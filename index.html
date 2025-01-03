@@ -1,28 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pattern Generator</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pattern Generator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #canvas-container {
+      margin-bottom: 20px;
+    }
+    #controls {
+      display: flex;
+      flex-direction: column;
+      max-width: 320px; /* Maximum width for UI elements */
+      width: 100%;
+    }
+    #controls label {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    #controls input, #controls select, #controls button {
+      margin-bottom: 15px;
+      width: 100%; /* Stretch to full width within the max-width */
+      padding: 8px;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 8px 10px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Pattern Generator</h1>
-        <p>Use the sliders to adjust the number of nodes and tiles.</p>
-        <div id="sliders">
-            <div id="node-slider">
-                <label for="nodes">Nodes:</label>
-                <span id="nodes-value">4</span>
-            </div>
-            <div id="tile-slider">
-                <label for="tiles">Tiles:</label>
-                <span id="tiles-value">3</span>
-            </div>
-        </div>
-    </div>
+  <h1>Pattern Generator</h1>
+  <div id="canvas-container"></div>
+  <div id="controls">
+    <label for="canvas-size-slider">Canvas Size:</label>
+    <input type="range" id="canvas-size-slider" min="320" max="800" value="320">
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
-    <script src="sketch.js"></script>
+    <label for="node-slider">Number of Nodes:</label>
+    <input type="range" id="node-slider" min="3" max="10" value="4">
+
+    <label for="symmetry-dropdown">Symmetry Mode:</label>
+    <select id="symmetry-dropdown">
+      <option value="rotation_reflection">Rotation and Reflection</option>
+      <option value="rotation">Only Rotation</option>
+    </select>
+
+    <button id="clear-button">Clear</button>
+    <button id="back-button">Back</button>
+  </div>
+  <script src="sketch.js"></script>
 </body>
 </html>

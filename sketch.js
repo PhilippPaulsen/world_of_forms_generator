@@ -1,52 +1,69 @@
-let canvasSize = 800;
-let squareSize = 200;
+let canvasSize = 320; // Default canvas size
+let squareSize = canvasSize / 3; // Central square size
 let nodes = [];
 let connections = [];
-let symmetryMode = "rotation_reflection"; // Default symmetry
-let nodeSlider, tileSlider, symmetryDropdown;
+let symmetryMode = "rotation_reflection";
 
 function setup() {
-  createCanvas(canvasSize, canvasSize);
-  noLoop();
+  const canvas = createCanvas(canvasSize, canvasSize);
+  canvas.parent("canvas-container");
 
-  // Create Sliders
-  nodeSlider = createSlider(3, 10, 4, 1);
-  nodeSlider.position(10, height + 10);
+  // Canvas size slider
+  const canvasSizeSlider = select("#canvas-size-slider");
+  canvasSizeSlider.input(() => {
+    canvasSize = canvasSizeSlider.value();
+    resizeCanvas(canvasSize, canvasSize);
+    squareSize = canvasSize / 3; // Update square size
+    setupNodes(); // Recalculate nodes
+    redraw();
+  });
+
+  // Node count slider
+  const nodeSlider = select("#node-slider");
   nodeSlider.input(() => {
     setupNodes();
     redraw();
   });
 
-  tileSlider = createSlider(1, 5, 3, 1);
-  tileSlider.position(10, height + 40);
-  tileSlider.input(() => redraw());
-
-  // Create Dropdown for Symmetry
-  symmetryDropdown = createSelect();
-  symmetryDropdown.position(10, height + 70);
-  symmetryDropdown.option("Rotation and Reflection");
-  symmetryDropdown.option("Only Rotation");
-  symmetryDropdown.selected("Rotation and Reflection");
-  symmetryDropdown.input(() => {
-    symmetryMode = symmetryDropdown.value() === "Only Rotation" ? "rotation" : "rotation_reflection";
+  // Symmetry dropdown
+  const symmetryDropdown = select("#symmetry-dropdown");
+  symmetryDropdown.changed(() => {
+    symmetryMode = symmetryDropdown.value() === "rotation" ? "rotation" : "rotation_reflection";
     redraw();
   });
 
-  setupNodes(); // Initialize nodes
+  // Clear button
+  const clearButton = select("#clear-button");
+  clearButton.mousePressed(() => {
+    connections = [];
+    redraw();
+  });
+
+  // Back button
+  const backButton = select("#back-button");
+  backButton.mousePressed(() => {
+    connections.pop();
+    redraw();
+  });
+
+  setupNodes();
+  noLoop();
 }
 
 function draw() {
   background(255);
 
-  drawTessellation(tileSlider.value()); // Draw tessellated connections
-  drawNodes(); // Draw nodes
-  drawConnections(); // Draw connections
+  // Draw tessellation
+  drawTessellation();
+
+  // Draw nodes
+  drawNodes();
 }
 
 function setupNodes() {
   nodes = [];
-  let nodeCount = nodeSlider.value();
-  let step = squareSize / (nodeCount - 1);
+  const nodeCount = select("#node-slider").value();
+  const step = squareSize / (nodeCount - 1);
   let idCounter = 1;
 
   for (let i = 0; i < nodeCount; i++) {
@@ -60,6 +77,23 @@ function setupNodes() {
   }
 }
 
+function drawTessellation() {
+  const tileCount = 2; // Fixed: 2 tiles around the center (5x5 grid total)
+  const tileSize = squareSize;
+
+  for (let i = -tileCount; i <= tileCount; i++) {
+    for (let j = -tileCount; j <= tileCount; j++) {
+      const offsetX = i * tileSize;
+      const offsetY = j * tileSize;
+
+      push();
+      translate(offsetX, offsetY);
+      drawConnections(); // Draw tessellated connections
+      pop();
+    }
+  }
+}
+
 function drawNodes() {
   nodes.forEach((node) => {
     fill(0);
@@ -69,87 +103,90 @@ function drawNodes() {
 }
 
 function drawConnections() {
-    connections.forEach(([startId, endId]) => {
-        if (!startId || !endId) return; // Skip invalid connections
-        const startNode = nodes[startId - 1];
-        const endNode = nodes[endId - 1];
+  connections.forEach(([startId, endId]) => {
+    if (!startId || !endId) return;
 
-        if (!startNode || !endNode) return; // Skip if nodes are undefined
+    const startNode = nodes[startId - 1];
+    const endNode = nodes[endId - 1];
 
-        // Draw original connection
-        stroke(0);
-        strokeWeight(2);
-        line(startNode.x, startNode.y, endNode.x, endNode.y);
+    if (!startNode || !endNode) return;
 
-        if (symmetryMode === "rotation_reflection") {
-        // Reflect across horizontal axis
-        let horizontalMirrorStart = getHorizontalMirrorNode(startNode);
-        let horizontalMirrorEnd = getHorizontalMirrorNode(endNode);
-        line(horizontalMirrorStart.x, horizontalMirrorStart.y, horizontalMirrorEnd.x, horizontalMirrorEnd.y);
+    // Draw original connection
+    stroke(0);
+    strokeWeight(2);
+    line(startNode.x, startNode.y, endNode.x, endNode.y);
 
-        // Reflect across vertical axis
-        let verticalMirrorStart = getVerticalMirrorNode(startNode);
-        let verticalMirrorEnd = getVerticalMirrorNode(endNode);
-        line(verticalMirrorStart.x, verticalMirrorStart.y, verticalMirrorEnd.x, verticalMirrorEnd.y);
+    if (symmetryMode === "rotation_reflection") {
+      // Reflect across horizontal axis
+      const hStart = getHorizontalMirrorNode(startNode);
+      const hEnd = getHorizontalMirrorNode(endNode);
+      line(hStart.x, hStart.y, hEnd.x, hEnd.y);
 
-        // Reflect across both axes (point reflection)
-        let pointMirrorStart = getMirroredNode(startNode);
-        let pointMirrorEnd = getMirroredNode(endNode);
-        line(pointMirrorStart.x, pointMirrorStart.y, pointMirrorEnd.x, pointMirrorEnd.y);
+      // Reflect across vertical axis
+      const vStart = getVerticalMirrorNode(startNode);
+      const vEnd = getVerticalMirrorNode(endNode);
+      line(vStart.x, vStart.y, vEnd.x, vEnd.y);
 
-        // Rotate original and reflected connections
-        [90, 180, 270].forEach((angle) => {
-            let rotatedStart = getRotatedNode(startNode, angle);
-            let rotatedEnd = getRotatedNode(endNode, angle);
-            line(rotatedStart.x, rotatedStart.y, rotatedEnd.x, rotatedEnd.y);
+      // Reflect across both axes (point reflection)
+      const pStart = getPointMirrorNode(startNode);
+      const pEnd = getPointMirrorNode(endNode);
+      line(pStart.x, pStart.y, pEnd.x, pEnd.y);
 
-            let rotatedHMirrorStart = getRotatedNode(horizontalMirrorStart, angle);
-            let rotatedHMirrorEnd = getRotatedNode(horizontalMirrorEnd, angle);
-            line(rotatedHMirrorStart.x, rotatedHMirrorStart.y, rotatedHMirrorEnd.x, rotatedHMirrorEnd.y);
-
-            let rotatedVMirrorStart = getRotatedNode(verticalMirrorStart, angle);
-            let rotatedVMirrorEnd = getRotatedNode(verticalMirrorEnd, angle);
-            line(rotatedVMirrorStart.x, rotatedVMirrorStart.y, rotatedVMirrorEnd.x, rotatedVMirrorEnd.y);
-
-            let rotatedPMirrorStart = getRotatedNode(pointMirrorStart, angle);
-            let rotatedPMirrorEnd = getRotatedNode(pointMirrorEnd, angle);
-            line(rotatedPMirrorStart.x, rotatedPMirrorStart.y, rotatedPMirrorEnd.x, rotatedPMirrorEnd.y);
-        });
-        }
-
-        if (symmetryMode === "rotation") {
-        // Rotate original connection (90°, 180°, and 270°)
-        [90, 180, 270].forEach((angle) => {
-            let rotatedStart = getRotatedNode(startNode, angle);
-            let rotatedEnd = getRotatedNode(endNode, angle);
-            line(rotatedStart.x, rotatedStart.y, rotatedEnd.x, rotatedEnd.y);
-        });
-        }
-    });
+      // Rotate original and reflected connections
+      [90, 180, 270].forEach((angle) => {
+        drawRotatedConnection(startNode, endNode, angle);
+        drawRotatedConnection(hStart, hEnd, angle);
+        drawRotatedConnection(vStart, vEnd, angle);
+        drawRotatedConnection(pStart, pEnd, angle);
+      });
     }
-  
-function drawTessellation(tileCount) {
-  let tileSize = squareSize;
 
-  for (let i = -tileCount; i <= tileCount; i++) {
-    for (let j = -tileCount; j <= tileCount; j++) {
-      let offsetX = i * tileSize;
-      let offsetY = j * tileSize;
-      push();
-      translate(offsetX, offsetY);
-      drawConnections();
-      pop();
+    if (symmetryMode === "rotation") {
+      // Rotate original connection
+      [90, 180, 270].forEach((angle) => {
+        drawRotatedConnection(startNode, endNode, angle);
+      });
     }
-  }
+  });
+}
+
+function getHorizontalMirrorNode(node) {
+  const centerY = height / 2;
+  return { x: node.x, y: centerY - (node.y - centerY) };
+}
+
+function getVerticalMirrorNode(node) {
+  const centerX = width / 2;
+  return { x: centerX - (node.x - centerX), y: node.y };
+}
+
+function getPointMirrorNode(node) {
+  const centerX = width / 2;
+  const centerY = height / 2;
+  return { x: centerX - (node.x - centerX), y: centerY - (node.y - centerY) };
+}
+
+function getRotatedNode(node, angle) {
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const rad = radians(angle);
+  const dx = node.x - centerX;
+  const dy = node.y - centerY;
+  return { x: centerX + dx * cos(rad) - dy * sin(rad), y: centerY + dx * sin(rad) + dy * cos(rad) };
+}
+
+function drawRotatedConnection(startNode, endNode, angle) {
+  const rotatedStart = getRotatedNode(startNode, angle);
+  const rotatedEnd = getRotatedNode(endNode, angle);
+  line(rotatedStart.x, rotatedStart.y, rotatedEnd.x, rotatedEnd.y);
 }
 
 function mousePressed() {
   let clickedNode = null;
 
-  // Detect clicked node
   nodes.forEach((node, index) => {
     if (dist(mouseX, mouseY, node.x, node.y) < 10) {
-      clickedNode = index + 1; // Node IDs start at 1
+      clickedNode = index + 1;
     }
   });
 
@@ -158,49 +195,9 @@ function mousePressed() {
 
 function handleNodeClick(nodeId) {
   if (connections.length && connections[connections.length - 1].length === 1) {
-    // Complete the connection
     connections[connections.length - 1].push(nodeId);
   } else {
-    // Start a new connection
     connections.push([nodeId]);
   }
-  redraw(); // Trigger redraw
-}
-
-function getMirroredNode(node) {
-  let centerX = width / 2;
-  let centerY = height / 2;
-  return {
-    x: centerX - (node.x - centerX), // Reflect horizontally
-    y: centerY - (node.y - centerY), // Reflect vertically
-  };
-}  
-
-function getVerticalMirrorNode(node) {
-  let centerX = width / 2; // Vertical axis through center
-  return {
-    x: centerX - (node.x - centerX), // Reflect horizontally
-    y: node.y, // Keep the same y-coordinate
-  };
-}
-  
-
-function getHorizontalMirrorNode(node) {
-  let centerY = height / 2; // Horizontal axis through center
-  return {
-    x: node.x, // Keep the same x-coordinate
-    y: centerY - (node.y - centerY), // Reflect vertically
-  };
-}
-
-function getRotatedNode(node, angle) {
-  let centerX = width / 2;
-  let centerY = height / 2;
-  let rad = radians(angle);
-  let dx = node.x - centerX;
-  let dy = node.y - centerY;
-  return {
-    x: centerX + dx * cos(rad) - dy * sin(rad),
-    y: centerY + dx * sin(rad) + dy * cos(rad),
-  };
+  redraw();
 }
