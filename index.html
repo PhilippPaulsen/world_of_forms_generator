@@ -19,7 +19,6 @@
       justify-content: center;
       align-items: center;
       position: relative;
-      border: none; /* Entfernt HTML-seitige Ränder */
     }
     #controls {
       display: flex;
@@ -45,7 +44,6 @@
   </style>
 </head>
 <body>
-  <h1>Pattern Generator</h1>
   <div id="canvas-container"></div>
   <div id="controls">
     <label for="canvas-size-slider">Canvas Size:</label>
@@ -53,6 +51,9 @@
 
     <label for="node-slider">Number of Nodes:</label>
     <input type="range" id="node-slider" min="3" max="10" value="4">
+
+    <label for="curve-slider">Curve Strength:</label>
+    <input type="range" id="curve-slider" min="-50" max="50" value="0">    
 
     <label for="symmetry-dropdown">Symmetry Mode:</label>
     <select id="symmetry-dropdown">

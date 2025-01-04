@@ -5,6 +5,7 @@ let connections = [];
 let symmetryMode = "rotation_reflection";
 let showNodes = true;
 let lineColor = "#000000"; // Default line color
+let curveOffset = 30; // Default curve offset
 
 function setup() {
   const canvas = createCanvas(canvasSize, canvasSize);
@@ -24,6 +25,13 @@ function setup() {
   const nodeSlider = select("#node-slider");
   nodeSlider.input(() => {
     setupNodes();
+    redraw();
+  });
+
+  // Curve offset slider
+  const curveSlider = select("#curve-slider");
+  curveSlider.input(() => {
+    curveOffset = curveSlider.value(); // Dynamically update curve offset
     redraw();
   });
 
@@ -139,50 +147,105 @@ function drawNodes() {
 
 function drawConnections() {
   connections.forEach(([startId, endId]) => {
-    if (!startId || !endId) return;
+    if (!startId || !endId) return; // Skip invalid connections
 
     const startNode = nodes[startId - 1];
     const endNode = nodes[endId - 1];
 
-    if (!startNode || !endNode) return;
+    if (!startNode || !endNode) return; // Skip if nodes are missing
 
-    // Draw original connection with selected line color
+    // Calculate control points: Perpendicular offset
+    const { controlX, controlY } = calculateControlPoints(startNode, endNode);
+
+    // Original curve
     stroke(lineColor);
     strokeWeight(2);
-    line(startNode.x, startNode.y, endNode.x, endNode.y);
+    noFill();
+    bezier(startNode.x, startNode.y, controlX, controlY, controlX, controlY, endNode.x, endNode.y);
 
     if (symmetryMode === "rotation_reflection") {
-      // Reflect across horizontal axis
-      const hStart = getHorizontalMirrorNode(startNode);
-      const hEnd = getHorizontalMirrorNode(endNode);
-      line(hStart.x, hStart.y, hEnd.x, hEnd.y);
-
-      // Reflect across vertical axis
-      const vStart = getVerticalMirrorNode(startNode);
-      const vEnd = getVerticalMirrorNode(endNode);
-      line(vStart.x, vStart.y, vEnd.x, vEnd.y);
-
-      // Reflect across both axes (point reflection)
-      const pStart = getPointMirrorNode(startNode);
-      const pEnd = getPointMirrorNode(endNode);
-      line(pStart.x, pStart.y, pEnd.x, pEnd.y);
-
-      // Rotate original and reflected connections
-      [90, 180, 270].forEach((angle) => {
-        drawRotatedConnection(startNode, endNode, angle);
-        drawRotatedConnection(hStart, hEnd, angle);
-        drawRotatedConnection(vStart, vEnd, angle);
-        drawRotatedConnection(pStart, pEnd, angle);
-      });
+      // Draw reflected and rotated curves
+      drawSymmetricalCurves(startNode, endNode, controlX, controlY);
     }
 
     if (symmetryMode === "rotation") {
-      // Rotate original connection
+      // Draw rotated curves
       [90, 180, 270].forEach((angle) => {
-        drawRotatedConnection(startNode, endNode, angle);
+        drawRotatedBezier(startNode, endNode, controlX, controlY, angle);
       });
     }
   });
+}
+
+function calculateControlPoints(startNode, endNode) {
+  const midX = (startNode.x + endNode.x) / 2;
+  const midY = (startNode.y + endNode.y) / 2;
+  const dx = endNode.x - startNode.x;
+  const dy = endNode.y - startNode.y;
+  const length = dist(startNode.x, startNode.y, endNode.x, endNode.y);
+
+  return {
+    controlX: midX - (dy / length) * curveOffset, // Perpendicular offset
+    controlY: midY + (dx / length) * curveOffset, // Perpendicular offset
+  };
+}
+
+function drawSymmetricalCurves(startNode, endNode, cx, cy) {
+  const transformations = [
+    getHorizontalMirrorNode,
+    getVerticalMirrorNode,
+    getPointMirrorNode,
+  ];
+
+  transformations.forEach((transform) => {
+    const transformedStart = transform(startNode);
+    const transformedEnd = transform(endNode);
+    const transformedControl = transform({ x: cx, y: cy });
+    bezier(
+      transformedStart.x,
+      transformedStart.y,
+      transformedControl.x,
+      transformedControl.y,
+      transformedControl.x,
+      transformedControl.y,
+      transformedEnd.x,
+      transformedEnd.y
+    );
+
+    // Apply rotations to the reflected curves
+    [90, 180, 270].forEach((angle) => {
+      const rotatedStart = getRotatedNode(transformedStart, angle);
+      const rotatedEnd = getRotatedNode(transformedEnd, angle);
+      const rotatedControl = getRotatedNode(transformedControl, angle);
+      bezier(
+        rotatedStart.x,
+        rotatedStart.y,
+        rotatedControl.x,
+        rotatedControl.y,
+        rotatedControl.x,
+        rotatedControl.y,
+        rotatedEnd.x,
+        rotatedEnd.y
+      );
+    });
+  });
+}
+
+function drawRotatedBezier(startNode, endNode, cx, cy, angle) {
+  const rotatedStart = getRotatedNode(startNode, angle);
+  const rotatedEnd = getRotatedNode(endNode, angle);
+  const rotatedControl = getRotatedNode({ x: cx, y: cy }, angle);
+
+  bezier(
+    rotatedStart.x,
+    rotatedStart.y,
+    rotatedControl.x,
+    rotatedControl.y,
+    rotatedControl.x,
+    rotatedControl.y,
+    rotatedEnd.x,
+    rotatedEnd.y
+  );
 }
 
 function getHorizontalMirrorNode(node) {
@@ -207,13 +270,21 @@ function getRotatedNode(node, angle) {
   const rad = radians(angle);
   const dx = node.x - centerX;
   const dy = node.y - centerY;
-  return { x: centerX + dx * cos(rad) - dy * sin(rad), y: centerY + dx * sin(rad) + dy * cos(rad) };
+  return {
+    x: centerX + dx * cos(rad) - dy * sin(rad),
+    y: centerY + dx * sin(rad) + dy * cos(rad),
+  };
 }
 
-function drawRotatedConnection(startNode, endNode, angle) {
-  const rotatedStart = getRotatedNode(startNode, angle);
-  const rotatedEnd = getRotatedNode(endNode, angle);
-  line(rotatedStart.x, rotatedStart.y, rotatedEnd.x, rotatedEnd.y);
+function handleNodeClick(nodeId) {
+  if (connections.length && connections[connections.length - 1].length === 1) {
+    // Complete the last connection
+    connections[connections.length - 1].push(nodeId);
+  } else {
+    // Add a new starting point
+    connections.push([nodeId]);
+  }
+  redraw();
 }
 
 function mousePressed() {
@@ -226,13 +297,4 @@ function mousePressed() {
   });
 
   if (clickedNode) handleNodeClick(clickedNode);
-}
-
-function handleNodeClick(nodeId) {
-  if (connections.length && connections[connections.length - 1].length === 1) {
-    connections[connections.length - 1].push(nodeId);
-  } else {
-    connections.push([nodeId]);
-  }
-  redraw();
 }
