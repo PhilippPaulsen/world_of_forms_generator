@@ -60,21 +60,35 @@ The current version includes:
 
 ## Next Steps
 
+## Next Steps
+
 ### User Interface Enhancements
-- **Tooltips**: Add tooltips explaining sliders, dropdowns, and buttons.
-- **Responsive Design**: Improve layout for mobile and desktop users.
-- **Theming**: Add light and dark mode options.
+- **Tooltips**: Add tooltips explaining sliders, dropdowns, and buttons. *(Difficulty: Easy)*
+- **Responsive Design**: Improve layout for mobile and desktop users. *(Difficulty: Easy)*
+- **Theming**: Add light and dark mode options. *(Difficulty: Easy)*
+- **Node Toggle**: Allow users to show or hide nodes dynamically. *(Difficulty: Easy)*
+- **Farbschema speichern**: Save color selections for lines and nodes to persist after reload. *(Difficulty: Easy)*
 
 ### Functional Improvements
-- **Export Options**: Allow users to save patterns as PNG or SVG files.
-- **Custom Symmetry**: Enable users to define their own symmetry rules.
-- **Color Customization**: Add options for coloring connections or tiles.
+- **Export Options**: Allow users to save patterns as PNG or SVG files. *(Difficulty: Medium)*
+- **Custom Symmetry**: Enable users to define their own symmetry rules. *(Difficulty: High)*
+- **Color Customization**: Add options for coloring connections or tiles. *(Difficulty: Medium)*
+- **Dynamic Node Management**: Allow users to add or remove nodes dynamically. *(Difficulty: Medium)*
+- **Undo/Redo Stack**: Extend "Back" functionality for multiple undo/redo actions. *(Difficulty: Medium)*
+- **State Saving**: Enable saving and loading patterns for future editing. *(Difficulty: Medium)*
+- **Drag-and-Drop Nodes**: Allow users to create connections by dragging between nodes. *(Difficulty: Medium)*
 
 ### Visual Enhancements
-- **Curved Connections**: Provide an option to draw curved lines.
-- **Animated Connections**: Animate the drawing process for better visualization.
+- **Curved Connections**: Provide an option to draw curved lines. *(Difficulty: Medium)*
+- **Animated Connections**: Animate the drawing process for better visualization. *(Difficulty: Medium)*
+- **Flächenfärbung**: Detect closed areas formed by connections and allow users to fill them with color. *(Difficulty: High)*
+- **Unterschiedliche Knotentypen**: Add support for different node shapes (circles, squares, triangles). *(Difficulty: Easy)*
 
 ### Advanced Features
-- **Undo/Redo Stack**: Extend "Back" functionality for multiple undo/redo actions.
-- **Dynamic Node Management**: Allow users to add or remove nodes dynamically.
-- **State Saving**: Enable saving and loading patterns for future editing.
+- **Undo/Redo Stack**: Extend "Back" functionality for multiple undo/redo actions. *(Difficulty: Medium)*
+- **Automatic Pattern Generation**: Implement algorithms to auto-generate complex patterns. *(Difficulty: High)*
+- **3D Patterns**: Transform the canvas into a 3D object using `webgl`. *(Difficulty: High)*
+- **Live Sharing**: Add the ability to share patterns via public links. *(Difficulty: High)*
+- **Kaleidoscope Symmetry**: Add support for advanced symmetry modes, such as kaleidoscope effects. *(Difficulty: High)*
+- **Dynamic Symmetry Animation**: Introduce animations that dynamically modify symmetry in real time. *(Difficulty: Medium)*
+
