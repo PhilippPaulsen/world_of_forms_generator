@@ -1,8 +1,10 @@
 let canvasSize = 320; // Default canvas size
-let squareSize = canvasSize / 3; // Central square size
+let squareSize = canvasSize / 5; // Central square size
 let nodes = [];
 let connections = [];
 let symmetryMode = "rotation_reflection";
+let showNodes = true;
+let lineColor = "#000000"; // Default line color
 
 function setup() {
   const canvas = createCanvas(canvasSize, canvasSize);
@@ -13,7 +15,7 @@ function setup() {
   canvasSizeSlider.input(() => {
     canvasSize = canvasSizeSlider.value();
     resizeCanvas(canvasSize, canvasSize);
-    squareSize = canvasSize / 3; // Update square size
+    squareSize = canvasSize / 5; // Update square size
     setupNodes(); // Recalculate nodes
     redraw();
   });
@@ -39,10 +41,36 @@ function setup() {
     redraw();
   });
 
-  // Back button
-  const backButton = select("#back-button");
-  backButton.mousePressed(() => {
+  // Undo button (renamed from "Back")
+  const undoButton = select("#back-button");
+  undoButton.html("Undo");
+  undoButton.mousePressed(() => {
     connections.pop();
+    redraw();
+  });
+
+  // Random button
+  const randomButton = select("#random-button");
+  randomButton.mousePressed(() => {
+    const randomStart = Math.floor(random(nodes.length)) + 1;
+    const randomEnd = Math.floor(random(nodes.length)) + 1;
+    if (randomStart !== randomEnd) {
+      connections.push([randomStart, randomEnd]);
+    }
+    redraw();
+  });
+
+  // Line color picker
+  const lineColorPicker = select("#line-color-picker");
+  lineColorPicker.input(() => {
+    lineColor = lineColorPicker.value();
+    redraw();
+  });
+
+  // Node toggle checkbox
+  const toggleNodes = select("#toggle-nodes");
+  toggleNodes.changed(() => {
+    showNodes = toggleNodes.checked();
     redraw();
   });
 
@@ -53,10 +81,16 @@ function setup() {
 function draw() {
   background(255);
 
+  // Draw black border around canvas
+  stroke(0); // Border color
+  strokeWeight(2); // Border thickness
+  noFill();
+  rect(1, 1, width - 2, height - 2); // Border rectangle
+
   // Draw tessellation
   drawTessellation();
 
-  // Draw nodes
+  // Draw nodes if toggled on
   drawNodes();
 }
 
@@ -95,6 +129,7 @@ function drawTessellation() {
 }
 
 function drawNodes() {
+  if (!showNodes) return; // Skip if nodes are hidden
   nodes.forEach((node) => {
     fill(0);
     noStroke();
@@ -111,8 +146,8 @@ function drawConnections() {
 
     if (!startNode || !endNode) return;
 
-    // Draw original connection
-    stroke(0);
+    // Draw original connection with selected line color
+    stroke(lineColor);
     strokeWeight(2);
     line(startNode.x, startNode.y, endNode.x, endNode.y);
 

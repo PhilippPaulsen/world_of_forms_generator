@@ -15,11 +15,16 @@
     }
     #canvas-container {
       margin-bottom: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      border: none; /* Entfernt HTML-seitige Ränder */
     }
     #controls {
       display: flex;
       flex-direction: column;
-      max-width: 320px; /* Maximum width for UI elements */
+      max-width: 320px; /* Maximale Breite für UI-Elemente */
       width: 100%;
     }
     #controls label {
@@ -55,8 +60,15 @@
       <option value="rotation">Only Rotation</option>
     </select>
 
+    <label for="line-color-picker">Line Color:</label>
+    <input type="color" id="line-color-picker" value="#000000">
+
+    <label for="toggle-nodes">Show Nodes:</label>
+    <input type="checkbox" id="toggle-nodes" checked>
+
     <button id="clear-button">Clear</button>
-    <button id="back-button">Back</button>
+    <button id="back-button">Undo</button>
+    <button id="random-button">+ Random Line</button>
   </div>
   <script src="sketch.js"></script>
 </body>
