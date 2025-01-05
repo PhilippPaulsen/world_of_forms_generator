@@ -60,8 +60,6 @@ The current version includes:
 
 ## Next Steps
 
-## Next Steps
-
 ### User Interface Enhancements
 - **Tooltips**: Add tooltips explaining sliders, dropdowns, and buttons. *(Difficulty: Easy)*
 - **Responsive Design**: Improve layout for mobile and desktop users. *(Difficulty: Easy)*
