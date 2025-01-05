@@ -1,5 +1,6 @@
 let canvasSize = 320; // Default canvas size
-let squareSize = canvasSize / 5; // Central square size
+let squareSize = canvasSize / 5; // Default central square size divisor
+let squareSizeDivisor = 5; // Default divisor
 let nodes = [];
 let connections = [];
 let symmetryMode = "rotation_reflection";
@@ -16,7 +17,7 @@ function setup() {
   canvasSizeSlider.input(() => {
     canvasSize = canvasSizeSlider.value();
     resizeCanvas(canvasSize, canvasSize);
-    squareSize = canvasSize / 5; // Update square size
+    updateSquareSize(); // Recalculate square size
     setupNodes(); // Recalculate nodes
     redraw();
   });
@@ -32,6 +33,15 @@ function setup() {
   const curveSlider = select("#curve-slider");
   curveSlider.input(() => {
     curveOffset = curveSlider.value(); // Dynamically update curve offset
+    redraw();
+  });
+
+  // Square size slider
+  const squareSizeSlider = select("#square-size-slider");
+  squareSizeSlider.input(() => {
+    squareSizeDivisor = squareSizeSlider.value();
+    updateSquareSize();
+    setupNodes(); // Recalculate nodes
     redraw();
   });
 
@@ -84,6 +94,10 @@ function setup() {
 
   setupNodes();
   noLoop();
+}
+
+function updateSquareSize() {
+  squareSize = canvasSize / squareSizeDivisor; // Update central square size
 }
 
 function draw() {
