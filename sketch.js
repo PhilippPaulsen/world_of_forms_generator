@@ -134,13 +134,14 @@ function setupNodes() {
 }
 
 function drawTessellation() {
-  const tileCount = 2; // Fixed: 2 tiles around the center (5x5 grid total)
-  const tileSize = squareSize;
+  // Calculate how many tiles are needed to cover the canvas
+  const tilesNeeded = Math.ceil(canvasSize / squareSize);
+  const tileCount = Math.max(2, Math.ceil(tilesNeeded / 2)); // Ensure at least 2 tiles around center
 
   for (let i = -tileCount; i <= tileCount; i++) {
     for (let j = -tileCount; j <= tileCount; j++) {
-      const offsetX = i * tileSize;
-      const offsetY = j * tileSize;
+      const offsetX = i * squareSize;
+      const offsetY = j * squareSize;
 
       push();
       translate(offsetX, offsetY);
