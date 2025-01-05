@@ -134,7 +134,6 @@ function setupNodes() {
 }
 
 function drawTessellation() {
-  // Calculate how many tiles are needed to cover the canvas
   const tilesNeeded = Math.ceil(canvasSize / squareSize);
   const tileCount = Math.max(2, Math.ceil(tilesNeeded / 2)); // Ensure at least 2 tiles around center
 
@@ -179,12 +178,10 @@ function drawConnections() {
     bezier(startNode.x, startNode.y, controlX, controlY, controlX, controlY, endNode.x, endNode.y);
 
     if (symmetryMode === "rotation_reflection") {
-      // Draw reflected and rotated curves
       drawSymmetricalCurves(startNode, endNode, controlX, controlY);
     }
 
     if (symmetryMode === "rotation") {
-      // Draw rotated curves
       [90, 180, 270].forEach((angle) => {
         drawRotatedBezier(startNode, endNode, controlX, controlY, angle);
       });
@@ -227,7 +224,6 @@ function drawSymmetricalCurves(startNode, endNode, cx, cy) {
       transformedEnd.y
     );
 
-    // Apply rotations to the reflected curves
     [90, 180, 270].forEach((angle) => {
       const rotatedStart = getRotatedNode(transformedStart, angle);
       const rotatedEnd = getRotatedNode(transformedEnd, angle);
@@ -293,10 +289,8 @@ function getRotatedNode(node, angle) {
 
 function handleNodeClick(nodeId) {
   if (connections.length && connections[connections.length - 1].length === 1) {
-    // Complete the last connection
     connections[connections.length - 1].push(nodeId);
   } else {
-    // Add a new starting point
     connections.push([nodeId]);
   }
   redraw();
