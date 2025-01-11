@@ -1,309 +1,438 @@
-let canvasSize = 320; // Default canvas size
-let squareSize = canvasSize / 5; // Default central square size divisor
-let squareSizeDivisor = 5; // Default divisor
+/***************************************************************
+ * SKETCH.JS
+ * Triangle Tiling (Kite / Rhombus) with Mirroring 
+ * - Canvas size slider
+ * - "Shape Size" slider (#square-size-slider) => triangle base
+ * - Node slider => subdivisions
+ * - Curve slider => -50..50 offset 
+ * - Symmetry => rotation or rotation+reflection
+ * - Line color picker
+ * - Toggle nodes
+ * - Clear, Undo, Random line
+ ***************************************************************/
+
+// Canvas dimensions
+let canvasW = 320;
+let canvasH = 320;
+
+// Triangle base size, node count, curve offset, etc.
+let triangleBaseFactor = 5;  // read from #square-size-slider
+let nodeCount = 4;           // from #node-slider
+let curveAmount = 0;         // from #curve-slider, range -50..50
+let symmetryMode = "rotation_reflection"; // from #symmetry-dropdown
+let lineColor = "#000000";   // from #line-color-picker
+let showNodes = true;        // from #toggle-nodes
+
+// Central upright triangle vertices
+let A, B, C;      // computed from triangleBaseFactor
+let centroid;     // centroid of ABC
+
+// The arrays storing “subdivided nodes” and user connections
 let nodes = [];
 let connections = [];
-let symmetryMode = "rotation_reflection";
-let showNodes = true;
-let lineColor = "#000000"; // Default line color
-let curveOffset = 30; // Default curve offset
 
+// For “kite tiling”: we reflect the entire triangle about base BC => T'
+let mirroredNodes = [];
+let mirroredConnections = [];
+
+// p5 Setup
 function setup() {
-  const canvas = createCanvas(canvasSize, canvasSize);
-  canvas.parent("canvas-container");
+  // 1) Read canvas size slider => createCanvas
+  const sizeSlider = select("#canvas-size-slider");
+  canvasW = parseInt(sizeSlider.value()) || 320;
+  canvasH = canvasW; // keep square if you prefer
+  createCanvas(canvasW, canvasH).parent("canvas-container");
 
-  // Canvas size slider
-  const canvasSizeSlider = select("#canvas-size-slider");
-  canvasSizeSlider.input(() => {
-    canvasSize = canvasSizeSlider.value();
-    resizeCanvas(canvasSize, canvasSize);
-    updateSquareSize(); // Recalculate square size
-    setupNodes(); // Recalculate nodes
+  noLoop(); // We'll redraw only on demand
+
+  // 2) Hook up UI
+
+  // When canvas size slider changes, resize the canvas
+  sizeSlider.input(() => {
+    let val = parseInt(sizeSlider.value()) || 320;
+    canvasW = val;
+    canvasH = val;
+    resizeCanvas(canvasW, canvasH);
     redraw();
   });
 
-  // Node count slider
-  const nodeSlider = select("#node-slider");
-  nodeSlider.input(() => {
+  // “Shape Size” => triangle base factor
+  const shapeSizeSlider = select("#square-size-slider");
+  triangleBaseFactor = parseInt(shapeSizeSlider.value()) || 5;
+  shapeSizeSlider.input(() => {
+    triangleBaseFactor = parseInt(shapeSizeSlider.value()) || 5;
+    resetConnections();
+    updateTriangleGeometry();
     setupNodes();
     redraw();
   });
 
-  // Curve offset slider
-  const curveSlider = select("#curve-slider");
-  curveSlider.input(() => {
-    curveOffset = curveSlider.value(); // Dynamically update curve offset
+  // Node slider
+  const nodeSlider = select("#node-slider");
+  nodeCount = parseInt(nodeSlider.value()) || 4;
+  nodeSlider.input(() => {
+    nodeCount = parseInt(nodeSlider.value()) || 4;
+    resetConnections();
+    setupNodes();
     redraw();
   });
 
-  // Square size slider
-  const squareSizeSlider = select("#square-size-slider");
-  squareSizeSlider.input(() => {
-    squareSizeDivisor = squareSizeSlider.value();
-    updateSquareSize();
-    setupNodes(); // Recalculate nodes
+  // Curve slider (-50..50)
+  const cSlider = select("#curve-slider");
+  curveAmount = parseInt(cSlider.value()) || 0;
+  cSlider.input(() => {
+    curveAmount = parseInt(cSlider.value()) || 0;
     redraw();
   });
 
   // Symmetry dropdown
-  const symmetryDropdown = select("#symmetry-dropdown");
-  symmetryDropdown.changed(() => {
-    symmetryMode = symmetryDropdown.value() === "rotation" ? "rotation" : "rotation_reflection";
+  const symDropdown = select("#symmetry-dropdown");
+  symmetryMode = symDropdown.value();
+  symDropdown.changed(() => {
+    symmetryMode = symDropdown.value();
     redraw();
   });
 
-  // Clear button
-  const clearButton = select("#clear-button");
-  clearButton.mousePressed(() => {
-    connections = [];
+  // Line color
+  const colorPicker = select("#line-color-picker");
+  lineColor = colorPicker.value();
+  colorPicker.input(() => {
+    lineColor = colorPicker.value();
     redraw();
   });
 
-  // Undo button (renamed from "Back")
-  const undoButton = select("#back-button");
-  undoButton.html("Undo");
-  undoButton.mousePressed(() => {
-    connections.pop();
+  // Toggle nodes
+  const nodeCB = select("#toggle-nodes");
+  showNodes = nodeCB.elt.checked;
+  nodeCB.changed(() => {
+    showNodes = nodeCB.elt.checked;
     redraw();
   });
 
-  // Random button
-  const randomButton = select("#random-button");
-  randomButton.mousePressed(() => {
-    const randomStart = Math.floor(random(nodes.length)) + 1;
-    const randomEnd = Math.floor(random(nodes.length)) + 1;
-    if (randomStart !== randomEnd) {
-      connections.push([randomStart, randomEnd]);
-    }
+  // Buttons: Clear, Undo, Random
+  const clearBtn = select("#clear-button");
+  clearBtn.mousePressed(() => {
+    resetConnections();
     redraw();
   });
 
-  // Line color picker
-  const lineColorPicker = select("#line-color-picker");
-  lineColorPicker.input(() => {
-    lineColor = lineColorPicker.value();
+  const backBtn = select("#back-button");
+  backBtn.mousePressed(() => {
+    undoConnection();
     redraw();
   });
 
-  // Node toggle checkbox
-  const toggleNodes = select("#toggle-nodes");
-  toggleNodes.changed(() => {
-    showNodes = toggleNodes.checked();
+  const randomBtn = select("#random-button");
+  randomBtn.mousePressed(() => {
+    addRandomConnection();
     redraw();
   });
 
+  // 3) Init geometry
+  updateTriangleGeometry();
   setupNodes();
-  noLoop();
 }
 
-function updateSquareSize() {
-  squareSize = canvasSize / squareSizeDivisor; // Update central square size
-}
-
+// p5 draw
 function draw() {
   background(255);
 
-  // Draw black border around canvas
-  stroke(0); // Border color
-  strokeWeight(2); // Border thickness
-  noFill();
-  rect(1, 1, width - 2, height - 2); // Border rectangle
+  // Re-check the canvas size slider to allow live resizing
+  const sizeSlider = select("#canvas-size-slider");
+  let newSize = parseInt(sizeSlider.value()) || 320;
+  if (newSize !== canvasW) {
+    canvasW = newSize;
+    canvasH = newSize;
+    resizeCanvas(canvasW, canvasH);
+  }
 
-  // Draw tessellation
-  drawTessellation();
+  // 1) Mirror the entire triangle => T'
+  reflectTriangle();
 
-  // Draw nodes if toggled on
-  drawNodes();
+  // 2) Tiled “kite” approach => fill the canvas
+  tileKiteNoGaps();
+
+  // 3) Draw the central triangle’s nodes (if toggled on), etc.
+  drawCentralReference();
 }
 
+// --------------- Geometry & Tiling ---------------
+
+// Update “A,B,C” from triangleBaseFactor
+function updateTriangleGeometry() {
+  // The base = factor * 30?  Customize scaling as you like
+  const base = triangleBaseFactor * 30;
+  const h = (base * sqrt(3)) / 2;
+
+  // center near canvas center
+  const cx = width / 2;
+  const cy = height / 2;
+
+  B = { x: cx - base/2, y: cy + h/2 };
+  C = { x: cx + base/2, y: cy + h/2 };
+  A = { x: cx,          y: cy - h/2 };
+
+  centroid = {
+    x: (A.x + B.x + C.x)/3,
+    y: (A.y + B.y + C.y)/3,
+  };
+}
+
+// Create subdivided nodes inside the upright triangle
 function setupNodes() {
   nodes = [];
-  const nodeCount = select("#node-slider").value();
-  const step = squareSize / (nodeCount - 1);
-  let idCounter = 1;
-
-  for (let i = 0; i < nodeCount; i++) {
-    for (let j = 0; j < nodeCount; j++) {
-      nodes.push({
-        x: width / 2 - squareSize / 2 + i * step,
-        y: height / 2 - squareSize / 2 + j * step,
-        id: idCounter++,
-      });
+  const n = nodeCount;
+  let id = 1;
+  for (let i = 0; i < n; i++) {
+    let t = (n<=1)? 0 : i/(n-1);
+    for (let j=0; j<=i; j++) {
+      let s = (i===0)? 0 : j/i;
+      let x = (1 - t)*A.x + t*((1-s)*B.x + s*C.x);
+      let y = (1 - t)*A.y + t*((1-s)*B.y + s*C.y);
+      nodes.push({ id:id++, x, y });
     }
   }
 }
 
-function drawTessellation() {
-  const tilesNeeded = Math.ceil(canvasSize / squareSize);
-  const tileCount = Math.max(2, Math.ceil(tilesNeeded / 2)); // Ensure at least 2 tiles around center
+// Mirror the entire triangle about base BC => T'
+function reflectTriangle() {
+  mirroredNodes = [];
+  mirroredConnections = [];
+  // Mirror each node
+  for (let nd of nodes) {
+    mirroredNodes.push( reflectPointOverLine(nd, B, C) );
+  }
+  // Mirror each connection
+  for (let pair of connections) {
+    if (pair.length===2) {
+      let sN = nodes.find(n=>n.id===pair[0]);
+      let eN = nodes.find(n=>n.id===pair[1]);
+      if (sN&&eN) {
+        let sMir = reflectPointOverLine(sN, B, C);
+        let eMir = reflectPointOverLine(eN, B, C);
+        mirroredConnections.push([sMir, eMir]);
+      }
+    }
+  }
+}
 
-  for (let i = -tileCount; i <= tileCount; i++) {
-    for (let j = -tileCount; j <= tileCount; j++) {
-      const offsetX = i * squareSize;
-      const offsetY = j * squareSize;
+// Tiled “kite” approach => no diagonal gaps
+function tileKiteNoGaps() {
+  const s = dist(B.x,B.y, C.x,C.y); // base length from B->C
+  // total vertical extent = s * sqrt(3)? Actually the big “kite” is 2*(height/2) = s*sqrt(3)
+  const diagHeight = s * sqrt(3);
+  const rowH = diagHeight/2;
+  const colW = s;
 
+  // expand enough to fill the entire canvas
+  let colCount = ceil(width/colW)+4;
+  let rowCount = ceil(height/rowH)+4;
+
+  for (let row=-2; row<rowCount; row++) {
+    let yOff = row*rowH;
+    for (let col=-2; col<colCount; col++) {
+      let xOff = col*colW;
+      if (row%2!==0) {
+        xOff += s/2;
+      }
       push();
-      translate(offsetX, offsetY);
-      drawConnections(); // Draw tessellated connections
+      translate(xOff,yOff);
+      drawKiteCell();
       pop();
     }
   }
 }
 
-function drawNodes() {
-  if (!showNodes) return; // Skip if nodes are hidden
-  nodes.forEach((node) => {
+// draw one “kite cell” => original + mirrored connections
+function drawKiteCell() {
+  // original
+  for (let pair of connections) {
+    if (pair.length===2) {
+      let sN = nodes.find(n=>n.id===pair[0]);
+      let eN = nodes.find(n=>n.id===pair[1]);
+      if (sN&&eN) {
+        drawConnectionWithSymmetry(sN, eN);
+      }
+    }
+  }
+  // mirrored
+  for (let pair of mirroredConnections) {
+    if (pair.length===2) {
+      let [sN, eN] = pair;
+      drawConnectionWithSymmetry(sN, eN); 
+    }
+  }
+}
+
+// Draw the “central reference” => only the nodes if showNodes
+function drawCentralReference() {
+  if (showNodes) {
     fill(0);
     noStroke();
-    ellipse(node.x, node.y, 8, 8);
-  });
-}
-
-function drawConnections() {
-  connections.forEach(([startId, endId]) => {
-    if (!startId || !endId) return; // Skip invalid connections
-
-    const startNode = nodes[startId - 1];
-    const endNode = nodes[endId - 1];
-
-    if (!startNode || !endNode) return; // Skip if nodes are missing
-
-    // Calculate control points: Perpendicular offset
-    const { controlX, controlY } = calculateControlPoints(startNode, endNode);
-
-    // Original curve
-    stroke(lineColor);
-    strokeWeight(2);
-    noFill();
-    bezier(startNode.x, startNode.y, controlX, controlY, controlX, controlY, endNode.x, endNode.y);
-
-    if (symmetryMode === "rotation_reflection") {
-      drawSymmetricalCurves(startNode, endNode, controlX, controlY);
+    for (let nd of nodes) {
+      ellipse(nd.x, nd.y, 6,6);
     }
-
-    if (symmetryMode === "rotation") {
-      [90, 180, 270].forEach((angle) => {
-        drawRotatedBezier(startNode, endNode, controlX, controlY, angle);
-      });
-    }
-  });
-}
-
-function calculateControlPoints(startNode, endNode) {
-  const midX = (startNode.x + endNode.x) / 2;
-  const midY = (startNode.y + endNode.y) / 2;
-  const dx = endNode.x - startNode.x;
-  const dy = endNode.y - startNode.y;
-  const length = dist(startNode.x, startNode.y, endNode.x, endNode.y);
-
-  return {
-    controlX: midX - (dy / length) * curveOffset, // Perpendicular offset
-    controlY: midY + (dx / length) * curveOffset, // Perpendicular offset
-  };
-}
-
-function drawSymmetricalCurves(startNode, endNode, cx, cy) {
-  const transformations = [
-    getHorizontalMirrorNode,
-    getVerticalMirrorNode,
-    getPointMirrorNode,
-  ];
-
-  transformations.forEach((transform) => {
-    const transformedStart = transform(startNode);
-    const transformedEnd = transform(endNode);
-    const transformedControl = transform({ x: cx, y: cy });
-    bezier(
-      transformedStart.x,
-      transformedStart.y,
-      transformedControl.x,
-      transformedControl.y,
-      transformedControl.x,
-      transformedControl.y,
-      transformedEnd.x,
-      transformedEnd.y
-    );
-
-    [90, 180, 270].forEach((angle) => {
-      const rotatedStart = getRotatedNode(transformedStart, angle);
-      const rotatedEnd = getRotatedNode(transformedEnd, angle);
-      const rotatedControl = getRotatedNode(transformedControl, angle);
-      bezier(
-        rotatedStart.x,
-        rotatedStart.y,
-        rotatedControl.x,
-        rotatedControl.y,
-        rotatedControl.x,
-        rotatedControl.y,
-        rotatedEnd.x,
-        rotatedEnd.y
-      );
-    });
-  });
-}
-
-function drawRotatedBezier(startNode, endNode, cx, cy, angle) {
-  const rotatedStart = getRotatedNode(startNode, angle);
-  const rotatedEnd = getRotatedNode(endNode, angle);
-  const rotatedControl = getRotatedNode({ x: cx, y: cy }, angle);
-
-  bezier(
-    rotatedStart.x,
-    rotatedStart.y,
-    rotatedControl.x,
-    rotatedControl.y,
-    rotatedControl.x,
-    rotatedControl.y,
-    rotatedEnd.x,
-    rotatedEnd.y
-  );
-}
-
-function getHorizontalMirrorNode(node) {
-  const centerY = height / 2;
-  return { x: node.x, y: centerY - (node.y - centerY) };
-}
-
-function getVerticalMirrorNode(node) {
-  const centerX = width / 2;
-  return { x: centerX - (node.x - centerX), y: node.y };
-}
-
-function getPointMirrorNode(node) {
-  const centerX = width / 2;
-  const centerY = height / 2;
-  return { x: centerX - (node.x - centerX), y: centerY - (node.y - centerY) };
-}
-
-function getRotatedNode(node, angle) {
-  const centerX = width / 2;
-  const centerY = height / 2;
-  const rad = radians(angle);
-  const dx = node.x - centerX;
-  const dy = node.y - centerY;
-  return {
-    x: centerX + dx * cos(rad) - dy * sin(rad),
-    y: centerY + dx * sin(rad) + dy * cos(rad),
-  };
-}
-
-function handleNodeClick(nodeId) {
-  if (connections.length && connections[connections.length - 1].length === 1) {
-    connections[connections.length - 1].push(nodeId);
-  } else {
-    connections.push([nodeId]);
   }
-  redraw();
+  // If you want to see the main triangle’s boundary or centroid, you can do:
+  // stroke(200);
+  // line(A.x,A.y, B.x,B.y);
+  // line(B.x,B.y, C.x,C.y);
+  // line(C.x,C.y, A.x,A.y);
 }
 
-function mousePressed() {
-  let clickedNode = null;
+// --------------- Connection Drawing with Symmetry & Curves ---------------
 
-  nodes.forEach((node, index) => {
-    if (dist(mouseX, mouseY, node.x, node.y) < 10) {
-      clickedNode = index + 1;
+function drawConnectionWithSymmetry(p1, p2) {
+  // parse curveAmount => range -50..50
+  stroke(lineColor);
+  strokeWeight(2);
+
+  drawCurvedBezier(p1, p2, curveAmount);
+
+  if (symmetryMode==="rotation" || symmetryMode==="rotation_reflection") {
+    // e.g. rotate 120, 240 deg around centroid
+    // This can be quite visually heavy. 
+    let angles=[120,240];
+    for (let a of angles) {
+      let sR=rotatePointAroundBase(p1,a);
+      let eR=rotatePointAroundBase(p2,a);
+      drawCurvedBezier(sR,eR, curveAmount);
     }
-  });
+  }
+  if (symmetryMode==="rotation_reflection") {
+    // reflect original
+    let sRef=reflectVertically(p1);
+    let eRef=reflectVertically(p2);
+    // If you want a “mirrored curve offset,” you can do -curveAmount here
+    drawCurvedBezier(sRef,eRef, curveAmount);
 
-  if (clickedNode) handleNodeClick(clickedNode);
+    // reflect the rotated lines
+    let angles=[120,240];
+    for (let a of angles) {
+      let sR=rotatePointAroundBase(p1,a);
+      let eR=rotatePointAroundBase(p2,a);
+      let sRR=reflectVertically(sR);
+      let eRR=reflectVertically(eR);
+      drawCurvedBezier(sRR,eRR, curveAmount);
+    }
+  }
+}
+
+// A simple cubic Bézier with offset normal
+function drawCurvedBezier(p1,p2,cAmt) {
+  // range -50..50 => scale e.g. *0.01
+  let scaleFactor=0.01;
+  let offsetSign=(cAmt>=0)?1:-1;
+  let mag=abs(cAmt)*scaleFactor;
+  if (mag<0.0001) {
+    line(p1.x,p1.y, p2.x,p2.y);
+    return;
+  }
+
+  let mx=(p1.x+p2.x)/2;
+  let my=(p1.y+p2.y)/2;
+  let dx=p2.x-p1.x;
+  let dy=p2.y-p1.y;
+  let distLine=sqrt(dx*dx+dy*dy);
+  let nx=-dy, ny=dx;
+  let ln=sqrt(nx*nx+ny*ny);
+  if (ln<0.0001) {
+    return;
+  }
+  nx/=ln; ny/=ln;
+
+  let offset=distLine*mag*offsetSign;
+  let c1x=mx+nx*offset;
+  let c1y=my+ny*offset;
+  let c2x=c1x; 
+  let c2y=c1y;
+
+  noFill();
+  bezier(p1.x,p1.y, c1x,c1y, c2x,c2y, p2.x,p2.y);
+}
+
+// --------------- Mouse Connections ---------------
+function mousePressed() {
+  // Only if inside the canvas
+  if (mouseX<0||mouseX>width||mouseY<0||mouseY>height) return;
+
+  // find a node
+  let foundId=null;
+  for (let nd of nodes) {
+    if (dist(mouseX,mouseY, nd.x, nd.y)<10) {
+      foundId=nd.id; 
+      break;
+    }
+  }
+  if (foundId!==null) {
+    if (!connections.length || connections[connections.length-1].length===2) {
+      connections.push([foundId]);
+    } else {
+      connections[connections.length-1].push(foundId);
+    }
+    redraw();
+  }
+}
+
+// --------------- Additional Functions ---------------
+
+function resetConnections() {
+  connections = [];
+}
+
+function undoConnection() {
+  if (connections.length>0) {
+    connections.pop();
+  }
+}
+
+function addRandomConnection() {
+  if (nodes.length<2) return;
+  let i1=floor(random(nodes.length));
+  let i2=floor(random(nodes.length));
+  if (i1===i2)return;
+  let id1=nodes[i1].id;
+  let id2=nodes[i2].id;
+  connections.push([id1,id2]);
+}
+
+// --------------- Transform Helpers ---------------
+function rotatePointAroundBase(pt, angleDeg) {
+  let rad=radians(angleDeg);
+  let dx=pt.x - centroid.x;
+  let dy=pt.y - centroid.y;
+  return {
+    x: centroid.x + dx*cos(rad) - dy*sin(rad),
+    y: centroid.y + dx*sin(rad) + dy*cos(rad),
+  };
+}
+
+function reflectVertically(pt) {
+  return {
+    x: 2*centroid.x - pt.x,
+    y: pt.y,
+  };
+}
+
+function reflectPointOverLine(P, L1, L2) {
+  let vx=L2.x-L1.x;
+  let vy=L2.y-L1.y;
+  let len=sqrt(vx*vx+vy*vy);
+
+  let ux=vx/len;
+  let uy=vy/len;
+
+  let wx=P.x - L1.x;
+  let wy=P.y - L1.y;
+  let dot=wx*ux + wy*uy;
+
+  let px=L1.x + dot*ux;
+  let py=L1.y + dot*uy;
+
+  let vxPP=px-P.x;
+  let vyPP=py-P.y;
+  return {
+    x: P.x + 2*vxPP,
+    y: P.y + 2*vyPP
+  };
 }

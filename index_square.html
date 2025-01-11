@@ -2,43 +2,66 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <!-- Important for mobile scaling -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pattern Generator</title>
-
-  <!-- p5.js (you can change version if you like) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
-
-  <!-- Link to your external stylesheet -->
-  <link rel="stylesheet" href="style.css" />
-  
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #canvas-container {
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+    #controls {
+      display: flex;
+      flex-direction: column;
+      max-width: 320px; /* Maximale Breite für UI-Elemente */
+      width: 100%;
+    }
+    #controls label {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    #controls input, #controls select, #controls button {
+      margin-bottom: 15px;
+      width: 100%; /* Stretch to full width within the max-width */
+      padding: 8px;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 8px 10px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+  </style>
 </head>
 <body>
-  <!-- A container for the p5 canvas -->
   <div id="canvas-container"></div>
-
-  <!-- Controls remain below the canvas -->
   <div id="controls">
-
-    <!-- Canvas size slider -->
     <label for="canvas-size-slider">Canvas Size:</label>
     <input type="range" id="canvas-size-slider" min="320" max="800" value="320">
 
-    <!-- Grid shape (square or triangle) -->
     <label for="grid-shape-dropdown">Grid Shape:</label>
     <select id="grid-shape-dropdown">
       <option value="square">Square</option>
       <option value="triangle">Triangle</option>
     </select>
     
-    <!-- Repurpose the name so it's not just for square -->
-    <label for="square-size-slider">Central Shape Size:</label>
+    <label for="square-size-slider">Central Square Size:</label>
     <input type="range" id="square-size-slider" min="1" max="9" step="2" value="5">
 
     <label for="node-slider">Number of Nodes:</label>
     <input type="range" id="node-slider" min="3" max="10" value="4">
 
-    <label for="curve-slider">Curve Strength (-50 to 50):</label>
+    <label for="curve-slider">Curve Strength:</label>
     <input type="range" id="curve-slider" min="-50" max="50" value="0">    
 
     <label for="symmetry-dropdown">Symmetry Mode:</label>
@@ -57,9 +80,6 @@
     <button id="back-button">Undo</button>
     <button id="random-button">+ Random Line</button>
   </div>
-
-  <!-- Your main sketch code -->
   <script src="sketch.js"></script>
-
 </body>
 </html>
