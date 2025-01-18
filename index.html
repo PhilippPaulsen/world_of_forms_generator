@@ -9,15 +9,15 @@
   <!-- p5.js (you can change version if you like) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
 
-  <!-- Link to your external stylesheet -->
+  <!-- Link to your external stylesheet (if you have one) -->
   <link rel="stylesheet" href="style.css" />
-  
 </head>
 <body>
-  <!-- A container for the p5 canvas -->
+
+  <!-- Container for the p5 canvas -->
   <div id="canvas-container"></div>
 
-  <!-- Controls remain below the canvas -->
+  <!-- Controls below the canvas -->
   <div id="controls">
 
     <!-- Canvas size slider -->
@@ -29,36 +29,49 @@
     <select id="grid-shape-dropdown">
       <option value="square">Square</option>
       <option value="triangle">Triangle</option>
+      <!-- if later you add "hex", you can do:
+      <option value="hex">Hex</option>
+      -->
     </select>
     
-    <!-- Repurpose the name so it's not just for square -->
+    <!-- Central Shape Size factor (1..9) -->
     <label for="square-size-slider">Central Shape Size:</label>
     <input type="range" id="square-size-slider" min="1" max="9" step="2" value="5">
 
+    <!-- Number of Nodes (1..10 for example) -->
     <label for="node-slider">Number of Nodes:</label>
-    <input type="range" id="node-slider" min="3" max="10" value="4">
+    <input type="range" id="node-slider" min="1" max="10" value="1" step="1">
 
+    <!-- Curve Strength (-50..50) -->
     <label for="curve-slider">Curve Strength (-50 to 50):</label>
-    <input type="range" id="curve-slider" min="-50" max="50" value="0">    
+    <input type="range" id="curve-slider" min="-50" max="50" value="0">
 
+    <!-- Symmetry Mode -->
     <label for="symmetry-dropdown">Symmetry Mode:</label>
     <select id="symmetry-dropdown">
-      <option value="rotation_reflection">Rotation and Reflection</option>
-      <option value="rotation">Only Rotation</option>
+      <option value="none">None</option>
+      <option value="reflection_only">Reflection Only</option>
+      <option value="rotation">Rotation (6-fold)</option>
+      <option value="rotation_reflection" selected>Rotation + Reflection</option>
+      <!-- If you have more advanced modes, add them here -->
     </select>
 
+    <!-- Line Color -->
     <label for="line-color-picker">Line Color:</label>
     <input type="color" id="line-color-picker" value="#000000">
 
+    <!-- Show Nodes Checkbox -->
     <label for="toggle-nodes">Show Nodes:</label>
     <input type="checkbox" id="toggle-nodes" checked>
 
+    <!-- Buttons -->
     <button id="clear-button">Clear</button>
     <button id="back-button">Undo</button>
     <button id="random-button">+ Random Line</button>
+
   </div>
 
-  <!-- Your main sketch code -->
+  <!-- Main sketch code -->
   <script src="sketch.js"></script>
 
 </body>
