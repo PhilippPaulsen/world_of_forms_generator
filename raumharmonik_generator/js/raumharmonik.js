@@ -759,6 +759,154 @@ class RaumharmonikApp {
     }
   }
 
+  completeSurfacesAndVolumes({ closeFacesOnly = false, maxEdges = 20 } = {}) {
+    this._updateFaces();
+    const adjacency = new Map();
+    this.adjacencyGraph.forEach((set, key) => {
+      adjacency.set(key, new Set(set));
+    });
+    const segmentsToAdd = [];
+    const plannedKeys = new Set();
+    const segmentSet = new Set(this.segmentLookup.keys());
+    const ensureAdjacency = (keyA, keyB) => {
+      if (!adjacency.has(keyA)) {
+        adjacency.set(keyA, new Set());
+      }
+      adjacency.get(keyA).add(keyB);
+    };
+    const addSegmentByKeys = (keyA, keyB) => {
+      const segmentKey = this._segmentKeyFromKeys(keyA, keyB);
+      if (segmentSet.has(segmentKey) || plannedKeys.has(segmentKey)) {
+        return null;
+      }
+      const segment = this._createSegmentFromKeys(keyA, keyB);
+      if (!segment) {
+        return null;
+      }
+      const indexA = this.pointIndexLookup.get(keyA);
+      const indexB = this.pointIndexLookup.get(keyB);
+      if (indexA !== undefined && indexB !== undefined) {
+        segment.indices = [indexA, indexB];
+      }
+      segment.key = segmentKey;
+      plannedKeys.add(segmentKey);
+      segmentsToAdd.push(segment);
+      segmentSet.add(segmentKey);
+      ensureAdjacency(keyA, keyB);
+      ensureAdjacency(keyB, keyA);
+      return segment;
+    };
+
+    const faceSet = new Set();
+    adjacency.forEach((neighborsA, keyA) => {
+      const arr = Array.from(neighborsA).sort();
+      for (let i = 0; i < arr.length && segmentsToAdd.length < maxEdges; i += 1) {
+        const keyB = arr[i];
+        const neighborsB = adjacency.get(keyB);
+        if (!neighborsB) continue;
+        for (let j = i + 1; j < arr.length && segmentsToAdd.length < maxEdges; j += 1) {
+          const keyC = arr[j];
+          if (keyC === keyB) continue;
+          const neighborsC = adjacency.get(keyC);
+          if (!neighborsC) continue;
+          const faceKey = [keyA, keyB, keyC].sort().join('#');
+          if (faceSet.has(faceKey)) continue;
+          faceSet.add(faceKey);
+          const edgeBC = this._segmentKeyFromKeys(keyB, keyC);
+          if (segmentSet.has(edgeBC) || plannedKeys.has(edgeBC)) continue;
+          const pA = this._vectorFromKey(keyA);
+          const pB = this._vectorFromKey(keyB);
+          const pC = this._vectorFromKey(keyC);
+          if (!pA || !pB || !pC) continue;
+          const ab = new THREE.Vector3().subVectors(pB, pA);
+          const ac = new THREE.Vector3().subVectors(pC, pA);
+          const areaVec = new THREE.Vector3().crossVectors(ab, ac);
+          if (areaVec.lengthSq() < 1e-6) continue;
+          if (!neighborsB.has(keyC) || !neighborsC.has(keyB)) {
+            addSegmentByKeys(keyB, keyC);
+            if (segmentsToAdd.length >= maxEdges) break;
+          }
+        }
+      }
+    });
+
+    if (!closeFacesOnly && segmentsToAdd.length < maxEdges) {
+      const processVolume = (keys) => {
+        const missing = [];
+        const pairs = [
+          [keys[0], keys[1]],
+          [keys[0], keys[2]],
+          [keys[0], keys[3]],
+          [keys[1], keys[2]],
+          [keys[1], keys[3]],
+          [keys[2], keys[3]],
+        ];
+        pairs.forEach(([a, b]) => {
+          const edgeKey = this._segmentKeyFromKeys(a, b);
+          if (!segmentSet.has(edgeKey) && !plannedKeys.has(edgeKey)) {
+            missing.push([a, b]);
+          }
+        });
+        if (missing.length === 0 || segmentsToAdd.length + missing.length > maxEdges) {
+          return;
+        }
+        const points = keys.map((key) => this._vectorFromKey(key));
+        if (points.some((p) => !p)) {
+          return;
+        }
+        const [pA, pB, pC, pD] = points;
+        const ab = new THREE.Vector3().subVectors(pB, pA);
+        const ac = new THREE.Vector3().subVectors(pC, pA);
+        const ad = new THREE.Vector3().subVectors(pD, pA);
+        const triple = Math.abs(ab.dot(new THREE.Vector3().crossVectors(ac, ad))) / 6;
+        if (triple < 1e-6) {
+          return;
+        }
+        missing.forEach(([a, b]) => {
+          addSegmentByKeys(a, b);
+        });
+      };
+
+      const adjacencyCopy = adjacency;
+      const keys = Array.from(adjacencyCopy.keys()).sort();
+      for (let i = 0; i < keys.length && segmentsToAdd.length < maxEdges; i += 1) {
+        const keyA = keys[i];
+        const neighborsA = adjacencyCopy.get(keyA);
+        if (!neighborsA) continue;
+        const neighborsArr = Array.from(neighborsA).sort();
+        for (let j = 0; j < neighborsArr.length && segmentsToAdd.length < maxEdges; j += 1) {
+          const keyB = neighborsArr[j];
+          if (keyB <= keyA) continue;
+          const neighborsB = adjacencyCopy.get(keyB);
+          if (!neighborsB) continue;
+          for (let k = j + 1; k < neighborsArr.length && segmentsToAdd.length < maxEdges; k += 1) {
+            const keyC = neighborsArr[k];
+            if (keyC <= keyB) continue;
+            const neighborsC = adjacencyCopy.get(keyC);
+            if (!neighborsC || !neighborsB.has(keyC)) continue;
+            const candidates = new Set([...neighborsA].filter((value) => neighborsB.has(value) && neighborsC.has(value)));
+            candidates.forEach((keyD) => {
+              if (keyD <= keyC || keyD === keyA || keyD === keyB) {
+                return;
+              }
+              processVolume([keyA, keyB, keyC, keyD]);
+            });
+            if (segmentsToAdd.length >= maxEdges) {
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (segmentsToAdd.length) {
+      this._commitSegments(segmentsToAdd);
+    } else {
+      this._updateFaceCountDisplay();
+    }
+    return segmentsToAdd.length;
+  }
+
   registerPresetSelect(selectEl) {
     this.presetSelect = selectEl;
     this._initializePresets();
@@ -778,6 +926,9 @@ class RaumharmonikApp {
   _updateFaces() {
     this.baseFaces = [];
     if (this.baseSegments.length < 3) {
+      this.adjacencyGraph = new Map();
+      this.baseVolumes = [];
+      this._updateFaceCountDisplay();
       return;
     }
     const adjacency = new Map();
@@ -1322,6 +1473,7 @@ function init() {
   const undoButton = document.getElementById('undo-button');
   const redoButton = document.getElementById('redo-button');
   const randomFormButton = document.getElementById('random-form-button');
+  const completeShapesButton = document.getElementById('complete-shapes-button');
   const presetSelectEl = document.getElementById('preset-select');
   const faceCountEl = document.getElementById('face-count');
   const clearButton = document.getElementById('clear-button');
@@ -1340,6 +1492,10 @@ function init() {
 
   if (randomFormButton) {
     randomFormButton.addEventListener('click', () => app.generateRandomForm());
+  }
+
+  if (completeShapesButton) {
+    completeShapesButton.addEventListener('click', () => app.completeSurfacesAndVolumes());
   }
 
   if (presetSelectEl) {
