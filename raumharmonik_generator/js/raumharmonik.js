@@ -73,9 +73,18 @@ class SymmetryEngine {
       angleDeg = 0,
       count = 0,
     } = config;
-    this.settings.rotoreflection.enabled = Boolean(enabled);
-    this.settings.rotoreflection.axis = axis || 'none';
-    this.settings.rotoreflection.plane = plane || 'xy';
+    const axisValue = axis === 'all' ? 'none' : (axis || 'none');
+    const planeValue = plane || 'xy';
+    const axisPlaneMap = {
+      x: 'yz',
+      y: 'zx',
+      z: 'xy',
+    };
+    const expectedPlane = axisPlaneMap[axisValue];
+    const isValidCombo = !axisValue || axisValue === 'none' || !expectedPlane || expectedPlane === planeValue;
+    this.settings.rotoreflection.enabled = Boolean(enabled) && axisValue !== 'none' && isValidCombo;
+    this.settings.rotoreflection.axis = this.settings.rotoreflection.enabled ? axisValue : 'none';
+    this.settings.rotoreflection.plane = this.settings.rotoreflection.enabled ? planeValue : planeValue;
     this.settings.rotoreflection.angleDeg = Number.isFinite(angleDeg) ? angleDeg : 0;
     this.settings.rotoreflection.count = Math.max(0, Math.floor(count || 0));
   }
@@ -88,8 +97,9 @@ class SymmetryEngine {
       distance = 0,
       count = 0,
     } = config;
-    this.settings.screw.enabled = Boolean(enabled);
-    this.settings.screw.axis = axis || 'none';
+    const axisValue = axis === 'all' ? 'none' : (axis || 'none');
+    this.settings.screw.enabled = Boolean(enabled) && axisValue !== 'none';
+    this.settings.screw.axis = axisValue;
     this.settings.screw.angleDeg = Number.isFinite(angleDeg) ? angleDeg : 0;
     this.settings.screw.distance = Number.isFinite(distance) ? distance : 0;
     this.settings.screw.count = Math.max(0, Math.floor(count || 0));
@@ -394,7 +404,8 @@ class RaumharmonikApp {
     this.activePointGeometry = new THREE.SphereGeometry(0.014, 16, 16);
     this.activePointMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
     this.lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
-    this.faceMaterial = new THREE.MeshStandardMaterial({ color: 0x6fa8dc, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
+    this.faceMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
+    this.volumeMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
 
     this.gridDivisions = 1;
     this.axisPositions = this._axisPositions(this.gridDivisions);
@@ -402,10 +413,12 @@ class RaumharmonikApp {
     this.baseSegments = [];
     this.activePointIndex = null;
     this.showPoints = true;
+    this.showLines = true;
     this.symmetryGroup = null;
 
     this.segmentLookup = new Map();
     this.baseFaces = [];
+    this.baseVolumes = [];
     this.history = [];
     this.future = [];
     this.pointLookup = new Map();
@@ -413,6 +426,7 @@ class RaumharmonikApp {
     this.presetSelect = null;
     this.presets = [];
     this.faceCountElement = null;
+    this.adjacencyGraph = new Map();
 
     this._addCubeFrame();
     this._setupLighting();
@@ -470,6 +484,11 @@ class RaumharmonikApp {
 
   updateShowPoints(flag) {
     this.showPoints = Boolean(flag);
+    this._rebuildSymmetryObjects();
+  }
+
+  updateShowLines(flag) {
+    this.showLines = Boolean(flag);
     this._rebuildSymmetryObjects();
   }
 
@@ -547,6 +566,11 @@ class RaumharmonikApp {
   _segmentKey(startVec, endVec) {
     const keys = [this._pointKey(startVec), this._pointKey(endVec)].sort();
     return keys.join('->');
+  }
+
+  _segmentKeyFromKeys(keyA, keyB) {
+    const sorted = [keyA, keyB].sort();
+    return sorted.join('->');
   }
 
   _createSegmentFromIndices(indexA, indexB) {
@@ -808,20 +832,99 @@ class RaumharmonikApp {
         });
       });
     });
+
+    this.adjacencyGraph = adjacency;
+    this._updateVolumes(adjacency);
+  }
+
+  _updateVolumes(adjacency) {
+    this.baseVolumes = [];
+    if (!adjacency || this.baseFaces.length < 4) {
+      return;
+    }
+    const volumeSet = new Set();
+    const segmentSet = new Set(this.baseSegments.map((seg) => seg.key));
+    const insertVolume = (keys) => {
+      const sorted = [...keys].sort();
+      const key = sorted.join('#');
+      if (volumeSet.has(key)) {
+        return;
+      }
+      const [keyA, keyB, keyC, keyD] = keys;
+      const combos = [
+        [keyA, keyB],
+        [keyA, keyC],
+        [keyA, keyD],
+        [keyB, keyC],
+        [keyB, keyD],
+        [keyC, keyD],
+      ];
+      const missingEdge = combos.some(([a, b]) => !segmentSet.has(this._segmentKeyFromKeys(a, b)));
+      if (missingEdge) {
+        return;
+      }
+      const pA = this._vectorFromKey(keyA);
+      const pB = this._vectorFromKey(keyB);
+      const pC = this._vectorFromKey(keyC);
+      const pD = this._vectorFromKey(keyD);
+      if (!pA || !pB || !pC || !pD) {
+        return;
+      }
+      const ab = new THREE.Vector3().subVectors(pB, pA);
+      const ac = new THREE.Vector3().subVectors(pC, pA);
+      const ad = new THREE.Vector3().subVectors(pD, pA);
+      const triple = Math.abs(ab.dot(new THREE.Vector3().crossVectors(ac, ad))) / 6;
+      if (triple < 1e-6) {
+        return;
+      }
+      volumeSet.add(key);
+      this.baseVolumes.push({ keys: [keyA, keyB, keyC, keyD] });
+    };
+
+    this.baseFaces.forEach((face) => {
+      const [keyA, keyB, keyC] = face.keys;
+      const neighborsA = adjacency.get(keyA);
+      const neighborsB = adjacency.get(keyB);
+      const neighborsC = adjacency.get(keyC);
+      if (!neighborsA || !neighborsB || !neighborsC) {
+        return;
+      }
+      neighborsA.forEach((keyD) => {
+        if (keyD === keyA || keyD === keyB || keyD === keyC) {
+          return;
+        }
+        if (!neighborsB.has(keyD) || !neighborsC.has(keyD)) {
+          return;
+        }
+        const sorted = [keyA, keyB, keyC, keyD].sort();
+        // Ensure deterministic ordering to avoid duplicates
+        if (sorted[3] !== keyD) {
+          return;
+        }
+        insertVolume([keyA, keyB, keyC, keyD]);
+      });
+    });
   }
 
   _updateFaceCountDisplay() {
     if (!this.faceCountElement) {
       return;
     }
-    const count = this.baseFaces.length;
-    this.faceCountElement.textContent = 'Flächen: ' + count;
+    const faceCount = this.baseFaces.length;
+    const volumeCount = this.baseVolumes ? this.baseVolumes.length : 0;
+    this.faceCountElement.textContent = 'Flächen: ' + faceCount + ' | Volumen: ' + volumeCount;
   }
 
   _clearSegments() {
     this.baseSegments = [];
-    this.segmentLookup.clear();
+    if (this.segmentLookup) {
+      this.segmentLookup.clear();
+    } else {
+      this.segmentLookup = new Map();
+    }
     this.baseFaces = [];
+    this.baseVolumes = [];
+    this.adjacencyGraph = new Map();
     this._updateFaces();
     this._updateFaceCountDisplay();
   }
@@ -866,6 +969,20 @@ class RaumharmonikApp {
       });
       return segments;
     };
+    const cubePairs = [
+      [cornerKeys[0], cornerKeys[1]],
+      [cornerKeys[1], cornerKeys[3]],
+      [cornerKeys[3], cornerKeys[2]],
+      [cornerKeys[2], cornerKeys[0]],
+      [cornerKeys[4], cornerKeys[5]],
+      [cornerKeys[5], cornerKeys[7]],
+      [cornerKeys[7], cornerKeys[6]],
+      [cornerKeys[6], cornerKeys[4]],
+      [cornerKeys[0], cornerKeys[4]],
+      [cornerKeys[1], cornerKeys[5]],
+      [cornerKeys[2], cornerKeys[6]],
+      [cornerKeys[3], cornerKeys[7]],
+    ];
     const diagonalCrossPairs = [
       [cornerKeys[0], cornerKeys[7]],
       [cornerKeys[1], cornerKeys[6]],
@@ -894,6 +1011,7 @@ class RaumharmonikApp {
       { id: 'none', label: 'Preset wählen …', build: () => [] },
       { id: 'diagonal-cross', label: 'Diagonales Kreuz', build: () => buildFromPairs(diagonalCrossPairs) },
       { id: 'tetrahedron', label: 'Tetraeder', build: () => buildFromPairs(tetrahedronPairs) },
+      { id: 'cube-frame', label: 'Würfelrahmen', build: () => buildFromPairs(cubePairs) },
       { id: 'mirror-star', label: 'Spiegelstern', build: () => buildFromPairs(starPairs) },
     ];
   }
@@ -1082,7 +1200,7 @@ class RaumharmonikApp {
       }
     }
 
-    if (this.baseSegments.length) {
+    if (this.showLines && this.baseSegments.length) {
       const positions = [];
       transforms.forEach((matrix) => {
         this.baseSegments.forEach((segment) => {
@@ -1119,6 +1237,36 @@ class RaumharmonikApp {
         faceGeometry.computeVertexNormals();
         const mesh = new THREE.Mesh(faceGeometry, this.faceMaterial);
         group.add(mesh);
+      }
+    }
+
+    if (this.baseVolumes && this.baseVolumes.length) {
+      const volumePositions = [];
+      transforms.forEach((matrix) => {
+        this.baseVolumes.forEach((volume) => {
+          const vertices = volume.keys.map((key) => this._vectorFromKey(key));
+          if (vertices.some((v) => !v)) {
+            return;
+          }
+          const transformed = vertices.map((vertex) => vertex.applyMatrix4(matrix));
+          const [pA, pB, pC, pD] = transformed;
+          const faces = [
+            [pA, pB, pC],
+            [pA, pB, pD],
+            [pA, pC, pD],
+            [pB, pC, pD],
+          ];
+          faces.forEach(([v1, v2, v3]) => {
+            volumePositions.push(v1.x, v1.y, v1.z, v2.x, v2.y, v2.z, v3.x, v3.y, v3.z);
+          });
+        });
+      });
+      if (volumePositions.length) {
+        const volumeGeometry = new THREE.BufferGeometry();
+        volumeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(volumePositions, 3));
+        volumeGeometry.computeVertexNormals();
+        const volumeMesh = new THREE.Mesh(volumeGeometry, this.volumeMaterial);
+        group.add(volumeMesh);
       }
     }
 
@@ -1169,6 +1317,7 @@ function init() {
   const screwDistanceEl = document.getElementById('screw-distance');
   const screwCountEl = document.getElementById('screw-count');
   const showPointsEl = document.getElementById('toggle-points');
+  const showLinesEl = document.getElementById('toggle-lines');
   const gridDensityEl = document.getElementById('grid-density');
   const undoButton = document.getElementById('undo-button');
   const redoButton = document.getElementById('redo-button');
@@ -1302,6 +1451,14 @@ function init() {
     };
     showPointsEl.addEventListener('change', applyShowPoints);
     applyShowPoints();
+  }
+
+  if (showLinesEl) {
+    const applyShowLines = () => {
+      app.updateShowLines(showLinesEl.checked);
+    };
+    showLinesEl.addEventListener('change', applyShowLines);
+    applyShowLines();
   }
 
   if (gridDensityEl) {
