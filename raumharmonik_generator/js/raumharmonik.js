@@ -23,6 +23,21 @@ class SymmetryEngine {
         count: 0,
         step: 0.5,
       },
+      inversion: false,
+      rotoreflection: {
+        enabled: false,
+        axis: 'none',
+        plane: 'xy',
+        angleDeg: 180,
+        count: 0,
+      },
+      screw: {
+        enabled: false,
+        axis: 'none',
+        angleDeg: 180,
+        distance: 0.5,
+        count: 0,
+      },
     };
   }
 
@@ -37,12 +52,47 @@ class SymmetryEngine {
   }
 
   setTranslation(axis, count, step) {
-    this.settings.translation.axis = axis;
-    this.settings.translation.count = Math.max(0, count || 0);
+    const axisValue = axis || 'none';
+    this.settings.translation.axis = axisValue;
+    this.settings.translation.count = Math.max(0, Math.floor(count || 0));
     this.settings.translation.step = Math.max(0, step || 0);
-    if (axis === 'none') {
+    if (axisValue === 'none') {
       this.settings.translation.count = 0;
     }
+  }
+
+  setInversion(enabled) {
+    this.settings.inversion = Boolean(enabled);
+  }
+
+  setRotoreflection(config = {}) {
+    const {
+      enabled = false,
+      axis = 'none',
+      plane = 'xy',
+      angleDeg = 0,
+      count = 0,
+    } = config;
+    this.settings.rotoreflection.enabled = Boolean(enabled);
+    this.settings.rotoreflection.axis = axis || 'none';
+    this.settings.rotoreflection.plane = plane || 'xy';
+    this.settings.rotoreflection.angleDeg = Number.isFinite(angleDeg) ? angleDeg : 0;
+    this.settings.rotoreflection.count = Math.max(0, Math.floor(count || 0));
+  }
+
+  setScrew(config = {}) {
+    const {
+      enabled = false,
+      axis = 'none',
+      angleDeg = 0,
+      distance = 0,
+      count = 0,
+    } = config;
+    this.settings.screw.enabled = Boolean(enabled);
+    this.settings.screw.axis = axis || 'none';
+    this.settings.screw.angleDeg = Number.isFinite(angleDeg) ? angleDeg : 0;
+    this.settings.screw.distance = Number.isFinite(distance) ? distance : 0;
+    this.settings.screw.count = Math.max(0, Math.floor(count || 0));
   }
 
   getTransforms() {
@@ -124,6 +174,57 @@ class SymmetryEngine {
       });
     }
 
+    if (this.settings.inversion) {
+      // Mirror everything at the origin to add central inversion symmetry.
+      transforms = this._expand(transforms, this.applyInversion());
+    }
+
+    const roto = this.settings.rotoreflection;
+    if (
+      roto.enabled &&
+      roto.axis !== 'none' &&
+      roto.plane !== 'none' &&
+      roto.count > 0
+    ) {
+      // Apply successive rotoreflections (rotation + reflection) to seed additional copies.
+      const baseTransforms = transforms.slice();
+      const angleRad = THREE.MathUtils.degToRad(roto.angleDeg || 0);
+      for (let i = 1; i <= roto.count; i += 1) {
+        const matrix = this.applyRotoreflection(roto.axis, angleRad * i, roto.plane);
+        if (!matrix) {
+          continue;
+        }
+        baseTransforms.forEach((existing) => {
+          transforms.push(existing.clone().multiply(matrix));
+        });
+      }
+    }
+
+    const screw = this.settings.screw;
+    if (
+      screw.enabled &&
+      screw.axis !== 'none' &&
+      screw.count > 0
+    ) {
+      // Build helical copies by pairing rotation with a translation along the same axis.
+      const baseTransforms = transforms.slice();
+      const angleRad = THREE.MathUtils.degToRad(screw.angleDeg || 0);
+      for (let i = 1; i <= screw.count; i += 1) {
+        const angle = angleRad * i;
+        const distance = screw.distance * i;
+        const matrixPos = this.applyScrew(screw.axis, angle, distance);
+        const matrixNeg = this.applyScrew(screw.axis, -angle, -distance);
+        baseTransforms.forEach((existing) => {
+          if (matrixPos) {
+            transforms.push(existing.clone().multiply(matrixPos));
+          }
+          if (matrixNeg) {
+            transforms.push(existing.clone().multiply(matrixNeg));
+          }
+        });
+      }
+    }
+
     return this._deduplicate(transforms);
   }
 
@@ -166,6 +267,36 @@ class SymmetryEngine {
       default:
         return matrix.identity();
     }
+  }
+
+  // Point inversion through the origin: (x, y, z) -> (-x, -y, -z)
+  applyInversion() {
+    return new THREE.Matrix4().makeScale(-1, -1, -1);
+  }
+
+  // Rotoreflection combines a rotation about an axis with a reflection in an orthogonal plane.
+  applyRotoreflection(axis, angleRad, plane) {
+    if (!axis || axis === 'none' || !plane || plane === 'none') {
+      return null;
+    }
+    const rotation = this._rotationMatrix(axis, angleRad);
+    const reflection = this._reflectionMatrix(plane);
+    return reflection.clone().multiply(rotation);
+  }
+
+  // Screw symmetry (helical motion) combines a rotation and translation along the same axis.
+  applyScrew(axis, angleRad, distance) {
+    if (!axis || axis === 'none') {
+      return null;
+    }
+    const nearZeroAngle = Math.abs(angleRad) < 1e-6;
+    const nearZeroDistance = Math.abs(distance) < 1e-6;
+    if (nearZeroAngle && nearZeroDistance) {
+      return null;
+    }
+    const rotation = nearZeroAngle ? new THREE.Matrix4().identity() : this._rotationMatrix(axis, angleRad);
+    const translation = nearZeroDistance ? new THREE.Matrix4().identity() : this._translationMatrix(axis, distance);
+    return translation.clone().multiply(rotation);
   }
 
   _expand(baseTransforms, extraMatrix) {
@@ -258,11 +389,12 @@ class RaumharmonikApp {
     );
 
     this.symmetry = new SymmetryEngine();
-    this.pointGeometry = new THREE.SphereGeometry(0.02, 16, 16);
+    this.pointGeometry = new THREE.SphereGeometry(0.01, 16, 16);
     this.pointMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-    this.activePointGeometry = new THREE.SphereGeometry(0.028, 16, 16);
+    this.activePointGeometry = new THREE.SphereGeometry(0.014, 16, 16);
     this.activePointMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
     this.lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+    this.faceMaterial = new THREE.MeshStandardMaterial({ color: 0x6fa8dc, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
 
     this.gridDivisions = 1;
     this.axisPositions = this._axisPositions(this.gridDivisions);
@@ -272,7 +404,18 @@ class RaumharmonikApp {
     this.showPoints = true;
     this.symmetryGroup = null;
 
+    this.segmentLookup = new Map();
+    this.baseFaces = [];
+    this.history = [];
+    this.future = [];
+    this.pointLookup = new Map();
+    this.pointIndexLookup = new Map();
+    this.presetSelect = null;
+    this.presets = [];
+    this.faceCountElement = null;
+
     this._addCubeFrame();
+    this._setupLighting();
     this._registerEvents();
     this.updateGrid(this.gridDivisions);
     this._onResize();
@@ -288,14 +431,22 @@ class RaumharmonikApp {
     const sanitized = Math.max(1, Math.floor(divisions || 1));
     this.gridDivisions = sanitized;
     this.axisPositions = this._axisPositions(sanitized);
-    this.gridPoints = this._generateGridPoints();
-    this.baseSegments = [];
+    this.segmentLookup = new Map();
+    this._clearSegments();
+    this.history = [];
+    this.future = [];
     this.activePointIndex = null;
+    this.gridPoints = this._generateGridPoints();
+    this._initializePresets();
+    this._populatePresetOptions();
+    this._updateFaceCountDisplay();
     this._rebuildSymmetryObjects();
   }
 
   reset() {
-    this.baseSegments = [];
+    this._clearSegments();
+    this.history = [];
+    this.future = [];
     this.activePointIndex = null;
     this._rebuildSymmetryObjects();
   }
@@ -322,26 +473,51 @@ class RaumharmonikApp {
     this._rebuildSymmetryObjects();
   }
 
+  updateInversion(flag) {
+    this.symmetry.setInversion(flag);
+    this._rebuildSymmetryObjects();
+  }
+
+  updateRotoreflection(config) {
+    this.symmetry.setRotoreflection(config);
+    this._rebuildSymmetryObjects();
+  }
+
+  updateScrew(config) {
+    this.symmetry.setScrew(config);
+    this._rebuildSymmetryObjects();
+  }
+
   _generateGridPoints() {
     const points = [];
+    this.pointLookup = new Map();
+    this.pointIndexLookup = new Map();
     const axisValues = this.axisPositions;
     axisValues.forEach((x) => {
       axisValues.forEach((y) => {
         axisValues.forEach((z) => {
-          points.push(new THREE.Vector3(x, y, z));
+          const point = new THREE.Vector3(x, y, z);
+          const key = this._pointKey(point);
+          this.pointLookup.set(key, point.clone());
+          this.pointIndexLookup.set(key, points.length);
+          points.push(point);
         });
       });
     });
     const hasCenter = axisValues.some((value) => Math.abs(value) < 1e-8);
-    if (!hasCenter) {
-      points.push(new THREE.Vector3(0, 0, 0));
+    if (!hasCenter && this.gridDivisions > 1) {
+      const center = new THREE.Vector3(0, 0, 0);
+      const key = this._pointKey(center);
+      this.pointLookup.set(key, center.clone());
+      this.pointIndexLookup.set(key, points.length);
+      points.push(center);
     }
     return points;
   }
 
   _axisPositions(divisions) {
     const count = Math.max(1, divisions);
-    const segments = count + 1;
+    const segments = count;
     const step = (CUBE_HALF_SIZE * 2) / segments;
     const positions = [];
     for (let i = 0; i <= segments; i += 1) {
@@ -351,11 +527,390 @@ class RaumharmonikApp {
     return positions;
   }
 
+  _formatCoord(value) {
+    return value.toFixed(5);
+  }
+
+  _pointKey(vec) {
+    return this._formatCoord(vec.x) + '|' + this._formatCoord(vec.y) + '|' + this._formatCoord(vec.z);
+  }
+
+  _pointKeyFromCoords(x, y, z) {
+    return this._formatCoord(x) + '|' + this._formatCoord(y) + '|' + this._formatCoord(z);
+  }
+
+  _vectorFromKey(key) {
+    const base = this.pointLookup.get(key);
+    return base ? base.clone() : null;
+  }
+
+  _segmentKey(startVec, endVec) {
+    const keys = [this._pointKey(startVec), this._pointKey(endVec)].sort();
+    return keys.join('->');
+  }
+
+  _createSegmentFromIndices(indexA, indexB) {
+    if (indexA === indexB) {
+      return null;
+    }
+    const pointA = this.gridPoints[indexA];
+    const pointB = this.gridPoints[indexB];
+    if (!pointA || !pointB) {
+      return null;
+    }
+    const segment = {
+      start: pointA.clone(),
+      end: pointB.clone(),
+    };
+    segment.key = this._segmentKey(segment.start, segment.end);
+    segment.indices = [indexA, indexB];
+    return segment;
+  }
+
+  _createSegmentFromKeys(keyA, keyB) {
+    if (!keyA || !keyB || keyA === keyB) {
+      return null;
+    }
+    const pointA = this._vectorFromKey(keyA);
+    const pointB = this._vectorFromKey(keyB);
+    if (!pointA || !pointB) {
+      return null;
+    }
+    const segment = {
+      start: pointA,
+      end: pointB,
+    };
+    segment.key = this._segmentKey(pointA, pointB);
+    return segment;
+  }
+
+  _addSegments(segments) {
+    const added = [];
+    segments.forEach((segment) => {
+      if (!segment || this.segmentLookup.has(segment.key)) {
+        return;
+      }
+      const stored = {
+        start: segment.start.clone(),
+        end: segment.end.clone(),
+        key: segment.key,
+        indices: segment.indices ? segment.indices.slice() : null,
+      };
+      this.baseSegments.push(stored);
+      this.segmentLookup.set(segment.key, stored);
+      added.push(stored);
+    });
+    if (added.length) {
+      this._updateFaces();
+    }
+    return added;
+  }
+
+  _removeSegments(segments) {
+    let removed = false;
+    segments.forEach((segment) => {
+      if (!segment) {
+        return;
+      }
+      const key = segment.key;
+      if (!this.segmentLookup.has(key)) {
+        return;
+      }
+      this.segmentLookup.delete(key);
+      this.baseSegments = this.baseSegments.filter((existing) => existing.key !== key);
+      removed = true;
+    });
+    if (removed) {
+      this._updateFaces();
+    }
+    return removed;
+  }
+
+  _commitSegments(segments) {
+    const added = this._addSegments(segments);
+    if (!added.length) {
+      return;
+    }
+    this._pushHistory({ type: 'addSegments', segments: added.map((seg) => ({
+      start: seg.start.clone(),
+      end: seg.end.clone(),
+      key: seg.key,
+    })) });
+    this.future = [];
+    this._rebuildSymmetryObjects();
+  }
+
+  _pushHistory(action) {
+    this.history.push(action);
+    if (this.history.length > 100) {
+      this.history.shift();
+    }
+  }
+
+  _applyAction(action, direction) {
+    if (!action) {
+      return;
+    }
+    switch (action.type) {
+      case 'addSegments':
+        if (direction === 'undo') {
+          this._removeSegments(action.segments);
+        } else {
+          this._addSegments(action.segments);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  undoLastAction() {
+    if (!this.history.length) {
+      return;
+    }
+    const action = this.history.pop();
+    this._applyAction(action, 'undo');
+    this.future.push(action);
+    this._rebuildSymmetryObjects();
+  }
+
+  redoLastAction() {
+    if (!this.future.length) {
+      return;
+    }
+    const action = this.future.pop();
+    this._applyAction(action, 'redo');
+    this.history.push(action);
+    this._rebuildSymmetryObjects();
+  }
+
+  generateRandomForm(count = null) {
+    const pointCount = this.gridPoints.length;
+    if (pointCount < 2) {
+      return;
+    }
+    const maxSegments = Math.min(pointCount, 12);
+    const minSegments = Math.min(3, maxSegments);
+    const targetCount = count || THREE.MathUtils.randInt(minSegments, maxSegments);
+    const selected = [];
+    const attempted = new Set();
+    let guard = 0;
+    while (selected.length < targetCount && guard < targetCount * 12) {
+      guard += 1;
+      const indexA = THREE.MathUtils.randInt(0, pointCount - 1);
+      const indexB = THREE.MathUtils.randInt(0, pointCount - 1);
+      if (indexA === indexB) {
+        continue;
+      }
+      const pairKey = [indexA, indexB].sort((a, b) => a - b).join(':');
+      if (attempted.has(pairKey)) {
+        continue;
+      }
+      attempted.add(pairKey);
+      const segment = this._createSegmentFromIndices(indexA, indexB);
+      if (!segment) {
+        continue;
+      }
+      if (this.segmentLookup.has(segment.key) || selected.some((item) => item.key === segment.key)) {
+        continue;
+      }
+      selected.push(segment);
+    }
+    if (selected.length) {
+      this._commitSegments(selected);
+    }
+  }
+
+  applyPreset(presetId) {
+    if (!this.presets || !this.presets.length) {
+      return;
+    }
+    const preset = this.presets.find((item) => item.id === presetId);
+    if (!preset || preset.id === 'none') {
+      return;
+    }
+    const segments = preset.build ? preset.build() : [];
+    if (segments.length) {
+      this._commitSegments(segments);
+    }
+  }
+
+  registerPresetSelect(selectEl) {
+    this.presetSelect = selectEl;
+    this._initializePresets();
+    this._populatePresetOptions();
+    if (this.presetSelect) {
+      this.presetSelect.addEventListener('change', () => {
+        this.applyPreset(this.presetSelect.value);
+      });
+    }
+  }
+
+  setFaceCountElement(element) {
+    this.faceCountElement = element;
+    this._updateFaceCountDisplay();
+  }
+
+  _updateFaces() {
+    this.baseFaces = [];
+    if (this.baseSegments.length < 3) {
+      return;
+    }
+    const adjacency = new Map();
+    const addEdge = (a, b) => {
+      if (!adjacency.has(a)) {
+        adjacency.set(a, new Set());
+      }
+      adjacency.get(a).add(b);
+    };
+    this.baseSegments.forEach((segment) => {
+      const keyA = this._pointKey(segment.start);
+      const keyB = this._pointKey(segment.end);
+      addEdge(keyA, keyB);
+      addEdge(keyB, keyA);
+    });
+    const faceSet = new Set();
+    adjacency.forEach((neighborsA, keyA) => {
+      neighborsA.forEach((keyB) => {
+        if (keyB <= keyA) {
+          return;
+        }
+        const neighborsB = adjacency.get(keyB);
+        if (!neighborsB) {
+          return;
+        }
+        neighborsB.forEach((keyC) => {
+          if (keyC <= keyB || keyC === keyA) {
+            return;
+          }
+          const neighborsC = adjacency.get(keyC);
+          if (!neighborsC || !neighborsC.has(keyA)) {
+            return;
+          }
+          const faceKey = [keyA, keyB, keyC].sort().join('#');
+          if (faceSet.has(faceKey)) {
+            return;
+          }
+          const pA = this._vectorFromKey(keyA);
+          const pB = this._vectorFromKey(keyB);
+          const pC = this._vectorFromKey(keyC);
+          if (!pA || !pB || !pC) {
+            return;
+          }
+          const ab = new THREE.Vector3().subVectors(pB, pA);
+          const ac = new THREE.Vector3().subVectors(pC, pA);
+          const areaVec = new THREE.Vector3().crossVectors(ab, ac);
+          if (areaVec.lengthSq() < 1e-6) {
+            return;
+          }
+          faceSet.add(faceKey);
+          this.baseFaces.push({ keys: [keyA, keyB, keyC] });
+        });
+      });
+    });
+  }
+
+  _updateFaceCountDisplay() {
+    if (!this.faceCountElement) {
+      return;
+    }
+    const count = this.baseFaces.length;
+    this.faceCountElement.textContent = 'Flächen: ' + count;
+  }
+
+  _clearSegments() {
+    this.baseSegments = [];
+    this.segmentLookup.clear();
+    this.baseFaces = [];
+    this._updateFaces();
+    this._updateFaceCountDisplay();
+  }
+
+  _populatePresetOptions() {
+    if (!this.presetSelect) {
+      return;
+    }
+    const current = this.presetSelect.value;
+    this.presetSelect.innerHTML = '';
+    this.presets.forEach((preset) => {
+      const option = document.createElement('option');
+      option.value = preset.id;
+      option.textContent = preset.label;
+      this.presetSelect.appendChild(option);
+    });
+    if (this.presets.some((preset) => preset.id === current)) {
+      this.presetSelect.value = current;
+    }
+  }
+
+  _initializePresets() {
+    const half = CUBE_HALF_SIZE;
+    const originKey = this._pointKeyFromCoords(0, 0, 0);
+    const cornerKeys = [
+      this._pointKeyFromCoords(-half, -half, -half),
+      this._pointKeyFromCoords(half, -half, -half),
+      this._pointKeyFromCoords(-half, half, -half),
+      this._pointKeyFromCoords(half, half, -half),
+      this._pointKeyFromCoords(-half, -half, half),
+      this._pointKeyFromCoords(half, -half, half),
+      this._pointKeyFromCoords(-half, half, half),
+      this._pointKeyFromCoords(half, half, half),
+    ];
+    const buildFromPairs = (pairs) => {
+      const segments = [];
+      pairs.forEach(([a, b]) => {
+        const segment = this._createSegmentFromKeys(a, b);
+        if (segment) {
+          segments.push(segment);
+        }
+      });
+      return segments;
+    };
+    const diagonalCrossPairs = [
+      [cornerKeys[0], cornerKeys[7]],
+      [cornerKeys[1], cornerKeys[6]],
+      [cornerKeys[2], cornerKeys[5]],
+      [cornerKeys[3], cornerKeys[4]],
+    ];
+    const tetrahedronPairs = [
+      [cornerKeys[0], cornerKeys[1]],
+      [cornerKeys[1], cornerKeys[7]],
+      [cornerKeys[7], cornerKeys[2]],
+      [cornerKeys[2], cornerKeys[0]],
+      [cornerKeys[0], cornerKeys[7]],
+      [cornerKeys[1], cornerKeys[2]],
+    ];
+    const starPairs = [
+      [cornerKeys[0], originKey],
+      [cornerKeys[1], originKey],
+      [cornerKeys[2], originKey],
+      [cornerKeys[3], originKey],
+      [cornerKeys[4], originKey],
+      [cornerKeys[5], originKey],
+      [cornerKeys[6], originKey],
+      [cornerKeys[7], originKey],
+    ];
+    this.presets = [
+      { id: 'none', label: 'Preset wählen …', build: () => [] },
+      { id: 'diagonal-cross', label: 'Diagonales Kreuz', build: () => buildFromPairs(diagonalCrossPairs) },
+      { id: 'tetrahedron', label: 'Tetraeder', build: () => buildFromPairs(tetrahedronPairs) },
+      { id: 'mirror-star', label: 'Spiegelstern', build: () => buildFromPairs(starPairs) },
+    ];
+  }
+
   _addCubeFrame() {
     const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
     const frameMaterial = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2 });
     const frame = new THREE.LineSegments(edges, frameMaterial);
     this.scene.add(frame);
+  }
+
+  _setupLighting() {
+    const ambient = new THREE.AmbientLight(0xffffff, 0.35);
+    this.scene.add(ambient);
+    const directional = new THREE.DirectionalLight(0xffffff, 0.65);
+    directional.position.set(1, 1, 1);
+    this.scene.add(directional);
   }
 
   _registerEvents() {
@@ -480,18 +1035,15 @@ class RaumharmonikApp {
       return;
     }
 
-    const start = this.gridPoints[this.activePointIndex];
-    const end = this.gridPoints[index];
-
-    if (!start.equals(end)) {
-      this.baseSegments.push({
-        start: start.clone(),
-        end: end.clone(),
-      });
+    const segment = this._createSegmentFromIndices(this.activePointIndex, index);
+    if (segment) {
+      this._commitSegments([segment]);
     }
 
     this.activePointIndex = null;
-    this._rebuildSymmetryObjects();
+    if (!segment) {
+      this._rebuildSymmetryObjects();
+    }
   }
 
   _rebuildSymmetryObjects() {
@@ -548,6 +1100,30 @@ class RaumharmonikApp {
       }
     }
 
+    if (this.baseFaces.length) {
+      const facePositions = [];
+      transforms.forEach((matrix) => {
+        this.baseFaces.forEach((face) => {
+          face.keys.forEach((key) => {
+            const vertex = this._vectorFromKey(key);
+            if (vertex) {
+              vertex.applyMatrix4(matrix);
+              facePositions.push(vertex.x, vertex.y, vertex.z);
+            }
+          });
+        });
+      });
+      if (facePositions.length) {
+        const faceGeometry = new THREE.BufferGeometry();
+        faceGeometry.setAttribute('position', new THREE.Float32BufferAttribute(facePositions, 3));
+        faceGeometry.computeVertexNormals();
+        const mesh = new THREE.Mesh(faceGeometry, this.faceMaterial);
+        group.add(mesh);
+      }
+    }
+
+    this._updateFaceCountDisplay();
+
     this.symmetryGroup = group;
     this.scene.add(group);
   }
@@ -577,16 +1153,52 @@ function init() {
     yz: document.getElementById('reflection-yz'),
     zx: document.getElementById('reflection-zx'),
   };
+  const inversionEl = document.getElementById('toggle-inversion');
   const rotationAxisEl = document.getElementById('rotation-axis');
+  const rotoreflectionEnabledEl = document.getElementById('rotoreflection-enabled');
+  const rotoreflectionAxisEl = document.getElementById('rotoreflection-axis');
+  const rotoreflectionPlaneEl = document.getElementById('rotoreflection-plane');
+  const rotoreflectionAngleEl = document.getElementById('rotoreflection-angle');
+  const rotoreflectionCountEl = document.getElementById('rotoreflection-count');
   const translationAxisEl = document.getElementById('translation-axis');
   const translationCountEl = document.getElementById('translation-count');
   const translationStepEl = document.getElementById('translation-step');
+  const screwEnabledEl = document.getElementById('screw-enabled');
+  const screwAxisEl = document.getElementById('screw-axis');
+  const screwAngleEl = document.getElementById('screw-angle');
+  const screwDistanceEl = document.getElementById('screw-distance');
+  const screwCountEl = document.getElementById('screw-count');
   const showPointsEl = document.getElementById('toggle-points');
   const gridDensityEl = document.getElementById('grid-density');
+  const undoButton = document.getElementById('undo-button');
+  const redoButton = document.getElementById('redo-button');
+  const randomFormButton = document.getElementById('random-form-button');
+  const presetSelectEl = document.getElementById('preset-select');
+  const faceCountEl = document.getElementById('face-count');
   const clearButton = document.getElementById('clear-button');
 
   if (clearButton) {
     clearButton.addEventListener('click', () => app.reset());
+  }
+
+  if (undoButton) {
+    undoButton.addEventListener('click', () => app.undoLastAction());
+  }
+
+  if (redoButton) {
+    redoButton.addEventListener('click', () => app.redoLastAction());
+  }
+
+  if (randomFormButton) {
+    randomFormButton.addEventListener('click', () => app.generateRandomForm());
+  }
+
+  if (presetSelectEl) {
+    app.registerPresetSelect(presetSelectEl);
+  }
+
+  if (faceCountEl) {
+    app.setFaceCountElement(faceCountEl);
   }
 
   Object.values(reflections).forEach((checkbox) => {
@@ -605,6 +1217,40 @@ function init() {
     yz: reflections.yz ? reflections.yz.checked : false,
     zx: reflections.zx ? reflections.zx.checked : false,
   });
+
+  if (inversionEl) {
+    const applyInversion = () => {
+      app.updateInversion(inversionEl.checked);
+    };
+    inversionEl.addEventListener('change', applyInversion);
+    applyInversion();
+  }
+
+  if (
+    rotoreflectionEnabledEl &&
+    rotoreflectionAxisEl &&
+    rotoreflectionPlaneEl &&
+    rotoreflectionAngleEl &&
+    rotoreflectionCountEl
+  ) {
+    const applyRotoreflection = () => {
+      app.updateRotoreflection({
+        enabled: rotoreflectionEnabledEl.checked,
+        axis: rotoreflectionAxisEl.value,
+        plane: rotoreflectionPlaneEl.value,
+        angleDeg: parseFloat(rotoreflectionAngleEl.value) || 0,
+        count: parseInt(rotoreflectionCountEl.value, 10) || 0,
+      });
+    };
+    rotoreflectionEnabledEl.addEventListener('change', applyRotoreflection);
+    rotoreflectionAxisEl.addEventListener('change', applyRotoreflection);
+    rotoreflectionPlaneEl.addEventListener('change', applyRotoreflection);
+    rotoreflectionAngleEl.addEventListener('change', applyRotoreflection);
+    rotoreflectionAngleEl.addEventListener('input', applyRotoreflection);
+    rotoreflectionCountEl.addEventListener('change', applyRotoreflection);
+    rotoreflectionCountEl.addEventListener('input', applyRotoreflection);
+    applyRotoreflection();
+  }
 
   if (rotationAxisEl) {
     const applyRotation = () => {
@@ -627,6 +1273,27 @@ function init() {
     translationStepEl.addEventListener('change', applyTranslation);
     translationStepEl.addEventListener('input', applyTranslation);
     applyTranslation();
+  }
+
+  if (screwEnabledEl && screwAxisEl && screwAngleEl && screwDistanceEl && screwCountEl) {
+    const applyScrew = () => {
+      app.updateScrew({
+        enabled: screwEnabledEl.checked,
+        axis: screwAxisEl.value,
+        angleDeg: parseFloat(screwAngleEl.value) || 0,
+        distance: parseFloat(screwDistanceEl.value) || 0,
+        count: parseInt(screwCountEl.value, 10) || 0,
+      });
+    };
+    screwEnabledEl.addEventListener('change', applyScrew);
+    screwAxisEl.addEventListener('change', applyScrew);
+    screwAngleEl.addEventListener('change', applyScrew);
+    screwAngleEl.addEventListener('input', applyScrew);
+    screwDistanceEl.addEventListener('change', applyScrew);
+    screwDistanceEl.addEventListener('input', applyScrew);
+    screwCountEl.addEventListener('change', applyScrew);
+    screwCountEl.addEventListener('input', applyScrew);
+    applyScrew();
   }
 
   if (showPointsEl) {

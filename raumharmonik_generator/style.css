@@ -8,10 +8,11 @@ body {
   align-items: center;
   justify-content: flex-start;
   min-height: 100vh;
+  font-size: 13px;
 }
 
 #canvas-container {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -21,41 +22,68 @@ body {
 #controls {
   display: flex;
   flex-direction: column;
-  max-width: 360px;
-  width: 100%;
-  gap: 12px;
+  gap: 10px;
+  width: min(360px, 100%);
 }
 
-#controls .section-title {
-  font-weight: bold;
-  margin-bottom: 4px;
+#controls button {
+  align-self: flex-start;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
 }
 
-#controls .field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-#controls .inline-control {
+.control-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-#controls input,
-#controls select,
-#controls button {
-  padding: 8px;
-  font-size: 14px;
-  width: 100%;
+.control-row label,
+.control-row span {
+  font-weight: 600;
+}
+
+.control-row input,
+.control-row select {
+  font-size: 13px;
+  padding: 4px 6px;
   box-sizing: border-box;
 }
 
-#controls input[type="checkbox"] {
-  width: auto;
+#grid-density {
+  width: 60px;
 }
 
-button {
-  cursor: pointer;
+#translation-count,
+#translation-step {
+  width: 60px;
+}
+
+#rotoreflection-angle,
+#rotoreflection-count,
+#screw-angle,
+#screw-distance,
+#screw-count {
+  width: 60px;
+}
+
+.checkbox-inline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 400;
+}
+
+.checkbox-inline input {
+  margin: 0;
+}
+
+.action-row button {
+  padding: 6px 8px;
+}
+
+.action-row select {
+  min-width: 120px;
 }
