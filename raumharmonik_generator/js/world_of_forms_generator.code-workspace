@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../../die-welt-der-formen"
+		}
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "raumharmonik_generator"
+	}
+}
