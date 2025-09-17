@@ -21,10 +21,21 @@
     <button id="clear-button">Alles löschen</button>
 
     <div class="field">
+      <span class="section-title">Punktdichte</span>
+      <label class="inline-control">
+        Unterteilungen je Achse
+        <input type="number" id="grid-density" min="1" max="12" step="1" value="1">
+      </label>
+      <label class="inline-control">
+        <input type="checkbox" id="toggle-points" checked> Punkte anzeigen
+      </label>
+    </div>
+
+    <div class="field">
       <span class="section-title">Spiegelungen</span>
-      <label class="inline-control"><input type="checkbox" id="reflection-xy"> Ebene XY</label>
-      <label class="inline-control"><input type="checkbox" id="reflection-yz"> Ebene YZ</label>
-      <label class="inline-control"><input type="checkbox" id="reflection-zx"> Ebene ZX</label>
+      <label class="inline-control"><input type="checkbox" id="reflection-xy" checked> Ebene XY</label>
+      <label class="inline-control"><input type="checkbox" id="reflection-yz" checked> Ebene YZ</label>
+      <label class="inline-control"><input type="checkbox" id="reflection-zx" checked> Ebene ZX</label>
     </div>
 
     <div class="field">
@@ -36,11 +47,8 @@
           <option value="x">X</option>
           <option value="y">Y</option>
           <option value="z">Z</option>
+          <option value="all" selected>Alle (XYZ)</option>
         </select>
-      </label>
-      <label class="inline-control">
-        Teilungen
-        <input type="number" id="rotation-steps" min="1" max="16" value="4">
       </label>
     </div>
 
@@ -49,10 +57,11 @@
       <label class="inline-control">
         Achse
         <select id="translation-axis">
-          <option value="none">Keine</option>
+          <option value="none" selected>Keine</option>
           <option value="x">X</option>
           <option value="y">Y</option>
           <option value="z">Z</option>
+          <option value="all">Alle (XYZ)</option>
         </select>
       </label>
       <label class="inline-control">
