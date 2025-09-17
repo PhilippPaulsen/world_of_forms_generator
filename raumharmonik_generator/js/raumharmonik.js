@@ -407,6 +407,9 @@ class RaumharmonikApp {
     this.faceMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
     this.volumeMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
 
+    this.useCurvedLines = false;
+    this.curvedLineMaterial = new THREE.LineBasicMaterial({ color: 0x555555 });
+
     this.gridDivisions = 1;
     this.axisPositions = this._axisPositions(this.gridDivisions);
     this.gridPoints = [];
@@ -489,6 +492,11 @@ class RaumharmonikApp {
 
   updateShowLines(flag) {
     this.showLines = Boolean(flag);
+    this._rebuildSymmetryObjects();
+  }
+
+  updateCurvedLines(flag) {
+    this.useCurvedLines = Boolean(flag);
     this._rebuildSymmetryObjects();
   }
 
@@ -1352,20 +1360,61 @@ class RaumharmonikApp {
     }
 
     if (this.showLines && this.baseSegments.length) {
-      const positions = [];
-      transforms.forEach((matrix) => {
-        this.baseSegments.forEach((segment) => {
-          const start = segment.start.clone().applyMatrix4(matrix);
-          const end = segment.end.clone().applyMatrix4(matrix);
-          positions.push(start.x, start.y, start.z, end.x, end.y, end.z);
+      if (this.useCurvedLines) {
+        const lineGroup = new THREE.Group();
+        transforms.forEach((matrix) => {
+          this.baseSegments.forEach((segment) => {
+            const start = segment.start.clone().applyMatrix4(matrix);
+            const end = segment.end.clone().applyMatrix4(matrix);
+            const dir = new THREE.Vector3().subVectors(end, start);
+            const length = dir.length();
+            if (length < 1e-6) {
+              return;
+            }
+            dir.normalize();
+            let normal = new THREE.Vector3(0, 1, 0).cross(dir);
+            if (normal.lengthSq() < 1e-6) {
+              normal = new THREE.Vector3(1, 0, 0).cross(dir);
+            }
+            if (normal.lengthSq() < 1e-6) {
+              normal = new THREE.Vector3(0, 0, 1);
+            }
+            normal.normalize();
+            const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+            const control = mid.clone().addScaledVector(normal, length * 0.2);
+            const curve = new THREE.QuadraticBezierCurve3(start, control, end);
+            const points = curve.getPoints(16);
+            const positions = new Float32Array(points.length * 3);
+            points.forEach((pt, idx) => {
+              positions[idx * 3] = pt.x;
+              positions[idx * 3 + 1] = pt.y;
+              positions[idx * 3 + 2] = pt.z;
+            });
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const line = new THREE.Line(geometry, this.curvedLineMaterial);
+            lineGroup.add(line);
+          });
         });
-      });
+        if (lineGroup.children.length) {
+          group.add(lineGroup);
+        }
+      } else {
+        const positions = [];
+        transforms.forEach((matrix) => {
+          this.baseSegments.forEach((segment) => {
+            const start = segment.start.clone().applyMatrix4(matrix);
+            const end = segment.end.clone().applyMatrix4(matrix);
+            positions.push(start.x, start.y, start.z, end.x, end.y, end.z);
+          });
+        });
 
-      if (positions.length) {
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-        const lines = new THREE.LineSegments(geometry, this.lineMaterial);
-        group.add(lines);
+        if (positions.length) {
+          const geometry = new THREE.BufferGeometry();
+          geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+          const lines = new THREE.LineSegments(geometry, this.lineMaterial);
+          group.add(lines);
+        }
       }
     }
 
@@ -1469,6 +1518,7 @@ function init() {
   const screwCountEl = document.getElementById('screw-count');
   const showPointsEl = document.getElementById('toggle-points');
   const showLinesEl = document.getElementById('toggle-lines');
+  const showCurvedLinesEl = document.getElementById('toggle-curved-lines');
   const gridDensityEl = document.getElementById('grid-density');
   const undoButton = document.getElementById('undo-button');
   const redoButton = document.getElementById('redo-button');
@@ -1615,6 +1665,14 @@ function init() {
     };
     showLinesEl.addEventListener('change', applyShowLines);
     applyShowLines();
+  }
+
+  if (showCurvedLinesEl) {
+    const applyCurvedLines = () => {
+      app.updateCurvedLines(showCurvedLinesEl.checked);
+    };
+    showCurvedLinesEl.addEventListener('change', applyCurvedLines);
+    applyCurvedLines();
   }
 
   if (gridDensityEl) {
