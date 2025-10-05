@@ -90,3 +90,90 @@ The current version includes:
 - **Kaleidoscope Symmetry**: Add support for advanced symmetry modes, such as kaleidoscope effects. *(Difficulty: High)*
 - **Dynamic Symmetry Animation**: Introduce animations that dynamically modify symmetry in real time. *(Difficulty: Medium)*
 
+
+# World of Forms Generator
+
+A creative tool for generating **symmetrical tessellations** with **interactive connections**, **customizable nodes**, and a **refined visual interface** inspired by geometric harmony and artistic design systems.
+
+## Overview
+
+The **World of Forms Generator** lets you connect nodes within a single geometric form (triangle, square, hexagon), apply **symmetry rules** (rotation and reflection), and tessellate the resulting patterns seamlessly across the canvas.  
+It combines geometry, design research, and aesthetic experimentation — bridging Wilhelm Ostwald’s *“Die Harmonie der Formen”* with contemporary computational design.
+
+## Features
+
+- 🎨 **Interactive Nodes** – Click nodes to draw connections dynamically.  
+- ♻️ **Symmetry Modes** – Choose between *Rotation* or *Rotation + Reflection* for balanced designs.  
+- 🧩 **Tessellation Engine** – Automatically tiles the pattern across the canvas.  
+- ⚙️ **Custom Controls** – Sliders to adjust the number of nodes and form size.  
+- 🌗 **Light/Dark Mode** – Adaptive background and line colors for different visual contexts.  
+- 💡 **Tooltips & Clean UI** – Minimal, glass-like interface with contextual hints.  
+- 🔄 **Reset & Undo** – Quickly clear the canvas or undo the last connection.  
+- 🧮 **Random Initialization** – Each session starts with a subtle random pattern for inspiration.
+
+## Setup
+
+### Prerequisites
+- [p5.js](https://p5js.org/) library (local or via CDN)
+- A modern browser with JavaScript enabled
+
+### Installation
+1. Clone or download this repository:
+   ```bash
+   git clone https://github.com/philipppaulsen/world_of_forms_generator.git
+   ```
+2. Open the `index.html` file in your browser.  
+3. Adjust settings, explore symmetry, and connect forms interactively.
+
+### Hosting
+The project is hosted via **GitHub Pages** and embedded in [ReadyMag](https://readymag.com) via an iframe:
+```html
+<iframe 
+  src="https://philipppaulsen.github.io/world_of_forms_generator/" 
+  style="width: 100%; height: 100vh; border: none;">
+</iframe>
+```
+
+---
+
+## Current State (October 2025)
+
+- ✅ Stable tessellation for **hexagon**, **square**, and **triangle**
+- ✅ Correct alignment and proportional scaling
+- ✅ Canvas-centered geometry
+- ✅ Integrated dark mode with white lines and black background
+- ✅ Refined node system (outer nodes visible, hover turns red)
+- ✅ Simplified UI with glass effect and consistent spacing
+- ✅ Frame and shadow styling aligned with control panel
+
+---
+
+## Planned Improvements
+
+### Visual & UX
+- Fine-tuned **color theming** for adaptive contrast  
+- Additional **line weight** and **style customization**
+- Option to **toggle node visibility**
+- **Responsive layout** for mobile embedding in ReadyMag  
+
+### Functional
+- Export as **PNG** or **SVG**  
+- Custom symmetry definitions  
+- Curved or animated line rendering  
+- Fill closed areas with colors  
+- Pattern saving and reloading  
+
+---
+
+## Related Projects
+
+- [**Space Harmony**](https://philipppaulsen.github.io/SpaceHarmony/) – exploring proportional and spatial relations based on geometric harmonics.  
+- Both projects are part of *Die Welt der Formen* research framework.
+
+---
+
+## Credits
+
+Developed by **Philipp Paulsen**  
+IU International University, 2025  
+Inspired by *Wilhelm Ostwald’s "Die Harmonie der Formen"*  
