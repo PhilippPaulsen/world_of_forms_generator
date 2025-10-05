@@ -1,77 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <!-- Important for mobile scaling -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pattern Generator</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>World of Forms Generator</title>
 
-  <!-- p5.js (you can change version if you like) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
+  <!-- p5.js Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
 
-  <!-- Link to your external stylesheet (if you have one) -->
-  <link rel="stylesheet" href="style.css" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: white; /* oder 'transparent' für ReadyMag-Hintergrund */
+    }
+    canvas {
+      display: block;
+    }
+  </style>
 </head>
 <body>
+  <script>
+    function setup() {
+      createCanvas(windowWidth, windowHeight);
+      noLoop(); // wenn du Animation willst, entferne diese Zeile
+      background(255);
+      noStroke();
+      fill(0);
+      textAlign(CENTER, CENTER);
+      textSize(24);
+      text('World of Forms Generator', width / 2, height / 2);
+    }
 
-  <!-- Container for the p5 canvas -->
-  <div id="canvas-container"></div>
+    function draw() {
+      // hier kommt dein p5.js-Code hin
+    }
 
-  <!-- Controls below the canvas -->
-  <div id="controls">
-
-    <!-- Canvas size slider -->
-    <label for="canvas-size-slider">Canvas Size:</label>
-    <input type="range" id="canvas-size-slider" min="320" max="800" value="320">
-
-    <!-- Grid shape (square or triangle) -->
-    <label for="grid-shape-dropdown">Grid Shape:</label>
-    <select id="grid-shape-dropdown">
-      <option value="square">Square</option>
-      <option value="triangle">Triangle</option>
-      <!-- if later you add "hex", you can do:
-      <option value="hex">Hex</option>
-      -->
-    </select>
-    
-    <!-- Central Shape Size factor (1..9) -->
-    <label for="square-size-slider">Central Shape Size:</label>
-    <input type="range" id="square-size-slider" min="1" max="9" step="2" value="5">
-
-    <!-- Number of Nodes (1..10 for example) -->
-    <label for="node-slider">Number of Nodes:</label>
-    <input type="range" id="node-slider" min="1" max="10" value="1" step="1">
-
-    <!-- Curve Strength (-50..50) -->
-    <label for="curve-slider">Curve Strength (-50 to 50):</label>
-    <input type="range" id="curve-slider" min="-50" max="50" value="0">
-
-    <!-- Symmetry Mode -->
-    <label for="symmetry-dropdown">Symmetry Mode:</label>
-    <select id="symmetry-dropdown">
-      <option value="rotation3">3-fold Rotation</option>
-      <option value="rotation_reflection3">3-fold Rotation + Reflection</option>
-      <option value="rotation6" selected>6-fold Rotation</option>
-      <option value="rotation_reflection6">6-fold Rotation + Reflection</option>
-    </select>
-
-    <!-- Line Color -->
-    <label for="line-color-picker">Line Color:</label>
-    <input type="color" id="line-color-picker" value="#000000">
-
-    <!-- Show Nodes Checkbox -->
-    <label for="toggle-nodes">Show Nodes:</label>
-    <input type="checkbox" id="toggle-nodes" checked>
-
-    <!-- Buttons -->
-    <button id="clear-button">Clear</button>
-    <button id="back-button">Undo</button>
-    <button id="random-button">+ Random Line</button>
-
-  </div>
-
-  <!-- Main sketch code -->
-  <script src="sketch.js"></script>
-
+    function windowResized() {
+      resizeCanvas(windowWidth, windowHeight);
+      redraw(); // aktualisiert das Layout nach Resize
+    }
+  </script>
 </body>
 </html>
