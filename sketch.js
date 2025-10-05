@@ -214,34 +214,44 @@ function tileSquare() {
   }
 }
 
-// --- TRIANGLE --- (equilateral tiling with alternating orientation)
+// --- TRIANGLE --- (triangular lattice, centroid-centered)
 function tileTriangle() {
-  // Base length of the central equilateral triangle
+  // Justage-Parameter für das Dreieck-Tiling:
+  // Passe horizontalAdjust und verticalAdjust manuell an, um die horizontale/vertikale Abstände zwischen den Dreiecken zu feintunen.
+  // Standardwerte: horizontalAdjust = 0.0, verticalAdjust = 0.08
+  const horizontalAdjust = -0.01;
+  const verticalAdjust = 0.01;
+
   const s = dist(outerCorners[1].x, outerCorners[1].y, outerCorners[2].x, outerCorners[2].y);
-  const h = (sqrt(3) / 2) * s; // triangle height
+  const h = (sqrt(3) / 2) * s;
 
-  // Number of bricks needed to cover canvas
-  const cols = ceil(width / s) + 4;
-  const rows = ceil(height / h) + 4;
+  // --- Manuelle Verschiebung des gesamten Musters ---
+  const offsetX = -s * 2.49; // negative Werte: nach links, positive: nach rechts
+  const offsetY = -h * 3.02; // negative Werte: nach oben, positive: nach unten
 
-  // Align bricks so that the central upright triangle stays centered
-  // For an upright equilateral triangle, the centroid is at y = h/3 from its base
-  const baseX0 = centroid.x - s / 2;     // brick's left x for the central brick
-  const baseY0 = centroid.y - h / 3;     // brick's top y for the central brick
+  // Schrittweiten mit manueller Justage
+  const v1 = { x: s * (1 + horizontalAdjust), y: 0 }; // horizontale Schrittweite (angepasst)
+  const v2 = { x: s / 2, y: h * (1 + verticalAdjust) }; // vertikale Schrittweite (angepasst)
+
+  // Ursprung für das Gitter
+  const B = outerCorners[1];
+  const cols = ceil(width / (s * (1 + horizontalAdjust))) + 4;
+  const rows = ceil(height / (h * (1 + verticalAdjust))) + 4;
 
   for (let j = -2; j < rows; j++) {
     for (let i = -2; i < cols; i++) {
-      const x0 = baseX0 + i * s;
-      const y0 = baseY0 + j * h;
+      const anchor = {
+        x: B.x + i * v1.x + j * v2.x + offsetX,
+        y: B.y + i * v1.y + j * v2.y + offsetY
+      };
 
-      // Centroid of the upright ("up") triangle inside the brick
-      const upC = { x: x0 + s / 2, y: y0 + h / 3 };
-      // Centroid of the upside-down ("down") triangle inside the brick
-      const downC = { x: x0 + s / 2, y: y0 + (2 * h) / 3 };
+      // Aufrechtes Dreieck
+      const centerUp = { x: anchor.x + s / 2, y: anchor.y - h / 3 };
+      drawShapeCell(centerUp, false);
 
-      // Draw the two triangles: up (no flip) and down (180° flip)
-      drawShapeCell(upC, false);
-      drawShapeCell(downC, true);
+      // Umgedrehtes Dreieck
+      const centerDown = { x: anchor.x + s / 2, y: anchor.y + h / 3 };
+      drawShapeCell(centerDown, true);
     }
   }
 }
@@ -324,7 +334,7 @@ function drawCurvedBezier(p1, p2, cAmt) {
 // ----------------- GRID BUILDERS (formerly forms.js) ------------
 function buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
   const nodes = []; let id = 1;
-  const base = shapeSizeFactor * 30; const h = (base * sqrt(3)) / 2;
+  const base = canvasW / shapeSizeFactor; const h = (Math.sqrt(3) / 2) * base;
   const cx = canvasW / 2, cy = canvasH / 2;
   const A = { x: cx, y: cy - h / 2 }, B = { x: cx - base / 2, y: cy + h / 2 }, C = { x: cx + base / 2, y: cy + h / 2 };
 

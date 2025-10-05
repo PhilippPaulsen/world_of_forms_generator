@@ -126,11 +126,11 @@ body.dark label {
 /* --- Canvas Styles --- */
 canvas {
   display: block;
-  border: none;
+  border: 1px solid rgba(0, 0, 0, 0.75);
   border-radius: 0;
   background: #fff;
   aspect-ratio: 1 / 1;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
 }
 
 /* --- Slider Styles (Minimal, Schwarz/Grau/Weiß) --- */
