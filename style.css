@@ -1,81 +1,124 @@
 /* 
-  We preserve your original layout approach:
-  - Body in the center, 
-  - Canvas on top (#canvas-container),
-  - Controls below (#controls),
-  - Some mobile-friendly styling 
+  Modernized styles for a compact, elegant GUI with an Apple-Glass effect.
 */
 
 /* Reset margins/padding, set background color, 
    center everything for phone use */
-   body {
-    font-family: Arial, sans-serif;
-    margin: 20px;
-    background-color: #f9f9f9;
-    color: #333;
-  
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  margin: 20px;
+  background-color: #f0f0f0;
+  color: #333;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 100vh;
+}
+
+/* The container for the p5 canvas */
+#canvas-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+/* The new controls container with glass effect */
+.controls-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  justify-items: center;
+  align-items: center;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%); /* For Safari */
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
+.control-group {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start; /* so content starts near top */
-    min-height: 100vh;
-  }
-  
-  /* The container for the p5 canvas */
-  #canvas-container {
-    margin-bottom: 20px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
-    /* If you want a border around the canvas, uncomment:
-    border: 1px solid #ccc; 
-    */
-  }
-  
-  /* The controls area */
-  #controls {
-    display: flex;
-    flex-direction: column;
-    max-width: 320px; 
-    width: 100%; 
-    margin-bottom: 20px; /* extra spacing at bottom if needed */
-  }
-  
-  /* Label styling */
-  #controls label {
-    font-weight: bold;
-    margin-bottom: 5px;
-  }
-  
-  /* Sliders, selects, and buttons */
-  #controls input, 
-  #controls select, 
-  #controls button {
-    margin-bottom: 15px;
+    gap: 8px;
     width: 100%;
-    padding: 8px;
-    box-sizing: border-box;
-    font-size: 14px;
-  }
-  
-  /* Specifically style your range sliders if you want: 
-  #controls input[type="range"] {
-    -webkit-appearance: none;
-    ...
-  }
-  */
-  
-  /* Buttons */
-  button {
-    padding: 8px 10px;
-    font-size: 14px;
-    cursor: pointer;
-  }
-  
-  /* 
-     (Optional) If you'd like to re-center or resize the p5 canvas,
-     you can target #defaultCanvas0 in CSS, or 
-     you can do createCanvas(...).parent("canvas-container") in code.
-  */
-  
+}
+
+.control-group label {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.control-group input,
+.control-group select {
+    width: 100%;
+}
+
+.button-group {
+    grid-column: 1 / -1; /* Span across all columns */
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+/* New styles for icon buttons */
+.icon-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  border-radius: 10px;
+  color: #000;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+  transition: background 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.icon-btn .material-icons {
+    font-size: 22px;
+}
+
+.theme-toggle {
+    grid-column: 1 / -1; /* Span across all columns */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* --- Dark Mode Styles --- */
+
+body.dark {
+  background-color: #111;
+  color: #eee;
+}
+
+body.dark .controls-container {
+  background: rgba(30, 30, 30, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+body.dark .icon-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+body.dark .icon-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+body.dark label {
+    color: #eee;
+}

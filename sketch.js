@@ -116,9 +116,18 @@ function setup() {
         redraw();
     });
 
+    // Added export button handler
+    select("#export-button").mousePressed(() => saveCanvas("world_of_forms", "png"));
+
     document.getElementById("shape-dropdown").addEventListener("change", e => {
         currentShape = e.target.value;
         rebuildGrid(currentShape);
+        redraw();
+    });
+
+    // Added dark mode toggle handler
+    document.getElementById("darkmode-toggle").addEventListener("change", e => {
+        document.body.classList.toggle("dark", e.target.checked);
         redraw();
     });
 
@@ -141,15 +150,37 @@ function rebuildGrid(shape) {
 }
 
 function draw() {
-    background(255);
+    // Adjust background for dark mode
+    if (document.body.classList.contains("dark")) {
+        background(30); // Dark background
+    } else {
+        background(255); // Light background
+    }
     drawTessellation();
 
     if (showNodes) {
-        fill(0);
         noStroke();
+        // Added node hover effect
         for (let nd of nodes) {
+            let d = dist(mouseX, mouseY, nd.x, nd.y);
+            if (d < 10) {
+                fill("#ff3b30"); // Apple-Red for hover
+            } else {
+                if (document.body.classList.contains("dark")) {
+                    fill(255);
+                } else {
+                    fill(0);
+                }
+            }
             ellipse(nd.x, nd.y, 6, 6);
         }
+    }
+}
+
+// Added mouseMoved to enable hover effect
+function mouseMoved() {
+    if (mouseX >= 0 && mouseX <= width && mouseY >= 0 && mouseY <= height) {
+        redraw();
     }
 }
 
@@ -176,16 +207,17 @@ function drawShapeCell() {
 }
 
 function tileHexNoGaps() {
+    if (outerCorners.length < 2) return;
     let side = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y);
     let hexW = side * 1.5;
     let hexH = sqrt(3) * side;
 
-    let colCount = ceil(width / hexW) + 10;
-    let rowCount = ceil(height / hexH) + 10;
+    let colCount = ceil(width / hexW);
+    let rowCount = ceil(height / hexH);
 
-    for (let col = -5; col < colCount; col++) {
+    for (let col = -colCount; col < colCount * 2; col++) {
         let xOff = col * hexW;
-        for (let row = -5; row < rowCount; row++) {
+        for (let row = -rowCount; row < rowCount * 2; row++) {
             let yOff = row * hexH;
             if (col % 2 !== 0) {
                 yOff += hexH * 0.5;
@@ -199,8 +231,10 @@ function tileHexNoGaps() {
 }
 
 function tileSquareNoGaps() {
-    const squareSize = canvasW / shapeSizeFactor;
-    const tilesNeeded = Math.ceil(canvasW / squareSize);
+    if (outerCorners.length < 2) return;
+    // Corrected squareSize calculation for accurate tiling
+    const squareSize = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y);
+    const tilesNeeded = Math.ceil(canvasW / squareSize) + 4;
     const tileCount = Math.max(2, Math.ceil(tilesNeeded / 2));
 
     for (let i = -tileCount; i <= tileCount; i++) {
@@ -217,17 +251,18 @@ function tileSquareNoGaps() {
 }
 
 function tileTriangleNoGaps() {
+    if (outerCorners.length < 3) return;
+    // Corrected tiling values for triangles
     const s = dist(outerCorners[1].x, outerCorners[1].y, outerCorners[2].x, outerCorners[2].y);
-    const diagHeight = s * sqrt(3);
-    const rowH = diagHeight / 2;
+    const rowH = s * sqrt(3) / 2;
     const colW = s;
 
     let colCount = ceil(width / colW) + 4;
     let rowCount = ceil(height / rowH) + 4;
 
-    for (let row = -2; row < rowCount; row++) {
+    for (let row = -rowCount; row < rowCount * 2; row++) {
         let yOff = row * rowH;
-        for (let col = -2; col < colCount; col++) {
+        for (let col = -colCount; col < colCount * 2; col++) {
             let xOff = col * colW;
             if (row % 2 !== 0) {
                 xOff += s / 2;
@@ -268,7 +303,12 @@ function addRandomConnection() {
 }
 
 function drawConnectionWithSymmetry(p1, p2) {
-    stroke(lineColor);
+    // Set line color based on dark mode
+    if (document.body.classList.contains("dark")) {
+        stroke(255); // White in dark mode
+    } else {
+        stroke(lineColor);
+    }
     strokeWeight(2);
 
     drawCurvedBezier(p1, p2, curveAmount);

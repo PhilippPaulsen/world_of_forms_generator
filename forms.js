@@ -9,7 +9,7 @@ function buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
     let nodes = [];
     let id = 1;
 
-    let base = shapeSizeFactor * 30;
+    let base = (canvasW / shapeSizeFactor) * 0.8;
     let h = (base * sqrt(3)) / 2;
 
     let shapeCenterX = canvasW / 2;
@@ -20,12 +20,14 @@ function buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
     const C = { x: shapeCenterX + base / 2, y: shapeCenterY + h / 2 };
 
     for (let i = 0; i < nodeCount; i++) {
-        let t = (nodeCount <= 1) ? 0 : i / (nodeCount - 1);
+        let t = (nodeCount <= 1) ? 0.5 : i / (nodeCount - 1);
         for (let j = 0; j <= i; j++) {
-            let s = (i === 0) ? 0 : j / i;
-            let x = (1 - t) * A.x + t * ((1 - s) * B.x + s * C.x);
-            let y = (1 - t) * A.y + t * ((1 - s) * B.y + s * C.y);
-            nodes.push({ id: id++, x, y });
+            let s = (i === 0) ? 0.5 : j / i;
+            let p_x = lerp(B.x, C.x, s);
+            let p_y = lerp(B.y, C.y, s);
+            let final_x = lerp(A.x, p_x, t);
+            let final_y = lerp(A.y, p_y, t);
+            nodes.push({ id: id++, x: final_x, y: final_y });
         }
     }
 
@@ -41,7 +43,7 @@ function buildSquareGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
     let nodes = [];
     let idCounter = 1;
     const squareSize = canvasW / shapeSizeFactor;
-    const step = squareSize / (nodeCount - 1);
+    const step = (nodeCount > 1) ? squareSize / (nodeCount - 1) : 0;
 
     const startX = canvasW / 2 - squareSize / 2;
     const startY = canvasH / 2 - squareSize / 2;
@@ -49,8 +51,8 @@ function buildSquareGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
     for (let i = 0; i < nodeCount; i++) {
         for (let j = 0; j < nodeCount; j++) {
             nodes.push({
-                x: startX + i * step,
-                y: startY + j * step,
+                x: startX + j * step,
+                y: startY + i * step,
                 id: idCounter++,
             });
         }
@@ -69,6 +71,7 @@ function buildSquareGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
 
 function buildHexGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
     let nodes = [];
+    let idCounter = 1;
     let outerCorners = [];
     
     const shapeHeight = canvasH / shapeSizeFactor;
@@ -87,48 +90,59 @@ function buildHexGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
     for (let c of outerCorners) { sumX += c.x; sumY += c.y; }
     const centroid = { x: sumX / 6, y: sumY / 6 };
 
-    function getScaledCorners(scale) {
-        let arr = [];
-        for (let i = 0; i < 6; i++) {
-            let ox = outerCorners[i].x;
-            let oy = outerCorners[i].y;
-            let x = centroid.x + (ox - centroid.x) * scale;
-            let y = centroid.y + (oy - centroid.y) * scale;
-            arr.push({ x, y });
-        }
-        return arr;
+    // Add center node
+    if (nodeCount > 0) {
+        nodes.push({ id: idCounter++, x: centroid.x, y: centroid.y });
     }
 
-    function addRingRecursive(r, scale) {
-        let ringCorners = getScaledCorners(scale);
+    // Add concentric rings
+    for (let i = 1; i < nodeCount; i++) {
+        const scale = i / (nodeCount - 1);
+        let ringCorners = outerCorners.map(c => ({
+            x: lerp(centroid.x, c.x, scale),
+            y: lerp(centroid.y, c.y, scale)
+        }));
 
-        for (let i = 0; i < 6; i++) {
-            nodes.push({ x: ringCorners[i].x, y: ringCorners[i].y, id: nodes.length + 1 });
-        }
-
-        let bridgingCount = r - 1;
-        for (let c = 0; c < 6; c++) {
-            let c1 = ringCorners[c];
-            let c2 = ringCorners[(c + 1) % 6];
-            for (let seg = 1; seg <= bridgingCount; seg++) {
-                let t = seg / (bridgingCount + 1);
-                let mx = c1.x + t * (c2.x - c1.x);
-                let my = c1.y + t * (c2.y - c1.y);
-                nodes.push({ x: mx, y: my, id: nodes.length + 1 });
+        // Add nodes on the edges of the ring
+        for (let j = 0; j < 6; j++) {
+            const p1 = ringCorners[j];
+            const p2 = ringCorners[(j + 1) % 6];
+            // The number of segments on each edge of the inner rings can be `i`
+            for (let k = 0; k < i; k++) {
+                const t = k / i;
+                nodes.push({
+                    id: idCounter++,
+                    x: lerp(p1.x, p2.x, t),
+                    y: lerp(p1.y, p2.y, t)
+                });
             }
         }
-
-        if (r === 1) {
-            nodes.push({ x: centroid.x, y: centroid.y, id: nodes.length + 1 });
-        }
-
-        if (r > 1) {
-            let subScale = scale * (r - 1) / r;
-            addRingRecursive(r - 1, subScale);
-        }
+    }
+    // Add the outermost ring corners
+    if (nodeCount > 1) {
+        outerCorners.forEach(c => {
+            nodes.push({ id: idCounter++, x: c.x, y: c.y });
+        });
     }
 
-    addRingRecursive(nodeCount, 1.0);
+    // A simple way to ensure all expected nodes are there for higher counts
+    if (nodeCount > 1) {
+        let finalNodes = [{ id: 1, x: centroid.x, y: centroid.y }];
+        let finalId = 2;
+        for (let i = 1; i < nodeCount; i++) {
+            const scale = i / (nodeCount-1);
+            let ringCorners = outerCorners.map(c => ({ x: lerp(centroid.x, c.x, scale), y: lerp(centroid.y, c.y, scale) }));
+            for(let j=0; j<6; j++) {
+                const p1 = ringCorners[j];
+                const p2 = ringCorners[(j+1)%6];
+                for(let k=0; k<i; k++) {
+                    const t = k/i;
+                    finalNodes.push({id: finalId++, x: lerp(p1.x, p2.x, t), y: lerp(p1.y, p2.y, t)});
+                }
+            }
+        }
+        nodes = finalNodes;
+    }
 
     return { nodes, centroid, outerCorners };
 }

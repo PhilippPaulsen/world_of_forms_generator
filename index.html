@@ -5,11 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>World of Forms Generator</title>
   <link rel="stylesheet" href="style.css">
+  <!-- Added Material Icons -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
 <body>
   <div class="main-container">
+    <!-- Canvas is now on top -->
+    <div id="canvas-container"></div>
+
+    <!-- Controls are now below canvas -->
     <div class="controls-container">
-      <h1>World of Forms</h1>
       
       <div class="control-group">
         <label for="shape-dropdown">Shape</label>
@@ -62,14 +67,22 @@
         <label for="toggle-nodes">Show Nodes</label>
       </div>
 
+      <!-- Replaced text buttons with icon buttons -->
       <div class="button-group">
-        <button id="clear-button">Clear</button>
-        <button id="back-button">Undo</button>
-        <button id="random-button">Random</button>
+        <button id="clear-button" class="icon-btn"><span class="material-icons">delete_outline</span></button>
+        <button id="back-button" class="icon-btn"><span class="material-icons">undo</span></button>
+        <button id="random-button" class="icon-btn"><span class="material-icons">shuffle</span></button>
+        <button id="export-button" class="icon-btn"><span class="material-icons">download</span></button>
+      </div>
+
+      <!-- Moved dark mode toggle into controls -->
+      <div class="theme-toggle">
+        <label>
+          <input type="checkbox" id="darkmode-toggle"> Dark Mode
+        </label>
       </div>
 
     </div>
-    <div id="canvas-container"></div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
