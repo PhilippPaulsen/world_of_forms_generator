@@ -29,6 +29,11 @@
       --glass-bg: rgba(255, 255, 255, 0.25);
       --glass-border: rgba(255, 255, 255, 0.18);
       --accent: #ff3b30;
+
+      /* Slider colors */
+      --slider-track-bg: #222;
+      --slider-thumb-bg: #888;
+      --slider-thumb-hover-bg: #aaa;
     }
 
     body.dark {
@@ -37,6 +42,10 @@
       --glass-bg: rgba(40, 40, 40, 0.35);
       --glass-border: rgba(255, 255, 255, 0.15);
       --accent: #ff453a;
+
+      --slider-track-bg: #ddd;
+      --slider-thumb-bg: #bbb;
+      --slider-thumb-hover-bg: #eee;
     }
 
     .main-container {
@@ -53,6 +62,7 @@
     #canvas-container {
       flex: 1;
       width: 100%;
+      aspect-ratio: 1 / 1;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -60,7 +70,7 @@
       border-radius: 16px;
       backdrop-filter: blur(10px) saturate(180%);
       -webkit-backdrop-filter: blur(10px) saturate(180%);
-      border: 1px solid var(--glass-border);
+      border: 1px solid black; /* Feine schwarze Außenlinie */
       overflow: hidden;
     }
 
@@ -94,6 +104,45 @@
       padding: 4px;
       background: rgba(255,255,255,0.2);
       color: var(--text);
+    }
+
+    /* Minimalist slider styling */
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      background: var(--slider-track-bg);
+      border-radius: 3px;
+      outline: none;
+      margin: 0;
+      padding: 0;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      background: var(--slider-thumb-bg);
+      cursor: pointer;
+      border-radius: 50%;
+      border: none;
+      margin-top: -4px; /* center thumb */
+      transition: background 0.3s;
+    }
+    input[type="range"]:hover::-webkit-slider-thumb {
+      background: var(--slider-thumb-hover-bg);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      background: var(--slider-thumb-bg);
+      cursor: pointer;
+      border-radius: 50%;
+      border: none;
+      transition: background 0.3s;
+    }
+    input[type="range"]:hover::-moz-range-thumb {
+      background: var(--slider-thumb-hover-bg);
     }
 
     .button-group {
@@ -165,7 +214,7 @@
 
       <div class="control-group">
         <label for="node-slider">Node Count</label>
-        <input type="range" id="node-slider" min="1" max="7" value="4">
+        <input type="range" id="node-slider" min="1" max="7" value="1">
       </div>
 
       <div class="control-group">
@@ -182,6 +231,7 @@
           <option value="rotation6">6-fold Rotation</option>
           <option value="rotation_reflection3">3-fold + Reflection</option>
           <option value="rotation_reflection6" selected>6-fold + Reflection</option>
+          <option value="rotation_reflection">Rotation + Reflection</option>
         </select>
       </div>
 
@@ -197,10 +247,10 @@
 
       <!-- Icon buttons -->
       <div class="button-group">
-        <button id="clear-button" class="icon-btn"><span class="material-icons">delete_outline</span></button>
-        <button id="back-button" class="icon-btn"><span class="material-icons">undo</span></button>
-        <button id="random-button" class="icon-btn"><span class="material-icons">shuffle</span></button>
-        <button id="export-button" class="icon-btn"><span class="material-icons">download</span></button>
+        <button id="clear-button" class="icon-btn" title="Clear Canvas"><span class="material-icons">delete_outline</span></button>
+        <button id="back-button" class="icon-btn" title="Undo"><span class="material-icons">undo</span></button>
+        <button id="random-button" class="icon-btn" title="Randomize"><span class="material-icons">shuffle</span></button>
+        <button id="export-button" class="icon-btn" title="Download"><span class="material-icons">download</span></button>
       </div>
 
       <!-- Dark Mode Toggle -->
