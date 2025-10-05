@@ -5,17 +5,145 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>World of Forms Generator</title>
   <link rel="stylesheet" href="style.css">
-  <!-- Added Material Icons -->
+
+  <!-- Material Icons -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+  <!-- Apple Glass effect -->
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      background: var(--background);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      transition: background 0.5s, color 0.5s;
+    }
+
+    :root {
+      --background: #ffffff;
+      --text: #000000;
+      --glass-bg: rgba(255, 255, 255, 0.25);
+      --glass-border: rgba(255, 255, 255, 0.18);
+      --accent: #ff3b30;
+    }
+
+    body.dark {
+      --background: #121212;
+      --text: #ffffff;
+      --glass-bg: rgba(40, 40, 40, 0.35);
+      --glass-border: rgba(255, 255, 255, 0.15);
+      --accent: #ff453a;
+    }
+
+    .main-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 95%;
+      max-width: 900px;
+      height: 95vh;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    #canvas-container {
+      flex: 1;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: var(--glass-bg);
+      border-radius: 16px;
+      backdrop-filter: blur(10px) saturate(180%);
+      -webkit-backdrop-filter: blur(10px) saturate(180%);
+      border: 1px solid var(--glass-border);
+      overflow: hidden;
+    }
+
+    .controls-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 1rem;
+      backdrop-filter: blur(12px) saturate(180%);
+      -webkit-backdrop-filter: blur(12px) saturate(180%);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      font-size: 14px;
+    }
+
+    .control-group label {
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+
+    input[type="range"], select, input[type="color"], input[type="checkbox"] {
+      border-radius: 8px;
+      border: none;
+      padding: 4px;
+      background: rgba(255,255,255,0.2);
+      color: var(--text);
+    }
+
+    .button-group {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      grid-column: 1 / -1;
+    }
+
+    .icon-btn {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 8px;
+      cursor: pointer;
+      color: var(--text);
+      transition: background 0.3s, color 0.3s, transform 0.2s;
+    }
+
+    .icon-btn:hover {
+      background: var(--accent);
+      color: white;
+      transform: scale(1.1);
+    }
+
+    .theme-toggle {
+      grid-column: 1 / -1;
+      text-align: center;
+    }
+
+    .theme-toggle label {
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    @media (max-width: 600px) {
+      .controls-container {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
 </head>
+
 <body>
   <div class="main-container">
-    <!-- Canvas is now on top -->
+    <!-- Canvas container -->
     <div id="canvas-container"></div>
 
-    <!-- Controls are now below canvas -->
+    <!-- Controls container -->
     <div class="controls-container">
-      
       <div class="control-group">
         <label for="shape-dropdown">Shape</label>
         <select id="shape-dropdown">
@@ -67,7 +195,7 @@
         <label for="toggle-nodes">Show Nodes</label>
       </div>
 
-      <!-- Replaced text buttons with icon buttons -->
+      <!-- Icon buttons -->
       <div class="button-group">
         <button id="clear-button" class="icon-btn"><span class="material-icons">delete_outline</span></button>
         <button id="back-button" class="icon-btn"><span class="material-icons">undo</span></button>
@@ -75,18 +203,26 @@
         <button id="export-button" class="icon-btn"><span class="material-icons">download</span></button>
       </div>
 
-      <!-- Moved dark mode toggle into controls -->
+      <!-- Dark Mode Toggle -->
       <div class="theme-toggle">
         <label>
           <input type="checkbox" id="darkmode-toggle"> Dark Mode
         </label>
       </div>
-
     </div>
   </div>
 
+  <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
   <script src="forms.js"></script>
   <script src="sketch.js"></script>
+
+  <script>
+    // Simple Dark Mode toggle
+    const toggle = document.getElementById("darkmode-toggle");
+    toggle.addEventListener("change", () => {
+      document.body.classList.toggle("dark", toggle.checked);
+    });
+  </script>
 </body>
 </html>

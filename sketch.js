@@ -1,406 +1,390 @@
 /**
- * sketch.js
- * 
- * Main sketch file for the consolidated World of Forms Generator.
- * Handles UI, event handling, drawing, and symmetry.
+ * sketch.js – Unified World of Forms Generator
+ * Combines: Hexagon, Square, Triangle
+ * Fully compatible with existing UI (sliders, dropdowns, buttons).
+ * Author: Philipp Paulsen / 2025 Refactor
  */
 
 let canvasW = 320;
 let canvasH = 320;
+let darkMode = false;
 
-let shapeSizeFactor = 1;
-let nodeCount = 1;
+// Shape parameters
+let currentShape = "hex"; // default
+let shapeSizeFactor = 3;
+let nodeCount = 3;
 let curveAmount = 0;
 let symmetryMode = "rotation_reflection6";
 let lineColor = "#000000";
 let showNodes = true;
-let currentShape = 'hex';
 
-let outerCorners = [];
-let centroid = { x: 0, y: 0 };
+// Data
 let nodes = [];
 let connections = [];
+let outerCorners = [];
+let centroid = { x: 0, y: 0 };
+
+// === SETUP ==================================================
 
 function setup() {
-    /************************************************************
-     * 1) CREATE CANVAS
-     ************************************************************/
-    const sizeSlider = select("#canvas-size-slider");
+  const sizeSlider = select("#canvas-size-slider");
+  canvasW = parseInt(sizeSlider.value()) || 320;
+  canvasH = canvasW;
+  createCanvas(canvasW, canvasH).parent("canvas-container");
+  noLoop();
+
+  // === UI HOOKS ===
+  sizeSlider.input(() => {
     canvasW = parseInt(sizeSlider.value()) || 320;
     canvasH = canvasW;
-    createCanvas(canvasW, canvasH).parent("canvas-container");
-    noLoop();
+    resizeCanvas(canvasW, canvasH);
+    rebuildShape();
+  });
 
-    /************************************************************
-     * 2) HOOK UP UI
-     ************************************************************/
-    sizeSlider.input(() => {
-        let oldW = canvasW, oldH = canvasH;
-        canvasW = parseInt(sizeSlider.value()) || 320;
-        canvasH = canvasW;
-        let scaleX = canvasW / oldW;
-        let scaleY = canvasH / oldH;
+  const shapeSlider = select("#square-size-slider");
+  shapeSizeFactor = parseInt(shapeSlider.value()) || 3;
+  shapeSlider.input(() => {
+    shapeSizeFactor = parseInt(shapeSlider.value()) || 3;
+    rebuildShape();
+  });
 
-        resizeCanvas(canvasW, canvasH);
+  const nSlider = select("#node-slider");
+  nodeCount = parseInt(nSlider.value()) || 3;
+  nSlider.input(() => {
+    nodeCount = parseInt(nSlider.value()) || 3;
+    rebuildShape();
+  });
 
-        for (let nd of nodes) {
-            nd.x = nd.x * scaleX;
-            nd.y = nd.y * scaleY;
-        }
-        for (let c of outerCorners) {
-            c.x *= scaleX;
-            c.y *= scaleY;
-        }
-        centroid.x *= scaleX;
-        centroid.y *= scaleY;
-
-        redraw();
-    });
-
-    const shapeSlider = select("#square-size-slider");
-    shapeSizeFactor = parseInt(shapeSlider.value()) || 1;
-    shapeSlider.input(() => {
-        shapeSizeFactor = parseInt(shapeSlider.value()) || 1;
-        rebuildGrid(currentShape);
-        redraw();
-    });
-
-    const nSlider = select("#node-slider");
-    nodeCount = parseInt(nSlider.value()) || 1;
-    nSlider.input(() => {
-        nodeCount = parseInt(nSlider.value()) || 1;
-        rebuildGrid(currentShape);
-        redraw();
-    });
-
-    const cSlider = select("#curve-slider");
+  const cSlider = select("#curve-slider");
+  cSlider.input(() => {
     curveAmount = parseInt(cSlider.value()) || 0;
-    cSlider.input(() => {
-        curveAmount = parseInt(cSlider.value()) || 0;
-        redraw();
-    });
+    redraw();
+  });
 
-    const symDropdown = select("#symmetry-dropdown");
+  const symDropdown = select("#symmetry-dropdown");
+  symDropdown.changed(() => {
     symmetryMode = symDropdown.value();
-    symDropdown.changed(() => {
-        symmetryMode = symDropdown.value();
-        redraw();
-    });
+    redraw();
+  });
 
-    const colorPicker = select("#line-color-picker");
+  const colorPicker = select("#line-color-picker");
+  colorPicker.input(() => {
     lineColor = colorPicker.value();
-    colorPicker.input(() => {
-        lineColor = colorPicker.value();
-        redraw();
-    });
+    redraw();
+  });
 
-    const nodeCB = select("#toggle-nodes");
+  const nodeCB = select("#toggle-nodes");
+  nodeCB.changed(() => {
     showNodes = nodeCB.elt.checked;
-    nodeCB.changed(() => {
-        showNodes = nodeCB.elt.checked;
-        redraw();
-    });
+    redraw();
+  });
 
-    select("#clear-button").mousePressed(() => {
-        connections = [];
-        redraw();
-    });
-
-    select("#back-button").mousePressed(() => {
-        if (connections.length > 0) connections.pop();
-        redraw();
-    });
-
-    select("#random-button").mousePressed(() => {
-        addRandomConnection();
-        redraw();
-    });
-
-    // Added export button handler
-    select("#export-button").mousePressed(() => saveCanvas("world_of_forms", "png"));
-
-    document.getElementById("shape-dropdown").addEventListener("change", e => {
-        currentShape = e.target.value;
-        rebuildGrid(currentShape);
-        redraw();
-    });
-
-    // Added dark mode toggle handler
-    document.getElementById("darkmode-toggle").addEventListener("change", e => {
-        document.body.classList.toggle("dark", e.target.checked);
-        redraw();
-    });
-
-    rebuildGrid(currentShape);
-}
-
-function rebuildGrid(shape) {
+  select("#clear-button").mousePressed(() => {
     connections = [];
-    let grid;
-    if (shape === 'triangle') {
-        grid = buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH);
-    } else if (shape === 'square') {
-        grid = buildSquareGrid(nodeCount, shapeSizeFactor, canvasW, canvasH);
-    } else {
-        grid = buildHexGrid(nodeCount, shapeSizeFactor, canvasW, canvasH);
-    }
-    nodes = grid.nodes;
-    centroid = grid.centroid;
-    outerCorners = grid.outerCorners;
+    redraw();
+  });
+
+  select("#back-button").mousePressed(() => {
+    if (connections.length > 0) connections.pop();
+    redraw();
+  });
+
+  select("#random-button").mousePressed(() => {
+    addRandomConnection();
+    redraw();
+  });
+
+  document.getElementById("shape-dropdown").addEventListener("change", e => {
+    currentShape = e.target.value;
+    rebuildShape();
+  });
+
+  document.getElementById("darkmode-toggle").addEventListener("change", e => {
+    darkMode = e.target.checked;
+    document.body.classList.toggle("dark", darkMode);
+    redraw();
+  });
+
+  rebuildShape();
 }
+
+// === DRAW ===================================================
 
 function draw() {
-    // Adjust background for dark mode
-    if (document.body.classList.contains("dark")) {
-        background(30); // Dark background
-    } else {
-        background(255); // Light background
-    }
-    drawTessellation();
+  background(darkMode ? 0 : 255);
+  stroke(lineColor);
+  noFill();
 
-    if (showNodes) {
-        noStroke();
-        // Added node hover effect
-        for (let nd of nodes) {
-            let d = dist(mouseX, mouseY, nd.x, nd.y);
-            if (d < 10) {
-                fill("#ff3b30"); // Apple-Red for hover
-            } else {
-                if (document.body.classList.contains("dark")) {
-                    fill(255);
-                } else {
-                    fill(0);
-                }
-            }
-            ellipse(nd.x, nd.y, 6, 6);
-        }
-    }
+  switch (currentShape) {
+    case "hex":
+      drawHexTessellation();
+      break;
+    case "square":
+      drawSquareTessellation();
+      break;
+    case "triangle":
+      drawTriangleTessellation();
+      break;
+  }
+
+  if (showNodes) drawNodes();
 }
 
-// Added mouseMoved to enable hover effect
-function mouseMoved() {
-    if (mouseX >= 0 && mouseX <= width && mouseY >= 0 && mouseY <= height) {
-        redraw();
-    }
+// === SHAPE BUILDERS =========================================
+
+function rebuildShape() {
+  connections = [];
+  nodes = [];
+
+  if (currentShape === "hex") {
+    buildHex();
+  } else if (currentShape === "square") {
+    buildSquare();
+  } else if (currentShape === "triangle") {
+    buildTriangle();
+  }
+
+  redraw();
 }
 
-function drawTessellation() {
-    if (currentShape === 'hex') {
-        tileHexNoGaps();
-    } else if (currentShape === 'square') {
-        tileSquareNoGaps();
-    } else if (currentShape === 'triangle') {
-        tileTriangleNoGaps();
-    }
+// --- HEX ----------------------------------------------------
+
+function buildHex() {
+  outerCorners = [];
+  let shapeHeight = canvasH / shapeSizeFactor;
+  let side = shapeHeight / sqrt(3);
+  let cx = width / 2;
+  let topY = (height / 2) - shapeHeight / 2;
+
+  outerCorners.push({ x: cx - side / 2, y: topY });
+  outerCorners.push({ x: cx + side / 2, y: topY });
+  outerCorners.push({ x: cx + side, y: topY + (sqrt(3) / 2) * side });
+  outerCorners.push({ x: cx + side / 2, y: topY + sqrt(3) * side });
+  outerCorners.push({ x: cx - side / 2, y: topY + sqrt(3) * side });
+  outerCorners.push({ x: cx - side, y: topY + (sqrt(3) / 2) * side });
+
+  centroid = outerCorners.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+  centroid.x /= 6;
+  centroid.y /= 6;
+
+  buildHexNodes();
 }
 
-function drawShapeCell() {
-    for (const conn of connections) {
-        if (conn.length === 2) {
-            const node1 = nodes.find(n => n.id === conn[0]);
-            const node2 = nodes.find(n => n.id === conn[1]);
-            if (node1 && node2) {
-                drawConnectionWithSymmetry(node1, node2);
-            }
-        }
+function buildHexNodes() {
+  nodes = [];
+  let id = 1;
+  let maxR = nodeCount;
+  for (let r = 1; r <= maxR; r++) {
+    let scale = r / maxR;
+    for (let i = 0; i < 6; i++) {
+      let a1 = outerCorners[i];
+      let a2 = outerCorners[(i + 1) % 6];
+      let x = centroid.x + (a1.x - centroid.x) * scale;
+      let y = centroid.y + (a1.y - centroid.y) * scale;
+      nodes.push({ x, y, id: id++ });
+
+      let stepCount = r - 1;
+      for (let s = 1; s <= stepCount; s++) {
+        let t = s / (stepCount + 1);
+        let mx = a1.x + t * (a2.x - a1.x);
+        let my = a1.y + t * (a2.y - a1.y);
+        mx = centroid.x + (mx - centroid.x) * scale;
+        my = centroid.y + (my - centroid.y) * scale;
+        nodes.push({ x: mx, y: my, id: id++ });
+      }
     }
+  }
+  nodes.push({ x: centroid.x, y: centroid.y, id: id++ });
 }
 
-function tileHexNoGaps() {
-    if (outerCorners.length < 2) return;
-    let side = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y);
-    let hexW = side * 1.5;
-    let hexH = sqrt(3) * side;
+function drawHexTessellation() {
+  const side = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y);
+  const hexW = side * 1.5;
+  const hexH = sqrt(3) * side;
+  const cols = ceil(width / hexW) + 4;
+  const rows = ceil(height / hexH) + 4;
 
-    let colCount = ceil(width / hexW);
-    let rowCount = ceil(height / hexH);
+  for (let j = -2; j < rows; j++) {
+    for (let i = -2; i < cols; i++) {
+      let xOff = i * hexW;
+      let yOff = j * hexH;
+      if (i % 2 !== 0) yOff += hexH / 2;
 
-    for (let col = -colCount; col < colCount * 2; col++) {
-        let xOff = col * hexW;
-        for (let row = -rowCount; row < rowCount * 2; row++) {
-            let yOff = row * hexH;
-            if (col % 2 !== 0) {
-                yOff += hexH * 0.5;
-            }
-            push();
-            translate(xOff, yOff);
-            drawShapeCell();
-            pop();
-        }
+      push();
+      translate(xOff, yOff);
+      drawConnections();
+      pop();
     }
+  }
 }
 
-function tileSquareNoGaps() {
-    if (outerCorners.length < 2) return;
-    // Corrected squareSize calculation for accurate tiling
-    const squareSize = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y);
-    const tilesNeeded = Math.ceil(canvasW / squareSize) + 4;
-    const tileCount = Math.max(2, Math.ceil(tilesNeeded / 2));
+// --- SQUARE -------------------------------------------------
 
-    for (let i = -tileCount; i <= tileCount; i++) {
-        for (let j = -tileCount; j <= tileCount; j++) {
-            const offsetX = i * squareSize;
-            const offsetY = j * squareSize;
-
-            push();
-            translate(offsetX, offsetY);
-            drawShapeCell();
-            pop();
-        }
+function buildSquare() {
+  const squareSize = canvasW / shapeSizeFactor;
+  const step = squareSize / (nodeCount - 1);
+  let id = 1;
+  nodes = [];
+  for (let i = 0; i < nodeCount; i++) {
+    for (let j = 0; j < nodeCount; j++) {
+      nodes.push({
+        x: width / 2 - squareSize / 2 + i * step,
+        y: height / 2 - squareSize / 2 + j * step,
+        id: id++
+      });
     }
+  }
 }
 
-function tileTriangleNoGaps() {
-    if (outerCorners.length < 3) return;
-    // Corrected tiling values for triangles
-    const s = dist(outerCorners[1].x, outerCorners[1].y, outerCorners[2].x, outerCorners[2].y);
-    const rowH = s * sqrt(3) / 2;
-    const colW = s;
+function drawSquareTessellation() {
+  const squareSize = canvasW / shapeSizeFactor;
+  const tileCount = ceil(width / squareSize) + 1;
 
-    let colCount = ceil(width / colW) + 4;
-    let rowCount = ceil(height / rowH) + 4;
-
-    for (let row = -rowCount; row < rowCount * 2; row++) {
-        let yOff = row * rowH;
-        for (let col = -colCount; col < colCount * 2; col++) {
-            let xOff = col * colW;
-            if (row % 2 !== 0) {
-                xOff += s / 2;
-            }
-            push();
-            translate(xOff, yOff);
-            drawShapeCell();
-            pop();
-        }
+  for (let i = -1; i <= tileCount; i++) {
+    for (let j = -1; j <= tileCount; j++) {
+      push();
+      translate(i * squareSize, j * squareSize);
+      drawConnections();
+      pop();
     }
+  }
+}
+
+// --- TRIANGLE -----------------------------------------------
+
+function buildTriangle() {
+  nodes = [];
+  const base = width / shapeSizeFactor;
+  const h = base * sqrt(3) / 2;
+  const cx = width / 2;
+  const cy = height / 2;
+  const top = { x: cx, y: cy - h / 2 };
+  const left = { x: cx - base / 2, y: cy + h / 2 };
+  const right = { x: cx + base / 2, y: cy + h / 2 };
+
+  let id = 1;
+  for (let i = 0; i < nodeCount; i++) {
+    const t = i / (nodeCount - 1);
+    for (let j = 0; j <= i; j++) {
+      const s = i ? j / i : 0;
+      const x = (1 - t) * top.x + t * ((1 - s) * left.x + s * right.x);
+      const y = (1 - t) * top.y + t * ((1 - s) * left.y + s * right.y);
+      nodes.push({ x, y, id: id++ });
+    }
+  }
+}
+
+function drawTriangleTessellation() {
+  const base = width / shapeSizeFactor;
+  const h = base * sqrt(3) / 2;
+  const cols = ceil(width / base) + 2;
+  const rows = ceil(height / h) + 2;
+
+  for (let row = -2; row < rows; row++) {
+    for (let col = -2; col < cols; col++) {
+      const xOff = col * base + (row % 2 === 0 ? 0 : base / 2);
+      const yOff = row * h;
+      push();
+      translate(xOff, yOff);
+      drawConnections();
+      pop();
+    }
+  }
+}
+
+// === DRAW CONNECTIONS =======================================
+
+function drawConnections() {
+  for (let [a, b] of connections) {
+    const p1 = nodes.find(n => n.id === a);
+    const p2 = nodes.find(n => n.id === b);
+    if (!p1 || !p2) continue;
+    drawConnectionWithSymmetry(p1, p2);
+  }
+}
+
+function drawNodes() {
+  fill(darkMode ? 255 : 0);
+  noStroke();
+  for (let n of nodes) ellipse(n.x, n.y, 6, 6);
 }
 
 function mousePressed() {
-    if (mouseX < 0 || mouseX > width || mouseY < 0 || mouseY > height) return;
-    let foundId = null;
-    for (let nd of nodes) {
-        if (dist(mouseX, mouseY, nd.x, nd.y) < 20) {
-            foundId = nd.id;
-            break;
-        }
+  let found = null;
+  for (let n of nodes) {
+    if (dist(mouseX, mouseY, n.x, n.y) < 15) {
+      found = n.id;
+      break;
     }
-    if (foundId !== null) {
-        if (!connections.length || connections[connections.length - 1].length === 2) {
-            connections.push([foundId]);
-        } else {
-            connections[connections.length - 1].push(foundId);
-        }
-        redraw();
-    }
+  }
+  if (found) {
+    if (!connections.length || connections[connections.length - 1].length === 2)
+      connections.push([found]);
+    else connections[connections.length - 1].push(found);
+    redraw();
+  }
 }
 
-function addRandomConnection() {
-    if (nodes.length < 2) return;
-    let i1 = floor(random(nodes.length));
-    let i2 = floor(random(nodes.length));
-    if (i1 === i2) return;
-    connections.push([nodes[i1].id, nodes[i2].id]);
-}
+// === SYMMETRY ===============================================
 
 function drawConnectionWithSymmetry(p1, p2) {
-    // Set line color based on dark mode
-    if (document.body.classList.contains("dark")) {
-        stroke(255); // White in dark mode
-    } else {
-        stroke(lineColor);
-    }
-    strokeWeight(2);
+  stroke(lineColor);
+  strokeWeight(2);
+  drawCurvedBezier(p1, p2, curveAmount);
 
-    drawCurvedBezier(p1, p2, curveAmount);
-
-    switch (symmetryMode) {
-        case "reflection_only":
-            let sRef = reflectVertically(p1);
-            let eRef = reflectVertically(p2);
-            drawCurvedBezier(sRef, eRef, curveAmount);
-            break;
-        case "rotation3":
-            [120, 240].forEach(a => {
-                let sR = rotateCentroid(p1, a);
-                let eR = rotateCentroid(p2, a);
-                drawCurvedBezier(sR, eR, curveAmount);
-            });
-            break;
-        case "rotation6":
-            [60, 120, 180, 240, 300].forEach(a => {
-                let sR = rotateCentroid(p1, a);
-                let eR = rotateCentroid(p2, a);
-                drawCurvedBezier(sR, eR, curveAmount);
-            });
-            break;
-        case "rotation_reflection3":
-            [120, 240].forEach(a => {
-                let sR = rotateCentroid(p1, a);
-                let eR = rotateCentroid(p2, a);
-                drawCurvedBezier(sR, eR, curveAmount);
-                let sRR = reflectVertically(sR);
-                let eRR = reflectVertically(eR);
-                drawCurvedBezier(sRR, eRR, curveAmount);
-            });
-            let sRef_ = reflectVertically(p1);
-            let eRef_ = reflectVertically(p2);
-            drawCurvedBezier(sRef_, eRef_, curveAmount);
-            break;
-        case "rotation_reflection6":
-            [60, 120, 180, 240, 300].forEach(a => {
-                let sR = rotateCentroid(p1, a);
-                let eR = rotateCentroid(p2, a);
-                drawCurvedBezier(sR, eR, curveAmount);
-                let sRR = reflectVertically(sR);
-                let eRR = reflectVertically(eR);
-                drawCurvedBezier(sRR, eRR, curveAmount);
-            });
-            let sRef__ = reflectVertically(p1);
-            let eRef__ = reflectVertically(p2);
-            drawCurvedBezier(sRef__, eRef__, curveAmount);
-            break;
+  if (symmetryMode.includes("rotation")) {
+    const angles = currentShape === "square" ? [90, 180, 270] :
+                   currentShape === "triangle" ? [120, 240] :
+                   [60, 120, 180, 240, 300];
+    for (let a of angles) {
+      const p1r = rotateAroundCentroid(p1, a);
+      const p2r = rotateAroundCentroid(p2, a);
+      drawCurvedBezier(p1r, p2r, curveAmount);
     }
+  }
+
+  if (symmetryMode.includes("reflection")) {
+    const p1r = reflectVertically(p1);
+    const p2r = reflectVertically(p2);
+    drawCurvedBezier(p1r, p2r, curveAmount);
+  }
 }
 
 function drawCurvedBezier(p1, p2, cAmt) {
-    let scaleF = 0.01;
-    let sign = (cAmt >= 0) ? 1 : -1;
-    let mag = abs(cAmt) * scaleF;
-    if (mag < 0.0001) {
-        line(p1.x, p1.y, p2.x, p2.y);
-        return;
-    }
-    let mx = (p1.x + p2.x) / 2;
-    let my = (p1.y + p2.y) / 2;
-    let dx = p2.x - p1.x;
-    let dy = p2.y - p1.y;
-    let distLine = sqrt(dx * dx + dy * dy);
-    let nx = -dy, ny = dx;
-    let ln = sqrt(nx * nx + ny * ny);
-    if (ln < 0.0001) return;
-    nx /= ln; ny /= ln;
-
-    let offset = distLine * mag * sign;
-    let c1x = mx + nx * offset;
-    let c1y = my + ny * offset;
-
-    noFill();
-    bezier(p1.x, p1.y, c1x, c1y, c1x, c1y, p2.x, p2.y);
+  const midX = (p1.x + p2.x) / 2;
+  const midY = (p1.y + p2.y) / 2;
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const len = sqrt(dx * dx + dy * dy);
+  const nx = -dy / len;
+  const ny = dx / len;
+  const offset = cAmt * 0.01 * len;
+  const cx = midX + nx * offset;
+  const cy = midY + ny * offset;
+  noFill();
+  bezier(p1.x, p1.y, cx, cy, cx, cy, p2.x, p2.y);
 }
 
-function rotateCentroid(pt, angleDeg) {
-    let rad = radians(angleDeg);
-    let dx = pt.x - centroid.x;
-    let dy = pt.y - centroid.y;
-    return {
-        x: centroid.x + dx * cos(rad) - dy * sin(rad),
-        y: centroid.y + dx * sin(rad) + dy * cos(rad)
-    };
+function rotateAroundCentroid(pt, angle) {
+  const rad = radians(angle);
+  const cx = width / 2;
+  const cy = height / 2;
+  const dx = pt.x - cx;
+  const dy = pt.y - cy;
+  return { x: cx + dx * cos(rad) - dy * sin(rad), y: cy + dx * sin(rad) + dy * cos(rad) };
 }
 
 function reflectVertically(pt) {
-    return {
-        x: 2 * centroid.x - pt.x,
-        y: pt.y
-    };
+  const cx = width / 2;
+  return { x: 2 * cx - pt.x, y: pt.y };
+}
+
+// === RANDOM CONNECTION ======================================
+
+function addRandomConnection() {
+  if (nodes.length < 2) return;
+  const i1 = floor(random(nodes.length));
+  const i2 = floor(random(nodes.length));
+  if (i1 === i2) return;
+  connections.push([nodes[i1].id, nodes[i2].id]);
 }
