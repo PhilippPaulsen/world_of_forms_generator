@@ -22,6 +22,12 @@ body {
   display: flex;
   justify-content: center;
   margin-bottom: 20px;
+  border: none;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
 }
 
 /* The new controls container with glass effect */
@@ -110,6 +116,11 @@ body.dark .controls-container {
   border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
+body.dark #canvas-container {
+  border: 1px solid rgba(255,255,255,0.15);
+  box-shadow: 0 4px 30px rgba(0,0,0,0.4);
+}
+
 body.dark .icon-btn {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
@@ -126,11 +137,25 @@ body.dark label {
 /* --- Canvas Styles --- */
 canvas {
   display: block;
-  border: 1px solid rgba(0, 0, 0, 0.75);
-  border-radius: 0;
-  background: #fff;
   aspect-ratio: 1 / 1;
+  background: #fff;
+  border: 1px solid var(--line-color);
   box-shadow: none;
+}
+
+/* Dynamische Linienfarbe wird per CSS-Variable --line-color aus JS abgerufen */
+:root {
+  --line-color: #000;
+}
+
+body.dark {
+  --line-color: #fff;
+}
+
+body.dark canvas {
+  background: #000;
+  box-shadow: none;
+  border: 1px solid var(--line-color);
 }
 
 /* --- Slider Styles (Minimal, Schwarz/Grau/Weiß) --- */
@@ -190,11 +215,6 @@ body.dark input[type="range"]::-webkit-slider-thumb {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 } */
 
-body.dark canvas {
-  background: #000;
-  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.1);
-  border: none;
-}
 
 /* Node point styles */
 .node {

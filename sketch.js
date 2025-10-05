@@ -131,22 +131,48 @@ function setup() {
   }
 
   rebuildGrid(currentShape);
+  // Draw a random connection on start
+  addRandomConnection();
+  redraw();
 }
 
 // ----------------- DRAW -----------------------------------------
 function draw() {
-  // Always white background (as requested)
-  background(255);
+  // Dark Mode erkennen
+  let isDarkMode = false;
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    isDarkMode = true;
+  }
+
+  if (isDarkMode) {
+    // Hintergrund im Dark Mode: immer vollständig schwarz, unabhängig vom CSS
+    background(0);
+    // Linien und Füllung global auf weiß setzen
+    stroke("#ffffff");
+    fill("#ffffff");
+  } else {
+    // Hintergrund exakt wie Bedienfeld
+    const bgColor = getComputedStyle(document.body).getPropertyValue('--panel-bg-color') || '#ffffff';
+    background(bgColor);
+    // Linienfarbe wie Picker/CSS, Füllung standardmäßig schwarz
+    stroke(lineColor);
+    fill(0);
+  }
 
   drawTessellation();
 
-  // Center tile nodes (hover red)
+  // Knoten (Hover rot/hellgrau im Dark Mode)
   if (showNodes) {
     push();
+    // Im Dark Mode: Punkte weiß oder hellgrau, im Light Mode: schwarz oder rot
     noStroke();
     nodes.forEach(nd => {
       const d = dist(mouseX, mouseY, nd.x, nd.y);
-      fill(d < 10 ? color(220, 0, 0) : color(0));
+      if (isDarkMode) {
+        fill(d < 10 ? color(200) : color(255));
+      } else {
+        fill(d < 10 ? color(220, 0, 0) : color(0));
+      }
       ellipse(nd.x, nd.y, 6, 6);
     });
     pop();
@@ -276,7 +302,8 @@ function addRandomConnection() {
 
 // ----------------- DRAWING LINES + SYMMETRY ---------------------
 function drawConnectionWithSymmetry(p1, p2, center) {
-  stroke(lineColor); strokeWeight(2);
+  // Linienfarbe und Füllung werden im draw() global gesetzt
+  strokeWeight(2);
   drawCurvedBezier(p1, p2, curveAmount);
 
   // Choose rotation set per shape, ignore incompatible modes gracefully
@@ -328,7 +355,9 @@ function drawCurvedBezier(p1, p2, cAmt) {
   const dx = p2.x - p1.x, dy = p2.y - p1.y; const distLine = sqrt(dx * dx + dy * dy);
   let nx = -dy, ny = dx; const ln = sqrt(nx * nx + ny * ny); if (ln < 0.0001) return; nx /= ln; ny /= ln;
   const offset = distLine * mag * sign; const cx = mx + nx * offset, cy = my + ny * offset;
-  noFill(); bezier(p1.x, p1.y, cx, cy, cx, cy, p2.x, p2.y);
+  // Die Linien sollen immer ungefüllt sein, aber noFill() nicht global setzen!
+  // Wir setzen fill/stroke im draw() global, daher hier keine Änderung.
+  bezier(p1.x, p1.y, cx, cy, cx, cy, p2.x, p2.y);
 }
 
 // ----------------- GRID BUILDERS (formerly forms.js) ------------
