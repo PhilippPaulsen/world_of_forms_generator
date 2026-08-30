@@ -9,7 +9,6 @@
   <!-- Material Icons -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 
-  <!-- Apple Glass effect -->
   <style>
     body {
       margin: 0;
@@ -29,6 +28,7 @@
       --glass-bg: rgba(255, 255, 255, 0.25);
       --glass-border: rgba(255, 255, 255, 0.18);
       --accent: #ff3b30;
+      --hover-bg: #f0f0f0;
 
       /* Slider colors */
       --slider-track-bg: #222;
@@ -42,6 +42,7 @@
       --glass-bg: rgba(40, 40, 40, 0.35);
       --glass-border: rgba(255, 255, 255, 0.15);
       --accent: #ff453a;
+      --hover-bg: #2a2a2a;
 
       --slider-track-bg: #ddd;
       --slider-thumb-bg: #bbb;
@@ -59,6 +60,9 @@
       gap: 1rem;
     }
 
+    /* Flat, opaque look matching die-welt-der-formen.de - no glass/blur/shadow.
+       The visible canvas frame is drawn by the sketch itself (see sketch.js draw()),
+       not by CSS. */
     #canvas-container {
       flex: 1;
       width: 100%;
@@ -66,43 +70,38 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      background: var(--glass-bg);
-      border-radius: 16px;
-      backdrop-filter: blur(10px) saturate(180%);
-      -webkit-backdrop-filter: blur(10px) saturate(180%);
-      border: 1px solid black; /* Feine schwarze Außenlinie */
+      background: var(--background);
       overflow: hidden;
     }
 
     .controls-container {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 10px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 16px;
-      padding: 1rem;
-      backdrop-filter: blur(12px) saturate(180%);
-      -webkit-backdrop-filter: blur(12px) saturate(180%);
-      box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 15px;
+      background: transparent;
+      width: 100%;
     }
 
     .control-group {
       display: flex;
       flex-direction: column;
-      font-size: 14px;
+      justify-content: center;
+      gap: 0;
+      width: auto; /* overrides legacy .control-group{width:100%} in style.css,
+                       which was written for the old CSS-Grid layout */
     }
 
     .control-group label {
-      margin-bottom: 4px;
-      font-weight: 600;
+      display: none;
     }
 
-    input[type="range"], select, input[type="color"], input[type="checkbox"] {
+    input[type="range"], input[type="checkbox"] {
       border-radius: 8px;
       border: none;
       padding: 4px;
-      background: rgba(255,255,255,0.2);
+      background: var(--background);
       color: var(--text);
     }
 
@@ -148,39 +147,101 @@
     .button-group {
       display: flex;
       justify-content: center;
-      gap: 10px;
-      grid-column: 1 / -1;
+      gap: 5px;
     }
 
+    /* Buttons (shapes & actions) - matches die-welt-der-formen.de:
+       40x40, 4px radius, solid black border, flat white fill,
+       active = inverted (black bg / white icon), hover = light gray. */
     .icon-btn {
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 12px;
-      padding: 8px;
+      background: var(--background);
+      border: 1px solid var(--text);
+      border-radius: 4px;
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
       color: var(--text);
-      transition: background 0.3s, color 0.3s, transform 0.2s;
+      transition: background 0.2s ease;
     }
 
     .icon-btn:hover {
-      background: var(--accent);
-      color: white;
-      transform: scale(1.1);
+      background: var(--hover-bg);
     }
 
-    .theme-toggle {
-      grid-column: 1 / -1;
+    .icon-btn svg {
+      display: block;
+    }
+
+    .icon-btn.active {
+      background: var(--text);
+      color: var(--background);
+    }
+
+    .icon-row {
+      display: flex;
+      justify-content: center;
+      gap: 5px;
+    }
+
+    /* Small number inputs (Shape Size, Node Count) - matches die-welt-der-formen.de:
+       60x40, 4px radius, solid black border, flat white fill. */
+    .control-group input[type="number"] {
+      font-size: 16px;
+      color: var(--text);
+      background: var(--background);
+      border: 1px solid var(--text);
+      border-radius: 4px;
+      padding: 5px;
+      width: 60px;
+      height: 40px;
+      box-sizing: border-box;
+      margin: 0;
       text-align: center;
     }
 
-    .theme-toggle label {
+    #help-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    #help-overlay.hidden {
+      display: none;
+    }
+
+    .help-content {
+      background: var(--background);
+      color: var(--text);
+      border: 1px solid var(--text);
+      padding: 20px 24px;
+      max-width: 320px;
+    }
+
+    .help-content ul {
+      padding-left: 20px;
+    }
+
+    .help-content button {
+      margin-top: 12px;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent);
+      color: white;
       cursor: pointer;
-      font-weight: 600;
     }
 
     @media (max-width: 600px) {
       .controls-container {
-        grid-template-columns: repeat(2, 1fr);
+        justify-content: space-between;
       }
     }
   </style>
@@ -193,72 +254,108 @@
 
     <!-- Controls container -->
     <div class="controls-container">
+      <!-- Shape Icons -->
       <div class="control-group">
-        <label for="shape-dropdown">Shape</label>
-        <select id="shape-dropdown">
-          <option value="triangle">Triangle</option>
-          <option value="square">Square</option>
-          <option value="hex" selected>Hexagon</option>
-        </select>
+        <label>Shape</label>
+        <div class="icon-row">
+          <button class="shape-icon-btn icon-btn active" data-shape="triangle" title="Triangle">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 4L4 20h16L12 4z" />
+            </svg>
+          </button>
+          <button class="shape-icon-btn icon-btn" data-shape="square" title="Square">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="4" y="4" width="16" height="16" />
+            </svg>
+          </button>
+          <button class="shape-icon-btn icon-btn" data-shape="hex" title="Hexagon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2l8.66 5v10L12 22 3.34 17V7L12 2z" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div class="control-group">
-        <label for="canvas-size-slider">Canvas Size</label>
-        <input type="range" id="canvas-size-slider" min="200" max="800" value="320">
+        <label for="shape-size-input">Shape Size</label>
+        <input type="number" id="shape-size-input" min="1" max="9" value="5">
       </div>
 
       <div class="control-group">
-        <label for="square-size-slider">Shape Size</label>
-        <input type="range" id="square-size-slider" min="1" max="9" value="5" step="2">
+        <label for="node-count-input">Node Count</label>
+        <input type="number" id="node-count-input" min="1" max="5" value="3">
       </div>
 
+      <!-- Visibility Toggle & Curve Toggle -->
       <div class="control-group">
-        <label for="node-slider">Node Count</label>
-        <input type="range" id="node-slider" min="1" max="7" value="1">
+        <div class="icon-row">
+          <button id="btn-toggle-nodes" class="icon-btn active" title="Toggle Nodes">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+          <button id="btn-toggle-curve" class="icon-btn" title="Toggle Curve">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 12c2-4 6-4 8 0s6 4 8 0" />
+            </svg>
+          </button>
+        </div>
       </div>
 
-      <div class="control-group">
-        <label for="curve-slider">Curve Amount</label>
-        <input type="range" id="curve-slider" min="-50" max="50" value="0">
-      </div>
-
-      <div class="control-group">
-        <label for="symmetry-dropdown">Symmetry</label>
-        <select id="symmetry-dropdown">
-          <option value="none">None</option>
-          <option value="reflection_only">Reflection</option>
-          <option value="rotation3">3-fold Rotation</option>
-          <option value="rotation6">6-fold Rotation</option>
-          <option value="rotation_reflection3">3-fold + Reflection</option>
-          <option value="rotation_reflection6" selected>6-fold + Reflection</option>
-          <option value="rotation_reflection">Rotation + Reflection</option>
-        </select>
-      </div>
-
-      <div class="control-group">
-        <label for="line-color-picker">Line Color</label>
-        <input type="color" id="line-color-picker" value="#000000">
-      </div>
-
-      <div class="control-group">
-        <input type="checkbox" id="toggle-nodes" checked>
-        <label for="toggle-nodes">Show Nodes</label>
-      </div>
-
-      <!-- Icon buttons -->
+      <!-- Action Buttons -->
       <div class="button-group">
-        <button id="clear-button" class="icon-btn" title="Clear Canvas"><span class="material-icons">delete_outline</span></button>
-        <button id="back-button" class="icon-btn" title="Undo"><span class="material-icons">undo</span></button>
-        <button id="random-button" class="icon-btn" title="Randomize"><span class="material-icons">shuffle</span></button>
-        <button id="export-button" class="icon-btn" title="Download"><span class="material-icons">download</span></button>
+        <button id="btn-clear" class="icon-btn" title="Clear">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+          </svg>
+        </button>
+        <button id="btn-undo" class="icon-btn" title="Undo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 14 4 9l5-5" />
+            <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11" />
+          </svg>
+        </button>
+        <button id="btn-redo" class="icon-btn" title="Redo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 14 20 9l-5-5" />
+            <path d="M20 9h-10.5a5.5 5.5 0 0 0 -5.5 5.5v0a5.5 5.5 0 0 0 5.5 5.5H13" />
+          </svg>
+        </button>
+        <button id="btn-random" class="icon-btn" title="Random Connection">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l-5 5M4 4l5 5" />
+          </svg>
+        </button>
+        <button id="btn-save" class="icon-btn" title="Download Image">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+          </svg>
+        </button>
+        <button id="btn-help" class="icon-btn" title="Help">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+        </button>
       </div>
 
-      <!-- Dark Mode Toggle -->
-      <div class="theme-toggle">
-        <label>
-          <input type="checkbox" id="darkmode-toggle"> Dark Mode
-        </label>
-      </div>
+      <!-- Hidden Canvas Size Input (fixed default, no live-resize control) -->
+      <input type="range" id="canvas-size-slider" min="200" max="800" value="600" style="display:none;">
+    </div>
+  </div>
+
+  <!-- Help Overlay -->
+  <div id="help-overlay" class="hidden">
+    <div class="help-content">
+      <p><strong>How to use:</strong></p>
+      <ul>
+        <li>Click nodes to connect them.</li>
+        <li>Use the controls to change shape, size and node count.</li>
+        <li>Toggle visibility of nodes and curvature.</li>
+      </ul>
+      <button id="close-help">Close</button>
     </div>
   </div>
 
@@ -266,13 +363,9 @@
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
   <script src="forms.js"></script>
   <script src="sketch.js"></script>
-
-  <script>
-    // Simple Dark Mode toggle
-    const toggle = document.getElementById("darkmode-toggle");
-    toggle.addEventListener("change", () => {
-      document.body.classList.toggle("dark", toggle.checked);
-    });
-  </script>
+  <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
+       so the app stays permanently in Light Mode (the var(--background)/
+       var(--text) defaults in :root). The body.dark CSS variable overrides
+       above are kept, unreachable, in case dark mode is reintroduced later. -->
 </body>
 </html>

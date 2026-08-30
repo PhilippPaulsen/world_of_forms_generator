@@ -17,35 +17,23 @@ body {
   min-height: 100vh;
 }
 
-/* The container for the p5 canvas */
+/* The container for the p5 canvas - flat, no glass/blur/shadow
+   (superseded by the equivalent, authoritative rule in index.html's
+   inline <style>, but kept here in sync so nothing leaks through the
+   cascade for properties that rule doesn't touch). */
 #canvas-container {
   display: flex;
   justify-content: center;
   margin-bottom: 20px;
   border: none;
-  background: rgba(255, 255, 255, 0.25);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-  border-radius: 20px;
 }
 
-/* The new controls container with glass effect */
+/* Controls container - flat, no glass/blur/shadow. Layout (flex-wrap
+   row) is owned by index.html's inline <style>; max-width/grid removed
+   here since they constrained the toolbar to wrap into two rows and
+   fought with that flex layout. */
 .controls-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 12px;
-  justify-items: center;
-  align-items: center;
-  max-width: 480px;
-  margin: 0 auto;
   padding: 15px;
-  background: rgba(255, 255, 255, 0.25);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%); /* For Safari */
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
 }
 
 .control-group {
@@ -73,24 +61,15 @@ body {
     justify-content: center;
 }
 
-/* New styles for icon buttons */
+/* Icon buttons - flat chrome (size/border/radius/active/hover) is owned
+   by index.html's inline <style>; layout-only properties here. */
 .icon-btn {
-  background: rgba(255, 255, 255, 0.15);
-  border: none;
-  border-radius: 10px;
-  color: #000;
-  width: 44px;
-  height: 44px;
   cursor: pointer;
-  transition: background 0.3s;
+  transition: background 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-}
-
-.icon-btn:hover {
-  background: rgba(255, 255, 255, 0.35);
 }
 
 .icon-btn .material-icons {
@@ -109,25 +88,6 @@ body {
 body.dark {
   background-color: #111;
   color: #eee;
-}
-
-body.dark .controls-container {
-  background: rgba(30, 30, 30, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-}
-
-body.dark #canvas-container {
-  border: 1px solid rgba(255,255,255,0.15);
-  box-shadow: 0 4px 30px rgba(0,0,0,0.4);
-}
-
-body.dark .icon-btn {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-
-body.dark .icon-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
 }
 
 body.dark label {

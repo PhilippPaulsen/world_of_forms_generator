@@ -1,127 +1,113 @@
 /**
  * forms.js
- * Modular shape generators for World of Forms Generator
- * Each function returns: { nodes, outerCorners }
- * All coordinates are centered around (0, 0)
+ * Grid generators for World of Forms Generator.
+ * Each function returns: { nodes, centroid, outerCorners }
+ * Coordinates are absolute canvas coordinates (0..canvasW / 0..canvasH),
+ * matching sketch.js's rebuildGrid() calls.
+ *
+ * Ported from die-welt-der-formen/p5_prototype/sketch.js's inlined
+ * "GRID BUILDERS" section, which fixed several issues present in the
+ * previous version of this file:
+ * - buildTriangleGrid() used to call subdivideEdge()/addUniqueNode(),
+ *   neither of which was defined anywhere in this repo (ReferenceError
+ *   at runtime for the default 'triangle' shape). This version computes
+ *   the triangular lattice directly via barycentric interpolation,
+ *   producing real interior nodes (not just edge subdivisions).
+ * - buildSquareGrid()/buildHexGrid() used to scale outerCorners by
+ *   shapeSizeFactor a second time (via scalePoints) after already
+ *   dividing by shapeSizeFactor, making nodes and outerCorners
+ *   geometrically inconsistent except at shapeSizeFactor === 1.
+ * - buildHexGrid() used to place nodes only along straight spokes from
+ *   the center to each of the 6 corners. This version builds proper
+ *   concentric hexagonal rings with edge-bridging nodes.
+ * - All three functions now take (nodeCount, shapeSizeFactor, canvasW,
+ *   canvasH) explicitly instead of relying on p5's global width/height,
+ *   matching how sketch.js already called them.
  */
 
-// === UNIVERSAL HELPERS ====================================
+function buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
+    const nodes = []; let id = 1;
+    const base = canvasW / shapeSizeFactor; const h = (Math.sqrt(3) / 2) * base;
+    const cx = canvasW / 2, cy = canvasH / 2;
+    const A = { x: cx, y: cy - h / 2 }, B = { x: cx - base / 2, y: cy + h / 2 }, C = { x: cx + base / 2, y: cy + h / 2 };
 
-function scalePoints(points, factor) {
-  return points.map(p => ({ x: p.x * factor, y: p.y * factor }));
-}
-
-function centerPoints(points) {
-  const cx = points.reduce((a, p) => a + p.x, 0) / points.length;
-  const cy = points.reduce((a, p) => a + p.y, 0) / points.length;
-  return points.map(p => ({ x: p.x - cx, y: p.y - cy }));
-}
-
-// === TRIANGLE ==============================================
-
-function buildTriangleGrid(nodeCount, shapeSizeFactor) {
-    let nodes = [];
-    let idCounter = { value: 1 };
-    const centerX = width / 2;
-    const centerY = height / 2;
-
-    const baseSize = 150 * shapeSizeFactor;
-    const heightTri = (Math.sqrt(3) / 2) * baseSize;
-
-    // Definiere gleichseitiges Dreieck zentriert auf Canvas
-    const corners = [
-        { x: 0, y: -heightTri / 2 },              // oben
-        { x: -baseSize / 2, y: heightTri / 2 },   // unten links
-        { x: baseSize / 2, y: heightTri / 2 }     // unten rechts
-    ];
-
-    // Unterteile jede Kante gleichmäßig
-    if (nodeCount > 0) {
-        for (let i = 0; i < corners.length; i++) {
-            const next = corners[(i + 1) % corners.length];
-            subdivideEdge(corners[i], next, nodeCount, nodes, idCounter);
+    if (nodeCount <= 1) {
+        [A, B, C].forEach(p => nodes.push({ id: id++, x: p.x, y: p.y }));
+    } else {
+        for (let i = 0; i < nodeCount; i++) {
+            const t = (nodeCount <= 1) ? 0 : i / (nodeCount - 1);
+            for (let j = 0; j <= i; j++) {
+                const s = (i === 0) ? 0 : j / i;
+                const x = (1 - t) * A.x + t * ((1 - s) * B.x + s * C.x);
+                const y = (1 - t) * A.y + t * ((1 - s) * B.y + s * C.y);
+                nodes.push({ id: id++, x, y });
+            }
         }
     }
-    addUniqueNode(nodes, corners[0], idCounter);
-
-    // Zentriere alle Punkte
-    nodes = nodes.map(p => ({
-        x: p.x + centerX,
-        y: p.y + centerY,
-        id: p.id
-    }));
-
-    const shiftedCorners = corners.map(p => ({
-        x: p.x + centerX,
-        y: p.y + centerY
-    }));
-
-    // Rückgabe für das zentrale Dreieck
-    return {
-        nodes,
-        centroid: { x: centerX, y: centerY },
-        outerCorners: shiftedCorners,
-        baseSize,
-        heightTri
-    };
+    const centroid = { x: (A.x + B.x + C.x) / 3, y: (A.y + B.y + C.y) / 3 };
+    return { nodes, centroid, outerCorners: [A, B, C] };
 }
 
-// === SQUARE ================================================
-
-function buildSquareGrid(nodeCount, shapeSizeFactor) {
-  const size = 100 / shapeSizeFactor;
-
-  let outerCorners = [
-    { x: -size / 2, y: -size / 2 },
-    { x: size / 2, y: -size / 2 },
-    { x: size / 2, y: size / 2 },
-    { x: -size / 2, y: size / 2 }
-  ];
-
-  outerCorners = scalePoints(outerCorners, shapeSizeFactor);
-
-  // generate evenly spaced nodes
-  let nodes = [];
-  let id = 1;
-  for (let i = 0; i < nodeCount; i++) {
-    for (let j = 0; j < nodeCount; j++) {
-      const x = -size / 2 + (i / (nodeCount - 1)) * size;
-      const y = -size / 2 + (j / (nodeCount - 1)) * size;
-      nodes.push({ x, y, id: id++ });
+function buildSquareGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
+    const nodes = []; let id = 1; const size = canvasW / shapeSizeFactor; const startX = canvasW / 2 - size / 2; const startY = canvasH / 2 - size / 2;
+    const corners = [
+        { x: startX, y: startY },
+        { x: startX + size, y: startY },
+        { x: startX + size, y: startY + size },
+        { x: startX, y: startY + size },
+    ];
+    if (nodeCount <= 1) {
+        corners.forEach(p => nodes.push({ id: id++, x: p.x, y: p.y }));
+    } else {
+        const step = size / (nodeCount - 1);
+        for (let i = 0; i < nodeCount; i++) {
+            for (let j = 0; j < nodeCount; j++) {
+                nodes.push({ id: id++, x: startX + i * step, y: startY + j * step });
+            }
+        }
     }
-  }
-
-  return { nodes, outerCorners };
+    const centroid = { x: canvasW / 2, y: canvasH / 2 };
+    return { nodes, centroid, outerCorners: corners };
 }
 
-// === HEXAGON ===============================================
+function buildHexGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
+    const nodes = []; const outerCorners = [];
+    const shapeHeight = canvasH / shapeSizeFactor; const side = shapeHeight / sqrt(3);
+    const cx = canvasW / 2; const topY = (canvasH / 2) - shapeHeight / 2;
+    outerCorners.push({ x: cx - side / 2, y: topY });
+    outerCorners.push({ x: cx + side / 2, y: topY });
+    outerCorners.push({ x: cx + side, y: topY + (sqrt(3) / 2) * side });
+    outerCorners.push({ x: cx + side / 2, y: topY + sqrt(3) * side });
+    outerCorners.push({ x: cx - side / 2, y: topY + sqrt(3) * side });
+    outerCorners.push({ x: cx - side, y: topY + (sqrt(3) / 2) * side });
+    let sumX = 0, sumY = 0; outerCorners.forEach(c => { sumX += c.x; sumY += c.y; });
+    const centroid = { x: sumX / 6, y: sumY / 6 };
 
-function buildHexGrid(nodeCount, shapeSizeFactor) {
-  const side = 50 / shapeSizeFactor;
-  const h = Math.sqrt(3) * side / 2;
-
-  let outerCorners = [];
-  for (let i = 0; i < 6; i++) {
-    const angle = Math.PI / 3 * i - Math.PI / 6;
-    outerCorners.push({ x: Math.cos(angle) * side, y: Math.sin(angle) * side });
-  }
-
-  outerCorners = scalePoints(outerCorners, shapeSizeFactor);
-
-  // generate radial nodes toward center
-  const centroid = { x: 0, y: 0 };
-  let nodes = [];
-  let id = 1;
-  for (let r = 1; r <= nodeCount; r++) {
-    const scale = r / nodeCount;
-    for (let i = 0; i < 6; i++) {
-      const a = outerCorners[i];
-      const x = centroid.x + (a.x - centroid.x) * scale;
-      const y = centroid.y + (a.y - centroid.y) * scale;
-      nodes.push({ x, y, id: id++ });
+    if (nodeCount <= 1) {
+        // 6 outer corners + center node (as requested)
+        outerCorners.forEach((p, idx) => nodes.push({ id: idx + 1, x: p.x, y: p.y }));
+        nodes.push({ id: nodes.length + 1, x: centroid.x, y: centroid.y });
+        return { nodes, centroid, outerCorners };
     }
-  }
-  nodes.push({ x: 0, y: 0, id: id++ });
 
-  return { nodes, outerCorners };
+    function getScaledCorners(scale) {
+        return outerCorners.map(p => ({ x: centroid.x + (p.x - centroid.x) * scale, y: centroid.y + (p.y - centroid.y) * scale }));
+    }
+    function addRingRecursive(r, scale) {
+        const ringC = getScaledCorners(scale);
+        ringC.forEach(p => nodes.push({ id: nodes.length + 1, x: p.x, y: p.y }));
+        const bridge = r - 1;
+        for (let c = 0; c < 6; c++) {
+            const c1 = ringC[c], c2 = ringC[(c + 1) % 6];
+            for (let seg = 1; seg <= bridge; seg++) {
+                const t = seg / (bridge + 1);
+                nodes.push({ id: nodes.length + 1, x: c1.x + t * (c2.x - c1.x), y: c1.y + t * (c2.y - c1.y) });
+            }
+        }
+        if (r > 1) addRingRecursive(r - 1, scale * (r - 1) / r);
+    }
+    addRingRecursive(nodeCount, 1.0);
+    // Always include the central node as well (not only for nodeCount == 1)
+    nodes.push({ id: nodes.length + 1, x: centroid.x, y: centroid.y });
+    return { nodes, centroid, outerCorners };
 }
