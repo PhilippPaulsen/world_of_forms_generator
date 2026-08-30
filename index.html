@@ -217,7 +217,9 @@
       text-align: center;
     }
 
-    #help-overlay {
+    /* Generic modal dialog - shared by the Help overlay and the Export
+       format dialog, same flat look as the rest of the UI. */
+    .dialog-overlay {
       position: fixed;
       inset: 0;
       background: rgba(0, 0, 0, 0.5);
@@ -227,11 +229,11 @@
       z-index: 1000;
     }
 
-    #help-overlay.hidden {
+    .dialog-overlay.hidden {
       display: none;
     }
 
-    .help-content {
+    .dialog-content {
       background: var(--background);
       color: var(--text);
       border: 1px solid var(--text);
@@ -239,11 +241,11 @@
       max-width: 320px;
     }
 
-    .help-content ul {
+    .dialog-content ul {
       padding-left: 20px;
     }
 
-    .help-content button {
+    .dialog-content button {
       margin-top: 12px;
       padding: 8px 16px;
       border: none;
@@ -251,6 +253,29 @@
       background: var(--accent);
       color: white;
       cursor: pointer;
+    }
+
+    .format-options {
+      display: flex;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .format-options .format-btn {
+      flex: 1;
+      margin-top: 0;
+      padding: 10px;
+      border: 1px solid var(--text);
+      border-radius: 4px;
+      background: var(--background);
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s ease;
+    }
+
+    .format-options .format-btn:hover {
+      background: var(--hover-bg);
     }
 
     @media (max-width: 600px) {
@@ -361,8 +386,8 @@
   </div>
 
   <!-- Help Overlay -->
-  <div id="help-overlay" class="hidden">
-    <div class="help-content">
+  <div id="help-overlay" class="dialog-overlay hidden">
+    <div class="dialog-content">
       <p><strong>How to use:</strong></p>
       <ul>
         <li>Click nodes to connect them.</li>
@@ -370,6 +395,19 @@
         <li>Toggle visibility of nodes and curvature.</li>
       </ul>
       <button id="close-help">Close</button>
+    </div>
+  </div>
+
+  <!-- Export Overlay -->
+  <div id="export-overlay" class="dialog-overlay hidden">
+    <div class="dialog-content">
+      <p><strong>Export as…</strong></p>
+      <div class="format-options">
+        <button id="export-png" class="format-btn" title="Export as PNG">PNG</button>
+        <button id="export-json" class="format-btn" title="Export as JSON">JSON</button>
+        <button id="export-svg" class="format-btn" title="Export as SVG">SVG</button>
+      </div>
+      <button id="close-export">Close</button>
     </div>
   </div>
 

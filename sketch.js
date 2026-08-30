@@ -32,6 +32,13 @@ let nodes = [];
 let connections = [];
 let redoStack = [];
 
+// When set to an array, drawCurvedBezier() appends SVG path data to it
+// instead of drawing to the canvas (see exportSVG()). This lets the SVG
+// export reuse drawTessellation()/drawConnectionWithSymmetry() exactly
+// as-is - same geometry, same symmetry rules, no separate/duplicated
+// implementation that could drift out of sync with the on-screen render.
+let svgPathCollector = null;
+
 // ----------------- HELPERS --------------------------------------
 function normSym(val) {
     // Dropdown option values are already canonical tokens (see index.html),
@@ -200,8 +207,41 @@ function setup() {
         redraw();
     });
 
+    // Export Dialog (PNG / JSON / SVG)
     const dlBtn = select('#btn-save');
-    dlBtn && dlBtn.mousePressed(() => saveCanvas('world_of_forms', 'png'));
+    const exportOverlay = select('#export-overlay');
+    const closeExportBtn = select('#close-export');
+
+    if (dlBtn && exportOverlay) {
+        dlBtn.mousePressed(() => {
+            exportOverlay.removeClass('hidden');
+        });
+        closeExportBtn && closeExportBtn.mousePressed(() => {
+            exportOverlay.addClass('hidden');
+        });
+        // Close on background click
+        exportOverlay.mousePressed((e) => {
+            if (e.target.id === 'export-overlay') exportOverlay.addClass('hidden');
+        });
+    }
+
+    const pngBtn = select('#export-png');
+    pngBtn && pngBtn.mousePressed(() => {
+        exportPNG();
+        exportOverlay && exportOverlay.addClass('hidden');
+    });
+
+    const jsonBtn = select('#export-json');
+    jsonBtn && jsonBtn.mousePressed(() => {
+        exportJSON();
+        exportOverlay && exportOverlay.addClass('hidden');
+    });
+
+    const svgBtn = select('#export-svg');
+    svgBtn && svgBtn.mousePressed(() => {
+        exportSVG();
+        exportOverlay && exportOverlay.addClass('hidden');
+    });
 
     // Help Button Logic
     const helpBtn = select('#btn-help');
@@ -435,12 +475,132 @@ function drawConnectionWithSymmetry(p1, p2, center) {
 
 function drawCurvedBezier(p1, p2, cAmt) {
     const scaleF = 0.01; const sign = (cAmt >= 0) ? 1 : -1; const mag = abs(cAmt) * scaleF;
-    if (mag < 0.0001) { line(p1.x, p1.y, p2.x, p2.y); return; }
+    if (mag < 0.0001) {
+        if (svgPathCollector) {
+            svgPathCollector.push(`M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} L ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`);
+            return;
+        }
+        line(p1.x, p1.y, p2.x, p2.y);
+        return;
+    }
     const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
     const dx = p2.x - p1.x, dy = p2.y - p1.y; const distLine = sqrt(dx * dx + dy * dy);
     let nx = -dy, ny = dx; const ln = sqrt(nx * nx + ny * ny); if (ln < 0.0001) return; nx /= ln; ny /= ln;
     const offset = distLine * mag * sign; const cx = mx + nx * offset, cy = my + ny * offset;
+    if (svgPathCollector) {
+        // p5's bezier(p1, cx,cy, cx,cy, p2) is a cubic bezier with both
+        // control points identical - mathematically equivalent to a
+        // quadratic bezier with control point (cx,cy), i.e. SVG's Q command.
+        svgPathCollector.push(`M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} Q ${cx.toFixed(2)} ${cy.toFixed(2)} ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`);
+        return;
+    }
     // Die Linien sollen immer ungefüllt sein, aber noFill() nicht global setzen!
     // Wir setzen fill/stroke im draw() global, daher hier keine Änderung.
     bezier(p1.x, p1.y, cx, cy, cx, cy, p2.x, p2.y);
+}
+
+// ----------------- EXPORT ----------------------------------------
+function exportPNG() {
+    saveCanvas('world_of_forms', 'png');
+}
+
+function downloadBlob(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Builds the exportable state as plain data: the un-tessellated,
+// un-symmetry-expanded base cell (nodes/connections are never mutated
+// by drawConnectionWithSymmetry - that only computes transient copies
+// at render time), plus an angle-sorted adjacency list per node so a
+// later face-detection pass (see README "Flächenfärbung") can walk the
+// minimal enclosed cycles without needing any structural change here.
+function buildExportData() {
+    // Mirror the same completeness filter drawShapeCell() already applies -
+    // a connection started by one click and never finished stays [id] (length 1).
+    const completeConnections = connections.filter(c => c.length === 2);
+    const nodeById = new Map(nodes.map(n => [n.id, n]));
+
+    const adjacency = {};
+    nodes.forEach(n => { adjacency[n.id] = []; });
+
+    completeConnections.forEach((conn, edgeIndex) => {
+        const [aId, bId] = conn;
+        const a = nodeById.get(aId), b = nodeById.get(bId);
+        if (!a || !b) return;
+        const angleAB = (degrees(atan2(b.y - a.y, b.x - a.x)) + 360) % 360;
+        const angleBA = (degrees(atan2(a.y - b.y, a.x - b.x)) + 360) % 360;
+        adjacency[aId].push({ neighborId: bId, edgeIndex, angleDeg: angleAB });
+        adjacency[bId].push({ neighborId: aId, edgeIndex, angleDeg: angleBA });
+    });
+
+    Object.keys(adjacency).forEach(id => {
+        adjacency[id].sort((x, y) => x.angleDeg - y.angleDeg);
+    });
+
+    return {
+        formatVersion: 1,
+        generator: "World of Forms Generator",
+        exportedAt: new Date().toISOString(),
+        meta: {
+            shapeType: currentShape,
+            shapeSizeFactor,
+            nodeCount,
+            symmetryMode,
+            curveAmount,
+            lineColor
+        },
+        geometry: {
+            centroid: { x: centroid.x, y: centroid.y },
+            outerCorners: outerCorners.map(c => ({ x: c.x, y: c.y })),
+            nodes: nodes.map(n => ({ id: n.id, x: n.x, y: n.y })),
+            edges: completeConnections.map(c => [c[0], c[1]]),
+            adjacency
+        }
+    };
+}
+
+function exportJSON() {
+    const data = buildExportData();
+    downloadBlob(JSON.stringify(data, null, 2), 'world_of_forms.json', 'application/json');
+}
+
+// Renders the full visible tessellation (same scope as the PNG export -
+// see plan discussion) by reusing drawTessellation() unchanged in SVG
+// collection mode, so the vector output can never drift from what's
+// actually on screen.
+function generateSVGString() {
+    svgPathCollector = [];
+    drawTessellation();
+    const paths = svgPathCollector;
+    svgPathCollector = null;
+
+    const w = width, h = height;
+    const bgColor = getComputedStyle(document.body).getPropertyValue('--panel-bg-color') || '#ffffff';
+
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n`;
+    svg += `  <rect x="0" y="0" width="${w}" height="${h}" fill="${bgColor.trim() || '#ffffff'}" />\n`;
+    svg += `  <g stroke="${lineColor}" stroke-width="2" fill="none">\n`;
+    paths.forEach(d => { svg += `    <path d="${d}" />\n`; });
+    svg += `  </g>\n`;
+    if (showNodes) {
+        svg += `  <g fill="#000000">\n`;
+        nodes.forEach(nd => { svg += `    <circle cx="${nd.x.toFixed(2)}" cy="${nd.y.toFixed(2)}" r="3" />\n`; });
+        svg += `  </g>\n`;
+    }
+    // Canvas frame, matching draw()'s rect(0,0,width,height) at strokeWeight(4).
+    svg += `  <rect x="0" y="0" width="${w}" height="${h}" fill="none" stroke="${lineColor}" stroke-width="4" />\n`;
+    svg += `</svg>\n`;
+    return svg;
+}
+
+function exportSVG() {
+    downloadBlob(generateSVGString(), 'world_of_forms.svg', 'image/svg+xml');
 }
