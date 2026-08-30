@@ -94,12 +94,14 @@ body.dark label {
     color: #eee;
 }
 
-/* --- Canvas Styles --- */
+/* --- Canvas Styles ---
+   No CSS border here anymore: the sketch itself draws a 4px frame
+   (see draw() in sketch.js) at the true canvas edge. A CSS border on
+   the <canvas> element on top of that produced a visible double line. */
 canvas {
   display: block;
   aspect-ratio: 1 / 1;
   background: #fff;
-  border: 1px solid var(--line-color);
   box-shadow: none;
 }
 
@@ -115,7 +117,6 @@ body.dark {
 body.dark canvas {
   background: #000;
   box-shadow: none;
-  border: 1px solid var(--line-color);
 }
 
 /* --- Slider Styles (Minimal, Schwarz/Grau/Weiß) --- */
