@@ -30,20 +30,6 @@ function normSym(val) {
     return validModes.includes(v) ? v : 'rotation_reflection6';
 }
 
-function rotateAround(pt, center, angleDeg) {
-    const rad = radians(angleDeg);
-    const dx = pt.x - center.x;
-    const dy = pt.y - center.y;
-    return {
-        x: center.x + dx * cos(rad) - dy * sin(rad),
-        y: center.y + dx * sin(rad) + dy * cos(rad)
-    };
-}
-
-function reflectVerticallyAround(pt, center) {
-    return { x: 2 * center.x - pt.x, y: pt.y };
-}
-
 // ----------------- SETUP ----------------------------------------
 function setup() {
     // Canvas size (Hidden input, default 600)
@@ -399,54 +385,7 @@ function addRandomConnection() {
     if (i === j) return; connections.push([nodes[i].id, nodes[j].id]);
 }
 
-// ----------------- DRAWING LINES + SYMMETRY ---------------------
-function drawConnectionWithSymmetry(p1, p2, center) {
-    // Linienfarbe und Füllung werden im draw() global gesetzt
-    strokeWeight(2);
-    drawCurvedBezier(p1, p2, curveAmount);
-
-    // Choose rotation set per shape, ignore incompatible modes gracefully
-    let rotAngles = [];
-    if (currentShape === 'square') {
-        if (symmetryMode === 'rotation3' || symmetryMode === 'rotation6') rotAngles = [90, 180, 270];
-        if (symmetryMode === 'rotation_reflection3' || symmetryMode === 'rotation_reflection6') rotAngles = [90, 180, 270];
-    } else if (currentShape === 'triangle') {
-        if (symmetryMode === 'rotation3' || symmetryMode === 'rotation6') rotAngles = [120, 240];
-        if (symmetryMode === 'rotation_reflection3' || symmetryMode === 'rotation_reflection6') rotAngles = [120, 240];
-    } else { // hex
-        if (symmetryMode === 'rotation3') rotAngles = [120, 240];
-        if (symmetryMode === 'rotation6') rotAngles = [60, 120, 180, 240, 300];
-        if (symmetryMode === 'rotation_reflection3') rotAngles = [120, 240];
-        if (symmetryMode === 'rotation_reflection6') rotAngles = [60, 120, 180, 240, 300];
-    }
-
-    // Rotations
-    rotAngles.forEach(a => {
-        const sR = rotateAround(p1, center, a);
-        const eR = rotateAround(p2, center, a);
-        drawCurvedBezier(sR, eR, curveAmount);
-    });
-
-    // Reflection(s)
-    if (symmetryMode === 'reflection_only') {
-        const sRef = reflectVerticallyAround(p1, center);
-        const eRef = reflectVerticallyAround(p2, center);
-        drawCurvedBezier(sRef, eRef, -curveAmount);
-    }
-    if (symmetryMode === 'rotation_reflection3' || symmetryMode === 'rotation_reflection6') {
-        const sRef = reflectVerticallyAround(p1, center);
-        const eRef = reflectVerticallyAround(p2, center);
-        drawCurvedBezier(sRef, eRef, -curveAmount);
-        rotAngles.forEach(a => {
-            const sR = rotateAround(p1, center, a);
-            const eR = rotateAround(p2, center, a);
-            const sRR = reflectVerticallyAround(sR, center);
-            const eRR = reflectVerticallyAround(eR, center);
-            drawCurvedBezier(sRR, eRR, -curveAmount);
-        });
-    }
-}
-
+// ----------------- CURVE RENDERING ---------------------
 function drawCurvedBezier(p1, p2, cAmt) {
     const scaleF = 0.01; const sign = (cAmt >= 0) ? 1 : -1; const mag = abs(cAmt) * scaleF;
     if (mag < 0.0001) {
