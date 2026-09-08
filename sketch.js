@@ -125,6 +125,84 @@ function setup() {
         });
     }
 
+    // Active Layer Selector (Base / Overlay) - determines which
+    // connections/redoStack pair mousePressed()/undo/redo/clear target
+    // (see activeConnections() etc. in INTERACTION). Plain click-only,
+    // no modifier-key shortcut - matches this project's existing
+    // interaction model. Declared before the Overlay Toggle below since
+    // that handler needs to reset the selector when overlay is turned off.
+    const layerBaseBtn = select('#btn-layer-base');
+    const layerOverlayBtn = select('#btn-layer-overlay');
+    if (layerBaseBtn && layerOverlayBtn) {
+        layerBaseBtn.mousePressed(() => {
+            activeLayer = 'base';
+            layerBaseBtn.addClass('active');
+            layerOverlayBtn.removeClass('active');
+        });
+        layerOverlayBtn.mousePressed(() => {
+            activeLayer = 'overlay';
+            layerOverlayBtn.addClass('active');
+            layerBaseBtn.removeClass('active');
+        });
+    }
+
+    // Overlay Toggle Button (Roadmap 1.3b) - shows/hides the layer
+    // selector and offset controls, which stay hidden (and inert,
+    // since drawTessellation() only reads overlayConnections/offset
+    // when overlayEnabled) until this is on.
+    const overlayBtn = select('#btn-toggle-overlay');
+    const overlayControls = selectAll('.overlay-control');
+    if (overlayBtn) {
+        overlayBtn.mousePressed(() => {
+            overlayEnabled = !overlayEnabled;
+            if (overlayEnabled) {
+                overlayBtn.addClass('active');
+                overlayControls.forEach(el => { el.elt.hidden = false; });
+            } else {
+                overlayBtn.removeClass('active');
+                overlayControls.forEach(el => { el.elt.hidden = true; });
+                activeLayer = 'base'; // editing the overlay layer while it's hidden would be confusing
+                layerBaseBtn && layerBaseBtn.addClass('active');
+                layerOverlayBtn && layerOverlayBtn.removeClass('active');
+            }
+            redraw();
+        });
+    }
+
+    // Overlay Offset Inputs (continuous, pixels - see 1.3(b) design:
+    // building this as a free parameter costs nothing extra over a
+    // whole-mesh-width-only control, so it's not artificially constrained)
+    const overlayOffsetXInput = select('#overlay-offset-x-input');
+    if (overlayOffsetXInput) {
+        overlayOffsetXInput.input(() => {
+            overlayOffsetX = parseFloat(overlayOffsetXInput.value()) || 0;
+            redraw();
+        });
+    }
+    const overlayOffsetYInput = select('#overlay-offset-y-input');
+    if (overlayOffsetYInput) {
+        overlayOffsetYInput.input(() => {
+            overlayOffsetY = parseFloat(overlayOffsetYInput.value()) || 0;
+            redraw();
+        });
+    }
+
+    // "1 mesh-width" Offset Presets - convenience shortcut for
+    // Ostwald's literal case; getMeshWidth() (core/tiling.js) derives
+    // the step from the current shape's own tiling math.
+    const meshPresetXBtn = select('#btn-mesh-preset-x');
+    meshPresetXBtn && meshPresetXBtn.mousePressed(() => {
+        overlayOffsetX = getMeshWidth().x;
+        if (overlayOffsetXInput) overlayOffsetXInput.value(overlayOffsetX);
+        redraw();
+    });
+    const meshPresetYBtn = select('#btn-mesh-preset-y');
+    meshPresetYBtn && meshPresetYBtn.mousePressed(() => {
+        overlayOffsetY = getMeshWidth().y;
+        if (overlayOffsetYInput) overlayOffsetYInput.value(overlayOffsetY);
+        redraw();
+    });
+
     // Show nodes Toggle Button
     const nodeBtn = select('#btn-toggle-nodes');
     if (nodeBtn) {

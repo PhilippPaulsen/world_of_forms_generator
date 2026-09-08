@@ -21,6 +21,25 @@ function drawTessellation() {
     else tileTriangle();
 }
 
+// One mesh-width per axis for the current shape, matching each
+// tile*() function's own spacing math below (kept in sync manually,
+// same pattern as buildExportData()'s "mirror the completeness filter"
+// comment in core/export.js). Used by the "1 mesh-width" overlay-
+// offset presets - see sketch.js setup().
+function getMeshWidth() {
+    if (currentShape === 'square') {
+        const s = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y);
+        return { x: s, y: s };
+    } else if (currentShape === 'hex') {
+        const side = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y);
+        return { x: side * 1.5, y: sqrt(3) * side };
+    } else { // triangle
+        const s = dist(outerCorners[1].x, outerCorners[1].y, outerCorners[2].x, outerCorners[2].y);
+        const h = (sqrt(3) / 2) * s;
+        return { x: s, y: h };
+    }
+}
+
 function drawShapeCell(connSet, tileCentroid, flip180 = false) {
     for (const conn of connSet) {
         if (conn.length === 2) {

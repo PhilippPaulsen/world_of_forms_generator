@@ -107,6 +107,14 @@
                        which was written for the old CSS-Grid layout */
     }
 
+    /* Same specificity as .control-group{display:flex} above, so without
+       this the native [hidden] UA rule (also display:none at that
+       specificity) loses the cascade tie to it and never actually hides
+       anything - this is what the overlay-control elements rely on. */
+    .control-group[hidden] {
+      display: none;
+    }
+
     .control-group label {
       display: none;
     }
@@ -191,6 +199,35 @@
     }
 
     .icon-btn.active {
+      background: var(--text);
+      color: var(--background);
+    }
+
+    /* Text-label buttons (active layer selector, mesh-width presets) -
+       same visual language as .icon-btn (border/radius/hover/active-
+       invert) but auto-width to fit a text label instead of a fixed
+       40x40 icon square. */
+    .layer-btn {
+      background: var(--background);
+      border: 1px solid var(--text);
+      border-radius: 4px;
+      height: 40px;
+      padding: 0 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      transition: background 0.2s ease;
+    }
+
+    .layer-btn:hover {
+      background: var(--hover-bg);
+    }
+
+    .layer-btn.active {
       background: var(--text);
       color: var(--background);
     }
@@ -348,6 +385,37 @@
               <line x1="12" y1="22" x2="12" y2="18" />
             </svg>
           </button>
+          <button id="btn-toggle-overlay" class="icon-btn" title="Toggle Overlay (Roadmap 1.3b)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="13" height="13" rx="1" />
+              <rect x="8" y="8" width="13" height="13" rx="1" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Overlay: Active Layer Selector & Offset Controls - hidden until Overlay is toggled on -->
+      <div class="control-group overlay-control" id="layer-selector-group" hidden>
+        <div class="icon-row">
+          <button id="btn-layer-base" class="layer-btn active" title="Edit Base Sheet">Base</button>
+          <button id="btn-layer-overlay" class="layer-btn" title="Edit Overlay Sheet">Overlay</button>
+        </div>
+      </div>
+
+      <div class="control-group overlay-control" hidden>
+        <label for="overlay-offset-x-input">Overlay Shift X</label>
+        <input type="number" id="overlay-offset-x-input" value="0" step="1">
+      </div>
+
+      <div class="control-group overlay-control" hidden>
+        <label for="overlay-offset-y-input">Overlay Shift Y</label>
+        <input type="number" id="overlay-offset-y-input" value="0" step="1">
+      </div>
+
+      <div class="control-group overlay-control" hidden>
+        <div class="icon-row">
+          <button id="btn-mesh-preset-x" class="layer-btn" title="Shift X by one mesh-width">1 mesh →</button>
+          <button id="btn-mesh-preset-y" class="layer-btn" title="Shift Y by one mesh-width">1 mesh ↓</button>
         </div>
       </div>
 
