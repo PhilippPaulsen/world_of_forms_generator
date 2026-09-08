@@ -10,35 +10,11 @@
 // shape-size, symmetry-mode, and line-color controls re-added on top
 // (dropped there in favor of a simpler public-site UI, but kept here
 // since this repo is the full-featured development environment).
-// Grid generators (buildTriangleGrid/buildSquareGrid/buildHexGrid) live
-// in forms.js, loaded separately.
-
-// ----------------- GLOBAL STATE ---------------------------------
-let canvasW = 600;
-let canvasH = 600; // keep square
-
-let shapeSizeFactor = 5; // 1..9, adjustable via #shape-size-input
-let nodeCount = 3;       // 1..5, adjustable via #node-count-input
-let curveAmount = 0;     // 0 or 25, toggled via #btn-toggle-curve
-let symmetryMode = "rotation_reflection6"; // fixed default - #symmetry-dropdown removed from UI, logic below stays wired for later reuse
-let lineColor = "#000000"; // fixed default - #line-color-picker removed from UI, logic below stays wired for later reuse
-let showNodes = true;
-let currentShape = 'triangle';
-let freeEndpointsEnabled = false; // toggled via #btn-toggle-free-endpoints
-
-// Center tile geometry (absolute coordinates)
-let outerCorners = [];
-let centroid = { x: 0, y: 0 };
-let nodes = [];
-let connections = [];
-let redoStack = [];
-
-// When set to an array, drawCurvedBezier() appends SVG path data to it
-// instead of drawing to the canvas (see exportSVG()). This lets the SVG
-// export reuse drawTessellation()/drawConnectionWithSymmetry() exactly
-// as-is - same geometry, same symmetry rules, no separate/duplicated
-// implementation that could drift out of sync with the on-screen render.
-let svgPathCollector = null;
+// This file is the UI shell: DOM/event wiring (setup), the render loop
+// (draw/mouseMoved), and interaction (mousePressed/addRandomConnection).
+// The generative engine itself (grid generation, state, symmetry,
+// curves, tiling, export) lives in core/, loaded separately - see
+// CLAUDE.md for the module map.
 
 // ----------------- HELPERS --------------------------------------
 function normSym(val) {
@@ -66,14 +42,6 @@ function rotateAround(pt, center, angleDeg) {
 
 function reflectVerticallyAround(pt, center) {
     return { x: 2 * center.x - pt.x, y: pt.y };
-}
-
-function toTileLocal(n, tileC, flip180) {
-    // shift node by removing center centroid, place at tile centroid; optional 180° flip
-    let x = n.x - centroid.x;
-    let y = n.y - centroid.y;
-    if (flip180) { x = -x; y = -y; }
-    return { x: tileC.x + x, y: tileC.y + y };
 }
 
 // ----------------- SETUP ----------------------------------------
@@ -316,16 +284,6 @@ function draw() {
 function mouseMoved() { if (showNodes) redraw(); }
 
 // ----------------- GRID & TILING -------------------------------
-function rebuildGrid(shape) {
-    connections = [];
-    let grid;
-    if (shape === 'triangle') grid = buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH);
-    else if (shape === 'square') grid = buildSquareGrid(nodeCount, shapeSizeFactor, canvasW, canvasH);
-    else grid = buildHexGrid(nodeCount, shapeSizeFactor, canvasW, canvasH);
-
-    nodes = grid.nodes; centroid = grid.centroid; outerCorners = grid.outerCorners;
-}
-
 function drawTessellation() {
     if (currentShape === 'hex') tileHex();
     else if (currentShape === 'square') tileSquare();
