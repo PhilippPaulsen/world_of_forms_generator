@@ -112,6 +112,15 @@ Independent research track; 1.6's geodesic work is a natural (though not strictl
 - Historical contextualization of dated or chauvinistic language in the source texts — situating without excusing
 - Introductory essays for the Harmony and World editions (see also `docs/website-editorial-checklist.md`)
 
+### Public visibility strategy
+
+The repositories and live site are already technically public, but broader visibility should follow readiness, not precede it. Proposed sequence:
+
+1. **Complete editorial framing above first.** Historical language in the source texts should be contextualized before actively directing outside attention to the site — not a blocker for the site existing, but a prerequisite for *promoting* it.
+2. **Generator Stage 1–2** (`world_of_forms_generator` roadmap: pattern combination, enumeration) — makes the interactive centerpiece more compelling before drawing in the generative-design/creative-coding audience specifically.
+3. **Informal outreach to relevant scholarly and practitioner communities** (design research, history of science/Ostwald studies, geometry-focused creative-coding circles) once (1) and (2) are in place — mailing lists, forums, relevant conferences (e.g. design history journals, Eyeo, Ars Electronica–adjacent circles), not paid growth/SEO services, which are a poor fit for an academic-editorial niche project.
+4. **Wider public/press attention** bundled with the Spector Books publication (2027) as the natural announcement anchor, rather than sought earlier ad hoc.
+
 ---
 
 ## Priority 3 — Long-Term Platform Phases
