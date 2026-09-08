@@ -6,8 +6,6 @@ Project context for Claude Code sessions. See `ROADMAP.md` for current prioritie
 
 This repository is part of *The World of Forms* — a research project reviving and extending Wilhelm Ostwald's form theory (*Die Harmonie der Formen*, 1922; *Die Welt der Formen*, 1922–25), combining a bilingual critical digital edition with a generative pattern engine derived from Ostwald's rule system.
 
-**⚠️ Open question, verify before assuming repo layout:** This repo may contain a `p5_prototype/` copy of the generator (`sketch.js`, `forms.js`) that duplicates or diverges from the standalone `world_of_forms_generator` repo. Before editing generator code, confirm which copy is canonical — check for drift between `p5_prototype/` here and the equivalent files in `world_of_forms_generator`, and consolidate if needed rather than editing both independently.
-
 ## Related repositories
 
 - `world_of_forms_generator` (this repo) — the canonical, actively developed pattern generator (`sketch.js`, `forms.js`, `index.html`). All generator feature work happens here.
@@ -22,9 +20,10 @@ This repository is part of *The World of Forms* — a research project reviving 
 ## Workflow conventions
 
 - **Analysis before action.** Read and reference specific files/lines first; get explicit go-ahead before implementing; verify (including live browser testing where relevant) before committing.
-- **Isolated sandbox filesystem.** Claude Code's edits do not reach the locally running dev server until committed and pushed (and sometimes the local checkout needs a pull too). Don't assume a live browser test reflects an uncommitted edit — this has caused confusion before.
+- **GitHub Pages deployment.** This repo is hosted via GitHub Pages and embedded via iframe elsewhere (see README). Edits only go live after commit + push — a locally opened `index.html` reflects uncommitted changes, but the embedded/hosted version does not until pushed.
 - **Thematically isolated commits.** One topic per commit; push separately per topic rather than batching unrelated changes.
-- **Step-by-step approval.** Prefer proposing a plan and getting confirmation per step over large unreviewed changes, especially for anything touching the published website content (the two Observable-derived `.js` files are large and hand-verified — regenerate via the documented export pipeline, don't hand-edit generated sections).
+- **Step-by-step approval.** Prefer proposing a plan and getting confirmation per step over large unreviewed changes.
+- **This repo is upstream of `die-welt-der-formen/p5_prototype/`.** Feature work happens here first; `p5_prototype/` is synced manually once a version is stable (see Related repositories above). Don't develop features directly against `p5_prototype/`.
 
 ## Terminology
 
