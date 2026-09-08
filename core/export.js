@@ -22,18 +22,10 @@ function downloadBlob(content, filename, mimeType) {
     URL.revokeObjectURL(url);
 }
 
-// Builds the exportable state as plain data: the un-tessellated,
-// un-symmetry-expanded base cell (nodes/connections are never mutated
-// by drawConnectionWithSymmetry - that only computes transient copies
-// at render time), plus an angle-sorted adjacency list per node so a
-// later face-detection pass (see README "Flächenfärbung") can walk the
-// minimal enclosed cycles without needing any structural change here.
-function buildExportData() {
-    // Mirror the same completeness filter drawShapeCell() already applies -
-    // a connection started by one click and never finished stays [id] (length 1).
-    const completeConnections = connections.filter(c => c.length === 2);
-    const nodeById = new Map(nodes.map(n => [n.id, n]));
-
+// Angle-sorted adjacency list for one connection set, shared by the
+// base sheet and (when present) the overlay sheet below - same
+// algorithm either way, just fed a different connSet/edges list.
+function computeAdjacency(completeConnections, nodeById) {
     const adjacency = {};
     nodes.forEach(n => { adjacency[n.id] = []; });
 
@@ -51,7 +43,35 @@ function buildExportData() {
         adjacency[id].sort((x, y) => x.angleDeg - y.angleDeg);
     });
 
-    return {
+    return adjacency;
+}
+
+// Builds the exportable state as plain data: the un-tessellated,
+// un-symmetry-expanded base cell (nodes/connections are never mutated
+// by drawConnectionWithSymmetry - that only computes transient copies
+// at render time), plus an angle-sorted adjacency list per node so a
+// later face-detection pass (see README "Flächenfärbung") can walk the
+// minimal enclosed cycles without needing any structural change here.
+//
+// Roadmap 1.3(b): geometry.overlay is additive and only present when
+// overlayEnabled - geometry.nodes/edges/adjacency (the base sheet)
+// are unchanged either way, so formatVersion stays 1 and existing
+// consumers (e.g. SpaceHarmony's 2D import) that only look for
+// formatVersion===1 + geometry.nodes/edges keep working unmodified.
+// The overlay's adjacency is computed independently over its own
+// edges, not merged with the base sheet's - a true cross-sheet merge
+// needs the offset-shifted intersection geometry 1.10's line-
+// intersection detection is scoped to compute, not this step; this
+// just exports enough raw data (both sheets' own edges plus the
+// offset) for that later pass to use.
+function buildExportData() {
+    // Mirror the same completeness filter drawShapeCell() already applies -
+    // a connection started by one click and never finished stays [id] (length 1).
+    const completeConnections = connections.filter(c => c.length === 2);
+    const nodeById = new Map(nodes.map(n => [n.id, n]));
+    const adjacency = computeAdjacency(completeConnections, nodeById);
+
+    const data = {
         formatVersion: 1,
         generator: "World of Forms Generator",
         exportedAt: new Date().toISOString(),
@@ -71,6 +91,18 @@ function buildExportData() {
             adjacency
         }
     };
+
+    if (overlayEnabled) {
+        const completeOverlayConnections = overlayConnections.filter(c => c.length === 2);
+        data.geometry.overlay = {
+            offsetX: overlayOffsetX,
+            offsetY: overlayOffsetY,
+            edges: completeOverlayConnections.map(c => [c[0], c[1]]),
+            adjacency: computeAdjacency(completeOverlayConnections, nodeById)
+        };
+    }
+
+    return data;
 }
 
 function exportJSON() {
