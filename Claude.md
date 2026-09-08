@@ -8,14 +8,25 @@ This repository is part of *The World of Forms* — a research project reviving 
 
 ## Related repositories
 
-- `world_of_forms_generator` (this repo) — the canonical, actively developed pattern generator (`sketch.js`, `forms.js`, `index.html`). All generator feature work happens here.
+- `world_of_forms_generator` (this repo) — the canonical, actively developed pattern generator (`sketch.js`, `core/`, `index.html`). All generator feature work happens here.
 - `die-welt-der-formen` — website: Observable-notebook-derived `.js` files for the bilingual editions, plus a `p5_prototype/` folder that embeds a *copy* of this generator once it's stable. `p5_prototype/` is a deployment target, synced manually from here — not a second development location.
 - `SpaceHarmony` — Three.js 3D extension; the target for Roadmap item 1.7 (solid forms)
 
 ## Key files (generator)
 
-- `forms.js` — pure grid/node generation (`buildTriangleGrid`, `buildSquareGrid`, `buildHexGrid`). No rendering, no p5 dependency except `sqrt()` in the hex builder.
-- `sketch.js` — p5 sketch: UI, symmetry engine (`drawConnectionWithSymmetry`, supports reflection and pure-rotation modes), tessellation (`tileTriangle`/`tileSquare`/`tileHex`), curve rendering (`drawCurvedBezier`), and export (`exportPNG`/`exportJSON`/`exportSVG`, via `buildExportData`).
+The generator is split into a portable `core/` engine and a `sketch.js` UI shell, loaded as plain global `<script>` tags (no bundler, no ES modules - see "Loading mechanism" below for why). Dependencies point one way: `sketch.js` → `core/*`, never the reverse. This is what lets `die-welt-der-formen/p5_prototype` embed the same engine under a different, reduced UI shell without needing to diff the whole file.
+
+- `core/forms.js` — pure grid/node generation (`buildTriangleGrid`, `buildSquareGrid`, `buildHexGrid`). No rendering, no p5 dependency (uses `Math.sqrt()`, not p5's global `sqrt()`).
+- `core/state.js` — shared mutable state (canvas/shape params, `nodes`/`connections`/`centroid`/`outerCorners`, `svgPathCollector`) plus `rebuildGrid()` and `toTileLocal()`, the two functions most tightly coupled to it.
+- `core/symmetry.js` — the Ostwald symmetry-group engine: `rotateAround`/`reflectVerticallyAround` and `drawConnectionWithSymmetry` (supports reflection and pure-rotation modes). Where roadmap 1.9/1.11 (combinatorics, Burnside/Pólya enumeration) will extend.
+- `core/curves.js` — curve substitution (`drawCurvedBezier`), dual-mode (canvas draw or SVG path collection via `svgPathCollector`). Where roadmap 1.4/1.5 (systematic curve variants, free "clothing") will grow.
+- `core/tiling.js` — plane tessellation (`drawTessellation`, `drawShapeCell`, `tileTriangle`/`tileSquare`/`tileHex`). Where roadmap 1.3(b) (offset overlays / pattern combination) hooks in.
+- `core/export.js` — `buildExportData` (the documented prerequisite for roadmap 1.10's face-detection pass), `exportPNG`/`exportJSON`/`exportSVG`.
+- `sketch.js` — the UI shell: `setup()` (DOM/event wiring for every control), `draw()`/`mouseMoved()` (render loop), `mousePressed()`/`addRandomConnection()` (interaction), `normSym()`. Expected to diverge from `p5_prototype`'s own shell by design (dropdown/color-picker/free-endpoint toggle presence differs) - do not force this file into a shared module.
+
+**Loading mechanism note:** p5 runs in *global mode* here, which requires `setup`/`draw`/`mousePressed`/`mouseMoved` to be plain `window` properties for its auto-bootstrap to find them. Switching any of these files to `type="module"` would break that silently (module-scoped declarations aren't `window` properties) unless every lifecycle hook were explicitly reassigned or the whole sketch migrated to p5 *instance mode* - out of scope for a file-organization change. Cross-file communication works via ordinary shared globals; `<script>` tag order in `index.html` only needs `core/*.js` before `sketch.js` (nothing does a top-level, module-eval-time read of another file's state).
+
+**Sync to `die-welt-der-formen/p5_prototype`:** not yet automated (deliberately - see the module-split planning session referenced in git history for reasoning). The `core/` subdirectory is the intended future "copy these files verbatim" boundary; revisit an actual copy mechanism once `core/`'s shape has survived 1.3(b) and later Stage 1-2 items without another reshuffle.
 
 ## Workflow conventions
 
