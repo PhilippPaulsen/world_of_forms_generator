@@ -353,16 +353,40 @@ function draw() {
 function mouseMoved() { if (showNodes) redraw(); }
 
 // ----------------- INTERACTION ---------------------------------
-// Roadmap 1.3(b): which connections/redo-stack pair mousePressed()/
-// addRandomConnection()/undo/redo/clear act on depends on activeLayer
-// ('base' | 'overlay', see core/state.js). Reads return the actual
-// array (mutate via .push()/.pop() as before); clears need an
+// Roadmap 1.9 (generalizing 1.3(b)'s base/overlay pair): which
+// connections/redo-stack pair mousePressed()/addRandomConnection()/
+// undo/redo/clear act on depends on activeLayer ('base' | integer
+// index into additionalLayers, see core/state.js). Reads return the
+// actual array (mutate via .push()/.pop() as before); clears need an
 // explicit setter since `arr = []` can't be expressed through a
 // returned reference.
-function activeConnections() { return activeLayer === 'overlay' ? overlayConnections : connections; }
-function activeRedoStack() { return activeLayer === 'overlay' ? overlayRedoStack : redoStack; }
-function clearActiveConnections() { if (activeLayer === 'overlay') overlayConnections = []; else connections = []; }
-function clearActiveRedoStack() { if (activeLayer === 'overlay') overlayRedoStack = []; else redoStack = []; }
+function activeConnections() { return activeLayer === 'base' ? connections : additionalLayers[activeLayer].connections; }
+function activeRedoStack() { return activeLayer === 'base' ? redoStack : additionalLayers[activeLayer].redoStack; }
+function clearActiveConnections() { if (activeLayer === 'base') connections = []; else additionalLayers[activeLayer].connections = []; }
+function clearActiveRedoStack() { if (activeLayer === 'base') redoStack = []; else additionalLayers[activeLayer].redoStack = []; }
+
+// Adds a new, empty additional layer and makes it the active one -
+// matches the natural workflow (add layer -> immediately start
+// clicking nodes to build its connections). No cap enforced here (see
+// 1.9 design session) - the UI is what practically targets 4 total
+// sheets.
+function addLayer() {
+    additionalLayers.push({ connections: [], redoStack: [], offsetX: 0, offsetY: 0, enabled: true });
+    activeLayer = additionalLayers.length - 1;
+}
+
+// Removes one additional layer by index. Falls back to 'base' if it
+// was the active layer; otherwise shifts a numeric activeLayer down
+// by one if it pointed past the removed index, since splice() shifts
+// every later layer's index down by one too.
+function removeLayer(index) {
+    additionalLayers.splice(index, 1);
+    if (activeLayer === index) {
+        activeLayer = 'base';
+    } else if (typeof activeLayer === 'number' && activeLayer > index) {
+        activeLayer -= 1;
+    }
+}
 
 function mousePressed() {
     if (mouseX < 0 || mouseX > width || mouseY < 0 || mouseY > height) return;
