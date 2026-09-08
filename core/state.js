@@ -28,6 +28,19 @@ let nodes = [];
 let connections = [];
 let redoStack = [];
 
+// Roadmap 1.3(b) offset overlay: a second, independent connection set
+// ("sheet") sharing the same grid/nodes as the base sheet, rendered as
+// a second tessellation pass offset by (overlayOffsetX, overlayOffsetY)
+// - see core/tiling.js. Deliberately two named slots, not a generic
+// layers[] array (see the 1.3(b) design session for why); nodes stay
+// shared/unduplicated since both sheets read the same grid.
+let overlayConnections = [];
+let overlayRedoStack = [];
+let overlayOffsetX = 0;
+let overlayOffsetY = 0;
+let overlayEnabled = false; // toggled via #btn-toggle-overlay
+let activeLayer = 'base';   // 'base' | 'overlay' - which sheet mousePressed()/addRandomConnection()/undo/redo/clear target
+
 // When set to an array, drawCurvedBezier() appends SVG path data to it
 // instead of drawing to the canvas (see exportSVG()). This lets the SVG
 // export reuse drawTessellation()/drawConnectionWithSymmetry() exactly
@@ -46,6 +59,8 @@ function toTileLocal(n, tileC, flip180) {
 
 function rebuildGrid(shape) {
     connections = [];
+    overlayConnections = [];
+    overlayRedoStack = [];
     let grid;
     if (shape === 'triangle') grid = buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH);
     else if (shape === 'square') grid = buildSquareGrid(nodeCount, shapeSizeFactor, canvasW, canvasH);
