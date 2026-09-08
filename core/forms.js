@@ -1,9 +1,12 @@
 /**
- * forms.js
- * Grid generators for World of Forms Generator.
+ * core/forms.js
+ * Grid generators for World of Forms Generator. Part of the portable
+ * "core" module set (see CLAUDE.md) - no p5 dependency (uses Math.sqrt(),
+ * not p5's global sqrt()), safe to copy verbatim into other sites
+ * embedding this engine.
  * Each function returns: { nodes, centroid, outerCorners }
  * Coordinates are absolute canvas coordinates (0..canvasW / 0..canvasH),
- * matching sketch.js's rebuildGrid() calls.
+ * matching state.js's rebuildGrid() calls.
  *
  * Ported from die-welt-der-formen/p5_prototype/sketch.js's inlined
  * "GRID BUILDERS" section, which fixed several issues present in the
@@ -72,14 +75,14 @@ function buildSquareGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
 
 function buildHexGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
     const nodes = []; const outerCorners = [];
-    const shapeHeight = canvasH / shapeSizeFactor; const side = shapeHeight / sqrt(3);
+    const shapeHeight = canvasH / shapeSizeFactor; const side = shapeHeight / Math.sqrt(3);
     const cx = canvasW / 2; const topY = (canvasH / 2) - shapeHeight / 2;
     outerCorners.push({ x: cx - side / 2, y: topY });
     outerCorners.push({ x: cx + side / 2, y: topY });
-    outerCorners.push({ x: cx + side, y: topY + (sqrt(3) / 2) * side });
-    outerCorners.push({ x: cx + side / 2, y: topY + sqrt(3) * side });
-    outerCorners.push({ x: cx - side / 2, y: topY + sqrt(3) * side });
-    outerCorners.push({ x: cx - side, y: topY + (sqrt(3) / 2) * side });
+    outerCorners.push({ x: cx + side, y: topY + (Math.sqrt(3) / 2) * side });
+    outerCorners.push({ x: cx + side / 2, y: topY + Math.sqrt(3) * side });
+    outerCorners.push({ x: cx - side / 2, y: topY + Math.sqrt(3) * side });
+    outerCorners.push({ x: cx - side, y: topY + (Math.sqrt(3) / 2) * side });
     let sumX = 0, sumY = 0; outerCorners.forEach(c => { sumX += c.x; sumY += c.y; });
     const centroid = { x: sumX / 6, y: sumY / 6 };
 
