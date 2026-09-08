@@ -23,8 +23,8 @@ function downloadBlob(content, filename, mimeType) {
 }
 
 // Angle-sorted adjacency list for one connection set, shared by the
-// base sheet and (when present) the overlay sheet below - same
-// algorithm either way, just fed a different connSet/edges list.
+// base sheet and every additional layer below - same algorithm
+// either way, just fed a different connSet/edges list.
 function computeAdjacency(completeConnections, nodeById) {
     const adjacency = {};
     nodes.forEach(n => { adjacency[n.id] = []; });
@@ -53,17 +53,23 @@ function computeAdjacency(completeConnections, nodeById) {
 // later face-detection pass (see README "Flächenfärbung") can walk the
 // minimal enclosed cycles without needing any structural change here.
 //
-// Roadmap 1.3(b): geometry.overlay is additive and only present when
-// overlayEnabled - geometry.nodes/edges/adjacency (the base sheet)
-// are unchanged either way, so formatVersion stays 1 and existing
-// consumers (e.g. SpaceHarmony's 2D import) that only look for
-// formatVersion===1 + geometry.nodes/edges keep working unmodified.
-// The overlay's adjacency is computed independently over its own
-// edges, not merged with the base sheet's - a true cross-sheet merge
-// needs the offset-shifted intersection geometry 1.10's line-
+// Roadmap 1.9 (generalizing 1.3(b)'s single geometry.overlay object):
+// geometry.layers is additive and only present when at least one
+// additional layer is enabled - geometry.nodes/edges/adjacency (the
+// base sheet) are unchanged either way, so formatVersion stays 1 and
+// existing consumers (e.g. SpaceHarmony's 2D import) that only look
+// for formatVersion===1 + geometry.nodes/edges keep working
+// unmodified. Renaming/reshaping the singular geometry.overlay object
+// from 1.3(b) into a plural geometry.layers array is safe here and
+// now, before anything external depends on it - grepped the whole
+// project tree in the 1.9 design session and found no reference to
+// geometry.overlay outside this file's own previous version. Each
+// layer's adjacency is computed independently over its own edges, not
+// merged across layers or with the base sheet's - a true cross-sheet
+// merge needs the offset-shifted intersection geometry 1.10's line-
 // intersection detection is scoped to compute, not this step; this
-// just exports enough raw data (both sheets' own edges plus the
-// offset) for that later pass to use.
+// just exports enough raw data (every enabled layer's own edges plus
+// its offset) for that later pass to use.
 function buildExportData() {
     // Mirror the same completeness filter drawShapeCell() already applies -
     // a connection started by one click and never finished stays [id] (length 1).
@@ -92,14 +98,17 @@ function buildExportData() {
         }
     };
 
-    if (overlayEnabled) {
-        const completeOverlayConnections = overlayConnections.filter(c => c.length === 2);
-        data.geometry.overlay = {
-            offsetX: overlayOffsetX,
-            offsetY: overlayOffsetY,
-            edges: completeOverlayConnections.map(c => [c[0], c[1]]),
-            adjacency: computeAdjacency(completeOverlayConnections, nodeById)
-        };
+    const enabledLayers = additionalLayers.filter(layer => layer.enabled);
+    if (enabledLayers.length > 0) {
+        data.geometry.layers = enabledLayers.map(layer => {
+            const completeLayerConnections = layer.connections.filter(c => c.length === 2);
+            return {
+                offsetX: layer.offsetX,
+                offsetY: layer.offsetY,
+                edges: completeLayerConnections.map(c => [c[0], c[1]]),
+                adjacency: computeAdjacency(completeLayerConnections, nodeById)
+            };
+        });
     }
 
     return data;
