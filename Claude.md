@@ -10,8 +10,8 @@ This repository is part of *The World of Forms* — a research project reviving 
 
 ## Related repositories
 
-- `die-welt-der-formen` — website: Observable-notebook-derived `.js` files for the bilingual editions (`notebooks/harmony_d.js`, `notebooks/harmony.js`, `notebooks/world_d.js`, `notebooks/world.js`, plus `intro`/`about`), and possibly `p5_prototype/` (see open question above)
-- `world_of_forms_generator` — the standalone p5.js pattern generator; likely the canonical home for `sketch.js`/`forms.js`
+- `world_of_forms_generator` (this repo) — the canonical, actively developed pattern generator (`sketch.js`, `forms.js`, `index.html`). All generator feature work happens here.
+- `die-welt-der-formen` — website: Observable-notebook-derived `.js` files for the bilingual editions, plus a `p5_prototype/` folder that embeds a *copy* of this generator once it's stable. `p5_prototype/` is a deployment target, synced manually from here — not a second development location.
 - `SpaceHarmony` — Three.js 3D extension; the target for Roadmap item 1.7 (solid forms)
 
 ## Key files (generator)
