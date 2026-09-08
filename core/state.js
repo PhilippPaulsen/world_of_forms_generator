@@ -55,6 +55,19 @@ let activeLayer = 'base'; // 'base' | integer index into additionalLayers - whic
 // implementation that could drift out of sync with the on-screen render.
 let svgPathCollector = null;
 
+// Roadmap 1.10a: when set to an array, drawCurvedBezier() appends a raw
+// {x1,y1,x2,y2} straight-chord segment to it instead of drawing (see
+// core/faces.js's collectCellSegments()) - a third collector mode next
+// to svgPathCollector, same precedented pattern, so face-detection's
+// input can never drift from what drawConnectionWithSymmetry() actually
+// produces. Always the straight p1->p2 chord regardless of curveAmount
+// - face-detection is explicitly straight-line-only for v1 (curved
+// intersection math is real extra work, deferred; the UI toggle that
+// triggers this collector is mutually exclusive with the curve toggle,
+// so this simplification is never reached with curveAmount != 0 in
+// practice, but the collector itself doesn't rely on that to be correct).
+let segmentCollector = null;
+
 // ----------------- STATE HELPERS ---------------------------------
 function toTileLocal(n, tileC, flip180) {
     // shift node by removing center centroid, place at tile centroid; optional 180° flip

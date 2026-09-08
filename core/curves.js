@@ -8,14 +8,23 @@
  * substantially, which is why it already gets its own file rather than
  * staying folded into the symmetry or export modules.
  *
- * Dual-mode: draws to the canvas normally, or - when state.js's
+ * Triple-mode: draws to the canvas normally, or - when state.js's
  * svgPathCollector is set to an array - appends SVG path data instead
  * of drawing, so exportSVG() can reuse the exact same geometry/symmetry
- * code path as the on-screen render (see core/export.js).
+ * code path as the on-screen render (see core/export.js); or - when
+ * segmentCollector is set - appends a raw straight-chord {x1,y1,x2,y2}
+ * segment instead, for roadmap 1.10a's face-detection (see
+ * core/faces.js). segmentCollector is checked first and always
+ * collects the straight p1->p2 chord regardless of curveAmount - see
+ * the state.js comment on segmentCollector for why.
  */
 
 // ----------------- CURVE RENDERING ---------------------
 function drawCurvedBezier(p1, p2, cAmt) {
+    if (segmentCollector) {
+        segmentCollector.push({ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y });
+        return;
+    }
     const scaleF = 0.01; const sign = (cAmt >= 0) ? 1 : -1; const mag = abs(cAmt) * scaleF;
     if (mag < 0.0001) {
         if (svgPathCollector) {
