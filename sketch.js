@@ -24,6 +24,7 @@ let symmetryMode = "rotation_reflection6"; // fixed default - #symmetry-dropdown
 let lineColor = "#000000"; // fixed default - #line-color-picker removed from UI, logic below stays wired for later reuse
 let showNodes = true;
 let currentShape = 'triangle';
+let freeEndpointsEnabled = false; // toggled via #btn-toggle-free-endpoints
 
 // Center tile geometry (absolute coordinates)
 let outerCorners = [];
@@ -160,6 +161,16 @@ function setup() {
         });
     }
 
+    // Free Endpoints Toggle Button
+    const freeEndpointsBtn = select('#btn-toggle-free-endpoints');
+    if (freeEndpointsBtn) {
+        freeEndpointsBtn.mousePressed(() => {
+            freeEndpointsEnabled = !freeEndpointsEnabled;
+            if (freeEndpointsEnabled) freeEndpointsBtn.addClass('active');
+            else freeEndpointsBtn.removeClass('active');
+        });
+    }
+
     // Show nodes Toggle Button
     const nodeBtn = select('#btn-toggle-nodes');
     if (nodeBtn) {
@@ -286,8 +297,8 @@ function draw() {
         noStroke();
         nodes.forEach(nd => {
             const d = dist(mouseX, mouseY, nd.x, nd.y);
-            // Default: Schwarz oder Rot bei Hover
-            fill(d < 10 ? color(220, 0, 0) : color(0));
+            // Default: Schwarz (Grid) / Blau (frei) oder Rot bei Hover
+            fill(d < 10 ? color(220, 0, 0) : (nd.free ? color(30, 110, 220) : color(0)));
             ellipse(nd.x, nd.y, 6, 6);
         });
         pop();
@@ -411,6 +422,11 @@ function mousePressed() {
     if (mouseX < 0 || mouseX > width || mouseY < 0 || mouseY > height) return;
     let foundId = null;
     for (let nd of nodes) { if (dist(mouseX, mouseY, nd.x, nd.y) < 18) { foundId = nd.id; break; } }
+    if (foundId === null && freeEndpointsEnabled) {
+        const newId = Math.max(...nodes.map(n => n.id), 0) + 1;
+        nodes.push({ id: newId, x: mouseX, y: mouseY, free: true });
+        foundId = newId;
+    }
     if (foundId !== null) {
         if (!connections.length || connections[connections.length - 1].length === 2) connections.push([foundId]);
         else connections[connections.length - 1].push(foundId);
