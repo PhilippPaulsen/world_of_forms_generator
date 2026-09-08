@@ -110,7 +110,8 @@
     /* Same specificity as .control-group{display:flex} above, so without
        this the native [hidden] UA rule (also display:none at that
        specificity) loses the cascade tie to it and never actually hides
-       anything - this is what the overlay-control elements rely on. */
+       anything - this is what the layer offset/preset control-groups
+       (contextually hidden while Base is the active tab) rely on. */
     .control-group[hidden] {
       display: none;
     }
@@ -230,6 +231,36 @@
     .layer-btn.active {
       background: var(--text);
       color: var(--background);
+    }
+
+    /* One dynamically-created additional-layer tab: enable checkbox +
+       label button + remove button, grouped tightly so the tab strip
+       reads as one unit per layer (see renderLayerTabs() in sketch.js). */
+    .layer-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .layer-remove-btn {
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border: 1px solid var(--text);
+      border-radius: 4px;
+      background: var(--background);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s ease;
+    }
+
+    .layer-remove-btn:hover {
+      background: var(--hover-bg);
     }
 
     .icon-row {
@@ -385,34 +416,35 @@
               <line x1="12" y1="22" x2="12" y2="18" />
             </svg>
           </button>
-          <button id="btn-toggle-overlay" class="icon-btn" title="Toggle Overlay (Roadmap 1.3b)">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="13" height="13" rx="1" />
-              <rect x="8" y="8" width="13" height="13" rx="1" />
-            </svg>
-          </button>
         </div>
       </div>
 
-      <!-- Overlay: Active Layer Selector & Offset Controls - hidden until Overlay is toggled on -->
-      <div class="control-group overlay-control" id="layer-selector-group" hidden>
+      <!-- Layer Tab Strip (Roadmap 1.9): Base (static, always present)
+           + one tab per additional layer, rendered dynamically by
+           sketch.js since the layer count is variable - see
+           renderLayerTabs() in setup(). "+ Layer" adds a new one. -->
+      <div class="control-group">
         <div class="icon-row">
           <button id="btn-layer-base" class="layer-btn active" title="Edit Base Sheet">Base</button>
-          <button id="btn-layer-overlay" class="layer-btn" title="Edit Overlay Sheet">Overlay</button>
+          <span id="layer-tabs"></span>
+          <button id="btn-add-layer" class="layer-btn" title="Add Layer">+ Layer</button>
         </div>
       </div>
 
-      <div class="control-group overlay-control" hidden>
-        <label for="overlay-offset-x-input">Overlay Shift X</label>
-        <input type="number" id="overlay-offset-x-input" value="0" step="1">
+      <!-- Offset Controls - contextual to whichever layer tab is
+           active (one X/Y pair, not one per layer); hidden while Base
+           is active, since the base sheet has no offset concept. -->
+      <div class="control-group" id="layer-offset-x-group" hidden>
+        <label for="layer-offset-x-input">Layer Shift X</label>
+        <input type="number" id="layer-offset-x-input" value="0" step="1">
       </div>
 
-      <div class="control-group overlay-control" hidden>
-        <label for="overlay-offset-y-input">Overlay Shift Y</label>
-        <input type="number" id="overlay-offset-y-input" value="0" step="1">
+      <div class="control-group" id="layer-offset-y-group" hidden>
+        <label for="layer-offset-y-input">Layer Shift Y</label>
+        <input type="number" id="layer-offset-y-input" value="0" step="1">
       </div>
 
-      <div class="control-group overlay-control" hidden>
+      <div class="control-group" id="layer-mesh-preset-group" hidden>
         <div class="icon-row">
           <button id="btn-mesh-preset-x" class="layer-btn" title="Shift X by one mesh-width">1 mesh →</button>
           <button id="btn-mesh-preset-y" class="layer-btn" title="Shift Y by one mesh-width">1 mesh ↓</button>

@@ -50,6 +50,8 @@ function setup() {
             // Set shape
             currentShape = btn.attribute('data-shape');
             rebuildGrid(currentShape);
+            renderLayerTabs(); // rebuildGrid() clears additionalLayers - keep the tab strip in sync
+            updateOffsetControls();
             redraw();
         });
     });
@@ -63,6 +65,8 @@ function setup() {
             if (v < 1) v = 1; if (v > 9) v = 9; // Clamp
             shapeSizeFactor = v;
             rebuildGrid(currentShape);
+            renderLayerTabs();
+            updateOffsetControls();
             redraw();
         });
     }
@@ -76,6 +80,8 @@ function setup() {
             if (v < 1) v = 1; if (v > 5) v = 5; // Clamp
             nodeCount = v;
             rebuildGrid(currentShape);
+            renderLayerTabs();
+            updateOffsetControls();
             redraw();
         });
     }
@@ -125,83 +131,145 @@ function setup() {
         });
     }
 
-    // Active Layer Selector (Base / Overlay) - determines which
-    // connections/redoStack pair mousePressed()/undo/redo/clear target
-    // (see activeConnections() etc. in INTERACTION). Plain click-only,
-    // no modifier-key shortcut - matches this project's existing
-    // interaction model. Declared before the Overlay Toggle below since
-    // that handler needs to reset the selector when overlay is turned off.
+    // ----------------- LAYER TAB STRIP (Roadmap 1.9) -----------------
+    // Base tab is static HTML (#btn-layer-base) since the base sheet is
+    // structurally special (always present, can't be removed, see
+    // core/state.js). Additional-layer tabs are rendered dynamically
+    // into #layer-tabs since their count is variable - the first place
+    // this app generates DOM elements at runtime rather than wiring
+    // fixed IDs from index.html. Offset inputs are contextual to
+    // whichever tab is active (one X/Y pair, not one per layer, per
+    // the 1.9 design session) - updateOffsetControls() shows/hides and
+    // (re)populates them; renderLayerTabs() rebuilds the tab strip
+    // itself. Both are `function` declarations (not `const`) so they're
+    // hoisted and safely callable from the shape/size/node-count
+    // handlers above, which are defined earlier in this same setup().
     const layerBaseBtn = select('#btn-layer-base');
-    const layerOverlayBtn = select('#btn-layer-overlay');
-    if (layerBaseBtn && layerOverlayBtn) {
+    const layerTabsContainer = select('#layer-tabs');
+    const addLayerBtn = select('#btn-add-layer');
+    const offsetXGroup = select('#layer-offset-x-group');
+    const offsetYGroup = select('#layer-offset-y-group');
+    const meshPresetGroup = select('#layer-mesh-preset-group');
+    const offsetXInput = select('#layer-offset-x-input');
+    const offsetYInput = select('#layer-offset-y-input');
+
+    function updateOffsetControls() {
+        const showOffsets = activeLayer !== 'base';
+        if (offsetXGroup) offsetXGroup.elt.hidden = !showOffsets;
+        if (offsetYGroup) offsetYGroup.elt.hidden = !showOffsets;
+        if (meshPresetGroup) meshPresetGroup.elt.hidden = !showOffsets;
+        if (showOffsets) {
+            const layer = additionalLayers[activeLayer];
+            if (offsetXInput) offsetXInput.value(layer.offsetX);
+            if (offsetYInput) offsetYInput.value(layer.offsetY);
+        }
+    }
+
+    function renderLayerTabs() {
+        if (layerBaseBtn) {
+            if (activeLayer === 'base') layerBaseBtn.addClass('active');
+            else layerBaseBtn.removeClass('active');
+        }
+        if (!layerTabsContainer) return;
+        const container = layerTabsContainer.elt;
+        container.innerHTML = '';
+
+        additionalLayers.forEach((layer, i) => {
+            const tab = document.createElement('span');
+            tab.className = 'layer-tab';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'layer-enable-checkbox';
+            checkbox.checked = layer.enabled;
+            checkbox.title = 'Show/Hide Layer ' + (i + 1);
+            checkbox.addEventListener('change', () => {
+                layer.enabled = checkbox.checked;
+                redraw();
+            });
+
+            const btn = document.createElement('button');
+            btn.className = 'layer-btn' + (activeLayer === i ? ' active' : '');
+            btn.textContent = 'Layer ' + (i + 1);
+            btn.title = 'Edit Layer ' + (i + 1);
+            btn.addEventListener('click', () => {
+                activeLayer = i;
+                renderLayerTabs();
+                updateOffsetControls();
+            });
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'layer-remove-btn';
+            removeBtn.textContent = '×';
+            removeBtn.title = 'Remove Layer ' + (i + 1);
+            removeBtn.addEventListener('click', () => {
+                removeLayer(i);
+                renderLayerTabs();
+                updateOffsetControls();
+                redraw();
+            });
+
+            tab.appendChild(checkbox);
+            tab.appendChild(btn);
+            tab.appendChild(removeBtn);
+            container.appendChild(tab);
+        });
+    }
+
+    if (layerBaseBtn) {
         layerBaseBtn.mousePressed(() => {
             activeLayer = 'base';
-            layerBaseBtn.addClass('active');
-            layerOverlayBtn.removeClass('active');
-        });
-        layerOverlayBtn.mousePressed(() => {
-            activeLayer = 'overlay';
-            layerOverlayBtn.addClass('active');
-            layerBaseBtn.removeClass('active');
+            renderLayerTabs();
+            updateOffsetControls();
         });
     }
 
-    // Overlay Toggle Button (Roadmap 1.3b) - shows/hides the layer
-    // selector and offset controls, which stay hidden (and inert,
-    // since drawTessellation() only reads overlayConnections/offset
-    // when overlayEnabled) until this is on.
-    const overlayBtn = select('#btn-toggle-overlay');
-    const overlayControls = selectAll('.overlay-control');
-    if (overlayBtn) {
-        overlayBtn.mousePressed(() => {
-            overlayEnabled = !overlayEnabled;
-            if (overlayEnabled) {
-                overlayBtn.addClass('active');
-                overlayControls.forEach(el => { el.elt.hidden = false; });
-            } else {
-                overlayBtn.removeClass('active');
-                overlayControls.forEach(el => { el.elt.hidden = true; });
-                activeLayer = 'base'; // editing the overlay layer while it's hidden would be confusing
-                layerBaseBtn && layerBaseBtn.addClass('active');
-                layerOverlayBtn && layerOverlayBtn.removeClass('active');
-            }
+    if (addLayerBtn) {
+        addLayerBtn.mousePressed(() => {
+            addLayer();
+            renderLayerTabs();
+            updateOffsetControls();
             redraw();
         });
     }
 
-    // Overlay Offset Inputs (continuous, pixels - see 1.3(b) design:
-    // building this as a free parameter costs nothing extra over a
-    // whole-mesh-width-only control, so it's not artificially constrained)
-    const overlayOffsetXInput = select('#overlay-offset-x-input');
-    if (overlayOffsetXInput) {
-        overlayOffsetXInput.input(() => {
-            overlayOffsetX = parseFloat(overlayOffsetXInput.value()) || 0;
+    // Offset Inputs (continuous, pixels - see 1.3(b) design: building
+    // this as a free parameter costs nothing extra over a whole-mesh-
+    // width-only control, so it's not artificially constrained) and
+    // "1 mesh-width" Presets both act on whichever layer is currently
+    // active - getMeshWidth() (core/tiling.js) derives the step from
+    // the current shape's own tiling math.
+    if (offsetXInput) {
+        offsetXInput.input(() => {
+            if (activeLayer === 'base') return;
+            additionalLayers[activeLayer].offsetX = parseFloat(offsetXInput.value()) || 0;
             redraw();
         });
     }
-    const overlayOffsetYInput = select('#overlay-offset-y-input');
-    if (overlayOffsetYInput) {
-        overlayOffsetYInput.input(() => {
-            overlayOffsetY = parseFloat(overlayOffsetYInput.value()) || 0;
+    if (offsetYInput) {
+        offsetYInput.input(() => {
+            if (activeLayer === 'base') return;
+            additionalLayers[activeLayer].offsetY = parseFloat(offsetYInput.value()) || 0;
             redraw();
         });
     }
-
-    // "1 mesh-width" Offset Presets - convenience shortcut for
-    // Ostwald's literal case; getMeshWidth() (core/tiling.js) derives
-    // the step from the current shape's own tiling math.
     const meshPresetXBtn = select('#btn-mesh-preset-x');
     meshPresetXBtn && meshPresetXBtn.mousePressed(() => {
-        overlayOffsetX = getMeshWidth().x;
-        if (overlayOffsetXInput) overlayOffsetXInput.value(overlayOffsetX);
+        if (activeLayer === 'base') return;
+        additionalLayers[activeLayer].offsetX = getMeshWidth().x;
+        if (offsetXInput) offsetXInput.value(additionalLayers[activeLayer].offsetX);
         redraw();
     });
     const meshPresetYBtn = select('#btn-mesh-preset-y');
     meshPresetYBtn && meshPresetYBtn.mousePressed(() => {
-        overlayOffsetY = getMeshWidth().y;
-        if (overlayOffsetYInput) overlayOffsetYInput.value(overlayOffsetY);
+        if (activeLayer === 'base') return;
+        additionalLayers[activeLayer].offsetY = getMeshWidth().y;
+        if (offsetYInput) offsetYInput.value(additionalLayers[activeLayer].offsetY);
         redraw();
     });
+
+    renderLayerTabs();
+    updateOffsetControls();
 
     // Show nodes Toggle Button
     const nodeBtn = select('#btn-toggle-nodes');
