@@ -2,10 +2,16 @@
  * core/tiling.js
  * Plane tessellation per net type - Ostwald's "unlimited surfaces".
  * Part of the portable "core" module set (see CLAUDE.md). This is
- * where roadmap 1.3(b) (offset overlays / pattern combination, the
- * next task after this split) hooks in: multiple tessellation passes
- * at a mesh-width shift. Also relevant to 1.1/1.2/1.12 (alternative
- * net construction, cross-order/cross-net combination).
+ * where roadmap 1.3(b) (offset overlays / pattern combination) hooks
+ * in: drawShapeCell() takes which connection set to draw, so each
+ * tile*() function can call it twice per tile position - once for the
+ * base sheet, once for the overlay sheet at a shifted tile anchor,
+ * gated on overlayEnabled. drawConnectionWithSymmetry()/
+ * drawCurvedBezier() are untouched by this - both sheets share the
+ * same symmetryMode/curveAmount/currentShape (see the 1.3(b) design
+ * session for why that's shared rather than per-sheet). Also relevant
+ * to 1.1/1.2/1.12 (alternative net construction, cross-order/cross-net
+ * combination).
  */
 
 // ----------------- GRID & TILING -------------------------------
@@ -15,8 +21,8 @@ function drawTessellation() {
     else tileTriangle();
 }
 
-function drawShapeCell(tileCentroid, flip180 = false) {
-    for (const conn of connections) {
+function drawShapeCell(connSet, tileCentroid, flip180 = false) {
+    for (const conn of connSet) {
         if (conn.length === 2) {
             const n1 = nodes.find(n => n.id === conn[0]);
             const n2 = nodes.find(n => n.id === conn[1]);
@@ -26,6 +32,13 @@ function drawShapeCell(tileCentroid, flip180 = false) {
             drawConnectionWithSymmetry(p1, p2, tileCentroid);
         }
     }
+}
+
+// Overlay sheet's tile anchor: same tileCentroid as the base sheet,
+// shifted by the current overlay offset. Shared by all three tile*()
+// functions below.
+function overlayTileCentroid(tileCentroid) {
+    return { x: tileCentroid.x + overlayOffsetX, y: tileCentroid.y + overlayOffsetY };
 }
 
 // --- HEX ---
@@ -40,7 +53,8 @@ function tileHex() {
         for (let r = -3; r < rows; r++) {
             let yOff = r * hexH; if (c % 2) yOff += hexH * 0.5;
             const tileC = { x: centroid.x + xOff, y: centroid.y + yOff };
-            drawShapeCell(tileC, false);
+            drawShapeCell(connections, tileC, false);
+            if (overlayEnabled) drawShapeCell(overlayConnections, overlayTileCentroid(tileC), false);
         }
     }
 }
@@ -52,7 +66,8 @@ function tileSquare() {
     for (let i = -4; i < cols; i++) {
         for (let j = -4; j < rows; j++) {
             const tileC = { x: centroid.x + i * s, y: centroid.y + j * s };
-            drawShapeCell(tileC, false);
+            drawShapeCell(connections, tileC, false);
+            if (overlayEnabled) drawShapeCell(overlayConnections, overlayTileCentroid(tileC), false);
         }
     }
 }
@@ -91,11 +106,13 @@ function tileTriangle() {
 
             // Aufrechtes Dreieck
             const centerUp = { x: anchor.x + s / 2, y: anchor.y - h / 3 };
-            drawShapeCell(centerUp, false);
+            drawShapeCell(connections, centerUp, false);
+            if (overlayEnabled) drawShapeCell(overlayConnections, overlayTileCentroid(centerUp), false);
 
             // Umgedrehtes Dreieck
             const centerDown = { x: anchor.x + s / 2, y: anchor.y + h / 3 };
-            drawShapeCell(centerDown, true);
+            drawShapeCell(connections, centerDown, true);
+            if (overlayEnabled) drawShapeCell(overlayConnections, overlayTileCentroid(centerDown), true);
         }
     }
 }
