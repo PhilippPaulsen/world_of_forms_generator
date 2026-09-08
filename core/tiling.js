@@ -69,16 +69,38 @@ function drawAdditionalLayers(tileCentroid, flip180 = false) {
     });
 }
 
+// Largest |offsetX|/|offsetY| among enabled additional layers. Each
+// tile*() function's loop bounds are sized to cover the canvas for
+// the base sheet (offset 0,0) only - a shifted layer's own rendered
+// positions are that same loop window translated by its offset, so
+// without widening the loop by this margin a large enough offset
+// pushes the shifted layer's coverage past the canvas edge opposite
+// the shift direction, leaving a gap there (bug found before 1.10).
+// Widening both bounds by the same margin (rather than only the side
+// a given layer's sign would strictly need) correctly covers every
+// enabled layer at once regardless of sign, including several layers
+// offset in different directions simultaneously.
+function maxLayerOffset() {
+    const enabled = additionalLayers.filter(l => l.enabled);
+    return {
+        x: enabled.length ? Math.max(...enabled.map(l => Math.abs(l.offsetX))) : 0,
+        y: enabled.length ? Math.max(...enabled.map(l => Math.abs(l.offsetY))) : 0
+    };
+}
+
 // --- HEX ---
 function tileHex() {
     const side = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y);
     const hexW = side * 1.5;
     const hexH = sqrt(3) * side;
-    const cols = ceil(width / hexW) + 6;
-    const rows = ceil(height / hexH) + 6;
-    for (let c = -3; c < cols; c++) {
+    const maxOffset = maxLayerOffset();
+    const extraCols = ceil(maxOffset.x / hexW);
+    const extraRows = ceil(maxOffset.y / hexH);
+    const cols = ceil(width / hexW) + 6 + extraCols;
+    const rows = ceil(height / hexH) + 6 + extraRows;
+    for (let c = -3 - extraCols; c < cols; c++) {
         const xOff = c * hexW;
-        for (let r = -3; r < rows; r++) {
+        for (let r = -3 - extraRows; r < rows; r++) {
             let yOff = r * hexH; if (c % 2) yOff += hexH * 0.5;
             const tileC = { x: centroid.x + xOff, y: centroid.y + yOff };
             drawShapeCell(connections, tileC, false);
@@ -90,9 +112,12 @@ function tileHex() {
 // --- SQUARE ---
 function tileSquare() {
     const s = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y); // tile size
-    const cols = ceil(width / s) + 6; const rows = ceil(height / s) + 6;
-    for (let i = -4; i < cols; i++) {
-        for (let j = -4; j < rows; j++) {
+    const maxOffset = maxLayerOffset();
+    const extraCols = ceil(maxOffset.x / s);
+    const extraRows = ceil(maxOffset.y / s);
+    const cols = ceil(width / s) + 6 + extraCols; const rows = ceil(height / s) + 6 + extraRows;
+    for (let i = -4 - extraCols; i < cols; i++) {
+        for (let j = -4 - extraRows; j < rows; j++) {
             const tileC = { x: centroid.x + i * s, y: centroid.y + j * s };
             drawShapeCell(connections, tileC, false);
             drawAdditionalLayers(tileC, false);
@@ -122,11 +147,19 @@ function tileTriangle() {
 
     // Ursprung für das Gitter
     const B = outerCorners[1];
-    const cols = ceil(width / (s * (1 + horizontalAdjust))) + 8;
-    const rows = ceil(height / (h * (1 + verticalAdjust))) + 8;
+    // Loop-margin for shifted additional layers (see maxLayerOffset()) -
+    // approximated the same way the base loop already sizes cols/rows:
+    // i's step is treated as s (X), j's as h (Y), ignoring v2.x's s/2
+    // cross-term, matching the existing approximation rather than
+    // introducing new, inconsistent precision.
+    const maxOffset = maxLayerOffset();
+    const extraCols = ceil(maxOffset.x / (s * (1 + horizontalAdjust)));
+    const extraRows = ceil(maxOffset.y / (h * (1 + verticalAdjust)));
+    const cols = ceil(width / (s * (1 + horizontalAdjust))) + 8 + extraCols;
+    const rows = ceil(height / (h * (1 + verticalAdjust))) + 8 + extraRows;
 
-    for (let j = -4; j < rows; j++) {
-        for (let i = -4; i < cols; i++) {
+    for (let j = -4 - extraRows; j < rows; j++) {
+        for (let i = -4 - extraCols; i < cols; i++) {
             const anchor = {
                 x: B.x + i * v1.x + j * v2.x + offsetX,
                 y: B.y + i * v1.y + j * v2.y + offsetY
