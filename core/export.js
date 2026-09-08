@@ -70,6 +70,27 @@ function computeAdjacency(completeConnections, nodeById) {
 // intersection detection is scoped to compute, not this step; this
 // just exports enough raw data (every enabled layer's own edges plus
 // its offset) for that later pass to use.
+//
+// Roadmap 1.10a: geometry.faces / geometry.layers[].faces (per-sheet
+// symmetry-orbit-colored bounded faces, from core/faces.js's
+// findFaces()) are additive the same way, gated only on curveAmount===0
+// (v1 is straight-line-only - see core/faces.js's computeCellFaces())
+// rather than on the showFaces display toggle, since export should
+// capture the pattern's actual structure independent of what's
+// currently visible on screen. geometry.faceNodes / geometry.layers[].
+// faceNodes (each face's own real+synthetic node set, with x/y) ride
+// alongside so a consumer can resolve every id a face's nodeIds
+// references - face detection can introduce synthetic intersection
+// nodes (see splitSegments()) that aren't in geometry.nodes at all.
+// Re-checked at implementation time (not assumed from the design
+// session): grepped SpaceHarmony's whole tree - its only 2D-import
+// consumers are importFlatForm() (FormGeneratorCore.js, reads only
+// geometry.centroid/outerCorners/nodes/edges, explicitly does NOT
+// process geometry.adjacency and computes form.faces itself via its
+// own 3D _validateForm(), entirely independent of anything this export
+// provides) and _isFlat2DExport() (App.js, checks only formatVersion===1
+// + Array.isArray(geometry.nodes)) - neither touches geometry.faces or
+// geometry.layers, so this addition is safe and formatVersion stays 1.
 function buildExportData() {
     // Mirror the same completeness filter drawShapeCell() already applies -
     // a connection started by one click and never finished stays [id] (length 1).
@@ -102,13 +123,25 @@ function buildExportData() {
     if (enabledLayers.length > 0) {
         data.geometry.layers = enabledLayers.map(layer => {
             const completeLayerConnections = layer.connections.filter(c => c.length === 2);
-            return {
+            const layerData = {
                 offsetX: layer.offsetX,
                 offsetY: layer.offsetY,
                 edges: completeLayerConnections.map(c => [c[0], c[1]]),
                 adjacency: computeAdjacency(completeLayerConnections, nodeById)
             };
+            if (curveAmount === 0) {
+                const layerFacesResult = computeCellFaces(completeLayerConnections);
+                layerData.faceNodes = layerFacesResult.nodes;
+                layerData.faces = layerFacesResult.faces;
+            }
+            return layerData;
         });
+    }
+
+    if (curveAmount === 0) {
+        const facesResult = computeCellFaces(completeConnections);
+        data.geometry.faceNodes = facesResult.nodes;
+        data.geometry.faces = facesResult.faces;
     }
 
     return data;

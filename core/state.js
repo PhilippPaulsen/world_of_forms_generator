@@ -69,13 +69,15 @@ let svgPathCollector = null;
 let segmentCollector = null;
 
 // Roadmap 1.10a: whether to render symmetry-orbit-colored face fills
-// for the base sheet, computed by core/faces.js's computeCellFaces()
+// for the BASE sheet, computed by core/faces.js's computeCellFaces()
 // and drawn behind the line/node drawing by core/tiling.js's tile*()
-// functions (see drawFaceFillsAtTile()). Base-sheet-only for now -
-// per-layer generalization (mirroring additionalLayers[].enabled) and
-// the actual UI toggle are step 6/6; this flag defaults off so the
-// step 5/6 rendering hookup has no visible effect until then. Kept
-// mutually exclusive with curveAmount != 0 by the UI (step 6/6);
+// functions (see drawFaceFillsAtTile()). Each additional layer gets its
+// own independent showFaces field instead (see addLayer() in
+// sketch.js) - "pro Blatt/Sheet unabhängig", no cross-layer fill, per
+// the 1.10 design session's point 7 - toggled via sketch.js's
+// #btn-toggle-faces button, contextual to whichever sheet tab is
+// active (activeShowFaces()/setActiveShowFaces()). Kept mutually
+// exclusive with curveAmount != 0 by that same button's handler;
 // computeCellFaces() also defends against that combination directly.
 let showFaces = false;
 

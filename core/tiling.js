@@ -14,12 +14,14 @@
  *
  * Roadmap 1.10a: each tile*() function also takes an optional cellFaces
  * param (drawTessellation()'s computeCellFaces(connections) result, or
- * null when the base sheet's face-fill toggle is off) and, when set,
- * draws it via core/faces.js's drawFaceFillsAtTile() at each tile
- * position BEFORE that tile's own drawShapeCell() call, so face fills
- * render behind the line/node drawing (1.10 design session, point 7).
- * Base-sheet-only for now - additionalLayers don't get their own
- * cellFaces here (see state.js's showFaces comment).
+ * null when the base sheet's face-fill toggle is off) and an optional
+ * layerCellFaces map (additional-layer index -> its own computeCellFaces()
+ * result, only for layers with their own showFaces on - see
+ * additionalLayers[].showFaces in state.js/addLayer()); when set, each
+ * draws via core/faces.js's drawFaceFillsAtTile() at each tile position
+ * BEFORE that sheet's own drawShapeCell() call, so face fills render
+ * behind that sheet's own line/node drawing (1.10 design session, point
+ * 7 - "pro Blatt/Sheet unabhängig", no cross-layer fill in 1.10a).
  */
 
 // ----------------- GRID & TILING -------------------------------
@@ -29,9 +31,26 @@ function drawTessellation() {
     // 1.10a step 5/6's rendering hookup); each tile*() function draws
     // this same face set at every tile position via drawFaceFillsAtTile().
     const cellFaces = showFaces ? computeCellFaces(connections) : null;
-    if (currentShape === 'hex') tileHex(cellFaces);
-    else if (currentShape === 'square') tileSquare(cellFaces);
-    else tileTriangle(cellFaces);
+    const layerCellFaces = computeLayerCellFaces();
+    if (currentShape === 'hex') tileHex(cellFaces, layerCellFaces);
+    else if (currentShape === 'square') tileSquare(cellFaces, layerCellFaces);
+    else tileTriangle(cellFaces, layerCellFaces);
+}
+
+// Same "compute once per redraw" reasoning as drawTessellation()'s own
+// cellFaces, generalized to additional layers: only layers that are
+// both enabled and have their own showFaces on get computed at all: a
+// disabled layer already draws nothing, and most layers won't have
+// face-fill on. Returns null when no layer needs it, so drawAdditionalLayers()
+// can skip the per-tile Map lookup entirely in the common case.
+function computeLayerCellFaces() {
+    const active = additionalLayers.filter(l => l.enabled && l.showFaces);
+    if (active.length === 0) return null;
+    const map = new Map();
+    additionalLayers.forEach((layer, i) => {
+        if (layer.enabled && layer.showFaces) map.set(i, computeCellFaces(layer.connections));
+    });
+    return map;
 }
 
 // One mesh-width per axis for the current shape, matching each
@@ -77,9 +96,17 @@ function layerTileCentroid(tileCentroid, layer) {
 // Draws every enabled additional layer at one base tile position -
 // the loop each tile*() function calls once per orientation, right
 // after its own unconditional base-sheet drawShapeCell() call.
-function drawAdditionalLayers(tileCentroid, flip180 = false) {
-    additionalLayers.forEach(layer => {
-        if (layer.enabled) drawShapeCell(layer.connections, layerTileCentroid(tileCentroid, layer), flip180);
+// layerCellFaces (computeLayerCellFaces() result, or null) supplies
+// each layer's own precomputed faces, drawn at that SAME layer's own
+// shifted tile anchor (not the base tileCentroid) right before that
+// layer's own drawShapeCell() call, same "fill behind lines" ordering
+// as the base sheet.
+function drawAdditionalLayers(tileCentroid, flip180 = false, layerCellFaces = null) {
+    additionalLayers.forEach((layer, i) => {
+        if (!layer.enabled) return;
+        const layerTileC = layerTileCentroid(tileCentroid, layer);
+        if (layerCellFaces && layerCellFaces.has(i)) drawFaceFillsAtTile(layerCellFaces.get(i), layerTileC, flip180);
+        drawShapeCell(layer.connections, layerTileC, flip180);
     });
 }
 
@@ -103,7 +130,7 @@ function maxLayerOffset() {
 }
 
 // --- HEX ---
-function tileHex(cellFaces) {
+function tileHex(cellFaces, layerCellFaces) {
     const side = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y);
     const hexW = side * 1.5;
     const hexH = sqrt(3) * side;
@@ -119,13 +146,13 @@ function tileHex(cellFaces) {
             const tileC = { x: centroid.x + xOff, y: centroid.y + yOff };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, tileC, false);
             drawShapeCell(connections, tileC, false);
-            drawAdditionalLayers(tileC, false);
+            drawAdditionalLayers(tileC, false, layerCellFaces);
         }
     }
 }
 
 // --- SQUARE ---
-function tileSquare(cellFaces) {
+function tileSquare(cellFaces, layerCellFaces) {
     const s = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y); // tile size
     const maxOffset = maxLayerOffset();
     const extraCols = ceil(maxOffset.x / s);
@@ -136,13 +163,13 @@ function tileSquare(cellFaces) {
             const tileC = { x: centroid.x + i * s, y: centroid.y + j * s };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, tileC, false);
             drawShapeCell(connections, tileC, false);
-            drawAdditionalLayers(tileC, false);
+            drawAdditionalLayers(tileC, false, layerCellFaces);
         }
     }
 }
 
 // --- TRIANGLE --- (triangular lattice, centroid-centered)
-function tileTriangle(cellFaces) {
+function tileTriangle(cellFaces, layerCellFaces) {
     // Justage-Parameter für das Dreieck-Tiling:
     // Passe horizontalAdjust und verticalAdjust manuell an, um die horizontale/vertikale Abstände zwischen den Dreiecken zu feintunen.
     // Justage-Parameter für das Dreieck-Tiling (Reset auf 0 für exakte Mathematik)
@@ -185,13 +212,13 @@ function tileTriangle(cellFaces) {
             const centerUp = { x: anchor.x + s / 2, y: anchor.y - h / 3 };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, centerUp, false);
             drawShapeCell(connections, centerUp, false);
-            drawAdditionalLayers(centerUp, false);
+            drawAdditionalLayers(centerUp, false, layerCellFaces);
 
             // Umgedrehtes Dreieck
             const centerDown = { x: anchor.x + s / 2, y: anchor.y + h / 3 };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, centerDown, true);
             drawShapeCell(connections, centerDown, true);
-            drawAdditionalLayers(centerDown, true);
+            drawAdditionalLayers(centerDown, true, layerCellFaces);
         }
     }
 }

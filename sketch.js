@@ -106,17 +106,48 @@ function setup() {
         });
     }
 
-    // Curve Toggle Button
+    // Curve Toggle Button. Mutually exclusive with the face-fill toggle
+    // below (Roadmap 1.10a design session, point 7 - straight-line-only
+    // face detection): enabling curve here force-disables face-fill on
+    // whichever layer is currently active.
     const curveBtn = select('#btn-toggle-curve');
+    const faceBtn = select('#btn-toggle-faces');
     if (curveBtn) {
         curveBtn.mousePressed(() => {
             if (curveAmount === 0) {
                 curveAmount = 25; // Enable curve
                 curveBtn.addClass('active');
+                setActiveShowFaces(false);
+                faceBtn && faceBtn.removeClass('active');
             } else {
                 curveAmount = 0; // Disable curve
                 curveBtn.removeClass('active');
             }
+            redraw();
+        });
+    }
+
+    // Face-Fill Toggle Button (Roadmap 1.10a). Contextual to the active
+    // layer (base or a specific additional layer - see
+    // activeShowFaces()/setActiveShowFaces()), and mutually exclusive
+    // with curve mode the same way the curve toggle above is with this
+    // one. updateFaceToggleControl() keeps the button's visual state in
+    // sync whenever the active layer changes (same call sites as
+    // updateOffsetControls() below).
+    function updateFaceToggleControl() {
+        if (!faceBtn) return;
+        if (activeShowFaces()) faceBtn.addClass('active');
+        else faceBtn.removeClass('active');
+    }
+    if (faceBtn) {
+        faceBtn.mousePressed(() => {
+            const next = !activeShowFaces();
+            setActiveShowFaces(next);
+            if (next) {
+                curveAmount = 0;
+                curveBtn && curveBtn.removeClass('active');
+            }
+            updateFaceToggleControl();
             redraw();
         });
     }
@@ -196,6 +227,7 @@ function setup() {
                 activeLayer = i;
                 renderLayerTabs();
                 updateOffsetControls();
+                updateFaceToggleControl();
             });
 
             const removeBtn = document.createElement('button');
@@ -206,6 +238,7 @@ function setup() {
                 removeLayer(i);
                 renderLayerTabs();
                 updateOffsetControls();
+                updateFaceToggleControl();
                 redraw();
             });
 
@@ -221,6 +254,7 @@ function setup() {
             activeLayer = 'base';
             renderLayerTabs();
             updateOffsetControls();
+            updateFaceToggleControl();
         });
     }
 
@@ -229,6 +263,7 @@ function setup() {
             addLayer();
             renderLayerTabs();
             updateOffsetControls();
+            updateFaceToggleControl();
             redraw();
         });
     }
@@ -270,6 +305,7 @@ function setup() {
 
     renderLayerTabs();
     updateOffsetControls();
+    updateFaceToggleControl();
 
     // Show nodes Toggle Button
     const nodeBtn = select('#btn-toggle-nodes');
@@ -433,13 +469,24 @@ function activeRedoStack() { return activeLayer === 'base' ? redoStack : additio
 function clearActiveConnections() { if (activeLayer === 'base') connections = []; else additionalLayers[activeLayer].connections = []; }
 function clearActiveRedoStack() { if (activeLayer === 'base') redoStack = []; else additionalLayers[activeLayer].redoStack = []; }
 
+// Roadmap 1.10a: same base/active-layer split as above, for the face-
+// fill toggle - "pro Blatt/Sheet unabhängig" (design session point 7),
+// no cross-layer fill in 1.10a. The base sheet keeps its own showFaces
+// global (core/state.js, read directly by core/tiling.js's
+// drawTessellation()); additional layers get their own showFaces field
+// (see addLayer()). setActiveShowFaces() needs an explicit setter for
+// the same reason clearActiveConnections() does - `x = v` can't be
+// expressed through a returned reference for the base-sheet case.
+function activeShowFaces() { return activeLayer === 'base' ? showFaces : additionalLayers[activeLayer].showFaces; }
+function setActiveShowFaces(v) { if (activeLayer === 'base') showFaces = v; else additionalLayers[activeLayer].showFaces = v; }
+
 // Adds a new, empty additional layer and makes it the active one -
 // matches the natural workflow (add layer -> immediately start
 // clicking nodes to build its connections). No cap enforced here (see
 // 1.9 design session) - the UI is what practically targets 4 total
 // sheets.
 function addLayer() {
-    additionalLayers.push({ connections: [], redoStack: [], offsetX: 0, offsetY: 0, enabled: true });
+    additionalLayers.push({ connections: [], redoStack: [], offsetX: 0, offsetY: 0, enabled: true, showFaces: false });
     activeLayer = additionalLayers.length - 1;
 }
 

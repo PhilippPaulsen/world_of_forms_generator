@@ -407,6 +407,16 @@
               <path d="M4 12c2-4 6-4 8 0s6 4 8 0" />
             </svg>
           </button>
+          <!-- Roadmap 1.10a: face-fill toggle, contextual to whichever
+               layer tab is active (see updateFaceToggleControl() in
+               sketch.js) and mutually exclusive with the curve toggle
+               above (straight-line-only face detection - see
+               core/faces.js's computeCellFaces()). -->
+          <button id="btn-toggle-faces" class="icon-btn" title="Toggle Face Fill">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+              <path d="M12 2 L22 20 L2 20 Z" />
+            </svg>
+          </button>
           <button id="btn-toggle-free-endpoints" class="icon-btn" title="Toggle Free Endpoints">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10" />
