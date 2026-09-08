@@ -2,16 +2,15 @@
  * core/tiling.js
  * Plane tessellation per net type - Ostwald's "unlimited surfaces".
  * Part of the portable "core" module set (see CLAUDE.md). This is
- * where roadmap 1.3(b) (offset overlays / pattern combination) hooks
- * in: drawShapeCell() takes which connection set to draw, so each
- * tile*() function can call it twice per tile position - once for the
- * base sheet, once for the overlay sheet at a shifted tile anchor,
- * gated on overlayEnabled. drawConnectionWithSymmetry()/
- * drawCurvedBezier() are untouched by this - both sheets share the
- * same symmetryMode/curveAmount/currentShape (see the 1.3(b) design
- * session for why that's shared rather than per-sheet). Also relevant
- * to 1.1/1.2/1.12 (alternative net construction, cross-order/cross-net
- * combination).
+ * where roadmap 1.3(b)/1.9 (offset overlays, generalized to N sheets)
+ * hook in: drawShapeCell() takes which connection set to draw, so each
+ * tile*() function calls it once for the base sheet unconditionally,
+ * then once per enabled entry in additionalLayers at that layer's own
+ * shifted tile anchor. drawConnectionWithSymmetry()/drawCurvedBezier()
+ * are untouched by this - every sheet shares the same symmetryMode/
+ * curveAmount/currentShape (see the 1.3(b)/1.9 design sessions for why
+ * that's shared rather than per-sheet). Also relevant to 1.1/1.2/1.12
+ * (alternative net construction, cross-order/cross-net combination).
  */
 
 // ----------------- GRID & TILING -------------------------------
@@ -53,11 +52,21 @@ function drawShapeCell(connSet, tileCentroid, flip180 = false) {
     }
 }
 
-// Overlay sheet's tile anchor: same tileCentroid as the base sheet,
-// shifted by the current overlay offset. Shared by all three tile*()
-// functions below.
-function overlayTileCentroid(tileCentroid) {
-    return { x: tileCentroid.x + overlayOffsetX, y: tileCentroid.y + overlayOffsetY };
+// One additional layer's tile anchor: same tileCentroid as the base
+// sheet, shifted by that layer's own (offsetX, offsetY) - independent
+// per layer relative to the base grid, not chained (see 1.9 design
+// session). Shared by all three tile*() functions below.
+function layerTileCentroid(tileCentroid, layer) {
+    return { x: tileCentroid.x + layer.offsetX, y: tileCentroid.y + layer.offsetY };
+}
+
+// Draws every enabled additional layer at one base tile position -
+// the loop each tile*() function calls once per orientation, right
+// after its own unconditional base-sheet drawShapeCell() call.
+function drawAdditionalLayers(tileCentroid, flip180 = false) {
+    additionalLayers.forEach(layer => {
+        if (layer.enabled) drawShapeCell(layer.connections, layerTileCentroid(tileCentroid, layer), flip180);
+    });
 }
 
 // --- HEX ---
@@ -73,7 +82,7 @@ function tileHex() {
             let yOff = r * hexH; if (c % 2) yOff += hexH * 0.5;
             const tileC = { x: centroid.x + xOff, y: centroid.y + yOff };
             drawShapeCell(connections, tileC, false);
-            if (overlayEnabled) drawShapeCell(overlayConnections, overlayTileCentroid(tileC), false);
+            drawAdditionalLayers(tileC, false);
         }
     }
 }
@@ -86,7 +95,7 @@ function tileSquare() {
         for (let j = -4; j < rows; j++) {
             const tileC = { x: centroid.x + i * s, y: centroid.y + j * s };
             drawShapeCell(connections, tileC, false);
-            if (overlayEnabled) drawShapeCell(overlayConnections, overlayTileCentroid(tileC), false);
+            drawAdditionalLayers(tileC, false);
         }
     }
 }
@@ -126,12 +135,12 @@ function tileTriangle() {
             // Aufrechtes Dreieck
             const centerUp = { x: anchor.x + s / 2, y: anchor.y - h / 3 };
             drawShapeCell(connections, centerUp, false);
-            if (overlayEnabled) drawShapeCell(overlayConnections, overlayTileCentroid(centerUp), false);
+            drawAdditionalLayers(centerUp, false);
 
             // Umgedrehtes Dreieck
             const centerDown = { x: anchor.x + s / 2, y: anchor.y + h / 3 };
             drawShapeCell(connections, centerDown, true);
-            if (overlayEnabled) drawShapeCell(overlayConnections, overlayTileCentroid(centerDown), true);
+            drawAdditionalLayers(centerDown, true);
         }
     }
 }
