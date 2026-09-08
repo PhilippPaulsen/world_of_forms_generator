@@ -141,26 +141,31 @@ function setup() {
         });
     }
 
-    // Action Buttons
+    // Action Buttons - operate on the active layer (base or overlay,
+    // see activeConnections()/clearActiveRedoStack() etc. in INTERACTION)
     const clearBtn = select('#btn-clear');
     clearBtn && clearBtn.mousePressed(() => {
-        connections = [];
-        redoStack = []; // Clear redo on clear
+        clearActiveConnections();
+        clearActiveRedoStack(); // Clear redo on clear
         redraw();
     });
 
     const backBtn = select('#btn-undo');
     backBtn && backBtn.mousePressed(() => {
-        if (connections.length) {
-            redoStack.push(connections.pop()); // Push to redo stack
+        const conns = activeConnections();
+        const redo = activeRedoStack();
+        if (conns.length) {
+            redo.push(conns.pop()); // Push to redo stack
             redraw();
         }
     });
 
     const redoBtn = select('#btn-redo');
     redoBtn && redoBtn.mousePressed(() => {
-        if (redoStack.length) {
-            connections.push(redoStack.pop()); // Pop from redo stack
+        const conns = activeConnections();
+        const redo = activeRedoStack();
+        if (redo.length) {
+            conns.push(redo.pop()); // Pop from redo stack
             redraw();
         }
     });
@@ -168,7 +173,7 @@ function setup() {
     const randBtn = select('#btn-random');
     randBtn && randBtn.mousePressed(() => {
         addRandomConnection();
-        redoStack = []; // Clear redo on new action
+        clearActiveRedoStack(); // Clear redo on new action
         redraw();
     });
 
@@ -270,6 +275,17 @@ function draw() {
 function mouseMoved() { if (showNodes) redraw(); }
 
 // ----------------- INTERACTION ---------------------------------
+// Roadmap 1.3(b): which connections/redo-stack pair mousePressed()/
+// addRandomConnection()/undo/redo/clear act on depends on activeLayer
+// ('base' | 'overlay', see core/state.js). Reads return the actual
+// array (mutate via .push()/.pop() as before); clears need an
+// explicit setter since `arr = []` can't be expressed through a
+// returned reference.
+function activeConnections() { return activeLayer === 'overlay' ? overlayConnections : connections; }
+function activeRedoStack() { return activeLayer === 'overlay' ? overlayRedoStack : redoStack; }
+function clearActiveConnections() { if (activeLayer === 'overlay') overlayConnections = []; else connections = []; }
+function clearActiveRedoStack() { if (activeLayer === 'overlay') overlayRedoStack = []; else redoStack = []; }
+
 function mousePressed() {
     if (mouseX < 0 || mouseX > width || mouseY < 0 || mouseY > height) return;
     let foundId = null;
@@ -280,9 +296,10 @@ function mousePressed() {
         foundId = newId;
     }
     if (foundId !== null) {
-        if (!connections.length || connections[connections.length - 1].length === 2) connections.push([foundId]);
-        else connections[connections.length - 1].push(foundId);
-        redoStack = []; // Clear redo stack on manual add
+        const conns = activeConnections();
+        if (!conns.length || conns[conns.length - 1].length === 2) conns.push([foundId]);
+        else conns[conns.length - 1].push(foundId);
+        clearActiveRedoStack(); // Clear redo stack on manual add
         redraw();
     }
 }
@@ -290,5 +307,5 @@ function mousePressed() {
 function addRandomConnection() {
     if (nodes.length < 2) return;
     let i = floor(random(nodes.length)); let j = floor(random(nodes.length));
-    if (i === j) return; connections.push([nodes[i].id, nodes[j].id]);
+    if (i === j) return; activeConnections().push([nodes[i].id, nodes[j].id]);
 }
