@@ -185,3 +185,143 @@ function splitSegments(segments, realNodes) {
     }
     return { nodes: Array.from(registry.byId.values()), edges: Array.from(edgeMap.values()) };
 }
+
+// Angle-sorted adjacency over the augmented (real+synthetic) node/edge
+// set from splitSegments() - same convention as core/export.js's
+// computeAdjacency() (angleDeg via atan2, normalized to [0,360)), but
+// reimplemented with Math.atan2/Math.PI instead of p5's degrees()/
+// atan2() global aliases, and taking nodes/edges as plain parameters
+// instead of reading the live app's nodes/connections globals - keeping
+// this module p5/live-app independent per the file docblock. Not reused
+// directly from export.js for that reason, even though the algorithm
+// is identical.
+function _buildFaceAdjacency(faceNodes, edges) {
+    const nodeById = new Map(faceNodes.map(n => [n.id, n]));
+    const adjacency = {};
+    faceNodes.forEach(n => { adjacency[n.id] = []; });
+    edges.forEach(([aId, bId]) => {
+        const a = nodeById.get(aId), b = nodeById.get(bId);
+        const angleAB = (Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI + 360) % 360;
+        const angleBA = (Math.atan2(a.y - b.y, a.x - b.x) * 180 / Math.PI + 360) % 360;
+        adjacency[aId].push({ neighborId: bId, angleDeg: angleAB });
+        adjacency[bId].push({ neighborId: aId, angleDeg: angleBA });
+    });
+    Object.keys(adjacency).forEach(id => adjacency[id].sort((x, y) => x.angleDeg - y.angleDeg));
+    return adjacency;
+}
+
+// The half-edge/rotation-system neighbor lookup at the heart of the
+// face-walk: given the directed half-edge (arrivingFrom -> atNode), the
+// next half-edge of the SAME face's boundary continues to whichever
+// neighbor sits immediately after arrivingFrom in atNode's own angle-
+// sorted list (wrapping around) - the standard planar-graph face-
+// tracing rule (see e.g. DCEL construction from a rotation system).
+function _nextAroundFace(adjacency, atNode, arrivingFrom) {
+    const list = adjacency[atNode];
+    const idx = list.findIndex(e => e.neighborId === arrivingFrom);
+    return list[(idx + 1) % list.length].neighborId;
+}
+
+// Traces every face boundary in the graph by walking each of the 2*E
+// directed half-edges exactly once (skipping ones already consumed by
+// an earlier walk) via _nextAroundFace() until the walk returns to its
+// own starting half-edge. For a connected graph this produces exactly
+// one boundary per face (Euler's V-E+F=2), including the single
+// unbounded outer face - _signedArea()'s sign is what separates that
+// one out afterwards in findFaces(), not this function. A tree/dangling
+// branch (no cycle) still traces as one single all-encompassing
+// boundary that revisits its cut vertices - not filtered out here, left
+// to findFaces()'s zero-area check.
+function _traceAllFaceBoundaries(faceNodes, edges, adjacency) {
+    const visited = new Set();
+    const boundaries = [];
+    const halfEdges = [];
+    edges.forEach(([a, b]) => { halfEdges.push([a, b]); halfEdges.push([b, a]); });
+    for (const [startU, startV] of halfEdges) {
+        const startKey = startU + '>' + startV;
+        if (visited.has(startKey)) continue;
+        const boundary = [];
+        let u = startU, v = startV;
+        while (true) {
+            visited.add(u + '>' + v);
+            boundary.push(u);
+            const w = _nextAroundFace(adjacency, v, u);
+            u = v; v = w;
+            if (u === startU && v === startV) break;
+        }
+        boundaries.push(boundary);
+    }
+    return boundaries;
+}
+
+// Shoelace formula over a face boundary (an ordered, non-repeated list
+// of node ids - see _traceAllFaceBoundaries()). Sign is what findFaces()
+// uses to separate the outer face from bounded ones (see there); this
+// consistent-rotation-system walk gives every bounded face one winding
+// sign and the single unbounded face the opposite sign, for a connected
+// graph. Magnitude is the face's area, in the same px^2 units as the
+// canvas.
+function _signedArea(boundaryIds, nodeById) {
+    let sum = 0;
+    for (let i = 0; i < boundaryIds.length; i++) {
+        const p1 = nodeById.get(boundaryIds[i]);
+        const p2 = nodeById.get(boundaryIds[(i + 1) % boundaryIds.length]);
+        sum += (p1.x * p2.y - p2.x * p1.y);
+    }
+    return sum / 2;
+}
+
+// Orchestrates the full 1.10a pipeline (1.10 design session, points 2-4
+// and 9): dedupe -> intersection-split/snap -> angle-sorted adjacency ->
+// half-edge face-walk -> drop the single unbounded outer face. realNodes
+// is optional (see splitSegments()); segments need not be pre-deduped -
+// this calls dedupeSegments() itself, so findFaces(collectCellSegments(
+// connSet)) is a complete, single-call pipeline for the live app (step
+// 5/6's rendering hookup).
+//
+// Known v1 limitation (design session point 9, documented rather than
+// silently mishandled): nested/disjoint bounded faces - e.g. a small
+// enclosed face fully inside a larger one, with no shared vertex - both
+// still get traced individually and correctly by the half-edge walk
+// itself (it operates per-vertex, not on global containment), but the
+// outer-face filter below assumes a single connected graph with exactly
+// one unbounded face distinguishable by winding sign. A graph with
+// multiple disconnected components (e.g. two separate closed shapes
+// that never intersect or touch) produces one such "opposite-sign"
+// trace PER component, not one - the sign-based split degrades to a
+// largest-|area| heuristic in that case (see the fallback branch below),
+// which is usually still correct for a single symmetry cell's compact
+// geometry but is not a mathematically guaranteed containment analysis.
+function findFaces(segments, realNodes) {
+    const deduped = dedupeSegments(segments);
+    const { nodes: faceNodes, edges } = splitSegments(deduped, realNodes);
+    if (edges.length === 0) return { nodes: faceNodes, faces: [] };
+
+    const nodeById = new Map(faceNodes.map(n => [n.id, n]));
+    const adjacency = _buildFaceAdjacency(faceNodes, edges);
+    const boundaries = _traceAllFaceBoundaries(faceNodes, edges, adjacency);
+
+    const traced = boundaries
+        .map(boundary => ({ boundary, area: _signedArea(boundary, nodeById) }))
+        .filter(f => Math.abs(f.area) > 1e-6); // drop degenerate zero-area tree-branch traces
+
+    if (traced.length === 0) return { nodes: faceNodes, faces: [] };
+
+    const positive = traced.filter(f => f.area > 0);
+    const negative = traced.filter(f => f.area < 0);
+    let bounded;
+    if (positive.length === 1 && negative.length >= 1) {
+        bounded = negative;
+    } else if (negative.length === 1 && positive.length >= 1) {
+        bounded = positive;
+    } else {
+        // Ambiguous (disconnected components, or every trace shares one
+        // sign) - fall back to dropping the single largest-|area| trace,
+        // the documented v1 heuristic above.
+        traced.sort((a, b) => Math.abs(b.area) - Math.abs(a.area));
+        bounded = traced.slice(1);
+    }
+
+    const faces = bounded.map(f => ({ nodeIds: f.boundary, area: Math.abs(f.area) }));
+    return { nodes: faceNodes, faces };
+}
