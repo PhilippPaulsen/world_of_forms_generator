@@ -11,13 +11,27 @@
  * curveAmount/currentShape (see the 1.3(b)/1.9 design sessions for why
  * that's shared rather than per-sheet). Also relevant to 1.1/1.2/1.12
  * (alternative net construction, cross-order/cross-net combination).
+ *
+ * Roadmap 1.10a: each tile*() function also takes an optional cellFaces
+ * param (drawTessellation()'s computeCellFaces(connections) result, or
+ * null when the base sheet's face-fill toggle is off) and, when set,
+ * draws it via core/faces.js's drawFaceFillsAtTile() at each tile
+ * position BEFORE that tile's own drawShapeCell() call, so face fills
+ * render behind the line/node drawing (1.10 design session, point 7).
+ * Base-sheet-only for now - additionalLayers don't get their own
+ * cellFaces here (see state.js's showFaces comment).
  */
 
 // ----------------- GRID & TILING -------------------------------
 function drawTessellation() {
-    if (currentShape === 'hex') tileHex();
-    else if (currentShape === 'square') tileSquare();
-    else tileTriangle();
+    // Computed once per redraw (not per tile - see computeCellFaces()'s
+    // own cost) when the base sheet's face-fill toggle is on (roadmap
+    // 1.10a step 5/6's rendering hookup); each tile*() function draws
+    // this same face set at every tile position via drawFaceFillsAtTile().
+    const cellFaces = showFaces ? computeCellFaces(connections) : null;
+    if (currentShape === 'hex') tileHex(cellFaces);
+    else if (currentShape === 'square') tileSquare(cellFaces);
+    else tileTriangle(cellFaces);
 }
 
 // One mesh-width per axis for the current shape, matching each
@@ -89,7 +103,7 @@ function maxLayerOffset() {
 }
 
 // --- HEX ---
-function tileHex() {
+function tileHex(cellFaces) {
     const side = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y);
     const hexW = side * 1.5;
     const hexH = sqrt(3) * side;
@@ -103,6 +117,7 @@ function tileHex() {
         for (let r = -3 - extraRows; r < rows; r++) {
             let yOff = r * hexH; if (c % 2) yOff += hexH * 0.5;
             const tileC = { x: centroid.x + xOff, y: centroid.y + yOff };
+            if (cellFaces) drawFaceFillsAtTile(cellFaces, tileC, false);
             drawShapeCell(connections, tileC, false);
             drawAdditionalLayers(tileC, false);
         }
@@ -110,7 +125,7 @@ function tileHex() {
 }
 
 // --- SQUARE ---
-function tileSquare() {
+function tileSquare(cellFaces) {
     const s = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y); // tile size
     const maxOffset = maxLayerOffset();
     const extraCols = ceil(maxOffset.x / s);
@@ -119,6 +134,7 @@ function tileSquare() {
     for (let i = -4 - extraCols; i < cols; i++) {
         for (let j = -4 - extraRows; j < rows; j++) {
             const tileC = { x: centroid.x + i * s, y: centroid.y + j * s };
+            if (cellFaces) drawFaceFillsAtTile(cellFaces, tileC, false);
             drawShapeCell(connections, tileC, false);
             drawAdditionalLayers(tileC, false);
         }
@@ -126,7 +142,7 @@ function tileSquare() {
 }
 
 // --- TRIANGLE --- (triangular lattice, centroid-centered)
-function tileTriangle() {
+function tileTriangle(cellFaces) {
     // Justage-Parameter für das Dreieck-Tiling:
     // Passe horizontalAdjust und verticalAdjust manuell an, um die horizontale/vertikale Abstände zwischen den Dreiecken zu feintunen.
     // Justage-Parameter für das Dreieck-Tiling (Reset auf 0 für exakte Mathematik)
@@ -167,11 +183,13 @@ function tileTriangle() {
 
             // Aufrechtes Dreieck
             const centerUp = { x: anchor.x + s / 2, y: anchor.y - h / 3 };
+            if (cellFaces) drawFaceFillsAtTile(cellFaces, centerUp, false);
             drawShapeCell(connections, centerUp, false);
             drawAdditionalLayers(centerUp, false);
 
             // Umgedrehtes Dreieck
             const centerDown = { x: anchor.x + s / 2, y: anchor.y + h / 3 };
+            if (cellFaces) drawFaceFillsAtTile(cellFaces, centerDown, true);
             drawShapeCell(connections, centerDown, true);
             drawAdditionalLayers(centerDown, true);
         }

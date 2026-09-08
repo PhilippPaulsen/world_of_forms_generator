@@ -7,14 +7,16 @@
  *
  * Two tiers, clearly separated below:
  *  - Pure geometry (dedup, intersection, node-snapping, the half-edge
- *    face-walk, findFaces() itself) - zero p5 dependency, uses Math.*
- *    not p5's global aliases, same portability standard as
- *    core/forms.js. Testable headlessly with plain segment arrays,
- *    with no canvas/DOM/live app state involved.
- *  - Live-app glue (collectCellSegments()) - bridges into the app's
- *    actual rendering pipeline (drawShapeCell(), segmentCollector) so
- *    the segments fed into the pure geometry below can never drift
- *    from what's actually drawn on screen.
+ *    face-walk, symmetry-orbit color assignment, findFaces() itself) -
+ *    zero p5 dependency, uses Math.* not p5's global aliases, same
+ *    portability standard as core/forms.js. Testable headlessly with
+ *    plain segment arrays, with no canvas/DOM/live app state involved.
+ *  - Live-app glue (collectCellSegments(), computeCellFaces(),
+ *    drawFaceFillsAtTile()) - bridges into the app's actual rendering
+ *    pipeline (drawShapeCell(), segmentCollector, toTileLocal()) so the
+ *    segments fed into the pure geometry below can never drift from
+ *    what's actually drawn on screen, and so face fills tessellate
+ *    exactly like the lines do.
  *
  * Scope for this pass (1.10a, see the 1.10 design session): one
  * sheet's symmetry-expanded base cell only - not tessellated across
@@ -38,12 +40,28 @@
 // same coordinate space as the live nodes[] array's own (x,y) values -
 // required for node-snapping (see snapOrCreateNode()) to work without
 // any extra coordinate translation.
+//
+// Calls drawShapeCell() once PER connection (rather than once for the
+// whole connSet) purely to tag each collected segment with connIndex -
+// which base connection's own rotation/reflection orbit produced it.
+// This produces byte-for-byte the same segments in the same order as a
+// single drawShapeCell(connSet, ...) call would (drawShapeCell just
+// loops over connSet calling drawConnectionWithSymmetry once per entry
+// either way - see core/tiling.js), so it's a pure bookkeeping addition,
+// not a behavior change. connIndex is what orbitColor()/findFaces() use
+// for symmetry-orbit face coloring (1.10 design session, point 6): all
+// copies of one base connection - its full rotation/reflection orbit -
+// get the same connIndex and so the same color.
 function collectCellSegments(connSet) {
-    segmentCollector = [];
-    drawShapeCell(connSet, centroid, false);
-    const segments = segmentCollector;
-    segmentCollector = null;
-    return segments;
+    const tagged = [];
+    connSet.forEach((conn, connIndex) => {
+        if (conn.length !== 2) return; // mirror drawShapeCell's own completeness filter
+        segmentCollector = [];
+        drawShapeCell([conn], centroid, false);
+        segmentCollector.forEach(seg => tagged.push({ ...seg, connIndex }));
+        segmentCollector = null;
+    });
+    return tagged;
 }
 
 // ----------------- PURE GEOMETRY ----------------------------------
@@ -124,6 +142,14 @@ function createNodeRegistry(realNodes) {
     return { realNodes: realNodes || [], byId: new Map(), nextSyntheticId: 0 };
 }
 
+// Canonical string key for an undirected edge, independent of endpoint
+// order - shared by splitSegments() (building edgeMeta) and findFaces()
+// (looking a boundary edge's meta back up), so both sides address the
+// same edge the same way regardless of which id happens to come first.
+function _undirectedKey(a, b) {
+    return String(a) < String(b) ? a + '|' + b : b + '|' + a;
+}
+
 // Snaps a breakpoint (segment endpoint or intersection point) onto an
 // existing node within FACE_EPSILON - checking already-registered nodes
 // first (so repeated visits to the same point, e.g. an intersection
@@ -154,6 +180,12 @@ function snapOrCreateNode(point, registry) {
 // should already be deduped (dedupeSegments()) before this runs; realNodes
 // is optional (defaults to none, i.e. every break point becomes synthetic)
 // so this stays testable with plain synthetic segment arrays.
+//
+// Also returns edgeMeta (undirected edge key -> the connIndex of the
+// original segment that produced it, if collectCellSegments() tagged
+// one - see there) so findFaces() can assign each face's symmetry-orbit
+// color from the connections along its own boundary, without needing a
+// second pass back over the raw segments.
 function splitSegments(segments, realNodes) {
     const registry = createNodeRegistry(realNodes);
     const breaks = segments.map(() => [0, 1]);
@@ -167,6 +199,7 @@ function splitSegments(segments, realNodes) {
         }
     }
     const edgeMap = new Map();
+    const edgeMeta = new Map();
     for (let i = 0; i < segments.length; i++) {
         const seg = segments[i];
         const tVals = [...new Set(breaks[i])].sort((a, b) => a - b);
@@ -179,11 +212,14 @@ function splitSegments(segments, realNodes) {
         }
         for (let k = 0; k < ids.length - 1; k++) {
             const a = ids[k], b = ids[k + 1];
-            const key = String(a) < String(b) ? a + '|' + b : b + '|' + a;
-            if (!edgeMap.has(key)) edgeMap.set(key, [a, b]);
+            const key = _undirectedKey(a, b);
+            if (!edgeMap.has(key)) {
+                edgeMap.set(key, [a, b]);
+                edgeMeta.set(key, seg.connIndex);
+            }
         }
     }
-    return { nodes: Array.from(registry.byId.values()), edges: Array.from(edgeMap.values()) };
+    return { nodes: Array.from(registry.byId.values()), edges: Array.from(edgeMap.values()), edgeMeta };
 }
 
 // Angle-sorted adjacency over the augmented (real+synthetic) node/edge
@@ -271,13 +307,50 @@ function _signedArea(boundaryIds, nodeById) {
     return sum / 2;
 }
 
-// Orchestrates the full 1.10a pipeline (1.10 design session, points 2-4
-// and 9): dedupe -> intersection-split/snap -> angle-sorted adjacency ->
-// half-edge face-walk -> drop the single unbounded outer face. realNodes
-// is optional (see splitSegments()); segments need not be pre-deduped -
-// this calls dedupeSegments() itself, so findFaces(collectCellSegments(
-// connSet)) is a complete, single-call pipeline for the live app (step
-// 5/6's rendering hookup).
+// A face's symmetry orbit = the connIndex most represented among the
+// edges on its own boundary (majority vote, ties broken toward the
+// lower connIndex for determinism) - "a starting point, not a real
+// graph-coloring" per the design session (point 6): a face bordered by
+// segments from more than one base connection just gets the most-common
+// one, not a blend. Returns null if no edge on the boundary carries meta
+// (e.g. synthetic test segments that never set connIndex) - orbitColor()
+// falls back to a neutral color in that case.
+function _majorityConnIndex(boundary, edgeMeta) {
+    const counts = new Map();
+    for (let i = 0; i < boundary.length; i++) {
+        const u = boundary[i], v = boundary[(i + 1) % boundary.length];
+        const ci = edgeMeta.get(_undirectedKey(u, v));
+        if (ci === undefined || ci === null) continue;
+        counts.set(ci, (counts.get(ci) || 0) + 1);
+    }
+    let best = null, bestCount = -1;
+    for (const [ci, count] of counts) {
+        if (count > bestCount || (count === bestCount && ci < best)) { best = ci; bestCount = count; }
+    }
+    return best;
+}
+
+// Deterministic, evenly-hued color per orbit (base connection index) -
+// the "symmetry-orbit palette" (design session point 6): every face
+// generated by the same base connection's rotation/reflection copies
+// gets the same hue, spaced 360/totalOrbits degrees apart around the
+// color wheel so adjacent orbits stay visually distinct even for a
+// handful of connections. Faces with no identifiable orbit (see
+// _majorityConnIndex()) get a neutral gray rather than an arbitrary hue.
+function orbitColor(connIndex, totalOrbits) {
+    if (connIndex === null || connIndex === undefined || totalOrbits <= 0) return 'hsl(0, 0%, 70%)';
+    const hue = Math.round((360 * connIndex / totalOrbits) % 360);
+    return `hsl(${hue}, 65%, 55%)`;
+}
+
+// Orchestrates the full 1.10a pipeline (1.10 design session, points 2-4,
+// 6 and 9): dedupe -> intersection-split/snap -> angle-sorted adjacency
+// -> half-edge face-walk -> drop the single unbounded outer face ->
+// symmetry-orbit color assignment. realNodes is optional (see
+// splitSegments()); segments need not be pre-deduped - this calls
+// dedupeSegments() itself, so findFaces(collectCellSegments(connSet)) is
+// a complete, single-call pipeline for the live app (see
+// computeCellFaces()).
 //
 // Known v1 limitation (design session point 9, documented rather than
 // silently mishandled): nested/disjoint bounded faces - e.g. a small
@@ -294,7 +367,7 @@ function _signedArea(boundaryIds, nodeById) {
 // geometry but is not a mathematically guaranteed containment analysis.
 function findFaces(segments, realNodes) {
     const deduped = dedupeSegments(segments);
-    const { nodes: faceNodes, edges } = splitSegments(deduped, realNodes);
+    const { nodes: faceNodes, edges, edgeMeta } = splitSegments(deduped, realNodes);
     if (edges.length === 0) return { nodes: faceNodes, faces: [] };
 
     const nodeById = new Map(faceNodes.map(n => [n.id, n]));
@@ -322,6 +395,65 @@ function findFaces(segments, realNodes) {
         bounded = traced.slice(1);
     }
 
-    const faces = bounded.map(f => ({ nodeIds: f.boundary, area: Math.abs(f.area) }));
+    const totalOrbits = deduped.reduce((max, s) =>
+        (typeof s.connIndex === 'number' ? Math.max(max, s.connIndex + 1) : max), 0);
+    const faces = bounded.map(f => {
+        const connIndex = _majorityConnIndex(f.boundary, edgeMeta);
+        return {
+            nodeIds: f.boundary,
+            area: Math.abs(f.area),
+            connIndex,
+            color: orbitColor(connIndex, totalOrbits)
+        };
+    });
     return { nodes: faceNodes, faces };
+}
+
+// ----------------- LIVE-APP GLUE (rendering) ----------------------
+
+// Complete pipeline for the live app: collects one sheet's connections
+// through the real rendering pipeline (collectCellSegments()) and runs
+// findFaces() over them. Straight-line-only for v1 (1.10 design session,
+// point 5) - returns no faces at all rather than computing against
+// curved geometry when curveAmount is set, since the UI keeps the face-
+// fill and curve toggles mutually exclusive (step 6/6) but this defends
+// the computation itself against that combination too, independent of
+// the UI state.
+function computeCellFaces(connSet) {
+    if (curveAmount !== 0) return { nodes: [], faces: [] };
+    const segments = collectCellSegments(connSet);
+    return findFaces(segments, nodes);
+}
+
+// Draws one sheet's already-computed faces (computeCellFaces() result)
+// at one tessellated tile position, using the exact same toTileLocal()
+// transform drawShapeCell() uses for lines - so face fills line up with
+// the lines/nodes exactly, at every tile, both orientations included
+// (flip180, for the triangle net's alternating up/down cells). Callers
+// (core/tiling.js's tile*() functions) are expected to call this BEFORE
+// drawShapeCell() at the same tile position, so fills render behind the
+// line/node drawing (1.10 design session, point 7).
+function drawFaceFillsAtTile(facesResult, tileCentroid, flip180) {
+    const { nodes: faceNodes, faces } = facesResult;
+    if (!faces || !faces.length) return;
+    const nodeById = new Map(faceNodes.map(n => [n.id, n]));
+    // push()/pop(): noStroke()/fill() are ambient p5 drawing-style state,
+    // not scoped to this call - draw()'s own stroke(lineColor)/noFill()
+    // (set once before drawTessellation(), see sketch.js) must survive
+    // this function so the line drawing that follows (drawShapeCell(),
+    // called right after this per tile*() function) still renders
+    // strokes instead of silently going invisible.
+    push();
+    noStroke();
+    faces.forEach(face => {
+        fill(face.color);
+        beginShape();
+        face.nodeIds.forEach(id => {
+            const n = nodeById.get(id);
+            const p = toTileLocal(n, tileCentroid, flip180);
+            vertex(p.x, p.y);
+        });
+        endShape(CLOSE);
+    });
+    pop();
 }

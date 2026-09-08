@@ -68,6 +68,17 @@ let svgPathCollector = null;
 // practice, but the collector itself doesn't rely on that to be correct).
 let segmentCollector = null;
 
+// Roadmap 1.10a: whether to render symmetry-orbit-colored face fills
+// for the base sheet, computed by core/faces.js's computeCellFaces()
+// and drawn behind the line/node drawing by core/tiling.js's tile*()
+// functions (see drawFaceFillsAtTile()). Base-sheet-only for now -
+// per-layer generalization (mirroring additionalLayers[].enabled) and
+// the actual UI toggle are step 6/6; this flag defaults off so the
+// step 5/6 rendering hookup has no visible effect until then. Kept
+// mutually exclusive with curveAmount != 0 by the UI (step 6/6);
+// computeCellFaces() also defends against that combination directly.
+let showFaces = false;
+
 // ----------------- STATE HELPERS ---------------------------------
 function toTileLocal(n, tileC, flip180) {
     // shift node by removing center centroid, place at tile centroid; optional 180° flip
