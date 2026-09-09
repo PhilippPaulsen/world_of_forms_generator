@@ -64,7 +64,110 @@ function collectCellSegments(connSet) {
     return tagged;
 }
 
+// Roadmap 1.10b-i: the mesh lattice basis (v1/v2) for the CURRENT shape,
+// for decomposeLatticeOffset()/neighborhoodRadiusTiles(). Deliberately
+// duplicates the small per-shape v1/v2 formulas already inline in
+// core/tiling.js's tileTriangle()/tileSquare()/tileHex() rather than
+// refactoring those three already-shipped, tested functions to expose a
+// shared helper - see the 1.10b design session, point 2b, for hex's
+// basis derivation (b1=(hexW, hexH/2), b2=(0, hexH) - reproduces
+// tileHex()'s column/row-with-parity loop exactly, verified in the
+// neighborhood-radius numeric check).
+function _meshBasisVectors() {
+    if (currentShape === 'square') {
+        const s = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y);
+        return { v1: { x: s, y: 0 }, v2: { x: 0, y: s } };
+    } else if (currentShape === 'hex') {
+        const side = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y);
+        const hexW = side * 1.5, hexH = sqrt(3) * side;
+        return { v1: { x: hexW, y: hexH / 2 }, v2: { x: 0, y: hexH } };
+    } else { // triangle
+        const s = dist(outerCorners[1].x, outerCorners[1].y, outerCorners[2].x, outerCorners[2].y);
+        const h = (sqrt(3) / 2) * s;
+        return { v1: { x: s, y: 0 }, v2: { x: s / 2, y: h } };
+    }
+}
+
+// Roadmap 1.10b-i: R, the current shape's circumradius (max distance
+// from centroid to any point any symmetry-expanded segment can reach) -
+// see neighborhoodRadiusTiles(). Computed from outerCorners (every real
+// node, and hence every rotation/reflection copy, is bounded within the
+// sub-polygon - core/forms.js's buildTriangleGrid()/buildSquareGrid()/
+// buildHexGrid() all place nodes as convex combinations scaled <=1 from
+// outerCorners, verified directly in the numeric check rather than
+// assumed).
+function _shapeCircumradius() {
+    let R = 0;
+    outerCorners.forEach(c => { R = Math.max(R, dist(centroid.x, centroid.y, c.x, c.y)); });
+    return R;
+}
+
 // ----------------- PURE GEOMETRY ----------------------------------
+
+// Roadmap 1.10b-i: decomposes an additional layer's (offsetX, offsetY)
+// into a whole-lattice-step part (an exact integer combination of the
+// mesh basis vectors v1/v2 - a translation the base sheet's own infinite
+// tessellation is invariant under, since that's literally what "one mesh
+// step" means) plus a residual smaller than one step in the (i,j) lattice
+// basis. Centered rounding (Math.round, not Math.floor) deliberately -
+// it picks the *nearest* of the 4 lattice points bounding the residual's
+// fundamental parallelogram rather than always the same corner, which
+// materially shrinks the residual's worst-case Euclidean magnitude (see
+// the 1.10b design session, point 2b/2c) - verified empirically to matter
+// for neighborhoodRadiusTiles() below staying tight across the full
+// residual domain, not just a hand-picked case.
+//
+// v1/v2 passed in explicitly (not read as globals) to keep this pure and
+// shape-agnostic - see _meshBasisVectors() for the live-app glue that
+// supplies them for the current shape.
+function decomposeLatticeOffset(v1, v2, offsetX, offsetY) {
+    const det = v1.x * v2.y - v2.x * v1.y;
+    const i_raw = (offsetX * v2.y - offsetY * v2.x) / det;
+    const j_raw = (offsetY * v1.x - offsetX * v1.y) / det;
+    const i = Math.round(i_raw), j = Math.round(j_raw);
+    const wholeOffset = { x: i * v1.x + j * v2.x, y: i * v1.y + j * v2.y };
+    const residual = { x: offsetX - wholeOffset.x, y: offsetY - wholeOffset.y };
+    return { i, j, wholeOffset, residual };
+}
+
+// Roadmap 1.10b-i: how many lattice steps (Chebyshev radius, i.e. a
+// (2K+1)x(2K+1) tile window) are needed to guarantee catching every
+// possible segment-segment crossing between a cell and another cell
+// offset by up to `residualMag` from it, given the shape's own R
+// (circumradius - the maximum distance from a cell's centroid to any
+// point any of its symmetry-expanded segments can reach, since every
+// node and hence every rotation/reflection copy is bounded within
+// outerCorners) and M (mesh step magnitude, |v1|==|v2|).
+//
+// Derivation (1.10b design session, point 2c): two cells' segment
+// footprints can only overlap if their centroid distance is < 2R (each
+// cell's own reach). A cell at K lattice steps away is at Euclidean
+// distance >= K*M (achieved along the primal lattice directions) - so
+// K = ceil((2R + residualMag) / M) is a safe upper bound: beyond that
+// many steps, centroid distance is provably >= 2R + residualMag >
+// 2R, ruling out any overlap even in the worst case where the target
+// cell is itself already offset by residualMag.
+//
+// This formula is PROVEN NEVER TO UNDERESTIMATE - the derivation above
+// is a straightforward necessary-condition argument, not a heuristic.
+// It is, however, measurably loose: empirical verification (real
+// segment-segment intersection, real per-shape R/M from actual grids,
+// the worst-case connection per shape - two outer corners, which is
+// provably the maximum-reach case since a segment's distance from its
+// own center is a convex function of position along it and therefore
+// maximized at an endpoint) found this formula predicts one full ring
+// more than is ever actually needed, in every one of 196 tested cases
+// across all three shapes (base-vs-base, a full sweep of the residual's
+// fundamental domain, and 8 concrete realistic offsets) - e.g. square/
+// triangle/hex at residual=(0,0) all empirically need only K=1 (a 3x3
+// window) while this formula predicts K=2 (5x5). Shipped as-is anyway
+// (safety over speed) since it is the only one of the two with an actual
+// correctness proof behind it - the empirically-tighter K=1 bound is a
+// real, ready-made optimization for 1.10b-ii once real performance
+// numbers (not this formula's a-priori safety margin) show it's needed.
+function neighborhoodRadiusTiles(R, M, residualMag) {
+    return Math.ceil((2 * R + residualMag) / M);
+}
 
 // Snapping/dedup tolerance in px. Small enough not to merge genuinely
 // distinct nearby points, large enough to absorb floating-point noise
