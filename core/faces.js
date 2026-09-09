@@ -102,6 +102,133 @@ function _shapeCircumradius() {
     return R;
 }
 
+// Roadmap 1.10b-i: the fixed vertical offset between the triangle net's
+// two co-existing sub-lattices - tileTriangle() (core/tiling.js:211-221)
+// draws centerUp = anchor+(s/2,-h/3) AND centerDown = anchor+(s/2,+h/3)
+// at every (i,j) anchor, so centerDown = centerUp + (0, 2h/3): a FIXED
+// vector, not any integer combination of v1/v2 (each sub-lattice is its
+// own v1/v2-periodic copy, just offset from the other by this constant).
+// Square/hex have no second orientation - tileSquare()/tileHex() always
+// call drawShapeCell() with flip180=false - so this only matters for
+// triangle; v2.y is h for triangle's own basis (see _meshBasisVectors()).
+function _triangleUpDownOffset(v2) {
+    return { x: 0, y: (2 * v2.y) / 3 };
+}
+
+// Roadmap 1.10b-i: a layer's "down"-oriented cells sit at a DIFFERENT
+// effective position than its "up"-oriented cells (shifted by
+// _triangleUpDownOffset()), so the shared neighborhood radius must be
+// sized for whichever orientation pairing against the (fixed, "up")
+// representative base cell is farthest away - verified empirically
+// (not assumed) that the "down" pairing can be the binding case, not
+// always "up": a numeric check found a residual where the "up" pairing
+// still had a full ring of margin (empirical K=1 vs predicted K=2) while
+// the "down" pairing's margin was exactly zero (empirical K=2 == predicted
+// K=2) - i.e. the up/down interaction genuinely consumes slack that a
+// naive same-orientation-only analysis would have missed.
+function _effectiveResidualMagnitude(residual, v2) {
+    const mag = Math.hypot(residual.x, residual.y);
+    if (currentShape !== 'triangle') return mag;
+    const d = _triangleUpDownOffset(v2);
+    const magWithFlip = Math.hypot(residual.x + d.x, residual.y + d.y);
+    return Math.max(mag, magWithFlip);
+}
+
+// Roadmap 1.10b-i: every (centroid-relative offset, flip180) tile anchor
+// within a Chebyshev-K neighborhood around `residual` (i,j in [-K,K] over
+// the mesh basis v1/v2). Triangle contributes TWO anchors per (i,j) -
+// centerUp (flip180=false) and centerDown (flip180=true, shifted by
+// _triangleUpDownOffset()) - mirroring tileTriangle()'s own per-anchor
+// structure exactly (core/tiling.js:211-221); square/hex contribute one
+// (flip180 always false, matching tileSquare()/tileHex()).
+function _neighborhoodTileAnchors(residual, K, v1, v2) {
+    const anchors = [];
+    const zero = { x: 0, y: 0 };
+    const d = currentShape === 'triangle' ? _triangleUpDownOffset(v2) : zero;
+    for (let i = -K; i <= K; i++) {
+        for (let j = -K; j <= K; j++) {
+            const lattice = { x: i * v1.x + j * v2.x, y: i * v1.y + j * v2.y };
+            anchors.push({ offset: { x: residual.x + lattice.x, y: residual.y + lattice.y }, flip180: false });
+            if (currentShape === 'triangle') {
+                anchors.push({ offset: { x: residual.x + d.x + lattice.x, y: residual.y + d.y + lattice.y }, flip180: true });
+            }
+        }
+    }
+    return anchors;
+}
+
+// Roadmap 1.10b-i: the shared setup for cross-layer gathering - the mesh
+// basis, each active layer's offset decomposition (decomposeLatticeOffset()),
+// and ONE shared neighborhood radius K sized to the largest effective
+// residual across all layers (neighborhoodRadiusTiles() with a larger
+// input is still a safe - just possibly generous - bound for layers with
+// smaller residuals, so one shared K is correct, not merely convenient).
+// Both collectCrossLayerSegments() and computeCrossLayerFaces()'s real-
+// node gathering build on a plan from this same function, so they can
+// never disagree about which tiles are in play.
+//
+// layers: [{ sheetId, connections, offsetX, offsetY }, ...] - already
+// filtered to enabled layers by the caller; sheetId is caller-supplied
+// (e.g. an additionalLayers[] index) so cross-layer face provenance can
+// reference it directly (design session, points 5/9).
+function _planCrossLayerNeighborhood(layers) {
+    const { v1, v2 } = _meshBasisVectors();
+    const R = _shapeCircumradius();
+    const M = (Math.hypot(v1.x, v1.y) + Math.hypot(v2.x, v2.y)) / 2;
+    const decomposedLayers = layers.map(layer => {
+        const { residual } = decomposeLatticeOffset(v1, v2, layer.offsetX, layer.offsetY);
+        return {
+            sheetId: layer.sheetId,
+            connections: layer.connections,
+            residual,
+            effectiveResidualMag: _effectiveResidualMagnitude(residual, v2)
+        };
+    });
+    let maxResidualMag = 0;
+    decomposedLayers.forEach(l => { maxResidualMag = Math.max(maxResidualMag, l.effectiveResidualMag); });
+    const K = neighborhoodRadiusTiles(R, M, maxResidualMag);
+    return { v1, v2, R, M, K, decomposedLayers };
+}
+
+// Roadmap 1.10b-i (design session point 3): gathers segments from the
+// base sheet AND every given additional layer, across the shared bounded
+// tile neighborhood from _planCrossLayerNeighborhood(), tagged with
+// {sheetId, connIndex} - sheetId distinguishes which SHEET a segment
+// came from (base, or a caller-supplied layer identifier), layered on
+// top of 1.10a's existing per-connection connIndex tagging
+// (collectCellSegments()) - needed because a cross-layer face can be
+// bordered by segments from different SHEETS, not just different
+// connections within one sheet (design session, point 5).
+//
+// Reuses drawShapeCell()/segmentCollector exactly as collectCellSegments()
+// does - just called once per tile anchor in the neighborhood instead of
+// always at the single untranslated centroid position - so gathered
+// geometry can never drift from what drawShapeCell() would actually
+// render at that tile.
+function collectCrossLayerSegments(baseConnSet, layers) {
+    const plan = _planCrossLayerNeighborhood(layers);
+    const tagged = [];
+
+    function gatherSheet(sheetId, connSet, residual) {
+        const anchors = _neighborhoodTileAnchors(residual, plan.K, plan.v1, plan.v2);
+        anchors.forEach(({ offset, flip180 }) => {
+            const tileC = { x: centroid.x + offset.x, y: centroid.y + offset.y };
+            connSet.forEach((conn, connIndex) => {
+                if (conn.length !== 2) return; // mirror drawShapeCell's own completeness filter
+                segmentCollector = [];
+                drawShapeCell([conn], tileC, flip180);
+                segmentCollector.forEach(seg => tagged.push({ ...seg, sheetId, connIndex }));
+                segmentCollector = null;
+            });
+        });
+    }
+
+    gatherSheet('base', baseConnSet, { x: 0, y: 0 });
+    plan.decomposedLayers.forEach(layer => gatherSheet(layer.sheetId, layer.connections, layer.residual));
+
+    return tagged;
+}
+
 // ----------------- PURE GEOMETRY ----------------------------------
 
 // Roadmap 1.10b-i: decomposes an additional layer's (offsetX, offsetY)
