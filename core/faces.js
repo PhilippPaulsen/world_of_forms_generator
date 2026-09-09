@@ -361,15 +361,104 @@ function segmentIntersection(a, b) {
     };
 }
 
+// Roadmap 1.10b-ii-a: spatial-hash bucket key for a point, at
+// FACE_EPSILON granularity - a bucket's width equals FACE_EPSILON, so
+// two points within FACE_EPSILON of each other can never land more than
+// one bucket apart on either axis (proof: buckets partition each axis
+// into [(*k*-0.5)*FACE_EPSILON, (*k*+0.5)*FACE_EPSILON) intervals, so
+// two points 2+ buckets apart on an axis are already >= FACE_EPSILON
+// apart on that axis alone) - checking the 3x3 neighborhood of buckets
+// (see _nearestInBuckets()) is therefore provably sufficient, not a
+// heuristic radius.
+function _bucketKey(x, y) {
+    return Math.round(x / FACE_EPSILON) + ',' + Math.round(y / FACE_EPSILON);
+}
+
 // Registry of nodes actually referenced while splitting segments, keyed
-// by id, seeded from the sheet's real nodes (from state.js's nodes[] -
-// passed in explicitly, never read as a global, to keep this module
-// p5/live-app independent per the file docblock) but populated lazily:
-// a real node only gets an entry once some breakpoint actually snaps to
-// it, and synthetic ids ('s0', 's1', ...) are string-prefixed so they
-// can never collide with real nodes' plain integer ids.
+// by id (registry.byId - unchanged external shape, still what
+// splitSegments() reads at the end), seeded from the sheet's real nodes
+// (from state.js's nodes[] - passed in explicitly, never read as a
+// global, to keep this module p5/live-app independent per the file
+// docblock) but populated lazily: a real node only gets a byId entry
+// once some breakpoint actually snaps to it, and synthetic ids ('s0',
+// 's1', ...) are string-prefixed so they can never collide with real
+// nodes' plain integer ids.
+//
+// Roadmap 1.10b-ii-a: realNodes are pre-bucketed here (realNodeBuckets)
+// rather than left as a flat array to scan - 1.10b-i's cross-layer
+// neighborhoods can pass several thousand real nodes (every tile
+// anchor's own translated copy of the base grid), so a linear scan over
+// realNodes on every miss was its own hidden cost once the registry
+// scan itself (see snapOrCreateNode()) was fixed. registeredBuckets
+// mirrors byId's contents, bucketed, built up incrementally as points
+// get registered.
 function createNodeRegistry(realNodes) {
-    return { realNodes: realNodes || [], byId: new Map(), nextSyntheticId: 0 };
+    const registry = {
+        realNodes: realNodes || [],
+        byId: new Map(),
+        registeredBuckets: new Map(),
+        realNodeBuckets: new Map(),
+        nextSyntheticId: 0
+    };
+    registry.realNodes.forEach(n => {
+        const key = _bucketKey(n.x, n.y);
+        if (!registry.realNodeBuckets.has(key)) registry.realNodeBuckets.set(key, []);
+        registry.realNodeBuckets.get(key).push(n);
+    });
+    return registry;
+}
+
+// Roadmap 1.10b-ii-a: finds the NEAREST entry to `point` within
+// FACE_EPSILON among the given bucket map (checking the query point's
+// own bucket plus its 8 neighbors - see _bucketKey()), or null if none
+// qualifies. Ties (equal distance) broken by lowest id, as a string
+// comparison - id is always either a real node's own id or a synthetic
+// 'sN' string, both comparable this way; extremely unlikely to matter in
+// practice (would need two DISTINCT already-registered points exactly
+// equidistant from a query point) but a total order needs SOME
+// tiebreak to stay well-defined.
+//
+// This is the deliberate canonical, order-independent rule chosen over
+// any traversal-order-based one (1.10b-ii design session, point 3): for
+// a fixed final set of candidate points, "nearest within epsilon" gives
+// the same answer regardless of insertion order, bucket layout, or scan
+// order - unlike "first match found while scanning in some order",
+// which is what both the original linear scan (insertion-order-first)
+// and a naive bucket-scan prototype (bucket-scan-order-first) actually
+// did. Verified empirically (not assumed) that this matters: a query
+// point can have two already-registered candidates both within
+// FACE_EPSILON of it but MORE than FACE_EPSILON apart from each other
+// (triangle inequality allows up to 2*FACE_EPSILON between them) - a
+// genuinely ambiguous case that dense cross-layer neighborhoods hit in
+// practice (see the 1.10b-ii-a investigation), where "first found" is
+// order-dependent but "nearest" is not.
+function _nearestInBuckets(point, bucketMap) {
+    const bx = Math.round(point.x / FACE_EPSILON), by = Math.round(point.y / FACE_EPSILON);
+    let best = null, bestDist = Infinity;
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+            const bucket = bucketMap.get((bx + dx) + ',' + (by + dy));
+            if (!bucket) continue;
+            for (const n of bucket) {
+                const d = Math.hypot(n.x - point.x, n.y - point.y);
+                if (d <= FACE_EPSILON && (best === null || d < bestDist || (d === bestDist && String(n.id) < String(best.id)))) {
+                    best = n;
+                    bestDist = d;
+                }
+            }
+        }
+    }
+    return best;
+}
+
+// Roadmap 1.10b-ii-a: registers a node entry in both byId (the flat map
+// splitSegments() reads at the end - unchanged) and registeredBuckets
+// (for future _nearestInBuckets() lookups against this same entry).
+function _registerInBuckets(registry, entry) {
+    registry.byId.set(entry.id, entry);
+    const key = _bucketKey(entry.x, entry.y);
+    if (!registry.registeredBuckets.has(key)) registry.registeredBuckets.set(key, []);
+    registry.registeredBuckets.get(key).push(entry);
 }
 
 // Canonical string key for an undirected edge, independent of endpoint
@@ -381,23 +470,38 @@ function _undirectedKey(a, b) {
 }
 
 // Snaps a breakpoint (segment endpoint or intersection point) onto an
-// existing node within FACE_EPSILON - checking already-registered nodes
-// first (so repeated visits to the same point, e.g. an intersection
-// computed once per participating segment, always resolve to the same
-// id regardless of visit order), then the sheet's real nodes, else
-// registers a new synthetic node at that exact point.
+// existing node within FACE_EPSILON - the NEAREST already-registered
+// node if one qualifies (so repeated visits to the same point, e.g. an
+// intersection computed once per participating segment, always resolve
+// to the same id regardless of visit order - see _nearestInBuckets()),
+// then the sheet's nearest real node, else registers a new synthetic
+// node at that exact point.
+//
+// Roadmap 1.10b-ii-a: spatial-hash bucketed (via _nearestInBuckets()),
+// not a linear scan over the whole registry - the original linear scan
+// here was found to dominate total cross-layer computation time by two
+// orders of magnitude (a real, measured 106-155x more expensive than
+// the O(S^2) pairwise segment-intersection test it was assumed to be
+// secondary to), since its cost grew with the registry's own size on
+// every call. Bucketing turns each call into O(1) amortized (a small,
+// bounded number of nearby candidates, not the whole registry) -
+// measured 53-89x total speedup on real cross-layer segment sets, with
+// identical final face counts and areas on those same real sets (see
+// the 1.10b-ii-a investigation) - and unblocks configurations (e.g. 3
+// connections/sheet x 3 layers, 3600 segments) that previously did not
+// complete in a practical amount of time at all.
 function snapOrCreateNode(point, registry) {
-    for (const n of registry.byId.values()) {
-        if (Math.hypot(n.x - point.x, n.y - point.y) <= FACE_EPSILON) return n.id;
+    const existing = _nearestInBuckets(point, registry.registeredBuckets);
+    if (existing) return existing.id;
+
+    const real = _nearestInBuckets(point, registry.realNodeBuckets);
+    if (real) {
+        _registerInBuckets(registry, { id: real.id, x: real.x, y: real.y });
+        return real.id;
     }
-    for (const n of registry.realNodes) {
-        if (Math.hypot(n.x - point.x, n.y - point.y) <= FACE_EPSILON) {
-            registry.byId.set(n.id, { id: n.id, x: n.x, y: n.y });
-            return n.id;
-        }
-    }
+
     const id = 's' + (registry.nextSyntheticId++);
-    registry.byId.set(id, { id, x: point.x, y: point.y });
+    _registerInBuckets(registry, { id, x: point.x, y: point.y });
     return id;
 }
 
