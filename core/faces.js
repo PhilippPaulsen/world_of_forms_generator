@@ -461,6 +461,41 @@ function splitSegments(segments, realNodes) {
 // this module p5/live-app independent per the file docblock. Not reused
 // directly from export.js for that reason, even though the algorithm
 // is identical.
+// Roadmap 1.10b-i: connected components of the (faceNodes, edges) graph,
+// via plain BFS - O(V+E), negligible next to splitSegments()'s O(S^2)
+// intersection cost. Added because findFaces()'s outer-face filter
+// assumes a single connected component with exactly one unbounded face;
+// a graph spanning multiple disconnected tile clusters (the normal case
+// for 1.10b's cross-layer neighborhoods, and already a latent,
+// documented gap for 1.10a's own single-sheet case - e.g. two
+// never-crossing connections in one cell) needs that filter applied
+// PER component, not once globally - see findFaces() below. Returns an
+// array of node-id Sets, one per component; every faceNodes entry
+// belongs to exactly one.
+function _connectedComponents(faceNodes, edges) {
+    const adj = new Map();
+    faceNodes.forEach(n => adj.set(n.id, []));
+    edges.forEach(([a, b]) => { adj.get(a).push(b); adj.get(b).push(a); });
+
+    const visited = new Set();
+    const components = [];
+    faceNodes.forEach(start => {
+        if (visited.has(start.id)) return;
+        const comp = new Set();
+        const queue = [start.id];
+        visited.add(start.id);
+        while (queue.length) {
+            const cur = queue.shift();
+            comp.add(cur);
+            adj.get(cur).forEach(nb => {
+                if (!visited.has(nb)) { visited.add(nb); queue.push(nb); }
+            });
+        }
+        components.push(comp);
+    });
+    return components;
+}
+
 function _buildFaceAdjacency(faceNodes, edges) {
     const nodeById = new Map(faceNodes.map(n => [n.id, n]));
     const adjacency = {};
@@ -573,28 +608,49 @@ function orbitColor(connIndex, totalOrbits) {
     return `hsl(${hue}, 65%, 55%)`;
 }
 
-// Orchestrates the full 1.10a pipeline (1.10 design session, points 2-4,
-// 6 and 9): dedupe -> intersection-split/snap -> angle-sorted adjacency
-// -> half-edge face-walk -> drop the single unbounded outer face ->
-// symmetry-orbit color assignment. realNodes is optional (see
-// splitSegments()); segments need not be pre-deduped - this calls
+// Orchestrates the full pipeline (1.10 design session, points 2-4, 6 and
+// 9): dedupe -> intersection-split/snap -> angle-sorted adjacency ->
+// half-edge face-walk -> drop each connected component's own unbounded
+// outer face -> symmetry-orbit color assignment. realNodes is optional
+// (see splitSegments()); segments need not be pre-deduped - this calls
 // dedupeSegments() itself, so findFaces(collectCellSegments(connSet)) is
 // a complete, single-call pipeline for the live app (see
 // computeCellFaces()).
 //
-// Known v1 limitation (design session point 9, documented rather than
-// silently mishandled): nested/disjoint bounded faces - e.g. a small
-// enclosed face fully inside a larger one, with no shared vertex - both
-// still get traced individually and correctly by the half-edge walk
-// itself (it operates per-vertex, not on global containment), but the
-// outer-face filter below assumes a single connected graph with exactly
-// one unbounded face distinguishable by winding sign. A graph with
-// multiple disconnected components (e.g. two separate closed shapes
-// that never intersect or touch) produces one such "opposite-sign"
-// trace PER component, not one - the sign-based split degrades to a
-// largest-|area| heuristic in that case (see the fallback branch below),
-// which is usually still correct for a single symmetry cell's compact
-// geometry but is not a mathematically guaranteed containment analysis.
+// Roadmap 1.10b-i: the outer-face filter is applied PER CONNECTED
+// COMPONENT (_connectedComponents()), not once globally as 1.10a
+// originally shipped it. This is a fix to already-shipped 1.10a
+// behavior, not new-for-1.10b logic: a graph with multiple disconnected
+// components (e.g. two never-crossing connections in one 1.10a sheet,
+// already possible before any of 1.10b existed) was always handled
+// incorrectly - the old code's ambiguous-case fallback dropped only the
+// SINGLE largest-|area| trace across the WHOLE graph, not each
+// component's own outer face, silently keeping stray outer regions as
+// if they were real bounded faces in every component but the one with
+// the largest trace. 1.10b's cross-layer neighborhoods make multi-
+// component graphs the norm rather than a rare edge case, which is what
+// surfaced this needing an actual fix rather than a footnote (1.10b
+// design session, point 3).
+//
+// For a graph with exactly one component, this produces byte-identical
+// results to the pre-fix code (the per-component sign-based/largest-
+// area logic, scoped to that single component, is the same computation
+// over the same data) - verified via regression against every 1.10a
+// synthetic test case.
+//
+// Remaining known v1 limitation (design session point 9, still not
+// solved by the component fix, documented rather than silently
+// mishandled): TRUE nested/disjoint bounded faces sharing no vertex at
+// all - e.g. a small closed loop fully enclosed within a larger one,
+// with no shared vertex - are two SEPARATE connected components by
+// definition (no edge connects them), so the component fix treats each
+// as its own independent graph and correctly drops each one's own outer
+// face - but has no way to know one component's "outer" region is
+// actually the OTHER component's interior. Both ends up counted as
+// bounded faces instead of the inner one being recognized as nested
+// inside the outer one. Still not a mathematically guaranteed
+// containment analysis - just no longer wrong about which trace is
+// which component's own outer face.
 function findFaces(segments, realNodes) {
     const deduped = dedupeSegments(segments);
     const { nodes: faceNodes, edges, edgeMeta } = splitSegments(deduped, realNodes);
@@ -610,20 +666,32 @@ function findFaces(segments, realNodes) {
 
     if (traced.length === 0) return { nodes: faceNodes, faces: [] };
 
-    const positive = traced.filter(f => f.area > 0);
-    const negative = traced.filter(f => f.area < 0);
-    let bounded;
-    if (positive.length === 1 && negative.length >= 1) {
-        bounded = negative;
-    } else if (negative.length === 1 && positive.length >= 1) {
-        bounded = positive;
-    } else {
-        // Ambiguous (disconnected components, or every trace shares one
-        // sign) - fall back to dropping the single largest-|area| trace,
-        // the documented v1 heuristic above.
-        traced.sort((a, b) => Math.abs(b.area) - Math.abs(a.area));
-        bounded = traced.slice(1);
-    }
+    const components = _connectedComponents(faceNodes, edges);
+    const componentOf = new Map();
+    components.forEach((comp, idx) => comp.forEach(id => componentOf.set(id, idx)));
+
+    let bounded = [];
+    components.forEach((comp, idx) => {
+        const compTraced = traced.filter(f => componentOf.get(f.boundary[0]) === idx);
+        if (compTraced.length === 0) return; // this component's only trace(s) were degenerate (zero-area) - nothing bounded here
+
+        const positive = compTraced.filter(f => f.area > 0);
+        const negative = compTraced.filter(f => f.area < 0);
+        let compBounded;
+        if (positive.length === 1 && negative.length >= 1) {
+            compBounded = negative;
+        } else if (negative.length === 1 && positive.length >= 1) {
+            compBounded = positive;
+        } else {
+            // Ambiguous within this component (every trace shares one
+            // sign, or more than one of each) - fall back to dropping
+            // the single largest-|area| trace IN THIS COMPONENT, the
+            // documented v1 heuristic above, now correctly scoped.
+            compTraced.sort((a, b) => Math.abs(b.area) - Math.abs(a.area));
+            compBounded = compTraced.slice(1);
+        }
+        bounded.push(...compBounded);
+    });
 
     const totalOrbits = deduped.reduce((max, s) =>
         (typeof s.connIndex === 'number' ? Math.max(max, s.connIndex + 1) : max), 0);
