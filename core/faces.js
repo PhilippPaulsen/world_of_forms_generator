@@ -655,6 +655,72 @@ function computeCellFaces(connSet) {
     return findFaces(segments, nodes);
 }
 
+// Roadmap 1.10b-i: every real (non-synthetic) node's own translated
+// position at every tile anchor for one sheet within the neighborhood -
+// needed so a crossing that happens to land exactly on a real grid node
+// (at ANY tile position in the neighborhood, not just the untranslated
+// one) snaps to that node's identity instead of spuriously becoming a
+// synthetic point (design session, point 4's "new wrinkle not present
+// in 1.10a": a real node id is no longer unambiguous once the same id
+// appears at multiple different absolute positions across the
+// neighborhood, so each instance gets its own id here, scoped by
+// sheetId and which anchor it came from - never reused as a bare
+// integer id, so it can never collide with collectCrossLayerSegments()'s
+// own real node ids from a DIFFERENT tile). Reuses toTileLocal() (the
+// exact same transform drawShapeCell() uses internally) rather than
+// hand-rolling the flip180 math, so this can never drift from where the
+// segments themselves actually are.
+function _neighborhoodRealNodes(sheetId, residual, K, v1, v2) {
+    const anchors = _neighborhoodTileAnchors(residual, K, v1, v2);
+    const realNodes = [];
+    anchors.forEach(({ offset, flip180 }, anchorIdx) => {
+        const tileC = { x: centroid.x + offset.x, y: centroid.y + offset.y };
+        nodes.forEach(n => {
+            const p = toTileLocal(n, tileC, flip180);
+            realNodes.push({ id: sheetId + ':' + anchorIdx + ':' + n.id, x: p.x, y: p.y });
+        });
+    });
+    return realNodes;
+}
+
+// Roadmap 1.10b-i (design session points 3-4): the complete cross-layer
+// pipeline entry point - collectCrossLayerSegments() (base + every given
+// layer, one shared bounded neighborhood) plus every tile's own
+// translated real nodes, run through findFaces() in exactly ONE call.
+//
+// Gather-once/run-once, deliberately NOT pairwise per sheet-pair (design
+// session, point 3): a genuine 3-or-more-sheet simultaneous crossing
+// only resolves to one correctly-shared node if every pairwise
+// intersection among the segments meeting there is computed within the
+// SAME splitSegments() pass - which is exactly what findFaces() already
+// does for any flat segment list, reused entirely unmodified here.
+// Running separate pairwise passes (base x layer1, base x layer2, ...)
+// and stitching afterward would each only ever see 2 of the 3 converging
+// segments, reconstructing inconsistent local graphs with no principled
+// way to reconcile them - so this function exists specifically to never
+// do that, not merely to be a convenience wrapper.
+//
+// Same straight-line-only guard as computeCellFaces() - curveAmount is a
+// single value shared by every sheet (confirmed against core/symmetry.js
+// in the design session, point 2a), so one top-level check covers base
+// and every layer at once.
+//
+// layers: [{ sheetId, connections, offsetX, offsetY }, ...] - already
+// filtered to enabled layers by the caller.
+function computeCrossLayerFaces(baseConnSet, layers) {
+    if (curveAmount !== 0) return { nodes: [], faces: [] };
+
+    const plan = _planCrossLayerNeighborhood(layers);
+    const segments = collectCrossLayerSegments(baseConnSet, layers);
+
+    const realNodes = _neighborhoodRealNodes('base', { x: 0, y: 0 }, plan.K, plan.v1, plan.v2);
+    plan.decomposedLayers.forEach(layer => {
+        realNodes.push(..._neighborhoodRealNodes(layer.sheetId, layer.residual, plan.K, plan.v1, plan.v2));
+    });
+
+    return findFaces(segments, realNodes);
+}
+
 // Draws one sheet's already-computed faces (computeCellFaces() result)
 // at one tessellated tile position, using the exact same toTileLocal()
 // transform drawShapeCell() uses for lines - so face fills line up with
