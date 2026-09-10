@@ -948,8 +948,16 @@ function _neighborhoodRealNodes(sheetId, residual, K, v1, v2) {
 //
 // layers: [{ sheetId, connections, offsetX, offsetY }, ...] - already
 // filtered to enabled layers by the caller.
+//
+// Roadmap 1.10b-ii-c: also returns latticeBasis ({v1, v2}, from the same
+// plan already computed here) alongside {nodes, faces} - the computed
+// face set is anchored at the origin (base at residual (0,0)); both
+// drawCrossLayerFaceFillsAcrossCanvas() (replicating it across the
+// visible canvas by simple translation) and buildExportData()'s
+// geometry.crossLayer need this same basis, so it rides along on the
+// result rather than being recomputed a second time by each caller.
 function computeCrossLayerFaces(baseConnSet, layers) {
-    if (curveAmount !== 0) return { nodes: [], faces: [] };
+    if (curveAmount !== 0) return { nodes: [], faces: [], latticeBasis: null };
 
     const plan = _planCrossLayerNeighborhood(layers);
     const segments = collectCrossLayerSegments(baseConnSet, layers);
@@ -963,7 +971,9 @@ function computeCrossLayerFaces(baseConnSet, layers) {
         realNodes = realNodes.concat(_neighborhoodRealNodes(layer.sheetId, layer.residual, plan.K, plan.v1, plan.v2));
     });
 
-    return findFaces(segments, realNodes);
+    const result = findFaces(segments, realNodes);
+    result.latticeBasis = { v1: plan.v1, v2: plan.v2 };
+    return result;
 }
 
 // Roadmap 1.10b-ii-b: a cheap prediction of how many segments
@@ -1031,5 +1041,88 @@ function drawFaceFillsAtTile(facesResult, tileCentroid, flip180) {
         });
         endShape(CLOSE);
     });
+    pop();
+}
+
+// Roadmap 1.10b-ii-c: converts an hsl(...) color string (orbitColor()'s/
+// CROSS_SHEET_COLOR's own format) to hsla(...) with the given alpha -
+// used only by drawCrossLayerFaceFillsAcrossCanvas() below, so cross-
+// layer fills read as a translucent overlay (lines and per-sheet fills
+// underneath stay legible) without changing orbitColor()/CROSS_SHEET_COLOR
+// themselves, which 1.10a's per-sheet rendering still needs fully opaque.
+function _withAlpha(hslColor, alpha) {
+    return hslColor.replace('hsl(', 'hsla(').replace(/\)$/, `, ${alpha})`);
+}
+
+// Roadmap 1.10b-ii-c (design session point 2): replicates one computed
+// cross-layer face set across the WHOLE visible canvas by simple vector
+// translation (i*v1 + j*v2 for every integer (i,j) within a bounded
+// window) - generalizing maxLayerOffset()'s "widen the loop to cover
+// shifted content" logic (core/tiling.js), but simpler here: there's no
+// per-layer offset margin to add, since v1/v2 themselves ARE the
+// replication step, not an extra shift on top of it.
+//
+// Unlike drawFaceFillsAtTile() (1.10a, per-sheet), this does NOT use
+// toTileLocal() - facesResult.nodes are already absolute canvas
+// coordinates from the neighborhood computation itself (see
+// _neighborhoodRealNodes()/collectCrossLayerSegments()), anchored at the
+// origin (base sheet's own residual is always (0,0)) - so replicating
+// them is a plain "add i*v1+j*v2 to every coordinate", not a centroid-
+// relative placement.
+//
+// Rendered as its own separate pass, on TOP of drawTessellation()'s
+// entire per-sheet fill+line output (not interleaved into the tile*()
+// loops the way per-sheet fills are) - the simplest safe integration
+// that doesn't touch those already-shipped, tested functions, and
+// guarantees cross-layer regions are never hidden underneath an opaque
+// per-sheet fill (which would defeat the point of highlighting them).
+// Drawn at reduced alpha (_withAlpha(), ~0.65) specifically so the line
+// strokes it sits on top of stay legible through it - a deliberate,
+// documented deviation from 1.10a's "fills strictly behind lines"
+// convention, made because interleaving cross-layer fills into that
+// per-tile choreography would require restructuring the tile*()
+// functions' existing draw order.
+//
+// Known v1 caveat, not silently glossed over: the computed face set can
+// include crossings between two DIFFERENT layers that don't involve the
+// base sheet's tiles at all (the gather-once/run-once pass tests every
+// segment against every other regardless of sheet - see
+// computeCrossLayerFaces()'s own comment). This replication scheme
+// attributes every face to "the base tile at the origin" and repeats
+// that one full set at each (i,j) - correct for base-vs-layer crossings
+// by construction (translation invariance - the design session's
+// original argument), but a layer-vs-layer-only crossing near the edge
+// of the K-neighborhood has no base tile to anchor its own translation
+// to, and could in principle be slightly mis-replicated (missed or
+// doubled at a neighborhood boundary) in that specific case. Not
+// resolved here - flagged for a future pass if it turns out to matter
+// in practice.
+function drawCrossLayerFaceFillsAcrossCanvas(facesResult) {
+    if (!facesResult || !facesResult.faces || !facesResult.faces.length || !facesResult.latticeBasis) return;
+    const { nodes: faceNodes, faces, latticeBasis } = facesResult;
+    const { v1, v2 } = latticeBasis;
+    const nodeById = new Map(faceNodes.map(n => [n.id, n]));
+
+    const m1 = Math.hypot(v1.x, v1.y), m2 = Math.hypot(v2.x, v2.y);
+    const cols = Math.ceil(width / m1) + 6;
+    const rows = Math.ceil(height / m2) + 6;
+
+    push();
+    noStroke();
+    for (let i = -cols; i <= cols; i++) {
+        for (let j = -rows; j <= rows; j++) {
+            const dx = i * v1.x + j * v2.x;
+            const dy = i * v1.y + j * v2.y;
+            faces.forEach(face => {
+                fill(_withAlpha(face.color, 0.65));
+                beginShape();
+                face.nodeIds.forEach(id => {
+                    const n = nodeById.get(id);
+                    vertex(n.x + dx, n.y + dy);
+                });
+                endShape(CLOSE);
+            });
+        }
+    }
     pop();
 }

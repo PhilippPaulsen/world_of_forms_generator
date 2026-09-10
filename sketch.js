@@ -439,6 +439,18 @@ function draw() {
 
     drawTessellation();
 
+    // Roadmap 1.10b-ii-c: cross-layer face fills - additive to (not a
+    // replacement for) 1.10a's per-sheet showFaces fills already drawn
+    // inside drawTessellation() above. Rendered only when a computed
+    // result exists AND is still current for the present connections/
+    // layers/offsets (crossLayerConfigSignature() - the same staleness
+    // check updateCrossLayerStatus() uses for its own "Outdated" label):
+    // an outdated result is never rendered as if it were current, even
+    // though it's still SHOWN (with that label) in the status text.
+    if (crossLayerResult && crossLayerResultSignature === crossLayerConfigSignature()) {
+        drawCrossLayerFaceFillsAcrossCanvas(crossLayerResult);
+    }
+
     // Knoten (Hover rot)
     if (showNodes) {
         push();
@@ -634,6 +646,16 @@ function computeCrossLayerFacesFlow() {
         computeBtn.elt.disabled = false;
         computeBtn.html('Compute Cross-Layer Faces');
         updateCrossLayerStatus();
+        // Roadmap 1.10b-ii-c: redraw() so the newly computed result
+        // actually renders (drawCrossLayerFaceFillsAcrossCanvas(), see
+        // draw()) - 1.10b-ii-b never needed this (no rendering existed
+        // yet, only the status-text summary updateCrossLayerStatus()
+        // handles), so it was correctly absent there; without it here,
+        // the canvas silently keeps showing whatever it last rendered
+        // (compute-and-display would stop being one action in practice,
+        // even though the result IS computed and non-stale) until some
+        // UNRELATED interaction happens to trigger its own redraw().
+        redraw();
     }, 0);
 }
 
