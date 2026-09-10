@@ -794,7 +794,14 @@ function findFaces(segments, realNodes) {
             compTraced.sort((a, b) => Math.abs(b.area) - Math.abs(a.area));
             compBounded = compTraced.slice(1);
         }
-        bounded.push(...compBounded);
+        // concat(), not push(...compBounded) - spreading a large array as
+        // individual push() arguments hits V8's internal call-argument
+        // limit (throws "Maximum call stack size exceeded", NOT true
+        // recursion) once compBounded is big enough - a real crash found
+        // live at ~7,200 cross-layer segments (1.10b-ii-b investigation),
+        // not merely a performance concern. concat() takes the array as
+        // one argument, no such limit.
+        bounded = bounded.concat(compBounded);
     });
 
     const totalOrbits = deduped.reduce((max, s) =>
@@ -885,12 +892,51 @@ function computeCrossLayerFaces(baseConnSet, layers) {
     const plan = _planCrossLayerNeighborhood(layers);
     const segments = collectCrossLayerSegments(baseConnSet, layers);
 
-    const realNodes = _neighborhoodRealNodes('base', { x: 0, y: 0 }, plan.K, plan.v1, plan.v2);
+    // concat(), not push(...bigArray) - see findFaces()'s bounded.concat()
+    // comment for why (V8's call-argument limit, a real crash found live
+    // during the 1.10b-ii-b investigation at large cross-layer
+    // neighborhoods, not a performance nicety).
+    let realNodes = _neighborhoodRealNodes('base', { x: 0, y: 0 }, plan.K, plan.v1, plan.v2);
     plan.decomposedLayers.forEach(layer => {
-        realNodes.push(..._neighborhoodRealNodes(layer.sheetId, layer.residual, plan.K, plan.v1, plan.v2));
+        realNodes = realNodes.concat(_neighborhoodRealNodes(layer.sheetId, layer.residual, plan.K, plan.v1, plan.v2));
     });
 
     return findFaces(segments, realNodes);
+}
+
+// Roadmap 1.10b-ii-b: a cheap prediction of how many segments
+// computeCrossLayerFaces() would gather, WITHOUT actually gathering them
+// (no per-tile-anchor drawShapeCell() calls) - used to size the soft
+// time warning before the user commits to what's now (post 1.10b-ii-a's
+// spatial-hash fix) a sub-second-to-few-seconds synchronous compute,
+// rather than the tens-of-seconds-to-incomplete cost that originally
+// motivated considering a Worker. EXACT (verified against real
+// collectCrossLayerSegments() output at 1,200/2,400/3,600 segments, not
+// just a bound), since every sheet shares the same K and copy count -
+// callers must pass only already-complete ([id,id]) connection counts,
+// matching what collectCrossLayerSegments() itself filters to.
+//
+// copiesPerConnection is measured via one real, cheap collectCellSegments()
+// probe call (a single throwaway connection between the first two real
+// nodes) instead of duplicating core/symmetry.js's rotAngles/reflection
+// logic a second time to compute it by formula - stays correct if
+// symmetryMode or the current shape's copy count ever changes, at the
+// cost of one tiny real segment-collection call (O(copies), not O(S^2) -
+// negligible next to what it's predicting).
+//
+// layers: same shape computeCrossLayerFaces() takes - already filtered
+// to enabled layers by the caller.
+function estimateCrossLayerSegmentCount(baseConnCount, layers) {
+    const layerConnCount = layers.reduce((sum, l) => sum + l.connections.length, 0);
+    if (nodes.length < 2 || (baseConnCount + layerConnCount) === 0) return 0;
+
+    const probe = collectCellSegments([[nodes[0].id, nodes[1].id]]);
+    const copiesPerConnection = probe.length;
+
+    const plan = _planCrossLayerNeighborhood(layers);
+    const anchorsPerSheet = (2 * plan.K + 1) * (2 * plan.K + 1) * (currentShape === 'triangle' ? 2 : 1);
+
+    return anchorsPerSheet * copiesPerConnection * (baseConnCount + layerConnCount);
 }
 
 // Draws one sheet's already-computed faces (computeCellFaces() result)

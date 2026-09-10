@@ -233,6 +233,25 @@
       color: var(--background);
     }
 
+    .layer-btn:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    /* Roadmap 1.10b-ii-b: cross-layer compute status line - live segment/
+       time estimate before a compute, result summary or stale-result
+       notice after one. Muted via opacity rather than a separate color
+       token (none of this project's existing tokens cover "secondary
+       text") so it still flips correctly with the light/dark --text
+       variable. */
+    #cross-layer-status {
+      font-size: 12px;
+      color: var(--text);
+      opacity: 0.7;
+      text-align: center;
+      min-height: 14px;
+    }
+
     /* One dynamically-created additional-layer tab: enable checkbox +
        label button + remove button, grouped tightly so the tab strip
        reads as one unit per layer (see renderLayerTabs() in sketch.js). */
@@ -459,6 +478,22 @@
           <button id="btn-mesh-preset-x" class="layer-btn" title="Shift X by one mesh-width">1 mesh →</button>
           <button id="btn-mesh-preset-y" class="layer-btn" title="Shift Y by one mesh-width">1 mesh ↓</button>
         </div>
+      </div>
+
+      <!-- Cross-Layer Face Compute (Roadmap 1.10b-ii-b): applies to the
+           base sheet + every ENABLED additional layer at once - not
+           contextual to whichever tab is active, unlike the offset
+           controls above, since it's inherently a cross-sheet operation.
+           Synchronous compute (see the 1.10b-ii-b design session: post
+           spatial-hash-fix real times are sub-second to a few seconds -
+           see sketch.js's computeCrossLayerFacesFlow() for the deferred-
+           via-setTimeout trick that lets the disabled/"Computing…" state
+           actually paint before the synchronous freeze). No rendering
+           yet - coloring + canvas display is 1.10b-ii-c; this step is
+           compute + timing + staleness feedback only. -->
+      <div class="control-group" id="cross-layer-compute-group">
+        <button id="btn-compute-cross-layer" class="layer-btn" title="Compute Cross-Layer Faces">Compute Cross-Layer Faces</button>
+        <span id="cross-layer-status"></span>
       </div>
 
       <!-- Action Buttons -->

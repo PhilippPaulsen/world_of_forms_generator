@@ -413,10 +413,17 @@ function setup() {
         });
     }
 
+    // Cross-Layer Face Compute (Roadmap 1.10b-ii-b) - see
+    // computeCrossLayerFacesFlow()/updateCrossLayerStatus() (INTERACTION
+    // section below) for the actual logic; this just wires the click.
+    const computeCrossLayerBtn = select('#btn-compute-cross-layer');
+    computeCrossLayerBtn && computeCrossLayerBtn.mousePressed(computeCrossLayerFacesFlow);
+
     rebuildGrid(currentShape);
     // Draw a random connection on start
     addRandomConnection();
     redraw();
+    updateCrossLayerStatus();
 }
 
 // ----------------- DRAW -----------------------------------------
@@ -452,6 +459,13 @@ function draw() {
     strokeWeight(4);   // 4px border (doubled)
     rect(0, 0, width, height);
     pop();
+
+    // Roadmap 1.10b-ii-b: cheap enough to run on every redraw (see
+    // updateCrossLayerStatus()'s own comment) - catches every
+    // connections/layers/offsets change via the same redraw() calls
+    // those already trigger, without needing a hook at each individual
+    // mutation site.
+    updateCrossLayerStatus();
 }
 
 function mouseMoved() { if (showNodes) redraw(); }
@@ -501,6 +515,126 @@ function removeLayer(index) {
     } else if (typeof activeLayer === 'number' && activeLayer > index) {
         activeLayer -= 1;
     }
+}
+
+// ----------------- CROSS-LAYER FACE COMPUTE (Roadmap 1.10b-ii-b) -----
+// Synchronous, user-initiated compute - NOT wired into every redraw()
+// the way 1.10a's per-sheet showFaces is (see the 1.10b-ii-b design
+// session for why: post spatial-hash-fix real times are sub-second to
+// a few seconds, too long to re-run on every click/drag the way single-
+// sheet face detection already does). No rendering yet - coloring and
+// canvas display are 1.10b-ii-c; this is compute + timing + staleness
+// feedback only.
+let crossLayerResult = null;          // last computeCrossLayerFaces() result, or null if never computed
+let crossLayerResultSignature = null; // crossLayerConfigSignature() at the time crossLayerResult was computed
+let crossLayerResultTimeMs = 0;       // that compute's real elapsed time, for the status line
+
+// Builds the {baseConn, layers} input computeCrossLayerFaces() (and
+// estimateCrossLayerSegmentCount()) expect - base sheet's complete
+// connections, plus one entry per ENABLED additional layer (sheetId =
+// its additionalLayers[] index, matching how 1.10b-i's own live testing
+// already addressed sheets), each with its own complete connections and
+// offset. Mirrors collectCrossLayerSegments()'s/drawShapeCell()'s own
+// completeness filter ([id,id] only - a connection started by one click
+// and never finished stays [id]).
+function buildCrossLayerInput() {
+    const baseConn = connections.filter(c => c.length === 2);
+    const layers = additionalLayers
+        .map((layer, i) => ({
+            sheetId: i,
+            connections: layer.connections.filter(c => c.length === 2),
+            offsetX: layer.offsetX,
+            offsetY: layer.offsetY,
+            enabled: layer.enabled
+        }))
+        .filter(l => l.enabled);
+    return { baseConn, layers };
+}
+
+// A cheap fingerprint of everything a cross-layer compute result
+// actually depends on - base connections, and each ENABLED layer's own
+// connections/offset. Used to detect staleness (see
+// updateCrossLayerStatus()) without needing to hook every individual
+// mutation site (mousePressed(), undo/redo/clear, layer add/remove/
+// enable-toggle, offset inputs) - updateCrossLayerStatus() is instead
+// called once per draw() (see there), which already fires after every
+// one of those via their own redraw() calls.
+function crossLayerConfigSignature() {
+    const { baseConn, layers } = buildCrossLayerInput();
+    return JSON.stringify({
+        base: baseConn,
+        layers: layers.map(l => ({ sheetId: l.sheetId, conns: l.connections, ox: l.offsetX, oy: l.offsetY }))
+    });
+}
+
+// Soft time hint (1.10b-ii-b design session, point 2): grounded in the
+// post-spatial-hash-fix real O(S^2)-ish scaling (2,400 segments -> real
+// 250ms, 3,600 -> real 598ms) extrapolated to ~1.7s at 6,000 and
+// ~3-5s at 10,000 segments - informational only, never a hard refusal.
+function crossLayerTimeHint(estimatedSegments) {
+    if (estimatedSegments >= 10000) return 'this will likely take several seconds';
+    if (estimatedSegments >= 6000) return 'this may take a moment';
+    return '';
+}
+
+// Updates #cross-layer-status: before any compute (or once the config
+// has changed since the last one), shows the live segment estimate's
+// time hint (or nothing, if fast); after a compute that's still current
+// for the present config, shows the result summary instead. Called once
+// per draw() (cheap - estimateCrossLayerSegmentCount()'s own cost is
+// one real but tiny single-connection collectCellSegments() probe,
+// negligible next to drawTessellation()'s own per-redraw cost) rather
+// than from every individual mutation site, so no interaction point
+// (however it changes connections/layers/offsets) can be missed.
+function updateCrossLayerStatus() {
+    const statusEl = select('#cross-layer-status');
+    if (!statusEl) return;
+
+    const { baseConn, layers } = buildCrossLayerInput();
+    const estimate = estimateCrossLayerSegmentCount(baseConn.length, layers);
+    const currentSignature = crossLayerConfigSignature();
+
+    if (crossLayerResult && crossLayerResultSignature === currentSignature) {
+        statusEl.html(`${crossLayerResult.faces.length} faces found (${Math.round(crossLayerResultTimeMs)} ms)`);
+    } else if (crossLayerResult) {
+        const hint = crossLayerTimeHint(estimate);
+        statusEl.html(`Outdated (last: ${crossLayerResult.faces.length} faces) - recompute to update` + (hint ? `; ${hint}` : ''));
+    } else {
+        const hint = crossLayerTimeHint(estimate);
+        statusEl.html(hint ? `Estimated ~${estimate} segments - ${hint}` : '');
+    }
+}
+
+// The Compute button's click handler. Sets the disabled/"Computing…"
+// state FIRST, then defers the actual (synchronous, blocking) compute
+// to the next tick via setTimeout(fn, 0) - a plain synchronous call
+// here would freeze the main thread in the SAME tick as the click,
+// before the browser gets a chance to paint the disabled button/label
+// change, making the button appear to do nothing until the result
+// suddenly appears (1.10b-ii-b design session, point 3).
+function computeCrossLayerFacesFlow() {
+    const computeBtn = select('#btn-compute-cross-layer');
+    const statusEl = select('#cross-layer-status');
+    if (!computeBtn) return;
+
+    computeBtn.elt.disabled = true;
+    computeBtn.html('Computing…');
+    if (statusEl) statusEl.html('Computing…');
+
+    setTimeout(() => {
+        const { baseConn, layers } = buildCrossLayerInput();
+        const t0 = performance.now();
+        const result = computeCrossLayerFaces(baseConn, layers);
+        const t1 = performance.now();
+
+        crossLayerResult = result;
+        crossLayerResultTimeMs = t1 - t0;
+        crossLayerResultSignature = crossLayerConfigSignature();
+
+        computeBtn.elt.disabled = false;
+        computeBtn.html('Compute Cross-Layer Faces');
+        updateCrossLayerStatus();
+    }, 0);
 }
 
 function mousePressed() {
