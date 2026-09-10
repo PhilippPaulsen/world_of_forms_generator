@@ -515,11 +515,21 @@ function snapOrCreateNode(point, registry) {
 // is optional (defaults to none, i.e. every break point becomes synthetic)
 // so this stays testable with plain synthetic segment arrays.
 //
-// Also returns edgeMeta (undirected edge key -> the connIndex of the
-// original segment that produced it, if collectCellSegments() tagged
-// one - see there) so findFaces() can assign each face's symmetry-orbit
-// color from the connections along its own boundary, without needing a
+// Also returns edgeMeta (undirected edge key -> {sheetId, connIndex} of
+// the original segment that produced it, if collectCellSegments()/
+// collectCrossLayerSegments() tagged one - see there) so findFaces() can
+// assign each face's color (symmetry-orbit for a same-sheet face, or the
+// distinct cross-sheet treatment - see _faceSheetSet()/CROSS_SHEET_COLOR)
+// from the connections/sheets along its own boundary, without needing a
 // second pass back over the raw segments.
+//
+// Roadmap 1.10b-ii-c: sheetId rides alongside connIndex in the SAME
+// meta object (not a second parallel map) - collectCellSegments()
+// (1.10a, single-sheet) never sets sheetId on its segments, so it comes
+// through here as undefined for every edge, which is exactly the
+// "no cross-sheet concept" behavior that path needs (see
+// _faceSheetSet() - an edge with no sheetId is skipped, so a single-
+// sheet graph's faces can never register as cross-sheet).
 function splitSegments(segments, realNodes) {
     const registry = createNodeRegistry(realNodes);
     const breaks = segments.map(() => [0, 1]);
@@ -549,7 +559,7 @@ function splitSegments(segments, realNodes) {
             const key = _undirectedKey(a, b);
             if (!edgeMap.has(key)) {
                 edgeMap.set(key, [a, b]);
-                edgeMeta.set(key, seg.connIndex);
+                edgeMeta.set(key, { sheetId: seg.sheetId, connIndex: seg.connIndex });
             }
         }
     }
@@ -684,12 +694,20 @@ function _signedArea(boundaryIds, nodeById) {
 // one, not a blend. Returns null if no edge on the boundary carries meta
 // (e.g. synthetic test segments that never set connIndex) - orbitColor()
 // falls back to a neutral color in that case.
+//
+// Roadmap 1.10b-ii-c: edgeMeta entries are now {sheetId, connIndex}
+// objects (see splitSegments()), so this only extracts .connIndex - the
+// algorithm itself is unchanged. Only ever called on a face that's
+// already been confirmed NOT genuinely cross-sheet (see
+// _faceSheetSet()/findFaces()), so every tagged edge here belongs to at
+// most one sheet anyway - no sheetId filtering needed at this point.
 function _majorityConnIndex(boundary, edgeMeta) {
     const counts = new Map();
     for (let i = 0; i < boundary.length; i++) {
         const u = boundary[i], v = boundary[(i + 1) % boundary.length];
-        const ci = edgeMeta.get(_undirectedKey(u, v));
-        if (ci === undefined || ci === null) continue;
+        const meta = edgeMeta.get(_undirectedKey(u, v));
+        if (!meta || meta.connIndex === undefined || meta.connIndex === null) continue;
+        const ci = meta.connIndex;
         counts.set(ci, (counts.get(ci) || 0) + 1);
     }
     let best = null, bestCount = -1;
@@ -697,6 +715,32 @@ function _majorityConnIndex(boundary, edgeMeta) {
         if (count > bestCount || (count === bestCount && ci < best)) { best = ci; bestCount = count; }
     }
     return best;
+}
+
+// Roadmap 1.10b-ii-c: the set of distinct sheetIds tagged among a face's
+// own boundary edges (untagged edges - e.g. from 1.10a's single-sheet
+// collectCellSegments(), which never sets sheetId - skipped, same as
+// _majorityConnIndex()). findFaces() uses this to decide whether a face
+// is genuinely cross-sheet: size 0 or 1 -> same-sheet (or no info at
+// all), the existing per-sheet orbit-color mechanism applies unchanged;
+// size >= 2 -> the face's boundary is only closed BECAUSE at least two
+// different sheets crossed there, so it gets the distinct cross-sheet
+// treatment (CROSS_SHEET_COLOR) instead - a strict PRESENCE rule
+// (design session point 1), not a majority/threshold one: even a single
+// edge from a second sheet among many from a first is enough, since the
+// face wouldn't exist as a separate region at all without that second
+// sheet's contribution - a proportion-based rule would misattribute it
+// to whichever sheet happens to contribute more edges, which isn't
+// meaningfully "whose face" it is.
+function _faceSheetSet(boundary, edgeMeta) {
+    const sheets = new Set();
+    for (let i = 0; i < boundary.length; i++) {
+        const u = boundary[i], v = boundary[(i + 1) % boundary.length];
+        const meta = edgeMeta.get(_undirectedKey(u, v));
+        if (!meta || meta.sheetId === undefined || meta.sheetId === null) continue;
+        sheets.add(meta.sheetId);
+    }
+    return sheets;
 }
 
 // Deterministic, evenly-hued color per orbit (base connection index) -
@@ -711,6 +755,16 @@ function orbitColor(connIndex, totalOrbits) {
     const hue = Math.round((360 * connIndex / totalOrbits) % 360);
     return `hsl(${hue}, 65%, 55%)`;
 }
+
+// Roadmap 1.10b-ii-c: color for a genuinely cross-sheet face (boundary
+// spans >=2 distinct sheets - see _faceSheetSet()). Extends orbitColor()'s
+// existing "no clean single-orbit attribution" gray-fallback convention
+// (hsl(0,0%,70%)) rather than introducing a competing palette concept -
+// same hue-less family, but at a distinguishably DARKER lightness so a
+// cross-sheet face reads as visually distinct from the (in practice
+// never hit with real, always-tagged segments) "no orbit info at all"
+// fallback, not just a coincidentally identical gray.
+const CROSS_SHEET_COLOR = 'hsl(0, 0%, 40%)';
 
 // Orchestrates the full pipeline (1.10 design session, points 2-4, 6 and
 // 9): dedupe -> intersection-split/snap -> angle-sorted adjacency ->
@@ -806,13 +860,21 @@ function findFaces(segments, realNodes) {
 
     const totalOrbits = deduped.reduce((max, s) =>
         (typeof s.connIndex === 'number' ? Math.max(max, s.connIndex + 1) : max), 0);
+    // Roadmap 1.10b-ii-c: cross-sheet check first (strict presence rule,
+    // see _faceSheetSet()) - only a confirmed same-sheet (or no-info)
+    // face falls through to the existing per-sheet majority-orbit
+    // mechanism. sheets rides on every face (not just cross-sheet ones)
+    // as provenance for rendering/export (design session points 2/4).
     const faces = bounded.map(f => {
-        const connIndex = _majorityConnIndex(f.boundary, edgeMeta);
+        const sheetSet = _faceSheetSet(f.boundary, edgeMeta);
+        const isCrossSheet = sheetSet.size >= 2;
+        const connIndex = isCrossSheet ? null : _majorityConnIndex(f.boundary, edgeMeta);
         return {
             nodeIds: f.boundary,
             area: Math.abs(f.area),
             connIndex,
-            color: orbitColor(connIndex, totalOrbits)
+            sheets: Array.from(sheetSet),
+            color: isCrossSheet ? CROSS_SHEET_COLOR : orbitColor(connIndex, totalOrbits)
         };
     });
     return { nodes: faceNodes, faces };
