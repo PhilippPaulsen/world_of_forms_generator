@@ -91,7 +91,20 @@ function computeAdjacency(completeConnections, nodeById) {
 // provides) and _isFlat2DExport() (App.js, checks only formatVersion===1
 // + Array.isArray(geometry.nodes)) - neither touches geometry.faces or
 // geometry.layers, so this addition is safe and formatVersion stays 1.
-function buildExportData() {
+// Roadmap 1.10b-ii-c: crossLayerData - {latticeBasis, nodes, faces}
+// (computeCrossLayerFaces()'s own result shape, minus its top-level
+// `faces` field's implicit sheet attribution already living on each
+// face) or null/undefined - is passed in as a PARAMETER rather than
+// read from a global, unlike every other piece of state this function
+// reads (connections, additionalLayers, nodes, ...). Reason: the
+// cross-layer compute result (crossLayerResult) is sketch.js-owned
+// state (added in 1.10b-ii-b, a UI-flow concern - the synchronous
+// Compute button's own result cache), and CLAUDE.md's module map is
+// explicit that core/* must never depend on sketch.js (dependencies
+// point one way). The caller (sketch.js's export-JSON button handler)
+// is what already knows whether a valid, non-stale result exists -
+// see exportJSON() below, which just forwards whatever it's given.
+function buildExportData(crossLayerData) {
     // Mirror the same completeness filter drawShapeCell() already applies -
     // a connection started by one click and never finished stays [id] (length 1).
     const completeConnections = connections.filter(c => c.length === 2);
@@ -144,11 +157,36 @@ function buildExportData() {
         data.geometry.faces = facesResult.faces;
     }
 
+    // Roadmap 1.10b-ii-c: geometry.crossLayer - additive the same way as
+    // geometry.faces/geometry.layers before it, present only when the
+    // caller actually has a valid (non-stale) result to give (see the
+    // crossLayerData param comment above). Doesn't belong to any single
+    // sheet (base or one layer), so it rides at the top level of
+    // geometry rather than nested under one - {latticeBasis, nodes,
+    // faces}, reusing computeCrossLayerFaces()'s own node id scheme
+    // (sheetId:anchorIdx:nodeId / synthetic 'sN') as-is, since a
+    // consumer resolving a cross-layer face's nodeIds needs exactly
+    // this same set. Re-verified at implementation time against
+    // SpaceHarmony's actual current importFlatForm()/_isFlat2DExport()
+    // (not assumed from 1.10a/1.9's own re-checks): same conclusion -
+    // importFlatForm() reads only geometry.centroid/outerCorners/nodes/
+    // edges, _isFlat2DExport() checks only formatVersion===1 +
+    // Array.isArray(geometry.nodes) - neither touches geometry.faces,
+    // geometry.layers, or (now) geometry.crossLayer, so this stays
+    // fully additive and formatVersion stays 1.
+    if (crossLayerData) {
+        data.geometry.crossLayer = crossLayerData;
+    }
+
     return data;
 }
 
-function exportJSON() {
-    const data = buildExportData();
+// crossLayerData: forwarded as-is to buildExportData() - see its own
+// param comment for why this is passed in rather than read from a
+// global (sketch.js's export-JSON button handler is the actual caller
+// in practice, deciding whether a valid result exists to pass).
+function exportJSON(crossLayerData) {
+    const data = buildExportData(crossLayerData);
     downloadBlob(JSON.stringify(data, null, 2), 'world_of_forms.json', 'application/json');
 }
 

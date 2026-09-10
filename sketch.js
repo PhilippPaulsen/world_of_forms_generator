@@ -385,7 +385,16 @@ function setup() {
 
     const jsonBtn = select('#export-json');
     jsonBtn && jsonBtn.mousePressed(() => {
-        exportJSON();
+        // Roadmap 1.10b-ii-c: only pass a crossLayerData object through
+        // to exportJSON()/buildExportData() when a valid, CURRENT (not
+        // stale - same crossLayerConfigSignature() check draw()/
+        // updateCrossLayerStatus() already use) cross-layer result
+        // exists - an outdated result never gets exported as if it were
+        // still accurate, same rule as rendering.
+        const crossLayerData = (crossLayerResult && crossLayerResultSignature === crossLayerConfigSignature())
+            ? { latticeBasis: crossLayerResult.latticeBasis, nodes: crossLayerResult.nodes, faces: crossLayerResult.faces }
+            : null;
+        exportJSON(crossLayerData);
         exportOverlay && exportOverlay.addClass('hidden');
     });
 
