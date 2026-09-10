@@ -1097,32 +1097,49 @@ function _withAlpha(hslColor, alpha) {
 // doubled at a neighborhood boundary) in that specific case. Not
 // resolved here - flagged for a future pass if it turns out to matter
 // in practice.
-function drawCrossLayerFaceFillsAcrossCanvas(facesResult) {
+//
+// Roadmap 1.10b-ii-d (performance follow-up): takes an optional `target`
+// to draw into - a p5.Graphics buffer, or the default p5 instance
+// (`window`, in this sketch's global mode) for the original "draw
+// straight onto the visible canvas" behavior. This is what lets
+// sketch.js's draw() render this pass ONCE into an offscreen buffer
+// (see crossLayerFillBuffer there) instead of re-running it - profiling
+// found this loop's own drawing calls (not the tile-loop or the vector
+// math) cost ~390ms at 915 faces / 23x23 tiles, paid on every redraw
+// with no caching, including on mere mouseMoved() - and confirmed a
+// cached buffer reduces the per-redraw cost to a single image() blit
+// (~0.001ms measured). Verified live that window.width/window.height/
+// window.fill/window.beginShape/window.push (etc.) are the exact same
+// values/functions as the bare globals used before this change in p5's
+// global mode, so target=window (the default) is a byte-identical
+// no-behavior-change default - a p5.Graphics instance exposes the same
+// drawing-method names, so no other change was needed to support both.
+function drawCrossLayerFaceFillsAcrossCanvas(facesResult, target = window) {
     if (!facesResult || !facesResult.faces || !facesResult.faces.length || !facesResult.latticeBasis) return;
     const { nodes: faceNodes, faces, latticeBasis } = facesResult;
     const { v1, v2 } = latticeBasis;
     const nodeById = new Map(faceNodes.map(n => [n.id, n]));
 
     const m1 = Math.hypot(v1.x, v1.y), m2 = Math.hypot(v2.x, v2.y);
-    const cols = Math.ceil(width / m1) + 6;
-    const rows = Math.ceil(height / m2) + 6;
+    const cols = Math.ceil(target.width / m1) + 6;
+    const rows = Math.ceil(target.height / m2) + 6;
 
-    push();
-    noStroke();
+    target.push();
+    target.noStroke();
     for (let i = -cols; i <= cols; i++) {
         for (let j = -rows; j <= rows; j++) {
             const dx = i * v1.x + j * v2.x;
             const dy = i * v1.y + j * v2.y;
             faces.forEach(face => {
-                fill(_withAlpha(face.color, 0.65));
-                beginShape();
+                target.fill(_withAlpha(face.color, 0.65));
+                target.beginShape();
                 face.nodeIds.forEach(id => {
                     const n = nodeById.get(id);
-                    vertex(n.x + dx, n.y + dy);
+                    target.vertex(n.x + dx, n.y + dy);
                 });
-                endShape(CLOSE);
+                target.endShape(CLOSE);
             });
         }
     }
-    pop();
+    target.pop();
 }
