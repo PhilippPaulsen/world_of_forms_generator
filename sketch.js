@@ -455,9 +455,29 @@ function draw() {
     // layers/offsets (crossLayerConfigSignature() - the same staleness
     // check updateCrossLayerStatus() uses for its own "Outdated" label):
     // an outdated result is never rendered as if it were current, even
-    // though it's still SHOWN (with that label) in the status text.
+    // though it's still SHOWN (with that label) in the status text. The
+    // whole block below (buffer render-or-reuse, then blit) only runs at
+    // all inside this same currency check, so an outdated result simply
+    // never reaches the blit - the previously cached buffer's content is
+    // left alone but never drawn, same "hidden until recomputed" behavior
+    // as before caching existed.
+    //
+    // Roadmap 1.10b-ii-d: offscreen-buffer cache (see crossLayerFillBuffer/
+    // crossLayerFillBufferSignature above) - re-renders into the buffer
+    // ONLY when its signature doesn't match the current result's (i.e. a
+    // new compute was accepted since the buffer was last built), then
+    // always just blits the buffer via image(). clear() before re-
+    // rendering matters: a new result can have FEWER faces than the one
+    // the buffer previously held, and without clearing, stale pixels from
+    // the larger previous render would linger under/around the new ones.
     if (crossLayerResult && crossLayerResultSignature === crossLayerConfigSignature()) {
-        drawCrossLayerFaceFillsAcrossCanvas(crossLayerResult);
+        if (crossLayerFillBufferSignature !== crossLayerResultSignature) {
+            if (!crossLayerFillBuffer) crossLayerFillBuffer = createGraphics(width, height);
+            crossLayerFillBuffer.clear();
+            drawCrossLayerFaceFillsAcrossCanvas(crossLayerResult, crossLayerFillBuffer);
+            crossLayerFillBufferSignature = crossLayerResultSignature;
+        }
+        image(crossLayerFillBuffer, 0, 0);
     }
 
     // Knoten (Hover rot)
@@ -549,6 +569,23 @@ function removeLayer(index) {
 let crossLayerResult = null;          // last computeCrossLayerFaces() result, or null if never computed
 let crossLayerResultSignature = null; // crossLayerConfigSignature() at the time crossLayerResult was computed
 let crossLayerResultTimeMs = 0;       // that compute's real elapsed time, for the status line
+
+// Roadmap 1.10b-ii-d (performance follow-up): offscreen cache for
+// drawCrossLayerFaceFillsAcrossCanvas()'s own output - real profiling
+// found that pass costs ~390ms at 915 faces/23x23 tiles, almost entirely
+// canvas draw-call volume (fill()/vertex()), and it was being re-run from
+// scratch on EVERY draw() (including plain mouseMoved() redraws, see
+// draw() below), not just when the underlying result actually changed.
+// crossLayerFillBuffer holds the rendered-once image; crossLayerFillBufferSignature
+// is the crossLayerResultSignature it was rendered for - draw() only
+// re-renders into the buffer when these disagree (i.e. a new compute was
+// accepted since the buffer was last built), and just blits the buffer
+// (a single image() call, measured ~0.001ms) otherwise. null/null is
+// deliberately never "equal" to a real signature, so the very first
+// current result always triggers one real render, same as before caching
+// existed.
+let crossLayerFillBuffer = null;
+let crossLayerFillBufferSignature = null;
 
 // Builds the {baseConn, layers} input computeCrossLayerFaces() (and
 // estimateCrossLayerSegmentCount()) expect - base sheet's complete
