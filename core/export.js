@@ -121,6 +121,18 @@ function buildExportData(crossLayerData) {
             shapeSizeFactor,
             nodeCount,
             symmetryMode,
+            // Roadmap 1.5-B: this object-shorthand already captured
+            // whatever curveType currently holds since 1.4-A, so no code
+            // change was needed to export kind:'free's own seed/
+            // roughness/visible fields - re-verified for real at 1.5-B
+            // implementation time (not just predicted from the 1.5-A
+            // design session): ran a real export with a full 'free'
+            // curveType (seed/roughness/visible all set) through
+            // SpaceHarmony's actual importFlatForm() and confirmed
+            // point/line/face counts and 2D-export detection are
+            // unaffected, same as every prior meta.* re-check in this
+            // series - meta.* still isn't read by that importer at all,
+            // regardless of curveType's shape.
             curveType,
             lineColor
         },
