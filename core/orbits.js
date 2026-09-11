@@ -278,3 +278,28 @@ function burnsideOrbitCount(nodes, centroid, shape, symmetryMode, eps = ORBIT_NO
 
     return fixedSum / groupOrder;
 }
+
+// ----------------- LIVE-APP GLUE -----------------------------------
+
+// Computes the theme-line orbit table for the CURRENT live grid -
+// reads nodes/centroid/currentShape (core/state.js globals) exactly as
+// core/faces.js's computeCellFaces() reads nodes/curveAmount, and
+// symmetryMode the same way unless a different mode is passed in
+// explicitly (`mode ||` rather than a same-named default parameter,
+// which would shadow the global instead of reading it - a real JS
+// default-parameter pitfall, avoided deliberately here).
+//
+// Caller's responsibility: nodes/centroid must already correspond to
+// `currentShape` - i.e. rebuildGrid(currentShape) must have already run
+// for whatever shape/order the caller wants a table for. This function
+// does not (and, per the 1.11 design session, should not) rebuild the
+// grid itself - rebuildGrid() clears connections/additionalLayers as a
+// side effect (core/state.js:93-96), which no caller of an orbit-table
+// lookup should trigger as a side effect of merely asking a question.
+// No planned 1.11 feature needs a table for a DIFFERENT shape/order
+// than what's currently on screen, so that case is deliberately left
+// unsupported rather than built for speculatively.
+function computeThemeLineOrbitTable(mode) {
+    const activeMode = mode || symmetryMode;
+    return computeThemeLineOrbits(nodes, centroid, currentShape, activeMode);
+}
