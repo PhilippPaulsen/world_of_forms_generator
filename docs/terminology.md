@@ -45,6 +45,7 @@ These terms describe structures and operations, independent of any specific patt
 | Eckspitz | corner-tip | |
 | Dreisechs | tri-hex | |
 | Zweier / Dreier / Vierer | pairs / triples / quadruples | not "-fold" (reserved for "-faltig", symmetry multiplicity) |
+| heimliches Gesetz | hidden law | Ostwald's term (Die Welt der Formen, Erste Mappe, the "free clothing" passage - see Roadmap 1.5) for the effect when a free/naturalistic stroke's underlying theme-line is hidden rather than shown - the pattern still follows a strict rule, but that rule isn't visible on its face. Implemented as `curveType.visible` (`core/curves.js`, `kind: 'free'`) - `false` hides the underlying chord (the "hidden law" case Ostwald names), `true` shows both. |
 
 ---
 
