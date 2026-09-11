@@ -114,13 +114,20 @@ function setup() {
     const faceBtn = select('#btn-toggle-faces');
     if (curveBtn) {
         curveBtn.mousePressed(() => {
-            if (curveAmount === 0) {
-                curveAmount = 25; // Enable curve
+            if (curveType.kind === 'straight') {
+                // Roadmap 1.4-A: same fixed style the old binary toggle
+                // always used (fold=1, symmetric, strength=25 - byte-
+                // identical rendering to the pre-1.4-A code, verified in
+                // the 1.4-A implementation session's own regression
+                // test). 1.4-B is what exposes fold/symmetric/leaning/
+                // strength as real controls; this toggle stays exactly
+                // as simple as it was before that.
+                curveType = { kind: 'curve', fold: 1, symmetric: true, leaning: 'left', strength: 25 };
                 curveBtn.addClass('active');
                 setActiveShowFaces(false);
                 faceBtn && faceBtn.removeClass('active');
             } else {
-                curveAmount = 0; // Disable curve
+                curveType = { kind: 'straight' }; // Disable curve
                 curveBtn.removeClass('active');
             }
             redraw();
@@ -144,7 +151,7 @@ function setup() {
             const next = !activeShowFaces();
             setActiveShowFaces(next);
             if (next) {
-                curveAmount = 0;
+                curveType = { kind: 'straight' };
                 curveBtn && curveBtn.removeClass('active');
             }
             updateFaceToggleControl();

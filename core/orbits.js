@@ -336,7 +336,7 @@ function formatThemeLineName(table, connSet) {
 
 // Computes the theme-line orbit table for the CURRENT live grid -
 // reads nodes/centroid/currentShape (core/state.js globals) exactly as
-// core/faces.js's computeCellFaces() reads nodes/curveAmount, and
+// core/faces.js's computeCellFaces() reads nodes/curveType, and
 // symmetryMode the same way unless a different mode is passed in
 // explicitly (`mode ||` rather than a same-named default parameter,
 // which would shadow the global instead of reading it - a real JS

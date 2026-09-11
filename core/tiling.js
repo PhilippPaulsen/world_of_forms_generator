@@ -8,8 +8,10 @@
  * then once per enabled entry in additionalLayers at that layer's own
  * shifted tile anchor. drawConnectionWithSymmetry()/drawCurvedBezier()
  * are untouched by this - every sheet shares the same symmetryMode/
- * curveAmount/currentShape (see the 1.3(b)/1.9 design sessions for why
- * that's shared rather than per-sheet). Also relevant to 1.1/1.2/1.12
+ * curveType/currentShape (see the 1.3(b)/1.9 design sessions for why
+ * that's shared rather than per-sheet - reconfirmed for curveType in
+ * the 1.4-A design session, same reasoning: a plate-wide stylistic
+ * choice, not a per-connection property). Also relevant to 1.1/1.2/1.12
  * (alternative net construction, cross-order/cross-net combination).
  *
  * Roadmap 1.10a: each tile*() function also takes an optional cellFaces
