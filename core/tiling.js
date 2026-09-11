@@ -82,7 +82,15 @@ function drawShapeCell(connSet, tileCentroid, flip180 = false) {
             if (!n1 || !n2) continue;
             const p1 = toTileLocal(n1, tileCentroid, flip180);
             const p2 = toTileLocal(n2, tileCentroid, flip180);
-            drawConnectionWithSymmetry(p1, p2, tileCentroid);
+            // Roadmap 1.5-A: n1.id/n2.id passed through so
+            // core/curves.js's buildCurvePieces() can derive a per-
+            // connection seed for kind:'free' - p1/p2 are already-
+            // transformed tile-local coordinates and can't be reversed
+            // back into node ids (not stable across this same
+            // connection's other tessellated/symmetry copies), so the
+            // real ids have to be threaded through from here, the place
+            // they're naturally still available.
+            drawConnectionWithSymmetry(p1, p2, tileCentroid, n1.id, n2.id);
         }
     }
 }

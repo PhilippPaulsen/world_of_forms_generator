@@ -30,7 +30,17 @@ function reflectVerticallyAround(pt, center) {
 }
 
 // ----------------- DRAWING LINES + SYMMETRY ---------------------
-function drawConnectionWithSymmetry(p1, p2, center) {
+// Roadmap 1.5-A: id1/id2 (the connection's real node ids, from
+// core/tiling.js's drawShapeCell()) are passed straight through to
+// EVERY drawCurvedBezier() call below - base, every rotated copy, and
+// every reflected copy - unchanged, regardless of which transform
+// produced that call's own p1/p2. This is what makes every symmetry/
+// tessellation copy of one base connection derive the SAME per-
+// connection seed (core/curves.js's _connectionSeed()), and hence show
+// the same underlying 'free' noise pattern, just transformed along with
+// the geometry - not independently re-rolled per copy (verified in the
+// 1.5-A implementation report).
+function drawConnectionWithSymmetry(p1, p2, center, id1, id2) {
     // Linienfarbe und Füllung werden im draw() global gesetzt
     strokeWeight(2);
     // Roadmap 1.4-A: curveType replaces the old bare curveAmount number
@@ -40,7 +50,7 @@ function drawConnectionWithSymmetry(p1, p2, center) {
     // Reflected copies use mirrorCurveType(curveType) instead of the old
     // numeric negation (-curveAmount) - see that function's own comment
     // in core/curves.js for why only `leaning` needs to flip.
-    drawCurvedBezier(p1, p2, curveType);
+    drawCurvedBezier(p1, p2, curveType, id1, id2);
 
     // Choose rotation set per shape, ignore incompatible modes gracefully
     let rotAngles = [];
@@ -61,25 +71,25 @@ function drawConnectionWithSymmetry(p1, p2, center) {
     rotAngles.forEach(a => {
         const sR = rotateAround(p1, center, a);
         const eR = rotateAround(p2, center, a);
-        drawCurvedBezier(sR, eR, curveType);
+        drawCurvedBezier(sR, eR, curveType, id1, id2);
     });
 
     // Reflection(s)
     if (symmetryMode === 'reflection_only') {
         const sRef = reflectVerticallyAround(p1, center);
         const eRef = reflectVerticallyAround(p2, center);
-        drawCurvedBezier(sRef, eRef, mirrorCurveType(curveType));
+        drawCurvedBezier(sRef, eRef, mirrorCurveType(curveType), id1, id2);
     }
     if (symmetryMode === 'rotation_reflection3' || symmetryMode === 'rotation_reflection6') {
         const sRef = reflectVerticallyAround(p1, center);
         const eRef = reflectVerticallyAround(p2, center);
-        drawCurvedBezier(sRef, eRef, mirrorCurveType(curveType));
+        drawCurvedBezier(sRef, eRef, mirrorCurveType(curveType), id1, id2);
         rotAngles.forEach(a => {
             const sR = rotateAround(p1, center, a);
             const eR = rotateAround(p2, center, a);
             const sRR = reflectVerticallyAround(sR, center);
             const eRR = reflectVerticallyAround(eR, center);
-            drawCurvedBezier(sRR, eRR, mirrorCurveType(curveType));
+            drawCurvedBezier(sRR, eRR, mirrorCurveType(curveType), id1, id2);
         });
     }
 }
