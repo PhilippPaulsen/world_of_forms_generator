@@ -14,7 +14,16 @@ let canvasH = 600; // keep square
 
 let shapeSizeFactor = 5; // 1..9, adjustable via #shape-size-input
 let nodeCount = 3;       // 1..5, adjustable via #node-count-input
-let curveAmount = 0;     // 0 or 25, toggled via #btn-toggle-curve
+// Roadmap 1.4-A: curveType replaces the old bare curveAmount number
+// (core/curves.js's curveType struct - kind/fold/symmetric/leaning/
+// strength). Still a single global shared by every sheet, same
+// rationale as symmetryMode below (a plate-wide stylistic choice, not
+// a per-connection property - see core/curves.js's own module
+// docblock). The toggle button (#btn-toggle-curve) still just flips
+// between straight and one fixed curve style for now - 1.4-B is what
+// exposes fold/symmetric/leaning/strength as real UI controls.
+let curveType = { kind: 'straight' };
+
 let symmetryMode = "rotation_reflection6"; // fixed default - #symmetry-dropdown removed from UI, logic below stays wired for later reuse
 let lineColor = "#000000"; // fixed default - #line-color-picker removed from UI, logic below stays wired for later reuse
 let showNodes = true;
@@ -60,12 +69,12 @@ let svgPathCollector = null;
 // core/faces.js's collectCellSegments()) - a third collector mode next
 // to svgPathCollector, same precedented pattern, so face-detection's
 // input can never drift from what drawConnectionWithSymmetry() actually
-// produces. Always the straight p1->p2 chord regardless of curveAmount
+// produces. Always the straight p1->p2 chord regardless of curveType
 // - face-detection is explicitly straight-line-only for v1 (curved
 // intersection math is real extra work, deferred; the UI toggle that
 // triggers this collector is mutually exclusive with the curve toggle,
-// so this simplification is never reached with curveAmount != 0 in
-// practice, but the collector itself doesn't rely on that to be correct).
+// so this simplification is never reached with curveType.kind!=='straight'
+// in practice, but the collector itself doesn't rely on that to be correct).
 let segmentCollector = null;
 
 // Roadmap 1.10a: whether to render symmetry-orbit-colored face fills
@@ -77,8 +86,8 @@ let segmentCollector = null;
 // the 1.10 design session's point 7 - toggled via sketch.js's
 // #btn-toggle-faces button, contextual to whichever sheet tab is
 // active (activeShowFaces()/setActiveShowFaces()). Kept mutually
-// exclusive with curveAmount != 0 by that same button's handler;
-// computeCellFaces() also defends against that combination directly.
+// exclusive with curveType.kind!=='straight' by that same button's
+// handler; computeCellFaces() also defends against that combination directly.
 let showFaces = false;
 
 // ----------------- STATE HELPERS ---------------------------------

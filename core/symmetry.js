@@ -33,7 +33,14 @@ function reflectVerticallyAround(pt, center) {
 function drawConnectionWithSymmetry(p1, p2, center) {
     // Linienfarbe und Füllung werden im draw() global gesetzt
     strokeWeight(2);
-    drawCurvedBezier(p1, p2, curveAmount);
+    // Roadmap 1.4-A: curveType replaces the old bare curveAmount number
+    // (core/curves.js). Rotated copies below reuse curveType UNCHANGED -
+    // rotation preserves a curve's LOCAL (chord-relative) leaning, same
+    // as the pre-1.4-A code leaving curveAmount unchanged for rotations.
+    // Reflected copies use mirrorCurveType(curveType) instead of the old
+    // numeric negation (-curveAmount) - see that function's own comment
+    // in core/curves.js for why only `leaning` needs to flip.
+    drawCurvedBezier(p1, p2, curveType);
 
     // Choose rotation set per shape, ignore incompatible modes gracefully
     let rotAngles = [];
@@ -54,25 +61,25 @@ function drawConnectionWithSymmetry(p1, p2, center) {
     rotAngles.forEach(a => {
         const sR = rotateAround(p1, center, a);
         const eR = rotateAround(p2, center, a);
-        drawCurvedBezier(sR, eR, curveAmount);
+        drawCurvedBezier(sR, eR, curveType);
     });
 
     // Reflection(s)
     if (symmetryMode === 'reflection_only') {
         const sRef = reflectVerticallyAround(p1, center);
         const eRef = reflectVerticallyAround(p2, center);
-        drawCurvedBezier(sRef, eRef, -curveAmount);
+        drawCurvedBezier(sRef, eRef, mirrorCurveType(curveType));
     }
     if (symmetryMode === 'rotation_reflection3' || symmetryMode === 'rotation_reflection6') {
         const sRef = reflectVerticallyAround(p1, center);
         const eRef = reflectVerticallyAround(p2, center);
-        drawCurvedBezier(sRef, eRef, -curveAmount);
+        drawCurvedBezier(sRef, eRef, mirrorCurveType(curveType));
         rotAngles.forEach(a => {
             const sR = rotateAround(p1, center, a);
             const eR = rotateAround(p2, center, a);
             const sRR = reflectVerticallyAround(sR, center);
             const eRR = reflectVerticallyAround(eR, center);
-            drawCurvedBezier(sRR, eRR, -curveAmount);
+            drawCurvedBezier(sRR, eRR, mirrorCurveType(curveType));
         });
     }
 }
