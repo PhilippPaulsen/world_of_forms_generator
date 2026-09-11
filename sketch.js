@@ -228,6 +228,13 @@ function setup() {
                 renderLayerTabs();
                 updateOffsetControls();
                 updateFaceToggleControl();
+                // Roadmap 1.11-B: switching tabs alone didn't previously
+                // trigger a redraw() (canvas content doesn't change just
+                // by selecting a tab) - added so #pattern-name-status
+                // (contextual to activeLayer, see updatePatternNameStatus())
+                // actually reflects the newly-selected sheet immediately,
+                // not only after some unrelated later redraw.
+                redraw();
             });
 
             const removeBtn = document.createElement('button');
@@ -255,6 +262,7 @@ function setup() {
             renderLayerTabs();
             updateOffsetControls();
             updateFaceToggleControl();
+            redraw(); // Roadmap 1.11-B: see the per-layer tab handler's own comment above
         });
     }
 
@@ -433,6 +441,7 @@ function setup() {
     addRandomConnection();
     redraw();
     updateCrossLayerStatus();
+    updatePatternNameStatus();
 }
 
 // ----------------- DRAW -----------------------------------------
@@ -507,6 +516,20 @@ function draw() {
     // those already trigger, without needing a hook at each individual
     // mutation site.
     updateCrossLayerStatus();
+
+    // Roadmap 1.11-B: NOT unconditionally cheap the way
+    // updateCrossLayerStatus() is - computeThemeLineName() rebuilds the
+    // full orbit table from scratch (core/orbits.js's
+    // computeThemeLineOrbitTable(), no caching of its own by design -
+    // see that function's own comment on why the cache lives here
+    // instead), measured at ~13ms at the UI's largest reachable order
+    // (hex, nodeCount 5). Paying that on every mouseMoved()-triggered
+    // redraw would reintroduce exactly the kind of avoidable per-redraw
+    // recomputation 1.10b-ii-d's diagnosis/fix targeted - so this is
+    // cached here (signature-invalidated), same pattern as
+    // crossLayerFillBuffer/crossLayerFillBufferSignature above, not
+    // called unconditionally like updateCrossLayerStatus().
+    updatePatternNameStatus();
 }
 
 function mouseMoved() { if (showNodes) redraw(); }
@@ -556,6 +579,46 @@ function removeLayer(index) {
     } else if (typeof activeLayer === 'number' && activeLayer > index) {
         activeLayer -= 1;
     }
+}
+
+// ----------------- PATTERN NAME (Roadmap 1.11-B) ---------------------
+// Per-sheet only (Base or whichever layer tab is active), same scoping
+// as 1.10a's own per-sheet face detection - no combined/cross-layer
+// name, since 1.9's offset overlay is a continuous parameter with no
+// orbit structure to name against (see core/orbits.js's own docblock).
+
+// Cached computeThemeLineName() result + the signature it was computed
+// for - see updatePatternNameStatus()'s own comment in draw() for why
+// this needs caching (unlike updateCrossLayerStatus()). null/null never
+// matches a real signature, so the first call always computes for real.
+let patternNameCacheSignature = null;
+let patternNameCacheValue = null;
+
+// Everything the active sheet's name actually depends on: which shape/
+// symmetry group is active, which sheet is selected, and that sheet's
+// own connections (activeConnections() - already the existing base/
+// layer selector, see INTERACTION above). Deliberately explicit about
+// shape/mode rather than relying only on rebuildGrid()'s side effect of
+// clearing connections on a shape change (the way crossLayerConfigSignature()
+// implicitly does) - cheap either way, and self-evidently correct
+// without depending on a side effect defined elsewhere.
+function patternNameSignature() {
+    return JSON.stringify({ shape: currentShape, mode: symmetryMode, activeLayer, conns: activeConnections() });
+}
+
+// Updates #pattern-name-status for whichever sheet is currently active.
+// Called once per draw() (see there for why this is cached rather than
+// unconditional like updateCrossLayerStatus()).
+function updatePatternNameStatus() {
+    const statusEl = select('#pattern-name-status');
+    if (!statusEl) return;
+
+    const sig = patternNameSignature();
+    if (sig !== patternNameCacheSignature) {
+        patternNameCacheValue = computeThemeLineName(activeConnections());
+        patternNameCacheSignature = sig;
+    }
+    statusEl.html(patternNameCacheValue || 'No theme lines yet');
 }
 
 // ----------------- CROSS-LAYER FACE COMPUTE (Roadmap 1.10b-ii-b) -----
