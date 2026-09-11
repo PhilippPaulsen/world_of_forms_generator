@@ -67,8 +67,11 @@ Independent research track; 1.6's geodesic work is a natural (though not strictl
 - *Status: `drawCurvedBezier()` already implements the simplest (1-fold) case. Do not conflate with the separate "Curved Lines" passage in Harmonie der Formen (Ch. "Unlimited Surfaces," Fig. 103–106) — different book, independent figure numbering; verify whether those figures are even present in the current `harmony.js` before referencing them anywhere in the UI or documentation.*
 
 ### 1.5 Free "clothing" of lines — ⛔ not started
-- Geometric or naturalistic free strokes around the theme lines, with the underlying straight lines either visible or hidden ("hidden law")
-- Even fully arbitrary, non-repeating lines between node pairs yield usable patterns if node points are held exact
+- Geometric or naturalistic free strokes around the theme lines, with the underlying straight lines either kept visible in the finished pattern or made to disappear — the latter carrying "the particular charm of the 'hidden law'" ("heimliches Gesetz")
+- Primarily suited to "open" patterns — those consisting of free-standing lines that don't form closed figures — per Ostwald's own scoping
+- Ostwald states he has confirmed that even entirely arbitrarily chosen lines, never repeated but different between every node-pair, yield usable patterns, provided the node points themselves are held exact — this residual lawfulness alone suffices for a beautiful effect, as long as the exercised freedom appears somehow motivated
+- *Source: Die Welt der Formen, Erste Mappe (full passage reviewed directly, not previously verified — see project notes). This passage directly follows and extends the curved-substitution text (1.4) — Ostwald presents "free clothing" as a further derivation step after continuous curves and compound lines are exhausted, not an independent idea.*
+- *Status: no infrastructure exists yet. `1.4-A`'s `curveType.kind` dispatch (`'straight' | 'curve' | 'compound'`) was deliberately left open specifically to accommodate a future `'free'` kind for this item — see `core/curves.js`.*
 
 ### 1.6 Projection onto other surfaces — ⛔ not started
 - Perspectival transformation of a regular net onto a less regular one (straight lines stay straight; only length ratios change)
