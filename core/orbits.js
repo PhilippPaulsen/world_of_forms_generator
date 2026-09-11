@@ -279,6 +279,59 @@ function burnsideOrbitCount(nodes, centroid, shape, symmetryMode, eps = ORBIT_NO
     return fixedSum / groupOrder;
 }
 
+// Roadmap 1.11-B: formats a computeThemeLineOrbits() table + a specific
+// connection set into the naming grammar - structurally inspired by
+// Hans Hinterreiter's real notation (Hart, G., "Hans Hinterreiter's
+// Flowing Fields", Bridges 2024 - a documented example: `4*/6
+// 98a+82a+52e+75a`, "4 basic segments, 6-fold rotational symmetry (no
+// mirror), four segment codes"), but NOT a reconstruction of his
+// undocumented digit+letter segment-coding convention (unpublished
+// outside his own 800-page book) - see docs/terminology.md, Part B, for
+// the full divergence note. `{count}*/{GroupToken} {orbitId}+...}`:
+// GroupToken (e.g. 'C6') replaces Hinterreiter's bare rotational-order
+// digit ('6') with the same explicit token computeThemeLineOrbits()
+// already uses, self-documenting across all six symmetryMode values
+// (his single published example only shows the unmarked pure-rotation
+// case, not how he denoted reflection).
+//
+// Two deliberate departures from a literal segment listing, both
+// documented here since they're real design choices, not incidental:
+//  - orbit ids are sorted ascending, NOT listed in click/draw order.
+//    Hinterreiter's own listing order is unknown, but a draw-order-
+//    dependent name would mean the SAME resulting pattern gets a
+//    DIFFERENT name depending on the sequence it was clicked in -
+//    directly contradicting docs/terminology.md's own rationale for
+//    this scheme ("unambiguous: the code alone reconstructs the
+//    geometry"). Sorting makes the name a true invariant of the
+//    constructed pattern, independent of interaction history.
+//  - the id list is NOT deduplicated: `{count}` (docs/terminology.md's
+//    Zweier/Dreier/Vierer - the literal number of theme-lines drawn,
+//    not the number of distinct symmetry classes among them) always
+//    equals the number of ids listed, even if two theme-lines happen to
+//    land in the same orbit (e.g. `2*/D3 1+1`) - keeping the header
+//    count and the list length consistent, and staying truthful to how
+//    many lines were actually drawn rather than silently collapsing
+//    them.
+//
+// Only complete ([id,id]) connections count, mirroring the same
+// filter used everywhere else in this codebase (buildExportData()'s
+// completeConnections, buildCrossLayerInput()'s baseConn, ...) - an
+// in-progress single-click connection isn't a theme-line yet. Returns
+// null (not a formal-looking-but-empty code like '0*/D3') when there
+// are no complete connections - callers decide how to display "nothing
+// drawn yet" (see sketch.js's updatePatternNameStatus()).
+//
+// Pure: table and connSet are both explicit parameters, no global
+// reads - testable headlessly against a synthetic table exactly like
+// computeThemeLineOrbits() itself.
+function formatThemeLineName(table, connSet) {
+    const completeConns = connSet.filter(c => c.length === 2);
+    if (completeConns.length === 0) return null;
+    const orbitIds = completeConns.map(([a, b]) => table.pairToOrbitId.get(_pairKey(a, b)));
+    const sortedIds = [...orbitIds].sort((x, y) => x - y);
+    return `${completeConns.length}*/${table.groupToken} ${sortedIds.join('+')}`;
+}
+
 // ----------------- LIVE-APP GLUE -----------------------------------
 
 // Computes the theme-line orbit table for the CURRENT live grid -
@@ -302,4 +355,16 @@ function burnsideOrbitCount(nodes, centroid, shape, symmetryMode, eps = ORBIT_NO
 function computeThemeLineOrbitTable(mode) {
     const activeMode = mode || symmetryMode;
     return computeThemeLineOrbits(nodes, centroid, currentShape, activeMode);
+}
+
+// Roadmap 1.11-B: the name for a specific connection set under the
+// CURRENT live grid - thin glue over computeThemeLineOrbitTable() +
+// formatThemeLineName(), mirroring computeThemeLineOrbitTable()'s own
+// (mode) passthrough. connSet is an explicit parameter (not read as a
+// global) the same way core/faces.js's computeCellFaces(connSet) takes
+// its connection set explicitly - callers pass either the base sheet's
+// `connections` or one additionalLayers[i].connections (see
+// sketch.js's activeConnections()), never assumed here.
+function computeThemeLineName(connSet, mode) {
+    return formatThemeLineName(computeThemeLineOrbitTable(mode), connSet);
 }
