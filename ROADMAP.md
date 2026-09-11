@@ -107,6 +107,11 @@ Independent research track; 1.6's geodesic work is a natural (though not strictl
   - arbitrary sub-mesh-width shifts as a continuous parameter, generalizing the discrete "offset overlay" case already noted in 1.3
 - Unlike 1.1–1.9, this entry is a genuine extension beyond Ostwald's own stated program, not an implementation of an announced-but-unrealized idea
 
+### Future candidate: curve-aware face detection
+- Currently, `core/faces.js`'s face detection and coloring is explicitly straight-line-only (`curveType.kind !== 'straight'` guard) — switching to any curved line type (`'curve'`, `'compound'`, `'free'`) disables face-fill entirely, both algorithmically and via the UI's mutual-exclusion toggle. This is a known, deliberate v1 limitation from `1.10a`/`1.5`, not a bug.
+- Extending face-detection to curved geometry would need real Bézier-Bézier intersection math (numerical subdivision/root-finding), a materially harder problem than the straight-segment intersection `1.10` currently solves.
+- Not currently scheduled in the Suggested Build Order — flagged here as a possible future item if curved+colored patterns become a priority. Natural placement would extend `1.10`'s existing work, though the required math is closer to `1.4`/`1.5`'s curve-construction domain.
+
 ---
 
 ## Priority 2 — Editorial Framing (planned, coming weeks)
