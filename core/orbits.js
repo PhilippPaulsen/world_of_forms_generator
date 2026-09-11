@@ -368,3 +368,20 @@ function computeThemeLineOrbitTable(mode) {
 function computeThemeLineName(connSet, mode) {
     return formatThemeLineName(computeThemeLineOrbitTable(mode), connSet);
 }
+
+// Roadmap 1.11-B (export integration): per-connection orbit assignments
+// ({connIndex, orbitId}) for a specific connection set under the
+// CURRENT live grid - what core/export.js's buildExportData() needs for
+// geometry.themeLineOrbits, without reaching into this module's private
+// _pairKey()/table internals itself (same "public API only" discipline
+// export.js already keeps toward core/faces.js - it calls
+// computeCellFaces(), never faces.js's own private helpers). connIndex
+// matches the connection's position in the SAME filtered (complete-only)
+// list the caller passes in, mirroring computeAdjacency()'s own
+// completeConnections-relative indexing in export.js.
+function computeThemeLineOrbitAssignments(connSet, mode) {
+    const table = computeThemeLineOrbitTable(mode);
+    return connSet
+        .filter(c => c.length === 2)
+        .map((c, connIndex) => ({ connIndex, orbitId: table.pairToOrbitId.get(_pairKey(c[0], c[1])) }));
+}

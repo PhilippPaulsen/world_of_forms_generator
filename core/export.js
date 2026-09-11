@@ -147,6 +147,20 @@ function buildExportData(crossLayerData) {
                 layerData.faceNodes = layerFacesResult.nodes;
                 layerData.faces = layerFacesResult.faces;
             }
+            // Roadmap 1.11-B: patternName/themeLineOrbits - additive the
+            // same way faceNodes/faces above are, but NOT gated on
+            // curveAmount===0: unlike face detection, theme-line orbit
+            // reduction only depends on which NODES a connection joins
+            // (core/orbits.js's computeThemeLineOrbits()), not on how the
+            // line between them is drawn - a curved connection between
+            // the same two nodes belongs to the exact same orbit as a
+            // straight one. Omitted entirely (not present as null) when
+            // this layer has no complete connections yet, same
+            // "nothing to export" convention as the top-level case below.
+            if (completeLayerConnections.length > 0) {
+                layerData.patternName = computeThemeLineName(completeLayerConnections);
+                layerData.themeLineOrbits = computeThemeLineOrbitAssignments(completeLayerConnections);
+            }
             return layerData;
         });
     }
@@ -155,6 +169,25 @@ function buildExportData(crossLayerData) {
         const facesResult = computeCellFaces(completeConnections);
         data.geometry.faceNodes = facesResult.nodes;
         data.geometry.faces = facesResult.faces;
+    }
+
+    // Roadmap 1.11-B: base sheet's own patternName (top-level, per the
+    // 1.11 design session's proposal - doesn't belong to `geometry`
+    // specifically, same rationale as generator/exportedAt living at the
+    // top level) + geometry.themeLineOrbits (per-connection orbit ids,
+    // connIndex relative to completeConnections - see
+    // computeThemeLineOrbitAssignments()'s own comment). Computed
+    // directly here via core/orbits.js's live-app glue, unlike
+    // crossLayerData below - no external parameter needed, since (unlike
+    // the cross-layer compute result) there's no expensive/user-
+    // triggered/staleness-tracked state to thread through: nodes/
+    // currentShape/symmetryMode/connections are exactly what this
+    // function already reads directly. Per-shape/curveAmount guard not
+    // needed here either, for the same reason as the per-layer addition
+    // above.
+    if (completeConnections.length > 0) {
+        data.patternName = computeThemeLineName(completeConnections);
+        data.geometry.themeLineOrbits = computeThemeLineOrbitAssignments(completeConnections);
     }
 
     // Roadmap 1.10b-ii-c: geometry.crossLayer - additive the same way as
