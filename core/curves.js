@@ -227,11 +227,33 @@ function _skewParam(u, exponent) {
 // yet (compound lines are 1.4-C, not this pass); revisit when a
 // compound-specific handedness field (e.g. a meeting-angle sign) is
 // actually added.
+//
+// Roadmap 1.5-A: extended to kind==='free' too, and the guard's old
+// `!curveType.leaning` short-circuit is removed - a real, previously-
+// dormant correctness gap, found while designing 'free's own mirroring
+// (never manifested for 'curve' because sketch.js's toggle always sets
+// leaning:'left' explicitly, never null). The geometric reason a flip
+// is required even for null: buildCurvePieces() recomputes the
+// perpendicular (nx,ny) fresh from whichever p1/p2 a given call
+// receives; for a reflected copy, reflectVerticallyAround's specific
+// mirror axis (negate x, keep y) means that freshly-recomputed
+// perpendicular comes out as the NEGATIVE of the true reflected
+// perpendicular vector, regardless of what leaning was set to,
+// including null. Skipping the flip when leaning is null (the old
+// behavior) left reflected copies of a null-leaning curve rendering on
+// the geometrically wrong side - never reachable via the current UI,
+// but a latent bug for any future null-leaning caller. Fixed by
+// resolving null to its already-implicit default ('left', matching
+// buildCurvePieces()'s own `leaning === 'right' ? -1 : 1` sign formula)
+// before flipping, so mirroring is always well-defined. Re-verified
+// this doesn't change behavior for any already-shipped (non-null)
+// case - see the 1.5-A test suite.
 function mirrorCurveType(curveType) {
-    if (!curveType || curveType.kind !== 'curve' || !curveType.leaning) return curveType;
+    if (!curveType || (curveType.kind !== 'curve' && curveType.kind !== 'free')) return curveType;
+    const currentLeaning = curveType.leaning || 'left';
     return {
         ...curveType,
-        leaning: curveType.leaning === 'left' ? 'right' : 'left'
+        leaning: currentLeaning === 'left' ? 'right' : 'left'
     };
 }
 
