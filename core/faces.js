@@ -24,8 +24,8 @@
  * transform instead, see core/tiling.js), not merged across layers
  * (1.9's overlay sheets - deferred to a later 1.10b session, since
  * cross-layer crossings need a materially different, offset-aware
- * local-neighborhood analysis), and straight-line-only (curveAmount
- * assumed 0 - see core/curves.js's segmentCollector comment).
+ * local-neighborhood analysis), and straight-line-only (curveType.kind
+ * assumed 'straight' - see core/curves.js's segmentCollector comment).
  */
 
 // ----------------- LIVE-APP GLUE ---------------------------------
@@ -886,12 +886,15 @@ function findFaces(segments, realNodes) {
 // through the real rendering pipeline (collectCellSegments()) and runs
 // findFaces() over them. Straight-line-only for v1 (1.10 design session,
 // point 5) - returns no faces at all rather than computing against
-// curved geometry when curveAmount is set, since the UI keeps the face-
-// fill and curve toggles mutually exclusive (step 6/6) but this defends
-// the computation itself against that combination too, independent of
-// the UI state.
+// curved geometry when curveType is anything other than straight, since
+// the UI keeps the face-fill and curve toggles mutually exclusive
+// (step 6/6) but this defends the computation itself against that
+// combination too, independent of the UI state. Guard condition updated
+// for Roadmap 1.4-A's curveType struct (was `curveAmount !== 0`) - still
+// just keeping this existing straight-line-only gate correctly wired,
+// not curve-aware face detection itself (still out of scope).
 function computeCellFaces(connSet) {
-    if (curveAmount !== 0) return { nodes: [], faces: [] };
+    if (curveType.kind !== 'straight') return { nodes: [], faces: [] };
     const segments = collectCellSegments(connSet);
     return findFaces(segments, nodes);
 }
@@ -941,7 +944,7 @@ function _neighborhoodRealNodes(sheetId, residual, K, v1, v2) {
 // way to reconcile them - so this function exists specifically to never
 // do that, not merely to be a convenience wrapper.
 //
-// Same straight-line-only guard as computeCellFaces() - curveAmount is a
+// Same straight-line-only guard as computeCellFaces() - curveType is a
 // single value shared by every sheet (confirmed against core/symmetry.js
 // in the design session, point 2a), so one top-level check covers base
 // and every layer at once.
@@ -957,7 +960,7 @@ function _neighborhoodRealNodes(sheetId, residual, K, v1, v2) {
 // geometry.crossLayer need this same basis, so it rides along on the
 // result rather than being recomputed a second time by each caller.
 function computeCrossLayerFaces(baseConnSet, layers) {
-    if (curveAmount !== 0) return { nodes: [], faces: [], latticeBasis: null };
+    if (curveType.kind !== 'straight') return { nodes: [], faces: [], latticeBasis: null };
 
     const plan = _planCrossLayerNeighborhood(layers);
     const segments = collectCrossLayerSegments(baseConnSet, layers);
