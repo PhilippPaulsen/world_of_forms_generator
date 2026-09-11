@@ -429,6 +429,14 @@
               <path d="M4 12c2-4 6-4 8 0s6 4 8 0" />
             </svg>
           </button>
+          <!-- Roadmap 1.5-B: kind:'free' toggle, separate from (not a
+               redesign of) the curve toggle above - three-way mutually
+               exclusive with it and with face-fill (see sketch.js). -->
+          <button id="btn-toggle-free" class="icon-btn" title="Toggle Free Clothing">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M2 17c1.5-3 2-5 3.5-3s1 5 3 3-.5-6 2-6 1 6 3 4 0-6 2-4 1 4 3 2" />
+            </svg>
+          </button>
           <!-- Roadmap 1.10a: face-fill toggle, contextual to whichever
                layer tab is active (see updateFaceToggleControl() in
                sketch.js) and mutually exclusive with the curve toggle
@@ -446,6 +454,53 @@
               <line x1="6" y1="12" x2="2" y2="12" />
               <line x1="12" y1="6" x2="12" y2="2" />
               <line x1="12" y1="22" x2="12" y2="18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Roadmap 1.5-B: kind:'free' controls - a plate-wide setting
+           (curveType, not per-layer, same as fold/symmetric/leaning/
+           strength already are - see core/curves.js's own docblock),
+           so this sits next to the icon row that selects curve style,
+           not near the layer-tab-contextual offset controls below.
+           Hidden whenever curveType.kind !== 'free' - shown/hidden by
+           sketch.js's updateFreeControls(), same [hidden]-attribute
+           pattern the layer-offset groups already use. -->
+      <div class="control-group" id="free-roughness-group" hidden>
+        <label for="free-roughness-input">Roughness</label>
+        <input type="number" id="free-roughness-input" min="0" max="5" step="0.25" value="1">
+      </div>
+      <div class="control-group" id="free-controls-group" hidden>
+        <div class="icon-row">
+          <!-- "heimliches Gesetz" ("hidden law") toggle - whether the
+               plain theme-line stays visible alongside the free stroke
+               or is hidden (curveType.visible). Same eye/eye-off icon-
+               swap convention as #btn-toggle-nodes, a separate control
+               for a separate thing (this hides the CONSTRUCTION line
+               within kind:'free', not the node markers). -->
+          <button id="btn-toggle-free-visible" class="icon-btn" title="Toggle Underlying Line (Hidden Law)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M1 1l22 22" />
+              <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+            </svg>
+          </button>
+          <!-- Reroll, not a raw seed number input - see the 1.5-B design
+               session for why (a seed has no meaningful order, unlike
+               shape size/node count; "try another variation" is the
+               actual mental model). Still fully deterministic/
+               reproducible from that point on - only this button's own
+               click uses Math.random(), never the render path itself
+               (core/curves.js's buildCurvePieces() stays a pure
+               function of the stored seed). -->
+          <button id="btn-free-reroll-seed" class="icon-btn" title="Reroll Free Clothing Variation">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="3" />
+              <circle cx="8" cy="8" r="1.4" fill="currentColor" stroke="none" />
+              <circle cx="16" cy="8" r="1.4" fill="currentColor" stroke="none" />
+              <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+              <circle cx="8" cy="16" r="1.4" fill="currentColor" stroke="none" />
+              <circle cx="16" cy="16" r="1.4" fill="currentColor" stroke="none" />
             </svg>
           </button>
         </div>

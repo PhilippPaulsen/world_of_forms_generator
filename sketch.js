@@ -106,15 +106,22 @@ function setup() {
         });
     }
 
-    // Curve Toggle Button. Mutually exclusive with the face-fill toggle
-    // below (Roadmap 1.10a design session, point 7 - straight-line-only
-    // face detection): enabling curve here force-disables face-fill on
-    // whichever layer is currently active.
+    // Curve Toggle Button. Three-way mutually exclusive with the free-
+    // clothing toggle and the face-fill toggle below (Roadmap 1.10a
+    // design session, point 7 - straight-line-only face detection, now
+    // extended to 'free' too - core/faces.js's guard is already
+    // `kind !== 'straight'`, so it already excludes 'free' with no
+    // change needed there; this is only the UI-level three-way
+    // exclusion, generalizing the old two-way curve/faces logic).
     const curveBtn = select('#btn-toggle-curve');
+    const freeBtn = select('#btn-toggle-free');
     const faceBtn = select('#btn-toggle-faces');
     if (curveBtn) {
         curveBtn.mousePressed(() => {
-            if (curveType.kind === 'straight') {
+            if (curveType.kind === 'curve') {
+                curveType = { kind: 'straight' }; // Disable curve
+                curveBtn.removeClass('active');
+            } else {
                 // Roadmap 1.4-A: same fixed style the old binary toggle
                 // always used (fold=1, symmetric, strength=25 - byte-
                 // identical rendering to the pre-1.4-A code, verified in
@@ -124,12 +131,45 @@ function setup() {
                 // as simple as it was before that.
                 curveType = { kind: 'curve', fold: 1, symmetric: true, leaning: 'left', strength: 25 };
                 curveBtn.addClass('active');
+                freeBtn && freeBtn.removeClass('active');
                 setActiveShowFaces(false);
                 faceBtn && faceBtn.removeClass('active');
-            } else {
-                curveType = { kind: 'straight' }; // Disable curve
-                curveBtn.removeClass('active');
             }
+            updateFreeControls();
+            redraw();
+        });
+    }
+
+    // Roadmap 1.5-B: 'free' clothing toggle - a separate button from
+    // the curve toggle above (not a redesign of it), same three-way
+    // exclusion. Activating 'free' auto-rolls a starting seed (via the
+    // SAME Math.random() call the reroll button uses below) rather than
+    // always starting from a fixed default - "try a variation" is the
+    // point from the very first activation, not just on reroll; the
+    // chosen seed then becomes a fixed, exported, deterministic value
+    // like any other curveType field (core/curves.js's buildCurvePieces()
+    // never calls random() itself - see the 1.5-A design).
+    if (freeBtn) {
+        freeBtn.mousePressed(() => {
+            if (curveType.kind === 'free') {
+                curveType = { kind: 'straight' }; // Disable free clothing
+                freeBtn.removeClass('active');
+            } else {
+                curveType = {
+                    kind: 'free',
+                    seed: Math.floor(Math.random() * 2147483648),
+                    roughness: 1,
+                    strength: 20,
+                    leaning: 'left',
+                    visible: false
+                };
+                freeBtn.addClass('active');
+                curveBtn && curveBtn.removeClass('active');
+                setActiveShowFaces(false);
+                faceBtn && faceBtn.removeClass('active');
+            }
+            updateFreeControls();
+            updateFreeVisibleToggleIcon();
             redraw();
         });
     }
@@ -137,10 +177,10 @@ function setup() {
     // Face-Fill Toggle Button (Roadmap 1.10a). Contextual to the active
     // layer (base or a specific additional layer - see
     // activeShowFaces()/setActiveShowFaces()), and mutually exclusive
-    // with curve mode the same way the curve toggle above is with this
-    // one. updateFaceToggleControl() keeps the button's visual state in
-    // sync whenever the active layer changes (same call sites as
-    // updateOffsetControls() below).
+    // with curve/free mode the same way those two are with this one and
+    // with each other. updateFaceToggleControl() keeps the button's
+    // visual state in sync whenever the active layer changes (same call
+    // sites as updateOffsetControls() below).
     function updateFaceToggleControl() {
         if (!faceBtn) return;
         if (activeShowFaces()) faceBtn.addClass('active');
@@ -153,8 +193,78 @@ function setup() {
             if (next) {
                 curveType = { kind: 'straight' };
                 curveBtn && curveBtn.removeClass('active');
+                freeBtn && freeBtn.removeClass('active');
             }
             updateFaceToggleControl();
+            updateFreeControls();
+            redraw();
+        });
+    }
+
+    // Roadmap 1.5-B: kind:'free' controls (roughness/visible/reroll) -
+    // a plate-wide curveType setting, not per-layer (see index.html's
+    // own comment on these groups), so no layer-switch call site needs
+    // to re-sync this the way updateOffsetControls() does for layer-
+    // specific state. Shown only while curveType.kind === 'free'.
+    const roughnessGroup = select('#free-roughness-group');
+    const roughnessInput = select('#free-roughness-input');
+    const freeControlsGroup = select('#free-controls-group');
+    const freeVisibleBtn = select('#btn-toggle-free-visible');
+    const rerollBtn = select('#btn-free-reroll-seed');
+
+    function updateFreeControls() {
+        const isFree = curveType.kind === 'free';
+        if (roughnessGroup) roughnessGroup.elt.hidden = !isFree;
+        if (freeControlsGroup) freeControlsGroup.elt.hidden = !isFree;
+        if (isFree && roughnessInput) roughnessInput.value(curveType.roughness);
+    }
+
+    if (roughnessInput) {
+        roughnessInput.input(() => {
+            if (curveType.kind !== 'free') return;
+            let v = parseFloat(roughnessInput.value());
+            if (isNaN(v) || v < 0) v = 0;
+            if (v > 5) v = 5;
+            curveType.roughness = v;
+            redraw();
+        });
+    }
+
+    // "heimliches Gesetz" ("hidden law") toggle - curveType.visible.
+    // Same eye/eye-off icon-swap convention as #btn-toggle-nodes
+    // (sketch.js below), a genuinely separate control for a separate
+    // thing: this hides the underlying theme-line WITHIN kind:'free',
+    // not the node markers showNodes controls.
+    function updateFreeVisibleToggleIcon() {
+        if (!freeVisibleBtn) return;
+        if (curveType.visible) {
+            freeVisibleBtn.addClass('active');
+            freeVisibleBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>');
+        } else {
+            freeVisibleBtn.removeClass('active');
+            freeVisibleBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M1 1l22 22"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/></svg>');
+        }
+    }
+    if (freeVisibleBtn) {
+        freeVisibleBtn.mousePressed(() => {
+            if (curveType.kind !== 'free') return;
+            curveType.visible = !curveType.visible;
+            updateFreeVisibleToggleIcon();
+            redraw();
+        });
+    }
+
+    // Reroll, not a raw seed number input - see the 1.5-B design
+    // session for why (a seed has no meaningful order to "tune" the way
+    // shape size/node count do; "try another variation" is the actual
+    // mental model). Only this click uses Math.random() - the render
+    // path (core/curves.js's buildCurvePieces()) stays a pure function
+    // of the stored seed, so the result is fully reproducible/exported
+    // from the moment it's rolled.
+    if (rerollBtn) {
+        rerollBtn.mousePressed(() => {
+            if (curveType.kind !== 'free') return;
+            curveType.seed = Math.floor(Math.random() * 2147483648);
             redraw();
         });
     }
@@ -321,6 +431,8 @@ function setup() {
     renderLayerTabs();
     updateOffsetControls();
     updateFaceToggleControl();
+    updateFreeControls();
+    updateFreeVisibleToggleIcon();
 
     // Show nodes Toggle Button
     const nodeBtn = select('#btn-toggle-nodes');
