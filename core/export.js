@@ -73,8 +73,9 @@ function computeAdjacency(completeConnections, nodeById) {
 //
 // Roadmap 1.10a: geometry.faces / geometry.layers[].faces (per-sheet
 // symmetry-orbit-colored bounded faces, from core/faces.js's
-// findFaces()) are additive the same way, gated only on curveAmount===0
-// (v1 is straight-line-only - see core/faces.js's computeCellFaces())
+// findFaces()) are additive the same way, gated only on
+// curveType.kind==='straight' (Roadmap 1.4-A: was curveAmount===0 -
+// v1 is straight-line-only - see core/faces.js's computeCellFaces())
 // rather than on the showFaces display toggle, since export should
 // capture the pattern's actual structure independent of what's
 // currently visible on screen. geometry.faceNodes / geometry.layers[].
@@ -120,7 +121,7 @@ function buildExportData(crossLayerData) {
             shapeSizeFactor,
             nodeCount,
             symmetryMode,
-            curveAmount,
+            curveType,
             lineColor
         },
         geometry: {
@@ -142,14 +143,14 @@ function buildExportData(crossLayerData) {
                 edges: completeLayerConnections.map(c => [c[0], c[1]]),
                 adjacency: computeAdjacency(completeLayerConnections, nodeById)
             };
-            if (curveAmount === 0) {
+            if (curveType.kind === 'straight') {
                 const layerFacesResult = computeCellFaces(completeLayerConnections);
                 layerData.faceNodes = layerFacesResult.nodes;
                 layerData.faces = layerFacesResult.faces;
             }
             // Roadmap 1.11-B: patternName/themeLineOrbits - additive the
             // same way faceNodes/faces above are, but NOT gated on
-            // curveAmount===0: unlike face detection, theme-line orbit
+            // curveType.kind: unlike face detection, theme-line orbit
             // reduction only depends on which NODES a connection joins
             // (core/orbits.js's computeThemeLineOrbits()), not on how the
             // line between them is drawn - a curved connection between
@@ -165,7 +166,7 @@ function buildExportData(crossLayerData) {
         });
     }
 
-    if (curveAmount === 0) {
+    if (curveType.kind === 'straight') {
         const facesResult = computeCellFaces(completeConnections);
         data.geometry.faceNodes = facesResult.nodes;
         data.geometry.faces = facesResult.faces;
@@ -182,7 +183,7 @@ function buildExportData(crossLayerData) {
     // the cross-layer compute result) there's no expensive/user-
     // triggered/staleness-tracked state to thread through: nodes/
     // currentShape/symmetryMode/connections are exactly what this
-    // function already reads directly. Per-shape/curveAmount guard not
+    // function already reads directly. Per-shape/curveType guard not
     // needed here either, for the same reason as the per-layer addition
     // above.
     if (completeConnections.length > 0) {
