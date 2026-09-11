@@ -61,3 +61,17 @@ Ostwald named patterns by hand and explicitly acknowledged the practice doesn't 
 Ostwald's names remain valuable as historical/editorial reference and stay attached as metadata — this scheme doesn't erase them, it adds a parallel, systematic identifier.
 
 ### Proposed grammar
+
+Format: `{count}*/{GroupToken} {orbitId}+{orbitId}+...` — implemented in `core/orbits.js` (`formatThemeLineName()` / `computeThemeLineName()`), Roadmap 1.11-B.
+
+- `{count}`: the number of theme-lines actually drawn in one sheet (Zweier/Dreier/Vierer, Part A above) — not the number of distinct symmetry classes among them.
+- `{GroupToken}`: the active dihedral/cyclic group's structure (`D4`, `C3`, `Z2`, `C1`, ...), derived from the shape's actual rotation-angle set plus whether reflection is active — not from the raw `symmetryMode` string, since `core/symmetry.js`'s `rotation3`/`rotation6` give identical angle sets for triangle/square (`core/orbits.js`'s `groupTokenFor()` collapses those two mode names to the same token).
+- `{orbitId}+...`: one canonical orbit id (`core/orbits.js`'s `computeThemeLineOrbits()` — orbits sorted by their lexicographically-smallest member node-pair) per theme-line, listed in **ascending** order rather than click order, so the name is an invariant of the constructed pattern, not of the sequence it was drawn in — and **not deduplicated**, so the list length always matches `{count}`.
+
+**Source and divergence.** This `{count}*/{group} {segments}` structure is adapted from Hans Hinterreiter's own working notation, confirmed via primary-source research: Hart, G., "Hans Hinterreiter's Flowing Fields," *Bridges 2024 Conference Proceedings*. A documented example from Hinterreiter's notes reads `4*/6 98a+82a+52e+75a` — "4 basic segments, 6-fold rotational symmetry (no mirror), four segment codes." That independently confirms this project's own Zweier/Dreier/Vierer reading (a count of base theme-lines within one sheet, under one symmetry group) matches Hinterreiter's real structure.
+
+What this scheme does **not** reproduce: Hinterreiter's exact digit+letter segment-coding convention (what makes a segment `98a` rather than `98b`) is not publicly documented — Hart's paper explicitly declines to explain it, and it exists only in Hinterreiter's rare 800-page book *Die Kunst der reinen Form* (1978), which the project's maintainer owns a copy of but whose specific conventions have not been confirmed to help rather than add idiosyncratic friction. Rather than guess at or reverse-engineer that convention, this scheme uses its own logical, documented segment identifier instead — a canonical orbit id from a plain Burnside orbit-reduction over the active symmetry group (`core/orbits.js`). Stated plainly rather than overclaiming fidelity to Hinterreiter's original notation.
+
+**Editorial aside**, not a design consideration for 1.11 itself: Hinterreiter was directly influenced by Ostwald's color theory (also noted in Hart's paper) — a genuine historical link worth flagging given this project's own Ostwald focus. He also deliberately avoided infinite tessellation in his own work, describing it as "too crystalline" and lacking "inherent closure" — a real point of divergence from Ostwald's (and this project's) tessellating approach. Worth noting in the project's editorial framing (see `ROADMAP.md`, Priority 2) at some point, not a blocker here.
+
+### Proposed grammar
