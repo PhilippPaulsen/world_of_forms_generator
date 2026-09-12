@@ -90,6 +90,17 @@ let segmentCollector = null;
 // handler; computeCellFaces() also defends against that combination directly.
 let showFaces = false;
 
+// Roadmap 1.2-C: null unless the CURRENT net came from
+// rebuildGridFromConstruction() (below), in which case {p, q, side, n} -
+// the exact inputs that reproduce this net's geometry, exported as
+// meta.altNetSeed (core/export.js) for construction-history
+// reproducibility. Reset to null by rebuildGrid() (an ordinary shape/
+// order change means the current net is no longer an alternative-net
+// construction), so switching shapes away from one via the existing
+// shape buttons correctly clears this too - no separate reset path
+// needed (see rebuildGrid() below).
+let altNetSeed = null;
+
 // ----------------- STATE HELPERS ---------------------------------
 function toTileLocal(n, tileC, flip180) {
     // shift node by removing center centroid, place at tile centroid; optional 180° flip
@@ -103,10 +114,53 @@ function rebuildGrid(shape) {
     connections = [];
     additionalLayers = [];
     activeLayer = 'base'; // an active additional-layer index would otherwise dangle once the array is cleared
+    altNetSeed = null; // Roadmap 1.2-C: an ordinary shape/order rebuild is never an alt-net construction
     let grid;
     if (shape === 'triangle') grid = buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH);
     else if (shape === 'square') grid = buildSquareGrid(nodeCount, shapeSizeFactor, canvasW, canvasH);
     else grid = buildHexGrid(nodeCount, shapeSizeFactor, canvasW, canvasH);
 
     nodes = grid.nodes; centroid = grid.centroid; outerCorners = grid.outerCorners;
+}
+
+// Roadmap 1.2-C: the "combiner" 1.2-A's own design deliberately held
+// off building (per explicit instruction at the time - "not part of the
+// task, stays for a later phase, if needed at all") - this is that later
+// phase. Ties completeEdgeToRegularPolygon() (1.2-A) to the matching
+// _subdivide*Interior() helper (also 1.2-A) by n, producing the same
+// {nodes, centroid, outerCorners} shape the three default builders
+// return, so every downstream consumer (tiling, symmetry, faces,
+// orbits, export) works unchanged - none of them care HOW outerCorners/
+// centroid/nodes were produced, only that they describe a real regular-
+// polygon net consistently (verified true throughout 1.2-B/1.2-C).
+//
+// completeEdgeToRegularPolygon()'s own vertices[0..n-1] are already in
+// correct cyclic (each-adjacent-to-the-next) order - rotating a regular
+// n-gon's own vertex by 360/n around its center always lands exactly on
+// the next vertex around the polygon - so they can be used directly as
+// outerCorners without reordering, matching each _subdivide*Interior()
+// helper's own adjacency convention (verified against each helper's own
+// docblock: triangle's A/B/C role assignment doesn't matter as long as
+// it's consistent; square's c0-c1/c0-c3 edge-sharing convention is
+// exactly consecutive vertices; hex's ring-building only needs
+// consistent cyclic order, not a specific starting corner).
+//
+// Does NOT set currentShape - the caller (sketch.js) derives `n` from
+// the ALREADY-selected shape button (no new picker, per the 1.2-A/1.2-C
+// design), so currentShape is already correct by the time this runs.
+function rebuildGridFromConstruction(p, q, n, side) {
+    connections = [];
+    additionalLayers = [];
+    activeLayer = 'base';
+
+    const { center, vertices } = completeEdgeToRegularPolygon(p, q, n, side);
+    let subdivided;
+    if (n === 3) subdivided = _subdivideTriangleInterior(vertices[0], vertices[1], vertices[2], nodeCount);
+    else if (n === 4) subdivided = _subdivideSquareInterior(vertices, nodeCount);
+    else subdivided = _subdivideHexInterior(vertices, center, nodeCount);
+
+    nodes = subdivided;
+    centroid = center;
+    outerCorners = vertices;
+    altNetSeed = { p, q, side, n };
 }
