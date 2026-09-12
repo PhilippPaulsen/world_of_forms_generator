@@ -935,6 +935,23 @@ function buildCrossLayerInput() {
     return { baseConn, layers };
 }
 
+// Roadmap 1.12 stage 1: cross-layer face detection (computeCrossLayerFaces(),
+// core/faces.js) assumes every sheet shares ONE lattice, translated by a
+// constant offset (_planCrossLayerNeighborhood()'s single shared v1/v2/R/M,
+// see the 1.12 stage-1 design session's own finding) - correct for 1.9's
+// offset-only layers, but NOT for a layer whose own scale (shapeSizeFactor)
+// differs from the base's, which has a genuinely different lattice period.
+// Computing anyway would silently produce wrong faces, not just imprecise
+// ones - refused outright rather than computed with a caveat, same "don't
+// silently compute wrong" principle as computeLayerCellFaces()'s own guard
+// (core/tiling.js). Returns the actual mismatched layers (not just a
+// boolean) so the status message can name them.
+function scaleMismatchedEnabledLayers() {
+    return additionalLayers
+        .map((layer, i) => ({ index: i, layer }))
+        .filter(({ layer }) => layer.enabled && layer.shapeSizeFactor !== shapeSizeFactor);
+}
+
 // A cheap fingerprint of everything a cross-layer compute result
 // actually depends on - base connections, and each ENABLED layer's own
 // connections/offset. Used to detect staleness (see
@@ -974,6 +991,13 @@ function updateCrossLayerStatus() {
     const statusEl = select('#cross-layer-status');
     if (!statusEl) return;
 
+    const mismatched = scaleMismatchedEnabledLayers();
+    if (mismatched.length > 0) {
+        const names = mismatched.map(({ index }) => `Layer ${index + 1}`).join(', ');
+        statusEl.html(`Cross-layer face detection needs every enabled layer to share the base's scale - ${names} ${mismatched.length === 1 ? 'has' : 'have'} an independent size. Match the scale or disable to compute.`);
+        return;
+    }
+
     const { baseConn, layers } = buildCrossLayerInput();
     const estimate = estimateCrossLayerSegmentCount(baseConn.length, layers);
     const currentSignature = crossLayerConfigSignature();
@@ -1000,6 +1024,19 @@ function computeCrossLayerFacesFlow() {
     const computeBtn = select('#btn-compute-cross-layer');
     const statusEl = select('#cross-layer-status');
     if (!computeBtn) return;
+
+    // Roadmap 1.12 stage 1: refuse outright rather than compute wrong
+    // faces - see scaleMismatchedEnabledLayers()'s own comment. Checked
+    // here too (not just in updateCrossLayerStatus()'s proactive
+    // display) as the actual hard safety net: the button could in
+    // principle still be clicked while the status text hasn't caught up
+    // for some reason, and this is the call that would do real,
+    // silently-wrong work.
+    const mismatched = scaleMismatchedEnabledLayers();
+    if (mismatched.length > 0) {
+        updateCrossLayerStatus();
+        return;
+    }
 
     computeBtn.elt.disabled = true;
     computeBtn.html('Computing…');

@@ -68,12 +68,25 @@ function drawTessellation() {
 // disabled layer already draws nothing, and most layers won't have
 // face-fill on. Returns null when no layer needs it, so drawAdditionalLayers()
 // can skip the per-tile Map lookup entirely in the common case.
+// Roadmap 1.12 stage 1: a layer whose own scale differs from the
+// base's is EXCLUDED here even when its own showFaces is on -
+// computeCellFaces()/collectCellSegments() (core/faces.js) resolve node
+// positions via the GLOBAL nodes/centroid (drawShapeCell()'s own
+// nodes.find(...) and the untranslated `centroid` collection anchor),
+// which is only correct for a layer sharing the base's exact grid.
+// Computing it anyway would silently produce wrong (or, since the
+// layer's own node ids may not even exist in the global nodes array,
+// empty) face data - refusing is the same "don't silently compute
+// wrong" principle as the cross-layer guard in sketch.js's
+// computeCrossLayerFacesFlow(). A per-layer face-fill for a genuinely
+// independent grid is a real follow-on gap, not fixed here - see the
+// 1.12 stage-1 design/implementation notes.
 function computeLayerCellFaces() {
-    const active = additionalLayers.filter(l => l.enabled && l.showFaces);
+    const active = additionalLayers.filter(l => l.enabled && l.showFaces && l.shapeSizeFactor === shapeSizeFactor);
     if (active.length === 0) return null;
     const map = new Map();
     additionalLayers.forEach((layer, i) => {
-        if (layer.enabled && layer.showFaces) map.set(i, computeCellFaces(layer.connections));
+        if (layer.enabled && layer.showFaces && layer.shapeSizeFactor === shapeSizeFactor) map.set(i, computeCellFaces(layer.connections));
     });
     return map;
 }
