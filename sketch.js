@@ -329,6 +329,16 @@ function setup() {
             if (offsetYInput) offsetYInput.value(layer.offsetY);
         }
     }
+    // Roadmap 1.2-C: exposed as a global - updateOffsetControls()/
+    // renderLayerTabs() are declared here (closing over setup()-local DOM
+    // refs like offsetXInput/layerTabsContainer), so they're invisible
+    // from handleAltNetClick() (a top-level function, same scope
+    // mousePressed()/mouseMoved() must be in for p5's global mode - see
+    // CLAUDE.md). Every OTHER call site is itself inside setup()'s own
+    // closure, which is why this gap wasn't hit before. window.x = x
+    // exposes the function globally while keeping its original closure
+    // over the setup()-local DOM references intact.
+    window.updateOffsetControls = updateOffsetControls;
 
     function renderLayerTabs() {
         if (layerBaseBtn) {
@@ -389,6 +399,7 @@ function setup() {
             container.appendChild(tab);
         });
     }
+    window.renderLayerTabs = renderLayerTabs; // see updateOffsetControls()'s own comment above
 
     if (layerBaseBtn) {
         layerBaseBtn.mousePressed(() => {
