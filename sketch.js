@@ -52,6 +52,7 @@ function setup() {
             rebuildGrid(currentShape);
             renderLayerTabs(); // rebuildGrid() clears additionalLayers - keep the tab strip in sync
             updateOffsetControls();
+            cancelAltNetConstruction(); // Roadmap 1.2-C: an in-progress P/Q click pair no longer means anything once the target shape/order changed underneath it
             redraw();
         });
     });
@@ -276,6 +277,22 @@ function setup() {
             freeEndpointsEnabled = !freeEndpointsEnabled;
             if (freeEndpointsEnabled) freeEndpointsBtn.addClass('active');
             else freeEndpointsBtn.removeClass('active');
+        });
+    }
+
+    // Roadmap 1.2-C: alternative net construction toggle - one-shot
+    // tool-like activation (armed by toggling on, auto-deactivates on
+    // confirm - see handleAltNetClick()). Toggling OFF while a
+    // construction is in progress cancels it (cancelAltNetConstruction()),
+    // which is the only cancel mechanism - no separate Escape handling.
+    const altNetBtn = select('#btn-alternative-net');
+    if (altNetBtn) {
+        altNetBtn.mousePressed(() => {
+            altNetActive = !altNetActive;
+            altNetPending = null;
+            if (altNetActive) altNetBtn.addClass('active');
+            else altNetBtn.removeClass('active');
+            redraw();
         });
     }
 
@@ -633,6 +650,32 @@ function draw() {
         pop();
     }
 
+    // Roadmap 1.2-C: live preview of the alternative-net construction in
+    // progress - a dashed outline (distinct from the actual rendered
+    // pattern) of the candidate polygon, flipping sides as
+    // altNetPending.previewSide updates in mouseMoved(). Drawn after
+    // nodes so P/Q markers stay visible on top.
+    if (altNetActive && altNetPending) {
+        push();
+        noStroke();
+        fill(30, 110, 220);
+        ellipse(altNetPending.p.x, altNetPending.p.y, 8, 8);
+        if (altNetPending.q !== undefined) {
+            ellipse(altNetPending.q.x, altNetPending.q.y, 8, 8);
+            const n = shapeToN(currentShape);
+            const { vertices } = completeEdgeToRegularPolygon(altNetPending.p, altNetPending.q, n, altNetPending.previewSide);
+            noFill();
+            stroke(120);
+            strokeWeight(2);
+            drawingContext.setLineDash([6, 4]);
+            beginShape();
+            vertices.forEach(v => vertex(v.x, v.y));
+            endShape(CLOSE);
+            drawingContext.setLineDash([]);
+        }
+        pop();
+    }
+
     // Draw Canvas Border (Frame)
     push();
     noFill();
@@ -663,7 +706,77 @@ function draw() {
     updatePatternNameStatus();
 }
 
-function mouseMoved() { if (showNodes) redraw(); }
+// ----------------- ALTERNATIVE NET CONSTRUCTION (Roadmap 1.2-C) -----
+// One-shot tool-like activation (not a persistent mode, per the design
+// session): toggling #btn-alternative-net arms a 3-click flow - click
+// P, click Q (live preview from then on, flipping side as the mouse
+// crosses line PQ), click again to confirm the currently-previewed
+// side. Reuses the existing shape-selector buttons for n (no new
+// picker) and raw click coordinates for P/Q (no snap-to-existing-node -
+// the grid any existing node belongs to is about to be replaced
+// entirely, so snapping to it has no clear meaning here, unlike
+// ordinary connection-drawing).
+let altNetActive = false;
+let altNetPending = null; // null | {p} | {p, q, previewSide}
+
+// UI-level safeguard against a careless near-zero-length click pair,
+// which would otherwise silently hit core/tiling.js's MAX_TILES safety
+// cap (cce6a8b) rather than giving immediate, obvious feedback. Well
+// below any default net's own smallest edge (canvasW/9 at
+// shapeSizeFactor=9 - e.g. ~67px on a 600px canvas), but far above the
+// ~3px scale that measurably produces a pathological tile count (1.2-B
+// design session) - a rejected click just doesn't advance the state
+// machine (stays waiting for a valid Q), no separate error UI needed.
+const MIN_EDGE_LENGTH = 20;
+
+function shapeToN(shape) { return shape === 'triangle' ? 3 : (shape === 'square' ? 4 : 6); }
+
+// Which side of line PQ point m falls on, in this project's screen
+// coordinates (y increasing downward) - sign verified directly against
+// completeEdgeToRegularPolygon()'s own `side` parameter (1.2-C
+// implementation note): a positive cross product here matches side=+1.
+function sideOfLine(p, q, m) {
+    const cross = (q.x - p.x) * (m.y - p.y) - (q.y - p.y) * (m.x - p.x);
+    return cross >= 0 ? 1 : -1;
+}
+
+function cancelAltNetConstruction() {
+    altNetActive = false;
+    altNetPending = null;
+    const btn = select('#btn-alternative-net');
+    if (btn) btn.removeClass('active');
+}
+
+function handleAltNetClick(x, y) {
+    if (altNetPending === null) {
+        altNetPending = { p: { x, y } };
+        redraw();
+        return;
+    }
+    if (altNetPending.q === undefined) {
+        const q = { x, y };
+        if (dist(altNetPending.p.x, altNetPending.p.y, q.x, q.y) < MIN_EDGE_LENGTH) return; // reject - stay waiting for a valid Q
+        altNetPending.q = q;
+        altNetPending.previewSide = 1; // initial default; mouseMoved() corrects it live from here on
+        redraw();
+        return;
+    }
+    // Third click: confirm the currently-previewed side.
+    const { p, q, previewSide } = altNetPending;
+    const n = shapeToN(currentShape);
+    rebuildGridFromConstruction(p, q, n, previewSide);
+    renderLayerTabs(); // rebuildGridFromConstruction() clears additionalLayers - keep the tab strip in sync, same as the shape-button handler
+    updateOffsetControls();
+    cancelAltNetConstruction();
+    redraw();
+}
+
+function mouseMoved() {
+    if (altNetActive && altNetPending && altNetPending.q !== undefined) {
+        altNetPending.previewSide = sideOfLine(altNetPending.p, altNetPending.q, mouseX, mouseY);
+    }
+    if (showNodes || (altNetActive && altNetPending)) redraw();
+}
 
 // ----------------- INTERACTION ---------------------------------
 // Roadmap 1.9 (generalizing 1.3(b)'s base/overlay pair): which
@@ -901,6 +1014,7 @@ function computeCrossLayerFacesFlow() {
 
 function mousePressed() {
     if (mouseX < 0 || mouseX > width || mouseY < 0 || mouseY > height) return;
+    if (altNetActive) { handleAltNetClick(mouseX, mouseY); return; }
     let foundId = null;
     for (let nd of nodes) { if (dist(mouseX, mouseY, nd.x, nd.y) < 18) { foundId = nd.id; break; } }
     if (foundId === null && freeEndpointsEnabled) {
