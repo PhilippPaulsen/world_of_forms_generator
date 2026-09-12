@@ -194,12 +194,39 @@ function tileTriangle(cellFaces, layerCellFaces) {
     const offsetX = 0;
     const offsetY = 0;
 
-    // Schrittweiten mit manueller Justage
-    const v1 = { x: s * (1 + horizontalAdjust), y: 0 }; // horizontale Schrittweite (angepasst)
-    const v2 = { x: s / 2, y: h * (1 + verticalAdjust) }; // vertikale Schrittweite (angepasst)
+    // Roadmap 1.2-B: v1/v2 derived directly from the triangle's own
+    // corners (A=apex, B=left-base, C=right-base - outerCorners' own
+    // convention, see forms.js's buildTriangleGrid()) rather than the
+    // previous hardcoded (s,0)/(s/2,h) literals - generalizes to an
+    // arbitrarily rotated/scaled triangle from
+    // completeEdgeToRegularPolygon() (1.2-A), not just the canvas-
+    // centered axis-aligned default. Verified to reproduce the prior
+    // hardcoded formula's own tile positions to within ~1e-13 (floating-
+    // point noise from sqrt(3)-derived term ordering, not a logic
+    // difference) for the axis-aligned case - see the regression test.
+    // horizontalAdjust/verticalAdjust (manual tuning knobs, currently
+    // inert at 0.0) now scale the WHOLE derived vector rather than one
+    // axis specifically, since a general v1/v2 has no privileged
+    // "horizontal"/"vertical" component to scale independently - a
+    // no-op at their current 0.0 values (x*(1+0) is exact), but a
+    // scoping note for whoever revisits them.
+    const A = outerCorners[0], B = outerCorners[1], C = outerCorners[2];
+    const v1 = { x: (C.x - B.x) * (1 + horizontalAdjust), y: (C.y - B.y) * (1 + horizontalAdjust) };
+    const v2 = { x: (C.x - A.x) * (1 + verticalAdjust), y: (C.y - A.y) * (1 + verticalAdjust) };
 
-    // Ursprung für das Gitter
-    const B = outerCorners[1];
+    // Fixed per-tile offsets (computed once, not per iteration) from the
+    // anchor corner B to this triangle's own up/down cell centers -
+    // replaces the previous hardcoded (s/2,-h/3)/(s/2,+h/3). upOffset is
+    // simply the triangle's own (centroid - B) vector; downOffset's
+    // exact relationship to it, (2/3)v2-(1/3)v1, was solved against the
+    // old hardcoded formula and verified numerically (1.2-B design
+    // session) before being committed here.
+    const upOffset = { x: centroid.x - B.x, y: centroid.y - B.y };
+    const downOffset = {
+        x: upOffset.x + (2 / 3) * v2.x - (1 / 3) * v1.x,
+        y: upOffset.y + (2 / 3) * v2.y - (1 / 3) * v1.y
+    };
+
     // Loop-margin for shifted additional layers (see maxLayerOffset()) -
     // approximated the same way the base loop already sizes cols/rows:
     // i's step is treated as s (X), j's as h (Y), ignoring v2.x's s/2
@@ -219,13 +246,13 @@ function tileTriangle(cellFaces, layerCellFaces) {
             };
 
             // Aufrechtes Dreieck
-            const centerUp = { x: anchor.x + s / 2, y: anchor.y - h / 3 };
+            const centerUp = { x: anchor.x + upOffset.x, y: anchor.y + upOffset.y };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, centerUp, false);
             drawShapeCell(connections, centerUp, false);
             drawAdditionalLayers(centerUp, false, layerCellFaces);
 
             // Umgedrehtes Dreieck
-            const centerDown = { x: anchor.x + s / 2, y: anchor.y + h / 3 };
+            const centerDown = { x: anchor.x + downOffset.x, y: anchor.y + downOffset.y };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, centerDown, true);
             drawShapeCell(connections, centerDown, true);
             drawAdditionalLayers(centerDown, true, layerCellFaces);
