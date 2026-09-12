@@ -392,12 +392,24 @@ function formatThemeLineName(table, connSet) {
 // grid itself - rebuildGrid() clears connections/additionalLayers as a
 // side effect (core/state.js:93-96), which no caller of an orbit-table
 // lookup should trigger as a side effect of merely asking a question.
-// No planned 1.11 feature needs a table for a DIFFERENT shape/order
-// than what's currently on screen, so that case is deliberately left
-// unsupported rather than built for speculatively.
-function computeThemeLineOrbitTable(mode) {
+//
+// Roadmap 1.12 stage 1: gridOverride ({nodes, centroid, outerCorners}),
+// defaulting to the base globals when omitted (byte-identical to every
+// pre-1.12 call site - the underlying computeThemeLineOrbits() already
+// took everything as explicit parameters, so this is a small, low-risk
+// extension of the thin live-glue wrapper only, not a change to the
+// actual orbit algorithm). Lets a caller ask for a DIFFERENTLY-SCALED
+// additional layer's own orbit table (its own layerGrid() result, see
+// core/forms.js) - the "no planned feature needs a different-shape
+// table" reasoning above no longer holds once layers can have their
+// own order/size (still shares currentShape/symmetryMode with the
+// base, per that design's own confirmation that a dihedral group is a
+// property of the outer polygon's shape/orientation, not of interior
+// subdivision density - only nodes/centroid/outerCorners vary here).
+function computeThemeLineOrbitTable(mode, gridOverride) {
     const activeMode = mode || symmetryMode;
-    return computeThemeLineOrbits(nodes, centroid, currentShape, activeMode, outerCorners);
+    const grid = gridOverride || { nodes, centroid, outerCorners };
+    return computeThemeLineOrbits(grid.nodes, grid.centroid, currentShape, activeMode, grid.outerCorners);
 }
 
 // Roadmap 1.11-B: the name for a specific connection set under the
@@ -408,8 +420,8 @@ function computeThemeLineOrbitTable(mode) {
 // its connection set explicitly - callers pass either the base sheet's
 // `connections` or one additionalLayers[i].connections (see
 // sketch.js's activeConnections()), never assumed here.
-function computeThemeLineName(connSet, mode) {
-    return formatThemeLineName(computeThemeLineOrbitTable(mode), connSet);
+function computeThemeLineName(connSet, mode, gridOverride) {
+    return formatThemeLineName(computeThemeLineOrbitTable(mode, gridOverride), connSet);
 }
 
 // Roadmap 1.11-B (export integration): per-connection orbit assignments
@@ -422,8 +434,8 @@ function computeThemeLineName(connSet, mode) {
 // matches the connection's position in the SAME filtered (complete-only)
 // list the caller passes in, mirroring computeAdjacency()'s own
 // completeConnections-relative indexing in export.js.
-function computeThemeLineOrbitAssignments(connSet, mode) {
-    const table = computeThemeLineOrbitTable(mode);
+function computeThemeLineOrbitAssignments(connSet, mode, gridOverride) {
+    const table = computeThemeLineOrbitTable(mode, gridOverride);
     return connSet
         .filter(c => c.length === 2)
         .map((c, connIndex) => ({ connIndex, orbitId: table.pairToOrbitId.get(_pairKey(c[0], c[1])) }));
