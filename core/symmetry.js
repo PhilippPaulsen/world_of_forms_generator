@@ -25,8 +25,31 @@ function rotateAround(pt, center, angleDeg) {
     };
 }
 
+// Roadmap 1.2-B: coordinate-free reflection across an arbitrary line
+// through `center`, given a UNIT direction vector `dir` for that line -
+// p' = center + 2*((p-center)·dir)*dir - (p-center). reflectVerticallyAround()
+// below is the special case dir=(0,1) (a vertical line) - the only case
+// reachable today, since all three axis-aligned grid builders happen to
+// have a vertical mirror axis. This general form is the fix flagged in
+// the 1.2-B design session's point 6: reflectVerticallyAround() alone
+// mirrors across the WRONG axis for an arbitrarily rotated polygon from
+// completeEdgeToRegularPolygon() (1.2-A) - verified concretely against a
+// synthetic rotated triangle (not yet reachable via the UI - that's
+// 1.2-C's job to wire up), where the old vertical-only formula gives a
+// visibly wrong result and this general one gives the correct mirror
+// image. Not yet wired into drawConnectionWithSymmetry() below, which
+// has no per-shape mirror-axis direction to pass yet.
+function reflectAcrossLine(pt, center, dir) {
+    const dx = pt.x - center.x, dy = pt.y - center.y;
+    const dot = dx * dir.x + dy * dir.y;
+    return {
+        x: center.x + 2 * dot * dir.x - dx,
+        y: center.y + 2 * dot * dir.y - dy
+    };
+}
+
 function reflectVerticallyAround(pt, center) {
-    return { x: 2 * center.x - pt.x, y: pt.y };
+    return reflectAcrossLine(pt, center, { x: 0, y: 1 });
 }
 
 // ----------------- DRAWING LINES + SYMMETRY ---------------------

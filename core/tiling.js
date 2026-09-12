@@ -172,9 +172,40 @@ function latticeIJBounds(v1, v2, origin, rectCorners, marginTiles) {
         if (i < iMin) iMin = i; if (i > iMax) iMax = i;
         if (j < jMin) jMin = j; if (j > jMax) jMax = j;
     });
-    return {
+    const bounds = {
         iMin: floor(iMin) - marginTiles, iMax: ceil(iMax) + marginTiles,
         jMin: floor(jMin) - marginTiles, jMax: ceil(jMax) + marginTiles,
+    };
+    return clampTileCount(bounds);
+}
+
+// Roadmap 1.2-B: safety cap on total tile count. An arbitrarily small
+// polygon (from completeEdgeToRegularPolygon(), 1.2-A/future 1.2-C)
+// could otherwise demand tens of thousands of tiles - a 3px edge on a
+// 600x600 canvas needs roughly 44,000 (measured directly in the 1.2-B
+// design session) - each incurring a full drawShapeCell()/
+// drawConnectionWithSymmetry() pass, further multiplied by up to 12
+// symmetry copies: genuinely pathological render time, not just "a lot
+// of tiles". When the requested i/j range would exceed MAX_TILES, both
+// axes are scaled down proportionally around their own center
+// (preserving the aspect ratio of the needed coverage) so the total
+// count is clamped rather than silently hanging the browser - the
+// pattern may then under-cover the canvas, which is the safer failure
+// mode; console.warn() flags it so it isn't a silent, mysterious gap.
+const MAX_TILES = 4000;
+function clampTileCount(bounds) {
+    const iCount = bounds.iMax - bounds.iMin + 1;
+    const jCount = bounds.jMax - bounds.jMin + 1;
+    const total = iCount * jCount;
+    if (total <= MAX_TILES) return bounds;
+    const scale = Math.sqrt(MAX_TILES / total);
+    const iCenter = (bounds.iMin + bounds.iMax) / 2, jCenter = (bounds.jMin + bounds.jMax) / 2;
+    const iHalf = Math.max(1, Math.round((iCount * scale) / 2));
+    const jHalf = Math.max(1, Math.round((jCount * scale) / 2));
+    console.warn(`Tiling: requested tile count ${total} exceeds safety cap ${MAX_TILES} - clamping to fit. The pattern may not fully cover the canvas.`);
+    return {
+        iMin: Math.round(iCenter - iHalf), iMax: Math.round(iCenter + iHalf),
+        jMin: Math.round(jCenter - jHalf), jMax: Math.round(jCenter + jHalf),
     };
 }
 
