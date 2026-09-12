@@ -37,6 +37,29 @@ function drawTessellation() {
     if (currentShape === 'hex') tileHex(cellFaces, layerCellFaces);
     else if (currentShape === 'square') tileSquare(cellFaces, layerCellFaces);
     else tileTriangle(cellFaces, layerCellFaces);
+
+    // Roadmap 1.12 stage 1: an additional layer whose OWN scale differs
+    // from the base's gets its own independent tile pass (own v1/v2,
+    // own latticeIJBounds()) instead of riding the base's tile loop -
+    // drawAdditionalLayers() (called from inside the base tile*() calls
+    // above) only shifts a layer's cell by (offsetX,offsetY) at each
+    // BASE tile position, which is the wrong pitch for a smaller/larger
+    // shape: a half-linear-scale shape has a quarter the area, so one
+    // draw per base-tile only covers roughly a quarter of what its own
+    // correctly-pitched tessellation would (1.12 stage-1 design
+    // session). Same-scale layers stay handled inside the base's own
+    // loop via drawAdditionalLayers() (see its own updated guard) -
+    // unaffected, and still the cheaper path for the common case.
+    additionalLayers.forEach((layer, i) => {
+        if (!layer.enabled) return;
+        if (layer.shapeSizeFactor === shapeSizeFactor) return; // handled inside the base's own tile loop instead
+        const grid = layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.nodeCount);
+        const override = { outerCorners: grid.outerCorners, centroid: grid.centroid, connections: layer.connections };
+        const thisLayerFaces = (layerCellFaces && layerCellFaces.has(i)) ? layerCellFaces.get(i) : null;
+        if (currentShape === 'hex') tileHex(thisLayerFaces, null, override);
+        else if (currentShape === 'square') tileSquare(thisLayerFaces, null, override);
+        else tileTriangle(thisLayerFaces, null, override);
+    });
 }
 
 // Same "compute once per redraw" reasoning as drawTessellation()'s own
@@ -126,6 +149,11 @@ function layerTileCentroid(tileCentroid, layer) {
 function drawAdditionalLayers(tileCentroid, flip180 = false, layerCellFaces = null) {
     additionalLayers.forEach((layer, i) => {
         if (!layer.enabled) return;
+        // Roadmap 1.12 stage 1: a layer whose own scale differs from
+        // the base's is drawn by its own independent tile pass instead
+        // (see drawTessellation()) - riding the base's tile loop here
+        // would use the base's (wrong) pitch for it.
+        if (layer.shapeSizeFactor !== shapeSizeFactor) return;
         const layerTileC = layerTileCentroid(tileCentroid, layer);
         if (layerCellFaces && layerCellFaces.has(i)) drawFaceFillsAtTile(layerCellFaces.get(i), layerTileC, flip180);
         drawShapeCell(layer.connections, layerTileC, flip180);
