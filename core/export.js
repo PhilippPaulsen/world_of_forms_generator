@@ -134,7 +134,19 @@ function buildExportData(crossLayerData) {
             // series - meta.* still isn't read by that importer at all,
             // regardless of curveType's shape.
             curveType,
-            lineColor
+            lineColor,
+            // Roadmap 1.2-C: null unless the current net came from
+            // rebuildGridFromConstruction() (core/state.js), in which
+            // case {p,q,side,n} - the exact inputs that reproduce this
+            // net's own geometry. Additive, not required for visual
+            // fidelity (geometry.outerCorners/nodes already fully
+            // describe the shape) - purely construction-history
+            // reproducibility, same object-shorthand pattern as
+            // curveType above. Re-verified against SpaceHarmony's real
+            // importFlatForm()/_isFlat2DExport() with actual alt-net
+            // data, same as every prior meta.* addition in this series -
+            // that importer still doesn't read meta.* at all.
+            altNetSeed
         },
         geometry: {
             centroid: { x: centroid.x, y: centroid.y },
