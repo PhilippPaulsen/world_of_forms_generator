@@ -55,22 +55,34 @@ function computeLayerCellFaces() {
     return map;
 }
 
-// One mesh-width per axis for the current shape, matching each
-// tile*() function's own spacing math below (kept in sync manually,
-// same pattern as buildExportData()'s "mirror the completeness filter"
-// comment in core/export.js). Used by the "1 mesh-width" overlay-
-// offset presets - see sketch.js setup().
+// Roadmap 1.2-B: the current shape's own two lattice vectors (v1,v2),
+// matching each tile*() function's own corner-derived basis exactly
+// (same corners, same convention - no longer independently re-derived
+// scalar spacing that had to be "kept in sync manually"). Used by the
+// "1 mesh-width" overlay-offset presets - see sketch.js setup(). This
+// changed shape - from {x,y} (two independent axis-aligned scalars) to
+// {v1,v2} (two 2D vectors) - because a single scalar-per-axis mesh
+// width only made sense for an axis-aligned net; the two call sites in
+// sketch.js were updated to match (see 1.2-B implementation notes).
 function getMeshWidth() {
     if (currentShape === 'square') {
-        const s = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y);
-        return { x: s, y: s };
+        const c0 = outerCorners[0], c1 = outerCorners[1], c3 = outerCorners[3];
+        return {
+            v1: { x: c1.x - c0.x, y: c1.y - c0.y },
+            v2: { x: c3.x - c0.x, y: c3.y - c0.y }
+        };
     } else if (currentShape === 'hex') {
-        const side = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y);
-        return { x: side * 1.5, y: sqrt(3) * side };
+        const c0 = outerCorners[0], c2 = outerCorners[2], c4 = outerCorners[4];
+        return {
+            v1: { x: c2.x - c0.x, y: c2.y - c0.y },
+            v2: { x: c4.x - c0.x, y: c4.y - c0.y }
+        };
     } else { // triangle
-        const s = dist(outerCorners[1].x, outerCorners[1].y, outerCorners[2].x, outerCorners[2].y);
-        const h = (sqrt(3) / 2) * s;
-        return { x: s, y: h };
+        const A = outerCorners[0], B = outerCorners[1], C = outerCorners[2];
+        return {
+            v1: { x: C.x - B.x, y: C.y - B.y },
+            v2: { x: C.x - A.x, y: C.y - A.y }
+        };
     }
 }
 
@@ -139,21 +151,68 @@ function maxLayerOffset() {
     };
 }
 
+// Roadmap 1.2-B: shared tile-loop bounds helper, replacing each shape's
+// own ad hoc "ceil(width/spacing)+fixed margin" heuristic (only valid
+// for axis-aligned spacing) - maps the corners of the rectangle that
+// must be covered into (i,j) lattice-index space via the inverse of the
+// 2x2 basis matrix [v1 v2] (det = v1.x*v2.y - v2.x*v1.y, nonzero for any
+// two non-parallel edge vectors of a simple regular polygon), then takes
+// the integer floor/ceil range per axis, widened by marginTiles. This
+// generalizes correctly to ANY v1/v2 (not just axis-aligned), and was
+// verified (1.2-B design session) to reproduce the same on-canvas tile
+// count as the prior per-shape scalar heuristics for the axis-aligned
+// default case.
+function latticeIJBounds(v1, v2, origin, rectCorners, marginTiles) {
+    const det = v1.x * v2.y - v2.x * v1.y;
+    let iMin = Infinity, iMax = -Infinity, jMin = Infinity, jMax = -Infinity;
+    rectCorners.forEach(P => {
+        const dx = P.x - origin.x, dy = P.y - origin.y;
+        const i = (v2.y * dx - v2.x * dy) / det;
+        const j = (-v1.y * dx + v1.x * dy) / det;
+        if (i < iMin) iMin = i; if (i > iMax) iMax = i;
+        if (j < jMin) jMin = j; if (j > jMax) jMax = j;
+    });
+    return {
+        iMin: floor(iMin) - marginTiles, iMax: ceil(iMax) + marginTiles,
+        jMin: floor(jMin) - marginTiles, jMax: ceil(jMax) + marginTiles,
+    };
+}
+
+// The rectangle every tile*() function's loop must cover: the canvas,
+// widened by maxLayerOffset() on every side. offsetX/offsetY are
+// absolute pixel-space vectors (layerTileCentroid() adds them
+// directly, regardless of shape orientation), so widening the canvas
+// RECT itself by that many pixels before the lattice-inverse mapping
+// generalizes the old per-shape extraCols/extraRows heuristic to an
+// arbitrary (non-axis-aligned) v1/v2 - see maxLayerOffset()'s own
+// comment for why a shifted layer needs this margin at all.
+function coveredRectCorners() {
+    const m = maxLayerOffset();
+    const x0 = -m.x, y0 = -m.y, x1 = width + m.x, y1 = height + m.y;
+    return [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+}
+
 // --- HEX ---
+// Roadmap 1.2-B: v1/v2 derived directly from the hex's own corners
+// (outerCorners' established top-left-then-clockwise order, see
+// forms.js's buildHexGrid()) rather than the previous scalar
+// hexW/hexH + column-parity stagger ("offset coordinates") - a true
+// parallelogram lattice basis, generalizing to an arbitrarily rotated
+// hex from completeEdgeToRegularPolygon(). Verified (1.2-B design
+// session) that this basis is numerically equal to the well-known
+// flat-top-hex lattice vectors (hexW,hexH/2)/(0,hexH), and that the
+// resulting on-canvas tile-position SET is identical to the old
+// parity-offset scheme's own (loop order differs - the two schemes
+// enumerate the same lattice differently - so tiles are compared as a
+// set, not by loop index).
 function tileHex(cellFaces, layerCellFaces) {
-    const side = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y);
-    const hexW = side * 1.5;
-    const hexH = sqrt(3) * side;
-    const maxOffset = maxLayerOffset();
-    const extraCols = ceil(maxOffset.x / hexW);
-    const extraRows = ceil(maxOffset.y / hexH);
-    const cols = ceil(width / hexW) + 6 + extraCols;
-    const rows = ceil(height / hexH) + 6 + extraRows;
-    for (let c = -3 - extraCols; c < cols; c++) {
-        const xOff = c * hexW;
-        for (let r = -3 - extraRows; r < rows; r++) {
-            let yOff = r * hexH; if (c % 2) yOff += hexH * 0.5;
-            const tileC = { x: centroid.x + xOff, y: centroid.y + yOff };
+    const c0 = outerCorners[0], c2 = outerCorners[2], c4 = outerCorners[4];
+    const v1 = { x: c2.x - c0.x, y: c2.y - c0.y };
+    const v2 = { x: c4.x - c0.x, y: c4.y - c0.y };
+    const b = latticeIJBounds(v1, v2, centroid, coveredRectCorners(), 3);
+    for (let i = b.iMin; i <= b.iMax; i++) {
+        for (let j = b.jMin; j <= b.jMax; j++) {
+            const tileC = { x: centroid.x + i * v1.x + j * v2.x, y: centroid.y + i * v1.y + j * v2.y };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, tileC, false);
             drawShapeCell(connections, tileC, false);
             drawAdditionalLayers(tileC, false, layerCellFaces);
@@ -162,15 +221,21 @@ function tileHex(cellFaces, layerCellFaces) {
 }
 
 // --- SQUARE ---
+// Roadmap 1.2-B: v1/v2 derived directly from the square's own corners
+// (outerCorners' [TL,TR,BR,BL] order, matching _subdivideSquareInterior()
+// in forms.js's own c0/c1/c3 adjacency convention) rather than the
+// previous single axis-aligned scalar `s` - generalizes to an
+// arbitrarily rotated square from completeEdgeToRegularPolygon().
+// Verified byte-identical to the prior scalar formula's own tile
+// positions for the axis-aligned case (0 diff, not just near-exact).
 function tileSquare(cellFaces, layerCellFaces) {
-    const s = dist(outerCorners[0].x, outerCorners[0].y, outerCorners[1].x, outerCorners[1].y); // tile size
-    const maxOffset = maxLayerOffset();
-    const extraCols = ceil(maxOffset.x / s);
-    const extraRows = ceil(maxOffset.y / s);
-    const cols = ceil(width / s) + 6 + extraCols; const rows = ceil(height / s) + 6 + extraRows;
-    for (let i = -4 - extraCols; i < cols; i++) {
-        for (let j = -4 - extraRows; j < rows; j++) {
-            const tileC = { x: centroid.x + i * s, y: centroid.y + j * s };
+    const c0 = outerCorners[0], c1 = outerCorners[1], c3 = outerCorners[3];
+    const v1 = { x: c1.x - c0.x, y: c1.y - c0.y };
+    const v2 = { x: c3.x - c0.x, y: c3.y - c0.y };
+    const b = latticeIJBounds(v1, v2, centroid, coveredRectCorners(), 3);
+    for (let i = b.iMin; i <= b.iMax; i++) {
+        for (let j = b.jMin; j <= b.jMax; j++) {
+            const tileC = { x: centroid.x + i * v1.x + j * v2.x, y: centroid.y + i * v1.y + j * v2.y };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, tileC, false);
             drawShapeCell(connections, tileC, false);
             drawAdditionalLayers(tileC, false, layerCellFaces);
@@ -185,9 +250,6 @@ function tileTriangle(cellFaces, layerCellFaces) {
     // Justage-Parameter für das Dreieck-Tiling (Reset auf 0 für exakte Mathematik)
     const horizontalAdjust = 0.0;
     const verticalAdjust = 0.0;
-
-    const s = dist(outerCorners[1].x, outerCorners[1].y, outerCorners[2].x, outerCorners[2].y);
-    const h = (sqrt(3) / 2) * s;
 
     // --- Manuelle Verschiebung des gesamten Musters ---
     // Reset auf 0, da das Gitter relativ zu "B" (zentrales Dreieck) aufgebaut wird.
@@ -227,19 +289,15 @@ function tileTriangle(cellFaces, layerCellFaces) {
         y: upOffset.y + (2 / 3) * v2.y - (1 / 3) * v1.y
     };
 
-    // Loop-margin for shifted additional layers (see maxLayerOffset()) -
-    // approximated the same way the base loop already sizes cols/rows:
-    // i's step is treated as s (X), j's as h (Y), ignoring v2.x's s/2
-    // cross-term, matching the existing approximation rather than
-    // introducing new, inconsistent precision.
-    const maxOffset = maxLayerOffset();
-    const extraCols = ceil(maxOffset.x / (s * (1 + horizontalAdjust)));
-    const extraRows = ceil(maxOffset.y / (h * (1 + verticalAdjust)));
-    const cols = ceil(width / (s * (1 + horizontalAdjust))) + 8 + extraCols;
-    const rows = ceil(height / (h * (1 + verticalAdjust))) + 8 + extraRows;
+    // Roadmap 1.2-B: bounds via the same shared latticeIJBounds() helper
+    // square/hex use, replacing the previous per-axis scalar
+    // approximation (which ignored v2.x's s/2 cross-term). anchor's own
+    // origin is B, not centroid - latticeIJBounds() is origin-agnostic,
+    // so B is passed directly as the origin here.
+    const b = latticeIJBounds(v1, v2, B, coveredRectCorners(), 4);
 
-    for (let j = -4 - extraRows; j < rows; j++) {
-        for (let i = -4 - extraCols; i < cols; i++) {
+    for (let j = b.jMin; j <= b.jMax; j++) {
+        for (let i = b.iMin; i <= b.iMax; i++) {
             const anchor = {
                 x: B.x + i * v1.x + j * v2.x + offsetX,
                 y: B.y + i * v1.y + j * v2.y + offsetY

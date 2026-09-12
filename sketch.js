@@ -413,17 +413,29 @@ function setup() {
             redraw();
         });
     }
+    // Roadmap 1.2-B: getMeshWidth() now returns {v1,v2} (the net's own
+    // lattice vectors) instead of {x,y} (two independent axis-aligned
+    // scalars) - each preset shifts by one FULL lattice vector, setting
+    // both offsetX and offsetY together, so the shift follows the net's
+    // actual lattice direction regardless of rotation (previously only
+    // correct because v1/v2 happened to be axis-aligned).
     const meshPresetXBtn = select('#btn-mesh-preset-x');
     meshPresetXBtn && meshPresetXBtn.mousePressed(() => {
         if (activeLayer === 'base') return;
-        additionalLayers[activeLayer].offsetX = getMeshWidth().x;
+        const v1 = getMeshWidth().v1;
+        additionalLayers[activeLayer].offsetX = v1.x;
+        additionalLayers[activeLayer].offsetY = v1.y;
         if (offsetXInput) offsetXInput.value(additionalLayers[activeLayer].offsetX);
+        if (offsetYInput) offsetYInput.value(additionalLayers[activeLayer].offsetY);
         redraw();
     });
     const meshPresetYBtn = select('#btn-mesh-preset-y');
     meshPresetYBtn && meshPresetYBtn.mousePressed(() => {
         if (activeLayer === 'base') return;
-        additionalLayers[activeLayer].offsetY = getMeshWidth().y;
+        const v2 = getMeshWidth().v2;
+        additionalLayers[activeLayer].offsetX = v2.x;
+        additionalLayers[activeLayer].offsetY = v2.y;
+        if (offsetXInput) offsetXInput.value(additionalLayers[activeLayer].offsetX);
         if (offsetYInput) offsetYInput.value(additionalLayers[activeLayer].offsetY);
         redraw();
     });
