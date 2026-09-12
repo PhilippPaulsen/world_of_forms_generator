@@ -62,6 +62,43 @@ function _reflectVerticallyAroundPure(pt, center) {
     return { x: 2 * center.x - pt.x, y: pt.y };
 }
 
+// Roadmap 1.2-C: coordinate-free reflection across an arbitrary line
+// through `center`, given a unit direction vector - the same fix
+// core/symmetry.js's reflectAcrossLine()/mirrorAxisDir() apply to
+// drawConnectionWithSymmetry(), mirrored here (same algorithm, not a
+// third independently-derived formula) because this file's own
+// docblock deliberately keeps its pure-geometry tier free of a
+// core/symmetry.js dependency (portability). _reflectVerticallyAroundPure()
+// above is unchanged and still used wherever the axis is genuinely
+// vertical (the default axis-aligned builders - see _mirrorAxisDirPure()).
+function _reflectAcrossLinePure(pt, center, dir) {
+    const dx = pt.x - center.x, dy = pt.y - center.y;
+    const dot = dx * dir.x + dy * dir.y;
+    return {
+        x: center.x + 2 * dot * dir.x - dx,
+        y: center.y + 2 * dot * dir.y - dy
+    };
+}
+
+// Roadmap 1.2-C: mirrors core/symmetry.js's mirrorAxisDir() exactly (see
+// that function's own comment for why this specific axis choice is
+// correct for any orientation) - takes outerCorners/centroid/shape as
+// explicit parameters rather than reading globals, matching this file's
+// existing "testable headlessly against synthetic node arrays"
+// philosophy (computeThemeLineOrbits()'s own docblock).
+function _mirrorAxisDirPure(outerCorners, centroid, shape) {
+    let dir;
+    if (shape === 'triangle') {
+        dir = { x: outerCorners[0].x - centroid.x, y: outerCorners[0].y - centroid.y };
+    } else { // square, hex
+        const c0 = outerCorners[0], c1 = outerCorners[1];
+        const mid = { x: (c0.x + c1.x) / 2, y: (c0.y + c1.y) / 2 };
+        dir = { x: mid.x - centroid.x, y: mid.y - centroid.y };
+    }
+    const len = Math.hypot(dir.x, dir.y);
+    return { x: dir.x / len, y: dir.y / len };
+}
+
 // Reproduces core/symmetry.js's drawConnectionWithSymmetry() rotAngles/
 // reflection-mode logic (lines 39-51 and the reflection ifs immediately
 // after) as data instead of draw calls - kept in sync manually with that
@@ -120,12 +157,16 @@ function groupTokenFor(shape, symmetryMode) {
 // copy, no rotations); non-empty rotAngles with hasReflection=false
 // ('rotation3'/'rotation6') gives the pure rotation subgroup; non-empty
 // rotAngles with hasReflection=true gives the full dihedral group.
-function _buildGroupOps(rotAngles, hasReflection) {
+// Roadmap 1.2-C: mirrorDir (this shape's actual mirror-axis direction,
+// from _mirrorAxisDirPure()) replaces the hardcoded vertical axis
+// _reflectVerticallyAroundPure() implicitly assumed - same reasoning as
+// core/symmetry.js's drawConnectionWithSymmetry() fix, mirrored here.
+function _buildGroupOps(rotAngles, hasReflection, mirrorDir) {
     const ops = [(p, c) => ({ x: p.x, y: p.y })]; // identity
     rotAngles.forEach(a => ops.push((p, c) => _rotateAroundPure(p, c, a)));
     if (hasReflection) {
-        ops.push((p, c) => _reflectVerticallyAroundPure(p, c));
-        rotAngles.forEach(a => ops.push((p, c) => _reflectVerticallyAroundPure(_rotateAroundPure(p, c, a), c)));
+        ops.push((p, c) => _reflectAcrossLinePure(p, c, mirrorDir));
+        rotAngles.forEach(a => ops.push((p, c) => _reflectAcrossLinePure(_rotateAroundPure(p, c, a), c, mirrorDir)));
     }
     return ops;
 }
@@ -195,10 +236,11 @@ function _pairKey(a, b) {
 // themselves by their own first (smallest) pair's key - fully
 // reproducible from (shape, order, symmetryMode) alone, no arbitrary
 // insertion-order dependence.
-function computeThemeLineOrbits(nodes, centroid, shape, symmetryMode, eps = ORBIT_NODE_EPSILON) {
+function computeThemeLineOrbits(nodes, centroid, shape, symmetryMode, outerCorners, eps = ORBIT_NODE_EPSILON) {
     const { rotAngles, hasReflection } = _rotAnglesAndReflectionFor(shape, symmetryMode);
     const groupToken = groupTokenFor(shape, symmetryMode);
-    const ops = _buildGroupOps(rotAngles, hasReflection);
+    const mirrorDir = _mirrorAxisDirPure(outerCorners, centroid, shape);
+    const ops = _buildGroupOps(rotAngles, hasReflection, mirrorDir);
     const groupOrder = ops.length;
 
     const pairs = [];
@@ -255,9 +297,10 @@ function computeThemeLineOrbits(nodes, centroid, shape, symmetryMode, eps = ORBI
 // Deliberately not called from computeThemeLineOrbits() itself: once
 // verified by tests, this is redundant work to pay for on every real
 // call, not a live consistency guard - see this file's own docblock.
-function burnsideOrbitCount(nodes, centroid, shape, symmetryMode, eps = ORBIT_NODE_EPSILON) {
+function burnsideOrbitCount(nodes, centroid, shape, symmetryMode, outerCorners, eps = ORBIT_NODE_EPSILON) {
     const { rotAngles, hasReflection } = _rotAnglesAndReflectionFor(shape, symmetryMode);
-    const ops = _buildGroupOps(rotAngles, hasReflection);
+    const mirrorDir = _mirrorAxisDirPure(outerCorners, centroid, shape);
+    const ops = _buildGroupOps(rotAngles, hasReflection, mirrorDir);
     const groupOrder = ops.length;
 
     const pairs = [];
@@ -354,7 +397,7 @@ function formatThemeLineName(table, connSet) {
 // unsupported rather than built for speculatively.
 function computeThemeLineOrbitTable(mode) {
     const activeMode = mode || symmetryMode;
-    return computeThemeLineOrbits(nodes, centroid, currentShape, activeMode);
+    return computeThemeLineOrbits(nodes, centroid, currentShape, activeMode, outerCorners);
 }
 
 // Roadmap 1.11-B: the name for a specific connection set under the
