@@ -112,6 +112,12 @@ Independent research track; 1.6's geodesic work is a natural (though not strictl
   - arbitrary sub-mesh-width shifts as a continuous parameter, generalizing the discrete "offset overlay" case already noted in 1.3
 - Unlike 1.1–1.9, this entry is a genuine extension beyond Ostwald's own stated program, not an implementation of an announced-but-unrealized idea
 
+*Suggested build order for 1.12 (staged by degrees of freedom, not from a textual source - 1.12 is already flagged as a genuine extension beyond Ostwald's stated program, not a reconstruction):*
+1. *Same net type, different order/size, shared center (no offset, no rotation) - the most constrained case, extending 1.9's `additionalLayers[]` model (currently one shared grid for all layers) to allow independent grid scale per layer while keeping center/orientation/type fixed.*
+2. *Add independent per-layer offset (translation) - generalizing 1.9's existing offset mechanism, which currently only shifts a layer's connections relative to one shared grid, to also apply to an independently-scaled grid.*
+3. *Add independent per-layer rotation.*
+4. *Different net types combined (e.g. triangle × hexagon) - the case explicitly named in the roadmap text itself, built last since it requires the most machinery (independent grid type per layer, not just independent scale/position/rotation of the same type).*
+
 ### Future candidate: curve-aware face detection
 - Currently, `core/faces.js`'s face detection and coloring is explicitly straight-line-only (`curveType.kind !== 'straight'` guard) — switching to any curved line type (`'curve'`, `'compound'`, `'free'`) disables face-fill entirely, both algorithmically and via the UI's mutual-exclusion toggle. This is a known, deliberate v1 limitation from `1.10a`/`1.5`, not a bug.
 - Extending face-detection to curved geometry would need real Bézier-Bézier intersection math (numerical subdivision/root-finding), a materially harder problem than the straight-segment intersection `1.10` currently solves.
