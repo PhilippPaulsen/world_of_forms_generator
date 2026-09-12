@@ -40,12 +40,19 @@
  * subdivision layer.
  */
 
-function buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
+// Roadmap 1.2-A: interior-subdivision logic extracted from
+// buildTriangleGrid() below into its own function - the barycentric
+// math only ever depended on A/B/C themselves, never on canvasW/
+// canvasH/shapeSizeFactor directly, so this is a verbatim move, not a
+// reformulation (byte-identical output, verified - see the test
+// suite). A is the "apex" role (t=0 end of the sweep), B/C the "base"
+// role (s=0/s=1 at t=1) - the algorithm doesn't care WHICH of a
+// triangle's three corners plays which role, just that the same
+// convention is used consistently by every caller (buildTriangleGrid()
+// passes its own apex/base corners; a future arbitrary-edge caller
+// gets to choose, per its own convention - see completeEdgeToRegularPolygon()).
+function _subdivideTriangleInterior(A, B, C, nodeCount) {
     const nodes = []; let id = 1;
-    const base = canvasW / shapeSizeFactor; const h = (Math.sqrt(3) / 2) * base;
-    const cx = canvasW / 2, cy = canvasH / 2;
-    const A = { x: cx, y: cy - h / 2 }, B = { x: cx - base / 2, y: cy + h / 2 }, C = { x: cx + base / 2, y: cy + h / 2 };
-
     if (nodeCount <= 1) {
         [A, B, C].forEach(p => nodes.push({ id: id++, x: p.x, y: p.y }));
     } else {
@@ -59,50 +66,77 @@ function buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
             }
         }
     }
+    return nodes;
+}
+
+function buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
+    const base = canvasW / shapeSizeFactor; const h = (Math.sqrt(3) / 2) * base;
+    const cx = canvasW / 2, cy = canvasH / 2;
+    const A = { x: cx, y: cy - h / 2 }, B = { x: cx - base / 2, y: cy + h / 2 }, C = { x: cx + base / 2, y: cy + h / 2 };
+    const nodes = _subdivideTriangleInterior(A, B, C, nodeCount);
     const centroid = { x: (A.x + B.x + C.x) / 3, y: (A.y + B.y + C.y) / 3 };
     return { nodes, centroid, outerCorners: [A, B, C] };
 }
 
+// Roadmap 1.2-A: interior-subdivision logic extracted from
+// buildSquareGrid() below, generalized from raw startX/startY/size
+// stepping to bilinear interpolation over an arbitrary corners array
+// (corners[0]/[1] share one edge, corners[0]/[3] share the other - the
+// same adjacency buildSquareGrid()'s own [TL,TR,BR,BL] order already
+// has). This is the one of the three subdivision helpers that ISN'T a
+// pure verbatim move (the original indexed by raw startX+i*step, not
+// by corner vectors, since it never needed to handle a rotated square
+// before) - re-derived to preserve the exact same per-axis step
+// computed ONCE and reused (stepUx/stepUy/stepVx/stepVy, mirroring the
+// original's single `step` variable) rather than recomputing a
+// division per node, specifically to keep floating-point rounding
+// identical to the original for the axis-aligned case - verified
+// byte-identical against the pre-refactor function's real output
+// across a real nodeCount/shapeSizeFactor sweep, not just assumed
+// algebraically equivalent (see the test suite).
+function _subdivideSquareInterior(corners, nodeCount) {
+    const nodes = []; let id = 1;
+    if (nodeCount <= 1) {
+        corners.forEach(p => nodes.push({ id: id++, x: p.x, y: p.y }));
+    } else {
+        const c0 = corners[0], c1 = corners[1], c3 = corners[3];
+        const stepUx = (c1.x - c0.x) / (nodeCount - 1), stepUy = (c1.y - c0.y) / (nodeCount - 1);
+        const stepVx = (c3.x - c0.x) / (nodeCount - 1), stepVy = (c3.y - c0.y) / (nodeCount - 1);
+        for (let i = 0; i < nodeCount; i++) {
+            for (let j = 0; j < nodeCount; j++) {
+                nodes.push({ id: id++, x: c0.x + i * stepUx + j * stepVx, y: c0.y + i * stepUy + j * stepVy });
+            }
+        }
+    }
+    return nodes;
+}
+
 function buildSquareGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
-    const nodes = []; let id = 1; const size = canvasW / shapeSizeFactor; const startX = canvasW / 2 - size / 2; const startY = canvasH / 2 - size / 2;
+    const size = canvasW / shapeSizeFactor; const startX = canvasW / 2 - size / 2; const startY = canvasH / 2 - size / 2;
     const corners = [
         { x: startX, y: startY },
         { x: startX + size, y: startY },
         { x: startX + size, y: startY + size },
         { x: startX, y: startY + size },
     ];
-    if (nodeCount <= 1) {
-        corners.forEach(p => nodes.push({ id: id++, x: p.x, y: p.y }));
-    } else {
-        const step = size / (nodeCount - 1);
-        for (let i = 0; i < nodeCount; i++) {
-            for (let j = 0; j < nodeCount; j++) {
-                nodes.push({ id: id++, x: startX + i * step, y: startY + j * step });
-            }
-        }
-    }
+    const nodes = _subdivideSquareInterior(corners, nodeCount);
     const centroid = { x: canvasW / 2, y: canvasH / 2 };
     return { nodes, centroid, outerCorners: corners };
 }
 
-function buildHexGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
-    const nodes = []; const outerCorners = [];
-    const shapeHeight = canvasH / shapeSizeFactor; const side = shapeHeight / Math.sqrt(3);
-    const cx = canvasW / 2; const topY = (canvasH / 2) - shapeHeight / 2;
-    outerCorners.push({ x: cx - side / 2, y: topY });
-    outerCorners.push({ x: cx + side / 2, y: topY });
-    outerCorners.push({ x: cx + side, y: topY + (Math.sqrt(3) / 2) * side });
-    outerCorners.push({ x: cx + side / 2, y: topY + Math.sqrt(3) * side });
-    outerCorners.push({ x: cx - side / 2, y: topY + Math.sqrt(3) * side });
-    outerCorners.push({ x: cx - side, y: topY + (Math.sqrt(3) / 2) * side });
-    let sumX = 0, sumY = 0; outerCorners.forEach(c => { sumX += c.x; sumY += c.y; });
-    const centroid = { x: sumX / 6, y: sumY / 6 };
-
+// Roadmap 1.2-A: interior-subdivision logic extracted from
+// buildHexGrid() below - the ring-building math only ever depended on
+// outerCorners/centroid themselves, never on canvasW/canvasH/
+// shapeSizeFactor directly, so (like triangle's) this is a verbatim
+// move, not a reformulation (byte-identical output, verified - see the
+// test suite).
+function _subdivideHexInterior(outerCorners, centroid, nodeCount) {
+    const nodes = [];
     if (nodeCount <= 1) {
         // 6 outer corners + center node (as requested)
         outerCorners.forEach((p, idx) => nodes.push({ id: idx + 1, x: p.x, y: p.y }));
         nodes.push({ id: nodes.length + 1, x: centroid.x, y: centroid.y });
-        return { nodes, centroid, outerCorners };
+        return nodes;
     }
 
     function getScaledCorners(scale) {
@@ -124,6 +158,22 @@ function buildHexGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
     addRingRecursive(nodeCount, 1.0);
     // Always include the central node as well (not only for nodeCount == 1)
     nodes.push({ id: nodes.length + 1, x: centroid.x, y: centroid.y });
+    return nodes;
+}
+
+function buildHexGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
+    const outerCorners = [];
+    const shapeHeight = canvasH / shapeSizeFactor; const side = shapeHeight / Math.sqrt(3);
+    const cx = canvasW / 2; const topY = (canvasH / 2) - shapeHeight / 2;
+    outerCorners.push({ x: cx - side / 2, y: topY });
+    outerCorners.push({ x: cx + side / 2, y: topY });
+    outerCorners.push({ x: cx + side, y: topY + (Math.sqrt(3) / 2) * side });
+    outerCorners.push({ x: cx + side / 2, y: topY + Math.sqrt(3) * side });
+    outerCorners.push({ x: cx - side / 2, y: topY + Math.sqrt(3) * side });
+    outerCorners.push({ x: cx - side, y: topY + (Math.sqrt(3) / 2) * side });
+    let sumX = 0, sumY = 0; outerCorners.forEach(c => { sumX += c.x; sumY += c.y; });
+    const centroid = { x: sumX / 6, y: sumY / 6 };
+    const nodes = _subdivideHexInterior(outerCorners, centroid, nodeCount);
     return { nodes, centroid, outerCorners };
 }
 
