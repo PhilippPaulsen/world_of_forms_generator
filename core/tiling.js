@@ -236,17 +236,27 @@ function coveredRectCorners() {
 // parity-offset scheme's own (loop order differs - the two schemes
 // enumerate the same lattice differently - so tiles are compared as a
 // set, not by loop index).
-function tileHex(cellFaces, layerCellFaces) {
-    const c0 = outerCorners[0], c2 = outerCorners[2], c4 = outerCorners[4];
+// Roadmap 1.12 stage 1: `override` ({outerCorners, centroid, connections})
+// lets this same tile-loop implementation draw a differently-scaled
+// layer's own grid (see drawTessellation()) instead of the base sheet's
+// - omitted (undefined), this is byte-identical to the pre-1.12 base-
+// sheet call. drawAdditionalLayers() is skipped entirely when override
+// is set: a layer's own independent tile pass has no further layers of
+// its own to draw.
+function tileHex(cellFaces, layerCellFaces, override) {
+    const oc = override ? override.outerCorners : outerCorners;
+    const ctr = override ? override.centroid : centroid;
+    const connSet = override ? override.connections : connections;
+    const c0 = oc[0], c2 = oc[2], c4 = oc[4];
     const v1 = { x: c2.x - c0.x, y: c2.y - c0.y };
     const v2 = { x: c4.x - c0.x, y: c4.y - c0.y };
-    const b = latticeIJBounds(v1, v2, centroid, coveredRectCorners(), 3);
+    const b = latticeIJBounds(v1, v2, ctr, coveredRectCorners(), 3);
     for (let i = b.iMin; i <= b.iMax; i++) {
         for (let j = b.jMin; j <= b.jMax; j++) {
-            const tileC = { x: centroid.x + i * v1.x + j * v2.x, y: centroid.y + i * v1.y + j * v2.y };
+            const tileC = { x: ctr.x + i * v1.x + j * v2.x, y: ctr.y + i * v1.y + j * v2.y };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, tileC, false);
-            drawShapeCell(connections, tileC, false);
-            drawAdditionalLayers(tileC, false, layerCellFaces);
+            drawShapeCell(connSet, tileC, false);
+            if (!override) drawAdditionalLayers(tileC, false, layerCellFaces);
         }
     }
 }
@@ -259,23 +269,28 @@ function tileHex(cellFaces, layerCellFaces) {
 // arbitrarily rotated square from completeEdgeToRegularPolygon().
 // Verified byte-identical to the prior scalar formula's own tile
 // positions for the axis-aligned case (0 diff, not just near-exact).
-function tileSquare(cellFaces, layerCellFaces) {
-    const c0 = outerCorners[0], c1 = outerCorners[1], c3 = outerCorners[3];
+// Roadmap 1.12 stage 1: see tileHex()'s own comment for `override`.
+function tileSquare(cellFaces, layerCellFaces, override) {
+    const oc = override ? override.outerCorners : outerCorners;
+    const ctr = override ? override.centroid : centroid;
+    const connSet = override ? override.connections : connections;
+    const c0 = oc[0], c1 = oc[1], c3 = oc[3];
     const v1 = { x: c1.x - c0.x, y: c1.y - c0.y };
     const v2 = { x: c3.x - c0.x, y: c3.y - c0.y };
-    const b = latticeIJBounds(v1, v2, centroid, coveredRectCorners(), 3);
+    const b = latticeIJBounds(v1, v2, ctr, coveredRectCorners(), 3);
     for (let i = b.iMin; i <= b.iMax; i++) {
         for (let j = b.jMin; j <= b.jMax; j++) {
-            const tileC = { x: centroid.x + i * v1.x + j * v2.x, y: centroid.y + i * v1.y + j * v2.y };
+            const tileC = { x: ctr.x + i * v1.x + j * v2.x, y: ctr.y + i * v1.y + j * v2.y };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, tileC, false);
-            drawShapeCell(connections, tileC, false);
-            drawAdditionalLayers(tileC, false, layerCellFaces);
+            drawShapeCell(connSet, tileC, false);
+            if (!override) drawAdditionalLayers(tileC, false, layerCellFaces);
         }
     }
 }
 
 // --- TRIANGLE --- (triangular lattice, centroid-centered)
-function tileTriangle(cellFaces, layerCellFaces) {
+// Roadmap 1.12 stage 1: see tileHex()'s own comment for `override`.
+function tileTriangle(cellFaces, layerCellFaces, override) {
     // Justage-Parameter für das Dreieck-Tiling:
     // Passe horizontalAdjust und verticalAdjust manuell an, um die horizontale/vertikale Abstände zwischen den Dreiecken zu feintunen.
     // Justage-Parameter für das Dreieck-Tiling (Reset auf 0 für exakte Mathematik)
@@ -303,7 +318,11 @@ function tileTriangle(cellFaces, layerCellFaces) {
     // "horizontal"/"vertical" component to scale independently - a
     // no-op at their current 0.0 values (x*(1+0) is exact), but a
     // scoping note for whoever revisits them.
-    const A = outerCorners[0], B = outerCorners[1], C = outerCorners[2];
+    const oc = override ? override.outerCorners : outerCorners;
+    const ctr = override ? override.centroid : centroid;
+    const connSet = override ? override.connections : connections;
+
+    const A = oc[0], B = oc[1], C = oc[2];
     const v1 = { x: (C.x - B.x) * (1 + horizontalAdjust), y: (C.y - B.y) * (1 + horizontalAdjust) };
     const v2 = { x: (C.x - A.x) * (1 + verticalAdjust), y: (C.y - A.y) * (1 + verticalAdjust) };
 
@@ -314,7 +333,7 @@ function tileTriangle(cellFaces, layerCellFaces) {
     // exact relationship to it, (2/3)v2-(1/3)v1, was solved against the
     // old hardcoded formula and verified numerically (1.2-B design
     // session) before being committed here.
-    const upOffset = { x: centroid.x - B.x, y: centroid.y - B.y };
+    const upOffset = { x: ctr.x - B.x, y: ctr.y - B.y };
     const downOffset = {
         x: upOffset.x + (2 / 3) * v2.x - (1 / 3) * v1.x,
         y: upOffset.y + (2 / 3) * v2.y - (1 / 3) * v1.y
@@ -337,14 +356,14 @@ function tileTriangle(cellFaces, layerCellFaces) {
             // Aufrechtes Dreieck
             const centerUp = { x: anchor.x + upOffset.x, y: anchor.y + upOffset.y };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, centerUp, false);
-            drawShapeCell(connections, centerUp, false);
-            drawAdditionalLayers(centerUp, false, layerCellFaces);
+            drawShapeCell(connSet, centerUp, false);
+            if (!override) drawAdditionalLayers(centerUp, false, layerCellFaces);
 
             // Umgedrehtes Dreieck
             const centerDown = { x: anchor.x + downOffset.x, y: anchor.y + downOffset.y };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, centerDown, true);
-            drawShapeCell(connections, centerDown, true);
-            drawAdditionalLayers(centerDown, true, layerCellFaces);
+            drawShapeCell(connSet, centerDown, true);
+            if (!override) drawAdditionalLayers(centerDown, true, layerCellFaces);
         }
     }
 }
