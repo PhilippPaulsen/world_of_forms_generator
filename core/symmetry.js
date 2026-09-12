@@ -52,6 +52,36 @@ function reflectVerticallyAround(pt, center) {
     return reflectAcrossLine(pt, center, { x: 0, y: 1 });
 }
 
+// Roadmap 1.2-C: the CURRENT shape's own mirror-axis direction, derived
+// from its actual (possibly rotated) outerCorners/centroid rather than
+// assuming vertical - this is the wiring 1.2-B's own docblock flagged as
+// still missing ("not yet wired into drawConnectionWithSymmetry()").
+// A regular n-gon has n valid mirror axes; this picks ONE (through
+// outerCorners[0] itself for triangle - the vertex-to-opposite-edge-
+// midpoint axis; through the midpoint of edge (outerCorners[0],
+// outerCorners[1]) for square/hex - an edge-midpoint-to-edge-midpoint
+// axis) - WHICH one doesn't matter for correctness (any of the n axes,
+// combined with the rotation copies drawConnectionWithSymmetry() already
+// draws, recovers the full dihedral group correctly), only that it's a
+// TRUE axis of the polygon at its actual current orientation, not a
+// fixed vertical line. Verified (1.2-C implementation) to reduce to
+// exactly (0,+-1) - i.e. byte-compatible with the old hardcoded vertical
+// axis via reflectAcrossLine()'s own sign-invariance - for all three
+// default axis-aligned builders, across a real shapeSizeFactor/
+// nodeCount/canvas sweep, not just the one config checked by hand here.
+function mirrorAxisDir() {
+    let dir;
+    if (currentShape === 'triangle') {
+        dir = { x: outerCorners[0].x - centroid.x, y: outerCorners[0].y - centroid.y };
+    } else { // square, hex
+        const c0 = outerCorners[0], c1 = outerCorners[1];
+        const mid = { x: (c0.x + c1.x) / 2, y: (c0.y + c1.y) / 2 };
+        dir = { x: mid.x - centroid.x, y: mid.y - centroid.y };
+    }
+    const len = Math.hypot(dir.x, dir.y);
+    return { x: dir.x / len, y: dir.y / len };
+}
+
 // ----------------- DRAWING LINES + SYMMETRY ---------------------
 // Roadmap 1.5-A: id1/id2 (the connection's real node ids, from
 // core/tiling.js's drawShapeCell()) are passed straight through to
@@ -97,22 +127,26 @@ function drawConnectionWithSymmetry(p1, p2, center, id1, id2) {
         drawCurvedBezier(sR, eR, curveType, id1, id2);
     });
 
-    // Reflection(s)
-    if (symmetryMode === 'reflection_only') {
-        const sRef = reflectVerticallyAround(p1, center);
-        const eRef = reflectVerticallyAround(p2, center);
+    // Reflection(s) - Roadmap 1.2-C: mirrorAxisDir() (this shape's own
+    // actual mirror axis, computed once per call) replaces the hardcoded
+    // reflectVerticallyAround() at all three sites below, so a rotated
+    // net from completeEdgeToRegularPolygon() reflects across ITS true
+    // axis rather than a fixed vertical line - byte-compatible with the
+    // old behavior for every default (axis-aligned) shape, since
+    // mirrorAxisDir() reduces to exactly (0,+-1) there (verified).
+    if (symmetryMode === 'reflection_only' || symmetryMode === 'rotation_reflection3' || symmetryMode === 'rotation_reflection6') {
+        const axisDir = mirrorAxisDir();
+        const sRef = reflectAcrossLine(p1, center, axisDir);
+        const eRef = reflectAcrossLine(p2, center, axisDir);
         drawCurvedBezier(sRef, eRef, mirrorCurveType(curveType), id1, id2);
-    }
-    if (symmetryMode === 'rotation_reflection3' || symmetryMode === 'rotation_reflection6') {
-        const sRef = reflectVerticallyAround(p1, center);
-        const eRef = reflectVerticallyAround(p2, center);
-        drawCurvedBezier(sRef, eRef, mirrorCurveType(curveType), id1, id2);
-        rotAngles.forEach(a => {
-            const sR = rotateAround(p1, center, a);
-            const eR = rotateAround(p2, center, a);
-            const sRR = reflectVerticallyAround(sR, center);
-            const eRR = reflectVerticallyAround(eR, center);
-            drawCurvedBezier(sRR, eRR, mirrorCurveType(curveType), id1, id2);
-        });
+        if (symmetryMode !== 'reflection_only') {
+            rotAngles.forEach(a => {
+                const sR = rotateAround(p1, center, a);
+                const eR = rotateAround(p2, center, a);
+                const sRR = reflectAcrossLine(sR, center, axisDir);
+                const eRR = reflectAcrossLine(eR, center, axisDir);
+                drawCurvedBezier(sRR, eRR, mirrorCurveType(curveType), id1, id2);
+            });
+        }
     }
 }
