@@ -819,7 +819,15 @@ function setActiveShowFaces(v) { if (activeLayer === 'base') showFaces = v; else
 // 1.9 design session) - the UI is what practically targets 4 total
 // sheets.
 function addLayer() {
-    additionalLayers.push({ connections: [], redoStack: [], offsetX: 0, offsetY: 0, enabled: true, showFaces: false });
+    // Roadmap 1.12 stage 1: nodeCount/shapeSizeFactor - this layer's own
+    // order/size, independent of the base's (see core/forms.js's
+    // layerGrid(), which derives this layer's actual grid from these two
+    // fields plus the base's CURRENT outerCorners/centroid - never
+    // cached here, always re-derived fresh). Starts identical to the
+    // base's current values (ratio=1, no visual change until the user
+    // adjusts them), matching the natural "layer starts as a copy of
+    // base" workflow addLayer() already establishes for connections.
+    additionalLayers.push({ connections: [], redoStack: [], offsetX: 0, offsetY: 0, enabled: true, showFaces: false, nodeCount, shapeSizeFactor });
     activeLayer = additionalLayers.length - 1;
 }
 

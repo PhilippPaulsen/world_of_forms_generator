@@ -233,3 +233,50 @@ function completeEdgeToRegularPolygon(P, Q, n, side) {
     for (let k = 0; k < n; k++) vertices.push(_rotateAroundPure(P, center, k * (360 / n)));
     return { center, vertices, sideLength: L };
 }
+
+// Roadmap 1.12 stage 1: derives an additional layer's own grid at a
+// different order/size than the base, SHARING the base's actual
+// current center (and orientation, whatever it is - default axis-
+// aligned or an alt-net construction, 1.2) rather than independently
+// re-deriving via buildTriangleGrid()/buildSquareGrid()/buildHexGrid().
+//
+// This side-steps a real, verified asymmetry between the three
+// builders (1.12 stage-1 design session): buildSquareGrid()'s and
+// buildHexGrid()'s own `centroid` is always exactly canvas-center for
+// ANY shapeSizeFactor (buildSquareGrid() sets it directly; buildHexGrid()'s
+// 6 corners are symmetric around canvas-center regardless of
+// shapeHeight), but buildTriangleGrid()'s `centroid` is the true
+// geometric centroid (A+B+C)/3, which shifts by h/6 as shapeSizeFactor
+// changes h - verified numerically (not assumed) at up to ~86px on a
+// 600px canvas between shapeSizeFactor=1 and 9. Calling
+// buildTriangleGrid() independently per layer would silently violate
+// "shared center" for triangle specifically (not square/hex) -
+// scaling the BASE's own outerCorners uniformly around the shared
+// centroid avoids this for all three shapes uniformly, by construction,
+// and works identically whether the base came from a default builder
+// or completeEdgeToRegularPolygon() (1.2) - it only ever reads the
+// base's CURRENT outerCorners/centroid, never re-derives from canvas
+// dimensions or re-runs trigonometry of its own.
+//
+// ratio = baseShapeSizeFactor / layerShapeSizeFactor - a larger
+// layerShapeSizeFactor means a SMALLER shape, matching the existing
+// canvasW/shapeSizeFactor convention (buildSquareGrid() etc.) exactly,
+// so the same per-layer UI control/range (1-9) means the same thing a
+// layer's own value already means for the base.
+//
+// Not cached by any caller - re-derive fresh from the base's CURRENT
+// outerCorners/centroid/shape every time (render, orbit-table lookup,
+// export), so changing the base's own shape/size/order can never leave
+// a layer's grid stale.
+function layerGrid(baseOuterCorners, baseCentroid, shape, baseShapeSizeFactor, layerShapeSizeFactor, layerNodeCount) {
+    const ratio = baseShapeSizeFactor / layerShapeSizeFactor;
+    const outerCorners = baseOuterCorners.map(c => ({
+        x: baseCentroid.x + (c.x - baseCentroid.x) * ratio,
+        y: baseCentroid.y + (c.y - baseCentroid.y) * ratio
+    }));
+    let nodes;
+    if (shape === 'triangle') nodes = _subdivideTriangleInterior(outerCorners[0], outerCorners[1], outerCorners[2], layerNodeCount);
+    else if (shape === 'square') nodes = _subdivideSquareInterior(outerCorners, layerNodeCount);
+    else nodes = _subdivideHexInterior(outerCorners, baseCentroid, layerNodeCount);
+    return { nodes, centroid: baseCentroid, outerCorners };
+}
