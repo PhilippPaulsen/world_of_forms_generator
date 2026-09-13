@@ -191,6 +191,23 @@ function buildExportData(crossLayerData) {
                 // (same ids, different positions, or ids the base's own
                 // node set doesn't even contain).
                 nodes: layer.nodes.map(n => ({ id: n.id, x: n.x, y: n.y })),
+                // Roadmap 1.12 stage 2 (export extension, distinct from
+                // the offsetX/offsetY-rendering fix this stage otherwise
+                // makes): this layer's own outerCorners/centroid/
+                // shapeSizeFactor/nodeCount, mirroring the top-level
+                // geometry.outerCorners/centroid/meta.shapeSizeFactor/
+                // meta.nodeCount. A pre-existing gap from stage 1, not
+                // introduced here: without these, a consumer has no way
+                // to derive this layer's own lattice vectors (v1/v2, its
+                // actual tiling pitch) at all - `nodes`/`edges` alone
+                // only describe its single un-tessellated cell, not how
+                // that cell repeats. Harmless/redundant for a same-scale
+                // layer (identical to the top-level fields already
+                // exported) but necessary for a differently-scaled one.
+                outerCorners: layer.outerCorners.map(c => ({ x: c.x, y: c.y })),
+                centroid: { x: layer.centroid.x, y: layer.centroid.y },
+                shapeSizeFactor: layer.shapeSizeFactor,
+                nodeCount: layer.nodeCount,
                 offsetX: layer.offsetX,
                 offsetY: layer.offsetY,
                 edges: completeLayerConnections.map(c => [c[0], c[1]]),
