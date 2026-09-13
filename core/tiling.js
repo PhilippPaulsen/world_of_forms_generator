@@ -60,7 +60,12 @@ function drawTessellation() {
         // any free-endpoint node (1.3(a)) added to this layer, since
         // _subdivide*Interior() restarts node ids at 1 on every call,
         // never the SAME array a previous click's push() landed in.
-        const override = { outerCorners: layer.outerCorners, centroid: layer.centroid, connections: layer.connections, nodes: layer.nodes };
+        // Roadmap 1.12 stage 2: offsetX/offsetY threaded through too -
+        // previously omitted here entirely, so a differently-scaled
+        // layer's own offset (already settable via the existing 1.9
+        // offset UI, already exported) had silently NO rendering effect
+        // at all - see each tile*() function's own override-branch fix.
+        const override = { outerCorners: layer.outerCorners, centroid: layer.centroid, connections: layer.connections, nodes: layer.nodes, offsetX: layer.offsetX, offsetY: layer.offsetY };
         const thisLayerFaces = (layerCellFaces && layerCellFaces.has(i)) ? layerCellFaces.get(i) : null;
         if (currentShape === 'hex') tileHex(thisLayerFaces, null, override);
         else if (currentShape === 'square') tileSquare(thisLayerFaces, null, override);
@@ -320,13 +325,27 @@ function tileHex(cellFaces, layerCellFaces, override) {
     const ctr = override ? override.centroid : centroid;
     const connSet = override ? override.connections : connections;
     const nodeArr = override ? override.nodes : nodes;
+    // Roadmap 1.12 stage 2: this layer's own independent-pass offset -
+    // 0 for the base sheet (override undefined), byte-identical to
+    // before this stage. Applied AFTER the i*v1+j*v2 lattice sum below
+    // (to the final tile center only), NOT to `ctr` here - `ctr` also
+    // feeds latticeIJBounds() as the bounds origin, which must stay
+    // UNSHIFTED: coveredRectCorners()'s margin (maxLayerOffset(), which
+    // already includes this layer's own offset unconditionally) already
+    // pads the covered rect generously enough for the unshifted-origin
+    // bounds to still fully cover the canvas once every resulting tile
+    // gets this same constant shift - the same "unshifted bounds +
+    // padded rect + shift applied only at render time" strategy 1.9's
+    // own layerTileCentroid() already uses for same-scale layers.
+    const layerOffsetX = override ? override.offsetX : 0;
+    const layerOffsetY = override ? override.offsetY : 0;
     const c0 = oc[0], c2 = oc[2], c4 = oc[4];
     const v1 = { x: c2.x - c0.x, y: c2.y - c0.y };
     const v2 = { x: c4.x - c0.x, y: c4.y - c0.y };
     const b = latticeIJBounds(v1, v2, ctr, coveredRectCorners(), 3);
     for (let i = b.iMin; i <= b.iMax; i++) {
         for (let j = b.jMin; j <= b.jMax; j++) {
-            const tileC = { x: ctr.x + i * v1.x + j * v2.x, y: ctr.y + i * v1.y + j * v2.y };
+            const tileC = { x: ctr.x + i * v1.x + j * v2.x + layerOffsetX, y: ctr.y + i * v1.y + j * v2.y + layerOffsetY };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, tileC, false);
             drawShapeCell(connSet, tileC, false, nodeArr);
             if (!override) drawAdditionalLayers(tileC, false, layerCellFaces);
@@ -348,13 +367,18 @@ function tileSquare(cellFaces, layerCellFaces, override) {
     const ctr = override ? override.centroid : centroid;
     const connSet = override ? override.connections : connections;
     const nodeArr = override ? override.nodes : nodes;
+    // Roadmap 1.12 stage 2: see tileHex()'s own comment for why this is
+    // applied after the i*v1+j*v2 sum, not to `ctr` (the unshifted
+    // latticeIJBounds() origin).
+    const layerOffsetX = override ? override.offsetX : 0;
+    const layerOffsetY = override ? override.offsetY : 0;
     const c0 = oc[0], c1 = oc[1], c3 = oc[3];
     const v1 = { x: c1.x - c0.x, y: c1.y - c0.y };
     const v2 = { x: c3.x - c0.x, y: c3.y - c0.y };
     const b = latticeIJBounds(v1, v2, ctr, coveredRectCorners(), 3);
     for (let i = b.iMin; i <= b.iMax; i++) {
         for (let j = b.jMin; j <= b.jMax; j++) {
-            const tileC = { x: ctr.x + i * v1.x + j * v2.x, y: ctr.y + i * v1.y + j * v2.y };
+            const tileC = { x: ctr.x + i * v1.x + j * v2.x + layerOffsetX, y: ctr.y + i * v1.y + j * v2.y + layerOffsetY };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, tileC, false);
             drawShapeCell(connSet, tileC, false, nodeArr);
             if (!override) drawAdditionalLayers(tileC, false, layerCellFaces);
@@ -373,8 +397,14 @@ function tileTriangle(cellFaces, layerCellFaces, override) {
 
     // --- Manuelle Verschiebung des gesamten Musters ---
     // Reset auf 0, da das Gitter relativ zu "B" (zentrales Dreieck) aufgebaut wird.
-    const offsetX = 0;
-    const offsetY = 0;
+    // Roadmap 1.12 stage 2: renamed from offsetX/offsetY (this function's
+    // own long-standing, currently-inert manual debug knob) to
+    // patternShiftX/patternShiftY specifically to avoid colliding with
+    // the REAL per-layer offsetX/offsetY (additionalLayers[i].offsetX/
+    // offsetY) introduced below for the independent-pass fix - these are
+    // two unrelated concepts that happened to share a name.
+    const patternShiftX = 0;
+    const patternShiftY = 0;
 
     // Roadmap 1.2-B: v1/v2 derived directly from the triangle's own
     // corners (A=apex, B=left-base, C=right-base - outerCorners' own
@@ -396,6 +426,13 @@ function tileTriangle(cellFaces, layerCellFaces, override) {
     const ctr = override ? override.centroid : centroid;
     const connSet = override ? override.connections : connections;
     const nodeArr = override ? override.nodes : nodes;
+    // Roadmap 1.12 stage 2: this layer's own independent-pass offset -
+    // 0 for the base sheet, applied to centerUp/centerDown below (the
+    // final per-tile-and-orientation center) AFTER the i*v1+j*v2 sum via
+    // `anchor`, never to B (latticeIJBounds()'s own unshifted origin) -
+    // same reasoning as tileHex()'s own comment.
+    const layerOffsetX = override ? override.offsetX : 0;
+    const layerOffsetY = override ? override.offsetY : 0;
 
     const A = oc[0], B = oc[1], C = oc[2];
     const v1 = { x: (C.x - B.x) * (1 + horizontalAdjust), y: (C.y - B.y) * (1 + horizontalAdjust) };
@@ -424,18 +461,18 @@ function tileTriangle(cellFaces, layerCellFaces, override) {
     for (let j = b.jMin; j <= b.jMax; j++) {
         for (let i = b.iMin; i <= b.iMax; i++) {
             const anchor = {
-                x: B.x + i * v1.x + j * v2.x + offsetX,
-                y: B.y + i * v1.y + j * v2.y + offsetY
+                x: B.x + i * v1.x + j * v2.x + patternShiftX,
+                y: B.y + i * v1.y + j * v2.y + patternShiftY
             };
 
             // Aufrechtes Dreieck
-            const centerUp = { x: anchor.x + upOffset.x, y: anchor.y + upOffset.y };
+            const centerUp = { x: anchor.x + upOffset.x + layerOffsetX, y: anchor.y + upOffset.y + layerOffsetY };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, centerUp, false);
             drawShapeCell(connSet, centerUp, false, nodeArr);
             if (!override) drawAdditionalLayers(centerUp, false, layerCellFaces);
 
             // Umgedrehtes Dreieck
-            const centerDown = { x: anchor.x + downOffset.x, y: anchor.y + downOffset.y };
+            const centerDown = { x: anchor.x + downOffset.x + layerOffsetX, y: anchor.y + downOffset.y + layerOffsetY };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, centerDown, true);
             drawShapeCell(connSet, centerDown, true, nodeArr);
             if (!override) drawAdditionalLayers(centerDown, true, layerCellFaces);
