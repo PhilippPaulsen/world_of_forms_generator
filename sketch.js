@@ -328,6 +328,11 @@ function setup() {
     const shapeSizeGroup = select('#layer-shape-size-group');
     const layerNodeCountInput = select('#layer-node-count-input');
     const layerShapeSizeInput = select('#layer-shape-size-input');
+    // Roadmap 1.12 stage 3: this layer's own rotation - same contextual
+    // show/hide + populate-on-switch handling as the fields above,
+    // folded into this same function for the same reason.
+    const rotationGroup = select('#layer-rotation-group');
+    const layerRotationInput = select('#layer-rotation-input');
 
     function updateOffsetControls() {
         const showOffsets = activeLayer !== 'base';
@@ -336,12 +341,14 @@ function setup() {
         if (meshPresetGroup) meshPresetGroup.elt.hidden = !showOffsets;
         if (nodeCountGroup) nodeCountGroup.elt.hidden = !showOffsets;
         if (shapeSizeGroup) shapeSizeGroup.elt.hidden = !showOffsets;
+        if (rotationGroup) rotationGroup.elt.hidden = !showOffsets;
         if (showOffsets) {
             const layer = additionalLayers[activeLayer];
             if (offsetXInput) offsetXInput.value(layer.offsetX);
             if (offsetYInput) offsetYInput.value(layer.offsetY);
             if (layerNodeCountInput) layerNodeCountInput.value(layer.nodeCount);
             if (layerShapeSizeInput) layerShapeSizeInput.value(layer.shapeSizeFactor);
+            if (layerRotationInput) layerRotationInput.value(layer.rotation || 0);
         }
     }
     // Roadmap 1.2-C: exposed as a global - updateOffsetControls()/
@@ -460,6 +467,22 @@ function setup() {
             let v = parseInt(layerShapeSizeInput.value());
             if (v < 1) v = 1; if (v > 9) v = 9;
             updateActiveLayerGrid({ shapeSizeFactor: v });
+            redraw();
+        });
+    }
+
+    // Roadmap 1.12 stage 3: this layer's own rotation - a pure render-
+    // time placement parameter, exactly like offsetX/offsetY (not baked
+    // into stored nodes/outerCorners, see the stage-3 design session's
+    // point 1) - so, unlike nodeCount/shapeSizeFactor above, this needs
+    // NO updateActiveLayerGrid() call: no connections-clearing, no grid
+    // refresh, just the field itself. [0,360) wraparound is a pure UI
+    // nicety (avoids an ever-growing spinner value on repeated
+    // scrolling) - rotateAround() itself handles any angle correctly,
+    // this normalization is not mathematically required.
+    if (layerRotationInput) {
+        layerRotationInput.input(() => {
+            setActiveLayerRotation(layerRotationInput.value());
             redraw();
         });
     }
@@ -899,7 +922,10 @@ function addLayer() {
     // only if this layer's own nodeCount/shapeSizeFactor changes later
     // (not yet wired - that's the paused pass 2's own point 4); never
     // re-derived on every redraw/click the way it was before this fix.
-    const layer = { connections: [], redoStack: [], offsetX: 0, offsetY: 0, enabled: true, showFaces: false, nodeCount, shapeSizeFactor };
+    // Roadmap 1.12 stage 3: rotation defaults to 0 (unrotated) - a pure
+    // render-time placement field, same status as offsetX/offsetY, so no
+    // grid-refresh implications at creation time either.
+    const layer = { connections: [], redoStack: [], offsetX: 0, offsetY: 0, rotation: 0, enabled: true, showFaces: false, nodeCount, shapeSizeFactor };
     const grid = layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.nodeCount);
     layer.nodes = grid.nodes;
     layer.centroid = grid.centroid;
@@ -949,6 +975,26 @@ function updateActiveLayerGrid(patch) {
     layer.nodes = grid.nodes;
     layer.centroid = grid.centroid;
     layer.outerCorners = grid.outerCorners;
+}
+
+// Roadmap 1.12 stage 3: normalizes a raw rotation input value into
+// [0,360) and writes it to the ACTIVE layer - a no-op when activeLayer
+// is 'base'. Unlike updateActiveLayerGrid() above, this never clears
+// connections/redoStack and never calls layerGrid() - rotation is a
+// pure render-time placement parameter (like offsetX/offsetY), not
+// baked into stored nodes/outerCorners, so no grid refresh is ever
+// needed when it changes (see the stage-3 design session's own point
+// 1). Extracted as its own function (mirroring updateActiveLayerGrid()'s
+// own separation of DOM wiring from state-mutation logic), so it's
+// directly testable headlessly without needing the DOM at all - the
+// [0,360) wraparound itself is a pure UI nicety (avoids an ever-growing
+// spinner value), not a mathematical requirement: rotateAround() (core/
+// symmetry.js) handles any angle correctly regardless.
+function setActiveLayerRotation(rawValue) {
+    if (activeLayer === 'base') return;
+    let v = parseFloat(rawValue) || 0;
+    v = ((v % 360) + 360) % 360;
+    additionalLayers[activeLayer].rotation = v;
 }
 
 // ----------------- PATTERN NAME (Roadmap 1.11-B) ---------------------

@@ -583,6 +583,22 @@
         </div>
       </div>
 
+      <!-- Roadmap 1.12 stage 3: this layer's own rotation, contextual
+           the same way the offset controls above are - hidden while
+           Base is active. Continuous (no snap-to-angle) - worked out
+           mathematically in the stage-3 design session that no fixed
+           snap angle is a guaranteed visual no-op here the way stage
+           2's own mesh-width offset preset was, since whether a given
+           rotation looks unchanged depends on symmetryMode and the
+           specific connections drawn, not on the shape's lattice alone.
+           [0,360) wraparound on input is a pure UI nicety (avoids an
+           ever-growing spinner value) - rotateAround() itself handles
+           any angle correctly regardless. -->
+      <div class="control-group" id="layer-rotation-group" hidden>
+        <label for="layer-rotation-input">Layer Rotation</label>
+        <input type="number" id="layer-rotation-input" value="0" step="1">
+      </div>
+
       <!-- Cross-Layer Face Compute (Roadmap 1.10b-ii-b): applies to the
            base sheet + every ENABLED additional layer at once - not
            contextual to whichever tab is active, unlike the offset
