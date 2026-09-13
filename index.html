@@ -546,6 +546,23 @@
         <span id="pattern-name-status"></span>
       </div>
 
+      <!-- Roadmap 1.12 stage 1 pass 2: this layer's own order/size -
+           contextual the same way the offset controls below are (one
+           pair, not one per layer; hidden while Base is active, since
+           the base sheet's own order/size already has its own controls
+           above). Changing either clears THIS layer's own connections/
+           redoStack and refreshes its persisted grid - see sketch.js's
+           updateActiveLayerGrid(). -->
+      <div class="control-group" id="layer-node-count-group" hidden>
+        <label for="layer-node-count-input">Layer Node Count</label>
+        <input type="number" id="layer-node-count-input" min="1" max="5" value="3">
+      </div>
+
+      <div class="control-group" id="layer-shape-size-group" hidden>
+        <label for="layer-shape-size-input">Layer Shape Size</label>
+        <input type="number" id="layer-shape-size-input" min="1" max="9" value="5">
+      </div>
+
       <!-- Offset Controls - contextual to whichever layer tab is
            active (one X/Y pair, not one per layer); hidden while Base
            is active, since the base sheet has no offset concept. -->

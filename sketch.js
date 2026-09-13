@@ -317,16 +317,31 @@ function setup() {
     const meshPresetGroup = select('#layer-mesh-preset-group');
     const offsetXInput = select('#layer-offset-x-input');
     const offsetYInput = select('#layer-offset-y-input');
+    // Roadmap 1.12 stage 1 pass 2: this layer's own order/size - same
+    // contextual show/hide + populate-on-switch handling as the offset
+    // controls above, folded into this same function (not a separate
+    // one) since both are "sync every layer-contextual control" and are
+    // already called together from every one of updateOffsetControls()'s
+    // existing call sites (layer switch/add/remove, shape/size/node-
+    // count change).
+    const nodeCountGroup = select('#layer-node-count-group');
+    const shapeSizeGroup = select('#layer-shape-size-group');
+    const layerNodeCountInput = select('#layer-node-count-input');
+    const layerShapeSizeInput = select('#layer-shape-size-input');
 
     function updateOffsetControls() {
         const showOffsets = activeLayer !== 'base';
         if (offsetXGroup) offsetXGroup.elt.hidden = !showOffsets;
         if (offsetYGroup) offsetYGroup.elt.hidden = !showOffsets;
         if (meshPresetGroup) meshPresetGroup.elt.hidden = !showOffsets;
+        if (nodeCountGroup) nodeCountGroup.elt.hidden = !showOffsets;
+        if (shapeSizeGroup) shapeSizeGroup.elt.hidden = !showOffsets;
         if (showOffsets) {
             const layer = additionalLayers[activeLayer];
             if (offsetXInput) offsetXInput.value(layer.offsetX);
             if (offsetYInput) offsetYInput.value(layer.offsetY);
+            if (layerNodeCountInput) layerNodeCountInput.value(layer.nodeCount);
+            if (layerShapeSizeInput) layerShapeSizeInput.value(layer.shapeSizeFactor);
         }
     }
     // Roadmap 1.2-C: exposed as a global - updateOffsetControls()/
@@ -417,6 +432,34 @@ function setup() {
             renderLayerTabs();
             updateOffsetControls();
             updateFaceToggleControl();
+            redraw();
+        });
+    }
+
+    // Roadmap 1.12 stage 1 pass 2: this layer's own order/size - same
+    // clamp ranges as the base sheet's own Shape Size/Node Count inputs
+    // above (1-9 / 1-5), acting on whichever layer is currently active.
+    // updateActiveLayerGrid() (INTERACTION section below) does the
+    // actual state mutation (clear this layer's own connections/
+    // redoStack, refresh its persisted grid via layerGrid()) - these
+    // handlers are just the DOM wiring, same division of labor as
+    // mousePressed()/addRandomConnection() calling activeNodes() rather
+    // than inlining the base/layer split themselves.
+    if (layerNodeCountInput) {
+        layerNodeCountInput.input(() => {
+            if (activeLayer === 'base') return;
+            let v = parseInt(layerNodeCountInput.value());
+            if (v < 1) v = 1; if (v > 5) v = 5;
+            updateActiveLayerGrid({ nodeCount: v });
+            redraw();
+        });
+    }
+    if (layerShapeSizeInput) {
+        layerShapeSizeInput.input(() => {
+            if (activeLayer === 'base') return;
+            let v = parseInt(layerShapeSizeInput.value());
+            if (v < 1) v = 1; if (v > 9) v = 9;
+            updateActiveLayerGrid({ shapeSizeFactor: v });
             redraw();
         });
     }
@@ -876,6 +919,36 @@ function removeLayer(index) {
     } else if (typeof activeLayer === 'number' && activeLayer > index) {
         activeLayer -= 1;
     }
+}
+
+// Roadmap 1.12 stage 1 pass 2: changes the ACTIVE layer's own nodeCount
+// and/or shapeSizeFactor (patch, e.g. {nodeCount: 4}) and refreshes that
+// layer's own persisted {nodes, centroid, outerCorners} via one real
+// layerGrid() call - the second (and, per addLayer()'s own comment,
+// final) trigger point layerGrid() needs beyond layer creation. No
+// analogous call is needed for base-level changes: rebuildGrid()/
+// rebuildGridFromConstruction() (core/state.js) already wipe
+// additionalLayers=[] unconditionally on any base-level change, so no
+// layer ever survives underneath a stale base grid.
+//
+// Also clears this layer's OWN connections/redoStack (not the base's,
+// not any other layer's) - its previous connections reference node ids
+// from the grid about to be replaced (_subdivide*Interior() restarts
+// ids at 1 for a new nodeCount, so old ids from a differently-sized
+// grid are stale, meaningless references), same reasoning rebuildGrid()
+// already applies at the base-sheet level. A no-op when activeLayer is
+// 'base' - this only ever changes an ADDITIONAL layer's own grid, never
+// the base's (which has its own Shape Size/Node Count controls).
+function updateActiveLayerGrid(patch) {
+    if (activeLayer === 'base') return;
+    const layer = additionalLayers[activeLayer];
+    Object.assign(layer, patch);
+    layer.connections = [];
+    layer.redoStack = [];
+    const grid = layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.nodeCount);
+    layer.nodes = grid.nodes;
+    layer.centroid = grid.centroid;
+    layer.outerCorners = grid.outerCorners;
 }
 
 // ----------------- PATTERN NAME (Roadmap 1.11-B) ---------------------
