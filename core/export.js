@@ -210,6 +210,21 @@ function buildExportData(crossLayerData) {
                 nodeCount: layer.nodeCount,
                 offsetX: layer.offsetX,
                 offsetY: layer.offsetY,
+                // Roadmap 1.12 stage 3: this layer's own rotation
+                // (degrees, about the shared centroid) - same status as
+                // offsetX/offsetY: a render-time placement parameter,
+                // not baked into the exported nodes/outerCorners above
+                // (which stay canonical/unrotated, per the stage-3
+                // design's own point 1). A consumer wanting this layer's
+                // actual rendered position applies rotation about
+                // centroid first, then offsetX/offsetY - the same
+                // reconstruction responsibility offsetX/offsetY already
+                // placed on a consumer. Defaults to 0 for any layer
+                // created before this field existed (addLayer() always
+                // sets it now, but a layer object built by hand - e.g.
+                // an older saved session re-hydrated some other way -
+                // may not have it).
+                rotation: layer.rotation || 0,
                 edges: completeLayerConnections.map(c => [c[0], c[1]]),
                 adjacency: computeAdjacency(completeLayerConnections, layerNodeById)
             };
