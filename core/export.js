@@ -27,7 +27,16 @@ function downloadBlob(content, filename, mimeType) {
 // either way, just fed a different connSet/edges list.
 function computeAdjacency(completeConnections, nodeById) {
     const adjacency = {};
-    nodes.forEach(n => { adjacency[n.id] = []; });
+    // Roadmap 1.12 stage 1 pass 2 (node-resolution fix, export path):
+    // keys initialized from nodeById itself (whichever node set was
+    // actually passed in), not always the base's global `nodes` - the
+    // latter is byte-identical for the base sheet's own call (nodeById
+    // there IS built from `nodes`), but was a real, separate bug for a
+    // layer's own call: a layer with MORE nodes than the base would hit
+    // adjacency[aId].push(...) below on an id never initialized here
+    // (TypeError on undefined), and a layer with FEWER would carry
+    // extra, meaningless base-only keys that don't belong to it at all.
+    nodeById.forEach((n, id) => { adjacency[id] = []; });
 
     completeConnections.forEach((conn, edgeIndex) => {
         const [aId, bId] = conn;
@@ -161,14 +170,34 @@ function buildExportData(crossLayerData) {
     if (enabledLayers.length > 0) {
         data.geometry.layers = enabledLayers.map(layer => {
             const completeLayerConnections = layer.connections.filter(c => c.length === 2);
+            // Roadmap 1.12 stage 1 pass 2 (node-resolution fix, export
+            // path): this layer's OWN persisted nodes, not the base's -
+            // same bug class the prior pass fixed for rendering/
+            // interaction/live pattern-name display, found here
+            // separately since export.js wasn't touched by that pass.
+            // A layer's own connections reference ITS OWN node ids
+            // (assigned by _subdivide*Interior() starting at 1 for
+            // that layer's own nodeCount), which the base's nodeById
+            // either resolves to the wrong (differently-positioned)
+            // node of the same id, or - once a layer's own node count
+            // exceeds the base's - finds nothing at all.
+            const layerNodeById = new Map(layer.nodes.map(n => [n.id, n]));
+            const layerGridOverride = { nodes: layer.nodes, centroid: layer.centroid, outerCorners: layer.outerCorners };
             const layerData = {
+                // This layer's own real node positions, mirroring the
+                // top-level geometry.nodes - without this, a consumer has
+                // no way to resolve `edges`' node ids to real coordinates
+                // at all once a layer's own grid differs from the base's
+                // (same ids, different positions, or ids the base's own
+                // node set doesn't even contain).
+                nodes: layer.nodes.map(n => ({ id: n.id, x: n.x, y: n.y })),
                 offsetX: layer.offsetX,
                 offsetY: layer.offsetY,
                 edges: completeLayerConnections.map(c => [c[0], c[1]]),
-                adjacency: computeAdjacency(completeLayerConnections, nodeById)
+                adjacency: computeAdjacency(completeLayerConnections, layerNodeById)
             };
             if (curveType.kind === 'straight') {
-                const layerFacesResult = computeCellFaces(completeLayerConnections);
+                const layerFacesResult = computeCellFaces(completeLayerConnections, layer.nodes);
                 layerData.faceNodes = layerFacesResult.nodes;
                 layerData.faces = layerFacesResult.faces;
             }
@@ -183,8 +212,8 @@ function buildExportData(crossLayerData) {
             // this layer has no complete connections yet, same
             // "nothing to export" convention as the top-level case below.
             if (completeLayerConnections.length > 0) {
-                layerData.patternName = computeThemeLineName(completeLayerConnections);
-                layerData.themeLineOrbits = computeThemeLineOrbitAssignments(completeLayerConnections);
+                layerData.patternName = computeThemeLineName(completeLayerConnections, undefined, layerGridOverride);
+                layerData.themeLineOrbits = computeThemeLineOrbitAssignments(completeLayerConnections, undefined, layerGridOverride);
             }
             return layerData;
         });
