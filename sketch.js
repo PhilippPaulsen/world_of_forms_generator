@@ -820,14 +820,26 @@ function setActiveShowFaces(v) { if (activeLayer === 'base') showFaces = v; else
 // sheets.
 function addLayer() {
     // Roadmap 1.12 stage 1: nodeCount/shapeSizeFactor - this layer's own
-    // order/size, independent of the base's (see core/forms.js's
-    // layerGrid(), which derives this layer's actual grid from these two
-    // fields plus the base's CURRENT outerCorners/centroid - never
-    // cached here, always re-derived fresh). Starts identical to the
+    // order/size, independent of the base's. Starts identical to the
     // base's current values (ratio=1, no visual change until the user
     // adjusts them), matching the natural "layer starts as a copy of
     // base" workflow addLayer() already establishes for connections.
-    additionalLayers.push({ connections: [], redoStack: [], offsetX: 0, offsetY: 0, enabled: true, showFaces: false, nodeCount, shapeSizeFactor });
+    //
+    // Roadmap 1.12 stage 1 (node-resolution fix): nodes/centroid/outerCorners
+    // are PERSISTED here (via one real layerGrid() call, core/forms.js),
+    // not re-derived fresh on every render/interaction - a fresh call
+    // would restart node ids at 1 every time (_subdivide*Interior()'s own
+    // `let id = 1`), silently discarding any free-endpoint node (1.3(a))
+    // pushed into a previous call's now-abandoned array. Refreshed again
+    // only if this layer's own nodeCount/shapeSizeFactor changes later
+    // (not yet wired - that's the paused pass 2's own point 4); never
+    // re-derived on every redraw/click the way it was before this fix.
+    const layer = { connections: [], redoStack: [], offsetX: 0, offsetY: 0, enabled: true, showFaces: false, nodeCount, shapeSizeFactor };
+    const grid = layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.nodeCount);
+    layer.nodes = grid.nodes;
+    layer.centroid = grid.centroid;
+    layer.outerCorners = grid.outerCorners;
+    additionalLayers.push(layer);
     activeLayer = additionalLayers.length - 1;
 }
 

@@ -53,8 +53,14 @@ function drawTessellation() {
     additionalLayers.forEach((layer, i) => {
         if (!layer.enabled) return;
         if (layer.shapeSizeFactor === shapeSizeFactor) return; // handled inside the base's own tile loop instead
-        const grid = layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.nodeCount);
-        const override = { outerCorners: grid.outerCorners, centroid: grid.centroid, connections: layer.connections };
+        // Roadmap 1.12 stage 1 (node-resolution fix): reads this layer's
+        // own PERSISTED outerCorners/centroid/nodes (populated once by
+        // addLayer(), see its own comment) instead of calling
+        // layerGrid() fresh here - a fresh call would silently discard
+        // any free-endpoint node (1.3(a)) added to this layer, since
+        // _subdivide*Interior() restarts node ids at 1 on every call,
+        // never the SAME array a previous click's push() landed in.
+        const override = { outerCorners: layer.outerCorners, centroid: layer.centroid, connections: layer.connections, nodes: layer.nodes };
         const thisLayerFaces = (layerCellFaces && layerCellFaces.has(i)) ? layerCellFaces.get(i) : null;
         if (currentShape === 'hex') tileHex(thisLayerFaces, null, override);
         else if (currentShape === 'square') tileSquare(thisLayerFaces, null, override);
@@ -122,11 +128,24 @@ function getMeshWidth() {
     }
 }
 
-function drawShapeCell(connSet, tileCentroid, flip180 = false) {
+// Roadmap 1.12 stage 1 (node-resolution fix): nodeArr defaults to the
+// base's own global `nodes` - every pre-existing call site that omits
+// it (core/faces.js's base-sheet calls, any future base-only caller)
+// is byte-identical. Callers drawing a LAYER's own connections
+// (drawAdditionalLayers(), the tile*() functions' override branch) pass
+// that layer's own persisted node array explicitly - previously this
+// always resolved against the global nodes regardless of which layer
+// was being drawn, so a layer's connections (referencing that layer's
+// own node ids) could silently resolve to the wrong (or no) node,
+// producing geometrically wrong content within that layer's own tile
+// cells (verified concretely before this fix: a connection spanning
+// one full base edge rendered 2x too long inside a half-scale layer's
+// own tile).
+function drawShapeCell(connSet, tileCentroid, flip180 = false, nodeArr = nodes) {
     for (const conn of connSet) {
         if (conn.length === 2) {
-            const n1 = nodes.find(n => n.id === conn[0]);
-            const n2 = nodes.find(n => n.id === conn[1]);
+            const n1 = nodeArr.find(n => n.id === conn[0]);
+            const n2 = nodeArr.find(n => n.id === conn[1]);
             if (!n1 || !n2) continue;
             const p1 = toTileLocal(n1, tileCentroid, flip180);
             const p2 = toTileLocal(n2, tileCentroid, flip180);
@@ -169,7 +188,11 @@ function drawAdditionalLayers(tileCentroid, flip180 = false, layerCellFaces = nu
         if (layer.shapeSizeFactor !== shapeSizeFactor) return;
         const layerTileC = layerTileCentroid(tileCentroid, layer);
         if (layerCellFaces && layerCellFaces.has(i)) drawFaceFillsAtTile(layerCellFaces.get(i), layerTileC, flip180);
-        drawShapeCell(layer.connections, layerTileC, flip180);
+        // Roadmap 1.12 stage 1 (node-resolution fix): this layer's own
+        // persisted nodes, not the base's - even a same-scale layer can
+        // have its own different nodeCount (interior density), whose
+        // connections reference ITS OWN node ids, not the base's.
+        drawShapeCell(layer.connections, layerTileC, flip180, layer.nodes);
     });
 }
 
@@ -288,6 +311,7 @@ function tileHex(cellFaces, layerCellFaces, override) {
     const oc = override ? override.outerCorners : outerCorners;
     const ctr = override ? override.centroid : centroid;
     const connSet = override ? override.connections : connections;
+    const nodeArr = override ? override.nodes : nodes;
     const c0 = oc[0], c2 = oc[2], c4 = oc[4];
     const v1 = { x: c2.x - c0.x, y: c2.y - c0.y };
     const v2 = { x: c4.x - c0.x, y: c4.y - c0.y };
@@ -296,7 +320,7 @@ function tileHex(cellFaces, layerCellFaces, override) {
         for (let j = b.jMin; j <= b.jMax; j++) {
             const tileC = { x: ctr.x + i * v1.x + j * v2.x, y: ctr.y + i * v1.y + j * v2.y };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, tileC, false);
-            drawShapeCell(connSet, tileC, false);
+            drawShapeCell(connSet, tileC, false, nodeArr);
             if (!override) drawAdditionalLayers(tileC, false, layerCellFaces);
         }
     }
@@ -315,6 +339,7 @@ function tileSquare(cellFaces, layerCellFaces, override) {
     const oc = override ? override.outerCorners : outerCorners;
     const ctr = override ? override.centroid : centroid;
     const connSet = override ? override.connections : connections;
+    const nodeArr = override ? override.nodes : nodes;
     const c0 = oc[0], c1 = oc[1], c3 = oc[3];
     const v1 = { x: c1.x - c0.x, y: c1.y - c0.y };
     const v2 = { x: c3.x - c0.x, y: c3.y - c0.y };
@@ -323,7 +348,7 @@ function tileSquare(cellFaces, layerCellFaces, override) {
         for (let j = b.jMin; j <= b.jMax; j++) {
             const tileC = { x: ctr.x + i * v1.x + j * v2.x, y: ctr.y + i * v1.y + j * v2.y };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, tileC, false);
-            drawShapeCell(connSet, tileC, false);
+            drawShapeCell(connSet, tileC, false, nodeArr);
             if (!override) drawAdditionalLayers(tileC, false, layerCellFaces);
         }
     }
@@ -362,6 +387,7 @@ function tileTriangle(cellFaces, layerCellFaces, override) {
     const oc = override ? override.outerCorners : outerCorners;
     const ctr = override ? override.centroid : centroid;
     const connSet = override ? override.connections : connections;
+    const nodeArr = override ? override.nodes : nodes;
 
     const A = oc[0], B = oc[1], C = oc[2];
     const v1 = { x: (C.x - B.x) * (1 + horizontalAdjust), y: (C.y - B.y) * (1 + horizontalAdjust) };
@@ -397,13 +423,13 @@ function tileTriangle(cellFaces, layerCellFaces, override) {
             // Aufrechtes Dreieck
             const centerUp = { x: anchor.x + upOffset.x, y: anchor.y + upOffset.y };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, centerUp, false);
-            drawShapeCell(connSet, centerUp, false);
+            drawShapeCell(connSet, centerUp, false, nodeArr);
             if (!override) drawAdditionalLayers(centerUp, false, layerCellFaces);
 
             // Umgedrehtes Dreieck
             const centerDown = { x: anchor.x + downOffset.x, y: anchor.y + downOffset.y };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, centerDown, true);
-            drawShapeCell(connSet, centerDown, true);
+            drawShapeCell(connSet, centerDown, true, nodeArr);
             if (!override) drawAdditionalLayers(centerDown, true, layerCellFaces);
         }
     }
