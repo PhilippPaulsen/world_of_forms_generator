@@ -801,6 +801,15 @@ function activeConnections() { return activeLayer === 'base' ? connections : add
 function activeRedoStack() { return activeLayer === 'base' ? redoStack : additionalLayers[activeLayer].redoStack; }
 function clearActiveConnections() { if (activeLayer === 'base') connections = []; else additionalLayers[activeLayer].connections = []; }
 function clearActiveRedoStack() { if (activeLayer === 'base') redoStack = []; else additionalLayers[activeLayer].redoStack = []; }
+// Roadmap 1.12 stage 1 (node-resolution fix): same base/active-layer
+// split as the four helpers above, for the NODE array a click/random-
+// connection should resolve/create against - mousePressed()'s hit-test
+// and free-endpoint creation, and addRandomConnection()'s random pick,
+// previously always read the bare global `nodes` regardless of
+// activeLayer (the bug this fix addresses). Returns the actual array
+// (mutated via .push() by mousePressed(), same convention as
+// activeConnections()), not a copy.
+function activeNodes() { return activeLayer === 'base' ? nodes : additionalLayers[activeLayer].nodes; }
 
 // Roadmap 1.10a: same base/active-layer split as above, for the face-
 // fill toggle - "pro Blatt/Sheet unabhängig" (design session point 7),
@@ -1083,11 +1092,18 @@ function computeCrossLayerFacesFlow() {
 function mousePressed() {
     if (mouseX < 0 || mouseX > width || mouseY < 0 || mouseY > height) return;
     if (altNetActive) { handleAltNetClick(mouseX, mouseY); return; }
+    // Roadmap 1.12 stage 1 (node-resolution fix): activeNodes() instead
+    // of the bare global `nodes` - both the hit-test below and 1.3(a)'s
+    // free-endpoint creation previously always read/wrote the base's
+    // array regardless of activeLayer, so a free-endpoint node created
+    // while a layer tab was active silently landed in the BASE's node
+    // space (and id range) instead of that layer's own.
+    const activeNodeArr = activeNodes();
     let foundId = null;
-    for (let nd of nodes) { if (dist(mouseX, mouseY, nd.x, nd.y) < 18) { foundId = nd.id; break; } }
+    for (let nd of activeNodeArr) { if (dist(mouseX, mouseY, nd.x, nd.y) < 18) { foundId = nd.id; break; } }
     if (foundId === null && freeEndpointsEnabled) {
-        const newId = Math.max(...nodes.map(n => n.id), 0) + 1;
-        nodes.push({ id: newId, x: mouseX, y: mouseY, free: true });
+        const newId = Math.max(...activeNodeArr.map(n => n.id), 0) + 1;
+        activeNodeArr.push({ id: newId, x: mouseX, y: mouseY, free: true });
         foundId = newId;
     }
     if (foundId !== null) {
@@ -1100,7 +1116,12 @@ function mousePressed() {
 }
 
 function addRandomConnection() {
-    if (nodes.length < 2) return;
-    let i = floor(random(nodes.length)); let j = floor(random(nodes.length));
-    if (i === j) return; activeConnections().push([nodes[i].id, nodes[j].id]);
+    // Roadmap 1.12 stage 1 (node-resolution fix): same activeNodes()
+    // swap as mousePressed() - previously always picked from the bare
+    // global `nodes`, so a "random connection" added to a layer would
+    // reference the BASE's node ids even while that layer was active.
+    const activeNodeArr = activeNodes();
+    if (activeNodeArr.length < 2) return;
+    let i = floor(random(activeNodeArr.length)); let j = floor(random(activeNodeArr.length));
+    if (i === j) return; activeConnections().push([activeNodeArr[i].id, activeNodeArr[j].id]);
 }
