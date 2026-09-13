@@ -92,7 +92,15 @@ function computeLayerCellFaces() {
     if (active.length === 0) return null;
     const map = new Map();
     additionalLayers.forEach((layer, i) => {
-        if (layer.enabled && layer.showFaces && layer.shapeSizeFactor === shapeSizeFactor) map.set(i, computeCellFaces(layer.connections));
+        // Roadmap 1.12 stage 1 (node-resolution fix): layer.nodes passed
+        // through explicitly - computeCellFaces() no longer silently
+        // resolves this layer's connections against the global nodes
+        // array. The shapeSizeFactor guard above is unchanged (a
+        // separate, still-latent gap for a same-scale-different-order
+        // layer - not reachable via any shipped UI yet, flagged in the
+        // 1.12 stage-1 node-resolution-fix design session, not fixed
+        // here).
+        if (layer.enabled && layer.showFaces && layer.shapeSizeFactor === shapeSizeFactor) map.set(i, computeCellFaces(layer.connections, layer.nodes));
     });
     return map;
 }

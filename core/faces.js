@@ -52,12 +52,24 @@
 // for symmetry-orbit face coloring (1.10 design session, point 6): all
 // copies of one base connection - its full rotation/reflection orbit -
 // get the same connIndex and so the same color.
-function collectCellSegments(connSet) {
+// Roadmap 1.12 stage 1 (node-resolution fix): gridNodes defaults to the
+// base's own global `nodes` - every pre-existing call site that omits
+// it (the base sheet's own face computation) is byte-identical.
+// Mirrors drawShapeCell()'s own identical fix (core/tiling.js) - a
+// layer's own connections reference that layer's own node ids, which
+// may not even exist in the global nodes array (or worse, silently
+// resolve to the wrong, differently-positioned node of the same id).
+// centroid itself is NOT threaded here (unlike nodes) - stage 1's own
+// "shared center" constraint means every layer's centroid is the exact
+// same value as the base's by construction (core/forms.js's layerGrid()),
+// so the global `centroid` is already correct regardless of which
+// layer's faces are being computed.
+function collectCellSegments(connSet, gridNodes = nodes) {
     const tagged = [];
     connSet.forEach((conn, connIndex) => {
         if (conn.length !== 2) return; // mirror drawShapeCell's own completeness filter
         segmentCollector = [];
-        drawShapeCell([conn], centroid, false);
+        drawShapeCell([conn], centroid, false, gridNodes);
         segmentCollector.forEach(seg => tagged.push({ ...seg, connIndex }));
         segmentCollector = null;
     });
@@ -893,10 +905,14 @@ function findFaces(segments, realNodes) {
 // for Roadmap 1.4-A's curveType struct (was `curveAmount !== 0`) - still
 // just keeping this existing straight-line-only gate correctly wired,
 // not curve-aware face detection itself (still out of scope).
-function computeCellFaces(connSet) {
+// Roadmap 1.12 stage 1 (node-resolution fix): gridNodes threaded
+// through to collectCellSegments() and to findFaces() itself - see
+// that function's own comment for why only nodes (not centroid) needs
+// this.
+function computeCellFaces(connSet, gridNodes = nodes) {
     if (curveType.kind !== 'straight') return { nodes: [], faces: [] };
-    const segments = collectCellSegments(connSet);
-    return findFaces(segments, nodes);
+    const segments = collectCellSegments(connSet, gridNodes);
+    return findFaces(segments, gridNodes);
 }
 
 // Roadmap 1.10b-i: every real (non-synthetic) node's own translated
