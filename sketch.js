@@ -810,6 +810,19 @@ function clearActiveRedoStack() { if (activeLayer === 'base') redoStack = []; el
 // (mutated via .push() by mousePressed(), same convention as
 // activeConnections()), not a copy.
 function activeNodes() { return activeLayer === 'base' ? nodes : additionalLayers[activeLayer].nodes; }
+// Roadmap 1.12 stage 1 pass 2: the {nodes, centroid, outerCorners}
+// gridOverride core/orbits.js's computeThemeLineOrbitTable() (and
+// friends) expects - undefined for the base sheet, so callers can pass
+// this straight through as the (optional) gridOverride argument and get
+// that function's own base-global default, byte-identical to omitting
+// it entirely. For an additional layer, its own PERSISTED fields (see
+// addLayer()/updateActiveLayerGrid()) - never an ephemeral layerGrid()
+// call, per the node-resolution fix this mirrors.
+function activeGridOverride() {
+    if (activeLayer === 'base') return undefined;
+    const layer = additionalLayers[activeLayer];
+    return { nodes: layer.nodes, centroid: layer.centroid, outerCorners: layer.outerCorners };
+}
 
 // Roadmap 1.10a: same base/active-layer split as above, for the face-
 // fill toggle - "pro Blatt/Sheet unabhängig" (design session point 7),
@@ -899,7 +912,14 @@ function updatePatternNameStatus() {
 
     const sig = patternNameSignature();
     if (sig !== patternNameCacheSignature) {
-        patternNameCacheValue = computeThemeLineName(activeConnections());
+        // Roadmap 1.12 stage 1 pass 2 (node-resolution fix follow-through):
+        // activeGridOverride() instead of omitting the argument - this
+        // previously always computed the name against the BASE's own
+        // grid regardless of activeLayer, so a differently-sized/scaled
+        // layer's displayed name was silently wrong (orbit ids resolved
+        // against the wrong node set, same bug class the shipped fix
+        // addressed for rendering/interaction - just not yet wired here).
+        patternNameCacheValue = computeThemeLineName(activeConnections(), undefined, activeGridOverride());
         patternNameCacheSignature = sig;
     }
     statusEl.html(patternNameCacheValue || 'No theme lines yet');
