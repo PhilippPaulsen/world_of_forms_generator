@@ -52,7 +52,17 @@ function drawTessellation() {
     // unaffected, and still the cheaper path for the common case.
     additionalLayers.forEach((layer, i) => {
         if (!layer.enabled) return;
-        if (layer.shapeSizeFactor === shapeSizeFactor) return; // handled inside the base's own tile loop instead
+        // Roadmap 1.12 stage 3: also routed to the independent pass
+        // whenever this layer's own rotation is nonzero, even at matching
+        // scale - a rotated-but-same-scale layer riding the base's own
+        // tile loop (drawAdditionalLayers()) would get rotated CONTENT
+        // pasted onto the base's UNROTATED tile positions, not a true
+        // rigid rotation. The exact logical complement of
+        // drawAdditionalLayers()'s own updated guard below (De Morgan's
+        // law: NOT(scale===base AND rotation===0) === (scale!==base OR
+        // rotation!==0)), preserving the "every enabled layer drawn
+        // exactly once" invariant those two guards have always been.
+        if (layer.shapeSizeFactor === shapeSizeFactor && (layer.rotation || 0) === 0) return; // handled inside the base's own tile loop instead
         // Roadmap 1.12 stage 1 (node-resolution fix): reads this layer's
         // own PERSISTED outerCorners/centroid/nodes (populated once by
         // addLayer(), see its own comment) instead of calling
@@ -97,7 +107,17 @@ function drawTessellation() {
 // independent grid is a real follow-on gap, not fixed here - see the
 // 1.12 stage-1 design/implementation notes.
 function computeLayerCellFaces() {
-    const active = additionalLayers.filter(l => l.enabled && l.showFaces && l.shapeSizeFactor === shapeSizeFactor);
+    // Roadmap 1.12 stage 3: rotation excluded here too, same principle
+    // as the scale exclusion below - computeCellFaces()/
+    // collectCellSegments() (core/faces.js) call drawShapeCell() with no
+    // rotation-awareness at all (not threaded there in this stage), so a
+    // rotated layer's face-fill would be silently computed against its
+    // UNROTATED content. Left deliberately unfixed here, extending the
+    // already-on-record "per-layer face-fill for a genuinely independent
+    // grid is a real follow-on gap" note from stage 1 to also cover
+    // rotation, rather than threading rotation through faces.js in this
+    // pass.
+    const active = additionalLayers.filter(l => l.enabled && l.showFaces && l.shapeSizeFactor === shapeSizeFactor && (l.rotation || 0) === 0);
     if (active.length === 0) return null;
     const map = new Map();
     additionalLayers.forEach((layer, i) => {
@@ -109,7 +129,7 @@ function computeLayerCellFaces() {
         // layer - not reachable via any shipped UI yet, flagged in the
         // 1.12 stage-1 node-resolution-fix design session, not fixed
         // here).
-        if (layer.enabled && layer.showFaces && layer.shapeSizeFactor === shapeSizeFactor) map.set(i, computeCellFaces(layer.connections, layer.nodes));
+        if (layer.enabled && layer.showFaces && layer.shapeSizeFactor === shapeSizeFactor && (layer.rotation || 0) === 0) map.set(i, computeCellFaces(layer.connections, layer.nodes));
     });
     return map;
 }
@@ -210,7 +230,11 @@ function drawAdditionalLayers(tileCentroid, flip180 = false, layerCellFaces = nu
         // the base's is drawn by its own independent tile pass instead
         // (see drawTessellation()) - riding the base's tile loop here
         // would use the base's (wrong) pitch for it.
-        if (layer.shapeSizeFactor !== shapeSizeFactor) return;
+        // Roadmap 1.12 stage 3: same for a layer whose own rotation is
+        // nonzero, even at matching scale - see drawTessellation()'s own
+        // comment for why (and for this condition being that guard's
+        // exact logical complement, preserving "drawn exactly once").
+        if (layer.shapeSizeFactor !== shapeSizeFactor || (layer.rotation || 0) !== 0) return;
         const layerTileC = layerTileCentroid(tileCentroid, layer);
         if (layerCellFaces && layerCellFaces.has(i)) drawFaceFillsAtTile(layerCellFaces.get(i), layerTileC, flip180);
         // Roadmap 1.12 stage 1 (node-resolution fix): this layer's own

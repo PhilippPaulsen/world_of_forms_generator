@@ -1060,10 +1060,21 @@ function buildCrossLayerInput() {
 // silently compute wrong" principle as computeLayerCellFaces()'s own guard
 // (core/tiling.js). Returns the actual mismatched layers (not just a
 // boolean) so the status message can name them.
-function scaleMismatchedEnabledLayers() {
+//
+// Roadmap 1.12 stage 3: also excludes a layer with a nonzero rotation,
+// even at matching scale - renamed from scaleMismatchedEnabledLayers()
+// since it's no longer just a scale check. _planCrossLayerNeighborhood()/
+// _meshBasisVectors() (core/faces.js) assume every included layer shares
+// the base's EXACT v1/v2 - decomposeLatticeOffset() decomposes a layer's
+// offset against the BASE's own (unrotated) lattice vectors, and
+// collectCrossLayerSegments() calls drawShapeCell() with no rotation-
+// awareness at all. A same-scale-but-rotated layer would previously have
+// PASSED this guard (it only checked shapeSizeFactor) and gone on to
+// silently compute wrong cross-layer face geometry.
+function incompatibleEnabledLayersForCrossLayerFaces() {
     return additionalLayers
         .map((layer, i) => ({ index: i, layer }))
-        .filter(({ layer }) => layer.enabled && layer.shapeSizeFactor !== shapeSizeFactor);
+        .filter(({ layer }) => layer.enabled && (layer.shapeSizeFactor !== shapeSizeFactor || (layer.rotation || 0) !== 0));
 }
 
 // A cheap fingerprint of everything a cross-layer compute result
@@ -1105,10 +1116,10 @@ function updateCrossLayerStatus() {
     const statusEl = select('#cross-layer-status');
     if (!statusEl) return;
 
-    const mismatched = scaleMismatchedEnabledLayers();
+    const mismatched = incompatibleEnabledLayersForCrossLayerFaces();
     if (mismatched.length > 0) {
         const names = mismatched.map(({ index }) => `Layer ${index + 1}`).join(', ');
-        statusEl.html(`Cross-layer face detection needs every enabled layer to share the base's scale - ${names} ${mismatched.length === 1 ? 'has' : 'have'} an independent size. Match the scale or disable to compute.`);
+        statusEl.html(`Cross-layer face detection needs every enabled layer to share the base's scale and rotation - ${names} ${mismatched.length === 1 ? 'has' : 'have'} an independent size or rotation. Match the base or disable to compute.`);
         return;
     }
 
@@ -1140,13 +1151,13 @@ function computeCrossLayerFacesFlow() {
     if (!computeBtn) return;
 
     // Roadmap 1.12 stage 1: refuse outright rather than compute wrong
-    // faces - see scaleMismatchedEnabledLayers()'s own comment. Checked
-    // here too (not just in updateCrossLayerStatus()'s proactive
-    // display) as the actual hard safety net: the button could in
-    // principle still be clicked while the status text hasn't caught up
-    // for some reason, and this is the call that would do real,
+    // faces - see incompatibleEnabledLayersForCrossLayerFaces()'s own
+    // comment. Checked here too (not just in updateCrossLayerStatus()'s
+    // proactive display) as the actual hard safety net: the button could
+    // in principle still be clicked while the status text hasn't caught
+    // up for some reason, and this is the call that would do real,
     // silently-wrong work.
-    const mismatched = scaleMismatchedEnabledLayers();
+    const mismatched = incompatibleEnabledLayersForCrossLayerFaces();
     if (mismatched.length > 0) {
         updateCrossLayerStatus();
         return;
