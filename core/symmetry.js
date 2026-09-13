@@ -69,14 +69,28 @@ function reflectVerticallyAround(pt, center) {
 // axis via reflectAcrossLine()'s own sign-invariance - for all three
 // default axis-aligned builders, across a real shapeSizeFactor/
 // nodeCount/canvas sweep, not just the one config checked by hand here.
-function mirrorAxisDir() {
+// Roadmap 1.12 stage 3: outerCornersOverride/centroidOverride let a
+// differently-rotated layer's own independent tile pass (core/tiling.js)
+// compute ITS OWN true mirror axis, instead of always reading the
+// globals - undefined/omitted is byte-identical to before this stage,
+// since every pre-existing call site omits both. A rotated layer's own
+// outerCorners (already rotated about the shared centroid by the time
+// this is called - see each tile*() function's own comment) plugged
+// into this SAME, otherwise-unchanged formula correctly gives that
+// layer's own rotated axis - this function was already purely a
+// function of geometry (1.2-C's own point), so no new logic was needed
+// here, only parameterizing what was previously hardcoded to the
+// globals.
+function mirrorAxisDir(outerCornersOverride, centroidOverride) {
+    const oc = outerCornersOverride || outerCorners;
+    const ctr = centroidOverride || centroid;
     let dir;
     if (currentShape === 'triangle') {
-        dir = { x: outerCorners[0].x - centroid.x, y: outerCorners[0].y - centroid.y };
+        dir = { x: oc[0].x - ctr.x, y: oc[0].y - ctr.y };
     } else { // square, hex
-        const c0 = outerCorners[0], c1 = outerCorners[1];
+        const c0 = oc[0], c1 = oc[1];
         const mid = { x: (c0.x + c1.x) / 2, y: (c0.y + c1.y) / 2 };
-        dir = { x: mid.x - centroid.x, y: mid.y - centroid.y };
+        dir = { x: mid.x - ctr.x, y: mid.y - ctr.y };
     }
     const len = Math.hypot(dir.x, dir.y);
     return { x: dir.x / len, y: dir.y / len };
@@ -93,7 +107,19 @@ function mirrorAxisDir() {
 // the same underlying 'free' noise pattern, just transformed along with
 // the geometry - not independently re-rolled per copy (verified in the
 // 1.5-A implementation report).
-function drawConnectionWithSymmetry(p1, p2, center, id1, id2) {
+// Roadmap 1.12 stage 3: mirrorAxisOverride - undefined/omitted (every
+// pre-existing call site) falls back to mirrorAxisDir()'s own base-
+// global computation, byte-identical to before this stage. A rotated
+// layer's own independent tile pass (core/tiling.js) passes its own
+// true mirror axis here instead - computed ONCE per tile*() call (not
+// per connection), reused for every connection/tile that call draws.
+// Rotational symmetry copies (rotAngles.forEach below) need NO such
+// override: rotateAround(p1, center, a) composes correctly regardless
+// of any ambient pre-rotation of p1/center - a 120 degree copy is still
+// a valid 120 degree copy whichever way the whole tile is oriented.
+// Only reflection is orientation-dependent, which is why only the axis
+// (not the rotation angles themselves) needs threading through.
+function drawConnectionWithSymmetry(p1, p2, center, id1, id2, mirrorAxisOverride) {
     // Linienfarbe und Füllung werden im draw() global gesetzt
     strokeWeight(2);
     // Roadmap 1.4-A: curveType replaces the old bare curveAmount number
@@ -135,7 +161,7 @@ function drawConnectionWithSymmetry(p1, p2, center, id1, id2) {
     // old behavior for every default (axis-aligned) shape, since
     // mirrorAxisDir() reduces to exactly (0,+-1) there (verified).
     if (symmetryMode === 'reflection_only' || symmetryMode === 'rotation_reflection3' || symmetryMode === 'rotation_reflection6') {
-        const axisDir = mirrorAxisDir();
+        const axisDir = mirrorAxisOverride || mirrorAxisDir();
         const sRef = reflectAcrossLine(p1, center, axisDir);
         const eRef = reflectAcrossLine(p2, center, axisDir);
         drawCurvedBezier(sRef, eRef, mirrorCurveType(curveType), id1, id2);

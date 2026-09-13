@@ -65,7 +65,11 @@ function drawTessellation() {
         // layer's own offset (already settable via the existing 1.9
         // offset UI, already exported) had silently NO rendering effect
         // at all - see each tile*() function's own override-branch fix.
-        const override = { outerCorners: layer.outerCorners, centroid: layer.centroid, connections: layer.connections, nodes: layer.nodes, offsetX: layer.offsetX, offsetY: layer.offsetY };
+        // Roadmap 1.12 stage 3: rotation threaded through the same way -
+        // this layer's own rotation angle (degrees, about the shared
+        // centroid), read by each tile*() function's own override branch
+        // to rotate its outerCorners once (see there).
+        const override = { outerCorners: layer.outerCorners, centroid: layer.centroid, connections: layer.connections, nodes: layer.nodes, offsetX: layer.offsetX, offsetY: layer.offsetY, rotation: layer.rotation };
         const thisLayerFaces = (layerCellFaces && layerCellFaces.has(i)) ? layerCellFaces.get(i) : null;
         if (currentShape === 'hex') tileHex(thisLayerFaces, null, override);
         else if (currentShape === 'square') tileSquare(thisLayerFaces, null, override);
@@ -154,14 +158,22 @@ function getMeshWidth() {
 // cells (verified concretely before this fix: a connection spanning
 // one full base edge rendered 2x too long inside a half-scale layer's
 // own tile).
-function drawShapeCell(connSet, tileCentroid, flip180 = false, nodeArr = nodes) {
+// Roadmap 1.12 stage 3: rotationDeg/mirrorAxisOverride - both default to
+// byte-identical-to-before-this-stage values (0 / undefined) for every
+// pre-existing call site. rotationDeg is threaded into toTileLocal()
+// (rotates this layer's own node content); mirrorAxisOverride is
+// threaded into drawConnectionWithSymmetry() (this layer's own true
+// mirror axis for reflection copies) - both computed ONCE per tile*()
+// call by the caller (not re-derived per connection here), see each
+// tile*() function's own comment.
+function drawShapeCell(connSet, tileCentroid, flip180 = false, nodeArr = nodes, rotationDeg = 0, mirrorAxisOverride) {
     for (const conn of connSet) {
         if (conn.length === 2) {
             const n1 = nodeArr.find(n => n.id === conn[0]);
             const n2 = nodeArr.find(n => n.id === conn[1]);
             if (!n1 || !n2) continue;
-            const p1 = toTileLocal(n1, tileCentroid, flip180);
-            const p2 = toTileLocal(n2, tileCentroid, flip180);
+            const p1 = toTileLocal(n1, tileCentroid, flip180, rotationDeg);
+            const p2 = toTileLocal(n2, tileCentroid, flip180, rotationDeg);
             // Roadmap 1.5-A: n1.id/n2.id passed through so
             // core/curves.js's buildCurvePieces() can derive a per-
             // connection seed for kind:'free' - p1/p2 are already-
@@ -170,7 +182,7 @@ function drawShapeCell(connSet, tileCentroid, flip180 = false, nodeArr = nodes) 
             // connection's other tessellated/symmetry copies), so the
             // real ids have to be threaded through from here, the place
             // they're naturally still available.
-            drawConnectionWithSymmetry(p1, p2, tileCentroid, n1.id, n2.id);
+            drawConnectionWithSymmetry(p1, p2, tileCentroid, n1.id, n2.id, mirrorAxisOverride);
         }
     }
 }
@@ -321,7 +333,6 @@ function coveredRectCorners() {
 // is set: a layer's own independent tile pass has no further layers of
 // its own to draw.
 function tileHex(cellFaces, layerCellFaces, override) {
-    const oc = override ? override.outerCorners : outerCorners;
     const ctr = override ? override.centroid : centroid;
     const connSet = override ? override.connections : connections;
     const nodeArr = override ? override.nodes : nodes;
@@ -339,6 +350,24 @@ function tileHex(cellFaces, layerCellFaces, override) {
     // own layerTileCentroid() already uses for same-scale layers.
     const layerOffsetX = override ? override.offsetX : 0;
     const layerOffsetY = override ? override.offsetY : 0;
+    // Roadmap 1.12 stage 3: this layer's own rotation (degrees, about
+    // the shared centroid `ctr`) - 0 for the base sheet, byte-identical
+    // to before this stage. outerCorners rotated ONCE here via the
+    // existing, unmodified rotateAround() (core/symmetry.js) - feeds the
+    // v1/v2 derivation below unchanged, so the tile LATTICE itself (not
+    // just its content) rotates. `ctr` itself is NOT rotated - it's the
+    // shared pivot point, invariant under a rotation about itself.
+    // mirrorAxisOverride derived from this SAME (possibly rotated) `oc`,
+    // computed once here and reused for every drawShapeCell() call below
+    // - a non-rotated layer's own outerCorners still give the exact same
+    // direction as the base's (layerGrid()'s uniform positive scaling
+    // from the shared centroid preserves direction), so this is correct
+    // and harmless to compute unconditionally, not just when rotated.
+    const rotationDeg = override ? (override.rotation || 0) : 0;
+    const oc = override
+        ? (rotationDeg ? override.outerCorners.map(c => rotateAround(c, override.centroid, rotationDeg)) : override.outerCorners)
+        : outerCorners;
+    const mirrorAxisOverride = override ? mirrorAxisDir(oc, override.centroid) : undefined;
     const c0 = oc[0], c2 = oc[2], c4 = oc[4];
     const v1 = { x: c2.x - c0.x, y: c2.y - c0.y };
     const v2 = { x: c4.x - c0.x, y: c4.y - c0.y };
@@ -347,7 +376,7 @@ function tileHex(cellFaces, layerCellFaces, override) {
         for (let j = b.jMin; j <= b.jMax; j++) {
             const tileC = { x: ctr.x + i * v1.x + j * v2.x + layerOffsetX, y: ctr.y + i * v1.y + j * v2.y + layerOffsetY };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, tileC, false);
-            drawShapeCell(connSet, tileC, false, nodeArr);
+            drawShapeCell(connSet, tileC, false, nodeArr, rotationDeg, mirrorAxisOverride);
             if (!override) drawAdditionalLayers(tileC, false, layerCellFaces);
         }
     }
@@ -363,7 +392,6 @@ function tileHex(cellFaces, layerCellFaces, override) {
 // positions for the axis-aligned case (0 diff, not just near-exact).
 // Roadmap 1.12 stage 1: see tileHex()'s own comment for `override`.
 function tileSquare(cellFaces, layerCellFaces, override) {
-    const oc = override ? override.outerCorners : outerCorners;
     const ctr = override ? override.centroid : centroid;
     const connSet = override ? override.connections : connections;
     const nodeArr = override ? override.nodes : nodes;
@@ -372,6 +400,13 @@ function tileSquare(cellFaces, layerCellFaces, override) {
     // latticeIJBounds() origin).
     const layerOffsetX = override ? override.offsetX : 0;
     const layerOffsetY = override ? override.offsetY : 0;
+    // Roadmap 1.12 stage 3: see tileHex()'s own comment for this layer's
+    // own rotation, the rotated outerCorners, and mirrorAxisOverride.
+    const rotationDeg = override ? (override.rotation || 0) : 0;
+    const oc = override
+        ? (rotationDeg ? override.outerCorners.map(c => rotateAround(c, override.centroid, rotationDeg)) : override.outerCorners)
+        : outerCorners;
+    const mirrorAxisOverride = override ? mirrorAxisDir(oc, override.centroid) : undefined;
     const c0 = oc[0], c1 = oc[1], c3 = oc[3];
     const v1 = { x: c1.x - c0.x, y: c1.y - c0.y };
     const v2 = { x: c3.x - c0.x, y: c3.y - c0.y };
@@ -380,7 +415,7 @@ function tileSquare(cellFaces, layerCellFaces, override) {
         for (let j = b.jMin; j <= b.jMax; j++) {
             const tileC = { x: ctr.x + i * v1.x + j * v2.x + layerOffsetX, y: ctr.y + i * v1.y + j * v2.y + layerOffsetY };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, tileC, false);
-            drawShapeCell(connSet, tileC, false, nodeArr);
+            drawShapeCell(connSet, tileC, false, nodeArr, rotationDeg, mirrorAxisOverride);
             if (!override) drawAdditionalLayers(tileC, false, layerCellFaces);
         }
     }
@@ -422,7 +457,6 @@ function tileTriangle(cellFaces, layerCellFaces, override) {
     // "horizontal"/"vertical" component to scale independently - a
     // no-op at their current 0.0 values (x*(1+0) is exact), but a
     // scoping note for whoever revisits them.
-    const oc = override ? override.outerCorners : outerCorners;
     const ctr = override ? override.centroid : centroid;
     const connSet = override ? override.connections : connections;
     const nodeArr = override ? override.nodes : nodes;
@@ -433,6 +467,17 @@ function tileTriangle(cellFaces, layerCellFaces, override) {
     // same reasoning as tileHex()'s own comment.
     const layerOffsetX = override ? override.offsetX : 0;
     const layerOffsetY = override ? override.offsetY : 0;
+    // Roadmap 1.12 stage 3: see tileHex()'s own comment for this layer's
+    // own rotation, the rotated outerCorners, and mirrorAxisOverride.
+    // Rotating A/B/C here (before v1/v2/upOffset/downOffset are derived)
+    // rotates B too - the SAME B latticeIJBounds() below uses as its
+    // origin, so the tile lattice's own anchor point rotates along with
+    // v1/v2, consistently.
+    const rotationDeg = override ? (override.rotation || 0) : 0;
+    const oc = override
+        ? (rotationDeg ? override.outerCorners.map(c => rotateAround(c, override.centroid, rotationDeg)) : override.outerCorners)
+        : outerCorners;
+    const mirrorAxisOverride = override ? mirrorAxisDir(oc, override.centroid) : undefined;
 
     const A = oc[0], B = oc[1], C = oc[2];
     const v1 = { x: (C.x - B.x) * (1 + horizontalAdjust), y: (C.y - B.y) * (1 + horizontalAdjust) };
@@ -468,13 +513,13 @@ function tileTriangle(cellFaces, layerCellFaces, override) {
             // Aufrechtes Dreieck
             const centerUp = { x: anchor.x + upOffset.x + layerOffsetX, y: anchor.y + upOffset.y + layerOffsetY };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, centerUp, false);
-            drawShapeCell(connSet, centerUp, false, nodeArr);
+            drawShapeCell(connSet, centerUp, false, nodeArr, rotationDeg, mirrorAxisOverride);
             if (!override) drawAdditionalLayers(centerUp, false, layerCellFaces);
 
             // Umgedrehtes Dreieck
             const centerDown = { x: anchor.x + downOffset.x + layerOffsetX, y: anchor.y + downOffset.y + layerOffsetY };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, centerDown, true);
-            drawShapeCell(connSet, centerDown, true, nodeArr);
+            drawShapeCell(connSet, centerDown, true, nodeArr, rotationDeg, mirrorAxisOverride);
             if (!override) drawAdditionalLayers(centerDown, true, layerCellFaces);
         }
     }

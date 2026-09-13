@@ -102,11 +102,28 @@ let showFaces = false;
 let altNetSeed = null;
 
 // ----------------- STATE HELPERS ---------------------------------
-function toTileLocal(n, tileC, flip180) {
+// Roadmap 1.12 stage 3: rotationDeg (default 0, byte-identical to
+// before this stage for every pre-existing call site) rotates the
+// node's centroid-relative delta vector by this layer's own rotation,
+// BEFORE flip180's sign-flip and before placing it at tileC - reads the
+// GLOBAL centroid always, still correct per stage 1's own "shared
+// centroid" invariant (a layer's rotation is a rotation about that same
+// shared point, never moving it). Composed with core/tiling.js's own
+// rotation of that layer's v1/v2 (see each tile*() function's own
+// comment), this reconstructs a true rigid rotation of the whole
+// tessellation: both the TILE POSITIONS and the CONTENT within each
+// tile rotate by the same angle about the same center.
+function toTileLocal(n, tileC, flip180, rotationDeg = 0) {
     // shift node by removing center centroid, place at tile centroid; optional 180° flip
     let x = n.x - centroid.x;
     let y = n.y - centroid.y;
     if (flip180) { x = -x; y = -y; }
+    if (rotationDeg) {
+        const rad = radians(rotationDeg);
+        const rx = x * cos(rad) - y * sin(rad);
+        const ry = x * sin(rad) + y * cos(rad);
+        x = rx; y = ry;
+    }
     return { x: tileC.x + x, y: tileC.y + y };
 }
 
