@@ -715,15 +715,44 @@ function draw() {
     }
 
     // Knoten (Hover rot)
+    // Roadmap [layer node-dot rendering fix]: previously always the base
+    // sheet's own `nodes`, regardless of activeLayer - an active,
+    // differently-scaled/shaped layer's own node positions (already
+    // correctly click-resolvable via activeNodes(), the stage-1 fix)
+    // were never actually drawn, making it impossible to see where to
+    // click to build a theme-line for that layer. Base sheet: full
+    // interactive styling when it IS the active sheet (byte-identical to
+    // before this fix), dimmed light gray when a layer tab is active
+    // instead - drawTessellation() still renders the base's own
+    // connections regardless of activeLayer, so its dots stay visible
+    // for spatial reference (shared centroid) rather than disappearing
+    // while its lines remain on screen. Scope: base + the ACTIVE layer
+    // only, not every simultaneously-enabled layer (design confirmed).
     if (showNodes) {
         push();
         noStroke();
         nodes.forEach(nd => {
-            const d = dist(mouseX, mouseY, nd.x, nd.y);
-            // Default: Schwarz (Grid) / Blau (frei) oder Rot bei Hover
-            fill(d < 10 ? color(220, 0, 0) : (nd.free ? color(30, 110, 220) : color(0)));
+            if (activeLayer === 'base') {
+                const d = dist(mouseX, mouseY, nd.x, nd.y);
+                // Default: Schwarz (Grid) / Blau (frei) oder Rot bei Hover
+                fill(d < 10 ? color(220, 0, 0) : (nd.free ? color(30, 110, 220) : color(0)));
+            } else {
+                fill(200);
+            }
             ellipse(nd.x, nd.y, 6, 6);
         });
+        // The active layer's own persisted nodes (canonical, untransformed
+        // positions - same rendering convention as the base's own dots
+        // above, see layerGrid()/addLayer()'s own comments for why these
+        // are already in the right coordinate space with no offset/
+        // rotation baked in).
+        if (activeLayer !== 'base') {
+            additionalLayers[activeLayer].nodes.forEach(nd => {
+                const d = dist(mouseX, mouseY, nd.x, nd.y);
+                fill(d < 10 ? color(220, 0, 0) : (nd.free ? color(30, 110, 220) : color(0)));
+                ellipse(nd.x, nd.y, 6, 6);
+            });
+        }
         pop();
     }
 
