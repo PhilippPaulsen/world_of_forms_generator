@@ -328,6 +328,12 @@ function setup() {
     const shapeSizeGroup = select('#layer-shape-size-group');
     const layerNodeCountInput = select('#layer-node-count-input');
     const layerShapeSizeInput = select('#layer-shape-size-input');
+    // Roadmap 1.12 stage 4 (UI): this layer's own shape - same
+    // contextual show/hide handling as the fields above, PLUS an
+    // active-state sync (which of the three buttons reflects
+    // layer.shape) since this is a button group, not a value input.
+    const shapeGroup = select('#layer-shape-group');
+    const layerShapeBtns = selectAll('.layer-shape-icon-btn');
     // Roadmap 1.12 stage 3: this layer's own rotation - same contextual
     // show/hide + populate-on-switch handling as the fields above,
     // folded into this same function for the same reason.
@@ -339,6 +345,7 @@ function setup() {
         if (offsetXGroup) offsetXGroup.elt.hidden = !showOffsets;
         if (offsetYGroup) offsetYGroup.elt.hidden = !showOffsets;
         if (meshPresetGroup) meshPresetGroup.elt.hidden = !showOffsets;
+        if (shapeGroup) shapeGroup.elt.hidden = !showOffsets;
         if (nodeCountGroup) nodeCountGroup.elt.hidden = !showOffsets;
         if (shapeSizeGroup) shapeSizeGroup.elt.hidden = !showOffsets;
         if (rotationGroup) rotationGroup.elt.hidden = !showOffsets;
@@ -349,6 +356,15 @@ function setup() {
             if (layerNodeCountInput) layerNodeCountInput.value(layer.nodeCount);
             if (layerShapeSizeInput) layerShapeSizeInput.value(layer.shapeSizeFactor);
             if (layerRotationInput) layerRotationInput.value(layer.rotation || 0);
+            // Roadmap 1.12 stage 4 (UI): active-state sync for the
+            // layer-shape button group, mirroring how the base's own
+            // .shape-icon-btn set tracks currentShape - this is the
+            // "populate on switch" step for a button group instead of a
+            // value input.
+            layerShapeBtns.forEach(b => {
+                if (b.attribute('data-shape') === layer.shape) b.addClass('active');
+                else b.removeClass('active');
+            });
         }
     }
     // Roadmap 1.2-C: exposed as a global - updateOffsetControls()/
@@ -440,6 +456,27 @@ function setup() {
             updateOffsetControls();
             updateFaceToggleControl();
             redraw();
+        });
+    }
+
+    // Roadmap 1.12 stage 4 (UI): this layer's own shape - the missing
+    // piece that finally makes a real cross-net-type combination
+    // (e.g. triangle base + hexagon layer) reachable through actual
+    // clicks, not just script-driven state (stage 4 parts 1-2 already
+    // shipped the data model/rendering/symmetry for it). Separate
+    // handler from the base's own .shape-icon-btn one above - writes
+    // additionalLayers[activeLayer].shape via updateActiveLayerGrid(),
+    // never currentShape, and updates only the LAYER buttons' own
+    // active state (the base's selector is untouched by this).
+    if (layerShapeBtns.length) {
+        layerShapeBtns.forEach(btn => {
+            btn.mousePressed(() => {
+                if (activeLayer === 'base') return;
+                layerShapeBtns.forEach(b => b.removeClass('active'));
+                btn.addClass('active');
+                updateActiveLayerGrid({ shape: btn.attribute('data-shape') });
+                redraw();
+            });
         });
     }
 
