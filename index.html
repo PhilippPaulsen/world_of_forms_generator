@@ -594,6 +594,22 @@
         <input type="number" id="layer-shape-size-input" min="1" max="9" value="5">
       </div>
 
+      <!-- Roadmap 1.12 "Align to base": computed suggestion, same
+           explicit-action convention as the mesh-width preset buttons
+           below (#btn-mesh-preset-x/-y) - never automatic. Same-shape
+           only (this layer's shape must match the base's currentShape);
+           sketch.js disables the button (with a tooltip explaining why)
+           rather than hiding it when that's not the case, so its
+           presence stays a consistent visual anchor across layer
+           switches. The status span reports the explicit "not
+           achievable within the current parameter ranges" case -
+           core/forms.js's alignLayerToBase() never applies an inexact
+           approximation. -->
+      <div class="control-group" id="layer-align-group" hidden>
+        <button id="btn-align-to-base" class="layer-btn" title="Align to base">Align to base</button>
+        <span id="align-to-base-status"></span>
+      </div>
+
       <!-- Offset Controls - contextual to whichever layer tab is
            active (one X/Y pair, not one per layer); hidden while Base
            is active, since the base sheet has no offset concept. -->

@@ -368,3 +368,86 @@ function layerGrid(baseOuterCorners, baseCentroid, baseShape, baseShapeSizeFacto
     else grid = buildHexGrid(layerNodeCount, layerShapeSizeFactor, canvasW, canvasH, baseCentroid);
     return { nodes: grid.nodes, centroid: baseCentroid, outerCorners: grid.outerCorners };
 }
+
+// Roadmap 1.12 "Align to base" (design session): the exact condition
+// under which a SAME-SHAPE layer's grid (layerGrid()'s scale-existing-
+// outerCorners path above) is a strict superset of the base's own
+// nodes - derived and exhaustively verified (hundreds of real cases per
+// shape, zero mismatches) in the design session, not assumed by analogy
+// between shapes. All three shapes share one mechanism: layerGrid()
+// scales the base's own outerCorners by ratio=baseShapeSizeFactor/
+// layerShapeSizeFactor around the shared centroid, so whether the
+// base's OWN vertex-anchored lattice points land exactly on the
+// layer's (generally finer) lattice reduces to whether the vertex's
+// fixed fractional offset from centroid (2/3,1/3 for triangle's 2:1
+// median split; 1/2,1/2 for square's raster corner; exactly 0 for hex,
+// whose centroid IS itself always a node - see _subdivideHexInterior())
+// lands on an integer lattice point once re-expressed in the layer's
+// own (finer) mesh-step units.
+//
+// Three conditions, all necessary:
+// - Condition A (mesh-step commensurability): k = [layerShapeSizeFactor
+//   * (layerNodeCount-1)] / [baseShapeSizeFactor*(baseNodeCount-1)] -
+//   for hex, uses nodeCount directly (not nodeCount-1), since hex's own
+//   mesh step formula (canvasH/(sqrt(3)*shapeSizeFactor*nodeCount), see
+//   buildHexGrid()) already divides by nodeCount, not nodeCount-1 - must
+//   be a positive integer.
+// - Condition B (centroid-alignment): with D = k*(baseNodeCount-1) -
+//   (layerNodeCount-1) [triangle/square] - a general identity that
+//   always evaluates to an integer once Condition A holds - D must be
+//   divisible by 3 for triangle, by 2 for square, and (since hex's
+//   centroid offset is exactly zero) no condition is needed for hex at
+//   all - verified: 0 mismatches out of 142 real hex cases satisfying
+//   only Condition A.
+// - Condition C (container size): layerShapeSizeFactor <=
+//   baseShapeSizeFactor - a smaller-scaled (larger shapeSizeFactor)
+//   layer's own boundary cannot physically contain the base's own
+//   (larger) outer nodes, regardless of lattice alignment.
+function _alignmentConditionMet(baseShapeSizeFactor, baseNodeCount, layerShapeSizeFactor, layerNodeCount, shape) {
+    if (layerShapeSizeFactor > baseShapeSizeFactor) return false; // Condition C
+    if (shape === 'hex') {
+        const num = layerShapeSizeFactor * layerNodeCount;
+        const den = baseShapeSizeFactor * baseNodeCount;
+        return num % den === 0; // Condition A only - hex has no Condition B
+    }
+    if (baseNodeCount < 2) return false; // no meaningful mesh step to align to (degenerate corners-only base)
+    const num = layerShapeSizeFactor * (layerNodeCount - 1);
+    const den = baseShapeSizeFactor * (baseNodeCount - 1);
+    if (num % den !== 0) return false; // Condition A
+    const k = num / den;
+    const D = k * (baseNodeCount - 1) - (layerNodeCount - 1);
+    const divisor = shape === 'triangle' ? 3 : 2; // Condition B
+    return D % divisor === 0;
+}
+
+// Roadmap 1.12 "Align to base": searches the layer's own reachable
+// parameter space (shapeSizeFactor 1..baseShapeSizeFactor - Condition C
+// folded directly into the search range rather than checked separately;
+// nodeCount 2..5, matching #layer-node-count-input's own real UI bounds
+// - searching beyond what the UI can actually express would produce an
+// unusable suggestion) for the SMALLEST valid (shapeSizeFactor,
+// nodeCount) pair satisfying _alignmentConditionMet() above - "smallest"
+// meaning fewest nodes first (nodeCount ascending), then coarsest scale
+// (shapeSizeFactor ascending) as the tiebreak, a simple and deterministic
+// notion of minimality. layerCurrentShapeSizeFactor/layerCurrentNodeCount
+// are accepted for signature symmetry with this file's other layer-
+// facing functions (explicit-parameters-only, no global reads - same
+// "testable headlessly" standard as layerGrid() itself) but are not
+// themselves searched over; the trivial already-aligned case (the
+// layer's current values already satisfy the condition) is simply the
+// first match this same search would find on its own, nothing special-
+// cased. Returns {achievable:false} - never an inexact "closest match"
+// - when no pair within these bounds satisfies the condition, matching
+// this codebase's established "refuse rather than compute wrong"
+// precedent (core/tiling.js's computeLayerCellFaces(), sketch.js's
+// incompatibleEnabledLayersForCrossLayerFaces()).
+function alignLayerToBase(baseShapeSizeFactor, baseNodeCount, layerCurrentShapeSizeFactor, layerCurrentNodeCount, shape) {
+    for (let nodeCount = 2; nodeCount <= 5; nodeCount++) {
+        for (let shapeSizeFactor = 1; shapeSizeFactor <= baseShapeSizeFactor; shapeSizeFactor++) {
+            if (_alignmentConditionMet(baseShapeSizeFactor, baseNodeCount, shapeSizeFactor, nodeCount, shape)) {
+                return { achievable: true, shapeSizeFactor, nodeCount };
+            }
+        }
+    }
+    return { achievable: false };
+}

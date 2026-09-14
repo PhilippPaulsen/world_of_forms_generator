@@ -334,6 +334,14 @@ function setup() {
     // layer.shape) since this is a button group, not a value input.
     const shapeGroup = select('#layer-shape-group');
     const layerShapeBtns = selectAll('.layer-shape-icon-btn');
+    // Roadmap 1.12 "Align to base": same contextual show/hide as the
+    // fields above, PLUS a disabled-state sync (same-shape-only, per
+    // this feature's scope) and clearing any stale "not achievable"
+    // message on every switch, so it never lingers across a layer
+    // change or shape change it no longer applies to.
+    const alignGroup = select('#layer-align-group');
+    const alignBtn = select('#btn-align-to-base');
+    const alignStatus = select('#align-to-base-status');
     // Roadmap 1.12 stage 3: this layer's own rotation - same contextual
     // show/hide + populate-on-switch handling as the fields above,
     // folded into this same function for the same reason.
@@ -346,6 +354,7 @@ function setup() {
         if (offsetYGroup) offsetYGroup.elt.hidden = !showOffsets;
         if (meshPresetGroup) meshPresetGroup.elt.hidden = !showOffsets;
         if (shapeGroup) shapeGroup.elt.hidden = !showOffsets;
+        if (alignGroup) alignGroup.elt.hidden = !showOffsets;
         if (nodeCountGroup) nodeCountGroup.elt.hidden = !showOffsets;
         if (shapeSizeGroup) shapeSizeGroup.elt.hidden = !showOffsets;
         if (rotationGroup) rotationGroup.elt.hidden = !showOffsets;
@@ -365,6 +374,18 @@ function setup() {
                 if (b.attribute('data-shape') === layer.shape) b.addClass('active');
                 else b.removeClass('active');
             });
+            // Roadmap 1.12 "Align to base": same-shape-only, per this
+            // feature's scope (triangle-hex/square-anything exact
+            // alignment needs a decoupled, non-integer sizing input -
+            // out of scope, a later session). Disabled (not hidden) so
+            // the button stays a consistent visual anchor; the tooltip
+            // explains why when it's unavailable.
+            if (alignBtn) {
+                const shapeMatches = layer.shape === currentShape;
+                alignBtn.elt.disabled = !shapeMatches;
+                alignBtn.attribute('title', shapeMatches ? 'Align to base' : "Only available when this layer's shape matches the base's");
+            }
+            if (alignStatus) alignStatus.html('');
         }
     }
     // Roadmap 1.2-C: exposed as a global - updateOffsetControls()/
@@ -477,6 +498,40 @@ function setup() {
                 updateActiveLayerGrid({ shape: btn.attribute('data-shape') });
                 redraw();
             });
+        });
+    }
+
+    // Roadmap 1.12 "Align to base": computed suggestion, same explicit-
+    // action convention as the mesh-width preset buttons below (never
+    // automatic). alignLayerToBase() (core/forms.js) searches the
+    // layer's own reachable parameter range for the smallest
+    // (shapeSizeFactor, nodeCount) pair whose grid is a strict superset
+    // of the base's own nodes - see the design session for the derived,
+    // per-shape condition. Guarded by activeLayer/shape-match even
+    // though the button is already disabled in that state (updateOffsetControls()) -
+    // defense in depth against a stale click queued before a fast
+    // layer/shape switch. On success, applies via the SAME
+    // updateActiveLayerGrid() path every other layer-grid-changing
+    // control already uses (clears this layer's own connections/
+    // redoStack, refreshes its persisted grid) and syncs the now-stale
+    // Layer Node Count/Layer Shape Size input displays. On
+    // {achievable:false}, shows an explicit status message - never a
+    // silent no-op, never an inexact approximation applied instead.
+    if (alignBtn) {
+        alignBtn.mousePressed(() => {
+            if (activeLayer === 'base') return;
+            const layer = additionalLayers[activeLayer];
+            if (layer.shape !== currentShape) return;
+            const result = alignLayerToBase(shapeSizeFactor, nodeCount, layer.shapeSizeFactor, layer.nodeCount, layer.shape);
+            if (result.achievable) {
+                updateActiveLayerGrid({ shapeSizeFactor: result.shapeSizeFactor, nodeCount: result.nodeCount });
+                if (layerShapeSizeInput) layerShapeSizeInput.value(layer.shapeSizeFactor);
+                if (layerNodeCountInput) layerNodeCountInput.value(layer.nodeCount);
+                if (alignStatus) alignStatus.html('');
+                redraw();
+            } else {
+                if (alignStatus) alignStatus.html('Not achievable within the current parameter ranges.');
+            }
         });
     }
 
