@@ -1046,7 +1046,21 @@ function updateActiveLayerGrid(patch) {
     Object.assign(layer, patch);
     layer.connections = [];
     layer.redoStack = [];
-    const grid = layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.nodeCount);
+    // Roadmap 1.12 stage 4 (UI) bugfix: layer.shape (post-patch, so a
+    // {shape:...} patch takes effect on the SAME refresh that applies
+    // it) and canvasW/canvasH were previously omitted here entirely -
+    // layerGrid()'s layerShape parameter silently defaulted to baseShape
+    // (currentShape) every time, so its cross-shape branch (which needs
+    // canvasW/canvasH to size the new polygon - buildTriangleGrid()/
+    // buildSquareGrid()/buildHexGrid()) was never actually reachable
+    // through this function, for ANY layer - latent and harmless before
+    // this session, since nothing could set a layer's shape differently
+    // from the base's before this control existed, but a real bug now
+    // that it does: without this, a shape-changing patch would update
+    // layer.shape itself (Object.assign above) while silently leaving
+    // the actual persisted grid geometry unchanged (still the base's
+    // shape) - see the design session's own before/after verification.
+    const grid = layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.nodeCount, layer.shape, canvasW, canvasH);
     layer.nodes = grid.nodes;
     layer.centroid = grid.centroid;
     layer.outerCorners = grid.outerCorners;
