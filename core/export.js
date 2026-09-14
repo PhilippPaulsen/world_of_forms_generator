@@ -206,6 +206,21 @@ function buildExportData(crossLayerData) {
                 // exported) but necessary for a differently-scaled one.
                 outerCorners: layer.outerCorners.map(c => ({ x: c.x, y: c.y })),
                 centroid: { x: layer.centroid.x, y: layer.centroid.y },
+                // Roadmap 1.12 stage 4 (export gap, flagged during the
+                // orbits.js shape-mismatch fix, built separately here):
+                // this layer's own shape - every sibling field above/
+                // below already describes how this layer's own geometry
+                // is placed/scaled, but nothing previously said WHAT
+                // shape it actually is once that can differ from the
+                // base's own meta.shapeType. No fallback default (unlike
+                // rotation's `|| 0`) - unlike rotation, which guards a
+                // hypothetical older-layer-object rehydration path, this
+                // app has no import/rehydration mechanism of its own
+                // (checked directly, not assumed) and addLayer() has set
+                // .shape unconditionally on every layer since stage 4,
+                // so every real layer object reaching this point already
+                // has it.
+                shape: layer.shape,
                 shapeSizeFactor: layer.shapeSizeFactor,
                 nodeCount: layer.nodeCount,
                 offsetX: layer.offsetX,
