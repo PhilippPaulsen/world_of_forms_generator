@@ -1079,7 +1079,21 @@ function updatePatternNameStatus() {
         patternNameCacheValue = computeThemeLineName(activeConnections(), undefined, activeGridOverride());
         patternNameCacheSignature = sig;
     }
-    statusEl.html(patternNameCacheValue || 'No theme lines yet');
+    // Roadmap [orbits.js free-endpoint fix]: computeThemeLineName() now
+    // returns null both when nothing's drawn yet AND when the active
+    // sheet's connections include a free-endpoint node (1.3(a) - no
+    // orbit under the fixed symmetry group by construction, see
+    // core/orbits.js's computeThemeLineOrbits()) - these are genuinely
+    // different situations and shouldn't share one fallback text; the
+    // old unconditional "No theme lines yet" would be actively
+    // misleading for a sheet that clearly has visible lines.
+    if (patternNameCacheValue) {
+        statusEl.html(patternNameCacheValue);
+    } else if (activeConnections().some(c => c.length === 2)) {
+        statusEl.html('Name unavailable (includes free endpoints)');
+    } else {
+        statusEl.html('No theme lines yet');
+    }
 }
 
 // ----------------- CROSS-LAYER FACE COMPUTE (Roadmap 1.10b-ii-b) -----

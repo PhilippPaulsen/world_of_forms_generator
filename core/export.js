@@ -243,9 +243,21 @@ function buildExportData(crossLayerData) {
             // straight one. Omitted entirely (not present as null) when
             // this layer has no complete connections yet, same
             // "nothing to export" convention as the top-level case below.
+            // Roadmap [orbits.js free-endpoint fix]: computeThemeLineName()
+            // now returns null when this layer's connections include a
+            // free-endpoint node (no orbit under the fixed group by
+            // construction), not just when nothing's drawn - compute
+            // first, then gate BOTH fields together on a non-null name,
+            // so an unnameable pattern stays fully omitted rather than
+            // exporting an explicit null or a holed themeLineOrbits
+            // array, same "additive, present-only-when-valid" convention
+            // this file already uses for every other optional field.
             if (completeLayerConnections.length > 0) {
-                layerData.patternName = computeThemeLineName(completeLayerConnections, undefined, layerGridOverride);
-                layerData.themeLineOrbits = computeThemeLineOrbitAssignments(completeLayerConnections, undefined, layerGridOverride);
+                const layerPatternName = computeThemeLineName(completeLayerConnections, undefined, layerGridOverride);
+                if (layerPatternName) {
+                    layerData.patternName = layerPatternName;
+                    layerData.themeLineOrbits = computeThemeLineOrbitAssignments(completeLayerConnections, undefined, layerGridOverride);
+                }
             }
             return layerData;
         });
@@ -271,9 +283,16 @@ function buildExportData(crossLayerData) {
     // function already reads directly. Per-shape/curveType guard not
     // needed here either, for the same reason as the per-layer addition
     // above.
+    // Roadmap [orbits.js free-endpoint fix]: same gate-on-non-null-name
+    // treatment as the per-layer case above - a free-endpoint-inclusive
+    // base sheet omits both fields entirely rather than exporting an
+    // explicit null.
     if (completeConnections.length > 0) {
-        data.patternName = computeThemeLineName(completeConnections);
-        data.geometry.themeLineOrbits = computeThemeLineOrbitAssignments(completeConnections);
+        const basePatternName = computeThemeLineName(completeConnections);
+        if (basePatternName) {
+            data.patternName = basePatternName;
+            data.geometry.themeLineOrbits = computeThemeLineOrbitAssignments(completeConnections);
+        }
     }
 
     // Roadmap 1.10b-ii-c: geometry.crossLayer - additive the same way as

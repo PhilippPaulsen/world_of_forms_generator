@@ -236,7 +236,25 @@ function _pairKey(a, b) {
 // themselves by their own first (smallest) pair's key - fully
 // reproducible from (shape, order, symmetryMode) alone, no arbitrary
 // insertion-order dependence.
+// Roadmap [orbits.js free-endpoint fix]: a free-endpoint node (1.3(a))
+// is, by construction, not a member of the canonical symmetric grid this
+// group acts on - its image under any non-trivial rotation/reflection
+// generically lands nowhere near any real node (verified: only a free
+// node placed exactly at the centroid, a fixed point of every op here,
+// survives; any other position crashes _nearestOrbitNodeId() - see the
+// design session's own headless verification). Excluding free nodes
+// here, before pairs/permutations are built, keeps that throw's original
+// meaning intact: it's still a real-bug detector for an actually
+// asymmetric grid (a forms.js/_rotAnglesAndReflectionFor() sync bug),
+// never a routine outcome of ordinary free-endpoint use. Orbit theory
+// (and therefore 1.11's naming scheme) is philosophically scoped to the
+// lawful/systematic grid only - Ostwald's own framing of free endpoints
+// as "diminished lawfulness, i.e. greater freedom" means a free node
+// having no orbit here is the correct outcome, not a gap. This also
+// means nodeTotal/rawPairCount below describe the orbit-eligible domain
+// this table actually covers, not the full live node count.
 function computeThemeLineOrbits(nodes, centroid, shape, symmetryMode, outerCorners, eps = ORBIT_NODE_EPSILON) {
+    const orbitNodes = nodes.filter(n => !n.free);
     const { rotAngles, hasReflection } = _rotAnglesAndReflectionFor(shape, symmetryMode);
     const groupToken = groupTokenFor(shape, symmetryMode);
     const mirrorDir = _mirrorAxisDirPure(outerCorners, centroid, shape);
@@ -244,11 +262,11 @@ function computeThemeLineOrbits(nodes, centroid, shape, symmetryMode, outerCorne
     const groupOrder = ops.length;
 
     const pairs = [];
-    for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) pairs.push([nodes[i].id, nodes[j].id]);
+    for (let i = 0; i < orbitNodes.length; i++) {
+        for (let j = i + 1; j < orbitNodes.length; j++) pairs.push([orbitNodes[i].id, orbitNodes[j].id]);
     }
 
-    const perms = ops.map(op => _computeNodePermutation(nodes, centroid, op, eps));
+    const perms = ops.map(op => _computeNodePermutation(orbitNodes, centroid, op, eps));
 
     const parent = new Map(pairs.map(([a, b]) => [_pairKey(a, b), _pairKey(a, b)]));
     const pairById = new Map(pairs.map(([a, b]) => [_pairKey(a, b), [a, b]]));
@@ -285,7 +303,7 @@ function computeThemeLineOrbits(nodes, centroid, shape, symmetryMode, outerCorne
         return { orbitId, pairs: members };
     });
 
-    return { shape, symmetryMode, groupToken, groupOrder, nodeTotal: nodes.length, rawPairCount: pairs.length, orbits, pairToOrbitId };
+    return { shape, symmetryMode, groupToken, groupOrder, nodeTotal: orbitNodes.length, rawPairCount: pairs.length, orbits, pairToOrbitId };
 }
 
 // Roadmap 1.11 design session: Burnside's lemma applied directly
@@ -298,19 +316,25 @@ function computeThemeLineOrbits(nodes, centroid, shape, symmetryMode, outerCorne
 // verified by tests, this is redundant work to pay for on every real
 // call, not a live consistency guard - see this file's own docblock.
 function burnsideOrbitCount(nodes, centroid, shape, symmetryMode, outerCorners, eps = ORBIT_NODE_EPSILON) {
+    // Roadmap [orbits.js free-endpoint fix]: mirrors computeThemeLineOrbits()'s
+    // own free-node filter (see there) - this function isn't called from
+    // any live code path today (test-only cross-check, per this file's
+    // own docblock), but left unfiltered it would crash the same way if
+    // ever run against a free-node-containing grid in the future.
+    const orbitNodes = nodes.filter(n => !n.free);
     const { rotAngles, hasReflection } = _rotAnglesAndReflectionFor(shape, symmetryMode);
     const mirrorDir = _mirrorAxisDirPure(outerCorners, centroid, shape);
     const ops = _buildGroupOps(rotAngles, hasReflection, mirrorDir);
     const groupOrder = ops.length;
 
     const pairs = [];
-    for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) pairs.push([nodes[i].id, nodes[j].id]);
+    for (let i = 0; i < orbitNodes.length; i++) {
+        for (let j = i + 1; j < orbitNodes.length; j++) pairs.push([orbitNodes[i].id, orbitNodes[j].id]);
     }
 
     let fixedSum = 0;
     ops.forEach(op => {
-        const perm = _computeNodePermutation(nodes, centroid, op, eps);
+        const perm = _computeNodePermutation(orbitNodes, centroid, op, eps);
         let fixed = 0;
         pairs.forEach(([a, b]) => {
             const ia = perm.get(a), ib = perm.get(b);
@@ -371,6 +395,16 @@ function formatThemeLineName(table, connSet) {
     const completeConns = connSet.filter(c => c.length === 2);
     if (completeConns.length === 0) return null;
     const orbitIds = completeConns.map(([a, b]) => table.pairToOrbitId.get(_pairKey(a, b)));
+    // Roadmap [orbits.js free-endpoint fix]: a connection touching a
+    // free-endpoint node has no entry in table.pairToOrbitId - that node
+    // was excluded from the table's own pairs (computeThemeLineOrbits()).
+    // No systematic name applies to a sheet containing even one such
+    // connection (see that function's own comment) - not a partial name
+    // with the free-touching line silently dropped or fabricated, which
+    // would violate this scheme's own "the code alone reconstructs the
+    // geometry" contract (docs/terminology.md, Part B) for exactly the
+    // connection it couldn't actually name.
+    if (orbitIds.some(id => id === undefined)) return null;
     const sortedIds = [...orbitIds].sort((x, y) => x - y);
     return `${completeConns.length}*/${table.groupToken} ${sortedIds.join('+')}`;
 }
@@ -434,9 +468,18 @@ function computeThemeLineName(connSet, mode, gridOverride) {
 // matches the connection's position in the SAME filtered (complete-only)
 // list the caller passes in, mirroring computeAdjacency()'s own
 // completeConnections-relative indexing in export.js.
+// Roadmap [orbits.js free-endpoint fix]: mirrors formatThemeLineName()'s
+// own all-or-nothing decision - a connection touching a free-endpoint
+// node (excluded from the table, see computeThemeLineOrbits()) has no
+// resolvable orbitId. Returning null for the whole set rather than a
+// partially-undefined array keeps this function self-protecting: a
+// caller (core/export.js) doesn't need its own free-endpoint detection
+// logic to avoid exporting a holed/inconsistent assignments array.
 function computeThemeLineOrbitAssignments(connSet, mode, gridOverride) {
     const table = computeThemeLineOrbitTable(mode, gridOverride);
-    return connSet
+    const assignments = connSet
         .filter(c => c.length === 2)
         .map((c, connIndex) => ({ connIndex, orbitId: table.pairToOrbitId.get(_pairKey(c[0], c[1])) }));
+    if (assignments.some(a => a.orbitId === undefined)) return null;
+    return assignments;
 }
