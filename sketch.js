@@ -1220,10 +1220,21 @@ function buildCrossLayerInput() {
 // awareness at all. A same-scale-but-rotated layer would previously have
 // PASSED this guard (it only checked shapeSizeFactor) and gone on to
 // silently compute wrong cross-layer face geometry.
+// Roadmap 1.12 stage 4 (UI) guard fix: also excludes a layer whose own
+// shape differs from the base's - found while implementing the per-layer
+// shape control (a differently-shaped layer was previously reachable
+// only via direct state manipulation, never through this guard's own
+// live path). "Every sheet shares ONE lattice" (this function's own
+// docblock above) fails even more fundamentally for a shape mismatch
+// than for the scale/rotation cases already excluded - a hex lattice and
+// a triangle lattice aren't the same lattice TYPE, so
+// _planCrossLayerNeighborhood()/_meshBasisVectors() (core/faces.js)
+// would otherwise silently compute cross-layer faces against the wrong
+// basis entirely, not just an imprecise one.
 function incompatibleEnabledLayersForCrossLayerFaces() {
     return additionalLayers
         .map((layer, i) => ({ index: i, layer }))
-        .filter(({ layer }) => layer.enabled && (layer.shapeSizeFactor !== shapeSizeFactor || (layer.rotation || 0) !== 0));
+        .filter(({ layer }) => layer.enabled && (layer.shapeSizeFactor !== shapeSizeFactor || (layer.rotation || 0) !== 0 || layer.shape !== currentShape));
 }
 
 // A cheap fingerprint of everything a cross-layer compute result
@@ -1268,7 +1279,13 @@ function updateCrossLayerStatus() {
     const mismatched = incompatibleEnabledLayersForCrossLayerFaces();
     if (mismatched.length > 0) {
         const names = mismatched.map(({ index }) => `Layer ${index + 1}`).join(', ');
-        statusEl.html(`Cross-layer face detection needs every enabled layer to share the base's scale and rotation - ${names} ${mismatched.length === 1 ? 'has' : 'have'} an independent size or rotation. Match the base or disable to compute.`);
+        // Roadmap 1.12 stage 4 (UI): wording updated alongside
+        // incompatibleEnabledLayersForCrossLayerFaces()'s own new shape
+        // check above - "size or rotation" alone became misleading for a
+        // layer flagged ONLY because its shape differs (matching scale
+        // and rotation otherwise), which the new per-layer shape control
+        // makes reachable for the first time.
+        statusEl.html(`Cross-layer face detection needs every enabled layer to share the base's shape, scale and rotation - ${names} ${mismatched.length === 1 ? 'has' : 'have'} an independent shape, size or rotation. Match the base or disable to compute.`);
         return;
     }
 
