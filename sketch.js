@@ -496,6 +496,20 @@ function setup() {
                 layerShapeBtns.forEach(b => b.removeClass('active'));
                 btn.addClass('active');
                 updateActiveLayerGrid({ shape: btn.attribute('data-shape') });
+                // Roadmap 1.12 "Align to base" bugfix: found live while
+                // testing - this handler predates the align button and
+                // never re-synced the layer-contextual controls'
+                // disabled/active state after a shape change, so
+                // #btn-align-to-base stayed enabled even once this
+                // layer's shape no longer matched the base's (its own
+                // manual active-class toggle above is exactly the kind
+                // of narrow, single-field update updateOffsetControls()
+                // exists to replace - see its own docblock). Calling the
+                // shared sync function here keeps every layer-contextual
+                // control (not just the align button) consistent with
+                // this layer's new shape, the same as every other
+                // shape/size/rotation change already does.
+                updateOffsetControls();
                 redraw();
             });
         });
