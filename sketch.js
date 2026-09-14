@@ -1019,10 +1019,19 @@ function activeNodes() { return activeLayer === 'base' ? nodes : additionalLayer
 // it entirely. For an additional layer, its own PERSISTED fields (see
 // addLayer()/updateActiveLayerGrid()) - never an ephemeral layerGrid()
 // call, per the node-resolution fix this mirrors.
+// Roadmap [orbits.js shape-mismatch fix]: shape - this layer's own
+// shape, mirroring core/tiling.js's own override.shape embedding (the
+// same override-object convention, not a separate accessor) - callers
+// extract it as the shapeOverride argument to
+// computeThemeLineOrbitTable()/computeThemeLineName()/friends, the
+// same way tileHex()/tileSquare()/tileTriangle() extract override.shape
+// before passing it onward. Correctly undefined for the base sheet
+// (the whole object is undefined there), letting shapeOverride default
+// to currentShape exactly as before this fix.
 function activeGridOverride() {
     if (activeLayer === 'base') return undefined;
     const layer = additionalLayers[activeLayer];
-    return { nodes: layer.nodes, centroid: layer.centroid, outerCorners: layer.outerCorners };
+    return { nodes: layer.nodes, centroid: layer.centroid, outerCorners: layer.outerCorners, shape: layer.shape };
 }
 
 // Roadmap 1.10a: same base/active-layer split as above, for the face-
@@ -1176,8 +1185,22 @@ let patternNameCacheValue = null;
 // clearing connections on a shape change (the way crossLayerConfigSignature()
 // implicitly does) - cheap either way, and self-evidently correct
 // without depending on a side effect defined elsewhere.
+// Roadmap [orbits.js shape-mismatch fix]: shape now reads the ACTIVE
+// sheet's own shape (activeGridOverride()'s shape field, falling back
+// to currentShape for the base) rather than the bare currentShape
+// global - this function's own comment above already states its
+// design principle as "deliberately explicit... rather than relying on
+// a side effect defined elsewhere"; keying the cache on the base's
+// shape even while a differently-shaped layer is active contradicted
+// that principle, even though it wasn't independently observable as a
+// bug (a layer's own shape change already clears its connections,
+// which this same signature also tracks via conns, so the cache still
+// happened to invalidate correctly regardless - fixed here for
+// consistency with the stated principle, not because of an observed
+// stale-cache symptom).
 function patternNameSignature() {
-    return JSON.stringify({ shape: currentShape, mode: symmetryMode, activeLayer, conns: activeConnections() });
+    const activeShape = activeLayer === 'base' ? currentShape : additionalLayers[activeLayer].shape;
+    return JSON.stringify({ shape: activeShape, mode: symmetryMode, activeLayer, conns: activeConnections() });
 }
 
 // Updates #pattern-name-status for whichever sheet is currently active.
@@ -1196,7 +1219,14 @@ function updatePatternNameStatus() {
         // layer's displayed name was silently wrong (orbit ids resolved
         // against the wrong node set, same bug class the shipped fix
         // addressed for rendering/interaction - just not yet wired here).
-        patternNameCacheValue = computeThemeLineName(activeConnections(), undefined, activeGridOverride());
+        // Roadmap [orbits.js shape-mismatch fix]: gridOverride captured
+        // once (not called twice) - its own .shape field (correctly
+        // undefined for the base sheet) is threaded through as the new
+        // shapeOverride argument, so a layer whose shape differs from
+        // the base's gets its OWN shape's symmetry group, not the
+        // base's (the crash/wrong-result this fix addresses).
+        const gridOverride = activeGridOverride();
+        patternNameCacheValue = computeThemeLineName(activeConnections(), undefined, gridOverride, gridOverride && gridOverride.shape);
         patternNameCacheSignature = sig;
     }
     // Roadmap [orbits.js free-endpoint fix]: computeThemeLineName() now

@@ -434,28 +434,45 @@ function formatThemeLineName(table, connSet) {
 // extension of the thin live-glue wrapper only, not a change to the
 // actual orbit algorithm). Lets a caller ask for a DIFFERENTLY-SCALED
 // additional layer's own orbit table (its own layerGrid() result, see
-// core/forms.js) - the "no planned feature needs a different-shape
-// table" reasoning above no longer holds once layers can have their
-// own order/size (still shares currentShape/symmetryMode with the
-// base, per that design's own confirmation that a dihedral group is a
-// property of the outer polygon's shape/orientation, not of interior
-// subdivision density - only nodes/centroid/outerCorners vary here).
-function computeThemeLineOrbitTable(mode, gridOverride) {
+// core/forms.js).
+//
+// Roadmap [orbits.js shape-mismatch fix]: shapeOverride - the
+// docblock above used to claim a layer "still shares currentShape/
+// symmetryMode with the base... only nodes/centroid/outerCorners
+// vary here". That was true when this parameter was added (1.12
+// stage 1, before a layer could have its own shape at all) and is
+// exactly the assumption Roadmap 1.12 stage 4's per-layer shape
+// control breaks: this function unconditionally passed the bare
+// global currentShape (the BASE's shape) into computeThemeLineOrbits()
+// even when gridOverride belonged to a layer with a genuinely
+// different shape, so a triangle-shaped layer's nodes would be
+// evaluated under a hex base's D6 group (or vice versa) - nodes that
+// generally aren't symmetric under that group, correctly tripping
+// _nearestOrbitNodeId()'s own "grid is not symmetric under the
+// claimed group" throw (that throw itself is untouched and correct -
+// see its own comment; the bug was always in what shape this caller
+// handed it, not in the throw). shapeOverride omitted/undefined
+// defaults to currentShape, byte-identical to every pre-existing call
+// site (base-sheet calls, which correctly want the base's own shape
+// regardless).
+function computeThemeLineOrbitTable(mode, gridOverride, shapeOverride) {
     const activeMode = mode || symmetryMode;
+    const activeShape = shapeOverride || currentShape;
     const grid = gridOverride || { nodes, centroid, outerCorners };
-    return computeThemeLineOrbits(grid.nodes, grid.centroid, currentShape, activeMode, grid.outerCorners);
+    return computeThemeLineOrbits(grid.nodes, grid.centroid, activeShape, activeMode, grid.outerCorners);
 }
 
 // Roadmap 1.11-B: the name for a specific connection set under the
 // CURRENT live grid - thin glue over computeThemeLineOrbitTable() +
 // formatThemeLineName(), mirroring computeThemeLineOrbitTable()'s own
-// (mode) passthrough. connSet is an explicit parameter (not read as a
-// global) the same way core/faces.js's computeCellFaces(connSet) takes
-// its connection set explicitly - callers pass either the base sheet's
-// `connections` or one additionalLayers[i].connections (see
-// sketch.js's activeConnections()), never assumed here.
-function computeThemeLineName(connSet, mode, gridOverride) {
-    return formatThemeLineName(computeThemeLineOrbitTable(mode, gridOverride), connSet);
+// (mode, shapeOverride) passthrough. connSet is an explicit parameter
+// (not read as a global) the same way core/faces.js's
+// computeCellFaces(connSet) takes its connection set explicitly -
+// callers pass either the base sheet's `connections` or one
+// additionalLayers[i].connections (see sketch.js's activeConnections()),
+// never assumed here.
+function computeThemeLineName(connSet, mode, gridOverride, shapeOverride) {
+    return formatThemeLineName(computeThemeLineOrbitTable(mode, gridOverride, shapeOverride), connSet);
 }
 
 // Roadmap 1.11-B (export integration): per-connection orbit assignments
@@ -475,8 +492,8 @@ function computeThemeLineName(connSet, mode, gridOverride) {
 // partially-undefined array keeps this function self-protecting: a
 // caller (core/export.js) doesn't need its own free-endpoint detection
 // logic to avoid exporting a holed/inconsistent assignments array.
-function computeThemeLineOrbitAssignments(connSet, mode, gridOverride) {
-    const table = computeThemeLineOrbitTable(mode, gridOverride);
+function computeThemeLineOrbitAssignments(connSet, mode, gridOverride, shapeOverride) {
+    const table = computeThemeLineOrbitTable(mode, gridOverride, shapeOverride);
     const assignments = connSet
         .filter(c => c.length === 2)
         .map((c, connIndex) => ({ connIndex, orbitId: table.pairToOrbitId.get(_pairKey(c[0], c[1])) }));

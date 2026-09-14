@@ -252,11 +252,18 @@ function buildExportData(crossLayerData) {
             // exporting an explicit null or a holed themeLineOrbits
             // array, same "additive, present-only-when-valid" convention
             // this file already uses for every other optional field.
+            // Roadmap [orbits.js shape-mismatch fix]: layer.shape passed
+            // explicitly as the new shapeOverride argument - previously
+            // omitted, so this layer's orbit table was silently computed
+            // under the BASE's own currentShape (crashing outright for a
+            // genuinely shape-mismatched layer, e.g. a triangle layer on
+            // a hex base - see core/orbits.js's own comment). layer is
+            // already in scope here, so no new plumbing is needed.
             if (completeLayerConnections.length > 0) {
-                const layerPatternName = computeThemeLineName(completeLayerConnections, undefined, layerGridOverride);
+                const layerPatternName = computeThemeLineName(completeLayerConnections, undefined, layerGridOverride, layer.shape);
                 if (layerPatternName) {
                     layerData.patternName = layerPatternName;
-                    layerData.themeLineOrbits = computeThemeLineOrbitAssignments(completeLayerConnections, undefined, layerGridOverride);
+                    layerData.themeLineOrbits = computeThemeLineOrbitAssignments(completeLayerConnections, undefined, layerGridOverride, layer.shape);
                 }
             }
             return layerData;
