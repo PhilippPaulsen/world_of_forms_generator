@@ -925,7 +925,16 @@ function addLayer() {
     // Roadmap 1.12 stage 3: rotation defaults to 0 (unrotated) - a pure
     // render-time placement field, same status as offsetX/offsetY, so no
     // grid-refresh implications at creation time either.
-    const layer = { connections: [], redoStack: [], offsetX: 0, offsetY: 0, rotation: 0, enabled: true, showFaces: false, nodeCount, shapeSizeFactor };
+    // Roadmap 1.12 stage 4 (data model only - no rendering/UI wiring
+    // yet): shape starts identical to the base's current shape, same
+    // "layer starts as a copy of base" convention as nodeCount/
+    // shapeSizeFactor above. Not yet threaded into the layerGrid() call
+    // below (that's a later, UI-driven pass's job - see the stage-4
+    // design session) - since layer.shape always equals currentShape at
+    // creation time regardless, layerGrid()'s own layerShape parameter
+    // (defaulting to baseShape when omitted, as it is here) already
+    // produces the exact same, correct same-shape result.
+    const layer = { connections: [], redoStack: [], offsetX: 0, offsetY: 0, rotation: 0, shape: currentShape, enabled: true, showFaces: false, nodeCount, shapeSizeFactor };
     const grid = layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.nodeCount);
     layer.nodes = grid.nodes;
     layer.centroid = grid.centroid;

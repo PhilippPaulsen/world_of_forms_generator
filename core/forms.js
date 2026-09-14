@@ -69,12 +69,36 @@ function _subdivideTriangleInterior(A, B, C, nodeCount) {
     return nodes;
 }
 
-function buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
+// Roadmap 1.12 stage 4: centerOverride - omitted (every pre-stage-4 call
+// site), this is byte-identical to before: the exact same cx/cy=canvas-
+// center expression, the exact same A/B/C/centroid derivation, untouched.
+// Given, it takes an entirely SEPARATE code path (not a parameterized
+// version of the same formula) specifically so the returned centroid is
+// the given centerOverride EXACTLY (object copy, not a recomputation
+// that could drift by floating-point noise) - needed for layerGrid()'s
+// new cross-shape branch to guarantee a differently-shaped layer shares
+// the base's centroid bit-exactly, not just approximately. A/B/C are
+// still derived correctly (to the same ~1e-13px precision already
+// accepted elsewhere in this codebase for trig-derived constructions -
+// see the 1.2-B design notes) via fixed offsets from the target
+// centroid: A = centroid+(0,-2h/3), B = centroid+(-base/2,+h/3),
+// C = centroid+(+base/2,+h/3) - solved so (A+B+C)/3 = centroid exactly
+// in EXACT arithmetic (the -2h/3+h/3+h/3 terms cancel), independently
+// of whatever the returned `centroid` field is set to.
+function buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH, centerOverride) {
     const base = canvasW / shapeSizeFactor; const h = (Math.sqrt(3) / 2) * base;
-    const cx = canvasW / 2, cy = canvasH / 2;
-    const A = { x: cx, y: cy - h / 2 }, B = { x: cx - base / 2, y: cy + h / 2 }, C = { x: cx + base / 2, y: cy + h / 2 };
+    let A, B, C, centroid;
+    if (centerOverride) {
+        centroid = { x: centerOverride.x, y: centerOverride.y };
+        A = { x: centroid.x, y: centroid.y - (2 / 3) * h };
+        B = { x: centroid.x - base / 2, y: centroid.y + h / 3 };
+        C = { x: centroid.x + base / 2, y: centroid.y + h / 3 };
+    } else {
+        const cx = canvasW / 2, cy = canvasH / 2;
+        A = { x: cx, y: cy - h / 2 }; B = { x: cx - base / 2, y: cy + h / 2 }; C = { x: cx + base / 2, y: cy + h / 2 };
+        centroid = { x: (A.x + B.x + C.x) / 3, y: (A.y + B.y + C.y) / 3 };
+    }
     const nodes = _subdivideTriangleInterior(A, B, C, nodeCount);
-    const centroid = { x: (A.x + B.x + C.x) / 3, y: (A.y + B.y + C.y) / 3 };
     return { nodes, centroid, outerCorners: [A, B, C] };
 }
 
@@ -111,8 +135,23 @@ function _subdivideSquareInterior(corners, nodeCount) {
     return nodes;
 }
 
-function buildSquareGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
-    const size = canvasW / shapeSizeFactor; const startX = canvasW / 2 - size / 2; const startY = canvasH / 2 - size / 2;
+// Roadmap 1.12 stage 4: centerOverride - omitted (every pre-stage-4 call
+// site), cx/cy resolve to the exact same canvasW/2, canvasH/2 expressions
+// as before, so startX/startY/corners/centroid are all byte-identical to
+// the pre-stage-4 code (same expressions, same evaluation order, just
+// routed through an intermediate cx/cy variable holding the identical
+// value - a side-effect-free expression evaluated twice always produces
+// the same float). Given, corners are placed relative to it directly (no
+// h/6-style correction needed here, unlike triangle - buildSquareGrid()'s
+// own centroid was ALREADY always exactly its own placement reference,
+// per layerGrid()'s own docblock) and centroid is set to the given value
+// exactly (object copy), guaranteeing bit-exact equality for
+// layerGrid()'s new cross-shape branch.
+function buildSquareGrid(nodeCount, shapeSizeFactor, canvasW, canvasH, centerOverride) {
+    const size = canvasW / shapeSizeFactor;
+    const cx = centerOverride ? centerOverride.x : canvasW / 2;
+    const cy = centerOverride ? centerOverride.y : canvasH / 2;
+    const startX = cx - size / 2; const startY = cy - size / 2;
     const corners = [
         { x: startX, y: startY },
         { x: startX + size, y: startY },
@@ -120,7 +159,7 @@ function buildSquareGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
         { x: startX, y: startY + size },
     ];
     const nodes = _subdivideSquareInterior(corners, nodeCount);
-    const centroid = { x: canvasW / 2, y: canvasH / 2 };
+    const centroid = { x: cx, y: cy };
     return { nodes, centroid, outerCorners: corners };
 }
 
@@ -161,18 +200,37 @@ function _subdivideHexInterior(outerCorners, centroid, nodeCount) {
     return nodes;
 }
 
-function buildHexGrid(nodeCount, shapeSizeFactor, canvasW, canvasH) {
+// Roadmap 1.12 stage 4: centerOverride - omitted (every pre-stage-4 call
+// site), cx/topY resolve to the exact same canvasW/2 / (canvasH/2 -
+// shapeHeight/2) expressions as before, so every corner and the
+// sumX/6,sumY/6 centroid are byte-identical to the pre-stage-4 code.
+// Given, corners are placed relative to it directly (buildHexGrid()'s
+// own centroid was ALREADY always exactly canvas-center by construction,
+// per layerGrid()'s own docblock - no correction term needed, unlike
+// triangle) and centroid is set to the given value exactly (object
+// copy, not the sumX/6,sumY/6 recomputation - which would only be
+// approximately equal to centerOverride due to floating-point summation
+// noise across 6 corners, not guaranteed bit-exact), guaranteeing exact
+// equality for layerGrid()'s new cross-shape branch.
+function buildHexGrid(nodeCount, shapeSizeFactor, canvasW, canvasH, centerOverride) {
     const outerCorners = [];
     const shapeHeight = canvasH / shapeSizeFactor; const side = shapeHeight / Math.sqrt(3);
-    const cx = canvasW / 2; const topY = (canvasH / 2) - shapeHeight / 2;
+    const cx = centerOverride ? centerOverride.x : canvasW / 2;
+    const cy = centerOverride ? centerOverride.y : canvasH / 2;
+    const topY = cy - shapeHeight / 2;
     outerCorners.push({ x: cx - side / 2, y: topY });
     outerCorners.push({ x: cx + side / 2, y: topY });
     outerCorners.push({ x: cx + side, y: topY + (Math.sqrt(3) / 2) * side });
     outerCorners.push({ x: cx + side / 2, y: topY + Math.sqrt(3) * side });
     outerCorners.push({ x: cx - side / 2, y: topY + Math.sqrt(3) * side });
     outerCorners.push({ x: cx - side, y: topY + (Math.sqrt(3) / 2) * side });
-    let sumX = 0, sumY = 0; outerCorners.forEach(c => { sumX += c.x; sumY += c.y; });
-    const centroid = { x: sumX / 6, y: sumY / 6 };
+    let centroid;
+    if (centerOverride) {
+        centroid = { x: centerOverride.x, y: centerOverride.y };
+    } else {
+        let sumX = 0, sumY = 0; outerCorners.forEach(c => { sumX += c.x; sumY += c.y; });
+        centroid = { x: sumX / 6, y: sumY / 6 };
+    }
     const nodes = _subdivideHexInterior(outerCorners, centroid, nodeCount);
     return { nodes, centroid, outerCorners };
 }
@@ -268,15 +326,45 @@ function completeEdgeToRegularPolygon(P, Q, n, side) {
 // outerCorners/centroid/shape every time (render, orbit-table lookup,
 // export), so changing the base's own shape/size/order can never leave
 // a layer's grid stale.
-function layerGrid(baseOuterCorners, baseCentroid, shape, baseShapeSizeFactor, layerShapeSizeFactor, layerNodeCount) {
-    const ratio = baseShapeSizeFactor / layerShapeSizeFactor;
-    const outerCorners = baseOuterCorners.map(c => ({
-        x: baseCentroid.x + (c.x - baseCentroid.x) * ratio,
-        y: baseCentroid.y + (c.y - baseCentroid.y) * ratio
-    }));
-    let nodes;
-    if (shape === 'triangle') nodes = _subdivideTriangleInterior(outerCorners[0], outerCorners[1], outerCorners[2], layerNodeCount);
-    else if (shape === 'square') nodes = _subdivideSquareInterior(outerCorners, layerNodeCount);
-    else nodes = _subdivideHexInterior(outerCorners, baseCentroid, layerNodeCount);
-    return { nodes, centroid: baseCentroid, outerCorners };
+//
+// Roadmap 1.12 stage 4: layerShape (defaults to baseShape - byte-
+// identical to before this stage for every pre-stage-4 call site, which
+// always omits it) - when the layer's own shape MATCHES the base's, the
+// logic above is completely unchanged: scaling the base's own
+// outerCorners is not just convenient but REQUIRED for triangle
+// specifically (see this function's own comment above on the h/6
+// centroid-shift asymmetry) - a same-shape layer must keep using this
+// path, not the builder dispatch below, even once that dispatch exists.
+// When the layer's own shape DIFFERS, scaling the base's outerCorners
+// cannot work AT ALL - a triangle's 3 corners, linearly scaled, can
+// never become a hexagon's 6 (confirmed concretely: the old code, given
+// a mismatched shape/outerCorners pair, would either produce nonsense or
+// throw inside _subdivideHexInterior()'s own ringC[c]/ringC[(c+1)%6]
+// indexing, which assumes exactly 6 corners - see the regression test).
+// Dispatches instead to the appropriate, now center-parameterized
+// builder (canvasW/canvasH only needed on this branch), constructing the
+// layer's own polygon from scratch, centered at the SAME shared
+// baseCentroid (never re-derived, preserving the "shared center"
+// invariant every other per-layer mechanism - toTileLocal(), orbit
+// computation, mirrorAxisDir() - already relies on) - not independently
+// re-centered at canvas-center, which would generally differ from the
+// base's own actual center (e.g. after an alt-net construction, 1.2).
+function layerGrid(baseOuterCorners, baseCentroid, baseShape, baseShapeSizeFactor, layerShapeSizeFactor, layerNodeCount, layerShape = baseShape, canvasW, canvasH) {
+    if (layerShape === baseShape) {
+        const ratio = baseShapeSizeFactor / layerShapeSizeFactor;
+        const outerCorners = baseOuterCorners.map(c => ({
+            x: baseCentroid.x + (c.x - baseCentroid.x) * ratio,
+            y: baseCentroid.y + (c.y - baseCentroid.y) * ratio
+        }));
+        let nodes;
+        if (baseShape === 'triangle') nodes = _subdivideTriangleInterior(outerCorners[0], outerCorners[1], outerCorners[2], layerNodeCount);
+        else if (baseShape === 'square') nodes = _subdivideSquareInterior(outerCorners, layerNodeCount);
+        else nodes = _subdivideHexInterior(outerCorners, baseCentroid, layerNodeCount);
+        return { nodes, centroid: baseCentroid, outerCorners };
+    }
+    let grid;
+    if (layerShape === 'triangle') grid = buildTriangleGrid(layerNodeCount, layerShapeSizeFactor, canvasW, canvasH, baseCentroid);
+    else if (layerShape === 'square') grid = buildSquareGrid(layerNodeCount, layerShapeSizeFactor, canvasW, canvasH, baseCentroid);
+    else grid = buildHexGrid(layerNodeCount, layerShapeSizeFactor, canvasW, canvasH, baseCentroid);
+    return { nodes: grid.nodes, centroid: baseCentroid, outerCorners: grid.outerCorners };
 }
