@@ -1,0 +1,11 @@
+{"path":"gallery/triangle/3/k2/D3/0+1.svg","shape":"triangle","order":3,"symmetryMode":"rotation_reflection6","groupToken":"D3","count":2,"orbitIds":[0,1],"isSample":false,"rendererVersion":"1.11-catalog-v1"}
+{"path":"gallery/triangle/3/k2/D3/0+2.svg","shape":"triangle","order":3,"symmetryMode":"rotation_reflection6","groupToken":"D3","count":2,"orbitIds":[0,2],"isSample":false,"rendererVersion":"1.11-catalog-v1"}
+{"path":"gallery/triangle/3/k2/D3/0+3.svg","shape":"triangle","order":3,"symmetryMode":"rotation_reflection6","groupToken":"D3","count":2,"orbitIds":[0,3],"isSample":false,"rendererVersion":"1.11-catalog-v1"}
+{"path":"gallery/triangle/3/k2/D3/1+2.svg","shape":"triangle","order":3,"symmetryMode":"rotation_reflection6","groupToken":"D3","count":2,"orbitIds":[1,2],"isSample":false,"rendererVersion":"1.11-catalog-v1"}
+{"path":"gallery/triangle/3/k2/D3/1+3.svg","shape":"triangle","order":3,"symmetryMode":"rotation_reflection6","groupToken":"D3","count":2,"orbitIds":[1,3],"isSample":false,"rendererVersion":"1.11-catalog-v1"}
+{"path":"gallery/triangle/3/k2/D3/2+3.svg","shape":"triangle","order":3,"symmetryMode":"rotation_reflection6","groupToken":"D3","count":2,"orbitIds":[2,3],"isSample":false,"rendererVersion":"1.11-catalog-v1"}
+{"path":"gallery/triangle/3/k3/D3/0+1+2.svg","shape":"triangle","order":3,"symmetryMode":"rotation_reflection6","groupToken":"D3","count":3,"orbitIds":[0,1,2],"isSample":false,"rendererVersion":"1.11-catalog-v1"}
+{"path":"gallery/triangle/3/k3/D3/0+1+3.svg","shape":"triangle","order":3,"symmetryMode":"rotation_reflection6","groupToken":"D3","count":3,"orbitIds":[0,1,3],"isSample":false,"rendererVersion":"1.11-catalog-v1"}
+{"path":"gallery/triangle/3/k3/D3/0+2+3.svg","shape":"triangle","order":3,"symmetryMode":"rotation_reflection6","groupToken":"D3","count":3,"orbitIds":[0,2,3],"isSample":false,"rendererVersion":"1.11-catalog-v1"}
+{"path":"gallery/triangle/3/k3/D3/1+2+3.svg","shape":"triangle","order":3,"symmetryMode":"rotation_reflection6","groupToken":"D3","count":3,"orbitIds":[1,2,3],"isSample":false,"rendererVersion":"1.11-catalog-v1"}
+{"path":"gallery/triangle/3/k4/D3/0+1+2+3.svg","shape":"triangle","order":3,"symmetryMode":"rotation_reflection6","groupToken":"D3","count":4,"orbitIds":[0,1,2,3],"isSample":false,"rendererVersion":"1.11-catalog-v1"}
