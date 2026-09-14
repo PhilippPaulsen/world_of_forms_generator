@@ -81,11 +81,20 @@ function reflectVerticallyAround(pt, center) {
 // function of geometry (1.2-C's own point), so no new logic was needed
 // here, only parameterizing what was previously hardcoded to the
 // globals.
-function mirrorAxisDir(outerCornersOverride, centroidOverride) {
+// Roadmap 1.12 stage 4 part 2: shapeOverride - undefined/omitted (every
+// pre-stage-4-part-2 call site) falls back to the global currentShape,
+// byte-identical to before. A cross-shape layer's own independent tile
+// pass (core/tiling.js) passes its own shape here instead, since this
+// function branches on shape to pick WHICH axis-derivation formula
+// applies (vertex-to-centroid for triangle; edge-midpoint-to-centroid
+// for square/hex) - using the base's shape for a differently-shaped
+// layer would pick the wrong formula entirely, not just a wrong angle.
+function mirrorAxisDir(outerCornersOverride, centroidOverride, shapeOverride) {
     const oc = outerCornersOverride || outerCorners;
     const ctr = centroidOverride || centroid;
+    const shape = shapeOverride || currentShape;
     let dir;
-    if (currentShape === 'triangle') {
+    if (shape === 'triangle') {
         dir = { x: oc[0].x - ctr.x, y: oc[0].y - ctr.y };
     } else { // square, hex
         const c0 = oc[0], c1 = oc[1];
@@ -119,7 +128,18 @@ function mirrorAxisDir(outerCornersOverride, centroidOverride) {
 // a valid 120 degree copy whichever way the whole tile is oriented.
 // Only reflection is orientation-dependent, which is why only the axis
 // (not the rotation angles themselves) needs threading through.
-function drawConnectionWithSymmetry(p1, p2, center, id1, id2, mirrorAxisOverride) {
+// Roadmap 1.12 stage 4 part 2: shapeOverride - undefined/omitted (every
+// pre-stage-4-part-2 call site) falls back to the global currentShape,
+// byte-identical to before. This is the genuinely NEW gap stage 3 never
+// needed to touch: rotAngles below is a table keyed by shape (which
+// rotation angles are even valid for this shape's own symmetry group),
+// not just an angle stage 3's own rotationDeg could rotate - a
+// differently-shaped layer needs ITS OWN valid rotAngles set, not the
+// base's. symmetryMode itself stays global/shared (confirmed correct in
+// the stage-4 design session): the SAME symmetryMode string already maps
+// to a shape-appropriate rotAngles subset via this same table, once the
+// shape used for the lookup is the layer's own.
+function drawConnectionWithSymmetry(p1, p2, center, id1, id2, mirrorAxisOverride, shapeOverride) {
     // Linienfarbe und Füllung werden im draw() global gesetzt
     strokeWeight(2);
     // Roadmap 1.4-A: curveType replaces the old bare curveAmount number
@@ -131,12 +151,13 @@ function drawConnectionWithSymmetry(p1, p2, center, id1, id2, mirrorAxisOverride
     // in core/curves.js for why only `leaning` needs to flip.
     drawCurvedBezier(p1, p2, curveType, id1, id2);
 
+    const shape = shapeOverride || currentShape;
     // Choose rotation set per shape, ignore incompatible modes gracefully
     let rotAngles = [];
-    if (currentShape === 'square') {
+    if (shape === 'square') {
         if (symmetryMode === 'rotation3' || symmetryMode === 'rotation6') rotAngles = [90, 180, 270];
         if (symmetryMode === 'rotation_reflection3' || symmetryMode === 'rotation_reflection6') rotAngles = [90, 180, 270];
-    } else if (currentShape === 'triangle') {
+    } else if (shape === 'triangle') {
         if (symmetryMode === 'rotation3' || symmetryMode === 'rotation6') rotAngles = [120, 240];
         if (symmetryMode === 'rotation_reflection3' || symmetryMode === 'rotation_reflection6') rotAngles = [120, 240];
     } else { // hex
