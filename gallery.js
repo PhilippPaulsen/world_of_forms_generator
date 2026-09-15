@@ -163,7 +163,20 @@ function renderFilterRow(containerId, values, active, onSelect) {
     const btn = document.createElement('button');
     btn.className = 'filter-btn' + (value === active ? ' active' : '');
     btn.textContent = label;
-    btn.addEventListener('click', () => onSelect(value));
+    btn.addEventListener('click', () => {
+      // Fix (found during Pass 3 testing): onSelect() below only
+      // re-renders DOWNSTREAM rows (e.g. Shape's onSelect rebuilds
+      // Order/k, never Shape's own row) plus applyFilters() - so
+      // without this, THIS row's own .active class stayed on whatever
+      // button was active before the click, since no later render
+      // pass ever revisits it. Updating it directly, immediately, on
+      // the actual clicked element is simpler and more robust than
+      // making every onSelect() remember to re-invoke its own render
+      // function too.
+      container.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      onSelect(value);
+    });
     container.appendChild(btn);
   };
   makeBtn('All', 'all');
