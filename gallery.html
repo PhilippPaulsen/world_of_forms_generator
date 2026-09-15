@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>World of Forms — Pattern Catalog</title>
+  <link rel="stylesheet" href="style.css">
+
+  <style>
+    /* Same flat black/white design tokens as index.html's own inline
+       <style> - kept in sync by eye (both pages are small enough that a
+       shared stylesheet extraction isn't warranted yet). */
+    :root {
+      --background: #ffffff;
+      --text: #000000;
+      --accent: #ff3b30;
+      --hover-bg: #f0f0f0;
+      --muted-border: #ccc;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    .page-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    h1 {
+      font-size: 18px;
+      margin: 0;
+    }
+
+    #manifest-status {
+      font-size: 12px;
+      opacity: 0.7;
+    }
+
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .filter-group label {
+      font-size: 11px;
+      font-weight: 600;
+      opacity: 0.7;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .filter-row {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+
+    /* Same chrome as index.html's .layer-btn: flat, bordered, invert on
+       active - reused here for shape/order/k filter buttons so this page
+       reads as part of the same app, not a bolted-on tool. */
+    .filter-btn {
+      background: var(--background);
+      border: 1px solid var(--text);
+      border-radius: 4px;
+      height: 32px;
+      padding: 0 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      transition: background 0.2s ease;
+    }
+
+    .filter-btn:hover {
+      background: var(--hover-bg);
+    }
+
+    .filter-btn.active {
+      background: var(--text);
+      color: var(--background);
+    }
+
+    #result-status {
+      font-size: 13px;
+      opacity: 0.8;
+    }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+    }
+
+    .gallery-cell {
+      border: 1px solid var(--muted-border);
+      border-radius: 4px;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .gallery-cell img {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: contain;
+      background: var(--background);
+    }
+
+    .gallery-cell-label {
+      font-size: 10px;
+      opacity: 0.65;
+      text-align: center;
+      word-break: break-word;
+    }
+
+    .pager {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 8px 0;
+    }
+
+    #page-info {
+      font-size: 13px;
+      opacity: 0.8;
+      min-width: 220px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <div>
+      <h1>Pattern Catalog</h1>
+      <div id="manifest-status">Loading manifest…</div>
+    </div>
+
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>Shape</label>
+        <div class="filter-row" id="shape-filter"></div>
+      </div>
+      <div class="filter-group">
+        <label>Order</label>
+        <div class="filter-row" id="order-filter"></div>
+      </div>
+      <div class="filter-group">
+        <label>k</label>
+        <div class="filter-row" id="k-filter"></div>
+      </div>
+    </div>
+
+    <div id="result-status"></div>
+
+    <div class="pager">
+      <button class="filter-btn" id="prev-page">← Prev</button>
+      <span id="page-info"></span>
+      <button class="filter-btn" id="next-page">Next →</button>
+    </div>
+
+    <div class="gallery-grid" id="gallery-grid"></div>
+
+    <div class="pager">
+      <button class="filter-btn" id="prev-page-bottom">← Prev</button>
+      <span id="page-info-bottom"></span>
+      <button class="filter-btn" id="next-page-bottom">Next →</button>
+    </div>
+  </div>
+
+  <script src="gallery.js"></script>
+</body>
+</html>
