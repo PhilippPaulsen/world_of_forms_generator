@@ -70,6 +70,67 @@ function applyFilters() {
   );
   currentPage = 0;
   $('result-status').textContent = `${filtered.length} entries match the current filter.`;
+  renderGrid();
+}
+
+// Pagination (design session point 2/3): never render more than
+// PAGE_SIZE <img> elements at once, regardless of how large `filtered`
+// is (up to 9,086 for a single shape+order) - the manifest DATA is
+// already fully loaded (point 1), this only bounds DOM node count.
+function renderGrid() {
+  const container = $('gallery-grid');
+  container.innerHTML = '';
+  const start = currentPage * PAGE_SIZE;
+  const pageItems = filtered.slice(start, start + PAGE_SIZE);
+
+  const frag = document.createDocumentFragment();
+  pageItems.forEach(entry => {
+    const cell = document.createElement('div');
+    cell.className = 'gallery-cell';
+
+    const img = document.createElement('img');
+    img.src = entry.path;
+    img.loading = 'lazy';
+    img.alt = `${entry.count}*/${entry.groupToken} ${entry.orbitIds.join('+')}`;
+
+    const label = document.createElement('div');
+    label.className = 'gallery-cell-label';
+    label.textContent = `${entry.shape} ${entry.order} — ${entry.count}*/${entry.groupToken} ${entry.orbitIds.join('+')}`;
+
+    cell.appendChild(img);
+    cell.appendChild(label);
+    frag.appendChild(cell);
+  });
+  container.appendChild(frag);
+
+  renderPager();
+}
+
+function renderPager() {
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageLabel = `Page ${currentPage + 1} / ${totalPages} (${filtered.length} entries)`;
+  const isFirst = currentPage === 0;
+  const isLast = currentPage >= totalPages - 1;
+
+  [$('page-info'), $('page-info-bottom')].forEach(el => { el.textContent = pageLabel; });
+  [$('prev-page'), $('prev-page-bottom')].forEach(btn => { btn.disabled = isFirst; });
+  [$('next-page'), $('next-page-bottom')].forEach(btn => { btn.disabled = isLast; });
+}
+
+function goToPage(delta) {
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const next = currentPage + delta;
+  if (next < 0 || next >= totalPages) return;
+  currentPage = next;
+  renderGrid();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function wirePagerControls() {
+  $('prev-page').addEventListener('click', () => goToPage(-1));
+  $('next-page').addEventListener('click', () => goToPage(1));
+  $('prev-page-bottom').addEventListener('click', () => goToPage(-1));
+  $('next-page-bottom').addEventListener('click', () => goToPage(1));
 }
 
 // One row of "All" + one button per available value; `active` marks the
@@ -118,6 +179,7 @@ function renderKFilter() {
 }
 
 function init() {
+  wirePagerControls();
   loadManifest().then(entries => {
     manifest = entries;
     $('manifest-status').textContent = `${manifest.length} entries loaded.`;
