@@ -179,6 +179,22 @@ function renderKFilter() {
   });
 }
 
+// Roadmap 1.11 gallery Phase (c), pass 3: client-side reimplementation
+// of tools/gallery/catalogPath.js's patternNameFor() - that file itself
+// is NOT safely loadable in a browser (its top-level `const path =
+// require('path')` throws a SyntaxError if pre-shimmed, aborting the
+// whole script block - confirmed by direct testing in the design
+// session), so this is a small local port of just the one function
+// actually needed here, mirroring how gallery-render.js already
+// reimplements toTileLocal() locally rather than loading core/state.js.
+// Byte-identical output to the real function for the same inputs
+// (${count}*/${groupToken} ${sortedIds.join('+')}) - verified against
+// it in that file's own Node test suite.
+function patternNameFor(groupToken, orbitIds) {
+  const sortedIds = [...orbitIds].sort((a, b) => a - b);
+  return `${sortedIds.length}*/${groupToken} ${sortedIds.join('+')}`;
+}
+
 // Detail view (Roadmap 1.11 gallery Phase (c), pass 2): full
 // tessellation rendered on demand from (shape, order, symmetryMode,
 // orbitIds) via gallery-render.js's renderFullTessellationSVG() - no
@@ -186,7 +202,7 @@ function renderKFilter() {
 // discarded on every open/close (point 6 - no stale content carried
 // between entries, no lingering DOM cost once closed).
 function entryLabel(entry) {
-  return `${entry.shape} ${entry.order} — ${entry.count}*/${entry.groupToken} ${entry.orbitIds.join('+')}`;
+  return `${entry.shape} ${entry.order} — ${patternNameFor(entry.groupToken, entry.orbitIds)}`;
 }
 
 function openDetailView(entry) {

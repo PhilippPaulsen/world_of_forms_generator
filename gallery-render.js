@@ -25,6 +25,14 @@
  * global scope, unlike tools/gallery/renderSingleCellSVG.js's Node
  * vm.createContext() sandbox, which fakes one per shape+order on
  * purpose for isolation - not needed or possible here.
+ *
+ * Pass 3 adds on-demand SINGLE-CELL rendering (buildOrbitTable() +
+ * renderSingleCellSVG(), below drawTessellation()/
+ * renderFullTessellationSVG()) for the orbit table and ad-hoc
+ * combination previews gallery.js builds from a user's own orbit
+ * selection - reusing the same shim globals above (drawShapeCell()
+ * needs the identical dependency surface drawTessellation() does,
+ * minus the tessellation-only ones).
  */
 
 // p5-global math aliases - exact Math.* values, nothing p5-specific
@@ -123,6 +131,66 @@ function renderFullTessellationSVG(entry) {
   var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">';
   svg += '<rect width="' + size + '" height="' + size + '" fill="#ffffff" />';
   svg += '<g stroke="#000000" stroke-width="1.5" fill="none">';
+  paths.forEach(function (d) { svg += '<path d="' + d + '" />'; });
+  svg += '</g></svg>';
+  return svg;
+}
+
+// Roadmap 1.11 gallery Phase (c), pass 3: on-demand SINGLE-CELL
+// rendering (not a full tessellation) for the orbit table and ad-hoc
+// combination previews - these are never in the manifest (the manifest
+// only stores k=2,3,4 combos from Phase (a)/(b)'s own confirmed scope;
+// a single orbit is conceptually k=1, and an arbitrary user-selected
+// subset was never pre-generated at all), so they always render live.
+// Same fixed parameters tools/gallery/renderSingleCellSVG.js used to
+// generate every manifest thumbnail (300x300 canvas, shapeSizeFactor
+// 1.3, stroke-width 2) - matching them exactly is what makes these
+// on-demand previews look identical to manifest-backed grid cells.
+var CATALOG_CANVAS_SIZE = 300;
+var CATALOG_SHAPE_SIZE_FACTOR = 1.3;
+
+// Builds the grid + orbit table for one (shape, order, symmetryMode)
+// ONCE - reused across every orbit-table tile and every generated
+// combination for that shape+order (mirrors renderSingleCellSVG.js's
+// own createShapeOrderRenderer(): rebuilding core/forms.js's grid and
+// re-running computeThemeLineOrbits() per tile would be wasteful when
+// a single shape+order selection can have dozens of orbit tiles and
+// up to 2,000 generated combinations).
+function buildOrbitTable(shape, order, symmetryModeArg) {
+  var buildGrid = SHAPE_BUILDERS[shape];
+  if (!buildGrid) throw new Error('buildOrbitTable: unknown shape "' + shape + '"');
+  var grid = buildGrid(order, CATALOG_SHAPE_SIZE_FACTOR, CATALOG_CANVAS_SIZE, CATALOG_CANVAS_SIZE);
+  var table = computeThemeLineOrbits(grid.nodes, grid.centroid, shape, symmetryModeArg, grid.outerCorners);
+  return { shape: shape, order: order, symmetryMode: symmetryModeArg, grid: grid, table: table };
+}
+
+// Renders ONE single cell (drawShapeCell(), not drawTessellation()) for
+// an arbitrary set of orbit ids against an already-built orbit table -
+// used for both a lone orbit preview (orbitIds.length === 1) and a full
+// ad-hoc k-combination preview.
+function renderSingleCellSVG(builderState, orbitIds) {
+  var size = CATALOG_CANVAS_SIZE;
+  centroid = builderState.grid.centroid;
+  outerCorners = builderState.grid.outerCorners;
+  currentShape = builderState.shape;
+  symmetryMode = builderState.symmetryMode;
+  nodes = builderState.grid.nodes;
+
+  var connSet = orbitIds.map(function (id) {
+    if (!builderState.table.orbits[id]) {
+      throw new Error('renderSingleCellSVG: orbit id ' + id + ' does not exist for ' + builderState.shape + ' order ' + builderState.order + ' (table has ' + builderState.table.orbits.length + ' orbits)');
+    }
+    return builderState.table.orbits[id].pairs[0];
+  });
+
+  svgPathCollector = [];
+  drawShapeCell(connSet, builderState.grid.centroid, false, builderState.grid.nodes, 0, undefined, builderState.shape);
+  var paths = svgPathCollector;
+  svgPathCollector = null;
+
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">';
+  svg += '<rect width="' + size + '" height="' + size + '" fill="#ffffff" />';
+  svg += '<g stroke="#000000" stroke-width="2" fill="none">';
   paths.forEach(function (d) { svg += '<path d="' + d + '" />'; });
   svg += '</g></svg>';
   return svg;

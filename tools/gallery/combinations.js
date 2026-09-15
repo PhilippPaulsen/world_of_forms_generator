@@ -28,4 +28,13 @@ function kCombinations(n, k) {
     return result;
 }
 
-module.exports = { kCombinations };
+// Roadmap 1.11 gallery Phase (c), pass 3: this file is also loaded
+// verbatim via a plain <script> tag in gallery.html (client-side
+// combination building over a user's own orbit selection - not
+// pre-generated, so kCombinations() itself needs to run in the
+// browser). `module` doesn't exist there, and an unguarded assignment
+// throws a ReferenceError that aborts this script block - confirmed by
+// direct browser testing in the Phase (c) design session. This guard
+// is a no-op in Node (module is always defined there) and makes the
+// same file safe in both environments without a second copy.
+if (typeof module !== 'undefined') module.exports = { kCombinations };
