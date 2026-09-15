@@ -148,6 +148,17 @@
       padding: 8px 0;
     }
 
+    /* Same specificity as .pager{display:flex} above, so without this
+       the native [hidden] UA rule (also display:none at that
+       specificity, but author styles always beat UA styles regardless)
+       never actually hides #combo-pager - the one .pager instance that
+       toggles [hidden] (Pass 1's own pagers never do). Same fix
+       index.html already applies to .control-group[hidden] for the
+       identical reason - see its own comment. */
+    .pager[hidden] {
+      display: none;
+    }
+
     #page-info {
       font-size: 13px;
       opacity: 0.8;
@@ -249,6 +260,50 @@
     #orbit-selection-status {
       font-size: 13px;
       opacity: 0.8;
+    }
+
+    /* Live C(selected, k) counts + Generate buttons (Roadmap 1.11
+       gallery Phase (c), pass 3, point 2/4) - computed and shown before
+       anything is generated, per the design session's own point that
+       this shouldn't be silent. One row per k=2,3,4. */
+    #combo-summary {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .combo-summary-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      flex-wrap: wrap;
+    }
+
+    .combo-warn {
+      color: var(--accent);
+      font-size: 12px;
+    }
+
+    #combo-results-heading {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    /* Ad-hoc combination preview tiles reuse .gallery-cell's chrome
+       (border/hover/click-affordance) but hold an inline <svg> (nothing
+       to look up - these were never pre-generated) instead of an <img
+       src>, so they need their own sizing rule matching .gallery-cell
+       img's own 1:1 box. */
+    .gallery-cell .inline-preview {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+    }
+
+    .gallery-cell .inline-preview svg {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
 
     /* Detail view (Roadmap 1.11 gallery Phase (c), pass 2) - same
@@ -357,6 +412,14 @@
         <div id="orbit-builder-heading"></div>
         <div class="orbit-grid" id="orbit-grid"></div>
         <div id="orbit-selection-status"></div>
+        <div id="combo-summary"></div>
+        <div id="combo-results-heading"></div>
+        <div class="gallery-grid" id="combo-grid"></div>
+        <div class="pager" id="combo-pager" hidden>
+          <button class="filter-btn" id="combo-prev-page">← Prev</button>
+          <span id="combo-page-info"></span>
+          <button class="filter-btn" id="combo-next-page">Next →</button>
+        </div>
       </div>
     </div>
 

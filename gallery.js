@@ -218,6 +218,8 @@ function updateOrbitBuilder() {
     content.hidden = true;
     orbitBuilderState = null;
     selectedOrbitIds = new Set();
+    clearComboResults();
+    $('combo-summary').innerHTML = '';
     return;
   }
 
@@ -248,6 +250,8 @@ function updateOrbitBuilder() {
   $('orbit-builder-heading').textContent = `${shape} order ${order} — ${orbitBuilderState.table.orbits.length} orbits (${orbitBuilderState.table.groupToken})`;
   renderOrbitGrid();
   renderOrbitSelectionStatus();
+  clearComboResults();
+  renderComboSummary();
 }
 
 function renderOrbitGrid() {
@@ -294,6 +298,12 @@ function toggleOrbitSelection(orbitId, tile, checkbox) {
   tile.classList.toggle('selected', isSelected);
   checkbox.checked = isSelected;
   renderOrbitSelectionStatus();
+  // The selection changed, so any already-generated combination grid is
+  // now stale (built from the previous selection) - clear it rather
+  // than leave a misleading result on screen (same "no stale content"
+  // principle as Pass 2's detail view).
+  clearComboResults();
+  renderComboSummary();
 }
 
 function renderOrbitSelectionStatus() {
@@ -301,6 +311,186 @@ function renderOrbitSelectionStatus() {
   $('orbit-selection-status').textContent = n === 0
     ? 'No orbits selected yet — click tiles above to select.'
     : `${n} orbit${n === 1 ? '' : 's'} selected.`;
+}
+
+// Scale guard (Phase c task, point 4): a generated combination is
+// computed and rendered live (never looked up, never pre-generated),
+// so - unlike the manifest grid's PAGE_SIZE, which only bounds DOM
+// node count against an already-loaded/generated set - this bounds
+// whether GENERATING is even a reasonable, meaningful interactive
+// action in the first place. 2,000 is a deliberately conservative
+// ceiling: roughly 10 pages at COMBO_PAGE_SIZE (still genuinely
+// browsable), comfortably under the largest already-shipped Pass 1/2
+// case (9,086, hex order 2) even though these are computed live rather
+// than static assets, and it rules out the kind of blowup a large
+// orbit selection produces (e.g. C(41,4) = 101,270 for all of triangle
+// order 6) without needing to be anywhere near a real performance
+// limit (on-demand single-cell renders are the cheap case, ~0.05-0.1ms
+// each per the design session's own measurement - see gallery-render.js).
+const MAX_COMBINATIONS_TO_GENERATE = 2000;
+const COMBO_PAGE_SIZE = PAGE_SIZE;
+
+let comboResults = []; // arrays of orbit ids, one per generated combination
+let comboK = null;
+let comboPage = 0;
+
+function nChooseK(n, k) {
+  if (k < 0 || k > n) return 0;
+  k = Math.min(k, n - k);
+  let result = 1;
+  for (let i = 0; i < k; i++) {
+    result = (result * (n - i)) / (i + 1);
+  }
+  return Math.round(result);
+}
+
+// Live counts (Phase c task, point 2) - computed and shown BEFORE
+// anything is generated, via a closed-form nCk rather than calling
+// kCombinations() just to count (that would mean enumerating up to
+// hundreds of thousands of arrays purely to display a number).
+function renderComboSummary() {
+  const container = $('combo-summary');
+  container.innerHTML = '';
+  const n = selectedOrbitIds.size;
+  if (n === 0) return;
+
+  [2, 3, 4].forEach(k => {
+    const count = nChooseK(n, k);
+    const row = document.createElement('div');
+    row.className = 'combo-summary-row';
+
+    const label = document.createElement('span');
+    label.textContent = `k=${k}: C(${n},${k}) = ${count.toLocaleString()} combination${count === 1 ? '' : 's'}`;
+    row.appendChild(label);
+
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn';
+    btn.textContent = `Generate k=${k}`;
+    row.appendChild(btn);
+
+    if (count === 0) {
+      btn.disabled = true;
+      btn.title = `Select at least ${k} orbits.`;
+    } else if (count > MAX_COMBINATIONS_TO_GENERATE) {
+      btn.disabled = true;
+      const warn = document.createElement('span');
+      warn.className = 'combo-warn';
+      warn.textContent = `Too many combinations (${count.toLocaleString()}) — narrow your selection (max ${MAX_COMBINATIONS_TO_GENERATE.toLocaleString()}) or choose fewer orbits.`;
+      row.appendChild(warn);
+    } else {
+      btn.addEventListener('click', () => generateCombinations(k));
+    }
+
+    container.appendChild(row);
+  });
+}
+
+// kCombinations(n,k) (tools/gallery/combinations.js) returns arrays of
+// local INDICES 0..n-1 into the selection, not real orbit ids - mapped
+// back via selectedArray below (same indirection
+// tools/gallery/generate.js's own batch driver uses for the
+// pre-generated manifest, just over an arbitrary user-chosen subset
+// here instead of the full 0..orbitCount-1 range).
+function generateCombinations(k) {
+  const selectedArray = [...selectedOrbitIds].sort((a, b) => a - b);
+  const n = selectedArray.length;
+  const count = nChooseK(n, k);
+  if (count === 0 || count > MAX_COMBINATIONS_TO_GENERATE) return; // defensive only - the button is already disabled in this case
+
+  comboResults = kCombinations(n, k).map(localIds => localIds.map(i => selectedArray[i]));
+  comboK = k;
+  comboPage = 0;
+  renderComboGrid();
+}
+
+// Renders exactly like a manifest-backed grid cell (Phase c task, point
+// 3 - "should look and behave like manifest-backed grid entries
+// visually") but with an inline on-demand <svg> instead of <img src>
+// (nothing to reference - these were never pre-generated), and reuses
+// openDetailView() unchanged on click: it only ever reads
+// (shape, order, symmetryMode, orbitIds) from an entry, which this
+// synthetic object has exactly like a real manifest row.
+function renderComboGrid() {
+  const container = $('combo-grid');
+  container.innerHTML = '';
+  $('combo-results-heading').textContent = comboResults.length
+    ? `k=${comboK} combinations (${comboResults.length.toLocaleString()} total)`
+    : '';
+
+  if (comboResults.length === 0) {
+    $('combo-pager').hidden = true;
+    return;
+  }
+
+  const start = comboPage * COMBO_PAGE_SIZE;
+  const pageItems = comboResults.slice(start, start + COMBO_PAGE_SIZE);
+  const frag = document.createDocumentFragment();
+
+  pageItems.forEach(orbitIds => {
+    const entry = {
+      shape: orbitBuilderState.shape,
+      order: orbitBuilderState.order,
+      symmetryMode: orbitBuilderState.symmetryMode,
+      groupToken: orbitBuilderState.table.groupToken,
+      count: orbitIds.length,
+      orbitIds: orbitIds,
+    };
+
+    const cell = document.createElement('div');
+    cell.className = 'gallery-cell';
+
+    const preview = document.createElement('div');
+    preview.className = 'inline-preview';
+    try {
+      preview.innerHTML = renderSingleCellSVG(orbitBuilderState, orbitIds);
+    } catch (err) {
+      preview.textContent = `Failed to render: ${err.message}`;
+    }
+
+    const label = document.createElement('div');
+    label.className = 'gallery-cell-label';
+    label.textContent = entryLabel(entry);
+
+    cell.appendChild(preview);
+    cell.appendChild(label);
+    cell.addEventListener('click', () => openDetailView(entry));
+    frag.appendChild(cell);
+  });
+  container.appendChild(frag);
+
+  renderComboPager();
+}
+
+function renderComboPager() {
+  const pagerRow = $('combo-pager');
+  pagerRow.hidden = false;
+  const totalPages = Math.max(1, Math.ceil(comboResults.length / COMBO_PAGE_SIZE));
+  $('combo-page-info').textContent = `Page ${comboPage + 1} / ${totalPages} (${comboResults.length} combinations)`;
+  $('combo-prev-page').disabled = comboPage === 0;
+  $('combo-next-page').disabled = comboPage >= totalPages - 1;
+}
+
+function goToComboPage(delta) {
+  const totalPages = Math.max(1, Math.ceil(comboResults.length / COMBO_PAGE_SIZE));
+  const next = comboPage + delta;
+  if (next < 0 || next >= totalPages) return;
+  comboPage = next;
+  renderComboGrid();
+}
+
+function wireComboPagerControls() {
+  $('combo-prev-page').addEventListener('click', () => goToComboPage(-1));
+  $('combo-next-page').addEventListener('click', () => goToComboPage(1));
+}
+
+function clearComboResults() {
+  comboResults = [];
+  comboK = null;
+  comboPage = 0;
+  $('combo-grid').innerHTML = '';
+  $('combo-results-heading').textContent = '';
+  $('combo-page-info').textContent = '';
+  $('combo-pager').hidden = true;
 }
 
 // Roadmap 1.11 gallery Phase (c), pass 3: client-side reimplementation
@@ -368,6 +558,7 @@ function wireDetailView() {
 function init() {
   wirePagerControls();
   wireDetailView();
+  wireComboPagerControls();
   loadManifest().then(entries => {
     manifest = entries;
     $('manifest-status').textContent = `${manifest.length} entries loaded.`;
