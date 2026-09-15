@@ -37,11 +37,94 @@ async function loadManifest() {
   return text.split('\n').filter(Boolean).map(line => JSON.parse(line));
 }
 
+// Canonical display order for shapes actually present in the data -
+// "dynamically populated" means never assuming a shape/order/k exists,
+// not that a sensible fixed ordering can't be applied to whichever
+// values ARE present (matches index.html's own triangle/square/hex
+// icon order).
+const SHAPE_ORDER = ['triangle', 'square', 'hex'];
+
+function distinctSorted(values) {
+  return Array.from(new Set(values)).sort((a, b) => a - b);
+}
+
+// Cascading filter option lists: order options depend on the current
+// shape selection (or the union across all shapes if shape='all'); k
+// options depend on the current shape+order selection the same way.
+function availableOrders() {
+  const pool = filterState.shape === 'all' ? manifest : manifest.filter(e => e.shape === filterState.shape);
+  return distinctSorted(pool.map(e => e.order));
+}
+
+function availableKs() {
+  let pool = filterState.shape === 'all' ? manifest : manifest.filter(e => e.shape === filterState.shape);
+  pool = filterState.order === 'all' ? pool : pool.filter(e => e.order === filterState.order);
+  return distinctSorted(pool.map(e => e.count));
+}
+
+function applyFilters() {
+  filtered = manifest.filter(e =>
+    (filterState.shape === 'all' || e.shape === filterState.shape) &&
+    (filterState.order === 'all' || e.order === filterState.order) &&
+    (filterState.k === 'all' || e.count === filterState.k)
+  );
+  currentPage = 0;
+  $('result-status').textContent = `${filtered.length} entries match the current filter.`;
+}
+
+// One row of "All" + one button per available value; `active` marks the
+// current filterState value. `onSelect` gets the raw value ('all' or a
+// number) and owns updating filterState + any downstream cascading.
+function renderFilterRow(containerId, values, active, onSelect) {
+  const container = $(containerId);
+  container.innerHTML = '';
+  const makeBtn = (label, value) => {
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn' + (value === active ? ' active' : '');
+    btn.textContent = label;
+    btn.addEventListener('click', () => onSelect(value));
+    container.appendChild(btn);
+  };
+  makeBtn('All', 'all');
+  values.forEach(v => makeBtn(String(v), v));
+}
+
+function renderShapeFilter() {
+  const shapes = SHAPE_ORDER.filter(s => manifest.some(e => e.shape === s));
+  renderFilterRow('shape-filter', shapes, filterState.shape, value => {
+    filterState.shape = value;
+    filterState.order = 'all';
+    filterState.k = 'all';
+    renderOrderFilter();
+    renderKFilter();
+    applyFilters();
+  });
+}
+
+function renderOrderFilter() {
+  renderFilterRow('order-filter', availableOrders(), filterState.order, value => {
+    filterState.order = value;
+    filterState.k = 'all';
+    renderKFilter();
+    applyFilters();
+  });
+}
+
+function renderKFilter() {
+  renderFilterRow('k-filter', availableKs(), filterState.k, value => {
+    filterState.k = value;
+    applyFilters();
+  });
+}
+
 function init() {
   loadManifest().then(entries => {
     manifest = entries;
-    filtered = manifest;
     $('manifest-status').textContent = `${manifest.length} entries loaded.`;
+    renderShapeFilter();
+    renderOrderFilter();
+    renderKFilter();
+    applyFilters();
   }).catch(err => {
     $('manifest-status').textContent = `Failed to load manifest: ${err.message} (this page needs to be served over http(s), not opened directly via file://).`;
   });
