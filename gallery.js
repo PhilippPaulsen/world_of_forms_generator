@@ -1,18 +1,18 @@
 /**
  * gallery.js
- * Roadmap 1.11 pattern catalog, Phase (c) pass 1: manifest loading + a
+ * Roadmap 1.11 pattern catalog, Phase (c). Pass 1: manifest loading + a
  * filtered, paginated grid of the pre-generated single-cell SVG
- * thumbnails from Phase (a)/(b) (gallery/manifest.jsonl, 28,722 entries).
- * No rendering pipeline involved in this pass - every thumbnail is an
- * existing static SVG file, referenced by <img src>, not computed. On-
- * demand full-tessellation (pass 2) and interactive orbit selection
- * (pass 3) are deliberately out of scope here (see the Phase (c) design
- * session).
+ * thumbnails from Phase (a)/(b) (gallery/manifest.jsonl, 28,722 entries)
+ * - every thumbnail is an existing static SVG file, referenced by
+ * <img src>, not computed. Pass 2: clicking a thumbnail opens a detail
+ * view rendering that entry's full tessellation on demand, via
+ * gallery-render.js's renderFullTessellationSVG() (core/*.js, loaded
+ * alongside this file - see gallery.html). Interactive orbit selection
+ * (pass 3) remains deliberately out of scope here (see the Phase (c)
+ * design session).
  *
  * Standalone page script for gallery.html, paired with it the same way
- * sketch.js pairs with index.html - but this page has no p5/core/*.js
- * dependency in this pass (core/*.js is only needed once on-demand
- * rendering exists, in pass 2).
+ * sketch.js pairs with index.html.
  */
 
 // Manifest loading strategy (Phase (c) design session, point 1): the
@@ -95,10 +95,11 @@ function renderGrid() {
 
     const label = document.createElement('div');
     label.className = 'gallery-cell-label';
-    label.textContent = `${entry.shape} ${entry.order} — ${entry.count}*/${entry.groupToken} ${entry.orbitIds.join('+')}`;
+    label.textContent = entryLabel(entry);
 
     cell.appendChild(img);
     cell.appendChild(label);
+    cell.addEventListener('click', () => openDetailView(entry));
     frag.appendChild(cell);
   });
   container.appendChild(frag);
@@ -178,8 +179,55 @@ function renderKFilter() {
   });
 }
 
+// Detail view (Roadmap 1.11 gallery Phase (c), pass 2): full
+// tessellation rendered on demand from (shape, order, symmetryMode,
+// orbitIds) via gallery-render.js's renderFullTessellationSVG() - no
+// pre-generated asset involved, nothing looked up. Reconstructed and
+// discarded on every open/close (point 6 - no stale content carried
+// between entries, no lingering DOM cost once closed).
+function entryLabel(entry) {
+  return `${entry.shape} ${entry.order} — ${entry.count}*/${entry.groupToken} ${entry.orbitIds.join('+')}`;
+}
+
+function openDetailView(entry) {
+  const container = $('detail-svg-container');
+  container.innerHTML = '';
+  $('detail-title').textContent = entryLabel(entry) + ' — full tessellation';
+  try {
+    container.innerHTML = renderFullTessellationSVG(entry);
+  } catch (err) {
+    // Fail visibly (this project's general practice), not silently -
+    // shouldn't happen for any real manifest entry (every one was
+    // generated and verified during Phase (a)/(b)), but a malformed or
+    // hand-edited manifest row should show an explicit message here,
+    // not a blank dialog or a swallowed console error.
+    container.textContent = `Failed to render full tessellation: ${err.message}`;
+  }
+  $('detail-overlay').classList.remove('hidden');
+}
+
+function closeDetailView() {
+  $('detail-overlay').classList.add('hidden');
+  // Drop the (possibly several-thousand-element) SVG from the DOM once
+  // closed, not just hidden - matches point 6's "no accumulation"
+  // requirement and frees the memory rather than leaving it parked
+  // behind [hidden].
+  $('detail-svg-container').innerHTML = '';
+}
+
+function wireDetailView() {
+  $('detail-close').addEventListener('click', closeDetailView);
+  // Close on background click - same convention as index.html's
+  // #help-overlay/#export-overlay (sketch.js: e.target.id check so a
+  // click inside the dialog itself doesn't bubble-close it).
+  $('detail-overlay').addEventListener('click', e => {
+    if (e.target.id === 'detail-overlay') closeDetailView();
+  });
+}
+
 function init() {
   wirePagerControls();
+  wireDetailView();
   loadManifest().then(entries => {
     manifest = entries;
     $('manifest-status').textContent = `${manifest.length} entries loaded.`;
