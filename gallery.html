@@ -189,6 +189,22 @@
     </div>
   </div>
 
+  <!-- Roadmap 1.11 gallery Phase (c), pass 2: the same core/*.js engine
+       the live app (index.html) uses, in the same load order - but NO
+       p5 library and NOT the full set index.html loads. Only the five
+       files the design session traced and proved necessary for a
+       headless-safe drawTessellation() call: no core/state.js (its
+       top-level centroid/currentShape/etc would shadow gallery-
+       render.js's own same-named globals - see that file's docblock),
+       no core/faces.js (never reached - showFaces=false), no
+       core/export.js (not used; gallery-render.js writes its own SVG
+       wrapper instead of generateSVGString()'s getComputedStyle() call). -->
+  <script src="core/forms.js"></script>
+  <script src="core/orbits.js"></script>
+  <script src="core/symmetry.js"></script>
+  <script src="core/curves.js"></script>
+  <script src="core/tiling.js"></script>
+  <script src="gallery-render.js"></script>
   <script src="gallery.js"></script>
 </body>
 </html>
