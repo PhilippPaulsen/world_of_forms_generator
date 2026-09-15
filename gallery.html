@@ -155,6 +155,102 @@
       text-align: center;
     }
 
+    /* Custom orbit combinations (Roadmap 1.11 gallery Phase (c), pass
+       3) - a bordered callout, distinct from the manifest grid below,
+       since it's a separate live-computed workflow keyed to the same
+       Shape/Order filter selection rather than a browse-the-manifest
+       one. */
+    #orbit-builder-section {
+      border: 1px solid var(--muted-border);
+      border-radius: 4px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    #orbit-builder-section h2 {
+      font-size: 15px;
+      margin: 0;
+    }
+
+    #orbit-builder-placeholder {
+      font-size: 13px;
+      opacity: 0.7;
+    }
+
+    #orbit-builder-heading {
+      font-size: 13px;
+      opacity: 0.8;
+    }
+
+    /* Smaller tiles than .gallery-grid/.gallery-cell (140px/300px SVG) -
+       an orbit table can have dozens of entries and is meant to be
+       scanned quickly, not admired individually. */
+    .orbit-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 8px;
+    }
+
+    .orbit-tile {
+      border: 1px solid var(--muted-border);
+      border-radius: 4px;
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      cursor: pointer;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+
+    .orbit-tile:hover {
+      border-color: var(--text);
+    }
+
+    /* Selected = accent border + faint accent tint, distinct from the
+       plain hover/active-invert convention used elsewhere (.filter-btn,
+       .gallery-cell) since this is a multi-select state that needs to
+       stay visible even when the pointer moves away - same semantic
+       role as sketch.js's layer-enable-checkbox, just tile-sized. */
+    .orbit-tile.selected {
+      border-color: var(--accent);
+      background: rgba(255, 59, 48, 0.08);
+    }
+
+    .orbit-tile-preview {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+    }
+
+    .orbit-tile-preview svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .orbit-tile-label {
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+
+    /* Purely a visual indicator of selection state, driven entirely by
+       toggleOrbitSelection() - not independently interactive, so a
+       click on the checkbox itself doesn't fire a second, redundant
+       native toggle alongside the tile's own click handler. */
+    .orbit-checkbox {
+      pointer-events: none;
+    }
+
+    #orbit-selection-status {
+      font-size: 13px;
+      opacity: 0.8;
+    }
+
     /* Detail view (Roadmap 1.11 gallery Phase (c), pass 2) - same
        dialog-overlay/dialog-content chrome as index.html's own help/
        export dialogs (fixed inset, dark backdrop, flat bordered panel),
@@ -246,6 +342,21 @@
       <div class="filter-group">
         <label>k</label>
         <div class="filter-row" id="k-filter"></div>
+      </div>
+    </div>
+
+    <!-- Custom orbit combinations (Roadmap 1.11 gallery Phase (c), pass
+         3) - keyed to the same Shape/Order filter selection above (no
+         separate selector); reuses ORBIT_BUILDER_SYMMETRY_MODE, the
+         only symmetry mode any manifest entry or the live app currently
+         supports. -->
+    <div id="orbit-builder-section">
+      <h2>Custom Orbit Combinations</h2>
+      <div id="orbit-builder-placeholder">Select a specific Shape and Order above to build custom orbit combinations.</div>
+      <div id="orbit-builder-content" hidden>
+        <div id="orbit-builder-heading"></div>
+        <div class="orbit-grid" id="orbit-grid"></div>
+        <div id="orbit-selection-status"></div>
       </div>
     </div>
 

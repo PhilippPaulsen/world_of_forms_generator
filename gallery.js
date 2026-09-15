@@ -11,6 +11,14 @@
  * (pass 3) remains deliberately out of scope here (see the Phase (c)
  * design session).
  *
+ * Pass 3: below a Shape+Order selection, a "Custom Orbit Combinations"
+ * section shows that configuration's full orbit table (one on-demand
+ * single-cell preview per orbit, via gallery-render.js's
+ * buildOrbitTable()/renderSingleCellSVG()) and lets the user select a
+ * subset to generate C(selected, k) combinations from - live, never
+ * looked up (the manifest only stores the full k=2,3,4 enumeration,
+ * never an arbitrary user-chosen subset).
+ *
  * Standalone page script for gallery.html, paired with it the same way
  * sketch.js pairs with index.html.
  */
@@ -27,6 +35,16 @@ let manifest = [];   // every parsed manifest entry, loaded once
 let filtered = [];   // current filter result over `manifest`
 let currentPage = 0;
 const filterState = { shape: 'all', order: 'all', k: 'all' };
+
+// Custom orbit combinations (Roadmap 1.11 gallery Phase (c), pass 3).
+// The only symmetry mode any manifest entry or the live app currently
+// supports - no selector needed yet (Phase (c) design session: the
+// manifest schema already accommodates a future mode axis with zero
+// restructuring, but building the UI for it ahead of a second mode
+// existing would be speculative).
+const ORBIT_BUILDER_SYMMETRY_MODE = 'rotation_reflection6';
+let orbitBuilderState = null;      // {shape, order, symmetryMode, grid, table} from gallery-render.js's buildOrbitTable() - cached per shape+order, rebuilt only when the selection actually changes
+let selectedOrbitIds = new Set();  // orbit ids the user has toggled on, for THIS orbitBuilderState only
 
 function $(id) { return document.getElementById(id); }
 
@@ -71,6 +89,7 @@ function applyFilters() {
   currentPage = 0;
   $('result-status').textContent = `${filtered.length} entries match the current filter.`;
   renderGrid();
+  updateOrbitBuilder();
 }
 
 // Pagination (design session point 2/3): never render more than
@@ -177,6 +196,111 @@ function renderKFilter() {
     filterState.k = value;
     applyFilters();
   });
+}
+
+// Custom orbit combinations (Roadmap 1.11 gallery Phase (c), pass 3).
+// Called on every filter change (from applyFilters(), below) - shows
+// the placeholder unless BOTH Shape and Order are a concrete value
+// (computeThemeLineOrbits() needs one specific grid, not "all shapes"
+// or "all orders"). Rebuilding the grid+orbit table (and clearing the
+// user's selection) only happens when the shape+order pair actually
+// changed - an unrelated k-filter click still calls applyFilters(),
+// and shouldn't discard an in-progress orbit selection.
+function updateOrbitBuilder() {
+  const shape = filterState.shape;
+  const order = filterState.order;
+  const placeholder = $('orbit-builder-placeholder');
+  const content = $('orbit-builder-content');
+
+  if (shape === 'all' || order === 'all') {
+    placeholder.hidden = false;
+    placeholder.textContent = 'Select a specific Shape and Order above to build custom orbit combinations.';
+    content.hidden = true;
+    orbitBuilderState = null;
+    selectedOrbitIds = new Set();
+    return;
+  }
+
+  if (orbitBuilderState && orbitBuilderState.shape === shape && orbitBuilderState.order === order) {
+    placeholder.hidden = true;
+    content.hidden = false;
+    return; // same selection as before - keep the existing orbit table and the user's in-progress selection
+  }
+
+  selectedOrbitIds = new Set();
+  try {
+    orbitBuilderState = buildOrbitTable(shape, order, ORBIT_BUILDER_SYMMETRY_MODE);
+  } catch (err) {
+    // Fail visibly, matching this project's general practice (and Pass
+    // 2's own error-handling precedent) - shouldn't happen for any real
+    // shape/order pair reachable through the filter bar, but a broken
+    // orbit table should show an explicit message, not silently leave
+    // stale content or throw an uncaught error.
+    orbitBuilderState = null;
+    placeholder.hidden = false;
+    placeholder.textContent = `Failed to build orbit table: ${err.message}`;
+    content.hidden = true;
+    return;
+  }
+
+  placeholder.hidden = true;
+  content.hidden = false;
+  $('orbit-builder-heading').textContent = `${shape} order ${order} — ${orbitBuilderState.table.orbits.length} orbits (${orbitBuilderState.table.groupToken})`;
+  renderOrbitGrid();
+  renderOrbitSelectionStatus();
+}
+
+function renderOrbitGrid() {
+  const container = $('orbit-grid');
+  container.innerHTML = '';
+  const frag = document.createDocumentFragment();
+
+  orbitBuilderState.table.orbits.forEach(orbit => {
+    const tile = document.createElement('div');
+    tile.className = 'orbit-tile';
+
+    const preview = document.createElement('div');
+    preview.className = 'orbit-tile-preview';
+    try {
+      preview.innerHTML = renderSingleCellSVG(orbitBuilderState, [orbit.orbitId]);
+    } catch (err) {
+      preview.textContent = 'render failed';
+    }
+
+    const label = document.createElement('label');
+    label.className = 'orbit-tile-label';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'orbit-checkbox';
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(`#${orbit.orbitId}`));
+
+    tile.appendChild(preview);
+    tile.appendChild(label);
+    tile.addEventListener('click', () => toggleOrbitSelection(orbit.orbitId, tile, checkbox));
+    frag.appendChild(tile);
+  });
+
+  container.appendChild(frag);
+}
+
+function toggleOrbitSelection(orbitId, tile, checkbox) {
+  if (selectedOrbitIds.has(orbitId)) {
+    selectedOrbitIds.delete(orbitId);
+  } else {
+    selectedOrbitIds.add(orbitId);
+  }
+  const isSelected = selectedOrbitIds.has(orbitId);
+  tile.classList.toggle('selected', isSelected);
+  checkbox.checked = isSelected;
+  renderOrbitSelectionStatus();
+}
+
+function renderOrbitSelectionStatus() {
+  const n = selectedOrbitIds.size;
+  $('orbit-selection-status').textContent = n === 0
+    ? 'No orbits selected yet — click tiles above to select.'
+    : `${n} orbit${n === 1 ? '' : 's'} selected.`;
 }
 
 // Roadmap 1.11 gallery Phase (c), pass 3: client-side reimplementation
