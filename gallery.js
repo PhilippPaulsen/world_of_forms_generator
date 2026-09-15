@@ -55,6 +55,125 @@ async function loadManifest() {
   return text.split('\n').filter(Boolean).map(line => JSON.parse(line));
 }
 
+// Ostwald plate backfill (docs/terminology.md Part B's "backfill
+// table" sub-task, ROADMAP.md 1.11) - a small, hand-curated, ongoing
+// mapping from a catalog entry's path to its historical plate name/
+// citation, kept in its OWN file (gallery/ostwald-backfill.csv) rather
+// than merged into gallery/manifest.jsonl: different update rhythm
+// (hand-edited in small increments vs. machine-generated in batch)
+// and different ownership (editorial vs. generated), matching this
+// project's general practice of not conflating hand-curated and
+// generated content. CSV, not JSON, specifically because this is
+// spreadsheet-shaped curatorial work (going plate-by-plate through
+// Ostwald's book) - opens directly in Excel/Numbers/Sheets, not
+// because CSV is simpler to parse (it isn't; JSON.parse would need no
+// code at all here).
+//
+// Handles RFC4180-style quoted fields (a plate label will eventually
+// contain a comma) rather than a naive per-line split(',').
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else {
+        field += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ',') {
+      row.push(field);
+      field = '';
+    } else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(field);
+      if (row.length > 1 || row[0] !== '') rows.push(row);
+      row = [];
+      field = '';
+    } else {
+      field += c;
+    }
+  }
+  if (field !== '' || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows;
+}
+
+// Column order in the file doesn't matter (indexOf, not fixed
+// positions) - a person reordering columns in a spreadsheet app
+// shouldn't break the lookup. A missing/unrecognized header degrades
+// to an empty map rather than throwing (point 4 - never break the
+// page over a malformed curatorial file).
+function buildBackfillMap(rows) {
+  const map = new Map();
+  if (rows.length === 0) return map;
+  const header = rows[0];
+  const pathIdx = header.indexOf('catalogPath');
+  const labelIdx = header.indexOf('label');
+  const urlIdx = header.indexOf('url');
+  if (pathIdx === -1 || labelIdx === -1 || urlIdx === -1) return map;
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const path = row[pathIdx];
+    if (!path) continue;
+    map.set(path, { label: row[labelIdx] || '', url: row[urlIdx] || '' });
+  }
+  return map;
+}
+
+// Never rejects - a missing file (404), an empty file, a network
+// error, or a malformed CSV all degrade to "no mappings yet" (an empty
+// Map), exactly today's behavior with zero backfill data. This file is
+// genuinely optional and expected to start small/empty for a long
+// time (ongoing manual curation), so its absence must never be an
+// error condition.
+async function loadBackfill() {
+  try {
+    const res = await fetch('gallery/ostwald-backfill.csv');
+    if (!res.ok) return new Map();
+    const text = await res.text();
+    if (!text.trim()) return new Map();
+    return buildBackfillMap(parseCsv(text));
+  } catch (err) {
+    return new Map();
+  }
+}
+
+let backfillMap = new Map();
+
+// Client-side reimplementation of tools/gallery/catalogPath.js's
+// catalogRelativePath() - same "small local port" precedent as
+// patternNameFor() below, and even simpler here: a template literal
+// does the identical string join catalogPath.js needs Node's `path`
+// module for, so there's no path.posix.join-style shim to write at
+// all.
+function catalogRelativePath(shape, order, groupToken, orbitIds) {
+  const sortedIds = [...orbitIds].sort((a, b) => a - b);
+  return `gallery/${shape}/${order}/k${sortedIds.length}/${groupToken}/${sortedIds.join('+')}.svg`;
+}
+
+// The backfill lookup key for ANY entry, manifest-backed or ad-hoc
+// (Phase c task point 2, worked out in the design session): a
+// manifest entry already carries the exact path it was generated at
+// (entry.path); an ad-hoc Pass 3 entry (an orbit-table tile or a
+// generated combination) never had one written to manifest.jsonl, but
+// is fully identified by the same (shape, order, groupToken, orbitIds)
+// tuple, so the same path formula applies - a backfill mapping is
+// about the PATTERN's structural coordinates, not about whether that
+// exact combination happened to be pre-generated.
+function entryCatalogPath(entry) {
+  return entry.path || catalogRelativePath(entry.shape, entry.order, entry.groupToken, entry.orbitIds);
+}
+
 // Canonical display order for shapes actually present in the data -
 // "dynamically populated" means never assuming a shape/order/k exists,
 // not that a sensible fixed ordering can't be applied to whichever
@@ -572,8 +691,13 @@ function init() {
   wirePagerControls();
   wireDetailView();
   wireComboPagerControls();
-  loadManifest().then(entries => {
+  // Loaded in parallel, not sequentially - the backfill file is tiny
+  // (low hundreds of rows at most) so this adds no meaningful latency,
+  // and loadBackfill() never rejects (point 4), so Promise.all here
+  // only ever fails due to the manifest itself failing to load.
+  Promise.all([loadManifest(), loadBackfill()]).then(([entries, backfill]) => {
     manifest = entries;
+    backfillMap = backfill;
     $('manifest-status').textContent = `${manifest.length} entries loaded.`;
     renderShapeFilter();
     renderOrderFilter();
