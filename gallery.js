@@ -174,6 +174,29 @@ function entryCatalogPath(entry) {
   return entry.path || catalogRelativePath(entry.shape, entry.order, entry.groupToken, entry.orbitIds);
 }
 
+// Shared badge for a backfill hit, reused identically across grid
+// thumbnails, orbit-table tiles, and combination tiles (the detail
+// view gets its own fuller citation instead - see openDetailView()).
+// Returns null when there's no match, so every call site can just do
+// `if (badge) cell.appendChild(badge)` - purely additive, zero change
+// for any entry without one.
+function backfillBadgeFor(catalogPath) {
+  const info = backfillMap.get(catalogPath);
+  if (!info) return null;
+  const a = document.createElement('a');
+  a.className = 'backfill-badge';
+  a.href = info.url;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.textContent = info.label;
+  a.title = `Ostwald: ${info.label}`;
+  // The badge is its own link inside an otherwise-clickable cell (cell
+  // click opens the detail view) - without this, clicking the badge
+  // would ALSO trigger the cell's own click handler underneath it.
+  a.addEventListener('click', e => e.stopPropagation());
+  return a;
+}
+
 // Canonical display order for shapes actually present in the data -
 // "dynamically populated" means never assuming a shape/order/k exists,
 // not that a sensible fixed ordering can't be applied to whichever
@@ -237,6 +260,8 @@ function renderGrid() {
 
     cell.appendChild(img);
     cell.appendChild(label);
+    const badge = backfillBadgeFor(entryCatalogPath(entry));
+    if (badge) cell.appendChild(badge);
     cell.addEventListener('click', () => openDetailView(entry));
     frag.appendChild(cell);
   });
@@ -413,6 +438,8 @@ function renderOrbitGrid() {
 
     tile.appendChild(preview);
     tile.appendChild(label);
+    const badge = backfillBadgeFor(catalogRelativePath(orbitBuilderState.shape, orbitBuilderState.order, orbitBuilderState.table.groupToken, [orbit.orbitId]));
+    if (badge) tile.appendChild(badge);
     tile.addEventListener('click', () => toggleOrbitSelection(orbit.orbitId, tile, checkbox));
     frag.appendChild(tile);
   });
@@ -585,6 +612,8 @@ function renderComboGrid() {
 
     cell.appendChild(preview);
     cell.appendChild(label);
+    const badge = backfillBadgeFor(entryCatalogPath(entry));
+    if (badge) cell.appendChild(badge);
     cell.addEventListener('click', () => openDetailView(entry));
     frag.appendChild(cell);
   });
@@ -655,6 +684,23 @@ function openDetailView(entry) {
   const container = $('detail-svg-container');
   container.innerHTML = '';
   $('detail-title').textContent = entryLabel(entry) + ' — full tessellation';
+
+  // Fuller citation than the grid/tile badges (Phase c task point 3) -
+  // cleared and rebuilt on every open, same "no stale content between
+  // entries" rule as the SVG container itself.
+  const citation = $('detail-citation');
+  citation.innerHTML = '';
+  const info = backfillMap.get(entryCatalogPath(entry));
+  if (info) {
+    citation.append('Ostwald’s original plate: ');
+    const a = document.createElement('a');
+    a.href = info.url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = info.label;
+    citation.appendChild(a);
+  }
+
   try {
     container.innerHTML = renderFullTessellationSVG(entry);
   } catch (err) {
@@ -675,6 +721,7 @@ function closeDetailView() {
   // requirement and frees the memory rather than leaving it parked
   // behind [hidden].
   $('detail-svg-container').innerHTML = '';
+  $('detail-citation').innerHTML = '';
 }
 
 function wireDetailView() {

@@ -140,6 +140,33 @@
       word-break: break-word;
     }
 
+    /* Ostwald plate backfill badge (docs/terminology.md Part B /
+       ROADMAP.md 1.11) - a small pill/link shown only where a
+       gallery/ostwald-backfill.csv mapping exists for that entry's
+       catalog path; every entry without one renders exactly as before
+       (purely additive). Reused identically on grid thumbnails, orbit-
+       table tiles, and combination tiles - only the detail view (below)
+       gets a fuller, differently-styled citation. */
+    .backfill-badge {
+      display: inline-block;
+      margin-top: 2px;
+      padding: 1px 6px;
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      font-size: 9px;
+      color: var(--accent);
+      text-decoration: none;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .backfill-badge:hover {
+      background: var(--accent);
+      color: var(--background);
+    }
+
     .pager {
       display: flex;
       align-items: center;
@@ -348,6 +375,21 @@
       font-weight: 600;
     }
 
+    /* Fuller citation than .backfill-badge (Phase c task point 3: "the
+       most natural place for a fuller citation, given it's already a
+       dedicated per-entry view") - empty/absent when there's no
+       backfill match for this entry, same purely-additive rule as
+       everywhere else. */
+    #detail-citation {
+      font-size: 12px;
+      opacity: 0.85;
+    }
+
+    #detail-citation a {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
     #detail-svg-container {
       width: 600px;
       max-width: 100%;
@@ -448,6 +490,7 @@
   <div id="detail-overlay" class="dialog-overlay hidden">
     <div class="detail-dialog">
       <div id="detail-title"></div>
+      <div id="detail-citation"></div>
       <div id="detail-svg-container"></div>
       <button id="detail-close">Close</button>
     </div>
