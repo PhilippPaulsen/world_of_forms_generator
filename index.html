@@ -657,6 +657,73 @@
         <input type="number" id="layer-shape-size-input" min="1" max="9" value="5">
       </div>
 
+      <!-- Roadmap 1.12 stage 5 (symmetryMode axis) part 3 (UI): this
+           layer's own symmetryMode - contextual the same way layer-
+           shape-group above is (hidden while Base is active). Dedicated
+           .layer-mode-btn/.layer-fold-btn buttons, not the base's own
+           #btn-mode-*/#btn-fold-* set - same reasoning as layer-shape-
+           group's own separation from the base's .shape-icon-btn set
+           (one shared button group can't show two different "active"
+           states at once). Reuses the exact glyphs from the base's own
+           Mode row above. Fold-row visibility keyed to THIS layer's own
+           shape (layer.shape === 'hex'), not currentShape - mirrors
+           layer-shape-group's own layer-scoped logic. Changing this is
+           a pure property write (setActiveLayerSymmetryMode(),
+           sketch.js) - no connections/redoStack clearing, no grid
+           rebuild, same "render-time parameter" status as layer-
+           rotation-group below, NOT updateActiveLayerGrid()'s clear-
+           and-rebuild pattern (correct for shape/nodeCount/
+           shapeSizeFactor, wrong here).
+
+           Z2 (reflection_only) gap: deliberately left unresolved, same
+           as the base's own Mode/Fold row - no raw-token escape hatch
+           added here. Decided, not overlooked: the base's own gap is
+           only reachable in practice via the catalog-URL back-link (a
+           real, already-shipped code path that can hand the base a raw
+           reflection_only value no click combination reproduces); no
+           equivalent "load a layer's pattern from the catalog" feature
+           exists, so a layer's symmetryMode can only ever be set via
+           addLayer()'s own copy-from-base default or these very
+           buttons - meaning Z2 is not just best-effort-approximated for
+           layers, it's currently unreachable for them by ANY path,
+           exactly mirroring what the base's own clickable UI (ignoring
+           the URL back-link) can reach. Adding a layer-only escape
+           hatch would give layers a capability the base's own UI
+           doesn't have via clicks either - a real, separate feature
+           (mirroring the catalog's own raw-groupToken filter), not a
+           gap this control needs to close to be a faithful per-layer
+           analog of the existing one. -->
+      <div class="control-group" id="layer-mode-group" hidden>
+        <label>Layer Mode</label>
+        <div class="icon-row">
+          <button class="layer-mode-btn icon-btn" data-mode="none" title="No symmetry">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
+          <button class="layer-mode-btn icon-btn" data-mode="spiegeling" title="Mirror symmetry (Spiegeling)">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2,2" />
+              <path d="M4 12 L9 8 L9 16 Z" fill="currentColor" stroke="none" />
+              <path d="M20 12 L15 8 L15 16 Z" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
+          <button class="layer-mode-btn icon-btn" data-mode="drehling" title="Rotational symmetry (Drehling)">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 12a8 8 0 1 1-2.7-6" />
+              <path d="M20 4v6h-6" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="control-group" id="layer-fold-group" hidden>
+        <div class="icon-row">
+          <button class="layer-fold-btn layer-btn" data-fold="3" title="3-fold">3-fold</button>
+          <button class="layer-fold-btn layer-btn" data-fold="6" title="6-fold">6-fold</button>
+        </div>
+      </div>
+
       <!-- Roadmap 1.12 "Align to base": computed suggestion, same
            explicit-action convention as the mesh-width preset buttons
            below (#btn-mesh-preset-x/-y) - never automatic. Same-shape

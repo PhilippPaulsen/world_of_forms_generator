@@ -234,6 +234,29 @@ function setup() {
         if (foldGroup) foldGroup.elt.hidden = currentShape !== 'hex';
     }
 
+    // Roadmap 1.12 stage 5 (symmetryMode axis) part 3: the best-effort
+    // INVERSE of resolveSymmetryMode() directly above - reused by both
+    // the catalog-URL best-effort highlighting below and the per-layer
+    // Mode/Fold buttons further down (previously inlined once for the
+    // catalog case only; a second call site now needs the identical
+    // mapping). Exact for the four rotation-bearing raw modes and for
+    // 'none' (this table really is resolveSymmetryMode()'s own inverse
+    // there); approximate for 'reflection_only' (Z2), which has no
+    // category+fold combination that reaches it going forward - see the
+    // design session. currentFold is the caller's own fallback for
+    // whichever entries don't have a real fold of their own (none/Z2),
+    // so a fold click doesn't lose the user's last real fold choice.
+    function bestEffortCategoryFold(mode, currentFold) {
+        return {
+            none: { category: 'none', fold: currentFold },
+            reflection_only: { category: 'spiegeling', fold: currentFold },
+            rotation3: { category: 'drehling', fold: 3 },
+            rotation6: { category: 'drehling', fold: 6 },
+            rotation_reflection3: { category: 'spiegeling', fold: 3 },
+            rotation_reflection6: { category: 'spiegeling', fold: 6 },
+        }[mode];
+    }
+
     const modeBtns = selectAll('.mode-btn');
     modeBtns.forEach(btn => {
         btn.mousePressed(() => {
@@ -279,14 +302,7 @@ function setup() {
     // stale pre-load default.
     if (catalogUrlPattern) {
         symmetryMode = catalogUrlPattern.symmetryMode;
-        const bestEffort = {
-            none: { category: 'none', fold: symmetryFold },
-            reflection_only: { category: 'spiegeling', fold: symmetryFold },
-            rotation3: { category: 'drehling', fold: 3 },
-            rotation6: { category: 'drehling', fold: 6 },
-            rotation_reflection3: { category: 'spiegeling', fold: 3 },
-            rotation_reflection6: { category: 'spiegeling', fold: 6 },
-        }[symmetryMode];
+        const bestEffort = bestEffortCategoryFold(symmetryMode, symmetryFold);
         if (bestEffort) {
             symmetryCategory = bestEffort.category;
             symmetryFold = bestEffort.fold;
@@ -536,6 +552,22 @@ function setup() {
     // layer.shape) since this is a button group, not a value input.
     const shapeGroup = select('#layer-shape-group');
     const layerShapeBtns = selectAll('.layer-shape-icon-btn');
+    // Roadmap 1.12 stage 5 (symmetryMode axis) part 3: this layer's own
+    // symmetryMode - same contextual show/hide + active-state-sync
+    // handling as shapeGroup/layerShapeBtns directly above (dedicated
+    // .layer-mode-btn/.layer-fold-btn buttons, not the base's own
+    // #btn-mode-*/#btn-fold-* set, for the identical "one shared button
+    // group can't show two different active states" reason). foldGroup's
+    // visibility gets a SECOND, more specific refinement inside
+    // updateOffsetControls() below (keyed to THIS layer's own shape,
+    // not currentShape) - the line here only handles the base showOffsets
+    // toggle, same two-tier pattern the base's own mode-fold-group has
+    // (always hex-gated) layered on top of "only when a layer tab is
+    // active" (layers only).
+    const modeGroup = select('#layer-mode-group');
+    const foldGroup = select('#layer-fold-group');
+    const layerModeBtns = selectAll('.layer-mode-btn');
+    const layerFoldBtns = selectAll('.layer-fold-btn');
     // Roadmap 1.12 "Align to base": same contextual show/hide as the
     // fields above, PLUS a disabled-state sync (same-shape-only, per
     // this feature's scope) and clearing any stale "not achievable"
@@ -556,6 +588,8 @@ function setup() {
         if (offsetYGroup) offsetYGroup.elt.hidden = !showOffsets;
         if (meshPresetGroup) meshPresetGroup.elt.hidden = !showOffsets;
         if (shapeGroup) shapeGroup.elt.hidden = !showOffsets;
+        if (modeGroup) modeGroup.elt.hidden = !showOffsets;
+        if (foldGroup) foldGroup.elt.hidden = !showOffsets; // refined below to this layer's own shape once showOffsets is true
         if (alignGroup) alignGroup.elt.hidden = !showOffsets;
         if (nodeCountGroup) nodeCountGroup.elt.hidden = !showOffsets;
         if (shapeSizeGroup) shapeSizeGroup.elt.hidden = !showOffsets;
@@ -574,6 +608,27 @@ function setup() {
             // value input.
             layerShapeBtns.forEach(b => {
                 if (b.attribute('data-shape') === layer.shape) b.addClass('active');
+                else b.removeClass('active');
+            });
+            // Roadmap 1.12 stage 5 (symmetryMode axis) part 3: fold row
+            // visibility keyed to THIS layer's own shape (not
+            // currentShape) - mirrors layer-shape-group's own layer-
+            // scoped logic exactly, just for a further-nested control.
+            // Active-state sync for both button groups derives its
+            // category/fold from layer.symmetryMode via
+            // bestEffortCategoryFold() (defined above) - the single
+            // source of truth stays the raw symmetryMode string, not a
+            // separately-tracked per-layer category/fold pair, so this
+            // is always consistent with whatever the last write (click,
+            // or a future non-UI code path) actually set.
+            if (foldGroup) foldGroup.elt.hidden = layer.shape !== 'hex';
+            const layerBestEffort = bestEffortCategoryFold(layer.symmetryMode, 6) || {};
+            layerModeBtns.forEach(b => {
+                if (b.attribute('data-mode') === layerBestEffort.category) b.addClass('active');
+                else b.removeClass('active');
+            });
+            layerFoldBtns.forEach(b => {
+                if (parseInt(b.attribute('data-fold')) === layerBestEffort.fold) b.addClass('active');
                 else b.removeClass('active');
             });
             // Roadmap 1.12 "Align to base": same-shape-only, per this
@@ -711,6 +766,48 @@ function setup() {
                 // control (not just the align button) consistent with
                 // this layer's new shape, the same as every other
                 // shape/size/rotation change already does.
+                updateOffsetControls();
+                redraw();
+            });
+        });
+    }
+
+    // Roadmap 1.12 stage 5 (symmetryMode axis) part 3: this layer's own
+    // Mode/Fold - separate handlers from the base's own .mode-btn/
+    // .fold-btn ones above, writing additionalLayers[activeLayer].
+    // symmetryMode via setActiveLayerSymmetryMode(), never the global
+    // symmetryMode (mirrors the shape handler directly above exactly).
+    // category/fold aren't tracked as separate persisted state the way
+    // the base's own symmetryCategory/symmetryFold closure variables
+    // are - each click derives "the other half" (fold for a mode click,
+    // category for a fold click) from the layer's CURRENT symmetryMode
+    // via bestEffortCategoryFold(), so layer.symmetryMode stays the
+    // single source of truth (no separate category/fold fields to ever
+    // drift out of sync with it, unlike the base's own two-variable
+    // approach - a deliberate simplification enabled by the base
+    // already existing as a working precedent to compare against).
+    if (layerModeBtns.length) {
+        layerModeBtns.forEach(btn => {
+            btn.mousePressed(() => {
+                if (activeLayer === 'base') return;
+                const layer = additionalLayers[activeLayer];
+                const category = btn.attribute('data-mode');
+                const current = bestEffortCategoryFold(layer.symmetryMode, 6) || { fold: 6 };
+                setActiveLayerSymmetryMode(normSym(resolveSymmetryMode(layer.shape, category, current.fold)));
+                updateOffsetControls();
+                redraw();
+            });
+        });
+    }
+
+    if (layerFoldBtns.length) {
+        layerFoldBtns.forEach(btn => {
+            btn.mousePressed(() => {
+                if (activeLayer === 'base') return;
+                const layer = additionalLayers[activeLayer];
+                const fold = parseInt(btn.attribute('data-fold'));
+                const current = bestEffortCategoryFold(layer.symmetryMode, fold) || { category: 'spiegeling' };
+                setActiveLayerSymmetryMode(normSym(resolveSymmetryMode(layer.shape, current.category, fold)));
                 updateOffsetControls();
                 redraw();
             });
@@ -1392,6 +1489,29 @@ function setActiveLayerRotation(rawValue) {
     let v = parseFloat(rawValue) || 0;
     v = ((v % 360) + 360) % 360;
     additionalLayers[activeLayer].rotation = v;
+}
+
+// Roadmap 1.12 stage 5 (symmetryMode axis) part 3: writes the ACTIVE
+// layer's own symmetryMode - a no-op when activeLayer is 'base', same
+// guard as setActiveLayerRotation() directly above. Pure property
+// write, mirroring that function exactly (not updateActiveLayerGrid()'s
+// clear-and-rebuild pattern): symmetryMode is a pure render-time
+// parameter (Phase 1's own core/tiling.js module-docblock classifies
+// it alongside curveType/rotation), never baked into stored nodes/
+// connections, so no grid refresh or connections/redoStack clearing is
+// ever needed when it changes - core/tiling.js's drawTessellation()/
+// drawAdditionalLayers() (Phase 1) already read straight from this
+// field via symmetryModeOverride. Takes an ALREADY-RESOLVED raw mode
+// string (unlike setActiveLayerRotation()'s raw numeric input, which
+// normalizes itself) - the caller (setup()'s layer-mode/fold click
+// handlers) resolves category+fold to a raw value via the same
+// resolveSymmetryMode()/normSym() pipeline the base's own control uses,
+// since that resolution needs this layer's own shape (a setup()-local
+// closure concern), not something this standalone setter should
+// re-derive itself.
+function setActiveLayerSymmetryMode(resolvedMode) {
+    if (activeLayer === 'base') return;
+    additionalLayers[activeLayer].symmetryMode = resolvedMode;
 }
 
 // ----------------- PATTERN NAME (Roadmap 1.11-B) ---------------------
