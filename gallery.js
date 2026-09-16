@@ -34,16 +34,109 @@ const PAGE_SIZE = 200;
 let manifest = [];   // every parsed manifest entry, loaded once
 let filtered = [];   // current filter result over `manifest`
 let currentPage = 0;
-const filterState = { shape: 'all', order: 'all', k: 'all' };
 
-// Custom orbit combinations (Roadmap 1.11 gallery Phase (c), pass 3).
-// The only symmetry mode any manifest entry or the live app currently
-// supports - no selector needed yet (Phase (c) design session: the
-// manifest schema already accommodates a future mode axis with zero
-// restructuring, but building the UI for it ahead of a second mode
-// existing would be speculative).
-const ORBIT_BUILDER_SYMMETRY_MODE = 'rotation_reflection6';
-let orbitBuilderState = null;      // {shape, order, symmetryMode, grid, table} from gallery-render.js's buildOrbitTable() - cached per shape+order, rebuilt only when the selection actually changes
+// Roadmap 1.11 gallery Phase (ii): groupFilter is the single canonical
+// symmetry-group filter value - both the Mode/Fold row (the Ostwald-
+// terminology-accurate framing: Spiegeling/Drehling + hex-only fold)
+// and the direct Group row (an exact groupToken like 'D3') write into
+// this SAME field rather than keeping independent state, so they can
+// never disagree about what's currently selected, and the Custom Orbit
+// Combinations picker (see resolveSingleToken(), updateOrbitBuilder())
+// has exactly one place to read the answer from ("one source of
+// truth" - see the design session). Shape:
+//   { kind: 'all' }
+//   { kind: 'category', category: 'spiegeling'|'drehling', fold: 'all'|3|6 }
+//   { kind: 'token', token: 'D3' }
+// 'category' with fold='all' matches every reflection-containing (resp.
+// pure-rotation) token for the current shape at once - e.g. Spiegeling
+// alone on triangle matches both Z2 and D3, since Ostwald's own single
+// term covers the full reflection-containing case (docs/terminology.md,
+// confirmed in an earlier session) - fold narrows to one specific n.
+const filterState = { shape: 'all', order: 'all', k: 'all', groupFilter: { kind: 'all' } };
+
+function resetGroupFilter() {
+  filterState.groupFilter = { kind: 'all' };
+}
+
+// Does entry.groupToken satisfy the current filterState.groupFilter?
+// Pure predicate over the manifest's own groupToken strings - never
+// needs a raw symmetryMode value (that's only needed by the orbit
+// builder's own mirroring, see resolveSingleToken()/rawModeForToken()
+// below - a separate concern from filtering the already-generated
+// manifest rows).
+function groupFilterMatches(entry) {
+  const gf = filterState.groupFilter;
+  if (gf.kind === 'all') return true;
+  if (gf.kind === 'token') return entry.groupToken === gf.token;
+  // kind === 'category'
+  const t = entry.groupToken;
+  if (gf.category === 'spiegeling') {
+    if (t === 'Z2') return gf.fold === 'all'; // Z2 has no fold variant of its own - only matches the un-narrowed category (in practice fold is hidden for any shape/Z2 combination anyway, since Z2 never occurs for hex, the only shape with a fold row)
+    const m = /^D(\d+)$/.exec(t);
+    return !!m && (gf.fold === 'all' || Number(m[1]) === gf.fold);
+  }
+  if (gf.category === 'drehling') {
+    const m = /^C(\d+)$/.exec(t);
+    return !!m && (gf.fold === 'all' || Number(m[1]) === gf.fold);
+  }
+  return false;
+}
+
+// Real per-shape token list (Roadmap 1.11 gallery Phase (ii), design
+// session point 4) - always derived from the manifest itself, never
+// hardcoded, so it can never silently span shapes (the exact concern
+// flagged in the design session: a raw 'C3' button must only ever be
+// offered while looking at triangle, the one real shape it belongs to
+// today, even though hex could in principle have its own C3 later).
+// Fixed display order (mirror-only, then rotation-only, then dihedral,
+// ascending fold) rather than alphabetical - reads as a progression.
+const GROUP_TOKEN_ORDER = ['Z2', 'C3', 'C4', 'C6', 'D3', 'D4', 'D6'];
+
+function availableGroupTokens(shape) {
+  if (shape === 'all') return [];
+  const present = new Set(manifest.filter(e => e.shape === shape).map(e => e.groupToken));
+  return GROUP_TOKEN_ORDER.filter(t => present.has(t));
+}
+
+// Does the CURRENT filterState.groupFilter narrow the CURRENT shape
+// selection down to exactly one real groupToken? Used by the Custom
+// Orbit Combinations picker (updateOrbitBuilder()) to decide whether
+// there's a single, unambiguous group to build a live orbit table for -
+// never guesses when the filter is broader than one token (e.g. 'all',
+// or a category spanning >1 token for this shape).
+function resolveSingleToken(shape) {
+  const gf = filterState.groupFilter;
+  const tokens = availableGroupTokens(shape);
+  if (gf.kind === 'token') return tokens.includes(gf.token) ? gf.token : null;
+  if (gf.kind === 'all') return tokens.length === 1 ? tokens[0] : null;
+  const matching = tokens.filter(t => {
+    if (gf.category === 'spiegeling') {
+      if (t === 'Z2') return gf.fold === 'all';
+      const m = /^D(\d+)$/.exec(t);
+      return !!m && (gf.fold === 'all' || Number(m[1]) === gf.fold);
+    }
+    const m = /^C(\d+)$/.exec(t);
+    return !!m && (gf.fold === 'all' || Number(m[1]) === gf.fold);
+  });
+  return matching.length === 1 ? matching[0] : null;
+}
+
+// A real raw symmetryMode string that produces the given groupToken for
+// the given shape, for buildOrbitTable() (which needs an actual mode,
+// not a token) - see the group-verification session's own collapse
+// table: triangle/square never distinguish the "3" vs "6" variant
+// (rotation3≡rotation6, rotation_reflection3≡rotation_reflection6), so
+// either works there; hex genuinely does distinguish them, so the fold
+// digit must come from the token's own n for hex specifically.
+function rawModeForToken(shape, token) {
+  if (token === 'Z2') return 'reflection_only';
+  const m = /^([CD])(\d+)$/.exec(token);
+  if (!m) return null;
+  const fold = shape === 'hex' ? Number(m[2]) : 3;
+  return m[1] === 'C' ? `rotation${fold}` : `rotation_reflection${fold}`;
+}
+
+let orbitBuilderState = null;      // {shape, order, symmetryMode, grid, table} from gallery-render.js's buildOrbitTable() - cached per shape+order+symmetryMode, rebuilt only when the selection actually changes
 let selectedOrbitIds = new Set();  // orbit ids the user has toggled on, for THIS orbitBuilderState only
 
 function $(id) { return document.getElementById(id); }
@@ -204,6 +297,34 @@ function backfillBadgeFor(catalogPath) {
 // icon order).
 const SHAPE_ORDER = ['triangle', 'square', 'hex'];
 
+// Roadmap 1.11 gallery Phase (ii): shape icon glyphs, byte-identical
+// path/viewBox data to index.html's own .shape-icon-btn SVGs (see that
+// file's Shape control-group) - reused rather than redrawn, so the
+// catalog's shape row reads as literally the same shapes as the main
+// generator's, not a lookalike redrawing that could drift.
+const SHAPE_ICON_SVG = {
+  triangle: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4L4 20h16L12 4z" /></svg>',
+  square: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" /></svg>',
+  hex: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8.66 5v10L12 22 3.34 17V7L12 2z" /></svg>',
+};
+
+// Roadmap 1.11 gallery Phase (ii): Mode row icon glyphs + tooltips,
+// byte-identical to index.html's own icon-ified #btn-mode-spiegeling/
+// #btn-mode-drehling (see that file's Mode control-group) - same glyph
+// vocabulary in both places (mirror pair across a dashed axis;
+// circular rotation arrow), same tooltip wording (English description
+// first, German term in parens - kept visible, not dropped, per the
+// design session). "None" has no catalog equivalent (excluded below -
+// zero matching entries), so only these two are needed here.
+const MODE_ICON_SVG = {
+  spiegeling: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2,2" /><path d="M4 12 L9 8 L9 16 Z" fill="currentColor" stroke="none" /><path d="M20 12 L15 8 L15 16 Z" fill="currentColor" stroke="none" /></svg>',
+  drehling: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12a8 8 0 1 1-2.7-6" /><path d="M20 4v6h-6" /></svg>',
+};
+const MODE_TOOLTIP = {
+  spiegeling: 'Mirror symmetry (Spiegeling)',
+  drehling: 'Rotational symmetry (Drehling)',
+};
+
 function distinctSorted(values) {
   return Array.from(new Set(values)).sort((a, b) => a - b);
 }
@@ -226,7 +347,8 @@ function applyFilters() {
   filtered = manifest.filter(e =>
     (filterState.shape === 'all' || e.shape === filterState.shape) &&
     (filterState.order === 'all' || e.order === filterState.order) &&
-    (filterState.k === 'all' || e.count === filterState.k)
+    (filterState.k === 'all' || e.count === filterState.k) &&
+    groupFilterMatches(e)
   );
   currentPage = 0;
   $('result-status').textContent = `${filtered.length} entries match the current filter.`;
@@ -327,16 +449,50 @@ function renderFilterRow(containerId, values, active, onSelect) {
   values.forEach(v => makeBtn(String(v), v));
 }
 
+// Icon-ified variant of renderFilterRow() (Roadmap 1.11 gallery Phase
+// (ii)) - "All" stays a plain text button (per the design session:
+// there's no single shape glyph for "any shape"), each real shape gets
+// its icon (SHAPE_ICON_SVG) instead of a text label, title carries the
+// name so it's still identifiable without the label. Same active-
+// tracking/click-handler structure as renderFilterRow(), just not
+// reusable from it directly since that helper assumes a plain text
+// label throughout.
 function renderShapeFilter() {
   const shapes = SHAPE_ORDER.filter(s => manifest.some(e => e.shape === s));
-  renderFilterRow('shape-filter', shapes, filterState.shape, value => {
-    filterState.shape = value;
-    filterState.order = 'all';
-    filterState.k = 'all';
-    renderOrderFilter();
-    renderKFilter();
-    applyFilters();
-  });
+  const container = $('shape-filter');
+  container.innerHTML = '';
+  const makeBtn = (label, value, iconHtml) => {
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn' + (value === filterState.shape ? ' active' : '');
+    if (iconHtml) {
+      btn.innerHTML = iconHtml;
+      btn.title = label;
+    } else {
+      btn.textContent = label;
+    }
+    btn.addEventListener('click', () => {
+      container.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      filterState.shape = value;
+      filterState.order = 'all';
+      filterState.k = 'all';
+      // A shape change invalidates any shape-scoped Group selection (the
+      // whole point of scoping it - see availableGroupTokens()) and any
+      // in-progress Mode/Fold narrowing, so both reset to 'all' rather
+      // than silently carrying a now-meaningless token across shapes.
+      resetGroupFilter();
+      renderOrderFilter();
+      renderKFilter();
+      renderModeFilter();
+      updateFoldVisibility();
+      renderFoldFilter();
+      renderGroupFilter();
+      applyFilters();
+    });
+    container.appendChild(btn);
+  };
+  makeBtn('All', 'all', null);
+  shapes.forEach(s => makeBtn(s.charAt(0).toUpperCase() + s.slice(1), s, SHAPE_ICON_SVG[s]));
 }
 
 function renderOrderFilter() {
@@ -355,14 +511,131 @@ function renderKFilter() {
   });
 }
 
-// Custom orbit combinations (Roadmap 1.11 gallery Phase (c), pass 3).
-// Called on every filter change (from applyFilters(), below) - shows
-// the placeholder unless BOTH Shape and Order are a concrete value
-// (computeThemeLineOrbits() needs one specific grid, not "all shapes"
-// or "all orders"). Rebuilding the grid+orbit table (and clearing the
-// user's selection) only happens when the shape+order pair actually
-// changed - an unrelated k-filter click still calls applyFilters(),
-// and shouldn't discard an in-progress orbit selection.
+// Mode row: "All" + icon buttons for Spiegeling/Drehling (see
+// MODE_ICON_SVG/MODE_TOOLTIP above) - "None"/C1 deliberately not
+// offered, zero matching catalog entries (the gallery batch generation
+// excluded it; unlike index.html, this page browses a fixed generated
+// set rather than rendering one live pattern). Clicking a Mode button
+// sets filterState.groupFilter to a 'category' value with fold='all'
+// (narrowed later by the Fold row, hex only) and re-renders the Group
+// row's own active-highlighting, since a category pick and a specific-
+// token pick are mutually exclusive views of the same underlying value
+// (see the filterState.groupFilter docblock above).
+function renderModeFilter() {
+  const container = $('mode-filter');
+  container.innerHTML = '';
+  const gf = filterState.groupFilter;
+  const makeBtn = (label, category, iconHtml) => {
+    const btn = document.createElement('button');
+    const isActive = category === 'all' ? gf.kind === 'all' : (gf.kind === 'category' && gf.category === category);
+    btn.className = 'filter-btn' + (isActive ? ' active' : '');
+    if (iconHtml) {
+      btn.innerHTML = iconHtml + `<span>${label}</span>`;
+      btn.title = MODE_TOOLTIP[category];
+    } else {
+      btn.textContent = label;
+    }
+    btn.addEventListener('click', () => {
+      filterState.groupFilter = category === 'all' ? { kind: 'all' } : { kind: 'category', category, fold: 'all' };
+      renderModeFilter();
+      updateFoldVisibility();
+      renderFoldFilter();
+      renderGroupFilter();
+      applyFilters();
+    });
+    container.appendChild(btn);
+  };
+  makeBtn('All', 'all', null);
+  makeBtn('Spiegeling', 'spiegeling', MODE_ICON_SVG.spiegeling);
+  makeBtn('Drehling', 'drehling', MODE_ICON_SVG.drehling);
+}
+
+// Fold sub-row - hex only, and only meaningful once a Mode category is
+// actually selected (unlike index.html, whose Mode always has a
+// category by default since the live generator always renders
+// something - this page defaults to 'All', where "3-fold vs 6-fold"
+// has no meaning yet). Clicking a fold button narrows the CURRENT
+// category's fold; it's a no-op (and the row is hidden - see
+// updateFoldVisibility()) whenever groupFilter isn't a 'category' kind.
+function renderFoldFilter() {
+  const container = $('fold-filter');
+  container.innerHTML = '';
+  const gf = filterState.groupFilter;
+  [3, 6].forEach(n => {
+    const btn = document.createElement('button');
+    const isActive = gf.kind === 'category' && gf.fold === n;
+    btn.className = 'filter-btn' + (isActive ? ' active' : '');
+    btn.textContent = `${n}-fold`;
+    btn.addEventListener('click', () => {
+      if (filterState.groupFilter.kind !== 'category') return;
+      filterState.groupFilter = { kind: 'category', category: filterState.groupFilter.category, fold: n };
+      renderFoldFilter();
+      renderGroupFilter();
+      applyFilters();
+    });
+    container.appendChild(btn);
+  });
+}
+
+function updateFoldVisibility() {
+  $('mode-fold-group').hidden = !(filterState.shape === 'hex' && filterState.groupFilter.kind === 'category');
+}
+
+// Direct Group (groupToken) filter row - design session point 4. A
+// second, additional filter axis, not a replacement for Mode/Fold (see
+// the design session for the full reasoning): lets a technically-
+// inclined user isolate an exact algebraic group directly, including
+// Z2 (mirror-only), which Mode/Fold's Spiegeling category covers but
+// can't isolate on its own. Hidden entirely while Shape='all'
+// (availableGroupTokens() returns [] - enforces the shape-scoping the
+// design session flagged, so a token button is never offered spanning
+// more than one real shape's data). Writes the SAME filterState.
+// groupFilter value Mode/Fold does, resetting it to 'all' on click of
+// "All" here or to a 'token' kind otherwise - mutually exclusive with a
+// 'category' selection, per the shared-state design above.
+function renderGroupFilter() {
+  const wrap = $('group-filter-group');
+  const container = $('group-filter');
+  container.innerHTML = '';
+  const tokens = availableGroupTokens(filterState.shape);
+  if (filterState.shape === 'all') {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  const gf = filterState.groupFilter;
+  const makeBtn = (label, token) => {
+    const btn = document.createElement('button');
+    const isActive = token === 'all' ? gf.kind === 'all' : (gf.kind === 'token' && gf.token === token);
+    btn.className = 'filter-btn' + (isActive ? ' active' : '');
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      filterState.groupFilter = token === 'all' ? { kind: 'all' } : { kind: 'token', token };
+      renderGroupFilter();
+      renderModeFilter();
+      updateFoldVisibility();
+      renderFoldFilter();
+      applyFilters();
+    });
+    container.appendChild(btn);
+  };
+  makeBtn('All', 'all');
+  tokens.forEach(t => makeBtn(t, t));
+}
+
+// Custom orbit combinations (Roadmap 1.11 gallery Phase (c) pass 3;
+// Phase (ii) rewired this to mirror filterState.groupFilter instead of
+// a single hardcoded mode - see that field's own docblock for "one
+// source of truth"). Called on every filter change (from
+// applyFilters(), below) - shows a placeholder unless Shape+Order are
+// concrete AND the group filter resolves to exactly one real
+// groupToken (resolveSingleToken()) - computeThemeLineOrbits() needs
+// one specific grid and one specific symmetryMode, never "all modes"
+// or an ambiguous category spanning several. Rebuilding the grid+orbit
+// table (and clearing the user's selection) only happens when the
+// resolved (shape, order, symmetryMode) triple actually changed - an
+// unrelated k-filter click still calls applyFilters(), and shouldn't
+// discard an in-progress orbit selection.
 function updateOrbitBuilder() {
   const shape = filterState.shape;
   const order = filterState.order;
@@ -380,7 +653,20 @@ function updateOrbitBuilder() {
     return;
   }
 
-  if (orbitBuilderState && orbitBuilderState.shape === shape && orbitBuilderState.order === order) {
+  const token = resolveSingleToken(shape);
+  if (!token) {
+    placeholder.hidden = false;
+    placeholder.textContent = 'Narrow the Mode/Fold or Group filter above to a single symmetry group to build custom orbit combinations.';
+    content.hidden = true;
+    orbitBuilderState = null;
+    selectedOrbitIds = new Set();
+    clearComboResults();
+    $('combo-summary').innerHTML = '';
+    return;
+  }
+  const symmetryMode = rawModeForToken(shape, token);
+
+  if (orbitBuilderState && orbitBuilderState.shape === shape && orbitBuilderState.order === order && orbitBuilderState.symmetryMode === symmetryMode) {
     placeholder.hidden = true;
     content.hidden = false;
     return; // same selection as before - keep the existing orbit table and the user's in-progress selection
@@ -388,7 +674,7 @@ function updateOrbitBuilder() {
 
   selectedOrbitIds = new Set();
   try {
-    orbitBuilderState = buildOrbitTable(shape, order, ORBIT_BUILDER_SYMMETRY_MODE);
+    orbitBuilderState = buildOrbitTable(shape, order, symmetryMode);
   } catch (err) {
     // Fail visibly, matching this project's general practice (and Pass
     // 2's own error-handling precedent) - shouldn't happen for any real
@@ -749,6 +1035,10 @@ function init() {
     renderShapeFilter();
     renderOrderFilter();
     renderKFilter();
+    renderModeFilter();
+    updateFoldVisibility();
+    renderFoldFilter();
+    renderGroupFilter();
     applyFilters();
   }).catch(err => {
     $('manifest-status').textContent = `Failed to load manifest: ${err.message} (this page needs to be served over http(s), not opened directly via file://).`;

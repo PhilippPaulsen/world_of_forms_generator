@@ -83,11 +83,29 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      gap: 6px;
       cursor: pointer;
       color: var(--text);
       font-size: 13px;
       font-weight: 600;
       transition: background 0.2s ease;
+    }
+
+    /* Icon-bearing .filter-btn instances (shape row's triangle/square/
+       hex icons, mode row's Spiegeling/Drehling icons - Roadmap 1.11
+       gallery Phase (ii)) - same button, just an <svg> child instead of
+       (or alongside) a text label; the gap rule above already spaces
+       icon+text combinations correctly. */
+    .filter-btn svg {
+      display: block;
+    }
+
+    /* Same specificity fix as .pager[hidden] below - author .filter-
+       group{display:flex} would otherwise beat the native [hidden] UA
+       rule, so a JS-toggled hidden filter-group (Fold row, Group row -
+       both introduced in Phase (ii)) would stay visible. */
+    .filter-group[hidden] {
+      display: none;
     }
 
     .filter-btn:hover {
@@ -443,6 +461,40 @@
       <div class="filter-group">
         <label>k</label>
         <div class="filter-row" id="k-filter"></div>
+      </div>
+      <!-- Roadmap 1.11 gallery Phase (ii): Ostwald-terminology-accurate
+           Mode filter (All/Spiegeling/Drehling), plus a Fold sub-row
+           shown only for hex (mirrors index.html's own Mode/Fold
+           selector - see its own comment for the shape-scoping
+           reasoning). "None"/C1 not offered here - zero matching
+           catalog entries (the gallery batch generation deliberately
+           excluded it), unlike the live generator where None is a
+           real renderable state. Both rows write into the single
+           filterState.groupFilter value (see gallery.js) - the same
+           value the direct Group filter below and the Custom Orbit
+           Combinations picker read, so all three stay in sync. -->
+      <div class="filter-group">
+        <label>Mode</label>
+        <div class="filter-row" id="mode-filter"></div>
+      </div>
+      <div class="filter-group" id="mode-fold-group" hidden>
+        <label>Fold</label>
+        <div class="filter-row" id="fold-filter"></div>
+      </div>
+      <!-- Roadmap 1.11 gallery Phase (ii), design session point 4: a
+           second, additional filter axis alongside Mode/Fold (not a
+           replacement) - lets a technically-inclined user isolate an
+           exact algebraic group (e.g. Z2, the mirror-only case that
+           Mode/Fold's Spiegeling category covers but can't isolate on
+           its own - see the design session). Populated dynamically per
+           the CURRENT shape selection only (availableGroupTokens() in
+           gallery.js) - hidden entirely when Shape='All', so a token
+           like C3 (triangle's own rotation OR, in principle, hex's -
+           though hex has no C3 entries in the real data) is never
+           offered ambiguously across shapes. -->
+      <div class="filter-group" id="group-filter-group" hidden>
+        <label>Group (advanced)</label>
+        <div class="filter-row" id="group-filter"></div>
       </div>
     </div>
 
