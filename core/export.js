@@ -221,6 +221,14 @@ function buildExportData(crossLayerData) {
                 // so every real layer object reaching this point already
                 // has it.
                 shape: layer.shape,
+                // Roadmap 1.12 stage 5 (symmetryMode axis) part 2: this
+                // layer's own symmetryMode, same precedent/reasoning as
+                // shape directly above (added now that a layer has one,
+                // Phase 1) - no fallback default needed for the identical
+                // reason shape has none: addLayer() has set it
+                // unconditionally on every layer since Phase 1, and this
+                // app has no import/rehydration mechanism of its own.
+                symmetryMode: layer.symmetryMode,
                 shapeSizeFactor: layer.shapeSizeFactor,
                 nodeCount: layer.nodeCount,
                 offsetX: layer.offsetX,
@@ -274,11 +282,19 @@ function buildExportData(crossLayerData) {
             // genuinely shape-mismatched layer, e.g. a triangle layer on
             // a hex base - see core/orbits.js's own comment). layer is
             // already in scope here, so no new plumbing is needed.
+            // Roadmap 1.12 stage 5 (symmetryMode axis) part 2: layer.
+            // symmetryMode passed explicitly as the mode argument (same
+            // "layer is already in scope, no new plumbing" note as
+            // shapeOverride above) - previously always `undefined`, so
+            // this layer's exported patternName/themeLineOrbits were
+            // silently computed under the BASE's own symmetryMode
+            // (design session finding, harmless only because every layer
+            // shared the one global value before Phase 1).
             if (completeLayerConnections.length > 0) {
-                const layerPatternName = computeThemeLineName(completeLayerConnections, undefined, layerGridOverride, layer.shape);
+                const layerPatternName = computeThemeLineName(completeLayerConnections, layer.symmetryMode, layerGridOverride, layer.shape);
                 if (layerPatternName) {
                     layerData.patternName = layerPatternName;
-                    layerData.themeLineOrbits = computeThemeLineOrbitAssignments(completeLayerConnections, undefined, layerGridOverride, layer.shape);
+                    layerData.themeLineOrbits = computeThemeLineOrbitAssignments(completeLayerConnections, layer.symmetryMode, layerGridOverride, layer.shape);
                 }
             }
             return layerData;
