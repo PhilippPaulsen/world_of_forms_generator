@@ -1181,17 +1181,38 @@ function draw() {
     stroke(lineColor);
     noFill();
 
-    // Roadmap 1.8 Stage A: recompute every animating (or paused-mid-
-    // animation) layer's live offsetX/offsetY/rotation/shapeSizeFactor
-    // BEFORE drawTessellation() reads them - cheap (a handful of lerp()
-    // calls per layer with an animation object, negligible next to
-    // drawTessellation()'s own cost - see the design session's real
-    // per-redraw timing citations). Re-checking isAnythingAnimating()
-    // afterward (not just at the Play/Pause click site) is what makes
-    // loop() correctly stop the instant the LAST playing layer reaches
-    // its own end, not one frame late or never - applyLayerAnimationFrame()
-    // itself may have just flipped that layer's own `playing` to false.
-    additionalLayers.forEach(layer => { if (layer.animation) applyLayerAnimationFrame(layer); });
+    // Roadmap 1.8 Stage A: recompute every ACTIVELY PLAYING layer's live
+    // offsetX/offsetY/rotation/shapeSizeFactor BEFORE drawTessellation()
+    // reads them - cheap (a handful of lerp() calls per playing layer,
+    // negligible next to drawTessellation()'s own cost - see the design
+    // session's real per-redraw timing citations). Re-checking
+    // isAnythingAnimating() afterward (not just at the Play/Pause click
+    // site) is what makes loop() correctly stop the instant the LAST
+    // playing layer reaches its own end, not one frame late or never -
+    // applyLayerAnimationFrame() itself may have just flipped that
+    // layer's own `playing` to false.
+    //
+    // [real-bug fix]: gated on layer.animation.playing, NOT merely
+    // layer.animation existing (the shipped bug: `if (layer.animation)`
+    // alone). A layer that merely HAS an animation object but isn't
+    // playing (the entire window between "Set Start" and "Set End", or
+    // any paused state) would otherwise get its live offsetX/rotation/
+    // shapeSizeFactor forcibly reset to t=0's interpolated value (=
+    // fromOffsetX/fromRotation/fromShapeSizeFactor, since elapsedMs is
+    // still 0) on EVERY redraw - including the redraw the offset/
+    // rotation/shape-size input's OWN change handler already triggers
+    // right after writing the user's edit. That silently undid the
+    // edit before "Set End" ever captured it, so `to*` always ended up
+    // identical to `from*` - Play then genuinely interpolated between
+    // two identical states, which is indistinguishable from doing
+    // nothing (the reported bug: "no visible movement" - confirmed via
+    // real UI clicks, not assumed: editing #layer-offset-x-input after
+    // "Set Start" measurably had zero lasting effect on
+    // additionalLayers[i].offsetX before this fix). Scrubbing
+    // (setActiveLayerAnimationProgress()) is unaffected - it already
+    // calls applyLayerAnimationFrame() itself, directly, exactly once
+    // per scrub action, never relying on this per-frame loop.
+    additionalLayers.forEach(layer => { if (layer.animation && layer.animation.playing) applyLayerAnimationFrame(layer); });
     syncAnimationLoopState();
     if (activeLayer !== 'base' && additionalLayers[activeLayer] && additionalLayers[activeLayer].animation) {
         syncLayerAnimationDisplay(additionalLayers[activeLayer]);
