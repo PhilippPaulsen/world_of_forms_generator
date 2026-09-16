@@ -153,8 +153,8 @@
       padding: 1px 6px;
       border: 1px solid var(--accent);
       border-radius: 10px;
-      font-size: 9px;
-      color: var(--accent);
+      font-size: 8px;
+      color: var(--text);
       text-decoration: none;
       max-width: 100%;
       overflow: hidden;
@@ -227,7 +227,11 @@
        scanned quickly, not admired individually. */
     .orbit-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      /* Widened from 100px (measured, not guessed - a realistic plate
+         label like "Sh. 3. The Net in 2nd Position" still truncated at
+         100px even at the badge's own reduced 8px font; 120px plus 8px
+         fits every label length tested, including that one). */
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
       gap: 8px;
     }
 
