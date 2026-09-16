@@ -135,11 +135,22 @@ function mirrorAxisDir(outerCornersOverride, centroidOverride, shapeOverride) {
 // rotation angles are even valid for this shape's own symmetry group),
 // not just an angle stage 3's own rotationDeg could rotate - a
 // differently-shaped layer needs ITS OWN valid rotAngles set, not the
-// base's. symmetryMode itself stays global/shared (confirmed correct in
-// the stage-4 design session): the SAME symmetryMode string already maps
-// to a shape-appropriate rotAngles subset via this same table, once the
-// shape used for the lookup is the layer's own.
-function drawConnectionWithSymmetry(p1, p2, center, id1, id2, mirrorAxisOverride, shapeOverride) {
+// base's.
+// Roadmap 1.12 stage 5 (symmetryMode axis) part 1: symmetryModeOverride -
+// undefined/omitted (every pre-stage-5 call site) falls back to the
+// global symmetryMode, byte-identical to before. Supersedes this
+// function's own former claim that "symmetryMode itself stays global/
+// shared (confirmed correct in the stage-4 design session)" - that
+// conclusion was scoped to a narrower question (does a differently-
+// shaped layer render correctly UNDER the shared mode - yes, once the
+// shape used for this table's lookup is the layer's own) and never
+// evaluated whether a layer should be able to choose its OWN mode, which
+// is what this stage adds. Read once into a local `mode` below (not
+// re-read from the global at each of the 11 comparison sites this
+// function has) so every rotAngles/reflection decision within one call
+// consistently uses the SAME resolved value, the same "compute once,
+// reuse" discipline mirrorAxisOverride/shapeOverride already follow here.
+function drawConnectionWithSymmetry(p1, p2, center, id1, id2, mirrorAxisOverride, shapeOverride, symmetryModeOverride) {
     // Linienfarbe und Füllung werden im draw() global gesetzt
     strokeWeight(2);
     // Roadmap 1.4-A: curveType replaces the old bare curveAmount number
@@ -152,19 +163,20 @@ function drawConnectionWithSymmetry(p1, p2, center, id1, id2, mirrorAxisOverride
     drawCurvedBezier(p1, p2, curveType, id1, id2);
 
     const shape = shapeOverride || currentShape;
+    const mode = symmetryModeOverride || symmetryMode;
     // Choose rotation set per shape, ignore incompatible modes gracefully
     let rotAngles = [];
     if (shape === 'square') {
-        if (symmetryMode === 'rotation3' || symmetryMode === 'rotation6') rotAngles = [90, 180, 270];
-        if (symmetryMode === 'rotation_reflection3' || symmetryMode === 'rotation_reflection6') rotAngles = [90, 180, 270];
+        if (mode === 'rotation3' || mode === 'rotation6') rotAngles = [90, 180, 270];
+        if (mode === 'rotation_reflection3' || mode === 'rotation_reflection6') rotAngles = [90, 180, 270];
     } else if (shape === 'triangle') {
-        if (symmetryMode === 'rotation3' || symmetryMode === 'rotation6') rotAngles = [120, 240];
-        if (symmetryMode === 'rotation_reflection3' || symmetryMode === 'rotation_reflection6') rotAngles = [120, 240];
+        if (mode === 'rotation3' || mode === 'rotation6') rotAngles = [120, 240];
+        if (mode === 'rotation_reflection3' || mode === 'rotation_reflection6') rotAngles = [120, 240];
     } else { // hex
-        if (symmetryMode === 'rotation3') rotAngles = [120, 240];
-        if (symmetryMode === 'rotation6') rotAngles = [60, 120, 180, 240, 300];
-        if (symmetryMode === 'rotation_reflection3') rotAngles = [120, 240];
-        if (symmetryMode === 'rotation_reflection6') rotAngles = [60, 120, 180, 240, 300];
+        if (mode === 'rotation3') rotAngles = [120, 240];
+        if (mode === 'rotation6') rotAngles = [60, 120, 180, 240, 300];
+        if (mode === 'rotation_reflection3') rotAngles = [120, 240];
+        if (mode === 'rotation_reflection6') rotAngles = [60, 120, 180, 240, 300];
     }
 
     // Rotations
@@ -181,12 +193,12 @@ function drawConnectionWithSymmetry(p1, p2, center, id1, id2, mirrorAxisOverride
     // axis rather than a fixed vertical line - byte-compatible with the
     // old behavior for every default (axis-aligned) shape, since
     // mirrorAxisDir() reduces to exactly (0,+-1) there (verified).
-    if (symmetryMode === 'reflection_only' || symmetryMode === 'rotation_reflection3' || symmetryMode === 'rotation_reflection6') {
+    if (mode === 'reflection_only' || mode === 'rotation_reflection3' || mode === 'rotation_reflection6') {
         const axisDir = mirrorAxisOverride || mirrorAxisDir();
         const sRef = reflectAcrossLine(p1, center, axisDir);
         const eRef = reflectAcrossLine(p2, center, axisDir);
         drawCurvedBezier(sRef, eRef, mirrorCurveType(curveType), id1, id2);
-        if (symmetryMode !== 'reflection_only') {
+        if (mode !== 'reflection_only') {
             rotAngles.forEach(a => {
                 const sR = rotateAround(p1, center, a);
                 const eR = rotateAround(p2, center, a);

@@ -6,13 +6,17 @@
  * hook in: drawShapeCell() takes which connection set to draw, so each
  * tile*() function calls it once for the base sheet unconditionally,
  * then once per enabled entry in additionalLayers at that layer's own
- * shifted tile anchor. drawConnectionWithSymmetry()/drawCurvedBezier()
- * are untouched by this - every sheet shares the same symmetryMode/
- * curveType/currentShape (see the 1.3(b)/1.9 design sessions for why
- * that's shared rather than per-sheet - reconfirmed for curveType in
- * the 1.4-A design session, same reasoning: a plate-wide stylistic
- * choice, not a per-connection property). Also relevant to 1.1/1.2/1.12
- * (alternative net construction, cross-order/cross-net combination).
+ * shifted tile anchor. curveType stays shared across every sheet (see
+ * the 1.3(b)/1.9/1.4-A design sessions: a plate-wide stylistic choice,
+ * not a per-connection or per-sheet property) - symmetryMode no longer
+ * does (Roadmap 1.12 stage 5): each additionalLayers[] entry carries its
+ * own symmetryMode (addLayer()/core/state.js), threaded through
+ * drawShapeCell()'s own symmetryModeOverride parameter down to
+ * drawConnectionWithSymmetry() exactly the way shapeOverride already is
+ * (stage 4 part 2) - shape and symmetryMode are the two per-sheet axes
+ * drawConnectionWithSymmetry() itself branches on, curveType isn't. Also
+ * relevant to 1.1/1.2/1.12 (alternative net construction, cross-order/
+ * cross-net combination).
  *
  * Roadmap 1.10a: each tile*() function also takes an optional cellFaces
  * param (drawTessellation()'s computeCellFaces(connections) result, or
@@ -104,7 +108,15 @@ function drawTessellation() {
         // calls (see core/symmetry.js), so a layer's own reflection axis
         // and rotation-angle set are derived from ITS OWN shape, not the
         // base's.
-        const override = { outerCorners: layer.outerCorners, centroid: layer.centroid, connections: layer.connections, nodes: layer.nodes, offsetX: layer.offsetX, offsetY: layer.offsetY, rotation: layer.rotation, shape: layer.shape };
+        // Roadmap 1.12 stage 5 (symmetryMode axis) part 1: symmetryMode
+        // threaded through too, same pass-through role as shape above but
+        // narrower - it only ever reaches drawConnectionWithSymmetry()
+        // (via each tile*() function's own symmetryModeOverride, see
+        // there), never tileFor() or anything computing tile POSITIONS,
+        // since symmetryMode has no bearing on where tiles are, only on
+        // what's drawn within one (see each tile*() function's own
+        // symmetryModeOverride comment).
+        const override = { outerCorners: layer.outerCorners, centroid: layer.centroid, connections: layer.connections, nodes: layer.nodes, offsetX: layer.offsetX, offsetY: layer.offsetY, rotation: layer.rotation, shape: layer.shape, symmetryMode: layer.symmetryMode };
         const thisLayerFaces = (layerCellFaces && layerCellFaces.has(i)) ? layerCellFaces.get(i) : null;
         tileFor(layer.shape)(thisLayerFaces, null, override);
     });
@@ -214,7 +226,13 @@ function getMeshWidth() {
 // own currentShape default, byte-identical to before. Threaded through
 // to drawConnectionWithSymmetry() so a differently-shaped layer's own
 // rotAngles set is used, not the base's.
-function drawShapeCell(connSet, tileCentroid, flip180 = false, nodeArr = nodes, rotationDeg = 0, mirrorAxisOverride, shapeOverride) {
+// Roadmap 1.12 stage 5 (symmetryMode axis) part 1: symmetryModeOverride -
+// undefined/omitted (every pre-stage-5 call site) falls back to
+// drawConnectionWithSymmetry()'s own global-symmetryMode default, byte-
+// identical to before. Same pass-through-only role as shapeOverride
+// directly above - this function never branches on it itself, only
+// forwards it.
+function drawShapeCell(connSet, tileCentroid, flip180 = false, nodeArr = nodes, rotationDeg = 0, mirrorAxisOverride, shapeOverride, symmetryModeOverride) {
     for (const conn of connSet) {
         if (conn.length === 2) {
             const n1 = nodeArr.find(n => n.id === conn[0]);
@@ -230,7 +248,7 @@ function drawShapeCell(connSet, tileCentroid, flip180 = false, nodeArr = nodes, 
             // connection's other tessellated/symmetry copies), so the
             // real ids have to be threaded through from here, the place
             // they're naturally still available.
-            drawConnectionWithSymmetry(p1, p2, tileCentroid, n1.id, n2.id, mirrorAxisOverride, shapeOverride);
+            drawConnectionWithSymmetry(p1, p2, tileCentroid, n1.id, n2.id, mirrorAxisOverride, shapeOverride, symmetryModeOverride);
         }
     }
 }
@@ -274,7 +292,21 @@ function drawAdditionalLayers(tileCentroid, flip180 = false, layerCellFaces = nu
         // persisted nodes, not the base's - even a same-scale layer can
         // have its own different nodeCount (interior density), whose
         // connections reference ITS OWN node ids, not the base's.
-        drawShapeCell(layer.connections, layerTileC, flip180, layer.nodes);
+        // Roadmap 1.12 stage 5 (symmetryMode axis) part 1: this layer's
+        // own symmetryMode, threaded as the 8th (symmetryModeOverride)
+        // argument - rotationDeg/mirrorAxisOverride/shapeOverride stay at
+        // their defaults (0/undefined/undefined) deliberately: the guard
+        // above already guarantees this layer's rotation is 0 and its
+        // shape matches the base's, so omitting them still resolves
+        // correctly (undefined shapeOverride falls back to currentShape,
+        // which the guard has already confirmed equals layer.shape).
+        // symmetryMode has no such guard - a layer can ride this same
+        // fast path with a genuinely different symmetryMode, since (see
+        // drawTessellation()'s own override object comment) it never
+        // affects tile POSITIONS, only what's drawn at one - so it's the
+        // one axis here that always needs passing explicitly, never
+        // omitted.
+        drawShapeCell(layer.connections, layerTileC, flip180, layer.nodes, 0, undefined, undefined, layer.symmetryMode);
     });
 }
 
@@ -426,6 +458,16 @@ function tileHex(cellFaces, layerCellFaces, override) {
     // before this stage (mirrorAxisDir()/drawConnectionWithSymmetry()
     // both default an omitted shapeOverride to the global currentShape).
     const shapeOverride = override ? override.shape : undefined;
+    // Roadmap 1.12 stage 5 (symmetryMode axis) part 1: this layer's own
+    // symmetryMode - undefined for the base sheet (override undefined),
+    // byte-identical to before this stage (drawConnectionWithSymmetry()
+    // defaults an omitted symmetryModeOverride to the global symmetryMode).
+    // Pure pass-through, mirroring shapeOverride directly above - not
+    // used anywhere else in this function (unlike shapeOverride, which
+    // also feeds mirrorAxisDir() below), since the tile LATTICE itself
+    // (v1/v2/tileC) never depends on symmetryMode - only the CONTENT
+    // drawShapeCell() draws at each tileC does.
+    const symmetryModeOverride = override ? override.symmetryMode : undefined;
     const oc = override
         ? (rotationDeg ? override.outerCorners.map(c => rotateAround(c, override.centroid, rotationDeg)) : override.outerCorners)
         : outerCorners;
@@ -438,7 +480,7 @@ function tileHex(cellFaces, layerCellFaces, override) {
         for (let j = b.jMin; j <= b.jMax; j++) {
             const tileC = { x: ctr.x + i * v1.x + j * v2.x + layerOffsetX, y: ctr.y + i * v1.y + j * v2.y + layerOffsetY };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, tileC, false);
-            drawShapeCell(connSet, tileC, false, nodeArr, rotationDeg, mirrorAxisOverride, shapeOverride);
+            drawShapeCell(connSet, tileC, false, nodeArr, rotationDeg, mirrorAxisOverride, shapeOverride, symmetryModeOverride);
             if (!override) drawAdditionalLayers(tileC, false, layerCellFaces);
         }
     }
@@ -468,6 +510,9 @@ function tileSquare(cellFaces, layerCellFaces, override) {
     // shapeOverride.
     const rotationDeg = override ? (override.rotation || 0) : 0;
     const shapeOverride = override ? override.shape : undefined;
+    // Roadmap 1.12 stage 5 (symmetryMode axis) part 1: see tileHex()'s
+    // own comment for symmetryModeOverride.
+    const symmetryModeOverride = override ? override.symmetryMode : undefined;
     const oc = override
         ? (rotationDeg ? override.outerCorners.map(c => rotateAround(c, override.centroid, rotationDeg)) : override.outerCorners)
         : outerCorners;
@@ -480,7 +525,7 @@ function tileSquare(cellFaces, layerCellFaces, override) {
         for (let j = b.jMin; j <= b.jMax; j++) {
             const tileC = { x: ctr.x + i * v1.x + j * v2.x + layerOffsetX, y: ctr.y + i * v1.y + j * v2.y + layerOffsetY };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, tileC, false);
-            drawShapeCell(connSet, tileC, false, nodeArr, rotationDeg, mirrorAxisOverride, shapeOverride);
+            drawShapeCell(connSet, tileC, false, nodeArr, rotationDeg, mirrorAxisOverride, shapeOverride, symmetryModeOverride);
             if (!override) drawAdditionalLayers(tileC, false, layerCellFaces);
         }
     }
@@ -542,6 +587,9 @@ function tileTriangle(cellFaces, layerCellFaces, override) {
     // shapeOverride.
     const rotationDeg = override ? (override.rotation || 0) : 0;
     const shapeOverride = override ? override.shape : undefined;
+    // Roadmap 1.12 stage 5 (symmetryMode axis) part 1: see tileHex()'s
+    // own comment for symmetryModeOverride.
+    const symmetryModeOverride = override ? override.symmetryMode : undefined;
     const oc = override
         ? (rotationDeg ? override.outerCorners.map(c => rotateAround(c, override.centroid, rotationDeg)) : override.outerCorners)
         : outerCorners;
@@ -581,13 +629,13 @@ function tileTriangle(cellFaces, layerCellFaces, override) {
             // Aufrechtes Dreieck
             const centerUp = { x: anchor.x + upOffset.x + layerOffsetX, y: anchor.y + upOffset.y + layerOffsetY };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, centerUp, false);
-            drawShapeCell(connSet, centerUp, false, nodeArr, rotationDeg, mirrorAxisOverride, shapeOverride);
+            drawShapeCell(connSet, centerUp, false, nodeArr, rotationDeg, mirrorAxisOverride, shapeOverride, symmetryModeOverride);
             if (!override) drawAdditionalLayers(centerUp, false, layerCellFaces);
 
             // Umgedrehtes Dreieck
             const centerDown = { x: anchor.x + downOffset.x + layerOffsetX, y: anchor.y + downOffset.y + layerOffsetY };
             if (cellFaces) drawFaceFillsAtTile(cellFaces, centerDown, true);
-            drawShapeCell(connSet, centerDown, true, nodeArr, rotationDeg, mirrorAxisOverride, shapeOverride);
+            drawShapeCell(connSet, centerDown, true, nodeArr, rotationDeg, mirrorAxisOverride, shapeOverride, symmetryModeOverride);
             if (!override) drawAdditionalLayers(centerDown, true, layerCellFaces);
         }
     }
