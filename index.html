@@ -432,12 +432,35 @@
            sketch.js's resolveSymmetryMode()). "None" stays a real,
            selectable state here even though it's excluded from the
            gallery catalog (Roadmap 1.11 batch session) - the live app
-           renders one pattern at a time, no combinatorial concern. -->
+           renders one pattern at a time, no combinatorial concern.
+
+           Icon-ified in Phase (ii) of the gallery Spiegeling/Drehling
+           extension (mirrors the catalog's own icon-based Mode row) -
+           .layer-btn's text-label sizing swapped for .icon-btn's fixed
+           40x40 icon box, same active-invert/hover chrome. Tooltip
+           wording pairs a plain-English description with the German
+           term in parens (not dropped) - matters more now that the
+           button has no visible text label of its own to carry it. -->
       <div class="control-group">
         <div class="icon-row">
-          <button id="btn-mode-none" class="layer-btn mode-btn" data-mode="none" title="No symmetry">None</button>
-          <button id="btn-mode-spiegeling" class="layer-btn mode-btn active" data-mode="spiegeling" title="Spiegeling (mirror-generated)">Spiegeling</button>
-          <button id="btn-mode-drehling" class="layer-btn mode-btn" data-mode="drehling" title="Drehling (rotation-generated)">Drehling</button>
+          <button id="btn-mode-none" class="icon-btn mode-btn" data-mode="none" title="No symmetry">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
+          <button id="btn-mode-spiegeling" class="icon-btn mode-btn active" data-mode="spiegeling" title="Mirror symmetry (Spiegeling)">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2,2" />
+              <path d="M4 12 L9 8 L9 16 Z" fill="currentColor" stroke="none" />
+              <path d="M20 12 L15 8 L15 16 Z" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
+          <button id="btn-mode-drehling" class="icon-btn mode-btn" data-mode="drehling" title="Rotational symmetry (Drehling)">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 12a8 8 0 1 1-2.7-6" />
+              <path d="M20 4v6h-6" />
+            </svg>
+          </button>
         </div>
       </div>
 
