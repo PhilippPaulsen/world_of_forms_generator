@@ -1287,7 +1287,18 @@ function addLayer() {
     // creation time regardless, layerGrid()'s own layerShape parameter
     // (defaulting to baseShape when omitted, as it is here) already
     // produces the exact same, correct same-shape result.
-    const layer = { connections: [], redoStack: [], offsetX: 0, offsetY: 0, rotation: 0, shape: currentShape, enabled: true, showFaces: false, nodeCount, shapeSizeFactor };
+    // Roadmap 1.12 stage 5 (symmetryMode axis) part 1 (data model +
+    // rendering only - no UI wiring yet): symmetryMode starts identical
+    // to the base's current global value, same "layer starts as a copy
+    // of base" convention as shape above - NOT a live reference to the
+    // global (a later base symmetryMode change must not silently drag
+    // this layer's own value along with it, the same one-time-copy
+    // semantics shape/nodeCount/shapeSizeFactor already have). Unlike
+    // shape, this needs no grid refresh of any kind at creation or
+    // change time - core/tiling.js's drawTessellation()/drawAdditionalLayers()
+    // already read it straight from this field (symmetryModeOverride),
+    // no layerGrid() involvement.
+    const layer = { connections: [], redoStack: [], offsetX: 0, offsetY: 0, rotation: 0, shape: currentShape, symmetryMode, enabled: true, showFaces: false, nodeCount, shapeSizeFactor };
     const grid = layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.nodeCount);
     layer.nodes = grid.nodes;
     layer.centroid = grid.centroid;
