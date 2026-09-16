@@ -179,10 +179,15 @@ function _neighborhoodTileAnchors(residual, K, v1, v2) {
 // node gathering build on a plan from this same function, so they can
 // never disagree about which tiles are in play.
 //
-// layers: [{ sheetId, connections, offsetX, offsetY }, ...] - already
-// filtered to enabled layers by the caller; sheetId is caller-supplied
-// (e.g. an additionalLayers[] index) so cross-layer face provenance can
-// reference it directly (design session, points 5/9).
+// layers: [{ sheetId, connections, offsetX, offsetY, symmetryMode }, ...] -
+// already filtered to enabled layers by the caller; sheetId is caller-
+// supplied (e.g. an additionalLayers[] index) so cross-layer face
+// provenance can reference it directly (design session, points 5/9).
+// Roadmap 1.12 stage 5 (symmetryMode axis) part 2: symmetryMode passed
+// straight through to decomposedLayers below (this function computes
+// each layer's lattice-offset residual, unrelated to symmetryMode - just
+// the carrier that gets gatherSheet() its per-layer value, see
+// collectCrossLayerSegments()).
 function _planCrossLayerNeighborhood(layers) {
     const { v1, v2 } = _meshBasisVectors();
     const R = _shapeCircumradius();
@@ -193,7 +198,8 @@ function _planCrossLayerNeighborhood(layers) {
             sheetId: layer.sheetId,
             connections: layer.connections,
             residual,
-            effectiveResidualMag: _effectiveResidualMagnitude(residual, v2)
+            effectiveResidualMag: _effectiveResidualMagnitude(residual, v2),
+            symmetryMode: layer.symmetryMode
         };
     });
     let maxResidualMag = 0;
@@ -217,18 +223,40 @@ function _planCrossLayerNeighborhood(layers) {
 // always at the single untranslated centroid position - so gathered
 // geometry can never drift from what drawShapeCell() would actually
 // render at that tile.
+// Roadmap 1.12 stage 5 (symmetryMode axis) part 2 (design session's own
+// flagged highest-risk fix): gatherSheet() gains a symmetryModeOverride
+// parameter, threaded into its own drawShapeCell() call as that
+// function's 8th (symmetryModeOverride) argument - undefined for the
+// base sheet's own call below (falls through to the global symmetryMode,
+// correct since the base IS the global), the layer's own symmetryMode
+// for each per-layer call. Before this fix, EVERY gatherSheet() call
+// omitted this argument entirely, so a layer's own segments were
+// silently gathered under the BASE's symmetryMode regardless of what
+// that layer's own value was - wrong copies feeding directly into
+// findFaces(), not merely a display inconsistency the way the
+// patternName-status/export gaps (sketch.js/core/export.js) were.
+// rotationDeg/mirrorAxisOverride/shapeOverride stay omitted here (same
+// as before this fix) - this whole function is only ever reachable for
+// layers incompatibleEnabledLayersForCrossLayerFaces() has already
+// confirmed share the base's shape/scale/rotation exactly (sketch.js),
+// so every one of those three still correctly defaults to the shared
+// base values; symmetryMode has no such guard (see the Phase 1 design
+// session: it never breaks the shared-lattice assumption those three
+// protect), so it's the one axis a layer can differ on while still
+// reaching this function - and therefore the one that must always be
+// passed explicitly, never left to a default that assumes agreement.
 function collectCrossLayerSegments(baseConnSet, layers) {
     const plan = _planCrossLayerNeighborhood(layers);
     const tagged = [];
 
-    function gatherSheet(sheetId, connSet, residual) {
+    function gatherSheet(sheetId, connSet, residual, symmetryModeOverride) {
         const anchors = _neighborhoodTileAnchors(residual, plan.K, plan.v1, plan.v2);
         anchors.forEach(({ offset, flip180 }) => {
             const tileC = { x: centroid.x + offset.x, y: centroid.y + offset.y };
             connSet.forEach((conn, connIndex) => {
                 if (conn.length !== 2) return; // mirror drawShapeCell's own completeness filter
                 segmentCollector = [];
-                drawShapeCell([conn], tileC, flip180);
+                drawShapeCell([conn], tileC, flip180, undefined, 0, undefined, undefined, symmetryModeOverride);
                 segmentCollector.forEach(seg => tagged.push({ ...seg, sheetId, connIndex }));
                 segmentCollector = null;
             });
@@ -236,7 +264,7 @@ function collectCrossLayerSegments(baseConnSet, layers) {
     }
 
     gatherSheet('base', baseConnSet, { x: 0, y: 0 });
-    plan.decomposedLayers.forEach(layer => gatherSheet(layer.sheetId, layer.connections, layer.residual));
+    plan.decomposedLayers.forEach(layer => gatherSheet(layer.sheetId, layer.connections, layer.residual, layer.symmetryMode));
 
     return tagged;
 }
@@ -965,8 +993,8 @@ function _neighborhoodRealNodes(sheetId, residual, K, v1, v2) {
 // in the design session, point 2a), so one top-level check covers base
 // and every layer at once.
 //
-// layers: [{ sheetId, connections, offsetX, offsetY }, ...] - already
-// filtered to enabled layers by the caller.
+// layers: [{ sheetId, connections, offsetX, offsetY, symmetryMode }, ...] -
+// already filtered to enabled layers by the caller.
 //
 // Roadmap 1.10b-ii-c: also returns latticeBasis ({v1, v2}, from the same
 // plan already computed here) alongside {nodes, faces} - the computed
