@@ -808,16 +808,31 @@
   </div>
 
   <!-- Scripts -->
+  <!-- Cache-busting: this site has no build step (CLAUDE.md - plain
+       <script> tags, no bundler), so GitHub Pages/Fastly serves every
+       local script at the exact same URL on every deploy. A browser
+       that already cached an OLDER core/*.js or sketch.js for that URL
+       can silently keep serving it on a later same-tab navigation
+       (confirmed root cause of a real bug: opening a catalog->generator
+       link in a tab that had loaded index.html earlier the same day
+       ran a stale pre-fix sketch.js and ignored the URL entirely,
+       fixed only by a manual reload forcing a cache revalidation - see
+       that fix's own commit). ?v=CACHE_BUST_VERSION on every LOCAL
+       script tag below forces a fresh fetch whenever it changes - bump
+       this value (e.g. to today's date) on every commit that touches
+       ANY of index.html's own core/*.js or sketch.js. Not needed on
+       the p5.js CDN tag - that URL already carries its own version
+       (p5@1.9.0), so a version bump there naturally changes the URL. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js"></script>
-  <script src="core/state.js"></script>
-  <script src="core/symmetry.js"></script>
-  <script src="core/curves.js"></script>
-  <script src="core/tiling.js"></script>
-  <script src="core/faces.js"></script>
-  <script src="core/orbits.js"></script>
-  <script src="core/export.js"></script>
-  <script src="sketch.js"></script>
+  <script src="core/forms.js?v=20260916a"></script>
+  <script src="core/state.js?v=20260916a"></script>
+  <script src="core/symmetry.js?v=20260916a"></script>
+  <script src="core/curves.js?v=20260916a"></script>
+  <script src="core/tiling.js?v=20260916a"></script>
+  <script src="core/faces.js?v=20260916a"></script>
+  <script src="core/orbits.js?v=20260916a"></script>
+  <script src="core/export.js?v=20260916a"></script>
+  <script src="sketch.js?v=20260916a"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

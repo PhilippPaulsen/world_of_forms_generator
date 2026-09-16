@@ -604,18 +604,25 @@
        render.js's own same-named globals - see that file's docblock),
        no core/faces.js (never reached - showFaces=false), no
        core/export.js (not used; gallery-render.js writes its own SVG
-       wrapper instead of generateSVGString()'s getComputedStyle() call). -->
-  <script src="core/forms.js"></script>
-  <script src="core/orbits.js"></script>
-  <script src="core/symmetry.js"></script>
-  <script src="core/curves.js"></script>
-  <script src="core/tiling.js"></script>
-  <script src="gallery-render.js"></script>
+       wrapper instead of generateSVGString()'s getComputedStyle() call).
+
+       Cache-busting: same ?v=CACHE_BUST_VERSION convention as
+       index.html's own script tags (see that file's own comment for
+       the full reasoning/real-bug precedent) - this page has the exact
+       same exposure (no build step, every local script at a fixed URL
+       every deploy), so its own scripts need the same protection.
+       Bump alongside index.html's whenever any of these files change. -->
+  <script src="core/forms.js?v=20260916a"></script>
+  <script src="core/orbits.js?v=20260916a"></script>
+  <script src="core/symmetry.js?v=20260916a"></script>
+  <script src="core/curves.js?v=20260916a"></script>
+  <script src="core/tiling.js?v=20260916a"></script>
+  <script src="gallery-render.js?v=20260916a"></script>
   <!-- Roadmap 1.11 gallery Phase (c), pass 3: the real Node combination-
        enumeration tool, loaded verbatim (not a browser-side rewrite) -
        now dual-environment-safe via the guard added to its own trailing
        module.exports line. -->
-  <script src="tools/gallery/combinations.js"></script>
-  <script src="gallery.js"></script>
+  <script src="tools/gallery/combinations.js?v=20260916a"></script>
+  <script src="gallery.js?v=20260916a"></script>
 </body>
 </html>
