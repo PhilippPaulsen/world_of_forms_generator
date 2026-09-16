@@ -24,7 +24,7 @@ let nodeCount = 3;       // 1..5, adjustable via #node-count-input
 // exposes fold/symmetric/leaning/strength as real UI controls.
 let curveType = { kind: 'straight' };
 
-let symmetryMode = "rotation_reflection6"; // fixed default - #symmetry-dropdown removed from UI, logic below stays wired for later reuse
+let symmetryMode = "rotation_reflection6"; // Roadmap 1.11: initial default, now driven by sketch.js's Spiegeling/Drehling + fold button group (index.html) - matches this same value, so reactivating the control changed nothing about the default starting pattern. Was a raw <select id="symmetry-dropdown"> removed from the UI in an earlier flattening pass (commit 33411895); that markup is gone for good, not reintroduced - see sketch.js's own button-group wiring for the real control.
 let lineColor = "#000000"; // fixed default - #line-color-picker removed from UI, logic below stays wired for later reuse
 let showNodes = true;
 let currentShape = 'triangle';

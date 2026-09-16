@@ -415,6 +415,46 @@
         <input type="number" id="node-count-input" min="1" max="5" value="3">
       </div>
 
+      <!-- Roadmap 1.11: Spiegeling/Drehling selector - reintroduces the
+           symmetry-mode choice the original #symmetry-dropdown offered
+           (removed in commit 33411895's broad UI-flattening pass -
+           "single-row toolbar, remove dark mode toggle" - not a
+           symmetry-specific decision; core/state.js's own symmetryMode
+           default comment confirms the logic stayed wired for exactly
+           this reuse). .layer-btn row, matching the layer-tab-strip/
+           mesh-preset button convention (sketch.js's own more recent
+           idiom) rather than resurrecting the pre-flattening <select>.
+           The old dropdown markup also carried a 7th, invalid option
+           (value="rotation_reflection", no fold digit) that normSym()
+           would have silently collapsed to rotation_reflection6 - not
+           reproduced here; only the six real canonical modes are
+           reachable via the category+fold combination below (see
+           sketch.js's resolveSymmetryMode()). "None" stays a real,
+           selectable state here even though it's excluded from the
+           gallery catalog (Roadmap 1.11 batch session) - the live app
+           renders one pattern at a time, no combinatorial concern. -->
+      <div class="control-group">
+        <div class="icon-row">
+          <button id="btn-mode-none" class="layer-btn mode-btn" data-mode="none" title="No symmetry">None</button>
+          <button id="btn-mode-spiegeling" class="layer-btn mode-btn active" data-mode="spiegeling" title="Spiegeling (mirror-generated)">Spiegeling</button>
+          <button id="btn-mode-drehling" class="layer-btn mode-btn" data-mode="drehling" title="Drehling (rotation-generated)">Drehling</button>
+        </div>
+      </div>
+
+      <!-- Fold sub-choice - hex only. Triangle/square's fold is fixed
+           by the shape itself (rotation3 and rotation6 give byte-
+           identical rotAngles there, confirmed in the group-
+           verification session), so this row is meaningless for them
+           and stays hidden - same [hidden]-attribute convention as
+           every other contextual control-group (e.g. layer-shape-group),
+           toggled in sketch.js's updateSymmetryModeControl(). -->
+      <div class="control-group" id="mode-fold-group" hidden>
+        <div class="icon-row">
+          <button id="btn-fold-3" class="layer-btn fold-btn" data-fold="3" title="3-fold">3-fold</button>
+          <button id="btn-fold-6" class="layer-btn fold-btn active" data-fold="6" title="6-fold">6-fold</button>
+        </div>
+      </div>
+
       <!-- Visibility Toggle, Curve Toggle & Free Endpoints Toggle -->
       <div class="control-group">
         <div class="icon-row">

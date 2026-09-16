@@ -52,6 +52,7 @@ function setup() {
             rebuildGrid(currentShape);
             renderLayerTabs(); // rebuildGrid() clears additionalLayers - keep the tab strip in sync
             updateOffsetControls();
+            updateSymmetryModeControl(); // Roadmap 1.11: fold row only applies to hex - show/hide it and re-resolve symmetryMode for the new shape (function declaration, hoisted within setup() regardless of textual order below)
             cancelAltNetConstruction(); // Roadmap 1.2-C: an in-progress P/Q click pair no longer means anything once the target shape/order changed underneath it
             redraw();
         });
@@ -87,15 +88,59 @@ function setup() {
         });
     }
 
-    // Symmetry Mode (Dropdown)
-    const symDropdown = select('#symmetry-dropdown');
-    if (symDropdown) {
-        symmetryMode = normSym(symDropdown.value());
-        symDropdown.changed(() => {
-            symmetryMode = normSym(symDropdown.value());
+    // Symmetry Mode (Spiegeling/Drehling button group + hex-only fold
+    // sub-row) - see index.html's own comment on this control for the
+    // removal/reintroduction history. Category+fold state resolves to
+    // one of the six canonical raw mode strings via
+    // resolveSymmetryMode() - normSym() still validates the result
+    // (defensive, matches the function's existing role elsewhere)
+    // even though every reachable combination is already one of the
+    // six real values by construction.
+    let symmetryCategory = 'spiegeling'; // 'none' | 'spiegeling' | 'drehling' - matches the pre-existing rotation_reflection6 default
+    let symmetryFold = 6; // 3 | 6 - hex only, ignored for triangle/square
+
+    function resolveSymmetryMode(shape, category, fold) {
+        if (category === 'none') return 'none';
+        if (shape === 'hex') {
+            if (category === 'spiegeling') return fold === 3 ? 'rotation_reflection3' : 'rotation_reflection6';
+            return fold === 3 ? 'rotation3' : 'rotation6';
+        }
+        // Triangle/square: rotation3 ≡ rotation6 and rotation_reflection3 ≡
+        // rotation_reflection6 (confirmed collapse, group-verification
+        // session) - fold is meaningless there, so one representative
+        // raw mode per category is picked arbitrarily but consistently.
+        return category === 'spiegeling' ? 'rotation_reflection6' : 'rotation3';
+    }
+
+    function updateSymmetryModeControl() {
+        symmetryMode = normSym(resolveSymmetryMode(currentShape, symmetryCategory, symmetryFold));
+        const foldGroup = select('#mode-fold-group');
+        if (foldGroup) foldGroup.elt.hidden = currentShape !== 'hex';
+    }
+
+    const modeBtns = selectAll('.mode-btn');
+    modeBtns.forEach(btn => {
+        btn.mousePressed(() => {
+            modeBtns.forEach(b => b.removeClass('active'));
+            btn.addClass('active');
+            symmetryCategory = btn.attribute('data-mode');
+            updateSymmetryModeControl();
             redraw();
         });
-    }
+    });
+
+    const foldBtns = selectAll('.fold-btn');
+    foldBtns.forEach(btn => {
+        btn.mousePressed(() => {
+            foldBtns.forEach(b => b.removeClass('active'));
+            btn.addClass('active');
+            symmetryFold = parseInt(btn.attribute('data-fold'));
+            updateSymmetryModeControl();
+            redraw();
+        });
+    });
+
+    updateSymmetryModeControl(); // initial sync - keeps symmetryMode/fold-row-visibility correct on load without waiting for a click
 
     // Line Color (Color Picker)
     const colorPicker = select('#line-color-picker');
