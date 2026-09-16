@@ -424,8 +424,48 @@
       display: block;
     }
 
-    #detail-close {
+    /* Row for the two detail-dialog actions (Roadmap: catalog ->
+       generator back-link) - #detail-open-generator sits alongside
+       #detail-close instead of both stacking full-width, matching how
+       action buttons pair up elsewhere in this app (e.g. the pager
+       rows above). align-self:flex-start moved here from #detail-close
+       itself, since the ROW is what should hug the left edge now, not
+       each button individually. */
+    .detail-actions {
+      display: flex;
+      gap: 8px;
       align-self: flex-start;
+    }
+
+    /* Shares #detail-close's exact chrome (same border/radius/height/
+       hover) but as a real <a>, not a <button> - see gallery.js's
+       openDetailView() for why: a genuine link (not a JS-driven
+       window.open()) gets native middle-click/cmd-click/"copy link"
+       behavior for free, matching this page's own #btn-gallery link in
+       index.html. href is rebuilt on every openDetailView() call, same
+       "no stale content between entries" rule #detail-citation already
+       follows. */
+    #detail-open-generator {
+      background: var(--background);
+      border: 1px solid var(--text);
+      border-radius: 4px;
+      height: 32px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      box-sizing: border-box;
+    }
+
+    #detail-open-generator:hover {
+      background: var(--hover-bg);
+    }
+
+    #detail-close {
       background: var(--background);
       border: 1px solid var(--text);
       border-radius: 4px;
@@ -548,7 +588,10 @@
       <div id="detail-title"></div>
       <div id="detail-citation"></div>
       <div id="detail-svg-container"></div>
-      <button id="detail-close">Close</button>
+      <div class="detail-actions">
+        <a id="detail-open-generator" href="index.html" target="_blank" rel="noopener">Open in generator</a>
+        <button id="detail-close">Close</button>
+      </div>
     </div>
   </div>
 

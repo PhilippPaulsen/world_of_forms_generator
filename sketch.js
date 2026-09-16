@@ -30,6 +30,101 @@ function normSym(val) {
     return validModes.includes(v) ? v : 'rotation_reflection6';
 }
 
+// Roadmap: catalog (gallery.html) -> generator back-link. A catalog
+// entry's (shape, order, symmetryMode, orbitIds) tuple is already
+// exactly what core/orbits.js's computeThemeLineOrbits() needs to
+// reconstruct the same connections gallery-render.js's own
+// renderFullTessellationSVG() builds - see the design session for why
+// node-id numbering is guaranteed identical regardless of scale
+// (core/forms.js's id assignment depends only on nodeCount, never on
+// shapeSizeFactor/canvas size) and why shapeSizeFactor is deliberately
+// NOT part of this scheme (a pure rendering parameter, no bearing on
+// which nodes/orbits exist).
+//
+// orbitIds is comma-separated, not '+' (the pattern-name display
+// format's own separator, e.g. "2*/D3 0+2") - '+' in a URL query VALUE
+// is reserved and silently decodes to a space unless percent-encoded,
+// which would corrupt the id list; comma has no such meaning.
+//
+// Two validation layers, deliberately kept separate (see the design
+// session): this function is the SYNTACTIC layer only - can these four
+// params even describe a real request - checked before touching any
+// grid/orbit machinery. The SEMANTIC layer (do the given orbitIds
+// actually exist in THIS exact table) can only run once the grid is
+// built - see applyCatalogPattern() below. Returns null (never a
+// partial/best-guess object) for anything that doesn't clearly ask for
+// a catalog pattern - an ordinary load with no query string, and a
+// malformed one, are treated identically: fall through to the normal
+// addRandomConnection() default.
+const CATALOG_URL_SHAPES = ['triangle', 'square', 'hex'];
+const CATALOG_URL_MODES = ['none', 'reflection_only', 'rotation3', 'rotation6', 'rotation_reflection3', 'rotation_reflection6'];
+
+function parseCatalogUrlParams(search) {
+    const params = new URLSearchParams(search);
+    const shape = params.get('shape');
+    const orderRaw = params.get('order');
+    const symmetryModeParam = params.get('symmetryMode');
+    const orbitIdsRaw = params.get('orbitIds');
+    if (!shape || !orderRaw || !symmetryModeParam || !orbitIdsRaw) return null;
+
+    if (!CATALOG_URL_SHAPES.includes(shape)) return null;
+    // Deliberately NOT normSym() here - that function's fallback
+    // ('rotation_reflection6' for anything unrecognized) exists to keep
+    // a live UI control always showing SOMETHING sane; here, an
+    // unrecognized mode means the whole link is malformed, and should
+    // fall through to the ordinary default rather than silently
+    // substituting a DIFFERENT mode and proceeding to look up orbitIds
+    // against the wrong group's table.
+    if (!CATALOG_URL_MODES.includes(symmetryModeParam)) return null;
+
+    const order = parseInt(orderRaw, 10);
+    // 1..5 matches #node-count-input's own min/max (index.html) - every
+    // real manifest entry is within this range (max observed: 5,
+    // triangle), so this is a syntactic sanity bound, not a workaround.
+    if (!Number.isInteger(order) || order < 1 || order > 5) return null;
+
+    const orbitIds = orbitIdsRaw.split(',').map(s => parseInt(s, 10));
+    if (orbitIds.length === 0 || orbitIds.some(id => !Number.isInteger(id) || id < 0)) return null;
+
+    return { shape, order, symmetryMode: symmetryModeParam, orbitIds };
+}
+
+// Semantic validation + reconstruction (the second layer above) - only
+// meaningful once rebuildGrid(currentShape) has already run for the
+// resolved shape/order, since it needs the real live nodes/centroid.
+// Mirrors gallery-render.js's renderFullTessellationSVG() exactly:
+// connections = orbitIds.map(id => table.orbits[id].pairs[0]) - the
+// SAME reconstruction, reusing the SAME live orbit-table glue
+// (computeThemeLineOrbitTable(), core/orbits.js - already loaded by
+// index.html for the existing pattern-name-status feature) rather than
+// a second, independently-written lookup. Any representative pair
+// (pairs[0]) is fine to use as-is - two pairs land in the same orbit
+// precisely because the group maps one onto the other, so the rendered
+// copy-set is an invariant of the orbit, not of which member was
+// chosen (see the design session). Returns true/false so the caller
+// knows whether to fall back to addRandomConnection(); never throws
+// out of setup() - a stale/malformed orbitIds (not realistic for an
+// app-generated link, but a hand-edited or future-format-drifted one
+// should degrade gracefully) is reported via console.warn, not a new
+// UI element (deliberately - this is expected to be rare enough that
+// building dedicated in-page chrome for it isn't warranted yet).
+function applyCatalogPattern(pattern) {
+    try {
+        const table = computeThemeLineOrbitTable(pattern.symmetryMode);
+        const newConnections = pattern.orbitIds.map(id => {
+            if (!table.orbits[id]) {
+                throw new Error(`orbit id ${id} does not exist for ${pattern.shape} order ${pattern.order} ${pattern.symmetryMode} (table has ${table.orbits.length} orbits)`);
+            }
+            return table.orbits[id].pairs[0];
+        });
+        connections = newConnections;
+        return true;
+    } catch (err) {
+        console.warn('Failed to load catalog pattern from URL - falling back to the default random connection:', err.message);
+        return false;
+    }
+}
+
 // ----------------- SETUP ----------------------------------------
 function setup() {
     // Canvas size (Hidden input, default 600)
@@ -88,6 +183,27 @@ function setup() {
         });
     }
 
+    // Roadmap: catalog -> generator back-link (see parseCatalogUrlParams()/
+    // applyCatalogPattern() above for the full reasoning). Parsed once,
+    // here - after the shape/node-count controls exist and have their
+    // ordinary defaults, but before anything downstream (the symmetry-
+    // mode block, the final rebuildGrid() at the end of setup()) reads
+    // currentShape/nodeCount - so a valid catalog link overrides BOTH
+    // the internal state AND the controls a real user interaction would
+    // also update (point 3 of the design: not just connections, or the
+    // shape icons/node-count input would visually disagree with the
+    // actually-loaded grid). symmetryMode itself is applied further
+    // below, once modeBtns/foldBtns exist.
+    const catalogUrlPattern = parseCatalogUrlParams(location.search);
+    if (catalogUrlPattern) {
+        currentShape = catalogUrlPattern.shape;
+        nodeCount = catalogUrlPattern.order;
+        shapeBtns.forEach(b => b.removeClass('active'));
+        const matchingShapeBtn = shapeBtns.find(b => b.attribute('data-shape') === currentShape);
+        if (matchingShapeBtn) matchingShapeBtn.addClass('active');
+        if (nodeInput) nodeInput.value(nodeCount);
+    }
+
     // Symmetry Mode (Spiegeling/Drehling button group + hex-only fold
     // sub-row) - see index.html's own comment on this control for the
     // removal/reintroduction history. Category+fold state resolves to
@@ -141,6 +257,47 @@ function setup() {
     });
 
     updateSymmetryModeControl(); // initial sync - keeps symmetryMode/fold-row-visibility correct on load without waiting for a click
+
+    // Roadmap: catalog -> generator back-link, continued from above - the
+    // raw symmetryMode from the URL wins outright over whatever
+    // updateSymmetryModeControl() just resolved from the default
+    // category/fold, since it's already the portable, authoritative
+    // value (point 1 of the design - no category/fold re-derivation
+    // needed or wanted). Button highlighting below is best-effort: exact
+    // for the four rotation-bearing raw modes (this table is literally
+    // resolveSymmetryMode()'s own inverse) and for 'none', approximate
+    // for 'reflection_only' (Z2) - Z2 has no category+fold combination
+    // that reaches it (see the design session), so Spiegeling is
+    // highlighted as the conceptually correct category (Ostwald's own
+    // term covers the full reflection-containing case, not just the
+    // dihedral groups) even though re-clicking it afterward would NOT
+    // reproduce Z2 - a known, deliberately-deferred gap, not something
+    // this feature tries to solve. symmetryCategory/symmetryFold
+    // themselves are updated too, not just the button classes, so a
+    // LATER updateSymmetryModeControl() call (e.g. a subsequent shape-
+    // icon click) resolves from a sane starting point instead of a
+    // stale pre-load default.
+    if (catalogUrlPattern) {
+        symmetryMode = catalogUrlPattern.symmetryMode;
+        const bestEffort = {
+            none: { category: 'none', fold: symmetryFold },
+            reflection_only: { category: 'spiegeling', fold: symmetryFold },
+            rotation3: { category: 'drehling', fold: 3 },
+            rotation6: { category: 'drehling', fold: 6 },
+            rotation_reflection3: { category: 'spiegeling', fold: 3 },
+            rotation_reflection6: { category: 'spiegeling', fold: 6 },
+        }[symmetryMode];
+        if (bestEffort) {
+            symmetryCategory = bestEffort.category;
+            symmetryFold = bestEffort.fold;
+            modeBtns.forEach(b => b.removeClass('active'));
+            const matchingModeBtn = modeBtns.find(b => b.attribute('data-mode') === symmetryCategory);
+            if (matchingModeBtn) matchingModeBtn.addClass('active');
+            foldBtns.forEach(b => b.removeClass('active'));
+            const matchingFoldBtn = foldBtns.find(b => parseInt(b.attribute('data-fold')) === symmetryFold);
+            if (matchingFoldBtn) matchingFoldBtn.addClass('active');
+        }
+    }
 
     // Line Color (Color Picker)
     const colorPicker = select('#line-color-picker');
@@ -813,8 +970,15 @@ function setup() {
     computeCrossLayerBtn && computeCrossLayerBtn.mousePressed(computeCrossLayerFacesFlow);
 
     rebuildGrid(currentShape);
-    // Draw a random connection on start
-    addRandomConnection();
+    // Draw a random connection on start - unless a valid catalog URL
+    // pattern is already resolved (see catalogUrlPattern/applyCatalogPattern()
+    // above), in which case that pattern's own connections replace the
+    // random seed entirely. Any failure (semantic validation - orbitIds
+    // that don't actually exist in this exact table) falls back to
+    // exactly the pre-existing default, same as no URL pattern at all.
+    if (!catalogUrlPattern || !applyCatalogPattern(catalogUrlPattern)) {
+        addRandomConnection();
+    }
     redraw();
     updateCrossLayerStatus();
     updatePatternNameStatus();

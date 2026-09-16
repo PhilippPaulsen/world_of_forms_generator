@@ -966,10 +966,32 @@ function entryLabel(entry) {
   return `${entry.shape} ${entry.order} — ${patternNameFor(entry.groupToken, entry.orbitIds)}`;
 }
 
+// Roadmap: catalog -> generator back-link (design session, points 1/4).
+// entry already carries exactly the four fields the URL scheme needs
+// (manifest-backed rows and Pass 3 ad-hoc combinations alike - see
+// renderGrid()/renderComboGrid() above, both build the same shape) -
+// groupToken is NOT part of the URL, since symmetryMode is the portable/
+// authoritative value the generator's own orbit-table lookup consumes
+// directly (core/orbits.js), not a value derived from groupToken.
+// orbitIds joined with a comma, not '+' (the pattern-name display
+// format's own separator) - '+' in a URL query VALUE is reserved and
+// silently decodes to a space unless percent-encoded, which would
+// corrupt the id list.
+function catalogEntryGeneratorUrl(entry) {
+  const params = new URLSearchParams({
+    shape: entry.shape,
+    order: entry.order,
+    symmetryMode: entry.symmetryMode,
+    orbitIds: entry.orbitIds.join(','),
+  });
+  return `index.html?${params.toString()}`;
+}
+
 function openDetailView(entry) {
   const container = $('detail-svg-container');
   container.innerHTML = '';
   $('detail-title').textContent = entryLabel(entry) + ' — full tessellation';
+  $('detail-open-generator').href = catalogEntryGeneratorUrl(entry);
 
   // Fuller citation than the grid/tile badges (Phase c task point 3) -
   // cleared and rebuilt on every open, same "no stale content between
