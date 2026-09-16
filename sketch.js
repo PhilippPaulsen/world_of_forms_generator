@@ -1237,10 +1237,20 @@ function activeNodes() { return activeLayer === 'base' ? nodes : additionalLayer
 // before passing it onward. Correctly undefined for the base sheet
 // (the whole object is undefined there), letting shapeOverride default
 // to currentShape exactly as before this fix.
+// Roadmap 1.12 stage 5 (symmetryMode axis) part 2: symmetryMode -
+// same role/convention as shape directly above, added now that a layer
+// has its own value (Phase 1) - callers extract it as the mode argument
+// to computeThemeLineOrbitTable()/computeThemeLineName()/friends,
+// mirroring core/tiling.js's own override.symmetryMode embedding
+// (Phase 1). Fixes patternNameSignature()/updatePatternNameStatus(),
+// previously the two live call sites still reading/passing the bare
+// global symmetryMode regardless of activeLayer - the same bug class
+// the shape fix above already addressed for shape, just not yet
+// extended to this axis (design session finding).
 function activeGridOverride() {
     if (activeLayer === 'base') return undefined;
     const layer = additionalLayers[activeLayer];
-    return { nodes: layer.nodes, centroid: layer.centroid, outerCorners: layer.outerCorners, shape: layer.shape };
+    return { nodes: layer.nodes, centroid: layer.centroid, outerCorners: layer.outerCorners, shape: layer.shape, symmetryMode: layer.symmetryMode };
 }
 
 // Roadmap 1.10a: same base/active-layer split as above, for the face-
@@ -1418,9 +1428,20 @@ let patternNameCacheValue = null;
 // happened to invalidate correctly regardless - fixed here for
 // consistency with the stated principle, not because of an observed
 // stale-cache symptom).
+// Roadmap 1.12 stage 5 (symmetryMode axis) part 2: mode now reads the
+// ACTIVE sheet's own symmetryMode (activeGridOverride()'s symmetryMode
+// field, falling back to the global for the base) the same way shape
+// does directly above - UNLIKE the shape case, this one WAS an
+// observable bug (design session finding): a per-layer symmetryMode
+// edit doesn't clear that layer's connections the way a shape change
+// does (Phase 1 - it's a pure render-time parameter, see
+// setActiveLayerRotation()'s own precedent), so conns alone wouldn't
+// change and this cache would keep showing the stale pre-edit name.
 function patternNameSignature() {
-    const activeShape = activeLayer === 'base' ? currentShape : additionalLayers[activeLayer].shape;
-    return JSON.stringify({ shape: activeShape, mode: symmetryMode, activeLayer, conns: activeConnections() });
+    const gridOverride = activeGridOverride();
+    const activeShape = gridOverride ? gridOverride.shape : currentShape;
+    const activeMode = gridOverride ? gridOverride.symmetryMode : symmetryMode;
+    return JSON.stringify({ shape: activeShape, mode: activeMode, activeLayer, conns: activeConnections() });
 }
 
 // Updates #pattern-name-status for whichever sheet is currently active.
@@ -1445,8 +1466,16 @@ function updatePatternNameStatus() {
         // shapeOverride argument, so a layer whose shape differs from
         // the base's gets its OWN shape's symmetry group, not the
         // base's (the crash/wrong-result this fix addresses).
+        // Roadmap 1.12 stage 5 (symmetryMode axis) part 2: gridOverride's
+        // own .symmetryMode field (correctly undefined for the base
+        // sheet, falling through to computeThemeLineName()'s own global-
+        // symmetryMode default there) threaded through as the mode
+        // argument, replacing the bare `undefined` this call previously
+        // always passed regardless of activeLayer - the design session's
+        // own finding: a layer's displayed pattern name was silently
+        // computed under the BASE's symmetryMode, not its own.
         const gridOverride = activeGridOverride();
-        patternNameCacheValue = computeThemeLineName(activeConnections(), undefined, gridOverride, gridOverride && gridOverride.shape);
+        patternNameCacheValue = computeThemeLineName(activeConnections(), gridOverride && gridOverride.symmetryMode, gridOverride, gridOverride && gridOverride.shape);
         patternNameCacheSignature = sig;
     }
     // Roadmap [orbits.js free-endpoint fix]: computeThemeLineName() now
@@ -1503,6 +1532,11 @@ let crossLayerFillBufferSignature = null;
 // offset. Mirrors collectCrossLayerSegments()'s/drawShapeCell()'s own
 // completeness filter ([id,id] only - a connection started by one click
 // and never finished stays [id]).
+// Roadmap 1.12 stage 5 (symmetryMode axis) part 2: symmetryMode included
+// per layer now too, mirroring offsetX/offsetY above - core/faces.js's
+// collectCrossLayerSegments() (via _planCrossLayerNeighborhood()) needs
+// it to gather THIS layer's own segments under its own symmetryMode,
+// not the base's (design session's flagged highest-risk fix).
 function buildCrossLayerInput() {
     const baseConn = connections.filter(c => c.length === 2);
     const layers = additionalLayers
@@ -1511,6 +1545,7 @@ function buildCrossLayerInput() {
             connections: layer.connections.filter(c => c.length === 2),
             offsetX: layer.offsetX,
             offsetY: layer.offsetY,
+            symmetryMode: layer.symmetryMode,
             enabled: layer.enabled
         }))
         .filter(l => l.enabled);
