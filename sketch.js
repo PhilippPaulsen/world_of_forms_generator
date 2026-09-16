@@ -581,6 +581,20 @@ function setup() {
     // folded into this same function for the same reason.
     const rotationGroup = select('#layer-rotation-group');
     const layerRotationInput = select('#layer-rotation-input');
+    // Roadmap 1.8 Stage A: this layer's own animation controls - same
+    // contextual show/hide as the fields above. Populate-on-switch is
+    // split into its own syncLayerAnimationDisplay() function (below,
+    // also exposed on window like updateOffsetControls/renderLayerTabs
+    // are - see their own comment) rather than inlined here, since
+    // draw() also needs to call it every frame during active playback
+    // to keep the progress slider/play-icon live, not just on a tab
+    // switch or explicit control interaction.
+    const animationGroup = select('#layer-animation-group');
+    const setAnimStartBtn = select('#btn-layer-anim-set-start');
+    const setAnimEndBtn = select('#btn-layer-anim-set-end');
+    const animDurationInput = select('#layer-anim-duration-input');
+    const animPlayBtn = select('#btn-layer-anim-play');
+    const animProgressInput = select('#layer-anim-progress-input');
 
     function updateOffsetControls() {
         const showOffsets = activeLayer !== 'base';
@@ -594,6 +608,7 @@ function setup() {
         if (nodeCountGroup) nodeCountGroup.elt.hidden = !showOffsets;
         if (shapeSizeGroup) shapeSizeGroup.elt.hidden = !showOffsets;
         if (rotationGroup) rotationGroup.elt.hidden = !showOffsets;
+        if (animationGroup) animationGroup.elt.hidden = !showOffsets;
         if (showOffsets) {
             const layer = additionalLayers[activeLayer];
             if (offsetXInput) offsetXInput.value(layer.offsetX);
@@ -601,6 +616,7 @@ function setup() {
             if (layerNodeCountInput) layerNodeCountInput.value(layer.nodeCount);
             if (layerShapeSizeInput) layerShapeSizeInput.value(layer.shapeSizeFactor);
             if (layerRotationInput) layerRotationInput.value(layer.rotation || 0);
+            syncLayerAnimationDisplay(layer);
             // Roadmap 1.12 stage 4 (UI): active-state sync for the
             // layer-shape button group, mirroring how the base's own
             // .shape-icon-btn set tracks currentShape - this is the
@@ -645,6 +661,32 @@ function setup() {
             if (alignStatus) alignStatus.html('');
         }
     }
+
+    // Roadmap 1.8 Stage A: populates the animation controls (duration/
+    // progress/play-icon) for the given layer - split out of
+    // updateOffsetControls() itself (unlike the other populate-on-switch
+    // steps above) because draw() also needs to call it every frame
+    // during active playback, not only on a tab switch or explicit
+    // control interaction, to keep the progress slider/play-icon live.
+    // Renders a sensible default (duration 2000, progress 0, Play icon)
+    // when this layer has no animation object yet (Set Start/End not
+    // clicked) - those controls stay fully usable in that state, they
+    // just haven't captured a start/end pair to interpolate between.
+    function syncLayerAnimationDisplay(layer) {
+        const anim = layer.animation;
+        if (animDurationInput) animDurationInput.value(anim ? anim.durationMs : 2000);
+        const progress = anim && anim.durationMs > 0
+            ? (anim.playing ? Math.max(0, Math.min(anim.durationMs, millis() - anim.startTime)) : anim.elapsedMs) / anim.durationMs
+            : 0;
+        if (animProgressInput) animProgressInput.value(progress);
+        if (animPlayBtn) {
+            const playing = !!(anim && anim.playing);
+            animPlayBtn.attribute('title', playing ? 'Pause' : 'Play');
+            animPlayBtn.html(playing
+                ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="5" width="4" height="14" /><rect x="14" y="5" width="4" height="14" /></svg>'
+                : '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 5 L19 12 L7 19 Z" /></svg>');
+        }
+    }
     // Roadmap 1.2-C: exposed as a global - updateOffsetControls()/
     // renderLayerTabs() are declared here (closing over setup()-local DOM
     // refs like offsetXInput/layerTabsContainer), so they're invisible
@@ -653,8 +695,11 @@ function setup() {
     // CLAUDE.md). Every OTHER call site is itself inside setup()'s own
     // closure, which is why this gap wasn't hit before. window.x = x
     // exposes the function globally while keeping its original closure
-    // over the setup()-local DOM references intact.
+    // over the setup()-local DOM references intact. Roadmap 1.8 Stage A:
+    // syncLayerAnimationDisplay() needs the identical treatment - draw()
+    // (a top-level function) calls it every frame during playback.
     window.updateOffsetControls = updateOffsetControls;
+    window.syncLayerAnimationDisplay = syncLayerAnimationDisplay;
 
     function renderLayerTabs() {
         if (layerBaseBtn) {
@@ -811,6 +856,50 @@ function setup() {
                 updateOffsetControls();
                 redraw();
             });
+        });
+    }
+
+    // Roadmap 1.8 Stage A: this layer's own animation controls. Set
+    // Start/End are explicit-action captures (never automatic, same
+    // convention as "Align to base"); Duration/Play/Progress all funnel
+    // through the top-level setActiveLayer*() setters (Roadmap 1.8
+    // Stage A section) so activeLayer==='base' stays a no-op everywhere,
+    // same guard as every other per-layer setter.
+    if (setAnimStartBtn) {
+        setAnimStartBtn.mousePressed(() => {
+            setActiveLayerAnimationStart();
+            updateOffsetControls();
+        });
+    }
+    if (setAnimEndBtn) {
+        setAnimEndBtn.mousePressed(() => {
+            setActiveLayerAnimationEnd();
+            updateOffsetControls();
+        });
+    }
+    if (animDurationInput) {
+        animDurationInput.input(() => {
+            setActiveLayerAnimationDuration(animDurationInput.value());
+        });
+    }
+    if (animPlayBtn) {
+        animPlayBtn.mousePressed(() => {
+            toggleActiveLayerAnimationPlayback();
+            updateOffsetControls();
+            redraw();
+        });
+    }
+    // Roadmap 1.8 Stage A (design session point 4 - bidirectional scrub):
+    // dragging this slider pauses (if playing) and jumps straight to the
+    // dragged progress - setActiveLayerAnimationProgress() itself already
+    // applies the new frame immediately, so a single redraw() here is
+    // enough to show it even while noLoop() is active (nothing else is
+    // animating).
+    if (animProgressInput) {
+        animProgressInput.input(() => {
+            setActiveLayerAnimationProgress(parseFloat(animProgressInput.value()));
+            updateOffsetControls();
+            redraw();
         });
     }
 
@@ -1091,6 +1180,22 @@ function draw() {
     // Linienfarbe wie Picker/CSS, keine Füllung für die Kurven
     stroke(lineColor);
     noFill();
+
+    // Roadmap 1.8 Stage A: recompute every animating (or paused-mid-
+    // animation) layer's live offsetX/offsetY/rotation/shapeSizeFactor
+    // BEFORE drawTessellation() reads them - cheap (a handful of lerp()
+    // calls per layer with an animation object, negligible next to
+    // drawTessellation()'s own cost - see the design session's real
+    // per-redraw timing citations). Re-checking isAnythingAnimating()
+    // afterward (not just at the Play/Pause click site) is what makes
+    // loop() correctly stop the instant the LAST playing layer reaches
+    // its own end, not one frame late or never - applyLayerAnimationFrame()
+    // itself may have just flipped that layer's own `playing` to false.
+    additionalLayers.forEach(layer => { if (layer.animation) applyLayerAnimationFrame(layer); });
+    syncAnimationLoopState();
+    if (activeLayer !== 'base' && additionalLayers[activeLayer] && additionalLayers[activeLayer].animation) {
+        syncLayerAnimationDisplay(additionalLayers[activeLayer]);
+    }
 
     drawTessellation();
 
@@ -1425,6 +1530,15 @@ function removeLayer(index) {
     } else if (typeof activeLayer === 'number' && activeLayer > index) {
         activeLayer -= 1;
     }
+    // Roadmap 1.8 Stage A (design session's own isolated verification
+    // focus): a removed layer's own `playing` flag leaves with it (the
+    // object itself is gone, spliced out above), but isAnythingAnimating()
+    // only re-evaluates when SOMETHING calls syncAnimationLoopState() -
+    // without this call, removing the LAST still-playing layer would
+    // leave loop() running forever with nothing left to animate (not
+    // dangerous, but exactly the silent-leftover-loop risk the design
+    // session flagged as this feature's highest-risk piece).
+    syncAnimationLoopState();
 }
 
 // Roadmap 1.12 stage 1 pass 2: changes the ACTIVE layer's own nodeCount
@@ -1512,6 +1626,210 @@ function setActiveLayerRotation(rawValue) {
 function setActiveLayerSymmetryMode(resolvedMode) {
     if (activeLayer === 'base') return;
     additionalLayers[activeLayer].symmetryMode = resolvedMode;
+}
+
+// ----------------- LAYER ANIMATION (Roadmap 1.8 Stage A) -------------
+// Layer-level keyframe animation - interpolates a layer's already-
+// existing continuous parameters (offsetX/offsetY from 1.9/1.12 stage
+// 2, rotation from 1.12 stage 3, shapeSizeFactor from 1.12 stage 1)
+// between a captured start and end state over time. Additional layers
+// only, never the base - offsetX/offsetY/rotation are already layer-
+// only concepts (the base has none), and animating the base's own
+// shapeSizeFactor would mean the shared coordinate-scale reference
+// every other layer's positioning depends on changes over time, a
+// materially different, more invasive feature (design session).
+//
+// layer.animation, once created (undefined until the first Set Start/
+// End capture), holds:
+//   fromOffsetX/fromOffsetY/fromRotation/fromShapeSizeFactor - the
+//     captured start state
+//   toOffsetX/toOffsetY/toRotation/toShapeSizeFactor - the captured
+//     end state
+//   durationMs - playback length
+//   elapsedMs - progress while PAUSED (authoritative then); while
+//     PLAYING, derived progress is millis()-startTime instead, and
+//     elapsedMs is kept in sync every frame purely so pausing/resuming/
+//     scrubbing never has to distinguish "where was it stored" - it's
+//     always readable from elapsedMs regardless of playing state once
+//     applyLayerAnimationFrame() has run at least once this frame.
+//   startTime - millis() this playback segment's t=0 corresponds to;
+//     recomputed on every play so a paused-then-resumed animation
+//     continues from elapsedMs, not from the beginning.
+//   playing - whether this layer is actively advancing right now.
+//
+// No new rendering-path plumbing: core/tiling.js/core/symmetry.js
+// already read layer.offsetX/rotation/shapeSizeFactor unconditionally -
+// animation just means something other than the mouse is now writing
+// those same fields on a timer (design session point 2's central
+// reasoning for choosing this data model over two-full-layers-as-
+// keyframes).
+function ensureLayerAnimation(layer) {
+    if (!layer.animation) {
+        layer.animation = {
+            fromOffsetX: layer.offsetX, fromOffsetY: layer.offsetY,
+            fromRotation: layer.rotation || 0, fromShapeSizeFactor: layer.shapeSizeFactor,
+            toOffsetX: layer.offsetX, toOffsetY: layer.offsetY,
+            toRotation: layer.rotation || 0, toShapeSizeFactor: layer.shapeSizeFactor,
+            durationMs: 2000, elapsedMs: 0, startTime: null, playing: false,
+        };
+    }
+    return layer.animation;
+}
+
+// Captures the ACTIVE layer's CURRENT live offsetX/offsetY/rotation/
+// shapeSizeFactor as its animation's start (Set Start) or end (Set
+// End) state - explicit-action convention, same as "Align to base"
+// (never automatic). A no-op when activeLayer is 'base'.
+function setActiveLayerAnimationStart() {
+    if (activeLayer === 'base') return;
+    const layer = additionalLayers[activeLayer];
+    const anim = ensureLayerAnimation(layer);
+    anim.fromOffsetX = layer.offsetX;
+    anim.fromOffsetY = layer.offsetY;
+    anim.fromRotation = layer.rotation || 0;
+    anim.fromShapeSizeFactor = layer.shapeSizeFactor;
+}
+function setActiveLayerAnimationEnd() {
+    if (activeLayer === 'base') return;
+    const layer = additionalLayers[activeLayer];
+    const anim = ensureLayerAnimation(layer);
+    anim.toOffsetX = layer.offsetX;
+    anim.toOffsetY = layer.offsetY;
+    anim.toRotation = layer.rotation || 0;
+    anim.toShapeSizeFactor = layer.shapeSizeFactor;
+}
+
+function setActiveLayerAnimationDuration(rawValue) {
+    if (activeLayer === 'base') return;
+    const layer = additionalLayers[activeLayer];
+    const anim = ensureLayerAnimation(layer);
+    let v = parseFloat(rawValue);
+    if (!Number.isFinite(v) || v <= 0) v = 2000;
+    anim.durationMs = v;
+}
+
+// Play/Pause toggle for the ACTIVE layer's animation - a no-op when
+// activeLayer is 'base'. Resuming continues from anim.elapsedMs (not
+// from the beginning): startTime is recomputed so millis()-startTime
+// reproduces the same elapsed progress the pause left off at.
+function toggleActiveLayerAnimationPlayback() {
+    if (activeLayer === 'base') return;
+    const layer = additionalLayers[activeLayer];
+    const anim = ensureLayerAnimation(layer);
+    if (anim.playing) {
+        anim.elapsedMs = Math.max(0, Math.min(anim.durationMs, millis() - anim.startTime));
+        anim.playing = false;
+    } else {
+        // Roadmap 1.8 Stage A: play-once-and-stop (design session point
+        // 3) - restarts from the beginning once it has already reached
+        // the end, rather than silently doing nothing on a second Play
+        // click.
+        if (anim.elapsedMs >= anim.durationMs) anim.elapsedMs = 0;
+        anim.startTime = millis() - anim.elapsedMs;
+        anim.playing = true;
+    }
+    syncAnimationLoopState();
+}
+
+// Manual scrub (design session point 4 - bidirectional progress
+// control): sets progress directly to `t` (0..1) and pauses if it was
+// playing, matching a scrub gesture's usual "grab it, it stops"
+// convention. Applied immediately (not waiting for the next natural
+// animation frame) so dragging the slider while noLoop() is active
+// still shows a live preview - the caller is responsible for a single
+// redraw() afterward, same as every other manual-interaction control.
+function setActiveLayerAnimationProgress(t) {
+    if (activeLayer === 'base') return;
+    const layer = additionalLayers[activeLayer];
+    const anim = ensureLayerAnimation(layer);
+    anim.elapsedMs = Math.max(0, Math.min(1, t)) * anim.durationMs;
+    anim.playing = false;
+    syncAnimationLoopState();
+    applyLayerAnimationFrame(layer);
+}
+
+// Shortest-angular-path interpolation (design session point 3) - plain
+// linear interpolation of the raw stored degree values would sweep the
+// LONG way around whenever the short path crosses the 0/360 boundary
+// (e.g. 350 -> 10 linearly sweeps 340 degrees the wrong way instead of
+// the natural 20 degrees). +540 (not +180) before the modulo keeps the
+// dividend always positive despite JS's sign-of-dividend % semantics -
+// verified concretely: 350->10 gives delta=20 (the short way), matching
+// hand computation, not just assumed algebraically.
+function lerpAngleShortest(fromDeg, toDeg, t) {
+    const delta = ((toDeg - fromDeg + 540) % 360) - 180;
+    const result = fromDeg + delta * t;
+    return ((result % 360) + 360) % 360;
+}
+
+// Recomputes ONE layer's live offsetX/offsetY/rotation/shapeSizeFactor
+// from its animation's current progress - called for every layer that
+// HAS an animation object on every draw() call (not just while
+// playing), so a paused/scrubbed state renders correctly too, not only
+// live playback. Auto-stops at t=1 (play-once, not looping) - the
+// caller (draw()) re-checks isAnythingAnimating() afterward so loop()
+// correctly ends the instant the last playing layer finishes, not one
+// frame late.
+function applyLayerAnimationFrame(layer) {
+    const anim = layer.animation;
+    if (!anim) return;
+    let elapsed = anim.playing ? (millis() - anim.startTime) : anim.elapsedMs;
+    elapsed = Math.max(0, Math.min(anim.durationMs, elapsed));
+    if (anim.playing) {
+        anim.elapsedMs = elapsed;
+        if (elapsed >= anim.durationMs) anim.playing = false;
+    }
+    const t = anim.durationMs > 0 ? elapsed / anim.durationMs : 1;
+    layer.offsetX = lerp(anim.fromOffsetX, anim.toOffsetX, t);
+    layer.offsetY = lerp(anim.fromOffsetY, anim.toOffsetY, t);
+    layer.rotation = lerpAngleShortest(anim.fromRotation, anim.toRotation, t);
+    layer.shapeSizeFactor = lerp(anim.fromShapeSizeFactor, anim.toShapeSizeFactor, t);
+}
+
+// Whether loop()/noLoop() should be active right now - the single
+// source of truth both toggleActiveLayerAnimationPlayback() and
+// draw()'s own per-frame re-check consult, so multiple independently-
+// playing layers (1.12's own per-layer-independence precedent - no
+// artificial "only one animates at a time" restriction) and a layer
+// finishing mid-playback both correctly resolve to the same answer.
+function isAnythingAnimating() {
+    return additionalLayers.some(l => l.animation && l.animation.playing);
+}
+
+// Roadmap 1.8 Stage A (design session point 1's own scoping condition):
+// loop() is activated ONLY while something is actually animating, never
+// left on permanently - the app's whole efficiency discipline (pattern-
+// name-status caching, the cross-layer fill offscreen-buffer cache)
+// exists specifically because redraw is normally event-driven, not
+// continuous; leaving loop() on after playback ends would silently
+// undo that for the other 99% of the time nothing is moving. Guarded by
+// animationLoopActive so redundant loop()/noLoop() calls are avoided
+// (harmless either way, but this keeps the intent explicit at each call
+// site rather than relying on p5's own idempotence).
+//
+// Deliberately does NOT call redraw() itself when stopping - this is
+// called from two genuinely different contexts that need different
+// repaint handling: (1) from WITHIN draw() itself (every frame, to stop
+// the instant the last playing layer finishes) - the CURRENT draw()
+// call is already mid-execution and will finish painting the correct
+// final frame on its own; calling redraw() here would recursively
+// re-enter draw() from inside draw() itself, a real bug caught before
+// this shipped, not a hypothetical one. (2) from a click handler
+// OUTSIDE draw() (Pause, Set Start/End, a layer being removed
+// mid-playback) - every one of those call sites already ends with its
+// own explicit redraw() (this app's established "redraw() after every
+// manual state change" convention), so an extra one here would only be
+// redundant, never load-bearing.
+let animationLoopActive = false;
+function syncAnimationLoopState() {
+    const shouldBeLooping = isAnythingAnimating();
+    if (shouldBeLooping && !animationLoopActive) {
+        animationLoopActive = true;
+        loop();
+    } else if (!shouldBeLooping && animationLoopActive) {
+        animationLoopActive = false;
+        noLoop();
+    }
 }
 
 // ----------------- PATTERN NAME (Roadmap 1.11-B) ---------------------

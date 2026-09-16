@@ -776,6 +776,46 @@
         <input type="number" id="layer-rotation-input" value="0" step="1">
       </div>
 
+      <!-- Roadmap 1.8 Stage A: this layer's own keyframe animation -
+           contextual the same way layer-rotation-group above is (hidden
+           while Base is active - offsetX/offsetY/rotation are already
+           layer-only concepts, and animating the base's own
+           shapeSizeFactor would move the shared coordinate-scale
+           reference every other layer's positioning depends on, a
+           materially different feature - design session). Set Start/
+           Set End capture THIS layer's current live offsetX/offsetY/
+           rotation/shapeSizeFactor - explicit action, never automatic,
+           same convention as "Align to base". Duration in milliseconds.
+           Play/Pause icon swaps at runtime (sketch.js's
+           syncLayerAnimationDisplay(), mirroring #btn-toggle-nodes' own
+           eye/eye-off swap convention). The progress slider is
+           bidirectional: it live-updates during playback AND scrubbing
+           it directly sets/pauses progress (setActiveLayerAnimationProgress()).
+           Shape (1.12 stage 4) and symmetryMode (1.12 stage 5) are
+           deliberately NOT part of this control and stay fixed per
+           animated layer - both are discrete choices, not continuous
+           parameters, so they have no meaningful "interpolated middle"
+           (design session point 5). loop()/noLoop() is scoped strictly
+           to whenever any layer's animation.playing is true
+           (isAnythingAnimating(), sketch.js) - never left running
+           permanently. -->
+      <div class="control-group" id="layer-animation-group" hidden>
+        <label>Layer Animation</label>
+        <div class="icon-row">
+          <button id="btn-layer-anim-set-start" class="layer-btn" title="Set Start">Set Start</button>
+          <button id="btn-layer-anim-set-end" class="layer-btn" title="Set End">Set End</button>
+        </div>
+        <div class="icon-row">
+          <input type="number" id="layer-anim-duration-input" min="1" step="1" value="2000" title="Duration (ms)">
+          <button id="btn-layer-anim-play" class="icon-btn" title="Play">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+              <path d="M7 5 L19 12 L7 19 Z" />
+            </svg>
+          </button>
+        </div>
+        <input type="range" id="layer-anim-progress-input" min="0" max="1" step="0.001" value="0" title="Progress">
+      </div>
+
       <!-- Cross-Layer Face Compute (Roadmap 1.10b-ii-b): applies to the
            base sheet + every ENABLED additional layer at once - not
            contextual to whichever tab is active, unlike the offset
