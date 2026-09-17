@@ -116,6 +116,21 @@
       display: none;
     }
 
+    /* Roadmap 1.8 Stage C phase (i): same cascade-tie problem as
+       .control-group[hidden] above, found live while verifying
+       #btn-remove-timeline/#timeline-playback-controls's own
+       show/hide (updateTimelineControls(), sketch.js) - .layer-btn/
+       .icon-btn/.icon-row all set `display` directly at the same
+       (0,1,0) specificity as the native [hidden] UA rule, so without
+       this override a hidden button/row of any of these classes stays
+       visually shown despite its `hidden` attribute being true. No
+       existing element combines the `hidden` attribute with any of
+       these three classes today, so this is purely additive - it
+       changes nothing about the elements that already work. */
+    .layer-btn[hidden], .icon-btn[hidden], .icon-row[hidden] {
+      display: none;
+    }
+
     .control-group label {
       display: none;
     }
@@ -594,6 +609,35 @@
         </div>
       </div>
 
+      <!-- Roadmap 1.8 Stage C phase (i): persistent-layer timeline -
+           "Animate A -> B" designates the two existing additional layers
+           (in array order) as keyframes and creates a third, hidden
+           "playback" layer that renders the live-resolved interpolation
+           between them (sketch.js's createTwoKeyframeTimeline()/
+           applyTimelineFrame()). NOT contextual to the active tab, since
+           a timeline spans two layers rather than belonging to one -
+           always visible; updateTimelineControls() (setup()) shows/hides
+           individual pieces based on whether a timeline currently
+           exists. Supersedes nothing shipped so far - #layer-animation-group
+           above (Stage A/B's per-layer Set Start/End capture) stays
+           fully intact alongside this, see the design session's point 6. -->
+      <div class="control-group" id="timeline-group">
+        <label>Timeline</label>
+        <div class="icon-row">
+          <button id="btn-create-timeline" class="layer-btn" title="Animate A → B">Animate A → B</button>
+          <button id="btn-remove-timeline" class="layer-btn" title="Remove Timeline" hidden>Remove Timeline</button>
+        </div>
+        <div class="icon-row" id="timeline-playback-controls" hidden>
+          <button id="btn-timeline-play" class="icon-btn" title="Play">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+              <path d="M7 5 L19 12 L7 19 Z" />
+            </svg>
+          </button>
+        </div>
+        <input type="range" id="timeline-progress-input" min="0" max="1" step="0.001" value="0" title="Progress" hidden>
+        <span id="timeline-status"></span>
+      </div>
+
       <!-- Roadmap 1.11-B: read-only theme-line orbit name for whichever
            sheet is currently active (Base or a layer tab) - contextual
            the same way the offset controls below are, since each sheet
@@ -937,15 +981,15 @@
        the p5.js CDN tag - that URL already carries its own version
        (p5@1.9.0), so a version bump there naturally changes the URL. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260917a"></script>
-  <script src="core/state.js?v=20260917a"></script>
-  <script src="core/symmetry.js?v=20260917a"></script>
-  <script src="core/curves.js?v=20260917a"></script>
-  <script src="core/tiling.js?v=20260917a"></script>
-  <script src="core/faces.js?v=20260917a"></script>
-  <script src="core/orbits.js?v=20260917a"></script>
-  <script src="core/export.js?v=20260917a"></script>
-  <script src="sketch.js?v=20260917a"></script>
+  <script src="core/forms.js?v=20260917b"></script>
+  <script src="core/state.js?v=20260917b"></script>
+  <script src="core/symmetry.js?v=20260917b"></script>
+  <script src="core/curves.js?v=20260917b"></script>
+  <script src="core/tiling.js?v=20260917b"></script>
+  <script src="core/faces.js?v=20260917b"></script>
+  <script src="core/orbits.js?v=20260917b"></script>
+  <script src="core/export.js?v=20260917b"></script>
+  <script src="sketch.js?v=20260917b"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides
