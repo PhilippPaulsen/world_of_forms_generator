@@ -57,6 +57,25 @@ let redoStack = [];
 let additionalLayers = [];
 let activeLayer = 'base'; // 'base' | integer index into additionalLayers - which sheet mousePressed()/addRandomConnection()/undo/redo/clear target
 
+// Roadmap 1.8 Stage C phase (i) (persistent-layer timeline, superseding
+// the ephemeral per-layer capture design's earlier keyframe model for
+// this exact use case - see the design session's point 6): null unless
+// exactly two of additionalLayers[] have been designated keyframes via
+// sketch.js's createTwoKeyframeTimeline(). Deliberately a TOP-LEVEL
+// concept, not nested inside any one layer's own `animation` field the
+// way Stage A/B's per-layer transform/connections animation is - a
+// transition spanning two independent, persistent, still-editable
+// layers has no single layer to belong to (the design session's own
+// finding: this is the one place the redesign is structural, not
+// additive). Shape: { keyframeLayerIds: [idA, idB], playbackLayerIndex,
+// savedEnabled, durationMs, elapsedMs, startTime, playing } - see
+// sketch.js's createTwoKeyframeTimeline()/applyTimelineFrame() for the
+// full mechanism. Cleared (not just left dangling) by rebuildGrid()/
+// rebuildGridFromConstruction() below, same as additionalLayers itself -
+// a base-level shape/order change already unconditionally discards every
+// layer, so any timeline referencing them by index is equally moot.
+let timeline = null;
+
 // When set to an array, drawCurvedBezier() appends SVG path data to it
 // instead of drawing to the canvas (see exportSVG()). This lets the SVG
 // export reuse drawTessellation()/drawConnectionWithSymmetry() exactly
@@ -131,6 +150,7 @@ function rebuildGrid(shape) {
     connections = [];
     additionalLayers = [];
     activeLayer = 'base'; // an active additional-layer index would otherwise dangle once the array is cleared
+    timeline = null; // Roadmap 1.8 Stage C: its keyframeLayerIds/playbackLayerIndex would dangle the same way activeLayer would
     altNetSeed = null; // Roadmap 1.2-C: an ordinary shape/order rebuild is never an alt-net construction
     let grid;
     if (shape === 'triangle') grid = buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH);
@@ -169,6 +189,7 @@ function rebuildGridFromConstruction(p, q, n, side) {
     connections = [];
     additionalLayers = [];
     activeLayer = 'base';
+    timeline = null; // Roadmap 1.8 Stage C: see rebuildGrid()'s own comment
 
     const { center, vertices } = completeEdgeToRegularPolygon(p, q, n, side);
     let subdivided;
