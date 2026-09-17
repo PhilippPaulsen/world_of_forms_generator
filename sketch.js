@@ -59,6 +59,31 @@ function normSym(val) {
 const CATALOG_URL_SHAPES = ['triangle', 'square', 'hex'];
 const CATALOG_URL_MODES = ['none', 'reflection_only', 'rotation3', 'rotation6', 'rotation_reflection3', 'rotation_reflection6'];
 
+// Roadmap: catalog pattern syntactic validation - shared between the
+// URL-driven back-link (parseCatalogUrlParams() below) and the
+// clipboard-driven "Paste Pattern" action (parseClipboardCatalogPattern()
+// below) - ONE definition of "what a valid pattern object looks like",
+// not two independently-drifting copies (design session point 1).
+// Takes already-coerced-to-target-type candidate values - each caller's
+// own parsing step (URLSearchParams string splitting vs. JSON.parse)
+// stays separate, since the two transports hand this differently-shaped
+// raw input (strings from a query string; whatever JSON.parse produced,
+// which for a hand-edited clipboard payload could be any type at all)
+// - this only checks range/enum validity once that coercion has already
+// happened. Deliberately NOT normSym() for symmetryMode - see
+// parseCatalogUrlParams()'s own original comment on that, unchanged in
+// meaning by this extraction.
+function isWellFormedCatalogPattern(shape, order, symmetryMode, orbitIds) {
+    if (!CATALOG_URL_SHAPES.includes(shape)) return false;
+    if (!CATALOG_URL_MODES.includes(symmetryMode)) return false;
+    // 1..5 matches #node-count-input's own min/max (index.html) - every
+    // real manifest entry is within this range (max observed: 5,
+    // triangle), so this is a syntactic sanity bound, not a workaround.
+    if (!Number.isInteger(order) || order < 1 || order > 5) return false;
+    if (!Array.isArray(orbitIds) || orbitIds.length === 0 || orbitIds.some(id => !Number.isInteger(id) || id < 0)) return false;
+    return true;
+}
+
 function parseCatalogUrlParams(search) {
     const params = new URLSearchParams(search);
     const shape = params.get('shape');
@@ -67,24 +92,9 @@ function parseCatalogUrlParams(search) {
     const orbitIdsRaw = params.get('orbitIds');
     if (!shape || !orderRaw || !symmetryModeParam || !orbitIdsRaw) return null;
 
-    if (!CATALOG_URL_SHAPES.includes(shape)) return null;
-    // Deliberately NOT normSym() here - that function's fallback
-    // ('rotation_reflection6' for anything unrecognized) exists to keep
-    // a live UI control always showing SOMETHING sane; here, an
-    // unrecognized mode means the whole link is malformed, and should
-    // fall through to the ordinary default rather than silently
-    // substituting a DIFFERENT mode and proceeding to look up orbitIds
-    // against the wrong group's table.
-    if (!CATALOG_URL_MODES.includes(symmetryModeParam)) return null;
-
     const order = parseInt(orderRaw, 10);
-    // 1..5 matches #node-count-input's own min/max (index.html) - every
-    // real manifest entry is within this range (max observed: 5,
-    // triangle), so this is a syntactic sanity bound, not a workaround.
-    if (!Number.isInteger(order) || order < 1 || order > 5) return null;
-
     const orbitIds = orbitIdsRaw.split(',').map(s => parseInt(s, 10));
-    if (orbitIds.length === 0 || orbitIds.some(id => !Number.isInteger(id) || id < 0)) return null;
+    if (!isWellFormedCatalogPattern(shape, order, symmetryModeParam, orbitIds)) return null;
 
     // Roadmap: catalog -> NEW LAYER back-link extension. 'new' is
     // currently the only recognized value - a numeric layer INDEX would
@@ -105,6 +115,31 @@ function parseCatalogUrlParams(search) {
     }
 
     return { shape, order, symmetryMode: symmetryModeParam, orbitIds, layer };
+}
+
+// Roadmap: catalog -> clipboard "Paste Pattern" action. Parses+validates
+// a clipboard payload written by gallery.js's "Copy pattern" button
+// (JSON.stringify({shape, order, symmetryMode, orbitIds})) via the SAME
+// syntactic validation as the URL path (isWellFormedCatalogPattern()
+// above) - clipboard content is exactly as untrusted as a hand-edited
+// URL (stale, hand-edited, or from something else entirely; JSON.parse
+// itself can hand back any type for shape/order/symmetryMode/orbitIds,
+// not necessarily the right ones). Never throws, returns null for
+// anything that doesn't clearly describe a real pattern - same "no
+// partial/best-guess object" convention as parseCatalogUrlParams().
+// Always targets a NEW layer (no base-sheet equivalent, no `layer`
+// field to parse) - see this action's own design session point 3.
+function parseClipboardCatalogPattern(text) {
+    let obj;
+    try {
+        obj = JSON.parse(text);
+    } catch (err) {
+        return null;
+    }
+    if (!obj || typeof obj !== 'object') return null;
+    const { shape, order, symmetryMode, orbitIds } = obj;
+    if (!isWellFormedCatalogPattern(shape, order, symmetryMode, orbitIds)) return null;
+    return { shape, order, symmetryMode, orbitIds };
 }
 
 // Semantic validation + reconstruction (the second layer above) - only
@@ -595,6 +630,13 @@ function setup() {
     const layerBaseBtn = select('#btn-layer-base');
     const layerTabsContainer = select('#layer-tabs');
     const addLayerBtn = select('#btn-add-layer');
+    // Roadmap: catalog -> clipboard "Paste Pattern" action - same role
+    // as addLayerBtn above (adds a layer), different source (a
+    // gallery.html "Copy pattern" click, via the clipboard, instead of
+    // a fresh "+Layer" + manual editing). See applyCatalogPatternToNewLayer()'s
+    // own comment for why this reuses it unmodified.
+    const pastePatternBtn = select('#btn-paste-pattern');
+    const pastePatternStatus = select('#paste-pattern-status');
     // Roadmap 1.8 Stage C phase (i): timeline controls - NOT contextual
     // to whichever tab is active (unlike layer-animation-group below),
     // since a timeline spans two layers rather than belonging to one -
@@ -990,6 +1032,53 @@ function setup() {
             // canCreateTwoKeyframeTimeline()).
             updateTimelineControls();
             redraw();
+        });
+    }
+
+    // Roadmap: catalog -> clipboard "Paste Pattern" action. Mirrors
+    // setup()'s own catalogUrlPattern.layer==='new' tail handling
+    // exactly - applyCatalogPatternToNewLayer() reused completely
+    // unmodified (including its own removeLayer() rollback on semantic
+    // failure), then the SAME UI-sync sequence that tail already runs.
+    // navigator.clipboard.readText() is a real, uneven cross-browser
+    // permission surface (unlike writeText(), used on the gallery side)
+    // - guarded for outright unavailability (insecure context, very old
+    // browser) before ever calling it, and its rejection (permission
+    // denied, or blocked entirely) is reported via #paste-pattern-status,
+    // never a silent no-op - this needed real, isolated browser
+    // verification, not just code review (see this feature's own
+    // implementation report).
+    if (pastePatternBtn) {
+        pastePatternBtn.mousePressed(async () => {
+            if (!navigator.clipboard || !navigator.clipboard.readText) {
+                if (pastePatternStatus) pastePatternStatus.html('Clipboard access is not available in this browser/context.');
+                return;
+            }
+            let text;
+            try {
+                text = await navigator.clipboard.readText();
+            } catch (err) {
+                if (pastePatternStatus) pastePatternStatus.html("Clipboard permission denied - check your browser's site settings.");
+                console.warn('Failed to read clipboard for Paste Pattern:', err.message);
+                return;
+            }
+            const pattern = parseClipboardCatalogPattern(text);
+            if (!pattern) {
+                if (pastePatternStatus) pastePatternStatus.html('Clipboard does not contain a valid copied pattern.');
+                return;
+            }
+            if (applyCatalogPatternToNewLayer(pattern)) {
+                if (pastePatternStatus) pastePatternStatus.html('');
+            } else {
+                if (pastePatternStatus) pastePatternStatus.html('Failed to load the copied pattern - see console for details.');
+            }
+            renderLayerTabs();
+            updateOffsetControls();
+            updateFaceToggleControl();
+            updateTimelineControls();
+            redraw();
+            updateCrossLayerStatus();
+            updatePatternNameStatus();
         });
     }
 
