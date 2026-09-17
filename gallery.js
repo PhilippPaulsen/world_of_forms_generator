@@ -977,12 +977,20 @@ function entryLabel(entry) {
 // format's own separator) - '+' in a URL query VALUE is reserved and
 // silently decodes to a space unless percent-encoded, which would
 // corrupt the id list.
-function catalogEntryGeneratorUrl(entry) {
+// Roadmap: catalog -> NEW LAYER back-link extension. `extra` (optional)
+// is merged into the same params object - {layer: 'new'} is the only
+// value the generator side (sketch.js's parseCatalogUrlParams())
+// currently recognizes. A specific EXISTING layer index isn't
+// offerable from here at all: this page has no knowledge of any
+// generator session's own layer state (a separate page, opened fresh
+// via target="_blank") - see the design session point 3.
+function catalogEntryGeneratorUrl(entry, extra) {
   const params = new URLSearchParams({
     shape: entry.shape,
     order: entry.order,
     symmetryMode: entry.symmetryMode,
     orbitIds: entry.orbitIds.join(','),
+    ...extra,
   });
   return `index.html?${params.toString()}`;
 }
@@ -992,6 +1000,11 @@ function openDetailView(entry) {
   container.innerHTML = '';
   $('detail-title').textContent = entryLabel(entry) + ' — full tessellation';
   $('detail-open-generator').href = catalogEntryGeneratorUrl(entry);
+  // Roadmap: catalog -> NEW LAYER back-link extension - a second link,
+  // alongside (not replacing) the base-only one above. Replacing it
+  // would be a regression for the common case (exploring/editing one
+  // pattern standalone) - see the design session point 4.
+  $('detail-open-new-layer').href = catalogEntryGeneratorUrl(entry, { layer: 'new' });
 
   // Fuller citation than the grid/tile badges (Phase c task point 3) -
   // cleared and rebuilt on every open, same "no stale content between
