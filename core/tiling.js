@@ -116,7 +116,17 @@ function drawTessellation() {
         // since symmetryMode has no bearing on where tiles are, only on
         // what's drawn within one (see each tile*() function's own
         // symmetryModeOverride comment).
-        const override = { outerCorners: layer.outerCorners, centroid: layer.centroid, connections: layer.connections, nodes: layer.nodes, offsetX: layer.offsetX, offsetY: layer.offsetY, rotation: layer.rotation, shape: layer.shape, symmetryMode: layer.symmetryMode };
+        // Roadmap 1.8 Stage B (connections morph): layer._morphNodes/
+        // _morphConnections (sketch.js's applyLayerConnectionsMorphFrame())
+        // take priority over this layer's own persisted nodes/connections
+        // whenever set - the interpolated render substitute for an
+        // in-progress Start-to-End connections morph, recomputed once per
+        // draw() call (not per tile, see that function's own comment).
+        // null/undefined (every layer without an active connections morph,
+        // and this same layer between Set Start/End and the next Play/
+        // scrub) falls back to the layer's own live nodes/connections,
+        // byte-identical to before this stage.
+        const override = { outerCorners: layer.outerCorners, centroid: layer.centroid, connections: layer._morphConnections || layer.connections, nodes: layer._morphNodes || layer.nodes, offsetX: layer.offsetX, offsetY: layer.offsetY, rotation: layer.rotation, shape: layer.shape, symmetryMode: layer.symmetryMode };
         const thisLayerFaces = (layerCellFaces && layerCellFaces.has(i)) ? layerCellFaces.get(i) : null;
         tileFor(layer.shape)(thisLayerFaces, null, override);
     });
@@ -306,7 +316,10 @@ function drawAdditionalLayers(tileCentroid, flip180 = false, layerCellFaces = nu
         // affects tile POSITIONS, only what's drawn at one - so it's the
         // one axis here that always needs passing explicitly, never
         // omitted.
-        drawShapeCell(layer.connections, layerTileC, flip180, layer.nodes, 0, undefined, undefined, layer.symmetryMode);
+        // Roadmap 1.8 Stage B (connections morph): same _morphConnections/
+        // _morphNodes substitution as drawTessellation()'s own override
+        // object above - see that comment.
+        drawShapeCell(layer._morphConnections || layer.connections, layerTileC, flip180, layer._morphNodes || layer.nodes, 0, undefined, undefined, layer.symmetryMode);
     });
 }
 
