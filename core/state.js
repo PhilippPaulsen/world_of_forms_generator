@@ -57,20 +57,53 @@ let redoStack = [];
 let additionalLayers = [];
 let activeLayer = 'base'; // 'base' | integer index into additionalLayers - which sheet mousePressed()/addRandomConnection()/undo/redo/clear target
 
-// Roadmap 1.8 Stage C phase (i) (persistent-layer timeline, superseding
-// the ephemeral per-layer capture design's earlier keyframe model for
-// this exact use case - see the design session's point 6): null unless
-// exactly two of additionalLayers[] have been designated keyframes via
-// sketch.js's createTwoKeyframeTimeline(). Deliberately a TOP-LEVEL
-// concept, not nested inside any one layer's own `animation` field the
-// way Stage A/B's per-layer transform/connections animation is - a
-// transition spanning two independent, persistent, still-editable
-// layers has no single layer to belong to (the design session's own
-// finding: this is the one place the redesign is structural, not
-// additive). Shape: { keyframeLayerIds: [idA, idB], playbackLayerIndex,
-// savedEnabled, durationMs, elapsedMs, startTime, playing } - see
-// sketch.js's createTwoKeyframeTimeline()/applyTimelineFrame() for the
-// full mechanism. Cleared (not just left dangling) by rebuildGrid()/
+// Roadmap 1.8 Stage C (persistent-layer timeline, superseding the
+// ephemeral per-layer capture design's earlier keyframe model for this
+// exact use case): null unless at least one of additionalLayers[] has
+// been designated a keyframe via sketch.js's addLayerToTimeline().
+// Deliberately a TOP-LEVEL concept, not nested inside any one layer's
+// own `animation` field the way Stage A/B's per-layer transform/
+// connections animation is - a transition spanning multiple independent,
+// persistent, still-editable layers has no single layer to belong to.
+//
+// Shape: { keyframeLayerIds, playbackLayerIndex, segmentDurationsMs,
+// elapsedMs, startTime, playing }.
+//
+// Roadmap 1.8 Stage C phase (ii): generalized from phase (i)'s fixed
+// two named keyframes (keyframeLayerIds: [idA, idB]) to an ORDERED
+// ARRAY of any length >= 1 - keyframeLayerIds: [id0, id1, ..., idN-1].
+// A single entry (just-started, not yet playable) is a valid, real
+// state, not an edge case to special-case away - see addLayerToTimeline()
+// (sketch.js) for why the playback layer is created LAZILY, only once a
+// second keyframe makes a real segment possible.
+//
+// segmentDurationsMs is a PARALLEL array, one entry per SEGMENT (length
+// = keyframeLayerIds.length - 1, i.e. segmentDurationsMs[i] is the
+// duration of the transition from keyframeLayerIds[i] to
+// keyframeLayerIds[i+1]) - each segment's own FIXED duration, captured
+// once when that segment is created, not derived by dividing one total
+// duration evenly (design session point 2) - see
+// totalTimelineDurationMs()/resolveTimelineSegment() (sketch.js) for how
+// play/pause/scrub and the per-frame interpolation both consume this.
+//
+// playbackLayerIndex is null until the SECOND keyframe is added (no
+// segment exists yet with only one keyframe, so there is nothing to
+// interpolate and no reason to have created the render-substitute
+// layer) - see addLayerToTimeline()'s own comment for the lazy-creation
+// reasoning, and spliceKeyframeOutOfTimeline()'s own comment for the
+// symmetric lazy-removal case (dropping back to a single keyframe
+// removes the now-unusable playback layer again).
+//
+// A keyframe layer's own pre-timeline `enabled` value is saved directly
+// on that layer object itself (layer._timelineSavedEnabled), not in a
+// field here - deliberately NOT indexed by layer array position (unlike
+// keyframeLayerIds itself), since a plain {index: value} map would need
+// re-keying on every single removeLayer() splice once more than two
+// keyframes can exist; a property living on the layer object travels
+// with it regardless of its current array position, sidestepping that
+// entirely.
+//
+// Cleared (not just left dangling) by rebuildGrid()/
 // rebuildGridFromConstruction() below, same as additionalLayers itself -
 // a base-level shape/order change already unconditionally discards every
 // layer, so any timeline referencing them by index is equally moot.
