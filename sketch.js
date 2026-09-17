@@ -1050,35 +1050,59 @@ function setup() {
     // implementation report).
     if (pastePatternBtn) {
         pastePatternBtn.mousePressed(async () => {
-            if (!navigator.clipboard || !navigator.clipboard.readText) {
-                if (pastePatternStatus) pastePatternStatus.html('Clipboard access is not available in this browser/context.');
-                return;
-            }
-            let text;
+            // Bug fix (found via real state reproduction, not assumed):
+            // navigator.clipboard.readText() can take a real, uneven
+            // amount of time - a first-time permission prompt in
+            // particular. Without disabling the button for that whole
+            // window, an impatient double-click (very plausible exactly
+            // during a permission prompt) fired this handler TWICE, each
+            // independently calling applyCatalogPatternToNewLayer() -
+            // creating a SECOND, unwanted layer from what the person
+            // intended as a single paste. That extra layer then silently
+            // broke "Animate A -> B"'s own "exactly two ordinary layers"
+            // eligibility check (canCreateTwoKeyframeTimeline()) the next
+            // time it was clicked, with no obvious explanation - reproduced
+            // concretely (two back-to-back applyCatalogPatternToNewLayer()
+            // calls leave 3 non-playback layers, canCreateTwoKeyframeTimeline()
+            // correctly but confusingly returns false) before this fix.
+            // Native `disabled` both greys the button out (existing
+            // .layer-btn:disabled CSS) and stops the browser from
+            // dispatching mousedown/click to it at all - a re-click during
+            // the awaited read is a no-op, not a second invocation.
+            pastePatternBtn.elt.disabled = true;
             try {
-                text = await navigator.clipboard.readText();
-            } catch (err) {
-                if (pastePatternStatus) pastePatternStatus.html("Clipboard permission denied - check your browser's site settings.");
-                console.warn('Failed to read clipboard for Paste Pattern:', err.message);
-                return;
+                if (!navigator.clipboard || !navigator.clipboard.readText) {
+                    if (pastePatternStatus) pastePatternStatus.html('Clipboard access is not available in this browser/context.');
+                    return;
+                }
+                let text;
+                try {
+                    text = await navigator.clipboard.readText();
+                } catch (err) {
+                    if (pastePatternStatus) pastePatternStatus.html("Clipboard permission denied - check your browser's site settings.");
+                    console.warn('Failed to read clipboard for Paste Pattern:', err.message);
+                    return;
+                }
+                const pattern = parseClipboardCatalogPattern(text);
+                if (!pattern) {
+                    if (pastePatternStatus) pastePatternStatus.html('Clipboard does not contain a valid copied pattern.');
+                    return;
+                }
+                if (applyCatalogPatternToNewLayer(pattern)) {
+                    if (pastePatternStatus) pastePatternStatus.html('');
+                } else {
+                    if (pastePatternStatus) pastePatternStatus.html('Failed to load the copied pattern - see console for details.');
+                }
+                renderLayerTabs();
+                updateOffsetControls();
+                updateFaceToggleControl();
+                updateTimelineControls();
+                redraw();
+                updateCrossLayerStatus();
+                updatePatternNameStatus();
+            } finally {
+                pastePatternBtn.elt.disabled = false;
             }
-            const pattern = parseClipboardCatalogPattern(text);
-            if (!pattern) {
-                if (pastePatternStatus) pastePatternStatus.html('Clipboard does not contain a valid copied pattern.');
-                return;
-            }
-            if (applyCatalogPatternToNewLayer(pattern)) {
-                if (pastePatternStatus) pastePatternStatus.html('');
-            } else {
-                if (pastePatternStatus) pastePatternStatus.html('Failed to load the copied pattern - see console for details.');
-            }
-            renderLayerTabs();
-            updateOffsetControls();
-            updateFaceToggleControl();
-            updateTimelineControls();
-            redraw();
-            updateCrossLayerStatus();
-            updatePatternNameStatus();
         });
     }
 
