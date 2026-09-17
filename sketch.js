@@ -147,6 +147,7 @@ function setup() {
             rebuildGrid(currentShape);
             renderLayerTabs(); // rebuildGrid() clears additionalLayers - keep the tab strip in sync
             updateOffsetControls();
+            updateTimelineControls(); // rebuildGrid() also clears timeline - see its own comment (core/state.js)
             updateSymmetryModeControl(); // Roadmap 1.11: fold row only applies to hex - show/hide it and re-resolve symmetryMode for the new shape (function declaration, hoisted within setup() regardless of textual order below)
             cancelAltNetConstruction(); // Roadmap 1.2-C: an in-progress P/Q click pair no longer means anything once the target shape/order changed underneath it
             redraw();
@@ -164,6 +165,7 @@ function setup() {
             rebuildGrid(currentShape);
             renderLayerTabs();
             updateOffsetControls();
+            updateTimelineControls();
             redraw();
         });
     }
@@ -179,6 +181,7 @@ function setup() {
             rebuildGrid(currentShape);
             renderLayerTabs();
             updateOffsetControls();
+            updateTimelineControls();
             redraw();
         });
     }
@@ -530,6 +533,17 @@ function setup() {
     const layerBaseBtn = select('#btn-layer-base');
     const layerTabsContainer = select('#layer-tabs');
     const addLayerBtn = select('#btn-add-layer');
+    // Roadmap 1.8 Stage C phase (i): timeline controls - NOT contextual
+    // to whichever tab is active (unlike layer-animation-group below),
+    // since a timeline spans two layers rather than belonging to one -
+    // always visible, with individual pieces shown/hidden by
+    // updateTimelineControls() based on whether `timeline` exists.
+    const createTimelineBtn = select('#btn-create-timeline');
+    const removeTimelineBtn = select('#btn-remove-timeline');
+    const timelinePlaybackControls = select('#timeline-playback-controls');
+    const timelinePlayBtn = select('#btn-timeline-play');
+    const timelineProgressInput = select('#timeline-progress-input');
+    const timelineStatusEl = select('#timeline-status');
     const offsetXGroup = select('#layer-offset-x-group');
     const offsetYGroup = select('#layer-offset-y-group');
     const meshPresetGroup = select('#layer-mesh-preset-group');
@@ -746,6 +760,16 @@ function setup() {
         container.innerHTML = '';
 
         additionalLayers.forEach((layer, i) => {
+            // Roadmap 1.8 Stage C phase (i): the auto-created timeline
+            // playback layer is an ordinary additionalLayers[] entry (so
+            // every existing rendering/enabled-flag mechanism already
+            // works for it unmodified - see createTwoKeyframeTimeline()'s
+            // own comment) but isn't meant to be hand-edited like a real
+            // pattern layer, so it gets no tab here. Its true array index
+            // (i) is unaffected - only its OWN tab's rendering is skipped,
+            // every other layer's tab/click-handler still closes over its
+            // own correct, real index exactly as before.
+            if (layer.isTimelinePlayback) return;
             const tab = document.createElement('span');
             tab.className = 'layer-tab';
 
@@ -797,6 +821,92 @@ function setup() {
     }
     window.renderLayerTabs = renderLayerTabs; // see updateOffsetControls()'s own comment above
 
+    // Roadmap 1.8 Stage C phase (i): status line for a refused "Animate
+    // A -> B" (shape/order/symmetryMode or line-count mismatch) or a
+    // live keyframe-count mismatch discovered during playback - same
+    // plain-<span> convention as #layer-anim-connections-status.
+    // Exposed on window since createTwoKeyframeTimeline()/
+    // applyTimelineFrame()/removeLayer() are top-level functions.
+    function setTimelineStatus(msg) {
+        if (timelineStatusEl) timelineStatusEl.html(msg || '');
+    }
+    window.setTimelineStatus = setTimelineStatus;
+
+    // Roadmap 1.8 Stage C: populates the Play/Pause icon and progress
+    // slider from the timeline's own current state - split out of
+    // updateTimelineControls() (unlike the align-button pattern this
+    // otherwise mirrors) because draw() also needs to call it every
+    // frame during active playback, the same reason Stage A's
+    // syncLayerAnimationDisplay() is its own function.
+    function syncTimelineDisplay() {
+        if (!timeline) return;
+        if (timelineProgressInput) {
+            const progress = timeline.durationMs > 0
+                ? (timeline.playing ? Math.max(0, Math.min(timeline.durationMs, millis() - timeline.startTime)) : timeline.elapsedMs) / timeline.durationMs
+                : 0;
+            timelineProgressInput.value(progress);
+        }
+        if (timelinePlayBtn) {
+            const playing = timeline.playing;
+            timelinePlayBtn.attribute('title', playing ? 'Pause' : 'Play');
+            timelinePlayBtn.html(playing
+                ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="5" width="4" height="14" /><rect x="14" y="5" width="4" height="14" /></svg>'
+                : '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 5 L19 12 L7 19 Z" /></svg>');
+        }
+    }
+    window.syncTimelineDisplay = syncTimelineDisplay;
+
+    // Roadmap 1.8 Stage C: shows/hides the Create-vs-(Remove+playback)
+    // control sets based on whether `timeline` currently exists, and (no
+    // timeline) keeps #btn-create-timeline's disabled+tooltip state in
+    // sync with canCreateTwoKeyframeTimeline()'s own coarse check - same
+    // disabled-button-with-explanatory-tooltip convention as "Align to
+    // base" (updateOffsetControls()'s own alignBtn handling). Called
+    // after every add/remove-layer action and every base-level
+    // shape/order rebuild (all of which can change eligibility or tear
+    // down an existing timeline) - see each of those call sites.
+    function updateTimelineControls() {
+        const active = !!timeline;
+        if (createTimelineBtn) {
+            createTimelineBtn.elt.hidden = active;
+            if (!active) {
+                const can = canCreateTwoKeyframeTimeline();
+                createTimelineBtn.elt.disabled = !can;
+                createTimelineBtn.attribute('title', can ? 'Animate A → B' : 'Needs exactly two additional layers, and no existing timeline, to animate between.');
+            }
+        }
+        if (removeTimelineBtn) removeTimelineBtn.elt.hidden = !active;
+        if (timelinePlaybackControls) timelinePlaybackControls.elt.hidden = !active;
+        if (timelineProgressInput) timelineProgressInput.elt.hidden = !active;
+        if (active) syncTimelineDisplay();
+    }
+    window.updateTimelineControls = updateTimelineControls;
+
+    if (createTimelineBtn) {
+        createTimelineBtn.mousePressed(() => {
+            createTwoKeyframeTimeline();
+        });
+    }
+    if (removeTimelineBtn) {
+        removeTimelineBtn.mousePressed(() => {
+            removeTimelineAction();
+        });
+    }
+    if (timelinePlayBtn) {
+        timelinePlayBtn.mousePressed(() => {
+            toggleTimelinePlayback();
+            syncTimelineDisplay();
+            redraw();
+        });
+    }
+    if (timelineProgressInput) {
+        timelineProgressInput.input(() => {
+            setTimelineProgress(parseFloat(timelineProgressInput.value()));
+            syncTimelineDisplay();
+            redraw();
+        });
+    }
+
     if (layerBaseBtn) {
         layerBaseBtn.mousePressed(() => {
             activeLayer = 'base';
@@ -813,6 +923,10 @@ function setup() {
             renderLayerTabs();
             updateOffsetControls();
             updateFaceToggleControl();
+            // Roadmap 1.8 Stage C: a 3rd ordinary layer changes whether
+            // "Animate A -> B" is currently eligible (exactly two, see
+            // canCreateTwoKeyframeTimeline()).
+            updateTimelineControls();
             redraw();
         });
     }
@@ -1065,6 +1179,7 @@ function setup() {
 
     renderLayerTabs();
     updateOffsetControls();
+    updateTimelineControls();
     updateFaceToggleControl();
     updateFreeControls();
     updateFreeVisibleToggleIcon();
@@ -1248,10 +1363,23 @@ function draw() {
     // calls applyLayerAnimationFrame() itself, directly, exactly once
     // per scrub action, never relying on this per-frame loop.
     additionalLayers.forEach(layer => { if (layer.animation && layer.animation.playing) applyLayerAnimationFrame(layer); });
+    // Roadmap 1.8 Stage C phase (i): same "recompute while actively
+    // playing, re-check isAnythingAnimating() afterward" pattern as the
+    // per-layer loop just above - applyTimelineFrame() may itself flip
+    // timeline.playing to false (reaching the end), which
+    // syncAnimationLoopState() needs to see this same frame, not one
+    // frame late. syncTimelineDisplay() runs unconditionally whenever a
+    // timeline exists (not gated on `playing`) so the progress
+    // slider/play-icon stay live during playback the same way
+    // syncLayerAnimationDisplay() already does below for the per-layer
+    // case - timeline isn't tab-contextual, so this isn't gated on
+    // activeLayer either.
+    if (timeline && timeline.playing) applyTimelineFrame();
     syncAnimationLoopState();
     if (activeLayer !== 'base' && additionalLayers[activeLayer] && additionalLayers[activeLayer].animation) {
         syncLayerAnimationDisplay(additionalLayers[activeLayer]);
     }
+    if (timeline) syncTimelineDisplay();
 
     drawTessellation();
 
@@ -1446,6 +1574,7 @@ function handleAltNetClick(x, y) {
     rebuildGridFromConstruction(p, q, n, previewSide);
     renderLayerTabs(); // rebuildGridFromConstruction() clears additionalLayers - keep the tab strip in sync, same as the shape-button handler
     updateOffsetControls();
+    updateTimelineControls(); // rebuildGridFromConstruction() also clears timeline - see its own comment (core/state.js)
     cancelAltNetConstruction();
     redraw();
 }
@@ -1579,12 +1708,40 @@ function addLayer() {
 // was the active layer; otherwise shifts a numeric activeLayer down
 // by one if it pointed past the removed index, since splice() shifts
 // every later layer's index down by one too.
+//
+// Roadmap 1.8 Stage C phase (i) (this session's own isolated
+// verification focus): if `index` is one of the timeline's two
+// keyframes OR its auto-created playback layer, the WHOLE timeline is
+// torn down first - clearTimelineState() restores each keyframe's saved
+// `enabled` (so removing a keyframe mid-playback never leaves the
+// OTHER, surviving keyframe layer accidentally left disabled) before
+// this function's own splice() runs. Removing a keyframe (not the
+// playback layer itself) also orphans the playback layer, which nothing
+// else would otherwise remove - spliced out here too, via the same
+// local spliceOne() helper so activeLayer's own index-shift logic isn't
+// duplicated. A timeline that ISN'T affected (the removed layer is some
+// other, unrelated one) survives, with its own stored indices shifted
+// the same way activeLayer's is just below.
 function removeLayer(index) {
-    additionalLayers.splice(index, 1);
-    if (activeLayer === index) {
-        activeLayer = 'base';
-    } else if (typeof activeLayer === 'number' && activeLayer > index) {
-        activeLayer -= 1;
+    function spliceOne(i) {
+        additionalLayers.splice(i, 1);
+        if (activeLayer === i) {
+            activeLayer = 'base';
+        } else if (typeof activeLayer === 'number' && activeLayer > i) {
+            activeLayer -= 1;
+        }
+    }
+    let orphanedPlaybackIndex = null;
+    if (timeline && (index === timeline.keyframeLayerIds[0] || index === timeline.keyframeLayerIds[1] || index === timeline.playbackLayerIndex)) {
+        if (index !== timeline.playbackLayerIndex) orphanedPlaybackIndex = timeline.playbackLayerIndex;
+        clearTimelineState(`Timeline removed: Layer ${index + 1} was deleted.`);
+    }
+    spliceOne(index);
+    if (orphanedPlaybackIndex !== null) {
+        spliceOne(orphanedPlaybackIndex > index ? orphanedPlaybackIndex - 1 : orphanedPlaybackIndex);
+    } else if (timeline) {
+        timeline.keyframeLayerIds = timeline.keyframeLayerIds.map(i => i > index ? i - 1 : i);
+        if (timeline.playbackLayerIndex > index) timeline.playbackLayerIndex -= 1;
     }
     // Roadmap 1.8 Stage A (design session's own isolated verification
     // focus): a removed layer's own `playing` flag leaves with it (the
@@ -1595,6 +1752,11 @@ function removeLayer(index) {
     // dangerous, but exactly the silent-leftover-loop risk the design
     // session flagged as this feature's highest-risk piece).
     syncAnimationLoopState();
+    // Roadmap 1.8 Stage C: refreshes the Create/Remove/playback control
+    // visibility (a timeline may have just been torn down above) -
+    // window-exposed by setup() the same way updateOffsetControls() is,
+    // since this is a top-level function.
+    updateTimelineControls();
 }
 
 // Roadmap 1.12 stage 1 pass 2: changes the ACTIVE layer's own nodeCount
@@ -1984,8 +2146,13 @@ function applyLayerConnectionsMorphFrame(layer, anim, t) {
 // playing layers (1.12's own per-layer-independence precedent - no
 // artificial "only one animates at a time" restriction) and a layer
 // finishing mid-playback both correctly resolve to the same answer.
+// Roadmap 1.8 Stage C phase (i): also true while the timeline is
+// playing - a single shared loop()/noLoop() gate covering both the
+// per-layer transform/connections animation (Stage A/B) and the
+// persistent-layer timeline (Stage C), same "loop() only while
+// something is actually moving" discipline for both.
 function isAnythingAnimating() {
-    return additionalLayers.some(l => l.animation && l.animation.playing);
+    return additionalLayers.some(l => l.animation && l.animation.playing) || !!(timeline && timeline.playing);
 }
 
 // Roadmap 1.8 Stage A (design session point 1's own scoping condition):
@@ -2022,6 +2189,260 @@ function syncAnimationLoopState() {
         animationLoopActive = false;
         noLoop();
     }
+}
+
+// ----------------- TIMELINE (Roadmap 1.8 Stage C phase (i)) -----------
+// Persistent-layer keyframe timeline, superseding Stage B's ephemeral
+// Set Start/End capture model for the reasons the design session laid
+// out: a captured fromConnections/toConnections snapshot can't be
+// revisited (no way to correct a mistake in the Start pattern after
+// capturing it) and can't grow beyond two states. Here, each keyframe
+// IS one of additionalLayers[]'s own real, persistent, independently-
+// editable entries - "capturing" a keyframe is simply designating an
+// already-built layer as one, and revisiting it is just switching to
+// that layer's own tab and editing normally. `timeline` (core/state.js)
+// is a NEW TOP-LEVEL concept, not nested inside any one layer's own
+// `animation` field the way Stage A/B's per-layer animation is - a
+// transition spanning two independent layers has no single layer to
+// belong to. Stage B's own mechanism (ensureLayerAnimation() etc.,
+// above) stays fully intact and unmodified alongside this - see the
+// design session's point 6 for why both coexist until this phase is
+// verified to fully cover the two-keyframe case.
+
+// Roadmap 1.8 Stage C: the CHEAP, coarse eligibility check only (exactly
+// two ordinary - i.e. non-playback - layers exist, and no timeline is
+// already active) - mirrors "Align to base"'s own disabled-button
+// pattern (alignBtn.elt.disabled, sketch.js's updateOffsetControls()).
+// The finer content checks (shape/order/symmetryMode match, matching
+// connection counts) are only evaluated when the button is actually
+// clicked - see createTwoKeyframeTimeline() - and reported via
+// #timeline-status, not baked into this coarse check.
+function canCreateTwoKeyframeTimeline() {
+    if (timeline) return false;
+    return additionalLayers.filter(l => !l.isTimelinePlayback).length === 2;
+}
+
+// Roadmap 1.8 Stage C: the one-click "Animate A -> B" action. Designates
+// the two existing (non-playback) layers, in their existing array
+// order, as keyframes A and B - no separate picker UI for this phase
+// (exactly two keyframes is this phase's own deliberate scope boundary,
+// same as Stage B's own "exactly two states" constraint). Refuses with
+// a status message (#timeline-status) rather than half-applying anything
+// if their shape/order/symmetryMode don't match, or their current
+// connection counts don't - warn-and-refuse, same convention as
+// incompatibleEnabledLayersForCrossLayerFaces().
+//
+// Requiring matching shape/order/symmetryMode here is a SHARPER
+// constraint than it needs to be for the coordinate math alone (that's
+// already shape/order-agnostic - see resolveConnectionsToCoords()) but
+// is required for the playback layer's own FIXED tessellation scheme
+// (copied from keyframe A below, never re-derived per frame) to mean
+// the same thing for both keyframes' content (design session point 4).
+function createTwoKeyframeTimeline() {
+    if (!canCreateTwoKeyframeTimeline()) return;
+    const real = additionalLayers
+        .map((layer, i) => ({ layer, i }))
+        .filter(({ layer }) => !layer.isTimelinePlayback);
+    const [{ layer: layerA, i: idA }, { layer: layerB, i: idB }] = real;
+
+    if (layerA.shape !== layerB.shape || layerA.nodeCount !== layerB.nodeCount ||
+        layerA.shapeSizeFactor !== layerB.shapeSizeFactor || layerA.symmetryMode !== layerB.symmetryMode) {
+        setTimelineStatus(`Layer ${idA + 1} and Layer ${idB + 1} must share the same shape, order, size and symmetry mode to become timeline keyframes.`);
+        return;
+    }
+    const fromCoords = resolveConnectionsToCoords(layerA);
+    const toCoords = resolveConnectionsToCoords(layerB);
+    if (fromCoords.length !== toCoords.length || fromCoords.length === 0) {
+        setTimelineStatus(`Line count mismatch: Layer ${idA + 1} has ${fromCoords.length}, Layer ${idB + 1} has ${toCoords.length} - counts must match.`);
+        return;
+    }
+
+    // Roadmap 1.8 Stage C: the auto-created playback layer - an ordinary
+    // additionalLayers[] entry (every existing per-layer mechanism -
+    // enabled, the rendering call sites, _morphNodes/_morphConnections -
+    // already works for it completely unmodified, see core/tiling.js),
+    // copying keyframe A's shape/order/symmetryMode (already confirmed
+    // identical to B's own, just above). isTimelinePlayback marks it so
+    // renderLayerTabs() hides it from the ordinary tab strip and
+    // canCreateTwoKeyframeTimeline() excludes it from "which layers are
+    // ordinary pattern layers". Its own connections/nodes are never
+    // read in practice (drawTessellation()/drawAdditionalLayers() prefer
+    // _morphConnections/_morphNodes whenever set - see applyTimelineFrame()
+    // below), but still needs a real, valid grid for the tessellation
+    // LATTICE math (tileFor(), mirrorAxisDir(), etc.) to have somewhere
+    // consistent to anchor to.
+    const playbackLayer = {
+        connections: [], redoStack: [], offsetX: 0, offsetY: 0, rotation: 0,
+        shape: layerA.shape, symmetryMode: layerA.symmetryMode, enabled: true,
+        showFaces: false, nodeCount: layerA.nodeCount, shapeSizeFactor: layerA.shapeSizeFactor,
+        isTimelinePlayback: true,
+    };
+    const grid = layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, playbackLayer.shapeSizeFactor, playbackLayer.nodeCount, playbackLayer.shape, canvasW, canvasH);
+    playbackLayer.nodes = grid.nodes;
+    playbackLayer.centroid = grid.centroid;
+    playbackLayer.outerCorners = grid.outerCorners;
+    additionalLayers.push(playbackLayer);
+    const playbackLayerIndex = additionalLayers.length - 1;
+
+    // Roadmap 1.8 Stage C: visibility switches ONCE here, at creation -
+    // not per Play/Pause click. Both keyframes stay hidden and the
+    // playback layer stays shown for the ENTIRE lifetime of the
+    // timeline (Play/Pause/scrub only change WHAT the playback layer's
+    // own _morphNodes/_morphConnections interpolate to, never visibility
+    // itself) - the only other visibility transition is clearTimelineState()
+    // (Remove Timeline, or a keyframe layer being deleted), which
+    // restores exactly these saved values. This avoids an inconsistency
+    // a per-click toggle would otherwise have: a manual scrub already
+    // has to force `playing=false` (same as Stage A/B's own scrub
+    // convention) without being a "step out of the timeline" action -
+    // if visibility were tied to the playing flag directly, scrubbing
+    // would immediately re-show the raw keyframes instead of the
+    // scrubbed frame, which is not what scrubbing is for.
+    timeline = {
+        keyframeLayerIds: [idA, idB],
+        playbackLayerIndex,
+        savedEnabled: { [idA]: layerA.enabled, [idB]: layerB.enabled },
+        durationMs: 2000, elapsedMs: 0, startTime: null, playing: false,
+    };
+    layerA.enabled = false;
+    layerB.enabled = false;
+
+    setTimelineStatus('');
+    applyTimelineFrame(); // populate the playback layer's render substitute at t=0 immediately, so something coherent shows right away
+    renderLayerTabs();
+    updateOffsetControls();
+    updateTimelineControls();
+    redraw();
+}
+
+// Roadmap 1.8 Stage C: resolves BOTH keyframe layers' CURRENT connections
+// into raw coordinate pairs, fresh on EVERY call - this (not any cached/
+// frozen field) is what makes the interpolation "live-resolved": editing
+// a keyframe layer's connections is picked up the very next time this
+// runs, unlike Stage B's captured fromConnections/toConnections
+// snapshots. Reuses resolveConnectionsToCoords() (Stage B, unmodified) -
+// the same lookup drawShapeCell() itself does. Mismatched/zero counts
+// are reported, not silently truncated, matching Stage B's own
+// setActiveLayerAnimationStart()/End() convention - checked here, not
+// just once at createTwoKeyframeTimeline() time, since a keyframe can be
+// edited to a different count at any point while the timeline exists.
+function resolveTimelineKeyframeCoords(timeline) {
+    const layerA = additionalLayers[timeline.keyframeLayerIds[0]];
+    const layerB = additionalLayers[timeline.keyframeLayerIds[1]];
+    if (!layerA || !layerB) return { ok: false, reason: 'A keyframe layer no longer exists.' };
+    const from = resolveConnectionsToCoords(layerA);
+    const to = resolveConnectionsToCoords(layerB);
+    if (from.length !== to.length || from.length === 0) {
+        return { ok: false, reason: `Keyframe line count mismatch: Layer ${timeline.keyframeLayerIds[0] + 1} has ${from.length}, Layer ${timeline.keyframeLayerIds[1] + 1} has ${to.length} - counts must match.` };
+    }
+    return { ok: true, from, to };
+}
+
+// Roadmap 1.8 Stage C: recomputes the timeline's playback layer's
+// interpolated render substitute for the CURRENT progress t - mirrors
+// applyLayerAnimationFrame()'s own time bookkeeping exactly, generalized
+// from "one layer's own from*/to* fields" to "two REAL keyframe layers'
+// current connections, resolved fresh every call" (see
+// resolveTimelineKeyframeCoords() above). Reuses
+// applyLayerConnectionsMorphFrame() (Stage B, unmodified) verbatim - a
+// freshly-built {fromConnections, toConnections} object, never persisted
+// anywhere, is passed as its `anim` parameter; that function only ever
+// reads .fromConnections/.toConnections/.morphIds off it, and
+// ensureLayerMorphIds() (called inside) regenerates ids purely as a
+// function of the connection COUNT (never randomly), so rebuilding this
+// object fresh every call still yields byte-identical ids call to call
+// as long as the count hasn't changed - the exact property Stage B's own
+// 'free'-curve seed-stability guarantee depends on, re-verified
+// concretely for this mechanism (not just assumed to transfer) - see
+// this phase's own implementation report.
+function applyTimelineFrame() {
+    if (!timeline) return;
+    let elapsed = timeline.playing ? (millis() - timeline.startTime) : timeline.elapsedMs;
+    elapsed = Math.max(0, Math.min(timeline.durationMs, elapsed));
+    if (timeline.playing) {
+        timeline.elapsedMs = elapsed;
+        if (elapsed >= timeline.durationMs) timeline.playing = false;
+    }
+    const t = timeline.durationMs > 0 ? elapsed / timeline.durationMs : 1;
+    const playbackLayer = additionalLayers[timeline.playbackLayerIndex];
+    if (!playbackLayer) return; // defensive - removeLayer()/clearTimelineState() keep this in sync; shouldn't happen
+    const resolved = resolveTimelineKeyframeCoords(timeline);
+    if (!resolved.ok) {
+        playbackLayer._morphNodes = null;
+        playbackLayer._morphConnections = null;
+        setTimelineStatus(resolved.reason);
+        return;
+    }
+    setTimelineStatus('');
+    applyLayerConnectionsMorphFrame(playbackLayer, { fromConnections: resolved.from, toConnections: resolved.to }, t);
+}
+
+// Play/Pause toggle for the timeline - mirrors
+// toggleActiveLayerAnimationPlayback() exactly (resume-from-elapsedMs,
+// play-once-and-restart-from-0-if-already-finished). Visibility was
+// already established once, at createTwoKeyframeTimeline() time, and
+// stays that way for the timeline's whole lifetime - see that
+// function's own comment for why Play/Pause never touch it again.
+function toggleTimelinePlayback() {
+    if (!timeline) return;
+    if (timeline.playing) {
+        timeline.elapsedMs = Math.max(0, Math.min(timeline.durationMs, millis() - timeline.startTime));
+        timeline.playing = false;
+    } else {
+        if (timeline.elapsedMs >= timeline.durationMs) timeline.elapsedMs = 0;
+        timeline.startTime = millis() - timeline.elapsedMs;
+        timeline.playing = true;
+    }
+    syncAnimationLoopState();
+}
+
+// Manual scrub (0..1) - mirrors setActiveLayerAnimationProgress()
+// exactly: pauses if playing, applies the new frame immediately so a
+// drag shows a live preview even while noLoop() is active.
+function setTimelineProgress(t) {
+    if (!timeline) return;
+    timeline.elapsedMs = Math.max(0, Math.min(1, t)) * timeline.durationMs;
+    timeline.playing = false;
+    syncAnimationLoopState();
+    applyTimelineFrame();
+}
+
+// Roadmap 1.8 Stage C: restores each keyframe layer's saved `enabled`
+// state and clears `timeline` to null - the ONE visibility-restore
+// transition (see createTwoKeyframeTimeline()'s comment for why Play/
+// Pause/scrub don't need their own). Does NOT touch additionalLayers[]
+// itself - removing the now-orphaned playback layer is each CALLER's
+// own job (see removeTimelineAction() and removeLayer()'s own timeline-
+// teardown branch) - so this is safe to call even when a keyframe
+// layer is mid-removal (its own entry may already be gone from
+// additionalLayers by the time this runs, in which case there's simply
+// nothing to restore for it - guarded by `layer &&` below).
+function clearTimelineState(statusMessage) {
+    if (!timeline) return;
+    timeline.keyframeLayerIds.forEach(i => {
+        const layer = additionalLayers[i];
+        if (layer && timeline.savedEnabled && Object.prototype.hasOwnProperty.call(timeline.savedEnabled, i)) {
+            layer.enabled = timeline.savedEnabled[i];
+        }
+    });
+    timeline = null;
+    syncAnimationLoopState(); // a playing timeline being torn down must not leave loop() running for nothing
+    if (statusMessage !== undefined) setTimelineStatus(statusMessage);
+}
+
+// Explicit "Remove Timeline" action - restores keyframe visibility via
+// clearTimelineState(), then removes the now-orphaned playback layer via
+// the ordinary removeLayer() (safe to call now: timeline is already
+// null, so removeLayer()'s own teardown branch is a no-op for it).
+function removeTimelineAction() {
+    if (!timeline) return;
+    const playbackIndex = timeline.playbackLayerIndex;
+    clearTimelineState('');
+    removeLayer(playbackIndex);
+    renderLayerTabs();
+    updateOffsetControls();
+    updateTimelineControls();
+    redraw();
 }
 
 // ----------------- PATTERN NAME (Roadmap 1.11-B) ---------------------
