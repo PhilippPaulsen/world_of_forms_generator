@@ -600,13 +600,19 @@
       <!-- Layer Tab Strip (Roadmap 1.9): Base (static, always present)
            + one tab per additional layer, rendered dynamically by
            sketch.js since the layer count is variable - see
-           renderLayerTabs() in setup(). "+ Layer" adds a new one. -->
+           renderLayerTabs() in setup(). "+ Layer" adds a new one.
+           "Paste Pattern" (Roadmap: catalog -> clipboard extension)
+           adds one too, sourced from a gallery.html "Copy pattern"
+           click instead of a blank layer - see sketch.js's
+           applyCatalogPatternToNewLayer()/parseClipboardCatalogPattern(). -->
       <div class="control-group">
         <div class="icon-row">
           <button id="btn-layer-base" class="layer-btn active" title="Edit Base Sheet">Base</button>
           <span id="layer-tabs"></span>
           <button id="btn-add-layer" class="layer-btn" title="Add Layer">+ Layer</button>
+          <button id="btn-paste-pattern" class="layer-btn" title="Paste a pattern copied from the catalog as a new layer">Paste Pattern</button>
         </div>
+        <span id="paste-pattern-status"></span>
       </div>
 
       <!-- Roadmap 1.8 Stage C phase (i): persistent-layer timeline -
@@ -981,15 +987,15 @@
        the p5.js CDN tag - that URL already carries its own version
        (p5@1.9.0), so a version bump there naturally changes the URL. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260917c"></script>
-  <script src="core/state.js?v=20260917c"></script>
-  <script src="core/symmetry.js?v=20260917c"></script>
-  <script src="core/curves.js?v=20260917c"></script>
-  <script src="core/tiling.js?v=20260917c"></script>
-  <script src="core/faces.js?v=20260917c"></script>
-  <script src="core/orbits.js?v=20260917c"></script>
-  <script src="core/export.js?v=20260917c"></script>
-  <script src="sketch.js?v=20260917c"></script>
+  <script src="core/forms.js?v=20260917d"></script>
+  <script src="core/state.js?v=20260917d"></script>
+  <script src="core/symmetry.js?v=20260917d"></script>
+  <script src="core/curves.js?v=20260917d"></script>
+  <script src="core/tiling.js?v=20260917d"></script>
+  <script src="core/faces.js?v=20260917d"></script>
+  <script src="core/orbits.js?v=20260917d"></script>
+  <script src="core/export.js?v=20260917d"></script>
+  <script src="sketch.js?v=20260917d"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides
