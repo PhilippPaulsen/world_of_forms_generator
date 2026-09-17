@@ -86,41 +86,103 @@ function parseCatalogUrlParams(search) {
     const orbitIds = orbitIdsRaw.split(',').map(s => parseInt(s, 10));
     if (orbitIds.length === 0 || orbitIds.some(id => !Number.isInteger(id) || id < 0)) return null;
 
-    return { shape, order, symmetryMode: symmetryModeParam, orbitIds };
+    // Roadmap: catalog -> NEW LAYER back-link extension. 'new' is
+    // currently the only recognized value - a numeric layer INDEX would
+    // have no meaningful referent on a fresh page load (the generator
+    // always starts with zero additional layers; there is no
+    // pre-existing session for a URL to target by index - see the
+    // design session). Present-but-not-'new' is reported (not silently
+    // ignored) and treated as absent, so a typo'd layer= value degrades
+    // to the ordinary base-sheet link rather than doing something
+    // unexpected, and doesn't invalidate the rest of an otherwise-valid
+    // link the way a malformed shape/order/symmetryMode/orbitIds does.
+    const layerRaw = params.get('layer');
+    let layer = null;
+    if (layerRaw === 'new') {
+        layer = 'new';
+    } else if (layerRaw !== null) {
+        console.warn(`Unrecognized layer= value "${layerRaw}" in catalog URL - ignoring, loading as the base pattern instead.`);
+    }
+
+    return { shape, order, symmetryMode: symmetryModeParam, orbitIds, layer };
 }
 
 // Semantic validation + reconstruction (the second layer above) - only
-// meaningful once rebuildGrid(currentShape) has already run for the
-// resolved shape/order, since it needs the real live nodes/centroid.
-// Mirrors gallery-render.js's renderFullTessellationSVG() exactly:
-// connections = orbitIds.map(id => table.orbits[id].pairs[0]) - the
-// SAME reconstruction, reusing the SAME live orbit-table glue
-// (computeThemeLineOrbitTable(), core/orbits.js - already loaded by
-// index.html for the existing pattern-name-status feature) rather than
-// a second, independently-written lookup. Any representative pair
-// (pairs[0]) is fine to use as-is - two pairs land in the same orbit
-// precisely because the group maps one onto the other, so the rendered
-// copy-set is an invariant of the orbit, not of which member was
-// chosen (see the design session). Returns true/false so the caller
-// knows whether to fall back to addRandomConnection(); never throws
-// out of setup() - a stale/malformed orbitIds (not realistic for an
+// meaningful once the target grid (base or a layer's own, see callers
+// below) already reflects pattern.shape/order, since it needs the real
+// live nodes/centroid. Mirrors gallery-render.js's
+// renderFullTessellationSVG() exactly: orbitIds.map(id =>
+// table.orbits[id].pairs[0]) - the SAME reconstruction, reusing the
+// SAME live orbit-table glue (computeThemeLineOrbitTable(), core/orbits.js)
+// rather than a second, independently-written lookup. Any representative
+// pair (pairs[0]) is fine to use as-is - two pairs land in the same
+// orbit precisely because the group maps one onto the other, so the
+// rendered copy-set is an invariant of the orbit, not of which member
+// was chosen (see the design session). gridOverride/shapeOverride are
+// computeThemeLineOrbitTable()'s own passthrough params (core/orbits.js) -
+// omitted (as applyCatalogPattern() below does) resolves against the
+// base sheet's own live globals, byte-identical to before this was
+// extracted; applyCatalogPatternToNewLayer() passes a layer's own grid
+// instead. Throws on a stale/malformed orbitIds (not realistic for an
 // app-generated link, but a hand-edited or future-format-drifted one
-// should degrade gracefully) is reported via console.warn, not a new
-// UI element (deliberately - this is expected to be rare enough that
-// building dedicated in-page chrome for it isn't warranted yet).
+// should degrade gracefully) - each caller's own try/catch reports it
+// via console.warn, not a new UI element (deliberately - expected to be
+// rare enough that dedicated in-page chrome isn't warranted yet).
+function resolveCatalogPatternConnections(pattern, gridOverride, shapeOverride) {
+    const table = computeThemeLineOrbitTable(pattern.symmetryMode, gridOverride, shapeOverride);
+    return pattern.orbitIds.map(id => {
+        if (!table.orbits[id]) {
+            throw new Error(`orbit id ${id} does not exist for ${pattern.shape} order ${pattern.order} ${pattern.symmetryMode} (table has ${table.orbits.length} orbits)`);
+        }
+        return table.orbits[id].pairs[0];
+    });
+}
+
+// Applies a catalog pattern to the BASE sheet - only meaningful once
+// rebuildGrid(currentShape) has already run for the resolved
+// shape/order. Returns true/false so the caller knows whether to fall
+// back to addRandomConnection(); never throws out of setup().
 function applyCatalogPattern(pattern) {
     try {
-        const table = computeThemeLineOrbitTable(pattern.symmetryMode);
-        const newConnections = pattern.orbitIds.map(id => {
-            if (!table.orbits[id]) {
-                throw new Error(`orbit id ${id} does not exist for ${pattern.shape} order ${pattern.order} ${pattern.symmetryMode} (table has ${table.orbits.length} orbits)`);
-            }
-            return table.orbits[id].pairs[0];
-        });
-        connections = newConnections;
+        connections = resolveCatalogPatternConnections(pattern);
         return true;
     } catch (err) {
         console.warn('Failed to load catalog pattern from URL - falling back to the default random connection:', err.message);
+        return false;
+    }
+}
+
+// Roadmap: catalog -> NEW LAYER back-link extension (layer=new URL
+// param, see parseCatalogUrlParams()). Targets a freshly-created
+// additionalLayers[] entry instead of the base globals -
+// addLayer() + updateActiveLayerGrid() are the EXACT same mechanism a
+// real "+Layer" click followed by manually changing its Shape/Node
+// Count controls would use (design session point 2: indistinguishable
+// from a real user action, not a special-cased silent write).
+// symmetryMode is written directly to the layer's own field, mirroring
+// how applyCatalogPattern() itself relies on the base's own global
+// having already been set (setup()'s own catalogUrlPattern handling,
+// further up) - this function never touches the base's globals/UI at
+// all, so the existing base-only link stays completely unaffected.
+// On semantic failure, the just-created layer is removed via the
+// existing removeLayer() - a clean, base-only fallback, not a dangling
+// empty layer.
+function applyCatalogPatternToNewLayer(pattern) {
+    addLayer();
+    const layerIndex = activeLayer;
+    try {
+        updateActiveLayerGrid({ shape: pattern.shape, nodeCount: pattern.order });
+        const layer = additionalLayers[layerIndex];
+        layer.symmetryMode = pattern.symmetryMode;
+        layer.connections = resolveCatalogPatternConnections(
+            pattern,
+            { nodes: layer.nodes, centroid: layer.centroid, outerCorners: layer.outerCorners },
+            pattern.shape
+        );
+        return true;
+    } catch (err) {
+        console.warn('Failed to load catalog pattern into a new layer from URL - removing the empty layer and falling back to the default random base connection:', err.message);
+        removeLayer(layerIndex);
         return false;
     }
 }
@@ -1312,9 +1374,28 @@ function setup() {
     // random seed entirely. Any failure (semantic validation - orbitIds
     // that don't actually exist in this exact table) falls back to
     // exactly the pre-existing default, same as no URL pattern at all.
-    if (!catalogUrlPattern || !applyCatalogPattern(catalogUrlPattern)) {
+    //
+    // Roadmap: catalog -> NEW LAYER back-link extension - a
+    // catalogUrlPattern.layer === 'new' link is routed to
+    // applyCatalogPatternToNewLayer() instead, which never touches the
+    // base globals/UI at all (see its own comment), so the plain
+    // base-only case just below is completely unaffected either way.
+    if (catalogUrlPattern && catalogUrlPattern.layer === 'new') {
+        if (!applyCatalogPatternToNewLayer(catalogUrlPattern)) addRandomConnection();
+    } else if (!catalogUrlPattern || !applyCatalogPattern(catalogUrlPattern)) {
         addRandomConnection();
     }
+    // Roadmap: renderLayerTabs()/updateOffsetControls()/updateFaceToggleControl()/
+    // updateTimelineControls() only ran once, earlier in setup(), BEFORE
+    // rebuildGrid() above - a layer created just now by
+    // applyCatalogPatternToNewLayer() needs an explicit re-sync so its
+    // tab/controls actually appear on the very first paint, the same
+    // sync a real "+Layer" click's own handler already does. Harmless
+    // (redundant, not wrong) when no layer was created.
+    renderLayerTabs();
+    updateOffsetControls();
+    updateFaceToggleControl();
+    updateTimelineControls();
     redraw();
     updateCrossLayerStatus();
     updatePatternNameStatus();
