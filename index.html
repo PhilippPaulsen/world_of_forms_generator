@@ -805,6 +805,12 @@
           <button id="btn-layer-anim-set-start" class="layer-btn" title="Set Start">Set Start</button>
           <button id="btn-layer-anim-set-end" class="layer-btn" title="Set End">Set End</button>
         </div>
+        <!-- Roadmap 1.8 Stage B (connections morph): Set Start/End also
+             capture this layer's CURRENT connections (see sketch.js's
+             setActiveLayerAnimationStart()/End()); a line-count mismatch
+             against the other side's already-captured connections is
+             refused and reported here rather than silently truncated. -->
+        <span id="layer-anim-connections-status"></span>
         <div class="icon-row">
           <input type="number" id="layer-anim-duration-input" min="1" step="1" value="2000" title="Duration (ms)">
           <button id="btn-layer-anim-play" class="icon-btn" title="Play">
@@ -931,15 +937,15 @@
        the p5.js CDN tag - that URL already carries its own version
        (p5@1.9.0), so a version bump there naturally changes the URL. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260916f"></script>
-  <script src="core/state.js?v=20260916f"></script>
-  <script src="core/symmetry.js?v=20260916f"></script>
-  <script src="core/curves.js?v=20260916f"></script>
-  <script src="core/tiling.js?v=20260916f"></script>
-  <script src="core/faces.js?v=20260916f"></script>
-  <script src="core/orbits.js?v=20260916f"></script>
-  <script src="core/export.js?v=20260916f"></script>
-  <script src="sketch.js?v=20260916f"></script>
+  <script src="core/forms.js?v=20260917a"></script>
+  <script src="core/state.js?v=20260917a"></script>
+  <script src="core/symmetry.js?v=20260917a"></script>
+  <script src="core/curves.js?v=20260917a"></script>
+  <script src="core/tiling.js?v=20260917a"></script>
+  <script src="core/faces.js?v=20260917a"></script>
+  <script src="core/orbits.js?v=20260917a"></script>
+  <script src="core/export.js?v=20260917a"></script>
+  <script src="sketch.js?v=20260917a"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides
