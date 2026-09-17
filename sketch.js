@@ -595,6 +595,33 @@ function setup() {
     const animDurationInput = select('#layer-anim-duration-input');
     const animPlayBtn = select('#btn-layer-anim-play');
     const animProgressInput = select('#layer-anim-progress-input');
+    // Roadmap 1.8 Stage B (connections morph): status line for a
+    // refused Set Start/End line-count mismatch - same plain-<span>
+    // convention as #align-to-base-status. Exposed on window (mirroring
+    // updateOffsetControls/syncLayerAnimationDisplay just below) since
+    // setActiveLayerAnimationStart()/End() are top-level functions, not
+    // declared inside this setup() closure.
+    const animConnectionsStatus = select('#layer-anim-connections-status');
+    // Roadmap 1.8 Stage B: which layer the CURRENTLY shown message
+    // belongs to - Set Start/End's own click handlers call
+    // updateOffsetControls() right after setActiveLayerAnimationStart()/
+    // End() (a pre-existing "refresh the whole panel" pattern, unrelated
+    // to this feature), so updateOffsetControls()'s own populate-on-
+    // switch block can't unconditionally clear this status the way
+    // alignStatus does (alignBtn's own handler never calls
+    // updateOffsetControls() itself, so it never hits this) - doing so
+    // would immediately wipe out the very message Set Start/End just
+    // set, before the person ever sees it (caught via a real Set-Start
+    // mismatch click in this stage's browser test). Tracked here instead
+    // so updateOffsetControls() only clears it on an ACTUAL tab switch
+    // (activeLayer different from whichever layer last wrote a message),
+    // never on a same-layer refresh.
+    let layerAnimConnectionsStatusOwner = null;
+    function setLayerAnimConnectionsStatus(msg) {
+        if (animConnectionsStatus) animConnectionsStatus.html(msg || '');
+        layerAnimConnectionsStatusOwner = msg ? activeLayer : null;
+    }
+    window.setLayerAnimConnectionsStatus = setLayerAnimConnectionsStatus;
 
     function updateOffsetControls() {
         const showOffsets = activeLayer !== 'base';
@@ -659,6 +686,14 @@ function setup() {
                 alignBtn.attribute('title', shapeMatches ? 'Align to base' : "Only available when this layer's shape matches the base's");
             }
             if (alignStatus) alignStatus.html('');
+            // Roadmap 1.8 Stage B: a mismatch message belongs to whichever
+            // layer produced it - clear it only on an ACTUAL tab switch
+            // (see layerAnimConnectionsStatusOwner's own comment above for
+            // why this can't be an unconditional clear the way alignStatus'
+            // own reset above is).
+            if (layerAnimConnectionsStatusOwner !== null && layerAnimConnectionsStatusOwner !== activeLayer) {
+                setLayerAnimConnectionsStatus('');
+            }
         }
     }
 
@@ -1697,10 +1732,70 @@ function ensureLayerAnimation(layer) {
     return layer.animation;
 }
 
+// Roadmap 1.8 Stage B (connections morph): resolves this layer's
+// CURRENT connections/nodes into raw {x1,y1,x2,y2} coordinate pairs -
+// the same lookup drawShapeCell() itself does (nodeArr.find(n => n.id
+// === conn[0])), but done once at capture time rather than at render
+// time, so the captured shape survives independently of whatever the
+// layer's own connections/nodes go on to become afterward (the person
+// keeps editing/rebuilding this SAME layer to author the other
+// endpoint of the morph - see setActiveLayerAnimationStart()/End()
+// below). A connection with a dangling/missing endpoint id is skipped,
+// the same defensive guard drawShapeCell() itself already has
+// (`if (!n1 || !n2) continue`) - not reachable via any shipped UI path,
+// kept consistent rather than assumed impossible.
+function resolveConnectionsToCoords(layer) {
+    const coords = [];
+    for (const conn of layer.connections) {
+        if (conn.length !== 2) continue;
+        const n1 = layer.nodes.find(n => n.id === conn[0]);
+        const n2 = layer.nodes.find(n => n.id === conn[1]);
+        if (!n1 || !n2) continue;
+        coords.push({ x1: n1.x, y1: n1.y, x2: n2.x, y2: n2.y });
+    }
+    return coords;
+}
+
+// Roadmap 1.8 Stage B: stable synthetic node ids for the interpolated
+// morph render substitute (applyLayerConnectionsMorphFrame() below) -
+// assigned ONCE per (fromConnections,toConnections) pairing, never
+// regenerated per frame. This is what keeps a 'free'-styled morphing
+// line's curve seed (core/curves.js's _connectionSeed(), keyed off
+// id1/id2) STABLE across the whole animation instead of re-rolling its
+// noise pattern every frame (verified via a real browser test - see
+// this stage's implementation report). Only regenerated when the
+// pairing's own length changes (a genuinely new Start/End capture with
+// a different, still-matching, line count) - recapturing with the SAME
+// count keeps the previous ids, so an in-flight animation's noise
+// pattern isn't disturbed by an unrelated recapture of the other side.
+function ensureLayerMorphIds(anim, count) {
+    if (!anim.morphIds || anim.morphIds.length !== count) {
+        anim.morphIds = [];
+        for (let i = 0; i < count; i++) anim.morphIds.push([i * 2, i * 2 + 1]);
+    }
+}
+
 // Captures the ACTIVE layer's CURRENT live offsetX/offsetY/rotation/
 // shapeSizeFactor as its animation's start (Set Start) or end (Set
 // End) state - explicit-action convention, same as "Align to base"
 // (never automatic). A no-op when activeLayer is 'base'.
+// Roadmap 1.8 Stage B: also resolves+deep-copies this layer's CURRENT
+// connections into anim.fromConnections/toConnections (see
+// resolveConnectionsToCoords() above) - independent of the transform
+// fields above (always captured unconditionally, unaffected by
+// anything below). A line-count mismatch against the OTHER side's
+// already-captured connections is refused with a status message
+// (#layer-anim-connections-status, see setup()'s
+// setLayerAnimConnectionsStatus()) rather than silently truncating or
+// crashing - matching this project's established "refuse, don't
+// silently do something wrong" convention (e.g. core/tiling.js's
+// clampTileCount()). layer._morphNodes/_morphConnections (the render
+// substitute - see core/tiling.js) are cleared unconditionally on every
+// Set Start/End click so the live, currently-edited connections render
+// normally until the next Play/scrub recomputes the substitute -
+// otherwise a stale substitute from a PREVIOUS animation would keep
+// shadowing whatever the person is now clicking together for the next
+// Start/End pattern.
 function setActiveLayerAnimationStart() {
     if (activeLayer === 'base') return;
     const layer = additionalLayers[activeLayer];
@@ -1709,6 +1804,18 @@ function setActiveLayerAnimationStart() {
     anim.fromOffsetY = layer.offsetY;
     anim.fromRotation = layer.rotation || 0;
     anim.fromShapeSizeFactor = layer.shapeSizeFactor;
+    layer._morphNodes = null;
+    layer._morphConnections = null;
+    const resolved = resolveConnectionsToCoords(layer);
+    if (anim.toConnections && resolved.length !== anim.toConnections.length) {
+        if (window.setLayerAnimConnectionsStatus) window.setLayerAnimConnectionsStatus(
+            `Line count mismatch: Start has ${resolved.length}, End has ${anim.toConnections.length} - counts must match. Start connections NOT captured.`
+        );
+        return;
+    }
+    anim.fromConnections = resolved;
+    if (anim.toConnections) ensureLayerMorphIds(anim, resolved.length);
+    if (window.setLayerAnimConnectionsStatus) window.setLayerAnimConnectionsStatus('');
 }
 function setActiveLayerAnimationEnd() {
     if (activeLayer === 'base') return;
@@ -1718,6 +1825,18 @@ function setActiveLayerAnimationEnd() {
     anim.toOffsetY = layer.offsetY;
     anim.toRotation = layer.rotation || 0;
     anim.toShapeSizeFactor = layer.shapeSizeFactor;
+    layer._morphNodes = null;
+    layer._morphConnections = null;
+    const resolved = resolveConnectionsToCoords(layer);
+    if (anim.fromConnections && resolved.length !== anim.fromConnections.length) {
+        if (window.setLayerAnimConnectionsStatus) window.setLayerAnimConnectionsStatus(
+            `Line count mismatch: End has ${resolved.length}, Start has ${anim.fromConnections.length} - counts must match. End connections NOT captured.`
+        );
+        return;
+    }
+    anim.toConnections = resolved;
+    if (anim.fromConnections) ensureLayerMorphIds(anim, resolved.length);
+    if (window.setLayerAnimConnectionsStatus) window.setLayerAnimConnectionsStatus('');
 }
 
 function setActiveLayerAnimationDuration(rawValue) {
@@ -1805,6 +1924,58 @@ function applyLayerAnimationFrame(layer) {
     layer.offsetY = lerp(anim.fromOffsetY, anim.toOffsetY, t);
     layer.rotation = lerpAngleShortest(anim.fromRotation, anim.toRotation, t);
     layer.shapeSizeFactor = lerp(anim.fromShapeSizeFactor, anim.toShapeSizeFactor, t);
+    applyLayerConnectionsMorphFrame(layer, anim, t);
+}
+
+// Roadmap 1.8 Stage B (connections morph): recomputes this layer's
+// interpolated connections-morph render substitute
+// (layer._morphNodes/_morphConnections) for the CURRENT progress t -
+// read by core/tiling.js's drawTessellation() override object and
+// drawAdditionalLayers()'s drawShapeCell() call INSTEAD OF
+// layer.nodes/layer.connections whenever set (see their own comments).
+// Computed ONCE per draw() call here (not per tile) - the same
+// "mutate once, let the existing per-tile loop pick it up for free"
+// strategy the four transform fields above already use, not a new
+// per-tile mechanism.
+//
+// Synthetic node ids (anim.morphIds, see ensureLayerMorphIds()) are
+// assigned once and reused every frame here, never regenerated - the
+// requirement a 'free'-styled morphing line's curve seed (id-keyed,
+// core/curves.js's _connectionSeed()) needs to stay STABLE across the
+// whole animation instead of re-rolling its noise pattern every frame
+// (verified concretely via a real browser test tracking one 'free'
+// line's rendered path across several frames - see this stage's
+// implementation report).
+//
+// null/null (not an empty array) whenever no valid pairing exists -
+// no fromConnections/toConnections captured yet, a length mismatch
+// between them (refused at capture time, see setActiveLayerAnimation
+// Start()/End(), but defended here too rather than trusting the
+// invariant blindly), or an empty pairing - so the two render call
+// sites' `layer._morphNodes || layer.nodes` fallback correctly reverts
+// to this layer's own live connections/nodes: both right after Set
+// Start/End (before Play/scrub ever runs this) and for any layer that
+// has never used the connections-morph feature at all.
+function applyLayerConnectionsMorphFrame(layer, anim, t) {
+    if (!anim.fromConnections || !anim.toConnections ||
+        anim.fromConnections.length !== anim.toConnections.length ||
+        anim.fromConnections.length === 0) {
+        layer._morphNodes = null;
+        layer._morphConnections = null;
+        return;
+    }
+    ensureLayerMorphIds(anim, anim.fromConnections.length);
+    const morphNodes = [];
+    const morphConnections = [];
+    for (let i = 0; i < anim.fromConnections.length; i++) {
+        const from = anim.fromConnections[i], to = anim.toConnections[i];
+        const idA = anim.morphIds[i][0], idB = anim.morphIds[i][1];
+        morphNodes.push({ id: idA, x: lerp(from.x1, to.x1, t), y: lerp(from.y1, to.y1, t), free: true });
+        morphNodes.push({ id: idB, x: lerp(from.x2, to.x2, t), y: lerp(from.y2, to.y2, t), free: true });
+        morphConnections.push([idA, idB]);
+    }
+    layer._morphNodes = morphNodes;
+    layer._morphConnections = morphConnections;
 }
 
 // Whether loop()/noLoop() should be active right now - the single
