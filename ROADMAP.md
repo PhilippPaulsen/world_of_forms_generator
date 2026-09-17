@@ -86,11 +86,13 @@ Independent research track; 1.6's geodesic work is a natural (though not strictl
 - *Harmonie der Formen*, Ch. 8: Ostwald states he cannot undertake a harmony of solid forms himself, cites crystallography as partial groundwork, and explicitly invites others to develop a new, aesthetically grounded systematics
 - Direct conceptual mandate for `SpaceHarmony`
 
-### 1.8 Temporal / dynamic form art — ⛔ not started
+### 1.8 Temporal / dynamic form art — 🟡 partially implemented
 - *Harmonie der Formen*, "The Two Sources of Art": Ostwald anticipates a future formal "light art" comparable to the art of tone, explicitly including "the great artistic means of temporal variation" — an implicit invitation to animate/parametrize form harmony over time
+- *Status: layer-level transform animation (`offsetX`/`offsetY`/rotation/`shapeSizeFactor` interpolation), a pattern-to-pattern connection morph, and a persistent-layer keyframe timeline (two real, independently-editable layers as keyframes, live-resolved interpolation, fed by catalog-to-layer loading) are all shipped. Two follow-ons remain open: generalizing the timeline to N ordered keyframes (currently constrained to exactly two), and deprecating the earlier Set Start/End capture mechanism, which is still kept alongside the new timeline per the phased plan rather than removed.*
 
-### 1.9 Higher-order combinatorics — ⛔ not started (depends on 1.3)
+### 1.9 Higher-order combinatorics — ✅ implemented
 - Pairs → triples → quadruples systematically applied throughout; Ostwald stops enumerating individually only for reasons of scope, not principle — the method itself is open-ended
+- *Status: implemented via `additionalLayers[]` (`core/state.js`) — any number of additional pattern layers, each independently scalable/offsettable/rotatable, with its own net type and symmetry mode (`1.12` stages 1-5, all shipped — see that entry below for the per-stage breakdown).*
 
 ### 1.10 Line-intersection detection and pattern coloring — 🟡 data foundation ready
 - Detect closed regions (faces) formed by line crossings, building on the adjacency-list structure already designed for this purpose (`edgeIndex`, `angleDeg` in the JSON export schema)
@@ -104,13 +106,14 @@ Independent research track; 1.6's geodesic work is a natural (though not strictl
 - Apply Burnside/Pólya orbit reduction to collapse symmetry-equivalent theme lines before naming/enumerating — directly addresses the combinatorial explosion Ostwald flags repeatedly ("die Anzahl... übertrifft das beste Gedächtnis")
 - *Naming scheme: see `docs/terminology.md`, Part B, for a proposed systematic (Hinterreiter-style) parametric naming grammar, cross-referenced to Ostwald's original names for historical traceability. Includes open sub-tasks (canonical node numbering, mapping script, backfill table, orbit-equivalence handling) that constitute the concrete first steps for this item.*
 
-### 1.12 Pattern combination beyond same-order pairs — ⛔ not started (depends on 1.1, 1.3, 1.2)
+### 1.12 Pattern combination beyond same-order pairs — ✅ implemented
 - Ostwald's "Verbindungen" sections combine patterns of the *same* polygon order (pairs, triples, quadruples) via direct overlay
 - Extend this to:
   - combinations of patterns from polygons of *different* orders/sizes (e.g., third-triangle × fifth-triangle) — an extrapolation from Ostwald's combinatorial logic, not an idea he states explicitly (searched but no supporting passage found)
   - combinations across net types where compatible (triangle × hexagon, sharing the same underlying triangular lattice)
   - arbitrary sub-mesh-width shifts as a continuous parameter, generalizing the discrete "offset overlay" case already noted in 1.3
 - Unlike 1.1–1.9, this entry is a genuine extension beyond Ostwald's own stated program, not an implementation of an announced-but-unrealized idea
+- *Status: shipped across the five stages below — same net type at independent order/size, shared center (stage 1); independent per-layer offset (stage 2); independent per-layer rotation (stage 3); combination across different net types, e.g. triangle × hexagon (stage 4); and independent per-layer `symmetryMode` (stage 5). Stage 5 goes beyond the original four-stage build order below — noted honestly here rather than silently folded into stage 4 — added once per-layer shape/order independence made a single shared symmetry mode across differently-typed layers stop making sense.*
 
 *Suggested build order for 1.12 (staged by degrees of freedom, not from a textual source - 1.12 is already flagged as a genuine extension beyond Ostwald's stated program, not a reconstruction):*
 1. *Same net type, different order/size, shared center (no offset, no rotation) - the most constrained case, extending 1.9's `additionalLayers[]` model (currently one shared grid for all layers) to allow independent grid scale per layer while keeping center/orientation/type fixed.*
