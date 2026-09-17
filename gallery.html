@@ -447,8 +447,12 @@
        follows. */
     /* #detail-open-new-layer (Roadmap: catalog -> NEW LAYER back-link
        extension) shares this exact chrome - a second link alongside
-       #detail-open-generator, not a replacement for it. */
-    #detail-open-generator, #detail-open-new-layer {
+       #detail-open-generator, not a replacement for it.
+       #detail-copy-pattern (Roadmap: catalog -> clipboard extension) is
+       a real <button> (no destination to link to - it never navigates),
+       but shares this same chrome too, per the design session's own
+       "same chrome as the existing two links" instruction. */
+    #detail-open-generator, #detail-open-new-layer, #detail-copy-pattern {
       background: var(--background);
       border: 1px solid var(--text);
       border-radius: 4px;
@@ -464,7 +468,7 @@
       box-sizing: border-box;
     }
 
-    #detail-open-generator:hover, #detail-open-new-layer:hover {
+    #detail-open-generator:hover, #detail-open-new-layer:hover, #detail-copy-pattern:hover {
       background: var(--hover-bg);
     }
 
@@ -594,6 +598,7 @@
       <div class="detail-actions">
         <a id="detail-open-generator" href="index.html" target="_blank" rel="noopener">Open in generator</a>
         <a id="detail-open-new-layer" href="index.html" target="_blank" rel="noopener">Open as new layer</a>
+        <button id="detail-copy-pattern">Copy pattern</button>
         <button id="detail-close">Close</button>
       </div>
     </div>
@@ -616,17 +621,17 @@
        same exposure (no build step, every local script at a fixed URL
        every deploy), so its own scripts need the same protection.
        Bump alongside index.html's whenever any of these files change. -->
-  <script src="core/forms.js?v=20260917c"></script>
-  <script src="core/orbits.js?v=20260917c"></script>
-  <script src="core/symmetry.js?v=20260917c"></script>
-  <script src="core/curves.js?v=20260917c"></script>
-  <script src="core/tiling.js?v=20260917c"></script>
-  <script src="gallery-render.js?v=20260917c"></script>
+  <script src="core/forms.js?v=20260917d"></script>
+  <script src="core/orbits.js?v=20260917d"></script>
+  <script src="core/symmetry.js?v=20260917d"></script>
+  <script src="core/curves.js?v=20260917d"></script>
+  <script src="core/tiling.js?v=20260917d"></script>
+  <script src="gallery-render.js?v=20260917d"></script>
   <!-- Roadmap 1.11 gallery Phase (c), pass 3: the real Node combination-
        enumeration tool, loaded verbatim (not a browser-side rewrite) -
        now dual-environment-safe via the guard added to its own trailing
        module.exports line. -->
-  <script src="tools/gallery/combinations.js?v=20260917c"></script>
-  <script src="gallery.js?v=20260917c"></script>
+  <script src="tools/gallery/combinations.js?v=20260917d"></script>
+  <script src="gallery.js?v=20260917d"></script>
 </body>
 </html>

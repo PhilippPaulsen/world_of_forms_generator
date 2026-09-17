@@ -1005,6 +1005,38 @@ function openDetailView(entry) {
   // would be a regression for the common case (exploring/editing one
   // pattern standalone) - see the design session point 4.
   $('detail-open-new-layer').href = catalogEntryGeneratorUrl(entry, { layer: 'new' });
+  // Roadmap: catalog -> clipboard extension - lets an already-open
+  // generator session bring a pattern in as a new layer without
+  // navigating (sketch.js's #btn-paste-pattern/applyCatalogPatternToNewLayer()).
+  // .onclick (not addEventListener) is deliberate: exactly one handler
+  // at a time, closing over THIS entry - reassigned fresh on every
+  // openDetailView() call, same "rebuilt on every open, no stale
+  // content between entries" rule the two hrefs above already follow,
+  // just as a click handler instead of an href (this button has no
+  // destination to link to, so it can't be a plain <a> the way the
+  // other two are).
+  $('detail-copy-pattern').onclick = async () => {
+    const payload = JSON.stringify({
+      shape: entry.shape,
+      order: entry.order,
+      symmetryMode: entry.symmetryMode,
+      orbitIds: entry.orbitIds,
+    });
+    const btn = $('detail-copy-pattern');
+    const original = btn.textContent;
+    try {
+      await navigator.clipboard.writeText(payload);
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    } catch (err) {
+      // writeText() is broadly frictionless (unlike the generator
+      // side's readText()) but can still fail in an insecure context or
+      // a very old browser - reported, not silently swallowed.
+      console.warn('Failed to copy pattern to clipboard:', err.message);
+      btn.textContent = 'Copy failed';
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    }
+  };
 
   // Fuller citation than the grid/tile badges (Phase c task point 3) -
   // cleared and rebuilt on every open, same "no stale content between
