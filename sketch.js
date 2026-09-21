@@ -2691,6 +2691,7 @@ function addLayerToTimeline() {
             playbackLayerIndex: null,
             segmentDurationsMs: [],
             segmentPairings: [],
+            segmentFlips: [],
             elapsedMs: 0, startTime: null, playing: false,
         };
         layer._timelineSavedEnabled = layer.enabled;
@@ -2748,6 +2749,7 @@ function addLayerToTimeline() {
     // anything else, since it already lives in its own array entry.
     timeline.segmentDurationsMs.push(2000);
     timeline.segmentPairings.push(null); // Roadmap 1.8 Stage D phase (i): null = default (index) pairing
+    timeline.segmentFlips.push(null); // Stage D phase (iii): null = no End line reversed
     layer._timelineSavedEnabled = layer.enabled;
     layer.enabled = false;
 
@@ -2811,21 +2813,30 @@ function resolveTimelineKeyframeCoords(timeline, segmentIndex) {
     const layerTo = additionalLayers[idTo];
     if (!layerFrom || !layerTo) return { ok: false, reason: 'A keyframe layer no longer exists.' };
     const from = resolveConnectionsToCoords(layerFrom);
-    const toUnpaired = resolveConnectionsToCoords(layerTo);
-    if (from.length !== toUnpaired.length || from.length === 0) {
-        return { ok: false, reason: `Keyframe line count mismatch: Layer ${idFrom + 1} has ${from.length}, Layer ${idTo + 1} has ${toUnpaired.length} - counts must match.` };
+    const toStored = resolveConnectionsToCoords(layerTo);
+    if (from.length !== toStored.length || from.length === 0) {
+        return { ok: false, reason: `Keyframe line count mismatch: Layer ${idFrom + 1} has ${from.length}, Layer ${idTo + 1} has ${toStored.length} - counts must match.` };
     }
     // Roadmap 1.8 Stage D phase (i): the optional manual pairing
     // (timeline.segmentPairings[segmentIndex]) reorders the END side
-    // only - to[i] becomes toUnpaired[perm[i]] - so
+    // only - to[i] becomes toOriented[perm[i]] - so
     // applyLayerConnectionsMorphFrame() below, still untouched, keeps
     // pairing index i with index i exactly as before; a null/invalid
     // pairing is the old default (index order) and changes nothing.
-    // toUnpaired/perm are returned too for the pairing editor's own
+    // Stage D phase (iii): before pairing, End line j is REVERSED
+    // (endpoints swapped) when segmentFlips[segmentIndex][j] is true -
+    // indexed by End line, not by row, so up/down reordering never
+    // disturbs an orientation choice. A null/absent/invalid flips entry
+    // (every timeline authored before this phase has none) leaves
+    // toOriented === toStored, i.e. the pre-phase-(iii) behavior exactly.
+    // toStored (as authored), toOriented (flips applied, before pairing)
+    // and perm/flips are returned too for the pairing editor's own
     // displacement readout (timelineSegmentInfo()).
     const perm = getSegmentPairing(timeline, segmentIndex, from.length);
-    const to = perm ? perm.map(j => toUnpaired[j]) : toUnpaired;
-    return { ok: true, from, to, toUnpaired, perm, layerFrom, layerTo };
+    const flips = getSegmentFlips(timeline, segmentIndex, from.length);
+    const toOriented = applyFlipsToCoords(toStored, flips);
+    const to = perm ? perm.map(j => toOriented[j]) : toOriented;
+    return { ok: true, from, to, toStored, toOriented, perm, flips, layerFrom, layerTo };
 }
 
 // Roadmap 1.8 Stage D phase (i): a pairing is perm[i] = index into the
@@ -2849,14 +2860,35 @@ function getSegmentPairing(timeline, segmentIndex, n) {
     return isValidPairing(perm, n) ? perm : null;
 }
 
+// Roadmap 1.8 Stage D phase (iii): per-End-line orientation flips - an
+// array of n booleans (flips[j] true = End line j is read with its two
+// endpoints swapped). Same "stale means absent" rule as isValidPairing():
+// a wrong-length/non-boolean entry, or one with no true value, is
+// treated as no flips at all (null), which is also what every timeline
+// created before this phase has (no segmentFlips array at all).
+function isValidFlips(flips, n) {
+    return Array.isArray(flips) && flips.length === n && flips.every(f => typeof f === 'boolean');
+}
+function getSegmentFlips(timeline, segmentIndex, n) {
+    const flips = timeline.segmentFlips && timeline.segmentFlips[segmentIndex];
+    return isValidFlips(flips, n) && flips.some(f => f) ? flips : null;
+}
+// Returns the SAME array when flips is null (no copy, no allocation on
+// the common unflipped path); otherwise a new array with the flagged
+// lines' endpoints swapped.
+function applyFlipsToCoords(coords, flips) {
+    if (!flips) return coords;
+    return coords.map((c, j) => flips[j] ? { x1: c.x2, y1: c.y2, x2: c.x1, y2: c.y1 } : c);
+}
+
 // Roadmap 1.8 Stage D phase (i): sum of squared endpoint displacements
 // for a given pairing (design session point 3's cost proxy) - both
 // endpoints of every line, in the layer's own px coordinates. perm null
 // = index order. Purely an orientation aid, not used by rendering.
-function pairingDisplacement(from, toUnpaired, perm) {
+function pairingDisplacement(from, toOriented, perm) {
     let sum = 0;
     for (let i = 0; i < from.length; i++) {
-        const t = toUnpaired[perm ? perm[i] : i];
+        const t = toOriented[perm ? perm[i] : i];
         sum += (from[i].x1 - t.x1) ** 2 + (from[i].y1 - t.y1) ** 2
              + (from[i].x2 - t.x2) ** 2 + (from[i].y2 - t.y2) ** 2;
     }
@@ -2885,19 +2917,27 @@ function timelineSegmentInfo(segmentIndex) {
     if (!r.ok) return { ok: false, reason: r.reason };
     const n = r.from.length;
     const perm = r.perm || Array.from({ length: n }, (_, i) => i);
+    const flips = r.flips || new Array(n).fill(false);
+    const permIsDefault = perm.every((j, i) => j === i);
+    const flipsAny = flips.some(f => f);
     return {
-        ok: true, n, perm, isDefault: !r.perm || perm.every((j, i) => j === i),
+        ok: true, n, perm, flips, permIsDefault, flipsAny,
+        isDefault: permIsDefault && !flipsAny, // index pairing AND no flips
         fromLabels: completeConnectionLabels(r.layerFrom),
         toLabels: completeConnectionLabels(r.layerTo),
-        displacement: pairingDisplacement(r.from, r.toUnpaired, perm),
-        defaultDisplacement: pairingDisplacement(r.from, r.toUnpaired, null),
+        // displacement follows the effective (flipped) endpoints;
+        // defaultDisplacement is the plain default: index order, no flips.
+        displacement: pairingDisplacement(r.from, r.toOriented, perm),
+        defaultDisplacement: pairingDisplacement(r.from, r.toStored, null),
     };
 }
 
-// Roadmap 1.8 Stage D phase (ii): "Browse all" is offered only for
-// 2 <= n <= PAIRING_BROWSE_MAX_N (n! = 120 at n=5) - the agreed cutoff
-// from the phase (ii) design session; n=6 (720) and beyond stay
-// editor-only (up/down).
+// Roadmap 1.8 Stage D phase (ii)/(iii): "Browse all" is offered for
+// 1 <= n <= PAIRING_BROWSE_MAX_N, i.e. whenever the combined space
+// n!*2^n is greater than 1 (n=1 lists the two orientations; n=2..5 the
+// n! pairings, 120 at n=5) - the agreed cutoff from the phase (ii)
+// design session; n=6 (720) and beyond stay editor-only (up/down and
+// the per-row flip toggle).
 const PAIRING_BROWSE_MAX_N = 5;
 
 // All permutations of 0..n-1 in lexicographic order.
@@ -2910,20 +2950,42 @@ function allPermutations(n) {
     return out;
 }
 
-// Roadmap 1.8 Stage D phase (ii): every one of the segment's n! pairings
-// with its sum-of-squared-endpoint-displacement (pairingDisplacement(),
-// the same value the editor's readout shows), lexicographic order -
-// the caller sorts/filters. Live-resolved like timelineSegmentInfo();
-// null when the segment is unresolvable or n is outside the browse range.
+// Roadmap 1.8 Stage D phase (ii)/(iii): the segment's browsable
+// candidates, or null when the segment is unresolvable or the space is
+// not worth browsing / too large. Two-level design (phase (iii) design
+// session): correspondence (n!) and orientation (2^n) are NOT merged
+// into one flat list. For n >= 2 the candidates are the n! pairings (as
+// in phase (ii)), each with its sum-of-squared displacement computed at
+// the segment's CURRENT flips (so a listed value always equals what the
+// editor would show after picking it); per-line flips stay a separate,
+// linear per-row control (the editor's toggle). Only at n = 1, where
+// n! = 1 leaves orientation as the sole variable, are the two
+// orientations themselves the candidates (flips [false] / [true]) - a
+// 2-entry list, so still never a flat n!*2^n one. Offered whenever the
+// combined space n!*2^n is greater than 1 (true for every n >= 1) up to
+// PAIRING_BROWSE_MAX_N.
 function timelinePairingCandidates(segmentIndex) {
     if (!timeline || segmentIndex < 0 || segmentIndex >= timeline.segmentDurationsMs.length) return null;
     const r = resolveTimelineKeyframeCoords(timeline, segmentIndex);
     if (!r.ok) return null;
     const n = r.from.length;
-    if (n < 2 || n > PAIRING_BROWSE_MAX_N) return null;
+    let factorial = 1;
+    for (let i = 2; i <= n; i++) factorial *= i;
+    if (factorial * 2 ** n <= 1 || n > PAIRING_BROWSE_MAX_N) return null;
+    if (n === 1) {
+        return {
+            n,
+            orientation: true,
+            items: [false, true].map(f => ({
+                perm: [0], flips: [f],
+                displacement: pairingDisplacement(r.from, applyFlipsToCoords(r.toStored, [f]), [0]),
+            })),
+        };
+    }
     return {
         n,
-        items: allPermutations(n).map(perm => ({ perm, displacement: pairingDisplacement(r.from, r.toUnpaired, perm) })),
+        orientation: false,
+        items: allPermutations(n).map(perm => ({ perm, displacement: pairingDisplacement(r.from, r.toOriented, perm) })),
     };
 }
 
@@ -3039,8 +3101,31 @@ function previewTimelineSegmentMidpoint(segmentIndex) {
 // t=0.5 and refreshes the panel.
 function setTimelinePairing(segmentIndex, perm) {
     const info = timelineSegmentInfo(segmentIndex);
-    if (!info || !info.ok || !isValidPairing(perm, info.n)) return;
+    if (!info || !info.ok) return;
+    commitTimelineSegmentPairing(segmentIndex, perm, info.flips);
+}
+
+// Roadmap 1.8 Stage D phase (iii): flips End line `endIdx` (or sets it
+// explicitly when `value` is given) and keeps the current correspondence.
+function setTimelineFlip(segmentIndex, endIdx, value) {
+    const info = timelineSegmentInfo(segmentIndex);
+    if (!info || !info.ok || endIdx < 0 || endIdx >= info.n) return;
+    const flips = info.flips.slice();
+    flips[endIdx] = value === undefined ? !flips[endIdx] : !!value;
+    commitTimelineSegmentPairing(segmentIndex, info.perm, flips);
+}
+
+// Roadmap 1.8 Stage D phase (iii): the shared tail of every pairing edit
+// (correspondence, per-line flip, or both at once from the n=1 list) -
+// validates against the CURRENT line count, stores a default
+// correspondence / an all-false flips array as null (so "default" stays
+// a single state each), then parks the live preview and refreshes.
+function commitTimelineSegmentPairing(segmentIndex, perm, flips) {
+    const info = timelineSegmentInfo(segmentIndex);
+    if (!info || !info.ok || !isValidPairing(perm, info.n) || !isValidFlips(flips, info.n)) return;
     timeline.segmentPairings[segmentIndex] = perm.every((j, i) => j === i) ? null : perm.slice();
+    if (!timeline.segmentFlips) timeline.segmentFlips = timeline.segmentPairings.map(() => null);
+    timeline.segmentFlips[segmentIndex] = flips.some(f => f) ? flips.slice() : null;
     previewTimelineSegmentMidpoint(segmentIndex);
     updateTimelineControls();
     redraw();
@@ -3063,6 +3148,7 @@ function moveTimelinePairing(segmentIndex, row, delta) {
 function resetTimelinePairing(segmentIndex) {
     if (!timeline || segmentIndex < 0 || segmentIndex >= timeline.segmentPairings.length) return;
     timeline.segmentPairings[segmentIndex] = null;
+    if (timeline.segmentFlips) timeline.segmentFlips[segmentIndex] = null;
     previewTimelineSegmentMidpoint(segmentIndex);
     updateTimelineControls();
     redraw();
@@ -3109,12 +3195,15 @@ function spliceKeyframeOutOfTimeline(layerIndex) {
     if (pos > 0 && pos < segCountBefore) {
         timeline.segmentDurationsMs.splice(pos - 1, 2, 2000);
         timeline.segmentPairings.splice(pos - 1, 2, null);
+        if (timeline.segmentFlips) timeline.segmentFlips.splice(pos - 1, 2, null);
     } else if (pos === 0 && segCountBefore > 0) {
         timeline.segmentDurationsMs.splice(0, 1);
         timeline.segmentPairings.splice(0, 1);
+        if (timeline.segmentFlips) timeline.segmentFlips.splice(0, 1);
     } else if (pos === segCountBefore && segCountBefore > 0) {
         timeline.segmentDurationsMs.splice(pos - 1, 1);
         timeline.segmentPairings.splice(pos - 1, 1);
+        if (timeline.segmentFlips) timeline.segmentFlips.splice(pos - 1, 1);
     }
 
     if (timeline.keyframeLayerIds.length === 0) {
