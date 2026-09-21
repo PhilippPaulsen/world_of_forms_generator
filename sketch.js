@@ -657,6 +657,15 @@ function setup() {
     const timelinePairingMetric = select('#timeline-pairing-metric');
     const timelinePairingResetBtn = select('#btn-timeline-pairing-reset');
     let timelinePairingSegment = 0;
+    // Roadmap 1.8 Stage D phase (ii): "Browse all" list state.
+    const timelinePairingBrowseBtn = select('#btn-timeline-pairing-browse');
+    const timelinePairingBrowser = select('#timeline-pairing-browser');
+    const timelinePairingSortSelect = select('#timeline-pairing-sort');
+    const timelinePairingFilterInput = select('#timeline-pairing-filter');
+    const timelinePairingBrowserCount = select('#timeline-pairing-browser-count');
+    const timelinePairingBrowserList = select('#timeline-pairing-browser-list');
+    let timelinePairingBrowseOpen = false;
+    let timelinePairingBrowseJustOpened = false; // scroll the current row into view only when the list was just opened
     const offsetXGroup = select('#layer-offset-x-group');
     const offsetYGroup = select('#layer-offset-y-group');
     const meshPresetGroup = select('#layer-mesh-preset-group');
@@ -1055,6 +1064,7 @@ function setup() {
         if (!info || !info.ok) {
             timelinePairingMetric.html(info ? info.reason : '');
             timelinePairingResetBtn.elt.hidden = true;
+            renderTimelinePairingBrowser(null, seg);
             return;
         }
         if (timeline.segmentPairings[seg] && info.isDefault) timeline.segmentPairings[seg] = null;
@@ -1086,8 +1096,77 @@ function setup() {
             ? `Displacement \u03A3d\u00B2: ${fmt(info.displacement)} px\u00B2 (default order)`
             : `Displacement \u03A3d\u00B2: ${fmt(info.displacement)} px\u00B2 (default order: ${fmt(info.defaultDisplacement)})`);
         timelinePairingResetBtn.elt.hidden = info.isDefault;
+        renderTimelinePairingBrowser(info, seg);
     }
     window.renderTimelinePairingEditor = renderTimelinePairingEditor;
+
+    // Roadmap 1.8 Stage D phase (ii): the numeric "Browse all" list - one
+    // row per pairing (order = the End line assigned to Start 1..n, then
+    // its sum-of-squared-displacement), sorted by that value (ties broken
+    // by the permutation itself, so the order is deterministic) and
+    // optionally cut off at a max value. The row equal to the segment's
+    // CURRENT pairing is marked. Clicking a row commits it via
+    // setTimelinePairing() - the same call the up/down buttons end in.
+    // Hidden entirely unless the segment resolves and 2 <= n <=
+    // PAIRING_BROWSE_MAX_N (timelinePairingCandidates() returns null
+    // otherwise). Rebuilt fresh like the rest of the panel; the list's
+    // scroll position is preserved across rebuilds so stepping with
+    // up/down doesn't jump the list back to the top.
+    function renderTimelinePairingBrowser(info, seg) {
+        const cand = info ? timelinePairingCandidates(seg) : null;
+        if (timelinePairingBrowseBtn) timelinePairingBrowseBtn.elt.hidden = !cand;
+        const open = !!cand && timelinePairingBrowseOpen;
+        if (timelinePairingBrowseBtn) timelinePairingBrowseBtn.html(open ? 'Hide list' : 'Browse all');
+        if (timelinePairingBrowser) timelinePairingBrowser.elt.hidden = !open;
+        if (!open) {
+            timelinePairingBrowserList.elt.innerHTML = ''; // no stale rows behind a hidden list (n left the browse range, or the list was closed)
+            return;
+        }
+
+        const dir = timelinePairingSortSelect.elt.value === 'desc' ? -1 : 1;
+        const maxRaw = parseFloat(timelinePairingFilterInput.elt.value);
+        const hasMax = Number.isFinite(maxRaw);
+        const cmpPerm = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; };
+        const rows = cand.items
+            .filter(it => !hasMax || Math.round(it.displacement) <= maxRaw)
+            .sort((a, b) => (a.displacement - b.displacement) * dir || cmpPerm(a.perm, b.perm));
+
+        timelinePairingBrowserCount.html(`Showing ${rows.length} of ${cand.items.length} pairings (Start 1..${cand.n} \u2192 End ...)`);
+        const list = timelinePairingBrowserList.elt;
+        const prevScroll = list.scrollTop;
+        list.innerHTML = '';
+        const fmt = v => Math.round(v).toLocaleString('en-US');
+        let currentRow = null;
+        rows.forEach(it => {
+            const btn = document.createElement('button');
+            const isCurrent = it.perm.every((j, i) => j === info.perm[i]);
+            btn.className = 'pairing-browse-row' + (isCurrent ? ' current' : '');
+            btn.dataset.perm = it.perm.join('');
+            btn.title = it.perm.map((j, i) => `Start ${i + 1} \u2192 End ${j + 1}`).join(', ');
+            const order = document.createElement('span');
+            order.textContent = it.perm.map(j => j + 1).join(' ');
+            const d = document.createElement('span');
+            d.textContent = `${fmt(it.displacement)} px\u00B2`;
+            btn.appendChild(order);
+            btn.appendChild(d);
+            btn.addEventListener('click', () => setTimelinePairing(seg, it.perm));
+            list.appendChild(btn);
+            if (isCurrent) currentRow = btn;
+        });
+        list.scrollTop = prevScroll;
+        if (timelinePairingBrowseJustOpened && currentRow) currentRow.scrollIntoView({ block: 'nearest' });
+        timelinePairingBrowseJustOpened = false;
+    }
+
+    if (timelinePairingBrowseBtn) {
+        timelinePairingBrowseBtn.elt.addEventListener('click', () => {
+            timelinePairingBrowseOpen = !timelinePairingBrowseOpen;
+            timelinePairingBrowseJustOpened = timelinePairingBrowseOpen;
+            renderTimelinePairingEditor();
+        });
+    }
+    if (timelinePairingSortSelect) timelinePairingSortSelect.elt.addEventListener('change', () => renderTimelinePairingEditor());
+    if (timelinePairingFilterInput) timelinePairingFilterInput.elt.addEventListener('input', () => renderTimelinePairingEditor());
 
     if (timelinePairingSegmentSelect) {
         timelinePairingSegmentSelect.elt.addEventListener('change', () => {

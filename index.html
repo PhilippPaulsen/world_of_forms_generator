@@ -663,6 +663,23 @@
           <div id="timeline-pairing-list"></div>
           <div id="timeline-pairing-metric"></div>
           <button id="btn-timeline-pairing-reset" class="layer-btn" hidden>Reset order</button>
+          <!-- Roadmap 1.8 Stage D phase (ii): numeric "Browse all" list of
+               every pairing (n! entries, offered only for 2 <= n <= 5) with
+               its sum-of-squared-displacement, sortable/filterable; a click
+               commits that pairing exactly like the up/down buttons (see
+               sketch.js's setTimelinePairing()). No per-entry rendering. -->
+          <button id="btn-timeline-pairing-browse" class="layer-btn" hidden>Browse all</button>
+          <div id="timeline-pairing-browser" hidden>
+            <div class="pairing-browser-controls">
+              <select id="timeline-pairing-sort">
+                <option value="asc">Σd² ascending</option>
+                <option value="desc">Σd² descending</option>
+              </select>
+              <input type="number" id="timeline-pairing-filter" min="0" step="any" placeholder="max Σd²" title="Only list pairings with Σd² at most this value">
+            </div>
+            <div id="timeline-pairing-browser-count"></div>
+            <div id="timeline-pairing-browser-list"></div>
+          </div>
         </div>
         <span id="timeline-status"></span>
       </div>
