@@ -306,6 +306,61 @@ function computeThemeLineOrbits(nodes, centroid, shape, symmetryMode, outerCorne
     return { shape, symmetryMode, groupToken, groupOrder, nodeTotal: orbitNodes.length, rawPairCount: pairs.length, orbits, pairToOrbitId };
 }
 
+// Roadmap 1.8 Stage D phase (iv): the group's own elements as data, for
+// callers that need to APPLY a group element (not just partition pairs
+// into orbits) - the line-pairing editor's per-End-line "member choice"
+// (sketch.js's segmentMembers[]) maps an End line's node ids through
+// element g. Same construction computeThemeLineOrbits() uses (and shares
+// its private helpers), exposed without changing that function:
+//  - ops[g](point, center): the g-th element as a coordinate transform.
+//  - perms[g]: Map(node id -> node id), the permutation g induces on the
+//    non-free nodes (a free-endpoint node has no orbit - see
+//    computeThemeLineOrbits() - so it is absent from every perm; a caller
+//    must treat "id not in perms[g]" as "this line has no member choice").
+//  - element 0 is always the identity (_buildGroupOps() puts it first),
+//    so "as clicked" is index 0; the index order is otherwise fixed by
+//    (shape, symmetryMode) alone (identity, rotations, then - if the mode
+//    has a reflection - the reflection and each rotation composed with
+//    it), which is what makes a stored element index stable across
+//    rebuilds of the same grid.
+// Throws (via _nearestOrbitNodeId()) if the grid is not actually
+// symmetric under the claimed group - a real bug, not routine input.
+function computeGroupElements(nodes, centroid, shape, symmetryMode, outerCorners, eps = ORBIT_NODE_EPSILON) {
+    const orbitNodes = nodes.filter(n => !n.free);
+    const { rotAngles, hasReflection } = _rotAnglesAndReflectionFor(shape, symmetryMode);
+    const mirrorDir = _mirrorAxisDirPure(outerCorners, centroid, shape);
+    const ops = _buildGroupOps(rotAngles, hasReflection, mirrorDir);
+    const perms = ops.map(op => _computeNodePermutation(orbitNodes, centroid, op, eps));
+    return { groupOrder: ops.length, ops, perms, centroid };
+}
+
+// Cached wrapper - the timeline's per-frame path (resolveTimelineKeyframeCoords())
+// would otherwise rebuild this 0.1-4.4ms structure (measured, hex order 3
+// at the top) on every draw. Cache key: what actually determines the
+// elements is NOT just (shape, order, symmetryMode): a layer's grid can
+// be scaled or, for a 1.2 alternative-net construction, arbitrarily
+// rotated, which changes both the node coordinates the permutations are
+// snapped from and WHICH mirror axis _mirrorAxisDirPure() picks (element
+// indices among the reflections depend on it). So the entry is keyed on
+// the node array's identity (a WeakMap - one grid instance, garbage-
+// collected with its layer; every grid rebuild allocates a fresh array)
+// plus, within it, shape, symmetryMode, node count (a free endpoint
+// pushed onto the array later invalidates the entry, harmlessly), the
+// centroid and the first two outer corners (which fix the mirror axis).
+const _groupElementsCache = new WeakMap();
+function getGroupElementsCached(nodes, centroid, shape, symmetryMode, outerCorners) {
+    const oc0 = outerCorners[0], oc1 = outerCorners[1] || oc0;
+    const key = [shape, symmetryMode, nodes.length, centroid.x, centroid.y, oc0.x, oc0.y, oc1.x, oc1.y].join('|');
+    let byKey = _groupElementsCache.get(nodes);
+    if (!byKey) { byKey = new Map(); _groupElementsCache.set(nodes, byKey); }
+    let hit = byKey.get(key);
+    if (!hit) {
+        hit = computeGroupElements(nodes, centroid, shape, symmetryMode, outerCorners);
+        byKey.set(key, hit);
+    }
+    return hit;
+}
+
 // Roadmap 1.11 design session: Burnside's lemma applied directly
 // (|orbits| = average, over every group element g, of |Fix(g)| - the
 // count of pairs g maps to themselves) - an INDEPENDENT count computed
