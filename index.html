@@ -651,6 +651,19 @@
           </button>
         </div>
         <input type="range" id="timeline-progress-input" min="0" max="1" step="0.001" value="0" title="Progress" hidden>
+        <!-- Roadmap 1.8 Stage D phase (i): manual line pairing for one
+             timeline segment - see sketch.js's renderTimelinePairingEditor().
+             Row order = the pairing (Start line i -> the End line shown
+             on row i); up/down swap End assignments; every edit parks the
+             timeline at t=0.5 of that segment as a live preview. Hidden
+             until the timeline has at least one segment. -->
+        <div id="timeline-pairing" class="timeline-pairing" hidden>
+          <label>Line Pairing</label>
+          <select id="timeline-pairing-segment"></select>
+          <div id="timeline-pairing-list"></div>
+          <div id="timeline-pairing-metric"></div>
+          <button id="btn-timeline-pairing-reset" class="layer-btn" hidden>Reset order</button>
+        </div>
         <span id="timeline-status"></span>
       </div>
 

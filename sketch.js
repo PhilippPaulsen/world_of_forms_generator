@@ -650,6 +650,13 @@ function setup() {
     const timelinePlayBtn = select('#btn-timeline-play');
     const timelineProgressInput = select('#timeline-progress-input');
     const timelineStatusEl = select('#timeline-status');
+    // Roadmap 1.8 Stage D phase (i): manual line-pairing editor.
+    const timelinePairingPanel = select('#timeline-pairing');
+    const timelinePairingSegmentSelect = select('#timeline-pairing-segment');
+    const timelinePairingList = select('#timeline-pairing-list');
+    const timelinePairingMetric = select('#timeline-pairing-metric');
+    const timelinePairingResetBtn = select('#btn-timeline-pairing-reset');
+    let timelinePairingSegment = 0;
     const offsetXGroup = select('#layer-offset-x-group');
     const offsetYGroup = select('#layer-offset-y-group');
     const meshPresetGroup = select('#layer-mesh-preset-group');
@@ -1015,6 +1022,85 @@ function setup() {
     }
     window.renderTimelineKeyframeList = renderTimelineKeyframeList;
 
+    // Roadmap 1.8 Stage D phase (i): the manual line-pairing editor -
+    // for the selected segment, lists every Start line with the End line
+    // currently assigned to it (row order = the pairing), with up/down
+    // buttons that swap a row's End assignment with its neighbour's
+    // (moveTimelinePairing()), plus the sum-of-squared-endpoint-
+    // displacement readout for the current vs. default pairing. Rebuilt
+    // fresh on every call, same "no stale rows" discipline as
+    // renderTimelineKeyframeList(). A stored pairing that has gone stale
+    // (line count changed since - see isValidPairing()) is discarded here.
+    function renderTimelinePairingEditor() {
+        if (!timelinePairingPanel) return;
+        const segCount = timeline ? timeline.segmentDurationsMs.length : 0;
+        timelinePairingPanel.elt.hidden = segCount === 0;
+        if (segCount === 0) return;
+        timelinePairingSegment = Math.max(0, Math.min(segCount - 1, timelinePairingSegment));
+        const seg = timelinePairingSegment;
+
+        const sel = timelinePairingSegmentSelect.elt;
+        sel.innerHTML = '';
+        for (let i = 0; i < segCount; i++) {
+            const opt = document.createElement('option');
+            opt.value = String(i);
+            opt.textContent = `Segment ${i + 1}: Layer ${timeline.keyframeLayerIds[i] + 1} \u2192 Layer ${timeline.keyframeLayerIds[i + 1] + 1}`;
+            sel.appendChild(opt);
+        }
+        sel.value = String(seg);
+
+        const list = timelinePairingList.elt;
+        list.innerHTML = '';
+        const info = timelineSegmentInfo(seg);
+        if (!info || !info.ok) {
+            timelinePairingMetric.html(info ? info.reason : '');
+            timelinePairingResetBtn.elt.hidden = true;
+            return;
+        }
+        if (timeline.segmentPairings[seg] && info.isDefault) timeline.segmentPairings[seg] = null;
+        info.perm.forEach((endIdx, row) => {
+            const r = document.createElement('div');
+            r.className = 'pairing-row';
+            const label = document.createElement('span');
+            label.className = 'pairing-label';
+            label.textContent = `Start ${row + 1} (${info.fromLabels[row] || '?'}) \u2192 End ${endIdx + 1} (${info.toLabels[endIdx] || '?'})`;
+            const up = document.createElement('button');
+            up.className = 'layer-btn pairing-move-btn';
+            up.textContent = '\u25B2';
+            up.title = 'Swap this End assignment with the row above';
+            up.disabled = row === 0;
+            up.addEventListener('click', () => moveTimelinePairing(seg, row, -1));
+            const down = document.createElement('button');
+            down.className = 'layer-btn pairing-move-btn';
+            down.textContent = '\u25BC';
+            down.title = 'Swap this End assignment with the row below';
+            down.disabled = row === info.n - 1;
+            down.addEventListener('click', () => moveTimelinePairing(seg, row, 1));
+            r.appendChild(label);
+            r.appendChild(up);
+            r.appendChild(down);
+            list.appendChild(r);
+        });
+        const fmt = v => Math.round(v).toLocaleString('en-US');
+        timelinePairingMetric.html(info.isDefault
+            ? `Displacement \u03A3d\u00B2: ${fmt(info.displacement)} px\u00B2 (default order)`
+            : `Displacement \u03A3d\u00B2: ${fmt(info.displacement)} px\u00B2 (default order: ${fmt(info.defaultDisplacement)})`);
+        timelinePairingResetBtn.elt.hidden = info.isDefault;
+    }
+    window.renderTimelinePairingEditor = renderTimelinePairingEditor;
+
+    if (timelinePairingSegmentSelect) {
+        timelinePairingSegmentSelect.elt.addEventListener('change', () => {
+            timelinePairingSegment = parseInt(timelinePairingSegmentSelect.elt.value, 10) || 0;
+            previewTimelineSegmentMidpoint(timelinePairingSegment);
+            updateTimelineControls();
+            redraw();
+        });
+    }
+    if (timelinePairingResetBtn) {
+        timelinePairingResetBtn.elt.addEventListener('click', () => resetTimelinePairing(timelinePairingSegment));
+    }
+
     // Roadmap 1.8 Stage C phase (ii): shows/hides the timeline controls
     // based on THREE states, not phase (i)'s original binary create-vs-
     // remove toggle: no timeline yet (only "Add to Timeline" matters,
@@ -1043,6 +1129,7 @@ function setup() {
         if (timelinePlaybackControls) timelinePlaybackControls.elt.hidden = !playable;
         if (timelineProgressInput) timelineProgressInput.elt.hidden = !playable;
         renderTimelineKeyframeList();
+        renderTimelinePairingEditor();
         if (playable) syncTimelineDisplay();
     }
     window.updateTimelineControls = updateTimelineControls;
@@ -2809,6 +2896,51 @@ function setTimelineProgress(t) {
     timeline.playing = false;
     syncAnimationLoopState();
     applyTimelineFrame();
+}
+
+// Roadmap 1.8 Stage D phase (i): live preview for the pairing editor -
+// parks the timeline at t=0.5 of ONE segment (paused, applied
+// immediately so it shows even while noLoop() is active), i.e. exactly
+// the halfway frame, where a different pairing differs most visibly from
+// the endpoints. Every pairing edit and every segment switch calls this,
+// so a reorder is always directly visible on the canvas. Reuses the
+// timeline's own elapsedMs/applyTimelineFrame() path - no separate
+// preview render.
+function previewTimelineSegmentMidpoint(segmentIndex) {
+    if (!timeline || segmentIndex < 0 || segmentIndex >= timeline.segmentDurationsMs.length) return;
+    let acc = 0;
+    for (let i = 0; i < segmentIndex; i++) acc += timeline.segmentDurationsMs[i];
+    timeline.elapsedMs = acc + timeline.segmentDurationsMs[segmentIndex] / 2;
+    timeline.playing = false;
+    syncAnimationLoopState();
+    applyTimelineFrame();
+    if (window.syncTimelineDisplay) window.syncTimelineDisplay();
+}
+
+// Roadmap 1.8 Stage D phase (i): moves START line `row`'s assigned END
+// line up/down by swapping it with its neighbour's (delta -1/+1) - i.e.
+// reorders the End list against the fixed Start list. Stores the result
+// as segmentPairings[segmentIndex] (perm[i] = End line index assigned to
+// Start line i, see isValidPairing()); a result equal to the default
+// order is stored as null so "default" stays a single state.
+function moveTimelinePairing(segmentIndex, row, delta) {
+    const info = timelineSegmentInfo(segmentIndex);
+    if (!info || !info.ok) return;
+    const other = row + delta;
+    if (row < 0 || other < 0 || row >= info.n || other >= info.n) return;
+    const perm = info.perm.slice();
+    [perm[row], perm[other]] = [perm[other], perm[row]];
+    timeline.segmentPairings[segmentIndex] = perm.every((j, i) => j === i) ? null : perm;
+    previewTimelineSegmentMidpoint(segmentIndex);
+    updateTimelineControls();
+    redraw();
+}
+function resetTimelinePairing(segmentIndex) {
+    if (!timeline || segmentIndex < 0 || segmentIndex >= timeline.segmentPairings.length) return;
+    timeline.segmentPairings[segmentIndex] = null;
+    previewTimelineSegmentMidpoint(segmentIndex);
+    updateTimelineControls();
+    redraw();
 }
 
 // Roadmap 1.8 Stage C phase (ii): splices ONE keyframe out of the
