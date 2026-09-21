@@ -2524,6 +2524,7 @@ function addLayerToTimeline() {
             keyframeLayerIds: [idx],
             playbackLayerIndex: null,
             segmentDurationsMs: [],
+            segmentPairings: [],
             elapsedMs: 0, startTime: null, playing: false,
         };
         layer._timelineSavedEnabled = layer.enabled;
@@ -2580,6 +2581,7 @@ function addLayerToTimeline() {
     // expose this as an editable value per segment without touching
     // anything else, since it already lives in its own array entry.
     timeline.segmentDurationsMs.push(2000);
+    timeline.segmentPairings.push(null); // Roadmap 1.8 Stage D phase (i): null = default (index) pairing
     layer._timelineSavedEnabled = layer.enabled;
     layer.enabled = false;
 
@@ -2643,11 +2645,87 @@ function resolveTimelineKeyframeCoords(timeline, segmentIndex) {
     const layerTo = additionalLayers[idTo];
     if (!layerFrom || !layerTo) return { ok: false, reason: 'A keyframe layer no longer exists.' };
     const from = resolveConnectionsToCoords(layerFrom);
-    const to = resolveConnectionsToCoords(layerTo);
-    if (from.length !== to.length || from.length === 0) {
-        return { ok: false, reason: `Keyframe line count mismatch: Layer ${idFrom + 1} has ${from.length}, Layer ${idTo + 1} has ${to.length} - counts must match.` };
+    const toUnpaired = resolveConnectionsToCoords(layerTo);
+    if (from.length !== toUnpaired.length || from.length === 0) {
+        return { ok: false, reason: `Keyframe line count mismatch: Layer ${idFrom + 1} has ${from.length}, Layer ${idTo + 1} has ${toUnpaired.length} - counts must match.` };
     }
-    return { ok: true, from, to };
+    // Roadmap 1.8 Stage D phase (i): the optional manual pairing
+    // (timeline.segmentPairings[segmentIndex]) reorders the END side
+    // only - to[i] becomes toUnpaired[perm[i]] - so
+    // applyLayerConnectionsMorphFrame() below, still untouched, keeps
+    // pairing index i with index i exactly as before; a null/invalid
+    // pairing is the old default (index order) and changes nothing.
+    // toUnpaired/perm are returned too for the pairing editor's own
+    // displacement readout (timelineSegmentInfo()).
+    const perm = getSegmentPairing(timeline, segmentIndex, from.length);
+    const to = perm ? perm.map(j => toUnpaired[j]) : toUnpaired;
+    return { ok: true, from, to, toUnpaired, perm, layerFrom, layerTo };
+}
+
+// Roadmap 1.8 Stage D phase (i): a pairing is perm[i] = index into the
+// END keyframe's line list assigned to START line i. Must be a true
+// permutation of 0..n-1 for the CURRENT line count - a stored pairing
+// silently goes stale when a keyframe layer's line count changes (a
+// line added/removed), and is then treated as absent (default order)
+// rather than trusted; the editor (renderTimelinePairingEditor())
+// discards it on next render.
+function isValidPairing(perm, n) {
+    if (!Array.isArray(perm) || perm.length !== n) return false;
+    const seen = new Array(n).fill(false);
+    for (const j of perm) {
+        if (!Number.isInteger(j) || j < 0 || j >= n || seen[j]) return false;
+        seen[j] = true;
+    }
+    return true;
+}
+function getSegmentPairing(timeline, segmentIndex, n) {
+    const perm = timeline.segmentPairings && timeline.segmentPairings[segmentIndex];
+    return isValidPairing(perm, n) ? perm : null;
+}
+
+// Roadmap 1.8 Stage D phase (i): sum of squared endpoint displacements
+// for a given pairing (design session point 3's cost proxy) - both
+// endpoints of every line, in the layer's own px coordinates. perm null
+// = index order. Purely an orientation aid, not used by rendering.
+function pairingDisplacement(from, toUnpaired, perm) {
+    let sum = 0;
+    for (let i = 0; i < from.length; i++) {
+        const t = toUnpaired[perm ? perm[i] : i];
+        sum += (from[i].x1 - t.x1) ** 2 + (from[i].y1 - t.y1) ** 2
+             + (from[i].x2 - t.x2) ** 2 + (from[i].y2 - t.y2) ** 2;
+    }
+    return sum;
+}
+
+// Everything the pairing editor shows for one segment, resolved live
+// (same "live-resolved, never cached" discipline as the interpolation
+// itself). Labels are the real node-id pairs of the COMPLETE connections
+// only, in exactly resolveConnectionsToCoords()'s own filtered order, so
+// label i always names coords[i].
+function completeConnectionLabels(layer) {
+    const labels = [];
+    for (const conn of layer.connections) {
+        if (conn.length !== 2) continue;
+        const n1 = layer.nodes.find(n => n.id === conn[0]);
+        const n2 = layer.nodes.find(n => n.id === conn[1]);
+        if (!n1 || !n2) continue;
+        labels.push(`${conn[0]}\u2013${conn[1]}`);
+    }
+    return labels;
+}
+function timelineSegmentInfo(segmentIndex) {
+    if (!timeline || segmentIndex < 0 || segmentIndex >= timeline.segmentDurationsMs.length) return null;
+    const r = resolveTimelineKeyframeCoords(timeline, segmentIndex);
+    if (!r.ok) return { ok: false, reason: r.reason };
+    const n = r.from.length;
+    const perm = r.perm || Array.from({ length: n }, (_, i) => i);
+    return {
+        ok: true, n, perm, isDefault: !r.perm || perm.every((j, i) => j === i),
+        fromLabels: completeConnectionLabels(r.layerFrom),
+        toLabels: completeConnectionLabels(r.layerTo),
+        displacement: pairingDisplacement(r.from, r.toUnpaired, perm),
+        defaultDisplacement: pairingDisplacement(r.from, r.toUnpaired, null),
+    };
 }
 
 // Roadmap 1.8 Stage C: recomputes the timeline's playback layer's
@@ -2767,12 +2845,19 @@ function spliceKeyframeOutOfTimeline(layerIndex) {
     }
     const segCountBefore = timeline.segmentDurationsMs.length;
     timeline.keyframeLayerIds.splice(pos, 1);
+    // segmentPairings (Stage D phase (i)) is spliced in lockstep with
+    // segmentDurationsMs - a merged interior segment gets a fresh null
+    // (default) pairing, since its two neighbours' pairings referred to
+    // keyframes that are no longer adjacent.
     if (pos > 0 && pos < segCountBefore) {
         timeline.segmentDurationsMs.splice(pos - 1, 2, 2000);
+        timeline.segmentPairings.splice(pos - 1, 2, null);
     } else if (pos === 0 && segCountBefore > 0) {
         timeline.segmentDurationsMs.splice(0, 1);
+        timeline.segmentPairings.splice(0, 1);
     } else if (pos === segCountBefore && segCountBefore > 0) {
         timeline.segmentDurationsMs.splice(pos - 1, 1);
+        timeline.segmentPairings.splice(pos - 1, 1);
     }
 
     if (timeline.keyframeLayerIds.length === 0) {
