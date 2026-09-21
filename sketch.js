@@ -2715,6 +2715,7 @@ function addLayerToTimeline() {
             segmentDurationsMs: [],
             segmentPairings: [],
             segmentFlips: [],
+            segmentMembers: [],
             elapsedMs: 0, startTime: null, playing: false,
         };
         layer._timelineSavedEnabled = layer.enabled;
@@ -2773,6 +2774,7 @@ function addLayerToTimeline() {
     timeline.segmentDurationsMs.push(2000);
     timeline.segmentPairings.push(null); // Roadmap 1.8 Stage D phase (i): null = default (index) pairing
     timeline.segmentFlips.push(null); // Stage D phase (iii): null = no End line reversed
+    timeline.segmentMembers.push(null); // Stage D phase (iv): null = every End line as clicked (group element 0)
     layer._timelineSavedEnabled = layer.enabled;
     layer.enabled = false;
 
@@ -2852,14 +2854,33 @@ function resolveTimelineKeyframeCoords(timeline, segmentIndex) {
     // disturbs an orientation choice. A null/absent/invalid flips entry
     // (every timeline authored before this phase has none) leaves
     // toOriented === toStored, i.e. the pre-phase-(iii) behavior exactly.
-    // toStored (as authored), toOriented (flips applied, before pairing)
-    // and perm/flips are returned too for the pairing editor's own
-    // displacement readout (timelineSegmentInfo()).
+    // Stage D phase (iv): even before that, End line j is REPLACED by its
+    // image under group element segmentMembers[segmentIndex][j] (index 0
+    // = identity = as clicked; see core/orbits.js's computeGroupElements())
+    // - an interpolation-time substitution only: the End keyframe layer's
+    // own connections are never touched. Order member -> flip -> pairing;
+    // member and flip commute (reversing an image is the image of the
+    // reversal), so the order is a convention, not a constraint. A
+    // null/absent/all-zero/wrong-length members entry leaves toMembered
+    // === toStored (the SAME array, no group computation at all), i.e.
+    // exactly the pre-phase-(iv) behavior. An out-of-range single entry
+    // counts as 0; a line touching a free endpoint has no orbit, so its
+    // member choice is ignored (memberImageLines()).
+    // toStored (as authored), toMembered/toOriented (member / member+flip
+    // applied, before pairing) and perm/flips/members are returned too for
+    // the pairing editor's own displacement readout (timelineSegmentInfo()).
     const perm = getSegmentPairing(timeline, segmentIndex, from.length);
     const flips = getSegmentFlips(timeline, segmentIndex, from.length);
-    const toOriented = applyFlipsToCoords(toStored, flips);
+    let members = null, groupElements = null;
+    const rawMembers = timeline.segmentMembers && timeline.segmentMembers[segmentIndex];
+    if (Array.isArray(rawMembers) && rawMembers.length === from.length && rawMembers.some(g => g !== 0)) {
+        groupElements = layerGroupElements(layerTo);
+        members = groupElements ? sanitizeMembers(rawMembers, groupElements.groupOrder) : null;
+    }
+    const toMembered = members ? memberImageLines(layerTo, members, groupElements).map(l => l.coords) : toStored;
+    const toOriented = applyFlipsToCoords(toMembered, flips);
     const to = perm ? perm.map(j => toOriented[j]) : toOriented;
-    return { ok: true, from, to, toStored, toOriented, perm, flips, layerFrom, layerTo };
+    return { ok: true, from, to, toStored, toMembered, toOriented, perm, flips, members, groupElements, layerFrom, layerTo };
 }
 
 // Roadmap 1.8 Stage D phase (i): a pairing is perm[i] = index into the
@@ -2904,6 +2925,78 @@ function applyFlipsToCoords(coords, flips) {
     return coords.map((c, j) => flips[j] ? { x1: c.x2, y1: c.y2, x2: c.x1, y2: c.y1 } : c);
 }
 
+// Roadmap 1.8 Stage D phase (iv): per-End-line member choice - an array
+// of n group-element indices (segmentMembers[seg][j] = element applied to
+// End line j; 0 = identity = as clicked). Same "stale means absent" rule
+// as the pairing/flips arrays for the LENGTH (a wrong-length entry is
+// ignored wholesale); an individual out-of-range index is treated as 0.
+function sanitizeMembers(raw, groupOrder) {
+    const clean = raw.map(g => Number.isInteger(g) && g >= 0 && g < groupOrder ? g : 0);
+    return clean.some(g => g !== 0) ? clean : null;
+}
+function isValidMemberArray(members, n) {
+    return Array.isArray(members) && members.length === n && members.every(g => Number.isInteger(g) && g >= 0);
+}
+
+// The group elements (core/orbits.js, cached per grid) of a layer's own
+// grid/shape/symmetryMode, or null if they cannot be built (a grid that
+// is not symmetric under its claimed group makes the engine throw - a
+// real bug elsewhere, reported once and not allowed to take the render
+// loop down; callers fall back to "no member choice").
+let groupElementsWarned = false;
+function layerGroupElements(layer) {
+    try {
+        return getGroupElementsCached(layer.nodes, layer.centroid, layer.shape, layer.symmetryMode, layer.outerCorners);
+    } catch (err) {
+        if (!groupElementsWarned) { groupElementsWarned = true; console.warn('Group elements unavailable for a layer grid - member choice disabled:', err.message); }
+        return null;
+    }
+}
+
+// A layer's complete lines as node-id pairs, in resolveConnectionsToCoords()'s
+// own filtered order (so index j names the same line in both).
+function completeConnectionIds(layer) {
+    const ids = [];
+    for (const conn of layer.connections) {
+        if (conn.length !== 2) continue;
+        const n1 = layer.nodes.find(n => n.id === conn[0]);
+        const n2 = layer.nodes.find(n => n.id === conn[1]);
+        if (!n1 || !n2) continue;
+        ids.push([conn[0], conn[1]]);
+    }
+    return ids;
+}
+
+// Each complete line of `layer`, replaced by its image under group
+// element members[j] (null members = as clicked): {ids, coords} in
+// resolveConnectionsToCoords()'s filtered order. Maps the line's node ids
+// through the element's permutation and reads the image's coordinates
+// from the layer's own nodes - the group is a symmetry of the grid, so
+// both image nodes exist. A line with a free endpoint is absent from the
+// permutation (no orbit) and stays as clicked.
+function memberImageLines(layer, members, ge) {
+    const lines = [];
+    let j = 0;
+    for (const conn of layer.connections) {
+        if (conn.length !== 2) continue;
+        const n1 = layer.nodes.find(n => n.id === conn[0]);
+        const n2 = layer.nodes.find(n => n.id === conn[1]);
+        if (!n1 || !n2) continue;
+        let ids = [conn[0], conn[1]], a = n1, b = n2;
+        const g = members ? members[j] : 0;
+        if (g > 0) {
+            const perm = ge.perms[g];
+            const i1 = perm.get(conn[0]), i2 = perm.get(conn[1]);
+            const m1 = i1 !== undefined ? layer.nodes.find(n => n.id === i1) : null;
+            const m2 = i2 !== undefined ? layer.nodes.find(n => n.id === i2) : null;
+            if (m1 && m2) { ids = [i1, i2]; a = m1; b = m2; }
+        }
+        lines.push({ ids, coords: { x1: a.x, y1: a.y, x2: b.x, y2: b.y } });
+        j++;
+    }
+    return lines;
+}
+
 // Roadmap 1.8 Stage D phase (i): sum of squared endpoint displacements
 // for a given pairing (design session point 3's cost proxy) - both
 // endpoints of every line, in the layer's own px coordinates. perm null
@@ -2941,15 +3034,22 @@ function timelineSegmentInfo(segmentIndex) {
     const n = r.from.length;
     const perm = r.perm || Array.from({ length: n }, (_, i) => i);
     const flips = r.flips || new Array(n).fill(false);
+    const members = r.members || new Array(n).fill(0);
     const permIsDefault = perm.every((j, i) => j === i);
     const flipsAny = flips.some(f => f);
+    const membersAny = members.some(g => g !== 0);
     return {
-        ok: true, n, perm, flips, permIsDefault, flipsAny,
-        isDefault: permIsDefault && !flipsAny, // index pairing AND no flips
+        ok: true, n, perm, flips, members, permIsDefault, flipsAny, membersAny,
+        isDefault: permIsDefault && !flipsAny && !membersAny, // index pairing, no flips, every End line as clicked
         fromLabels: completeConnectionLabels(r.layerFrom),
-        toLabels: completeConnectionLabels(r.layerTo),
-        // displacement follows the effective (flipped) endpoints;
-        // defaultDisplacement is the plain default: index order, no flips.
+        // End labels name the line actually used (its member image),
+        // not the authored one, so a chosen member is visible in the editor.
+        toLabels: r.members
+            ? memberImageLines(r.layerTo, r.members, r.groupElements).map(l => `${l.ids[0]}\u2013${l.ids[1]}`)
+            : completeConnectionLabels(r.layerTo),
+        // displacement follows the effective (member+flip) endpoints;
+        // defaultDisplacement is the plain default: index order, no flips,
+        // no member substitution (as authored).
         displacement: pairingDisplacement(r.from, r.toOriented, perm),
         defaultDisplacement: pairingDisplacement(r.from, r.toStored, null),
     };
@@ -2973,20 +3073,104 @@ function allPermutations(n) {
     return out;
 }
 
-// Roadmap 1.8 Stage D phase (ii)/(iii): the segment's browsable
+// Roadmap 1.8 Stage D phase (iv): the picture ONE morphing line draws -
+// its segment at t = 0.25/0.5/0.75, every image under all group elements
+// (exactly what drawConnectionWithSymmetry() puts on the canvas for a
+// straight line), endpoints quantized to 1e-3 px and each segment
+// canonically ordered/sorted, so two transitions that render identically
+// get the same string. 1e-3 px sits between the ~1e-9 px float noise of
+// exact lattice transforms and the tens-of-px differences between
+// genuinely different transitions (core/orbits.js's snap tolerance is
+// 1e-6, core/faces.js's 0.5 for arbitrary user geometry - neither fits
+// exact-transform output as well). Three frames, not one, so two
+// transitions that merely coincide at t=0.5 are not merged. Compares
+// coordinates, never a symbolic stabilizer computed in isolation - the
+// equivalence depends on the line it is paired with (a Start line on a
+// mirror axis makes mirror-image End variants identical; an off-axis one
+// does not).
+const ROW_VARIANT_FRAMES = [0.25, 0.5, 0.75];
+function transitionPictureKey(a, b, ge) {
+    const q = v => Math.round(v * 1000) / 1000;
+    const c = ge.centroid;
+    return ROW_VARIANT_FRAMES.map(t => {
+        const p = { x: a.x1 + (b.x1 - a.x1) * t, y: a.y1 + (b.y1 - a.y1) * t };
+        const r = { x: a.x2 + (b.x2 - a.x2) * t, y: a.y2 + (b.y2 - a.y2) * t };
+        const segs = new Set();
+        for (const op of ge.ops) {
+            const P = op(p, c), Q = op(r, c);
+            const s1 = `${q(P.x)},${q(P.y)}`, s2 = `${q(Q.x)},${q(Q.y)}`;
+            segs.add(s1 < s2 ? s1 + '~' + s2 : s2 + '~' + s1);
+        }
+        return [...segs].sort().join('|');
+    }).join('##');
+}
+
+// Roadmap 1.8 Stage D phase (iv): the DEDUPLICATED End-line variants for
+// one row - every (group element g, flip f) applied to the End line
+// currently assigned to that row (perm[row]), keeping only the first
+// candidate of each distinct rendered picture against that row's own
+// Start line. Candidate order is g ascending, unflipped before flipped,
+// so the kept representative is always the "simplest": identity and
+// unflipped first, then the smallest g. Returns
+// {variants: [{g, f, ids, coords, key, displacement}], currentKey,
+// groupOrder}; currentKey is the picture key of the row's CURRENT state
+// (which may be a duplicate not itself listed - callers mark whichever
+// variant shares its key as current). Without group elements (grid
+// unavailable) only identity is offered and flips are not deduplicated.
+// Lines with a free endpoint have no member choice (identity only).
+function timelineRowVariants(segmentIndex, row) {
+    if (!timeline) return null;
+    const r = resolveTimelineKeyframeCoords(timeline, segmentIndex);
+    if (!r.ok || row < 0 || row >= r.from.length) return null;
+    const perm = r.perm || Array.from({ length: r.from.length }, (_, i) => i);
+    const j = perm[row];
+    const layerTo = r.layerTo;
+    const authored = completeConnectionIds(layerTo)[j];
+    const ge = layerGroupElements(layerTo);
+    const a = r.from[row];
+    const groupOrder = ge ? ge.groupOrder : 1;
+    const nodeOf = id => layerTo.nodes.find(n => n.id === id);
+    const variants = [];
+    const seen = new Set();
+    for (let g = 0; g < groupOrder; g++) {
+        let ids = authored;
+        if (g > 0) {
+            const i1 = ge.perms[g].get(authored[0]), i2 = ge.perms[g].get(authored[1]);
+            if (i1 === undefined || i2 === undefined) continue; // free endpoint: no orbit, no member choice
+            ids = [i1, i2];
+        }
+        const n1 = nodeOf(ids[0]), n2 = nodeOf(ids[1]);
+        if (!n1 || !n2) continue;
+        for (const f of [false, true]) {
+            const coords = f ? { x1: n2.x, y1: n2.y, x2: n1.x, y2: n1.y } : { x1: n1.x, y1: n1.y, x2: n2.x, y2: n2.y };
+            const key = ge ? transitionPictureKey(a, coords, ge) : `g${g}f${f ? 1 : 0}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            variants.push({
+                g, f, ids: f ? [ids[1], ids[0]] : ids, coords, key,
+                displacement: (a.x1 - coords.x1) ** 2 + (a.y1 - coords.y1) ** 2 + (a.x2 - coords.x2) ** 2 + (a.y2 - coords.y2) ** 2,
+            });
+        }
+    }
+    const currentKey = ge ? transitionPictureKey(a, r.to[row], ge) : null;
+    return { variants, currentKey, groupOrder };
+}
+
+// Roadmap 1.8 Stage D phase (ii)/(iii)/(iv): the segment's browsable
 // candidates, or null when the segment is unresolvable or the space is
 // not worth browsing / too large. Two-level design (phase (iii) design
-// session): correspondence (n!) and orientation (2^n) are NOT merged
+// session): correspondence (n!) and per-line variants are NOT merged
 // into one flat list. For n >= 2 the candidates are the n! pairings (as
 // in phase (ii)), each with its sum-of-squared displacement computed at
-// the segment's CURRENT flips (so a listed value always equals what the
-// editor would show after picking it); per-line flips stay a separate,
-// linear per-row control (the editor's toggle). Only at n = 1, where
-// n! = 1 leaves orientation as the sole variable, are the two
-// orientations themselves the candidates (flips [false] / [true]) - a
-// 2-entry list, so still never a flat n!*2^n one. Offered whenever the
-// combined space n!*2^n is greater than 1 (true for every n >= 1) up to
-// PAIRING_BROWSE_MAX_N.
+// the segment's CURRENT flips/members (so a listed value always equals
+// what the editor would show after picking it); per-line variants stay a
+// separate, linear per-row control. Only at n = 1, where n! = 1 leaves the
+// line's own variants as the sole variable, are those variants the
+// candidates: the deduplicated (group element, flip) images of the End
+// line (timelineRowVariants()), each carrying perm/flips/members ready
+// to commit - a list of at most 2*|G| entries (2 without symmetry), still
+// never a flat n!*2^n one. Offered whenever the combined space n!*2^n is
+// greater than 1 (true for every n >= 1) up to PAIRING_BROWSE_MAX_N.
 function timelinePairingCandidates(segmentIndex) {
     if (!timeline || segmentIndex < 0 || segmentIndex >= timeline.segmentDurationsMs.length) return null;
     const r = resolveTimelineKeyframeCoords(timeline, segmentIndex);
@@ -2996,12 +3180,15 @@ function timelinePairingCandidates(segmentIndex) {
     for (let i = 2; i <= n; i++) factorial *= i;
     if (factorial * 2 ** n <= 1 || n > PAIRING_BROWSE_MAX_N) return null;
     if (n === 1) {
+        const rv = timelineRowVariants(segmentIndex, 0);
+        if (!rv) return null;
         return {
             n,
             orientation: true,
-            items: [false, true].map(f => ({
-                perm: [0], flips: [f],
-                displacement: pairingDisplacement(r.from, applyFlipsToCoords(r.toStored, [f]), [0]),
+            currentKey: rv.currentKey,
+            items: rv.variants.map(v => ({
+                perm: [0], flips: [v.f], members: [v.g], key: v.key, ids: v.ids,
+                displacement: v.displacement,
             })),
         };
     }
@@ -3143,15 +3330,34 @@ function setTimelineFlip(segmentIndex, endIdx, value) {
 // validates against the CURRENT line count, stores a default
 // correspondence / an all-false flips array as null (so "default" stays
 // a single state each), then parks the live preview and refreshes.
-function commitTimelineSegmentPairing(segmentIndex, perm, flips) {
+function commitTimelineSegmentPairing(segmentIndex, perm, flips, members) {
     const info = timelineSegmentInfo(segmentIndex);
-    if (!info || !info.ok || !isValidPairing(perm, info.n) || !isValidFlips(flips, info.n)) return;
+    if (!info || !info.ok) return;
+    if (members === undefined) members = info.members; // callers that don't touch member choice keep it
+    if (!isValidPairing(perm, info.n) || !isValidFlips(flips, info.n) || !isValidMemberArray(members, info.n)) return;
     timeline.segmentPairings[segmentIndex] = perm.every((j, i) => j === i) ? null : perm.slice();
     if (!timeline.segmentFlips) timeline.segmentFlips = timeline.segmentPairings.map(() => null);
     timeline.segmentFlips[segmentIndex] = flips.some(f => f) ? flips.slice() : null;
+    if (!timeline.segmentMembers) timeline.segmentMembers = timeline.segmentPairings.map(() => null);
+    timeline.segmentMembers[segmentIndex] = members.some(g => g !== 0) ? members.slice() : null;
     previewTimelineSegmentMidpoint(segmentIndex);
     updateTimelineControls();
     redraw();
+}
+
+// Roadmap 1.8 Stage D phase (iv): sets End line `endIdx`'s member choice
+// (group element index; 0 = as clicked), keeping correspondence and
+// flips. Refused (no state change) for an index outside the End layer's
+// group - the number of elements comes from that layer's own grid/mode.
+function setTimelineMember(segmentIndex, endIdx, g) {
+    const info = timelineSegmentInfo(segmentIndex);
+    if (!info || !info.ok || endIdx < 0 || endIdx >= info.n || !Number.isInteger(g) || g < 0) return;
+    const r = resolveTimelineKeyframeCoords(timeline, segmentIndex);
+    const ge = layerGroupElements(r.layerTo);
+    if (g > 0 && (!ge || g >= ge.groupOrder)) return;
+    const members = info.members.slice();
+    members[endIdx] = g;
+    commitTimelineSegmentPairing(segmentIndex, info.perm, info.flips, members);
 }
 
 // Roadmap 1.8 Stage D phase (i): moves START line `row`'s assigned END
@@ -3172,6 +3378,7 @@ function resetTimelinePairing(segmentIndex) {
     if (!timeline || segmentIndex < 0 || segmentIndex >= timeline.segmentPairings.length) return;
     timeline.segmentPairings[segmentIndex] = null;
     if (timeline.segmentFlips) timeline.segmentFlips[segmentIndex] = null;
+    if (timeline.segmentMembers) timeline.segmentMembers[segmentIndex] = null;
     previewTimelineSegmentMidpoint(segmentIndex);
     updateTimelineControls();
     redraw();
@@ -3219,14 +3426,17 @@ function spliceKeyframeOutOfTimeline(layerIndex) {
         timeline.segmentDurationsMs.splice(pos - 1, 2, 2000);
         timeline.segmentPairings.splice(pos - 1, 2, null);
         if (timeline.segmentFlips) timeline.segmentFlips.splice(pos - 1, 2, null);
+        if (timeline.segmentMembers) timeline.segmentMembers.splice(pos - 1, 2, null);
     } else if (pos === 0 && segCountBefore > 0) {
         timeline.segmentDurationsMs.splice(0, 1);
         timeline.segmentPairings.splice(0, 1);
         if (timeline.segmentFlips) timeline.segmentFlips.splice(0, 1);
+        if (timeline.segmentMembers) timeline.segmentMembers.splice(0, 1);
     } else if (pos === segCountBefore && segCountBefore > 0) {
         timeline.segmentDurationsMs.splice(pos - 1, 1);
         timeline.segmentPairings.splice(pos - 1, 1);
         if (timeline.segmentFlips) timeline.segmentFlips.splice(pos - 1, 1);
+        if (timeline.segmentMembers) timeline.segmentMembers.splice(pos - 1, 1);
     }
 
     if (timeline.keyframeLayerIds.length === 0) {
