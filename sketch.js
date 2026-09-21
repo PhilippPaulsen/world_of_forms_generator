@@ -1067,13 +1067,18 @@ function setup() {
             renderTimelinePairingBrowser(null, seg);
             return;
         }
-        if (timeline.segmentPairings[seg] && info.isDefault) timeline.segmentPairings[seg] = null;
+        if (timeline.segmentPairings[seg] && info.permIsDefault) timeline.segmentPairings[seg] = null;
+        if (timeline.segmentFlips && timeline.segmentFlips[seg] && !info.flipsAny) timeline.segmentFlips[seg] = null;
         info.perm.forEach((endIdx, row) => {
             const r = document.createElement('div');
             r.className = 'pairing-row';
             const label = document.createElement('span');
             label.className = 'pairing-label';
-            label.textContent = `Start ${row + 1} (${info.fromLabels[row] || '?'}) \u2192 End ${endIdx + 1} (${info.toLabels[endIdx] || '?'})`;
+            // Stage D phase (iii): a flipped End line is shown with its
+            // node pair reversed (the order it is actually read in).
+            const endLabel = info.toLabels[endIdx] || '?';
+            const flipped = info.flips[endIdx];
+            label.textContent = `Start ${row + 1} (${info.fromLabels[row] || '?'}) \u2192 End ${endIdx + 1} (${flipped ? endLabel.split('\u2013').reverse().join('\u2013') : endLabel})${flipped ? ' \u21C4' : ''}`;
             const up = document.createElement('button');
             up.className = 'layer-btn pairing-move-btn';
             up.textContent = '\u25B2';
@@ -1086,15 +1091,24 @@ function setup() {
             down.title = 'Swap this End assignment with the row below';
             down.disabled = row === info.n - 1;
             down.addEventListener('click', () => moveTimelinePairing(seg, row, 1));
+            // Stage D phase (iii): per-row orientation toggle - reverses
+            // THIS row's assigned End line (indexed by End line, so it
+            // stays with that line when rows are reordered).
+            const flip = document.createElement('button');
+            flip.className = 'layer-btn pairing-move-btn pairing-flip-btn' + (flipped ? ' active' : '');
+            flip.textContent = '\u21C4';
+            flip.title = flipped ? 'This End line is reversed - click to restore its stored direction' : 'Reverse this End line (swap which End endpoint each Start endpoint moves to)';
+            flip.addEventListener('click', () => setTimelineFlip(seg, endIdx));
             r.appendChild(label);
             r.appendChild(up);
             r.appendChild(down);
+            r.appendChild(flip);
             list.appendChild(r);
         });
         const fmt = v => Math.round(v).toLocaleString('en-US');
         timelinePairingMetric.html(info.isDefault
-            ? `Displacement \u03A3d\u00B2: ${fmt(info.displacement)} px\u00B2 (default order)`
-            : `Displacement \u03A3d\u00B2: ${fmt(info.displacement)} px\u00B2 (default order: ${fmt(info.defaultDisplacement)})`);
+            ? `Displacement \u03A3d\u00B2: ${fmt(info.displacement)} px\u00B2 (default)`
+            : `Displacement \u03A3d\u00B2: ${fmt(info.displacement)} px\u00B2 (default: ${fmt(info.defaultDisplacement)})`);
         timelinePairingResetBtn.elt.hidden = info.isDefault;
         renderTimelinePairingBrowser(info, seg);
     }
@@ -1107,9 +1121,9 @@ function setup() {
     // optionally cut off at a max value. The row equal to the segment's
     // CURRENT pairing is marked. Clicking a row commits it via
     // setTimelinePairing() - the same call the up/down buttons end in.
-    // Hidden entirely unless the segment resolves and 2 <= n <=
+    // Hidden entirely unless the segment resolves and 1 <= n <=
     // PAIRING_BROWSE_MAX_N (timelinePairingCandidates() returns null
-    // otherwise). Rebuilt fresh like the rest of the panel; the list's
+    // otherwise; at n=1 the rows are the two orientations, not pairings). Rebuilt fresh like the rest of the panel; the list's
     // scroll position is preserved across rebuilds so stepping with
     // up/down doesn't jump the list back to the top.
     function renderTimelinePairingBrowser(info, seg) {
@@ -1131,7 +1145,9 @@ function setup() {
             .filter(it => !hasMax || Math.round(it.displacement) <= maxRaw)
             .sort((a, b) => (a.displacement - b.displacement) * dir || cmpPerm(a.perm, b.perm));
 
-        timelinePairingBrowserCount.html(`Showing ${rows.length} of ${cand.items.length} pairings (Start 1..${cand.n} \u2192 End ...)`);
+        timelinePairingBrowserCount.html(cand.orientation
+            ? `Showing ${rows.length} of ${cand.items.length} orientations (Start 1 \u2192 End 1)`
+            : `Showing ${rows.length} of ${cand.items.length} pairings (Start 1..${cand.n} \u2192 End ...)`);
         const list = timelinePairingBrowserList.elt;
         const prevScroll = list.scrollTop;
         list.innerHTML = '';
@@ -1139,17 +1155,24 @@ function setup() {
         let currentRow = null;
         rows.forEach(it => {
             const btn = document.createElement('button');
-            const isCurrent = it.perm.every((j, i) => j === info.perm[i]);
+            const isCurrent = it.perm.every((j, i) => j === info.perm[i]) && (!cand.orientation || it.flips[0] === info.flips[0]);
             btn.className = 'pairing-browse-row' + (isCurrent ? ' current' : '');
             btn.dataset.perm = it.perm.join('');
-            btn.title = it.perm.map((j, i) => `Start ${i + 1} \u2192 End ${j + 1}`).join(', ');
+            if (cand.orientation) btn.dataset.flip = it.flips[0] ? '1' : '0';
+            // Stage D phase (iii), n=1: the two candidates are the End line
+            // as stored vs. reversed (see timelinePairingCandidates()).
+            btn.title = cand.orientation
+                ? (it.flips[0] ? 'Start 1 \u2192 End 1, End line reversed' : 'Start 1 \u2192 End 1, End line as stored')
+                : it.perm.map((j, i) => `Start ${i + 1} \u2192 End ${j + 1}`).join(', ');
             const order = document.createElement('span');
-            order.textContent = it.perm.map(j => j + 1).join(' ');
+            order.textContent = cand.orientation ? (it.flips[0] ? 'reversed \u21C4' : 'as stored') : it.perm.map(j => j + 1).join(' ');
             const d = document.createElement('span');
             d.textContent = `${fmt(it.displacement)} px\u00B2`;
             btn.appendChild(order);
             btn.appendChild(d);
-            btn.addEventListener('click', () => setTimelinePairing(seg, it.perm));
+            btn.addEventListener('click', () => cand.orientation
+                ? commitTimelineSegmentPairing(seg, it.perm, it.flips)
+                : setTimelinePairing(seg, it.perm));
             list.appendChild(btn);
             if (isCurrent) currentRow = btn;
         });

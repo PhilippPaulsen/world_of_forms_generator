@@ -212,3 +212,6 @@ body.dark {
 .pairing-browse-row { display: flex; justify-content: space-between; width: 100%; padding: 2px 6px; border: 0; border-bottom: 1px solid #eee; background: #fff; font: 12px monospace; text-align: left; cursor: pointer; }
 .pairing-browse-row:hover { background: #f0f0f0; }
 .pairing-browse-row.current { background: #000; color: #fff; }
+
+/* Roadmap 1.8 Stage D phase (iii): per-row End-line orientation toggle */
+.pairing-flip-btn.active { background: #000; color: #fff; }
