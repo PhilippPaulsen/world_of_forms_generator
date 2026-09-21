@@ -2815,6 +2815,39 @@ function timelineSegmentInfo(segmentIndex) {
     };
 }
 
+// Roadmap 1.8 Stage D phase (ii): "Browse all" is offered only for
+// 2 <= n <= PAIRING_BROWSE_MAX_N (n! = 120 at n=5) - the agreed cutoff
+// from the phase (ii) design session; n=6 (720) and beyond stay
+// editor-only (up/down).
+const PAIRING_BROWSE_MAX_N = 5;
+
+// All permutations of 0..n-1 in lexicographic order.
+function allPermutations(n) {
+    const out = [];
+    (function go(prefix, rest) {
+        if (rest.length === 0) { out.push(prefix); return; }
+        rest.forEach((x, i) => go([...prefix, x], rest.filter((_, j) => j !== i)));
+    })([], Array.from({ length: n }, (_, i) => i));
+    return out;
+}
+
+// Roadmap 1.8 Stage D phase (ii): every one of the segment's n! pairings
+// with its sum-of-squared-endpoint-displacement (pairingDisplacement(),
+// the same value the editor's readout shows), lexicographic order -
+// the caller sorts/filters. Live-resolved like timelineSegmentInfo();
+// null when the segment is unresolvable or n is outside the browse range.
+function timelinePairingCandidates(segmentIndex) {
+    if (!timeline || segmentIndex < 0 || segmentIndex >= timeline.segmentDurationsMs.length) return null;
+    const r = resolveTimelineKeyframeCoords(timeline, segmentIndex);
+    if (!r.ok) return null;
+    const n = r.from.length;
+    if (n < 2 || n > PAIRING_BROWSE_MAX_N) return null;
+    return {
+        n,
+        items: allPermutations(n).map(perm => ({ perm, displacement: pairingDisplacement(r.from, r.toUnpaired, perm) })),
+    };
+}
+
 // Roadmap 1.8 Stage C: recomputes the timeline's playback layer's
 // interpolated render substitute for the CURRENT progress - mirrors
 // applyLayerAnimationFrame()'s own time bookkeeping, generalized (phase
@@ -2917,12 +2950,28 @@ function previewTimelineSegmentMidpoint(segmentIndex) {
     if (window.syncTimelineDisplay) window.syncTimelineDisplay();
 }
 
+// Roadmap 1.8 Stage D phase (ii): the ONE place a pairing is committed -
+// used by both the up/down editor (moveTimelinePairing() below) and the
+// "Browse all" list (a click on a row), so picking a pairing from the
+// list is by construction the same state change as stepping there with
+// the buttons. Validates against the segment's CURRENT line count
+// (isValidPairing()), stores a result equal to the default order as null
+// so "default" stays a single state, then parks the live preview at
+// t=0.5 and refreshes the panel.
+function setTimelinePairing(segmentIndex, perm) {
+    const info = timelineSegmentInfo(segmentIndex);
+    if (!info || !info.ok || !isValidPairing(perm, info.n)) return;
+    timeline.segmentPairings[segmentIndex] = perm.every((j, i) => j === i) ? null : perm.slice();
+    previewTimelineSegmentMidpoint(segmentIndex);
+    updateTimelineControls();
+    redraw();
+}
+
 // Roadmap 1.8 Stage D phase (i): moves START line `row`'s assigned END
 // line up/down by swapping it with its neighbour's (delta -1/+1) - i.e.
-// reorders the End list against the fixed Start list. Stores the result
-// as segmentPairings[segmentIndex] (perm[i] = End line index assigned to
-// Start line i, see isValidPairing()); a result equal to the default
-// order is stored as null so "default" stays a single state.
+// reorders the End list against the fixed Start list. The swapped
+// permutation is committed via setTimelinePairing() (perm[i] = End line
+// index assigned to Start line i, see isValidPairing()).
 function moveTimelinePairing(segmentIndex, row, delta) {
     const info = timelineSegmentInfo(segmentIndex);
     if (!info || !info.ok) return;
@@ -2930,10 +2979,7 @@ function moveTimelinePairing(segmentIndex, row, delta) {
     if (row < 0 || other < 0 || row >= info.n || other >= info.n) return;
     const perm = info.perm.slice();
     [perm[row], perm[other]] = [perm[other], perm[row]];
-    timeline.segmentPairings[segmentIndex] = perm.every((j, i) => j === i) ? null : perm;
-    previewTimelineSegmentMidpoint(segmentIndex);
-    updateTimelineControls();
-    redraw();
+    setTimelinePairing(segmentIndex, perm);
 }
 function resetTimelinePairing(segmentIndex) {
     if (!timeline || segmentIndex < 0 || segmentIndex >= timeline.segmentPairings.length) return;
