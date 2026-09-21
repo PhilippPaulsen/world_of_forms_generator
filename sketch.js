@@ -1069,6 +1069,7 @@ function setup() {
         }
         if (timeline.segmentPairings[seg] && info.permIsDefault) timeline.segmentPairings[seg] = null;
         if (timeline.segmentFlips && timeline.segmentFlips[seg] && !info.flipsAny) timeline.segmentFlips[seg] = null;
+        if (timeline.segmentMembers && timeline.segmentMembers[seg] && !info.membersAny) timeline.segmentMembers[seg] = null;
         info.perm.forEach((endIdx, row) => {
             const r = document.createElement('div');
             r.className = 'pairing-row';
@@ -1146,7 +1147,7 @@ function setup() {
             .sort((a, b) => (a.displacement - b.displacement) * dir || cmpPerm(a.perm, b.perm));
 
         timelinePairingBrowserCount.html(cand.orientation
-            ? `Showing ${rows.length} of ${cand.items.length} orientations (Start 1 \u2192 End 1)`
+            ? `Showing ${rows.length} of ${cand.items.length} variants (Start 1 \u2192 End 1, distinct pictures only)`
             : `Showing ${rows.length} of ${cand.items.length} pairings (Start 1..${cand.n} \u2192 End ...)`);
         const list = timelinePairingBrowserList.elt;
         const prevScroll = list.scrollTop;
@@ -1155,23 +1156,34 @@ function setup() {
         let currentRow = null;
         rows.forEach(it => {
             const btn = document.createElement('button');
-            const isCurrent = it.perm.every((j, i) => j === info.perm[i]) && (!cand.orientation || it.flips[0] === info.flips[0]);
+            // n=1 (Stage D phase iv): "current" = the variant sharing the
+            // current state's rendered-picture key - the current state may
+            // itself be a duplicate of a listed variant, not listed on its own.
+            const isCurrent = cand.orientation
+                ? it.key === cand.currentKey
+                : it.perm.every((j, i) => j === info.perm[i]);
             btn.className = 'pairing-browse-row' + (isCurrent ? ' current' : '');
             btn.dataset.perm = it.perm.join('');
-            if (cand.orientation) btn.dataset.flip = it.flips[0] ? '1' : '0';
-            // Stage D phase (iii), n=1: the two candidates are the End line
-            // as stored vs. reversed (see timelinePairingCandidates()).
+            if (cand.orientation) { btn.dataset.flip = it.flips[0] ? '1' : '0'; btn.dataset.member = String(it.members[0]); }
+            // Stage D phase (iii)/(iv), n=1: the candidates are the End line's
+            // distinct (group element, flip) variants (see
+            // timelinePairingCandidates()) - shown as the node pair actually
+            // read (start\u2192end), with a marker for a reversal / a non-identity
+            // element, so as-clicked and reversed read as before.
+            const variantText = cand.orientation
+                ? `${it.ids[0]}\u2013${it.ids[1]}${it.flips[0] ? ' \u21C4' : ''}${it.members[0] === 0 && !it.flips[0] ? ' (as clicked)' : ''}`
+                : '';
             btn.title = cand.orientation
-                ? (it.flips[0] ? 'Start 1 \u2192 End 1, End line reversed' : 'Start 1 \u2192 End 1, End line as stored')
+                ? `Start 1 \u2192 End 1 as ${it.ids[0]}\u2013${it.ids[1]} (group element ${it.members[0]}${it.flips[0] ? ', reversed' : ''})`
                 : it.perm.map((j, i) => `Start ${i + 1} \u2192 End ${j + 1}`).join(', ');
             const order = document.createElement('span');
-            order.textContent = cand.orientation ? (it.flips[0] ? 'reversed \u21C4' : 'as stored') : it.perm.map(j => j + 1).join(' ');
+            order.textContent = cand.orientation ? variantText : it.perm.map(j => j + 1).join(' ');
             const d = document.createElement('span');
             d.textContent = `${fmt(it.displacement)} px\u00B2`;
             btn.appendChild(order);
             btn.appendChild(d);
             btn.addEventListener('click', () => cand.orientation
-                ? commitTimelineSegmentPairing(seg, it.perm, it.flips)
+                ? commitTimelineSegmentPairing(seg, it.perm, it.flips, it.members)
                 : setTimelinePairing(seg, it.perm));
             list.appendChild(btn);
             if (isCurrent) currentRow = btn;
