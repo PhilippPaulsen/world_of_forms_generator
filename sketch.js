@@ -3361,7 +3361,12 @@ function commitTimelineSegmentPairing(segmentIndex, perm, flips, members) {
 // (group element index; 0 = as clicked), keeping correspondence and
 // flips. Refused (no state change) for an index outside the End layer's
 // group - the number of elements comes from that layer's own grid/mode.
-function setTimelineMember(segmentIndex, endIdx, g) {
+// Step 2 (per-row variant stepper): the optional `flip` (true/false; omitted
+// = keep the End line's current flip) lets one call move to any
+// (group element, flip) variant of timelineRowVariants(), which spans both
+// - the stepper's list is the full deduplicated (element, flip) space of a
+// row, not just its elements.
+function setTimelineMember(segmentIndex, endIdx, g, flip) {
     const info = timelineSegmentInfo(segmentIndex);
     if (!info || !info.ok || endIdx < 0 || endIdx >= info.n || !Number.isInteger(g) || g < 0) return;
     const r = resolveTimelineKeyframeCoords(timeline, segmentIndex);
@@ -3369,7 +3374,9 @@ function setTimelineMember(segmentIndex, endIdx, g) {
     if (g > 0 && (!ge || g >= ge.groupOrder)) return;
     const members = info.members.slice();
     members[endIdx] = g;
-    commitTimelineSegmentPairing(segmentIndex, info.perm, info.flips, members);
+    const flips = info.flips.slice();
+    if (flip !== undefined) flips[endIdx] = !!flip;
+    commitTimelineSegmentPairing(segmentIndex, info.perm, flips, members);
 }
 
 // Roadmap 1.8 Stage D phase (i): moves START line `row`'s assigned END
