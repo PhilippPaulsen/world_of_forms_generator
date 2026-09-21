@@ -215,3 +215,7 @@ body.dark {
 
 /* Roadmap 1.8 Stage D phase (iii): per-row End-line orientation toggle */
 .pairing-flip-btn.active { background: #000; color: #fff; }
+
+/* Roadmap 1.8 Stage D phase (iv) step 2: per-row End-line variant stepper (k/c) */
+.pairing-variant { display: inline-flex; align-items: center; gap: 2px; }
+.pairing-variant-count { font: 12px monospace; min-width: 34px; text-align: center; }

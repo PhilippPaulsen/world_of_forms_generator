@@ -1100,10 +1100,61 @@ function setup() {
             flip.textContent = '\u21C4';
             flip.title = flipped ? 'This End line is reversed - click to restore its stored direction' : 'Reverse this End line (swap which End endpoint each Start endpoint moves to)';
             flip.addEventListener('click', () => setTimelineFlip(seg, endIdx));
+            // Stage D phase (iv) step 2: per-row variant stepper "k/c" over
+            // this row's deduplicated (group element, flip) variants
+            // (timelineRowVariants()). Both numbers are recomputed here on
+            // every render from the row's CURRENT Start<->End pairing -
+            // nothing is cached across reorders, so after Up/Down the count
+            // is the new pairing's (e.g. 12 for an orbit-0 line paired with
+            // an orbit-0 line, 6 for orbit 0 with orbit 2, 4 for orbit 2
+            // with orbit 2). k is the position of the CURRENT state's
+            // rendered picture in that list (matched by picture key, not by
+            // the stored element index), so a stored choice that is not the
+            // canonical representative of the new pairing's list - or a
+            // duplicate of a listed variant - still shows where it actually
+            // sits. A step commits element and flip together via
+            // setTimelineMember(), the same setter everything else uses.
+            const rv = timelineRowVariants(seg, row);
+            const variants = rv ? rv.variants : [];
+            const vCount = variants.length;
+            let vIdx = vCount === 0 ? -1 : (rv.currentKey !== null
+                ? variants.findIndex(v => v.key === rv.currentKey)
+                : variants.findIndex(v => v.g === info.members[endIdx] && v.f === !!info.flips[endIdx]));
+            if (vCount > 0 && vIdx < 0) vIdx = 0;
             r.appendChild(label);
             r.appendChild(up);
             r.appendChild(down);
             r.appendChild(flip);
+            if (vCount > 1) {
+                const stepper = document.createElement('span');
+                stepper.className = 'pairing-variant';
+                const prevBtn = document.createElement('button');
+                prevBtn.className = 'layer-btn pairing-move-btn pairing-variant-prev';
+                prevBtn.textContent = '\u25C0';
+                prevBtn.title = 'Previous variant of this End line (distinct pictures against this row\'s Start line)';
+                prevBtn.addEventListener('click', () => {
+                    const v = variants[(vIdx - 1 + vCount) % vCount];
+                    setTimelineMember(seg, endIdx, v.g, v.f);
+                });
+                const countEl = document.createElement('span');
+                countEl.className = 'pairing-variant-count';
+                countEl.textContent = `${vIdx + 1}/${vCount}`;
+                countEl.dataset.k = String(vIdx + 1);
+                countEl.dataset.c = String(vCount);
+                countEl.title = `End line variant ${vIdx + 1} of ${vCount} distinct pictures for this row's current Start\u2194End pairing`;
+                const nextBtn = document.createElement('button');
+                nextBtn.className = 'layer-btn pairing-move-btn pairing-variant-next';
+                nextBtn.textContent = '\u25B6';
+                nextBtn.title = 'Next variant of this End line (distinct pictures against this row\'s Start line)';
+                nextBtn.addEventListener('click', () => {
+                    const v = variants[(vIdx + 1) % vCount];
+                    setTimelineMember(seg, endIdx, v.g, v.f);
+                });
+                stepper.appendChild(prevBtn);
+                stepper.appendChild(countEl);
+                stepper.appendChild(nextBtn);
+                r.appendChild(stepper);
+            }
             list.appendChild(r);
         });
         const fmt = v => Math.round(v).toLocaleString('en-US');
