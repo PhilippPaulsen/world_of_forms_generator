@@ -189,6 +189,7 @@ function newFacePalette() {
 function applyPaletteToTrails(store, trails, palette) {
     if (!palette || !palette.ruleId || trails.length === 0) return null;
     const colors = generateHarmonyPalette(palette.ruleId, palette.idx, trails.length);
+    palette.slots = trails.length; // the length of the series now in force (frozen until the next full application)
     const slotOf = new Map();
     trails.forEach((t, i) => {
         const o = palette.overrides.get(t.key);
@@ -198,6 +199,66 @@ function applyPaletteToTrails(store, trails, palette) {
         slotOf.set(t.key, slot);
     });
     return { colors, slotOf };
+}
+
+// --- editing the series in force without repainting it (follow-up step 3) ---
+// After a full application the palette's series is FROZEN at palette.slots
+// colors: an edit that adds or removes trails does not regenerate it (that would
+// repaint most surviving trails - measured 73.6-85.9%), inherited trails keep
+// their slot, and the two functions below work inside that same series.
+
+// Trails of the list that hold no assignment right now (new regions, complex
+// components, anything reconciliation could not hand a color to).
+function unassignedTrails(store, trails) {
+    return trails.filter(t => !store.has(t.key));
+}
+
+function _writeSlot(store, palette, key, slot, slots, series) {
+    const c = series[slot];
+    setFaceAssignment(store, key, { hue: c.hue, w: c.w, s: c.s, rule: palette.ruleId, params: { idx: palette.idx.slice(), slot, slots } });
+    return c;
+}
+
+// Per-trail override: ONE trail takes `slot` of the series in force - a single
+// store write, never a re-run of the rule over the other trails. The choice
+// stays inside the series (the color is series[slot]); the override is recorded
+// so a later explicit full application keeps it. `fallbackSlots` = the series
+// length to use if the palette has none recorded yet. Returns the color.
+function assignTrailSlot(store, palette, key, slot, fallbackSlots) {
+    if (!palette || !palette.ruleId) throw new Error('assignTrailSlot: no rule is applied');
+    const slots = palette.slots || fallbackSlots;
+    if (!Number.isInteger(slot) || slot < 0 || slot >= slots) throw new Error(`assignTrailSlot: slot ${slot} outside the series (0..${slots - 1})`);
+    const series = generateHarmonyPalette(palette.ruleId, palette.idx, slots);
+    const c = _writeSlot(store, palette, key, slot, slots, series);
+    palette.overrides.set(key, slot);
+    return c;
+}
+
+// "Spread colors": gives every UNASSIGNED trail a slot of the series in force -
+// nothing that already has an assignment (inherited or overridden) is touched.
+// Slot choice: the least-used slot among the trails currently holding one
+// (a free slot first - one a vanished or merged trail left behind - then the
+// lowest), trails taken in list order (area, largest first); deterministic, and
+// spreads distinct colors as far as the series allows. Not recorded as overrides
+// (nobody chose them). Returns the number of trails colored.
+function spreadPaletteToUnassigned(store, trails, palette, fallbackSlots) {
+    if (!palette || !palette.ruleId) return 0;
+    const todo = unassignedTrails(store, trails);
+    if (!todo.length) return 0;
+    const slots = palette.slots || fallbackSlots || trails.length;
+    const series = generateHarmonyPalette(palette.ruleId, palette.idx, slots);
+    const usage = new Array(slots).fill(0);
+    trails.forEach(t => {
+        const a = store.get(t.key);
+        if (a && a.rule === palette.ruleId && a.params && Number.isInteger(a.params.slot) && a.params.slot >= 0 && a.params.slot < slots) usage[a.params.slot]++;
+    });
+    todo.forEach(t => {
+        let best = 0;
+        for (let k = 1; k < slots; k++) if (usage[k] < usage[best]) best = k;
+        _writeSlot(store, palette, t.key, best, slots, series);
+        usage[best]++;
+    });
+    return todo.length;
 }
 
 // "Reset colors": back to the default symmetry-orbit coloring - clears the
@@ -356,7 +417,7 @@ function reconcileFaceAssignments(store, oldSnap, newSnap) {
         comp.written = comp.written || [];
         comp.newKeys.forEach(child => {
             if (store.has(child)) return; // fill only
-            setFaceAssignment(store, child, { hue: a.hue, w: a.w, s: a.s, rule: a.rule, params: a.params === null ? null : JSON.parse(JSON.stringify(a.params)) });
+            setFaceAssignment(store, child, { hue: a.hue, w: a.w, s: a.s, rule: a.rule, params: a.params == null ? null : JSON.parse(JSON.stringify(a.params)) });
             comp.written.push(child);
             inherited++;
         });
