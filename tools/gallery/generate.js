@@ -28,7 +28,30 @@ const MANIFEST_PATH = path.join(ROOT, 'gallery', 'manifest.jsonl');
 // - when its expected output file already exists on disk. Re-running
 // this script after generation-scope grows only ever adds the newly-
 // in-scope targets, never touches what's already there.
+// Roadmap 1.1 (verification session): triangle/square's `order` 1 and 2
+// produce geometrically identical node sets (their subdivision formulas
+// only place a first edge-midpoint node starting at order 3; see
+// ROADMAP.md's `1.1` status note) - an unintended byproduct of the grid
+// formulas, not a deliberate scope choice. Every shipped batch already
+// started at order 3 for both shapes (no order 1/2 content exists, so
+// no cross-order dedup was ever needed), but the manifest/path scheme
+// itself has no such dedup - a future job targeting order 1 or 2 here
+// would silently generate real, disk-writing duplicate content under
+// its own path. Refused outright (not silently skipped) rather than
+// generated and left for someone else to notice.
+const DEGENERATE_ORDER_SHAPES = ['triangle', 'square'];
+function assertNotDegenerateOrder(shape, order) {
+    if (DEGENERATE_ORDER_SHAPES.includes(shape) && (order === 1 || order === 2)) {
+        throw new Error(
+            `generateJob: refusing ${shape} order ${order} - orders 1 and 2 produce identical node ` +
+            `sets for triangle/square (see ROADMAP.md's 1.1 status note), so generating both would ` +
+            `create duplicate catalog content under separate paths. Use order >= 3.`
+        );
+    }
+}
+
 function generateJob({ shape, order, symmetryMode = 'rotation_reflection6', kValues, isSample = false }) {
+    assertNotDegenerateOrder(shape, order);
     const renderer = createShapeOrderRenderer(shape, order, symmetryMode);
     const orbitCount = renderer.table.orbits.length;
     const stats = { generated: 0, skipped: 0, totalMs: 0 };
