@@ -76,10 +76,13 @@ const CATALOG_URL_MODES = ['none', 'reflection_only', 'rotation3', 'rotation6', 
 function isWellFormedCatalogPattern(shape, order, symmetryMode, orbitIds) {
     if (!CATALOG_URL_SHAPES.includes(shape)) return false;
     if (!CATALOG_URL_MODES.includes(symmetryMode)) return false;
-    // 1..5 matches #node-count-input's own min/max (index.html) - every
-    // real manifest entry is within this range (max observed: 5,
-    // triangle), so this is a syntactic sanity bound, not a workaround.
-    if (!Number.isInteger(order) || order < 1 || order > 5) return false;
+    // 1..7 matches #node-count-input's own min/max (index.html) - every
+    // real manifest entry is within the lower part of this range (max
+    // observed: 5, triangle; the ceiling itself was raised to 7 per
+    // Group A's node-count-limit item, see nodeInput's own clamp
+    // comment in setup()), so this is a syntactic sanity bound, not a
+    // workaround.
+    if (!Number.isInteger(order) || order < 1 || order > 7) return false;
     if (!Array.isArray(orbitIds) || orbitIds.length === 0 || orbitIds.some(id => !Number.isInteger(id) || id < 0)) return false;
     return true;
 }
@@ -273,7 +276,14 @@ function setup() {
         nodeCount = parseInt(nodeInput.value()) || 3;
         nodeInput.input(() => {
             let v = parseInt(nodeInput.value());
-            if (v < 1) v = 1; if (v > 5) v = 5; // Clamp
+            // Roadmap 1.1 (Group A, node-count limit raise): 5 -> 7 -
+            // matches #node-count-input's own max, `isWellFormedCatalogPattern()`'s
+            // order bound, and the layer input's own clamp just below -
+            // see the verification session's real measurement (hex, the
+            // fastest-growing shape: ~41ms at order 6, ~71ms at order 7,
+            // ~119ms at order 8 for updatePatternNameStatus()'s uncached
+            // orbit-table rebuild) for why 7, not higher, was chosen.
+            if (v < 1) v = 1; if (v > 7) v = 7; // Clamp
             nodeCount = v;
             rebuildGrid(currentShape);
             renderLayerTabs();
@@ -1588,7 +1598,7 @@ function setup() {
         layerNodeCountInput.input(() => {
             if (activeLayer === 'base') return;
             let v = parseInt(layerNodeCountInput.value());
-            if (v < 1) v = 1; if (v > 5) v = 5;
+            if (v < 1) v = 1; if (v > 7) v = 7; // Roadmap 1.1 (Group A): matches the base input's own 5 -> 7 raise, see its own clamp comment above
             updateActiveLayerGrid({ nodeCount: v });
             redraw();
         });
