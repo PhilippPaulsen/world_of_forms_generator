@@ -4,7 +4,9 @@
  * face gets when the user has ASSIGNED one - the geometric face-trail key,
  * the per-sheet assignment store, and the render-path override. Phase 1's
  * core/color.js supplies the color math (resolveColor()); nothing here is
- * UI (Phase 3) or export (Phase 4).
+ * DOM (the Phase 3 Face Colors panel lives in sketch.js and drives the
+ * trail/palette/highlight functions in the Phase 3 section below) or export
+ * (Phase 4).
  *
  * WHY assignments cannot live on face objects: computeCellFaces()
  * (core/faces.js) is re-run on EVERY redraw (core/tiling.js's
@@ -119,6 +121,84 @@ function applyFaceAssignments(facesResult, store, group) {
     return applied;
 }
 
+// ----------------- TRAILS, PALETTE, HIGHLIGHT (Phase 3) -------------
+// Pure logic behind the Face Colors panel (sketch.js); no DOM here.
+
+// The distinct face trails of a computeCellFaces() result, one entry per
+// key: {key, faceCount, area, connIndex, color}. `color` is the color the
+// trail is DRAWN with right now (its first face's face.color: an assigned
+// hex, or orbitColor()'s default). Order is by total area, largest first
+// (area rounded to 0.01 so float noise cannot reorder equal trails), ties
+// by key - deterministic for a given geometry, so a palette's slot i keeps
+// meaning the same trail across redraws. A cross-sheet face never belongs
+// to a trail.
+function computeFaceTrails(facesResult, group) {
+    const keys = computeFaceTrailKeys(facesResult, group);
+    const byKey = new Map();
+    facesResult.faces.forEach((f, i) => {
+        if (keys[i] === null || (f.sheets && f.sheets.length >= 2)) return;
+        let t = byKey.get(keys[i]);
+        if (!t) { t = { key: keys[i], faceCount: 0, area: 0, connIndex: f.connIndex, color: f.color }; byKey.set(keys[i], t); }
+        t.faceCount++;
+        t.area += f.area;
+    });
+    return Array.from(byKey.values()).sort((a, b) =>
+        (Math.round(b.area * 100) - Math.round(a.area * 100)) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+}
+
+// A sheet's palette state: which harmony rule is applied, the chosen index
+// per rule axis (one k/c stepper each), and per-trail slot overrides
+// (trail key -> slot of the SAME generated series). Plain data; the
+// assignments themselves live in the sheet's store.
+function newFacePalette() {
+    return { ruleId: null, idx: [], overrides: new Map() };
+}
+
+// Colors the sheet's trails from its palette: the rule generates exactly
+// one color per trail (slots = trails.length) and trail i gets slot i -
+// unless the palette holds an override for it, which moves that trail to
+// another slot of the SAME series (never a color from outside it). Every
+// trail is (re)assigned through setFaceAssignment(), recording the rule and
+// {idx, slot, slots} as provenance. Assignments of keys that are no longer
+// trails (orphans) are left alone. Returns {colors, slotOf} (slotOf: key ->
+// slot), or null when no rule is applied or there are no trails.
+function applyPaletteToTrails(store, trails, palette) {
+    if (!palette || !palette.ruleId || trails.length === 0) return null;
+    const colors = generateHarmonyPalette(palette.ruleId, palette.idx, trails.length);
+    const slotOf = new Map();
+    trails.forEach((t, i) => {
+        const o = palette.overrides.get(t.key);
+        const slot = (o !== undefined && o >= 0 && o < colors.length) ? o : i;
+        const c = colors[slot];
+        setFaceAssignment(store, t.key, { hue: c.hue, w: c.w, s: c.s, rule: palette.ruleId, params: { idx: palette.idx.slice(), slot, slots: trails.length } });
+        slotOf.set(t.key, slot);
+    });
+    return { colors, slotOf };
+}
+
+// "Reset colors": back to the default symmetry-orbit coloring - clears the
+// sheet's assignment store (orphans included) and its palette state.
+function resetFaceColors(sheet) {
+    const store = faceAssignmentsFor(sheet);
+    if (store) store.clear();
+    if (sheet === 'base') baseFacePalette = null;
+    else if (additionalLayers[sheet]) additionalLayers[sheet].facePalette = null;
+    if (faceHover && faceHover.sheet === sheet) faceHover = null;
+}
+
+// Hover highlight: the trail whose swatch row is under the pointer gets
+// its faces flagged (face.highlight), which drawFaceFillsAtTile() outlines
+// on every tile. Flags only faces of the matching key, on the fresh
+// per-redraw face objects; returns how many were flagged.
+const FACE_HIGHLIGHT_COLOR = '#ff2d55';
+function markHighlightedTrail(facesResult, key, group) {
+    if (!key || !group || !facesResult.faces.length) return 0;
+    const keys = computeFaceTrailKeys(facesResult, group);
+    let n = 0;
+    facesResult.faces.forEach((f, i) => { if (keys[i] === key) { f.highlight = true; n++; } });
+    return n;
+}
+
 // ----------------- LIVE-APP GLUE ---------------------------------
 
 // The group elements the CURRENT sheet's faces are symmetric under - see
@@ -150,4 +230,20 @@ function faceAssignmentsFor(sheet) {
     if (!layer) return null;
     if (!layer.faceAssignments) layer.faceAssignments = new Map();
     return layer.faceAssignments;
+}
+
+// The palette state of one sheet ('base' or a layer index), created lazily
+// like the assignment store. Base's lives in state.js (null = fresh, reset
+// with the grid); a layer's on the layer object.
+function facePaletteFor(sheet) {
+    if (sheet === 'base') { if (!baseFacePalette) baseFacePalette = newFacePalette(); return baseFacePalette; }
+    const layer = additionalLayers[sheet];
+    if (!layer) return null;
+    if (!layer.facePalette) layer.facePalette = newFacePalette();
+    return layer.facePalette;
+}
+
+// The trail key to outline on `sheet`'s faces right now (hover), or null.
+function faceHighlightKeyFor(sheet) {
+    return faceHover && faceHover.sheet === sheet ? faceHover.key : null;
 }

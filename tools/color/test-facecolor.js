@@ -31,7 +31,7 @@ function makeSheet(shape, order, mode) {
         dist: (a, b, c, d) => Math.hypot(c - a, d - b),
         segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' },
         centroid: null, symmetryMode: mode, outerCorners: null, currentShape: shape, nodes: null,
-        baseFaceAssignments: new Map(), additionalLayers: [], console
+        baseFaceAssignments: new Map(), baseFacePalette: null, faceHover: null, additionalLayers: [], console
     };
     sb.toTileLocal = (n, tileC, flip180) => {
         let x = n.x - sb.centroid.x, y = n.y - sb.centroid.y;
@@ -243,11 +243,111 @@ console.log('\n== wiring ==');
 {
     const til = fs.readFileSync(path.join(ROOT, 'core', 'tiling.js'), 'utf8');
     check('tiling.js passes the base store and each layer store to computeCellFaces()',
-        til.includes("computeCellFaces(connections, nodes, faceAssignmentsFor('base'))") && til.includes('computeCellFaces(layer.connections, layer.nodes, faceAssignmentsFor(i))'));
+        til.includes("computeCellFaces(connections, nodes, faceAssignmentsFor('base'), faceHighlightKeyFor('base'))") && til.includes('computeCellFaces(layer.connections, layer.nodes, faceAssignmentsFor(i), faceHighlightKeyFor(i))'));
     const st = fs.readFileSync(path.join(ROOT, 'core', 'state.js'), 'utf8');
     check('state.js resets the base store in BOTH grid-rebuild paths', (st.match(/baseFaceAssignments = new Map\(\)/g) || []).length === 3, 'declaration + 2 rebuilds');
     const exp = fs.readFileSync(path.join(ROOT, 'core', 'export.js'), 'utf8');
     check('export.js is untouched by this phase (its computeCellFaces() calls pass no store)', /computeCellFaces\(completeConnections\)/.test(exp) && /computeCellFaces\(completeLayerConnections, layer\.nodes\)/.test(exp));
+}
+
+// ---------------- 5. Phase 3 logic: trails, palettes, override, reset, highlight -----
+console.log('\n== 5. Phase 3 logic (trails, palette, override, reset, highlight) ==');
+{
+    const sb0 = patterns[0].sh.sb;
+    const rules = sb0.listHarmonyRules();
+    check('registry exposes what the UI needs: id, label, verified marker, note, and axes with label + resolved count',
+        rules.length >= 4 && rules.every(r => typeof r.id === 'string' && typeof r.label === 'string' && (r.verified === false || r.verified === 'secondary')
+            && typeof r.note === 'string' && sb0.harmonyRuleParams(r, sb0.REF).every(a => typeof a.label === 'string' && Number.isInteger(a.count) && a.count >= 1)),
+        rules.map(r => `${r.id}:${sb0.harmonyRuleParams(r, sb0.REF).map(a => a.count).join('x')}`).join(' '));
+
+    let orderBad = 0, sumBad = 0, unstableOrder = 0, palMismatch = 0, palCount = 0, slotBad = 0, renderBad = 0, palRuns = 0;
+    let ovBad = 0, ovRuns = 0, ovOutside = 0, othersChanged = 0, orphanLost = 0, resetBad = 0, hlBad = 0, hlLeak = 0;
+    for (const { sh, ids, res } of patterns) {
+        const { sb, group } = sh;
+        const conns = ids.map(i => sh.reps[i]);
+        const trails = sb.computeFaceTrails(res, group);
+        if (trails.reduce((a, t) => a + t.faceCount, 0) !== res.faces.length) sumBad++;
+        for (let i = 1; i < trails.length; i++) if (Math.round(trails[i - 1].area * 100) < Math.round(trails[i].area * 100)) orderBad++;
+        if (JSON.stringify(sb.computeFaceTrails(sh.faces(ids), group).map(t => t.key)) !== JSON.stringify(trails.map(t => t.key))) unstableOrder++;
+
+        for (const rule of sb.listHarmonyRules()) {
+            const axes = sb.harmonyRuleParams(rule, sb.REF);
+            for (const idx of [axes.map(() => 0), axes.map(a => a.count - 1), axes.map(a => a.count >> 1)]) {
+                palRuns++;
+                const store = new Map();
+                const palette = { ruleId: rule.id, idx, overrides: new Map() };
+                store.set('orphan-key', { hue: 1, w: 0.1, s: 0.1, rule: null, params: null });
+                const out = sb.applyPaletteToTrails(store, trails, palette);
+                const gen = sb.generateHarmonyPalette(rule.id, idx, trails.length);
+                if (store.size !== trails.length + 1) palCount++;
+                if (!store.has('orphan-key')) orphanLost++;
+                trails.forEach((t, i) => {
+                    const a = store.get(t.key);
+                    if (a.hue !== gen[i].hue || a.w !== gen[i].w || a.s !== gen[i].s || a.rule !== rule.id || a.params.slot !== i || a.params.slots !== trails.length) palMismatch++;
+                    if (out.slotOf.get(t.key) !== i) slotBad++;
+                });
+                const drawn = sb.computeCellFaces(conns, sh.grid.nodes, store);
+                const keys = sb.computeFaceTrailKeys(drawn, group);
+                drawn.faces.forEach((f, fi) => { const i = trails.findIndex(t => t.key === keys[fi]); if (f.color !== gen[i].hex) renderBad++; });
+
+                // per-trail override: another slot of the SAME series; nobody else changes
+                if (trails.length >= 2) {
+                    ovRuns++;
+                    const before = new Map(store);
+                    const target = trails[0].key, slot = trails.length - 1;
+                    palette.overrides.set(target, slot);
+                    const out2 = sb.applyPaletteToTrails(store, trails, palette);
+                    const a = store.get(target);
+                    const inSeries = gen.some(c => c.hue === a.hue && c.w === a.w && c.s === a.s);
+                    if (!inSeries) ovOutside++;
+                    if (a.params.slot !== slot || a.hue !== gen[slot].hue || a.w !== gen[slot].w || a.s !== gen[slot].s) ovBad++;
+                    trails.slice(1).forEach(t => { if (JSON.stringify(store.get(t.key)) !== JSON.stringify(before.get(t.key))) othersChanged++; });
+                    // an override beyond the series (trails shrank) falls back to the rank slot
+                    palette.overrides.set(target, 999);
+                    sb.applyPaletteToTrails(store, trails, palette);
+                    if (store.get(target).params.slot !== 0) ovBad++;
+                }
+            }
+        }
+
+        // reset -> default coloring, byte-identical to the never-assigned result
+        sb.additionalLayers = [];
+        const st = sb.faceAssignmentsFor('base'); const pal = sb.facePaletteFor('base');
+        pal.ruleId = 'isotint'; pal.idx = [3, 2]; pal.overrides.set(trails[0].key, 0);
+        sb.applyPaletteToTrails(st, trails, pal);
+        sb.resetFaceColors('base');
+        const after = sb.computeCellFaces(conns, sh.grid.nodes, sb.faceAssignmentsFor('base'));
+        if (sb.faceAssignmentsFor('base').size !== 0 || JSON.stringify(after) !== JSON.stringify(res) || sb.facePaletteFor('base').ruleId !== null || sb.facePaletteFor('base').overrides.size !== 0) resetBad++;
+
+        // highlight: exactly the trail's faces are flagged; nothing flagged without a key
+        const keys = sb.computeFaceTrailKeys(res, group);
+        const hk = trails[trails.length - 1].key;
+        const hres = sb.computeCellFaces(conns, sh.grid.nodes, null, hk);
+        hres.faces.forEach((f, i) => { if (!!f.highlight !== (keys[i] === hk)) hlBad++; });
+        if (JSON.stringify(sb.computeCellFaces(conns, sh.grid.nodes, null, null)) !== JSON.stringify(res) || JSON.stringify(res).includes('highlight')) hlLeak++;
+    }
+    check('trails: face counts add up to the faces, order is area-descending, and is identical on recomputation', sumBad === 0 && orderBad === 0 && unstableOrder === 0, `${patterns.length} patterns`);
+    check('every rule x {first, last, middle} axis position x every pattern: one assignment per trail (+ the orphan untouched)', palCount === 0 && orphanLost === 0, `${palRuns} palette applications`);
+    check('trail i gets slot i of the generated series (hue/w/s exact), with rule + {idx, slot, slots} recorded', palMismatch === 0 && slotBad === 0);
+    check('the palette really renders: every face drawn in its trail\'s series color', renderBad === 0);
+    check('per-trail override moves ONE trail to another slot of the same series; all others unchanged; stale override falls back', ovBad === 0 && ovOutside === 0 && othersChanged === 0, `${ovRuns} override runs`);
+    check('Reset colors: store and palette cleared, drawing byte-identical to never-assigned', resetBad === 0);
+    check('hover highlight flags exactly the hovered trail\'s faces, and nothing when no key is passed', hlBad === 0 && hlLeak === 0);
+
+    // per-sheet palette state
+    const { sh, ids, res } = patterns[0]; const sb = sh.sb;
+    sb.additionalLayers = [{ connections: [], nodes: sh.grid.nodes }, { connections: [], nodes: sh.grid.nodes }];
+    const pb = sb.facePaletteFor('base'), p0 = sb.facePaletteFor(0), p1 = sb.facePaletteFor(1);
+    pb.ruleId = 'tetrad'; pb.idx = [0, 0]; p0.ruleId = 'isotint'; p0.idx = [0, 0];
+    check('palette state is per sheet (base / layer 0 / layer 1 independent, stable, lazily created)', pb !== p0 && p0 !== p1 && sb.facePaletteFor(1) === p1 && p1.ruleId === null && sb.facePaletteFor(9) === null);
+    const trails = sb.computeFaceTrails(res, sh.group);
+    sb.applyPaletteToTrails(sb.faceAssignmentsFor('base'), trails, pb); sb.applyPaletteToTrails(sb.faceAssignmentsFor(0), trails, p0);
+    sb.resetFaceColors(0);
+    check('reset on one sheet leaves the others (store and palette) alone', sb.faceAssignmentsFor(0).size === 0 && sb.facePaletteFor(0).ruleId === null && sb.faceAssignmentsFor('base').size === trails.length && sb.facePaletteFor('base').ruleId === 'tetrad');
+    sb.faceHover = { sheet: 'base', key: trails[0].key };
+    check('faceHighlightKeyFor() answers only for the hovered sheet', sb.faceHighlightKeyFor('base') === trails[0].key && sb.faceHighlightKeyFor(0) === null);
+    sb.resetFaceColors('base');
+    check('reset clears that sheet\'s hover', sb.faceHover === null);
 }
 
 // ---------------- 4. split / merge investigation (report) ----------------
