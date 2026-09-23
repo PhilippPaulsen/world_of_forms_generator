@@ -943,11 +943,16 @@ function findFaces(segments, realNodes) {
 // the fresh face objects - with no/empty store nothing is computed and the
 // result is byte-identical to before. Callers that must NOT show assigned
 // colors (export, until Phase 4) simply omit it.
-function computeCellFaces(connSet, gridNodes = nodes, assignments = null) {
+// `highlightKey` (Phase 3): the trail to outline (Face Colors hover), or
+// null; flags that trail's faces with face.highlight for
+// drawFaceFillsAtTile(). Export never passes it, so exported faces never
+// carry the flag.
+function computeCellFaces(connSet, gridNodes = nodes, assignments = null, highlightKey = null) {
     if (curveType.kind !== 'straight') return { nodes: [], faces: [] };
     const segments = collectCellSegments(connSet, gridNodes);
     const result = findFaces(segments, gridNodes);
     if (assignments && assignments.size) applyFaceAssignments(result, assignments, sheetGroupElements(gridNodes));
+    if (highlightKey) markHighlightedTrail(result, highlightKey, sheetGroupElements(gridNodes));
     return result;
 }
 
@@ -1096,6 +1101,23 @@ function drawFaceFillsAtTile(facesResult, tileCentroid, flip180) {
         });
         endShape(CLOSE);
     });
+    // Group D Phase 3: the hovered trail's outline, on top of all fills
+    // (drawShapeCell()'s line drawing follows this call and paints over
+    // part of it, which is fine - it stays clearly visible).
+    if (faces.some(f => f.highlight)) {
+        noFill();
+        stroke(FACE_HIGHLIGHT_COLOR);
+        strokeWeight(3);
+        faces.forEach(face => {
+            if (!face.highlight) return;
+            beginShape();
+            face.nodeIds.forEach(id => {
+                const p = toTileLocal(nodeById.get(id), tileCentroid, flip180);
+                vertex(p.x, p.y);
+            });
+            endShape(CLOSE);
+        });
+    }
     pop();
 }
 

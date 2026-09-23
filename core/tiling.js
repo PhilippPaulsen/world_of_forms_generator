@@ -49,7 +49,7 @@ function drawTessellation() {
     // own cost) when the base sheet's face-fill toggle is on (roadmap
     // 1.10a step 5/6's rendering hookup); each tile*() function draws
     // this same face set at every tile position via drawFaceFillsAtTile().
-    const cellFaces = showFaces ? computeCellFaces(connections, nodes, faceAssignmentsFor('base')) : null;
+    const cellFaces = showFaces ? computeCellFaces(connections, nodes, faceAssignmentsFor('base'), faceHighlightKeyFor('base')) : null;
     const layerCellFaces = computeLayerCellFaces();
     tileFor(currentShape)(cellFaces, layerCellFaces);
 
@@ -174,7 +174,7 @@ function computeLayerCellFaces() {
         // layer - not reachable via any shipped UI yet, flagged in the
         // 1.12 stage-1 node-resolution-fix design session, not fixed
         // here).
-        if (layer.enabled && layer.showFaces && layer.shapeSizeFactor === shapeSizeFactor && (layer.rotation || 0) === 0) map.set(i, computeCellFaces(layer.connections, layer.nodes, faceAssignmentsFor(i)));
+        if (layer.enabled && layer.showFaces && layer.shapeSizeFactor === shapeSizeFactor && (layer.rotation || 0) === 0) map.set(i, computeCellFaces(layer.connections, layer.nodes, faceAssignmentsFor(i), faceHighlightKeyFor(i)));
     });
     return map;
 }

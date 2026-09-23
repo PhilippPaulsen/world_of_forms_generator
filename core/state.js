@@ -61,6 +61,13 @@ let additionalLayers = [];
 // additional layer's own store lives on the layer object (layer.faceAssignments,
 // created lazily by faceAssignmentsFor()), so it follows the layer.
 let baseFaceAssignments = new Map();
+// Group D Phase 3: the base sheet's palette state (rule, axis indices, per-
+// trail slot overrides - see core/facecolor.js newFacePalette()); null =
+// fresh, created lazily by facePaletteFor(). Reset with the grid, like the
+// store. faceHover = {sheet, key} while a Face Colors swatch row is hovered
+// (drives the on-canvas outline), else null.
+let baseFacePalette = null;
+let faceHover = null;
 let activeLayer = 'base'; // 'base' | integer index into additionalLayers - which sheet mousePressed()/addRandomConnection()/undo/redo/clear target
 
 // Roadmap 1.8 Stage C (persistent-layer timeline, superseding the
@@ -189,6 +196,7 @@ function rebuildGrid(shape) {
     connections = [];
     additionalLayers = [];
     baseFaceAssignments = new Map(); // keys are geometry of the OLD grid
+    baseFacePalette = null; faceHover = null;
     activeLayer = 'base'; // an active additional-layer index would otherwise dangle once the array is cleared
     timeline = null; // Roadmap 1.8 Stage C: its keyframeLayerIds/playbackLayerIndex would dangle the same way activeLayer would
     altNetSeed = null; // Roadmap 1.2-C: an ordinary shape/order rebuild is never an alt-net construction
@@ -229,6 +237,7 @@ function rebuildGridFromConstruction(p, q, n, side) {
     connections = [];
     additionalLayers = [];
     baseFaceAssignments = new Map();
+    baseFacePalette = null; faceHover = null;
     activeLayer = 'base';
     timeline = null; // Roadmap 1.8 Stage C: see rebuildGrid()'s own comment
 
