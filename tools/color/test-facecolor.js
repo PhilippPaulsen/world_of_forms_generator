@@ -247,7 +247,7 @@ console.log('\n== wiring ==');
     const st = fs.readFileSync(path.join(ROOT, 'core', 'state.js'), 'utf8');
     check('state.js resets the base store in BOTH grid-rebuild paths', (st.match(/baseFaceAssignments = new Map\(\)/g) || []).length === 3, 'declaration + 2 rebuilds');
     const exp = fs.readFileSync(path.join(ROOT, 'core', 'export.js'), 'utf8');
-    check('export.js is untouched by this phase (its computeCellFaces() calls pass no store)', /computeCellFaces\(completeConnections\)/.test(exp) && /computeCellFaces\(completeLayerConnections, layer\.nodes\)/.test(exp));
+    check('export.js passes the base store and each layer\'s store to computeCellFaces() (Phase 4; see test-export-color.js)', exp.includes('computeCellFaces(completeConnections, nodes, baseFaceAssignments)') && exp.includes('layer.faceAssignments || null'));
 }
 
 // ---------------- 5. Phase 3 logic: trails, palettes, override, reset, highlight -----

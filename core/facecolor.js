@@ -115,10 +115,34 @@ function applyFaceAssignments(facesResult, store, group) {
         if (!a) return;
         try {
             face.color = resolveColor(OSTWALD_REFERENCE_SYSTEM, a).hex;
+            // Phase 4: the full Ostwald-space data rides on the face (export:
+            // face.colorSpec) so an assignment is reconstructable, not just
+            // visually reproducible. Present on ASSIGNED faces only; `trail`
+            // is the key that joins the face to meta.faceColoring's entry.
+            face.colorSpec = { system: OSTWALD_REFERENCE_SYSTEM.id, hue: a.hue, w: a.w, s: a.s, rule: a.rule, params: a.params, trail: keys[i] };
             applied++;
         } catch (err) { /* stale/invalid entry: keep the default color */ }
     });
     return applied;
+}
+
+// Phase 4 (export): meta.faceColoring - {system, base?, layers?}. `system`
+// is the WHOLE reference color system as plain data (hue anchors, white/
+// black, gray-letter table, mix rule, and its verified/calibrated tags), so a
+// consumer can re-derive every color without this code. base / layers[] hold
+// every store entry of that sheet, orphans included (an orphan is inert but
+// returns on Undo - see the header): [{trail, hue, w, s, rule, params}].
+// `layerStores` = [{layerIndex, store}], layerIndex = position in the
+// EXPORTED geometry.layers array (enabled layers only). Returns null when no
+// sheet has an assignment, so unassigned patterns export byte-identically.
+function faceColoringExportData(baseStore, layerStores) {
+    const entries = store => Array.from(store.entries()).map(([trail, a]) => ({ trail, hue: a.hue, w: a.w, s: a.s, rule: a.rule, params: a.params }));
+    const out = { system: JSON.parse(JSON.stringify(OSTWALD_REFERENCE_SYSTEM)) };
+    let any = false;
+    if (baseStore && baseStore.size) { out.base = entries(baseStore); any = true; }
+    const layers = (layerStores || []).filter(l => l.store && l.store.size).map(l => ({ layerIndex: l.layerIndex, assignments: entries(l.store) }));
+    if (layers.length) { out.layers = layers; any = true; }
+    return any ? out : null;
 }
 
 // ----------------- TRAILS, PALETTE, HIGHLIGHT (Phase 3) -------------
