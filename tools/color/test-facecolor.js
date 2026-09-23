@@ -422,9 +422,11 @@ console.log('\n== 4. what an edit does to an assignment (investigation) ==');
         const a = sb.computeCellFaces(conns(newIds), sh.grid.nodes, store);
         const u = sb.computeCellFaces(conns(oldIds), sh.grid.nodes, store); // edit undone
         const cnt = (r, col) => r.faces.filter(f => f.color === col).length;
-        console.log(`  ${c.padEnd(8)} ${sh.label} orbits [${oldIds}] -> [${newIds}]: faces drawn in the assigned color  before=${cnt(b, want)}  after=${cnt(a, want)}  after undo=${cnt(u, want)}   (store still holds ${store.size} entry)`);
-        check(`${c}: assignment is colored before, INERT after the edit (no face inherits it), and comes back on undo`,
-            cnt(b, want) >= 1 && cnt(a, want) === 0 && cnt(u, want) === cnt(b, want) && store.size === 1);
+        console.log(`  ${c.padEnd(8)} ${sh.label} orbits [${oldIds}] -> [${newIds}]: faces drawn in the assigned color  before=${cnt(b, want)}  after=${cnt(a, want)}  after undo=${cnt(u, want)}   (store now holds ${store.size} entr${store.size === 1 ? 'y' : 'ies'})`);
+        // Phase 2 measured the KEY-level behavior (the entry goes inert). Since the inheritance hook (follow-up step 2) the
+        // edit hands the color on through computeCellFaces(): drawn faces after the edit are colored, undo restores exactly.
+        check(`${c}: assignment is colored before, INHERITED after the edit (still drawn), and exactly restored on undo (children kept as orphans)`,
+            cnt(b, want) >= 1 && cnt(a, want) >= 1 && cnt(u, want) === cnt(b, want) && store.size >= 1);
     }
 }
 

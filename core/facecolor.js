@@ -105,9 +105,9 @@ function setFaceAssignment(store, key, assignment) {
 //  - an assignment that no longer resolves is skipped, never thrown out of
 //    the render loop.
 // Returns the number of faces recolored.
-function applyFaceAssignments(facesResult, store, group) {
+function applyFaceAssignments(facesResult, store, group, keys = null) {
     if (!store || store.size === 0 || !group || !facesResult.faces.length) return 0;
-    const keys = computeFaceTrailKeys(facesResult, group);
+    if (!keys) keys = computeFaceTrailKeys(facesResult, group); // callers that already computed them pass them in
     let applied = 0;
     facesResult.faces.forEach((face, i) => {
         if (face.sheets && face.sheets.length >= 2) return;
@@ -283,8 +283,8 @@ function faceSamplePoints(poly) {
 // A before/after description of one sheet's faces: {faceCount, keys:Set,
 // trails:Map(key -> [face index]), faces:[{key, poly, area, samples}]}.
 // Cross-sheet faces are left out, like everywhere else.
-function faceTrailSnapshot(facesResult, group) {
-    const keys = computeFaceTrailKeys(facesResult, group);
+function faceTrailSnapshot(facesResult, group, keys = null) {
+    if (!keys) keys = computeFaceTrailKeys(facesResult, group);
     const nodeById = new Map(facesResult.nodes.map(n => [n.id, n]));
     const snap = { faceCount: 0, keys: new Set(), trails: new Map(), faces: [] };
     facesResult.faces.forEach((f, i) => {
@@ -379,6 +379,67 @@ function reconcileFaceAssignments(store, oldSnap, newSnap) {
         }
     }
     return { skipped: false, inherited, components };
+}
+
+// ----------------- LAZY RECONCILIATION (Group D follow-up, step 2) ----
+// Where the last REAL face-trail state of each sheet is remembered, and the one
+// function core/faces.js's computeCellFaces() calls to apply a store.
+//
+// The snapshot lives in a WeakMap keyed by the sheet's assignment STORE object
+// (not in state.js): the store is already the per-sheet identity (base:
+// baseFaceAssignments, layer: layer.faceAssignments), so the snapshot is per
+// sheet by construction and needs no reset code of its own - a grid rebuild
+// creates a new store Map (no snapshot), a deleted layer takes its store with
+// it (garbage-collected), and "Reset colors" (store.clear()) is caught below.
+const _faceSnapshots = new WeakMap();
+
+function faceSnapshotFor(store) { return _faceSnapshots.get(store) || null; }
+
+// Same key SET <=> nothing to reconcile (a key is the face's geometry).
+function _sameKeySet(a, b) {
+    if (a.size !== b.size) return false;
+    for (const k of a) if (!b.has(k)) return false;
+    return true;
+}
+
+// Applies one sheet's store to a fresh computeCellFaces() result, reconciling
+// first when the face structure changed since the stored snapshot:
+//  - empty/absent store: nothing is tracked - the snapshot is dropped (a later
+//    first assignment must not diff against a stale one) and no key is computed,
+//    so a sheet without assignments pays only this one WeakMap delete;
+//  - NO faces (curve/free mode returns none; a genuinely cleared pattern has
+//    none): return WITHOUT touching the snapshot. The stored snapshot stays the
+//    last REAL state, so a detour into curve mode - or clearing and redrawing -
+//    still reconciles against it afterwards (an empty snapshot would make every
+//    trail look like it had no predecessor);
+//  - no snapshot yet (the first call after the first assignment): record the
+//    current state as the baseline, nothing to reconcile - the app redraws right
+//    after every assignment, so the baseline is the state the colors were
+//    assigned in;
+//  - key set differs from the snapshot: reconcileFaceAssignments(), then the
+//    snapshot becomes the new state; same key set: nothing at all.
+// Keys are computed once and shared with applyFaceAssignments(). Returns the
+// number of faces recolored.
+function applyAssignmentsLazily(facesResult, store, gridNodes) {
+    if (!store) return 0;
+    if (store.size === 0) { _faceSnapshots.delete(store); return 0; }
+    if (!facesResult.faces.length) return 0;
+    const group = sheetGroupElements(gridNodes);
+    if (!group) return 0;
+    const keys = computeFaceTrailKeys(facesResult, group);
+    const prev = _faceSnapshots.get(store);
+    if (!prev) {
+        _faceSnapshots.set(store, faceTrailSnapshot(facesResult, group, keys));
+    } else {
+        const now = new Set();
+        facesResult.faces.forEach((f, i) => { if (keys[i] !== null && !(f.sheets && f.sheets.length >= 2)) now.add(keys[i]); });
+        if (!_sameKeySet(prev.keys, now)) {
+            const snap = faceTrailSnapshot(facesResult, group, keys);
+            reconcileFaceAssignments(store, prev, snap);
+            _faceSnapshots.set(store, snap);
+        }
+    }
+    return applyFaceAssignments(facesResult, store, group, keys);
 }
 
 // ----------------- LIVE-APP GLUE ---------------------------------

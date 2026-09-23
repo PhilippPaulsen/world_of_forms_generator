@@ -13,10 +13,15 @@ const path = require('path');
 const vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
 const CORE = ['forms', 'orbits', 'symmetry', 'curves', 'tiling', 'faces', 'color', 'facecolor'];
-const SRC = CORE.map(f => fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
+const { execSync } = require('child_process');
+// The core sources: the working tree, or (fromHead) the last commit's - for before/after comparisons.
+const loadSrc = fromHead => CORE.map(f => fromHead
+    ? execSync(`git show HEAD:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString()
+    : fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
+const SRC = loadSrc(false);
 const BUILDERS = { triangle: 'buildTriangleGrid', square: 'buildSquareGrid', hex: 'buildHexGrid' };
 
-function makeSheet(shape, order, mode) {
+function makeSheet(shape, order, mode, src = SRC) {
     const sb = {
         strokeWeight: () => { }, radians: d => d * Math.PI / 180, cos: Math.cos, sin: Math.sin, sqrt: Math.sqrt, abs: Math.abs,
         dist: (a, b, c, d) => Math.hypot(c - a, d - b),
@@ -26,7 +31,7 @@ function makeSheet(shape, order, mode) {
     };
     sb.toTileLocal = (n, tileC, flip180) => { let x = n.x - sb.centroid.x, y = n.y - sb.centroid.y; if (flip180) { x = -x; y = -y; } return { x: tileC.x + x, y: tileC.y + y }; };
     vm.createContext(sb);
-    vm.runInContext(SRC, sb);
+    vm.runInContext(src, sb);
     const grid = sb[BUILDERS[shape]](order, 1.3, 300, 300);
     sb.nodes = grid.nodes; sb.centroid = grid.centroid; sb.outerCorners = grid.outerCorners;
     const table = sb.computeThemeLineOrbits(grid.nodes, grid.centroid, shape, mode, grid.outerCorners);
@@ -44,11 +49,11 @@ const CONFIGS = [
     ['hex', 2, 'rotation_reflection6'], ['hex', 3, 'rotation_reflection6'], ['hex', 3, 'rotation6'], ['hex', 3, 'rotation_reflection3']
 ];
 
-function buildPatterns() {
+function buildPatterns(src = SRC) {
     const rand = rng(20260923);
     const patterns = [];
     for (const [shape, order, mode] of CONFIGS) {
-        const sh = makeSheet(shape, order, mode);
+        const sh = makeSheet(shape, order, mode, src);
         const n = sh.table.orbits.length;
         const seen = new Set();
         for (let tries = 0; tries < 400 && seen.size < 30; tries++) {
@@ -76,4 +81,4 @@ function editsOf(pattern) {
     return out;
 }
 
-module.exports = { makeSheet, rng, buildPatterns, editsOf, CONFIGS };
+module.exports = { makeSheet, rng, buildPatterns, editsOf, CONFIGS, loadSrc };

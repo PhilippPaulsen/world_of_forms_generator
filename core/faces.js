@@ -951,7 +951,12 @@ function computeCellFaces(connSet, gridNodes = nodes, assignments = null, highli
     if (curveType.kind !== 'straight') return { nodes: [], faces: [] };
     const segments = collectCellSegments(connSet, gridNodes);
     const result = findFaces(segments, gridNodes);
-    if (assignments && assignments.size) applyFaceAssignments(result, assignments, sheetGroupElements(gridNodes));
+    // Group D follow-up step 2: applies the store AFTER reconciling it against the
+    // sheet's last real face structure (core/facecolor.js applyAssignmentsLazily()) -
+    // an edit that split/merged/reshaped a trail hands its color on before this
+    // frame is drawn. A side effect on the store, accepted so every edit path is
+    // covered without instrumenting each call site.
+    if (assignments) applyAssignmentsLazily(result, assignments, gridNodes);
     if (highlightKey) markHighlightedTrail(result, highlightKey, sheetGroupElements(gridNodes));
     return result;
 }
