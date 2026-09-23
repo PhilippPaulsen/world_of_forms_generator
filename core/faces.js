@@ -937,10 +937,18 @@ function findFaces(segments, realNodes) {
 // through to collectCellSegments() and to findFaces() itself - see
 // that function's own comment for why only nodes (not centroid) needs
 // this.
-function computeCellFaces(connSet, gridNodes = nodes) {
+// Roadmap 1.10a / Group D Phase 2: `assignments` = this sheet's face-
+// trail assignment store (core/facecolor.js, faceAssignmentsFor()), or
+// null/omitted for none. Applied after findFaces() as a color override on
+// the fresh face objects - with no/empty store nothing is computed and the
+// result is byte-identical to before. Callers that must NOT show assigned
+// colors (export, until Phase 4) simply omit it.
+function computeCellFaces(connSet, gridNodes = nodes, assignments = null) {
     if (curveType.kind !== 'straight') return { nodes: [], faces: [] };
     const segments = collectCellSegments(connSet, gridNodes);
-    return findFaces(segments, gridNodes);
+    const result = findFaces(segments, gridNodes);
+    if (assignments && assignments.size) applyFaceAssignments(result, assignments, sheetGroupElements(gridNodes));
+    return result;
 }
 
 // Roadmap 1.10b-i: every real (non-synthetic) node's own translated

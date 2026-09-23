@@ -55,6 +55,12 @@ let redoStack = [];
 // targets 4 total sheets = base + 3 additional). offsetX/offsetY are
 // independent per layer relative to the base grid, not chained.
 let additionalLayers = [];
+// Roadmap 1.10a / Group D Phase 2: the BASE sheet's face-color assignments
+// (core/facecolor.js) - trail key -> {hue, w, s, rule, params}. Keyed by
+// grid geometry, so reset whenever the grid itself is rebuilt (below). An
+// additional layer's own store lives on the layer object (layer.faceAssignments,
+// created lazily by faceAssignmentsFor()), so it follows the layer.
+let baseFaceAssignments = new Map();
 let activeLayer = 'base'; // 'base' | integer index into additionalLayers - which sheet mousePressed()/addRandomConnection()/undo/redo/clear target
 
 // Roadmap 1.8 Stage C (persistent-layer timeline, superseding the
@@ -182,6 +188,7 @@ function toTileLocal(n, tileC, flip180, rotationDeg = 0) {
 function rebuildGrid(shape) {
     connections = [];
     additionalLayers = [];
+    baseFaceAssignments = new Map(); // keys are geometry of the OLD grid
     activeLayer = 'base'; // an active additional-layer index would otherwise dangle once the array is cleared
     timeline = null; // Roadmap 1.8 Stage C: its keyframeLayerIds/playbackLayerIndex would dangle the same way activeLayer would
     altNetSeed = null; // Roadmap 1.2-C: an ordinary shape/order rebuild is never an alt-net construction
@@ -221,6 +228,7 @@ function rebuildGrid(shape) {
 function rebuildGridFromConstruction(p, q, n, side) {
     connections = [];
     additionalLayers = [];
+    baseFaceAssignments = new Map();
     activeLayer = 'base';
     timeline = null; // Roadmap 1.8 Stage C: see rebuildGrid()'s own comment
 
