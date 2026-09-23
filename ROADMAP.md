@@ -132,6 +132,31 @@ Independent research track; 1.6's geodesic work is a natural (though not strictl
 - Extending face-detection to curved geometry would need real Bézier-Bézier intersection math (numerical subdivision/root-finding), a materially harder problem than the straight-segment intersection `1.10` currently solves.
 - Not currently scheduled in the Suggested Build Order — flagged here as a possible future item if curved+colored patterns become a priority. Natural placement would extend `1.10`'s existing work, though the required math is closer to `1.4`/`1.5`'s curve-construction domain.
 
+### Planned extensions (prioritized, not yet started)
+Agreed in a planning session, not yet reflected in code. Distinct from the numbered Ostwald-text items above — some extend already-shipped features (`1.8`, `1.9`, `1.12`), one (Group E) needs source research before design can even start. Recommended order: **A → B → C → D → (E in parallel throughout) → F.**
+
+**Group A — small, independent, do first**
+- Raise the node-count UI limit (`#node-count-input`, currently hardcoded 1–5) — a pure UI-range change, no new logic; already implicitly flagged under `1.1`'s "higher orders of existing nets" as UI-only work.
+- Slider controls for the already-continuous curve parameters (`fold`/`strength`/`roughness`, shipped since `1.4-A`/`1.5-A`) — currently number inputs only; a widget swap, not new math.
+
+**Group B — deferred UI cleanup, now due**
+- A general UI cleanup pass, bundling the three known issues already documented under `1.8` (stale `#timeline-status` message, Safari-specific layer-deletion bug, no feedback for a single-keyframe timeline) with a broader UI simplification/review.
+
+**Group C — reproducibility**
+- Seed-based reconstruction of random connections — `addRandomConnection()` currently uses unseeded `Math.random()`; reuse the existing `curveType.seed` pattern (`1.5-A`) rather than inventing a new mechanism.
+
+**Group D — color system (largest, multi-step)**
+1. Define an Ostwald color-harmony system — his color theory (*Die Harmonie der Farben* or equivalent), not yet touched by this project; to be verified against the actual primary source before implementation, matching this project's established practice of checking claims rather than assuming them (see `1.4`'s Fig. 4 correction as precedent).
+2. Manual face-to-color assignment — an interaction pattern analogous to `1.8` Phase (iv)'s "step through possibilities" line-pairing UI, once faces exist to assign colors to; depends on `1.10`'s existing face-detection.
+3. Extend to per-layer independent coloring, leveraging `1.12`'s already-shipped independent per-layer shape/scale/order/symmetryMode — color becomes another independent per-layer property, not a new architectural concept.
+4. Extend to color as an animatable parameter within the existing `1.8` timeline/keyframe infrastructure — transform parameters already interpolate over time; color would be a new interpolation target using the same mechanism, building on (not replacing) the transform/connection-morph animation already shipped.
+
+**Group E — source research required before design**
+- "Netzorgel" (net-organ) — net transformations mentioned by Ostwald and elaborated by Hinterreiter. Needs primary-source verification (which text, what's actually described) before any design session; the person's own research task, not yet started. Can proceed in parallel with any other group.
+
+**Group F — experimental, depends on Group D**
+- Extend time-based metamorphosis (currently theme-line/connection morphing, `1.8`) to surfaces/faces — once Group D's face-coloring exists, could faces themselves morph (in color, shape, or both) over time, analogous to how lines currently do. Explicitly speculative/exploratory, sequenced after Group D since it depends on Group D's output existing first.
+
 ---
 
 ## Priority 2 — Editorial Framing (planned, coming weeks)
