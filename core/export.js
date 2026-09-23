@@ -167,8 +167,9 @@ function buildExportData(crossLayerData) {
     };
 
     const enabledLayers = additionalLayers.filter(layer => layer.enabled);
+    const layerFaceStores = []; // Group D Phase 4: filled per exported layer below, for meta.faceColoring
     if (enabledLayers.length > 0) {
-        data.geometry.layers = enabledLayers.map(layer => {
+        data.geometry.layers = enabledLayers.map((layer, layerIdx) => {
             const completeLayerConnections = layer.connections.filter(c => c.length === 2);
             // Roadmap 1.12 stage 1 pass 2 (node-resolution fix, export
             // path): this layer's OWN persisted nodes, not the base's -
@@ -252,7 +253,11 @@ function buildExportData(crossLayerData) {
                 adjacency: computeAdjacency(completeLayerConnections, layerNodeById)
             };
             if (curveType.kind === 'straight') {
-                const layerFacesResult = computeCellFaces(completeLayerConnections, layer.nodes);
+                // Group D Phase 4: this layer's assignment store (undefined
+                // for a layer that never had one) recolors its assigned
+                // faces (face.color = resolved hex) and tags them with
+                // face.colorSpec; unassigned faces are untouched.
+                const layerFacesResult = computeCellFaces(completeLayerConnections, layer.nodes, layer.faceAssignments || null);
                 layerData.faceNodes = layerFacesResult.nodes;
                 layerData.faces = layerFacesResult.faces;
             }
@@ -297,15 +302,30 @@ function buildExportData(crossLayerData) {
                     layerData.themeLineOrbits = computeThemeLineOrbitAssignments(completeLayerConnections, layer.symmetryMode, layerGridOverride, layer.shape);
                 }
             }
+            layerFaceStores.push({ layerIndex: layerIdx, store: layer.faceAssignments });
             return layerData;
         });
     }
 
     if (curveType.kind === 'straight') {
-        const facesResult = computeCellFaces(completeConnections);
+        const facesResult = computeCellFaces(completeConnections, nodes, baseFaceAssignments);
         data.geometry.faceNodes = facesResult.nodes;
         data.geometry.faces = facesResult.faces;
     }
+
+    // Roadmap 1.10a / Group D Phase 4: meta.faceColoring - additive, present
+    // ONLY when at least one sheet has a face-color assignment, so every
+    // unassigned pattern exports byte-identically to before (formatVersion
+    // stays 1). Assigned faces additionally carry face.colorSpec and export
+    // face.color as the resolved #rrggbb (unassigned faces keep orbitColor()'s
+    // hsl string, no colorSpec) - see core/facecolor.js. Extra JSON keys under
+    // meta/geometry.faces, in the same category as every earlier additive
+    // field (SpaceHarmony's importFlatForm()/_isFlat2DExport() read only
+    // formatVersion + geometry.centroid/outerCorners/nodes/edges - re-confirmed
+    // by grep in the Phase 4 session, not re-run against SpaceHarmony itself,
+    // which is out of Group D's scope).
+    const faceColoring = faceColoringExportData(baseFaceAssignments, layerFaceStores);
+    if (faceColoring) data.meta.faceColoring = faceColoring;
 
     // Roadmap 1.11-B: base sheet's own patternName (top-level, per the
     // 1.11 design session's proposal - doesn't belong to `geometry`
