@@ -750,6 +750,25 @@
         <span id="timeline-status"></span>
       </div>
 
+      <!-- Roadmap 1.10a / Group D Phase 3: Face Colors - Ostwald color
+           harmony applied to the ACTIVE sheet's face trails (a trail = all
+           symmetry copies of one face, core/facecolor.js). Visible only
+           while that sheet's face fill is on; rebuilt by sketch.js's
+           updateFaceColorsPanel(). A harmony rule (core/color.js registry)
+           + one k/c stepper per rule axis distributes one color per trail;
+           a trail's own stepper then moves it to another slot of the SAME
+           series (no free color picker, by design). "Reset colors" clears
+           the sheet's assignments back to the default orbit coloring. -->
+      <div class="control-group" id="face-colors-group" hidden>
+        <label>Face Colors</label>
+        <div id="face-colors-status"></div>
+        <select id="face-colors-rule" title="Harmony rule"></select>
+        <div id="face-colors-axes"></div>
+        <div id="face-colors-note"></div>
+        <div id="face-colors-list"></div>
+        <button id="btn-face-colors-reset" class="layer-btn" title="Back to the default symmetry-orbit colors">Reset colors</button>
+      </div>
+
       <!-- Roadmap 1.11-B: read-only theme-line orbit name for whichever
            sheet is currently active (Base or a layer tab) - contextual
            the same way the offset controls below are, since each sheet
@@ -1093,17 +1112,17 @@
        the p5.js CDN tag - that URL already carries its own version
        (p5@1.9.0), so a version bump there naturally changes the URL. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260923c"></script>
-  <script src="core/state.js?v=20260923c"></script>
-  <script src="core/symmetry.js?v=20260923c"></script>
-  <script src="core/curves.js?v=20260923c"></script>
-  <script src="core/tiling.js?v=20260923c"></script>
-  <script src="core/faces.js?v=20260923c"></script>
-  <script src="core/orbits.js?v=20260923c"></script>
-  <script src="core/color.js?v=20260923c"></script>
-  <script src="core/facecolor.js?v=20260923c"></script>
-  <script src="core/export.js?v=20260923c"></script>
-  <script src="sketch.js?v=20260923c"></script>
+  <script src="core/forms.js?v=20260923e"></script>
+  <script src="core/state.js?v=20260923e"></script>
+  <script src="core/symmetry.js?v=20260923e"></script>
+  <script src="core/curves.js?v=20260923e"></script>
+  <script src="core/tiling.js?v=20260923e"></script>
+  <script src="core/faces.js?v=20260923e"></script>
+  <script src="core/orbits.js?v=20260923e"></script>
+  <script src="core/color.js?v=20260923e"></script>
+  <script src="core/facecolor.js?v=20260923e"></script>
+  <script src="core/export.js?v=20260923e"></script>
+  <script src="sketch.js?v=20260923e"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

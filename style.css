@@ -219,3 +219,17 @@ body.dark {
 /* Roadmap 1.8 Stage D phase (iv) step 2: per-row End-line variant stepper (k/c) */
 .pairing-variant { display: inline-flex; align-items: center; gap: 2px; }
 .pairing-variant-count { font: 12px monospace; min-width: 34px; text-align: center; }
+
+/* Roadmap 1.10a / Group D Phase 3: Face Colors panel */
+#face-colors-group select { width: 100%; margin: 4px 0; }
+#face-colors-status, #face-colors-note { font-size: 12px; margin: 2px 0; }
+#face-colors-note { color: #666; }
+.fc-axis { display: flex; align-items: center; gap: 4px; margin: 2px 0; font-size: 12px; }
+.fc-axis-label { min-width: 84px; }
+.fc-axis-value { color: #666; }
+#face-colors-list { margin: 6px 0; max-height: 240px; overflow-y: auto; }
+.fc-row { display: flex; align-items: center; gap: 6px; margin: 2px 0; padding: 1px 2px; font-size: 12px; border-radius: 3px; }
+.fc-row:hover { background: #f0f0f0; }
+.fc-swatch { width: 16px; height: 16px; border: 1px solid #888; flex: none; }
+.fc-label { flex: 1; }
+.fc-default { color: #888; font-style: italic; }

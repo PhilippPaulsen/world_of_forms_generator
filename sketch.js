@@ -555,6 +555,8 @@ function setup() {
         });
     }
 
+    initFaceColorsPanel();
+
     // Roadmap 1.5-B: kind:'free' controls (roughness/visible/reroll) -
     // a plate-wide curveType setting, not per-layer (see index.html's
     // own comment on these groups), so no layer-switch call site needs
@@ -2134,6 +2136,9 @@ function draw() {
     // crossLayerFillBuffer/crossLayerFillBufferSignature above, not
     // called unconditionally like updateCrossLayerStatus().
     updatePatternNameStatus();
+    // Group D Phase 3: Face Colors panel - same once-per-draw, signature-
+    // gated pattern (rebuilds only when its contents could have changed).
+    updateFaceColorsPanel();
 }
 
 // ----------------- ALTERNATIVE NET CONSTRUCTION (Roadmap 1.2-C) -----
@@ -3758,6 +3763,207 @@ function patternNameSignature() {
     const activeShape = gridOverride ? gridOverride.shape : currentShape;
     const activeMode = gridOverride ? gridOverride.symmetryMode : symmetryMode;
     return JSON.stringify({ shape: activeShape, mode: activeMode, activeLayer, conns: activeConnections() });
+}
+
+// ----------------- FACE COLORS PANEL (Group D Phase 3) -----------------
+// The UI over core/facecolor.js + core/color.js: rule picker, one k/c stepper
+// per rule axis, a swatch row per face trail (hover outlines the trail on the
+// canvas; a per-trail stepper picks another slot of the SAME generated
+// series), and Reset colors. Everything acts on the ACTIVE sheet's own store
+// and palette state (faceAssignmentsFor()/facePaletteFor()), so each tab keeps
+// independent colors. The panel exists only while that sheet's face fill is on.
+//
+// Not built here (Phase 2's deferred decisions, deliberately): orphan cleanup,
+// split/merge inheritance, stub-vertex key stability. In particular a trail
+// whose geometry an edit changed comes back UNASSIGNED (default color, no
+// explanation) - the row just says "default".
+let faceColorsSignature = null;
+
+// Why the active sheet draws no face fills right now, or null when it does.
+// Mirrors core/tiling.js's computeLayerCellFaces() guard (enabled, showFaces,
+// same scale, rotation 0) - duplicated on purpose so those guards stay
+// untouched; a base sheet only needs straight lines (computeCellFaces()).
+function faceFillsUnavailableReason() {
+    if (curveType.kind !== 'straight') return 'Face fills need straight lines (curve/free mode is on).';
+    if (activeLayer === 'base') return null;
+    const l = additionalLayers[activeLayer];
+    if (!l.enabled) return 'This layer is hidden.';
+    if (l.shapeSizeFactor !== shapeSizeFactor || (l.rotation || 0) !== 0) return 'Face fills are not drawn for this layer (its size or rotation differs from the base sheet).';
+    return null;
+}
+
+function faceColorsGrid() {
+    return activeLayer === 'base'
+        ? { gridNodes: nodes, conns: connections }
+        : { gridNodes: additionalLayers[activeLayer].nodes, conns: additionalLayers[activeLayer].connections };
+}
+
+function faceColorsSig() {
+    const l = activeLayer === 'base' ? null : additionalLayers[activeLayer];
+    return JSON.stringify({
+        sheet: activeLayer, conns: faceColorsGrid().conns, shape: currentShape, mode: symmetryMode, n: faceColorsGrid().gridNodes.length,
+        layer: l && [l.enabled, l.shapeSizeFactor, l.rotation], size: shapeSizeFactor, curve: curveType.kind,
+        store: faceAssignmentsFor(activeLayer).size
+    });
+}
+
+// Called once per draw(): shows/hides the panel with the active sheet's face
+// fill and rebuilds it only when what it lists could have changed.
+function updateFaceColorsPanel() {
+    const groupEl = document.getElementById('face-colors-group');
+    if (!groupEl) return;
+    const visible = activeShowFaces();
+    groupEl.hidden = !visible;
+    if (!visible) { faceColorsSignature = null; faceHover = null; return; }
+    if (faceColorsSig() !== faceColorsSignature) renderFaceColorsPanel();
+}
+
+function faceColorsAxisValue(rule, axis, k) {
+    const sys = OSTWALD_REFERENCE_SYSTEM;
+    if (axis.id === 'hue') return sys.hues[k].name;
+    if (axis.id === 'level') return rule.id === 'tetrad' ? sys.fullColorLevels.pairs[k].join(' / ') : sys.grayScale.letters[k];
+    return '';
+}
+
+function faceColorsStepper(k, c, title, onStep) {
+    const wrap = document.createElement('span');
+    wrap.className = 'pairing-variant';
+    const mk = (txt, delta) => {
+        const b = document.createElement('button');
+        b.className = 'layer-btn pairing-move-btn';
+        b.textContent = txt;
+        b.title = title;
+        b.addEventListener('click', () => onStep(delta));
+        return b;
+    };
+    const cnt = document.createElement('span');
+    cnt.className = 'pairing-variant-count';
+    cnt.textContent = `${k + 1}/${c}`;
+    cnt.dataset.k = String(k + 1);
+    cnt.dataset.c = String(c);
+    wrap.appendChild(mk('◀', -1));
+    wrap.appendChild(cnt);
+    wrap.appendChild(mk('▶', 1));
+    return wrap;
+}
+
+// (Re)colors every trail of the active sheet from its palette, then refreshes.
+function applyFaceColorsPalette() {
+    const { gridNodes, conns } = faceColorsGrid();
+    const group = sheetGroupElements(gridNodes);
+    if (group) {
+        const trails = computeFaceTrails(computeCellFaces(conns, gridNodes), group);
+        applyPaletteToTrails(faceAssignmentsFor(activeLayer), trails, facePaletteFor(activeLayer));
+    }
+    renderFaceColorsPanel();
+    redraw();
+}
+
+function renderFaceColorsPanel() {
+    const sheet = activeLayer;
+    const statusEl = document.getElementById('face-colors-status');
+    const ruleSel = document.getElementById('face-colors-rule');
+    const axesEl = document.getElementById('face-colors-axes');
+    const noteEl = document.getElementById('face-colors-note');
+    const listEl = document.getElementById('face-colors-list');
+    const resetBtn = document.getElementById('btn-face-colors-reset');
+    if (!statusEl || !ruleSel || !axesEl || !noteEl || !listEl || !resetBtn) return;
+    faceHover = null; // the rows being replaced may have been hovered; restored below if the pointer is still on one
+    axesEl.innerHTML = ''; listEl.innerHTML = ''; noteEl.textContent = '';
+
+    const store = faceAssignmentsFor(sheet);
+    const palette = facePaletteFor(sheet);
+    const reason = faceFillsUnavailableReason();
+    const { gridNodes, conns } = faceColorsGrid();
+    const group = reason ? null : sheetGroupElements(gridNodes);
+    const trails = group ? computeFaceTrails(computeCellFaces(conns, gridNodes, store), group) : [];
+
+    resetBtn.disabled = store.size === 0 && !palette.ruleId;
+    ruleSel.innerHTML = '';
+    const ph = document.createElement('option');
+    ph.value = ''; ph.textContent = 'Choose a harmony rule…';
+    ruleSel.appendChild(ph);
+    listHarmonyRules().forEach(r => {
+        const o = document.createElement('option');
+        o.value = r.id;
+        o.textContent = r.label + (r.verified === false ? ' – unverified' : '');
+        ruleSel.appendChild(o);
+    });
+    ruleSel.value = palette.ruleId || '';
+    ruleSel.disabled = trails.length === 0;
+
+    if (reason || !group) { statusEl.textContent = reason || 'Face colors are unavailable for this grid.'; faceColorsSignature = faceColorsSig(); return; }
+    statusEl.textContent = trails.length === 0
+        ? 'No faces yet — draw connections that enclose regions.'
+        : `${trails.length} face trail${trails.length === 1 ? '' : 's'} (all symmetry copies of a face share one color)`;
+
+    const rule = palette.ruleId ? getHarmonyRule(palette.ruleId) : null;
+    if (rule) {
+        harmonyRuleParams(rule, OSTWALD_REFERENCE_SYSTEM).forEach((axis, a) => {
+            const row = document.createElement('div');
+            row.className = 'fc-axis';
+            const lab = document.createElement('span');
+            lab.className = 'fc-axis-label';
+            lab.textContent = axis.label;
+            const val = document.createElement('span');
+            val.className = 'fc-axis-value';
+            val.textContent = faceColorsAxisValue(rule, axis, palette.idx[a]);
+            row.appendChild(lab);
+            row.appendChild(faceColorsStepper(palette.idx[a], axis.count, `Step ${axis.label}`, delta => {
+                palette.idx[a] = (palette.idx[a] + delta + axis.count) % axis.count;
+                applyFaceColorsPalette();
+            }));
+            row.appendChild(val);
+            axesEl.appendChild(row);
+        });
+        noteEl.textContent = (rule.verified === false ? 'Unverified definition. ' : '') + (rule.note || '');
+    }
+
+    trails.forEach((t, i) => {
+        const row = document.createElement('div');
+        row.className = 'fc-row';
+        const sw = document.createElement('span');
+        sw.className = 'fc-swatch';
+        sw.style.background = t.color;
+        const a = store.get(t.key);
+        const lab = document.createElement('span');
+        lab.className = 'fc-label';
+        lab.textContent = `Trail ${i + 1} · ${t.faceCount} face${t.faceCount === 1 ? '' : 's'}`;
+        row.appendChild(sw);
+        row.appendChild(lab);
+        if (!a) { const d = document.createElement('span'); d.className = 'fc-default'; d.textContent = 'default'; row.appendChild(d); }
+        if (rule) {
+            const slot = (a && a.rule === rule.id && a.params && Number.isInteger(a.params.slot)) ? a.params.slot : i;
+            row.appendChild(faceColorsStepper(Math.min(slot, trails.length - 1), trails.length, 'Pick another color of this series for this trail', delta => {
+                palette.overrides.set(t.key, (slot + delta + trails.length) % trails.length);
+                applyFaceColorsPalette();
+            }));
+        }
+        row.dataset.key = t.key;
+        row.addEventListener('mouseenter', () => { faceHover = { sheet, key: t.key }; redraw(); });
+        row.addEventListener('mouseleave', () => { if (faceHover && faceHover.key === t.key) { faceHover = null; redraw(); } });
+        listEl.appendChild(row);
+        if (row.matches(':hover')) faceHover = { sheet, key: t.key };
+    });
+    faceColorsSignature = faceColorsSig();
+}
+
+function initFaceColorsPanel() {
+    const ruleSel = document.getElementById('face-colors-rule');
+    const resetBtn = document.getElementById('btn-face-colors-reset');
+    if (ruleSel) ruleSel.addEventListener('change', () => {
+        const palette = facePaletteFor(activeLayer);
+        if (!ruleSel.value) { resetFaceColors(activeLayer); renderFaceColorsPanel(); redraw(); return; }
+        palette.ruleId = ruleSel.value;
+        // hue axis starts at the first hue, level axes at their middle - the lightest levels
+        // (gray letter 'a') are nearly white and would make a first application look like "nothing happened"
+        palette.idx = harmonyRuleParams(getHarmonyRule(ruleSel.value), OSTWALD_REFERENCE_SYSTEM).map(ax => ax.id === 'hue' ? 0 : ax.count >> 1);
+        palette.overrides = new Map(); // another rule = another series: old slot picks would mean something else
+        applyFaceColorsPalette();
+    });
+    if (resetBtn) resetBtn.addEventListener('click', () => { resetFaceColors(activeLayer); renderFaceColorsPanel(); redraw(); });
+    const listEl = document.getElementById('face-colors-list');
+    if (listEl) listEl.addEventListener('mouseleave', () => { if (faceHover) { faceHover = null; redraw(); } });
 }
 
 // Updates #pattern-name-status for whichever sheet is currently active.
