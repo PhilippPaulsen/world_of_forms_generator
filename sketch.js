@@ -3867,7 +3867,10 @@ function renderFaceColorsPanel() {
     const noteEl = document.getElementById('face-colors-note');
     const listEl = document.getElementById('face-colors-list');
     const resetBtn = document.getElementById('btn-face-colors-reset');
-    if (!statusEl || !ruleSel || !axesEl || !noteEl || !listEl || !resetBtn) return;
+    const unassignedEl = document.getElementById('face-colors-unassigned');
+    const unassignedText = document.getElementById('face-colors-unassigned-text');
+    if (!statusEl || !ruleSel || !axesEl || !noteEl || !listEl || !resetBtn || !unassignedEl || !unassignedText) return;
+    unassignedEl.hidden = true;
     faceHover = null; // the rows being replaced may have been hovered; restored below if the pointer is still on one
     axesEl.innerHTML = ''; listEl.innerHTML = ''; noteEl.textContent = '';
 
@@ -3898,6 +3901,18 @@ function renderFaceColorsPanel() {
         : `${trails.length} face trail${trails.length === 1 ? '' : 's'} (all symmetry copies of a face share one color)`;
 
     const rule = palette.ruleId ? getHarmonyRule(palette.ruleId) : null;
+    // Uncolored trails while a rule is applied (new regions an edit created, anything reconciliation
+    // could not hand a color to): say so, and offer the explicit fill - never an automatic repaint.
+    if (rule) {
+        const missing = unassignedTrails(store, trails).length;
+        if (missing) {
+            unassignedText.textContent = `${missing} of ${trails.length} trail${trails.length === 1 ? '' : 's'} ${missing === 1 ? 'has' : 'have'} no palette color (e.g. new regions).`;
+            unassignedEl.hidden = false;
+        }
+    }
+    // The series in force (frozen at the last full application - see core/facecolor.js): per-trail steppers
+    // work inside it, so an edit that changes the trail count does not change what a stepper offers.
+    const seriesSlots = palette.slots || trails.length;
     if (rule) {
         harmonyRuleParams(rule, OSTWALD_REFERENCE_SYSTEM).forEach((axis, a) => {
             const row = document.createElement('div');
@@ -3933,11 +3948,18 @@ function renderFaceColorsPanel() {
         row.appendChild(lab);
         if (!a) { const d = document.createElement('span'); d.className = 'fc-default'; d.textContent = 'default'; row.appendChild(d); }
         if (rule) {
-            const slot = (a && a.rule === rule.id && a.params && Number.isInteger(a.params.slot)) ? a.params.slot : i;
-            row.appendChild(faceColorsStepper(Math.min(slot, trails.length - 1), trails.length, 'Pick another color of this series for this trail', delta => {
-                palette.overrides.set(t.key, (slot + delta + trails.length) % trails.length);
-                applyFaceColorsPalette();
-            }));
+            // A stepper writes ONLY its own trail (assignTrailSlot()): never a re-run of the rule over the
+            // others, which would erase the colors edits handed on. An uncolored trail shows a dash and takes
+            // the first (or last) slot of the series on its first click.
+            const slot = (a && a.rule === rule.id && a.params && Number.isInteger(a.params.slot) && a.params.slot < seriesSlots) ? a.params.slot : null;
+            const stepper = faceColorsStepper(slot === null ? 0 : slot, seriesSlots, 'Pick another color of this series for this trail', delta => {
+                const next = slot === null ? (delta > 0 ? 0 : seriesSlots - 1) : (slot + delta + seriesSlots) % seriesSlots;
+                assignTrailSlot(store, palette, t.key, next, seriesSlots);
+                renderFaceColorsPanel();
+                redraw();
+            });
+            if (slot === null) stepper.querySelector('.pairing-variant-count').textContent = `\u2013/${seriesSlots}`;
+            row.appendChild(stepper);
         }
         row.dataset.key = t.key;
         row.addEventListener('mouseenter', () => { faceHover = { sheet, key: t.key }; redraw(); });
@@ -3962,6 +3984,14 @@ function initFaceColorsPanel() {
         applyFaceColorsPalette();
     });
     if (resetBtn) resetBtn.addEventListener('click', () => { resetFaceColors(activeLayer); renderFaceColorsPanel(); redraw(); });
+    const spreadBtn = document.getElementById('btn-face-colors-spread');
+    if (spreadBtn) spreadBtn.addEventListener('click', () => {
+        const { gridNodes, conns } = faceColorsGrid();
+        const group = sheetGroupElements(gridNodes), store = faceAssignmentsFor(activeLayer);
+        if (group) spreadPaletteToUnassigned(store, computeFaceTrails(computeCellFaces(conns, gridNodes, store), group), facePaletteFor(activeLayer));
+        renderFaceColorsPanel();
+        redraw();
+    });
     const listEl = document.getElementById('face-colors-list');
     if (listEl) listEl.addEventListener('mouseleave', () => { if (faceHover) { faceHover = null; redraw(); } });
 }
