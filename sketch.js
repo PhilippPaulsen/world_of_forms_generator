@@ -451,20 +451,33 @@ function setup() {
                 curveType = { kind: 'straight' }; // Disable curve
                 curveBtn.removeClass('active');
             } else {
-                // Roadmap 1.4-A: same fixed style the old binary toggle
-                // always used (fold=1, symmetric, strength=25 - byte-
-                // identical rendering to the pre-1.4-A code, verified in
-                // the 1.4-A implementation session's own regression
-                // test). 1.4-B is what exposes fold/symmetric/leaning/
-                // strength as real controls; this toggle stays exactly
-                // as simple as it was before that.
-                curveType = { kind: 'curve', fold: 1, symmetric: true, leaning: 'left', strength: 25 };
+                // Roadmap (Group A): fold/strength now come from the
+                // live #curve-fold-input/#curve-strength-input controls
+                // (declared further below in this same setup() call -
+                // safe forward reference, this handler only actually
+                // runs on a later click, by which point setup() has
+                // already run those declarations once, same pattern
+                // updateCurveTypeControls() itself already relies on)
+                // instead of a fixed hardcoded pair - so re-activating
+                // curve mode resumes at whatever fold/strength the
+                // person last set, not always fold=1/strength=25. Their
+                // own untouched HTML defaults (1/25) still match the
+                // OLD hardcoded pair exactly for a first-ever activation
+                // on a fresh page load - byte-identical starting point,
+                // just no longer frozen after that.
+                curveType = {
+                    kind: 'curve',
+                    fold: curveFoldInput ? parseInt(curveFoldInput.value()) || 1 : 1,
+                    symmetric: true,
+                    leaning: 'left',
+                    strength: curveStrengthInput ? parseFloat(curveStrengthInput.value()) || 0 : 25,
+                };
                 curveBtn.addClass('active');
                 freeBtn && freeBtn.removeClass('active');
                 setActiveShowFaces(false);
                 faceBtn && faceBtn.removeClass('active');
             }
-            updateFreeControls();
+            updateCurveTypeControls();
             redraw();
         });
     }
@@ -488,7 +501,19 @@ function setup() {
                     kind: 'free',
                     seed: Math.floor(Math.random() * 2147483648),
                     roughness: 1,
-                    strength: 20,
+                    // Roadmap (Group A): strength now shares the SAME
+                    // live #curve-strength-input - curveType.strength was
+                    // already read identically for 'curve' and 'free' in
+                    // core/curves.js (one field, two kinds) - unified
+                    // here into one control to match, rather than a
+                    // second, separately-hardcoded 20 that a shared
+                    // slider couldn't represent alongside curve's own
+                    // 25 anyway. On a fresh page load where 'free' is
+                    // activated before 'curve' ever has been, this
+                    // starts at the slider's own HTML default (25, not
+                    // the old 20) - a small, deliberate, documented
+                    // behavior change, not an oversight.
+                    strength: curveStrengthInput ? parseFloat(curveStrengthInput.value()) || 0 : 20,
                     leaning: 'left',
                     visible: false
                 };
@@ -497,7 +522,7 @@ function setup() {
                 setActiveShowFaces(false);
                 faceBtn && faceBtn.removeClass('active');
             }
-            updateFreeControls();
+            updateCurveTypeControls();
             updateFreeVisibleToggleIcon();
             redraw();
         });
@@ -525,7 +550,7 @@ function setup() {
                 freeBtn && freeBtn.removeClass('active');
             }
             updateFaceToggleControl();
-            updateFreeControls();
+            updateCurveTypeControls();
             redraw();
         });
     }
@@ -535,17 +560,58 @@ function setup() {
     // own comment on these groups), so no layer-switch call site needs
     // to re-sync this the way updateOffsetControls() does for layer-
     // specific state. Shown only while curveType.kind === 'free'.
+    // Roadmap (Group A): also owns fold/strength (kind:'curve', and
+    // strength also kind:'free' - see index.html's own comment on these
+    // two groups) - renamed from updateFreeControls() to
+    // updateCurveTypeControls() since it's no longer 'free'-only; every
+    // one of its 4 call sites (curveBtn/freeBtn/faceBtn handlers, plus
+    // setup()'s own initial call below) already runs at exactly the
+    // moments curveType.kind can change, so no new call site is needed.
+    // curveFoldGroup/curveFoldInput/curveStrengthGroup/curveStrengthInput
+    // are named with a `curve` prefix specifically to avoid colliding
+    // with the UNRELATED #mode-fold-group/#layer-fold-group ("3-fold"/
+    // "6-fold" HEX SYMMETRY buttons, an entirely different "fold"
+    // concept - see updateSymmetryModeControl()'s own foldGroup local
+    // and the layer panel's own top-level foldGroup const further below
+    // in this file) - caught as a real `const` redeclaration error
+    // before this shipped, not a hypothetical concern.
     const roughnessGroup = select('#free-roughness-group');
     const roughnessInput = select('#free-roughness-input');
+    const roughnessValueEl = select('#free-roughness-value');
     const freeControlsGroup = select('#free-controls-group');
     const freeVisibleBtn = select('#btn-toggle-free-visible');
     const rerollBtn = select('#btn-free-reroll-seed');
+    const curveFoldGroup = select('#curve-fold-group');
+    const curveFoldInput = select('#curve-fold-input');
+    const curveFoldValueEl = select('#curve-fold-value');
+    const curveStrengthGroup = select('#curve-strength-group');
+    const curveStrengthInput = select('#curve-strength-input');
+    const curveStrengthValueEl = select('#curve-strength-value');
 
-    function updateFreeControls() {
+    function updateCurveTypeControls() {
         const isFree = curveType.kind === 'free';
+        const isCurve = curveType.kind === 'curve';
         if (roughnessGroup) roughnessGroup.elt.hidden = !isFree;
         if (freeControlsGroup) freeControlsGroup.elt.hidden = !isFree;
-        if (isFree && roughnessInput) roughnessInput.value(curveType.roughness);
+        if (isFree && roughnessInput) {
+            roughnessInput.value(curveType.roughness);
+            if (roughnessValueEl) roughnessValueEl.html(curveType.roughness);
+        }
+        // fold: kind:'curve' only - core/curves.js never reads it for 'free'.
+        if (curveFoldGroup) curveFoldGroup.elt.hidden = !isCurve;
+        if (isCurve && curveFoldInput) {
+            curveFoldInput.value(curveType.fold);
+            if (curveFoldValueEl) curveFoldValueEl.html(curveType.fold);
+        }
+        // strength: kind:'curve' OR kind:'free' - core/curves.js reads
+        // curveType.strength identically for both (see buildCurvePieces()'s
+        // shared `mag` computation, before the kind-specific branches).
+        const hasStrength = isCurve || isFree;
+        if (curveStrengthGroup) curveStrengthGroup.elt.hidden = !hasStrength;
+        if (hasStrength && curveStrengthInput) {
+            curveStrengthInput.value(curveType.strength);
+            if (curveStrengthValueEl) curveStrengthValueEl.html(curveType.strength);
+        }
     }
 
     if (roughnessInput) {
@@ -555,6 +621,45 @@ function setup() {
             if (isNaN(v) || v < 0) v = 0;
             if (v > 5) v = 5;
             curveType.roughness = v;
+            if (roughnessValueEl) roughnessValueEl.html(v);
+            redraw();
+        });
+    }
+
+    // Roadmap (Group A): fold - kind:'curve' only. A stepped integer
+    // control (index.html's own step="1"); buildCurvePieces() throws if
+    // fold isn't a positive integer, so the clamp/rounding here is
+    // defensive (the HTML range's own step/min/max already constrain a
+    // normal drag), not load-bearing for a plain slider interaction.
+    if (curveFoldInput) {
+        curveFoldInput.input(() => {
+            if (curveType.kind !== 'curve') return;
+            let v = Math.round(parseFloat(curveFoldInput.value()));
+            if (isNaN(v) || v < 1) v = 1;
+            if (v > 12) v = 12;
+            curveType.fold = v;
+            if (curveFoldValueEl) curveFoldValueEl.html(v);
+            redraw();
+        });
+    }
+
+    // Roadmap (Group A): strength - kind:'curve' OR kind:'free' (one
+    // shared curveType field, one shared control - see
+    // updateCurveTypeControls()'s own comment). min=0 deliberately, not
+    // symmetric around 0: a negative value would trip
+    // buildCurvePieces()'s own `mag < 0.0001` degenerate check for ANY
+    // negative magnitude, silently rendering a plain straight line
+    // rather than a mirrored bulge - bulge DIRECTION is curveType.leaning's
+    // job (see core/curves.js's mirrorCurveType()), not strength's sign,
+    // so this control correctly has no negative range to offer.
+    if (curveStrengthInput) {
+        curveStrengthInput.input(() => {
+            if (curveType.kind !== 'curve' && curveType.kind !== 'free') return;
+            let v = parseFloat(curveStrengthInput.value());
+            if (isNaN(v) || v < 0) v = 0;
+            if (v > 200) v = 200;
+            curveType.strength = v;
+            if (curveStrengthValueEl) curveStrengthValueEl.html(v);
             redraw();
         });
     }
@@ -1680,7 +1785,7 @@ function setup() {
     updateOffsetControls();
     updateTimelineControls();
     updateFaceToggleControl();
-    updateFreeControls();
+    updateCurveTypeControls();
     updateFreeVisibleToggleIcon();
 
     // Show nodes Toggle Button

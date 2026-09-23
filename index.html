@@ -550,17 +550,83 @@
         </div>
       </div>
 
+      <!-- Roadmap 1.4-A/1.5-A (Group A, node-count-limit session's
+           follow-up): live controls for curveType's own fold/strength -
+           a plate-wide setting (not per-layer, same as roughness/
+           symmetric/leaning already are - see core/curves.js's own
+           docblock), so these sit next to the icon row that selects
+           curve style, not near the layer-tab-contextual offset
+           controls below. Hidden/shown by sketch.js's
+           updateCurveTypeControls(), same [hidden]-attribute pattern
+           the free-clothing groups already use.
+
+           `fold` (kind:'curve' only - core/curves.js never reads it for
+           kind:'free') is a STEPPED range (step="1"), not a continuous
+           slider - it must stay a positive integer (buildCurvePieces()
+           throws otherwise), matching Ostwald's own "1-, 2-, 3-fold"
+           counting. max="12": at the shortest realistic connection in
+           this app's own current max node-count configuration (hex,
+           order 7, ~38px between adjacent ring nodes - see ROADMAP.md's
+           Group A node-count entry), a lobe's own offset at the default
+           strength (25) drops below 1px - half the connection's own 2px
+           stroke width, i.e. genuinely swallowed by the line's own
+           thickness - at fold~9-10; 12 leaves a little headroom before
+           that point, past which core/curves.js's own docblock already
+           notes the curve "visually converges back toward a straight
+           line" regardless.
+
+           `strength` (kind:'curve' AND kind:'free' - core/curves.js
+           reads curveType.strength identically for both) is a
+           continuous slider, min="0" (NOT negative - a negative
+           strength makes buildCurvePieces()'s own `mag < 0.0001`
+           degenerate-check true for ANY negative value, silently
+           collapsing to a plain straight line, not a mirrored bulge;
+           bulge DIRECTION is `leaning`'s job, not strength's sign - see
+           core/curves.js's own mirrorCurveType() comment). max="200":
+           verified by direct computation of the actual fold===2 cubic
+           construction (two independent, oppositely-offset control
+           points - core/curves.js's own "true S-curve" case) on a unit
+           chord - strength=200 gives a peak perpendicular deviation of
+           ~58% of the chord length on EACH side (a full, clearly
+           legible double-bend, confirmed never self-intersecting up to
+           far beyond this range), matching the person's own "a full
+           sine-S in both directions" request; strength=25 (the
+           pre-1.4-A default, kept as this control's own starting value)
+           gives only ~7% - a shallow single bulge at fold=1, which is
+           exactly the gap this control closes. -->
+      <div class="control-group" id="curve-fold-group" hidden>
+        <label for="curve-fold-input">Fold</label>
+        <div class="icon-row">
+          <input type="range" id="curve-fold-input" min="1" max="12" step="1" value="1">
+          <span id="curve-fold-value">1</span>
+        </div>
+      </div>
+      <div class="control-group" id="curve-strength-group" hidden>
+        <label for="curve-strength-input">Strength</label>
+        <div class="icon-row">
+          <input type="range" id="curve-strength-input" min="0" max="200" step="1" value="25">
+          <span id="curve-strength-value">25</span>
+        </div>
+      </div>
+
       <!-- Roadmap 1.5-B: kind:'free' controls - a plate-wide setting
            (curveType, not per-layer, same as fold/symmetric/leaning/
            strength already are - see core/curves.js's own docblock),
            so this sits next to the icon row that selects curve style,
            not near the layer-tab-contextual offset controls below.
            Hidden whenever curveType.kind !== 'free' - shown/hidden by
-           sketch.js's updateFreeControls(), same [hidden]-attribute
-           pattern the layer-offset groups already use. -->
+           sketch.js's updateCurveTypeControls(), same [hidden]-attribute
+           pattern the layer-offset groups already use.
+           Roadmap (Group A): was a number input, now a slider - same
+           min/max/step (already genuinely continuous end-to-end in
+           core/curves.js, a pure widget swap) - with a live-value
+           readout span, matching the new fold/strength controls above. -->
       <div class="control-group" id="free-roughness-group" hidden>
         <label for="free-roughness-input">Roughness</label>
-        <input type="number" id="free-roughness-input" min="0" max="5" step="0.25" value="1">
+        <div class="icon-row">
+          <input type="range" id="free-roughness-input" min="0" max="5" step="0.25" value="1">
+          <span id="free-roughness-value">1</span>
+        </div>
       </div>
       <div class="control-group" id="free-controls-group" hidden>
         <div class="icon-row">
@@ -1027,15 +1093,15 @@
        the p5.js CDN tag - that URL already carries its own version
        (p5@1.9.0), so a version bump there naturally changes the URL. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260923a"></script>
-  <script src="core/state.js?v=20260923a"></script>
-  <script src="core/symmetry.js?v=20260923a"></script>
-  <script src="core/curves.js?v=20260923a"></script>
-  <script src="core/tiling.js?v=20260923a"></script>
-  <script src="core/faces.js?v=20260923a"></script>
-  <script src="core/orbits.js?v=20260923a"></script>
-  <script src="core/export.js?v=20260923a"></script>
-  <script src="sketch.js?v=20260923a"></script>
+  <script src="core/forms.js?v=20260923b"></script>
+  <script src="core/state.js?v=20260923b"></script>
+  <script src="core/symmetry.js?v=20260923b"></script>
+  <script src="core/curves.js?v=20260923b"></script>
+  <script src="core/tiling.js?v=20260923b"></script>
+  <script src="core/faces.js?v=20260923b"></script>
+  <script src="core/orbits.js?v=20260923b"></script>
+  <script src="core/export.js?v=20260923b"></script>
+  <script src="sketch.js?v=20260923b"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides
