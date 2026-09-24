@@ -199,3 +199,52 @@ function netTransformFromExport(exported) {
     const repeat = exported.repeat !== undefined ? !!exported.repeat : exported.domain !== 'single';
     return { x: axis(exported.x), y: axis(exported.y), repeat };
 }
+
+// ---- Net-line overlay (display aid): the actual grid lines of the warped net ----
+
+// The lines of the net itself - one vertical and one horizontal line (in the warp's own frame) through
+// every lattice position, drawn edge to edge, at the WARPED positions - so a person can SEE the unequal
+// raster instead of inferring it from node dots or theme lines. A display aid only: it is not part of any
+// export and never touches nodes or connections.
+//
+//   spec    baseNetTransform or null (null/identity = the regular, uniform raster)
+//   corners the base sheet's outerCorners (the frame: c0, v1 = c1-c0, v2 = c3-c0)
+//   E       divisions per tile and axis (nodeCount - 1)
+//   view    {x0,y0,x1,y1}: the visible rectangle (repeat mode covers it; closed mode ignores it)
+//   opts    {closed: one tile only (the net rectangle), micro: lines whose index i % micro != 0 are
+//           level 'micro' (default 1 = every line is 'macro'). Nesting is not implemented yet; this is the
+//           seam the macro/micro split will use, so the overlay needs no rework then.}
+// Returns [{level: 'macro'|'micro', axis: 'v'|'h', x1, y1, x2, y2}], canvas coordinates. Positions come
+// from the same per-axis function applyNetWarp() uses (so `alternate` parity and repeat are honoured).
+function netGridLines(spec, corners, E, view, opts = {}) {
+    if (!corners || corners.length < 4 || !(E >= 1)) return [];
+    const c0 = corners[0], c1 = corners[1], c3 = corners[3];
+    const v1 = { x: c1.x - c0.x, y: c1.y - c0.y }, v2 = { x: c3.x - c0.x, y: c3.y - c0.y };
+    const det = v1.x * v2.y - v2.x * v1.y;
+    if (!det) return [];
+    const ax = spec ? spec.x : null, ay = spec ? (spec.y === 'same' ? spec.x : spec.y) : null;
+    const fx = netAxisLaw(ax, E), fy = netAxisLaw(ay, E);
+    const altX = !!(ax && ax.alternate), altY = !!(ay && ay.alternate);
+    const micro = Math.max(1, Math.round(opts.micro || 1));
+    const coords = P => { const dx = P.x - c0.x, dy = P.y - c0.y; return { s: (dx * v2.y - dy * v2.x) / det, t: (v1.x * dy - v1.y * dx) / det }; };
+    let sLo, sHi, tLo, tHi;
+    if (opts.closed) { sLo = 0; sHi = 1; tLo = 0; tHi = 1; }
+    else {
+        const cs = [{ x: view.x0, y: view.y0 }, { x: view.x1, y: view.y0 }, { x: view.x1, y: view.y1 }, { x: view.x0, y: view.y1 }].map(coords);
+        sLo = Math.floor(Math.min(...cs.map(c => c.s))) - 1; sHi = Math.ceil(Math.max(...cs.map(c => c.s))) + 1;
+        tLo = Math.floor(Math.min(...cs.map(c => c.t))) - 1; tHi = Math.ceil(Math.max(...cs.map(c => c.t))) + 1;
+    }
+    const warp = (f, alt, s) => f ? _netWarpAxis(f, alt, s) : s;
+    const level = idx => ((((idx % E) + E) % E) % micro === 0) ? 'macro' : 'micro';
+    const at = (s, t) => ({ x: c0.x + s * v1.x + t * v2.x, y: c0.y + s * v1.y + t * v2.y });
+    const out = [];
+    for (let idx = Math.round(sLo * E); idx <= Math.round(sHi * E); idx++) {
+        const s = warp(fx, altX, idx / E), a = at(s, tLo), b = at(s, tHi);
+        out.push({ level: level(idx), axis: 'v', x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+    }
+    for (let idx = Math.round(tLo * E); idx <= Math.round(tHi * E); idx++) {
+        const t = warp(fy, altY, idx / E), a = at(sLo, t), b = at(sHi, t);
+        out.push({ level: level(idx), axis: 'h', x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+    }
+    return out;
+}

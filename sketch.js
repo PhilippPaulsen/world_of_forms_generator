@@ -604,6 +604,8 @@ function setup() {
         }));
         strengthInput.input(() => { target().strength = parseInt(strengthInput.value()) / 100; commit(); });
         repeatBtn.mousePressed(() => { ui.repeat = !ui.repeat; commit(); });
+        const linesBtn = select('#net-lines-btn');
+        linesBtn.mousePressed(() => { netLinesOn = !netLinesOn; linesBtn.elt.classList.toggle('active', netLinesOn); redraw(); });
         reverseBtn.mousePressed(() => { target().reverse = !target().reverse; commit(); });
         alternateBtn.mousePressed(() => { target().alternate = !target().alternate; commit(); });
 
@@ -2111,6 +2113,8 @@ function draw() {
         }
         image(crossLayerFillBuffer, 0, 0);
     }
+
+    drawNetLinesOverlay();
 
     // Knoten (Hover rot)
     // Roadmap [layer node-dot rendering fix]: previously always the base
@@ -3864,6 +3868,21 @@ let faceColorsSignature = null;
 // Roadmap 1.6 / Group E phase 2: set by setup() (it needs the curve/free/face button closures); called once per draw().
 let netControlsSync = null;
 let netFreeNoteTimer = null;
+// Net-line overlay (display aid, off by default): the warped net's own grid lines, edge to edge. Macro lines
+// black, a finer level (once macro/micro nesting exists) red. Not exported; a PNG export of the canvas includes it.
+let netLinesOn = false;
+function drawNetLinesOverlay() {
+    if (!netLinesOn || currentShape !== 'square') return;
+    const closed = netWarpActive() && !baseNetTransform.repeat;
+    const lines = netGridLines(baseNetTransform, outerCorners, nodeCount - 1, { x0: 0, y0: 0, x1: width, y1: height }, { closed, micro: 1 });
+    push();
+    strokeWeight(1);
+    lines.forEach(l => {
+        if (l.level === 'micro') stroke(200, 0, 0, 170); else stroke(0, 0, 0, 120);
+        line(l.x1, l.y1, l.x2, l.y2);
+    });
+    pop();
+}
 
 // Why the active sheet draws no face fills right now, or null when it does.
 // Mirrors core/tiling.js's computeLayerCellFaces() guard (enabled, showFaces,
