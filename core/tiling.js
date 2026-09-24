@@ -44,13 +44,22 @@ function tileFor(shape) {
     return shape === 'hex' ? tileHex : shape === 'square' ? tileSquare : tileTriangle;
 }
 
+// Roadmap 1.6: installs the base sheet's net warp (core/netwarp.js) for the duration of one redraw,
+// so every segment drawCurvedBezier() emits - base, layers, all tiles - is mapped by the same
+// position-based F. try/finally: the warp must never leak into face detection, export data or
+// the next call. Phase 1: face fills are skipped on a warped net (see the netwarp.js docblock).
 function drawTessellation() {
+    activeNetWarp = netWarpForBase(baseNetTransform, currentShape, outerCorners, nodeCount);
+    try { _drawTessellationCore(); } finally { activeNetWarp = null; }
+}
+
+function _drawTessellationCore() {
     // Computed once per redraw (not per tile - see computeCellFaces()'s
     // own cost) when the base sheet's face-fill toggle is on (roadmap
     // 1.10a step 5/6's rendering hookup); each tile*() function draws
     // this same face set at every tile position via drawFaceFillsAtTile().
-    const cellFaces = showFaces ? computeCellFaces(connections, nodes, faceAssignmentsFor('base'), faceHighlightKeyFor('base')) : null;
-    const layerCellFaces = computeLayerCellFaces();
+    const cellFaces = (showFaces && !activeNetWarp) ? computeCellFaces(connections, nodes, faceAssignmentsFor('base'), faceHighlightKeyFor('base')) : null;
+    const layerCellFaces = activeNetWarp ? null : computeLayerCellFaces();
     tileFor(currentShape)(cellFaces, layerCellFaces);
 
     // Roadmap 1.12 stage 1: an additional layer whose OWN scale differs

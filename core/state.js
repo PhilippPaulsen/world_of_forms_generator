@@ -155,6 +155,14 @@ let segmentCollector = null;
 // handler; computeCellFaces() also defends against that combination directly.
 let showFaces = false;
 
+// Roadmap 1.6 / Group E (core/netwarp.js): the base sheet's net transform spec
+// ({x: {kind, w, alternate}, y: same-shape | 'same'}), null = regular net. Phase 1 has no UI;
+// set from code/tests. activeNetWarp is the READY warp drawTessellation() installs for the
+// duration of one redraw (null otherwise) and drawCurvedBezier() - the single drawing sink -
+// applies to every segment endpoint. Never persisted: derived from the spec per redraw.
+let baseNetTransform = null;
+let activeNetWarp = null;
+
 // Roadmap 1.2-C: null unless the CURRENT net came from
 // rebuildGridFromConstruction() (below), in which case {p, q, side, n} -
 // the exact inputs that reproduce this net's geometry, exported as

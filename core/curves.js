@@ -468,6 +468,10 @@ function buildCurvePieces(p1, p2, curveType, id1, id2) {
 // Roadmap 1.5-A: id1/id2 added (see buildCurvePieces()'s own comment) -
 // passed straight through, unused by this function itself.
 function drawCurvedBezier(p1, p2, curveType, id1, id2) {
+    // Roadmap 1.6 (core/netwarp.js): the net transform is applied HERE, once, to the two endpoints
+    // of every emitted segment - so canvas, SVG and the segment collector all see the same warped
+    // geometry. activeNetWarp is null whenever no warp is set (the common case): untouched path.
+    if (activeNetWarp) { p1 = applyNetWarp(activeNetWarp, p1); p2 = applyNetWarp(activeNetWarp, p2); }
     if (segmentCollector) {
         segmentCollector.push({ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y });
         return;
