@@ -180,9 +180,15 @@ function computeLayerCellFaces() {
             // re-interpolated every frame). Its faces are detected from THE SAME substitute, so fills
             // match the lines drawn at that frame. It takes no assignment store: a geometric trail key
             // means nothing on geometry that changes every frame (and reconciling against it would
-            // write garbage into a store) - default orbit colors only for now.
+            // write garbage into a store) - its colors come from the crossfade below, or stay the
+            // default orbit colors when no keyframe is colored.
             if (layer.isTimelinePlayback && layer._morphConnections && layer._morphNodes) {
-                map.set(i, computeCellFaces(layer._morphConnections, layer._morphNodes, null, null, faceSheetOverrideOfLayer(layer)));
+                const res = computeCellFaces(layer._morphConnections, layer._morphNodes, null, null, faceSheetOverrideOfLayer(layer));
+                // Group D item 4: the keyframes' colorings crossfade over the morph (core/facecolor.js
+                // playbackCrossfadeColors()); null (no keyframe colored) keeps the default orbit colors.
+                const fade = playbackCrossfadeColors(res);
+                if (fade) res.faces.forEach((f, k) => { if (fade[k]) f.color = fade[k]; });
+                map.set(i, res);
             } else if (!layer.isTimelinePlayback) {
                 map.set(i, computeCellFaces(layer.connections, layer.nodes, faceAssignmentsFor(i), faceHighlightKeyFor(i), faceSheetOverrideOfLayer(layer)));
             }

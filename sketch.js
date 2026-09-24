@@ -3421,9 +3421,13 @@ function applyTimelineFrame() {
     if (!resolved.ok) {
         playbackLayer._morphNodes = null;
         playbackLayer._morphConnections = null;
+        timeline.currentFrame = null;
         setTimelineStatus(resolved.reason);
         return;
     }
+    // Group D item 4: which two keyframes bracket this frame and how far between them - read by
+    // core/facecolor.js's playbackCrossfadeColors() (core/* cannot call back into sketch.js).
+    timeline.currentFrame = { segmentIndex: segment.segmentIndex, localT: segment.localT };
     const segCount = timeline.segmentDurationsMs.length;
     setTimelineStatus(segCount > 1
         ? `Segment ${segment.segmentIndex + 1}/${segCount} (Layer ${timeline.keyframeLayerIds[segment.segmentIndex] + 1} → Layer ${timeline.keyframeLayerIds[segment.segmentIndex + 1] + 1})`
@@ -3787,7 +3791,9 @@ function faceFillsUnavailableReason() {
     if (curveType.kind !== 'straight') return 'Face fills need straight lines (curve/free mode is on).';
     if (activeLayer === 'base') return null;
     const l = additionalLayers[activeLayer];
-    if (!l.enabled) return 'This layer is hidden.';
+    if (!l.enabled) return isTimelineKeyframe(activeLayer)
+        ? 'This layer is a timeline keyframe and hidden - tick its checkbox to show and edit its colors; the timeline crossfades them on playback.'
+        : 'This layer is hidden.';
     if (l.shapeSizeFactor !== shapeSizeFactor || (l.rotation || 0) !== 0) return 'Face fills are not drawn for this layer (its size or rotation differs from the base sheet).';
     return null;
 }
@@ -3795,6 +3801,9 @@ function faceFillsUnavailableReason() {
 // The active sheet's face inputs. `sheet` = the layer's own shape/symmetry mode/
 // mirror axis override (null for the base), so the panel lists the trails of the
 // SAME face set the canvas draws.
+// Whether layer `i` is one of the timeline's keyframe layers (Group D item 4).
+function isTimelineKeyframe(i) { return i !== 'base' && !!timeline && timeline.keyframeLayerIds.includes(i); }
+
 function faceColorsGrid() {
     return activeLayer === 'base'
         ? { gridNodes: nodes, conns: connections, sheet: null }
@@ -3805,7 +3814,7 @@ function faceColorsSig() {
     const l = activeLayer === 'base' ? null : additionalLayers[activeLayer];
     return JSON.stringify({
         sheet: activeLayer, conns: faceColorsGrid().conns, shape: currentShape, mode: symmetryMode, n: faceColorsGrid().gridNodes.length,
-        layer: l && [l.enabled, l.shapeSizeFactor, l.rotation, l.shape, l.symmetryMode], size: shapeSizeFactor, curve: curveType.kind,
+        layer: l && [l.enabled, l.shapeSizeFactor, l.rotation, l.shape, l.symmetryMode], kf: isTimelineKeyframe(activeLayer), size: shapeSizeFactor, curve: curveType.kind,
         store: faceAssignmentsFor(activeLayer).size
     });
 }
@@ -3878,6 +3887,8 @@ function renderFaceColorsPanel() {
     const unassignedText = document.getElementById('face-colors-unassigned-text');
     if (!statusEl || !ruleSel || !axesEl || !noteEl || !listEl || !resetBtn || !unassignedEl || !unassignedText) return;
     unassignedEl.hidden = true;
+    const kfNote = document.getElementById('face-colors-timeline-note');
+    if (kfNote) kfNote.hidden = !isTimelineKeyframe(sheet);
     const titleEl = document.getElementById('face-colors-title');
     if (titleEl) titleEl.textContent = sheet === 'base' ? 'Face Colors \u2014 Base' : `Face Colors \u2014 Layer ${sheet + 1}`; // which sheet's palette state this is
     faceHover = null; // the rows being replaced may have been hovered; restored below if the pointer is still on one
