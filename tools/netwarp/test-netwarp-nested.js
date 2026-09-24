@@ -161,6 +161,10 @@ console.log('\n== 5. macro validity and the node-count ceiling ==');
     check('refused: E = 15 and above (beyond the verified ceiling 14) even for a valid divisor', refused(3, 15, 'ceiling') && refused(5, 20, 'ceiling') && vm.runInContext('NETWARP_MAX_E', sb) === 14);
     const divs = E => [...Array(E).keys()].map(i => i + 1).filter(m => eff(m, E).valid && m === eff(m, E).macro);
     check('the divisors accepted at the verified sizes: E = 12 -> 1,2,3,4,6,12 ; E = 14 -> 1,2,7,14 ; E = 13 -> 1,13', JSON.stringify(divs(12)) === '[1,2,3,4,6,12]' && JSON.stringify(divs(14)) === '[1,2,7,14]' && JSON.stringify(divs(13)) === '[1,13]');
+    const opts = E => JSON.stringify(sb.netMacroOptions(E));
+    check('netMacroOptions (what the UI offers): the divisors >= 3 up to E - E=6 -> 3,6 ; 8 -> 4,8 ; 9 -> 3,9 ; 12 -> 3,4,6,12 ; 14 -> 7,14', opts(6) === '[3,6]' && opts(8) === '[4,8]' && opts(9) === '[3,9]' && opts(12) === '[3,4,6,12]' && opts(14) === '[7,14]');
+    check('netMacroOptions: no nesting possible (only E itself, or nothing) for E = 2 -> none, 3,4,5,7 -> [E], 13 -> [13], above the ceiling -> none', opts(2) === '[]' && opts(4) === '[4]' && opts(5) === '[5]' && opts(7) === '[7]' && opts(13) === '[13]' && opts(15) === '[]' && opts(3) === '[3]');
+    check('every offered option is accepted by netMacroEffective (never a value the core would ignore)', [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].every(E => sb.netMacroOptions(E).every(m => eff(m, E).valid)));
     // an ignored macro really falls back to the smooth law
     const a = makeSb(SRC_NEW, 7, 1, 'none'), b = makeSb(SRC_NEW, 7, 1, 'none'); a.baseNetTransform = { ...S1, macro: 4 }; b.baseNetTransform = S1;
     const wa = a.netWarpBaseNow(), wb = b.netWarpBaseNow(); let same = true; for (let i = 0; i < 200; i++) { const p = { x: rnd() * 600, y: rnd() * 600 }; if (JSON.stringify(a.applyNetWarp(wa, p)) !== JSON.stringify(b.applyNetWarp(wb, p))) same = false; }
