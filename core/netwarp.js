@@ -71,8 +71,50 @@
 const NETWARP_A_SIN = 1.3;   // provisional cap, tuned with the UI (outer/inner mesh cos(1.3) = 0.27)
 const NETWARP_A_TAN = 1.2;   // provisional cap (outer/inner mesh sec^2(1.2) = 7.6)
 
-// f: [0,1] -> [0,1] for one axis spec {kind, w, alternate}; null = identity. E = divisions per tile.
-function netAxisLaw(axis, E) {
+// ---- Nested net: macro grid x uniform micro grid (Group E / 1.6, phase 2) ----
+// The macro law (the trig/geometric law above) fixes `macro` (Em) unequal macro cells per axis; every macro
+// cell is subdivided UNIFORMLY into micro = E/Em cells, so a tile still has E = Em*micro divisions and the
+// node array stays FLAT and unchanged (ids, connections, symmetry group, orbits, faces): only the position
+// function changes. F(t) = M_k + u*(M_{k+1}-M_k) for s = t*Em, k = floor(s) (clamped to Em-1), u = s-k, with
+// M_k = f(k/Em) the macro law sampled at the macro points (geometric: q = R^(1/(Em-1)) at the macro level).
+// F is odd about the tile centre whenever f is (the samples are symmetric), so the exact commutation with
+// the square's symmetry group carries over unchanged (measured 4.3e-14 px, Em=3, micro=2). micro = 1 (the
+// default, macro = E) returns the smooth law itself - byte-identical to before this change. Note Em = 2 puts
+// a trig law's macro points on its fixed points (0, 1/2, 1): no visible effect; use Em >= 3.
+// The upper bound on E is the measured node-count headroom (Group E phase 1 measurement: the orbit table for
+// a square is 53 ms at 13 nodes per axis (E = 12), 99.4 ms at 15 (E = 14) - marginal); a spec beyond it is
+// IGNORED (macro falls back to E), visibly: netMacroEffective() says why and the export flags it.
+const NETWARP_MAX_E = 14;
+function netMacroEffective(macro, E) {
+    const def = { macro: E, micro: 1, valid: true, reason: null };
+    if (macro === undefined || macro === null) return def;
+    let reason = null;
+    if (!Number.isInteger(macro) || macro < 1) reason = 'macro must be a positive integer';
+    else if (E > NETWARP_MAX_E) reason = `E = ${E} exceeds the verified ceiling ${NETWARP_MAX_E}`;
+    else if (E % macro !== 0) reason = `macro ${macro} does not divide E = ${E}`;
+    if (reason) return { macro: E, micro: 1, valid: false, reason };
+    return { macro, micro: E / macro, valid: true, reason: null };
+}
+
+// f: [0,1] -> [0,1] for one axis spec {kind, w, alternate}; null = identity. E = divisions per tile,
+// macro = macro divisions (optional; see above). A nested law carries f.pl = {M, Em} (its macro samples), which
+// is what makes its inverse closed-form per macro segment.
+function netAxisLaw(axis, E, macro) {
+    const eff = netMacroEffective(macro, E);
+    const smooth = _netSmoothLaw(axis, eff.macro);
+    if (!smooth || eff.micro === 1) return smooth;
+    const Em = eff.macro, M = Array.from({ length: Em + 1 }, (_, k) => smooth(k / Em));
+    const f = l => {
+        const s = l * Em; let k = Math.floor(s);
+        if (k < 0) k = 0; else if (k > Em - 1) k = Em - 1;
+        return M[k] + (s - k) * (M[k + 1] - M[k]);
+    };
+    f.pl = { M, Em };
+    return f;
+}
+
+// The smooth single-level law (unchanged since phase 1). E = divisions per tile (macro count when nested).
+function _netSmoothLaw(axis, E) {
     if (!axis || axis.kind === 'uniform' || !axis.w) return null;
     if (axis.kind === 'trig') {
         const w = Math.max(-1, Math.min(1, axis.w));
@@ -97,7 +139,7 @@ function netAxisLaw(axis, E) {
 function makeNetWarp(spec, frame, E) {
     if (!spec || !frame) return null;
     const ax = spec.x, ay = spec.y === 'same' ? spec.x : spec.y;
-    const fx = netAxisLaw(ax, E), fy = netAxisLaw(ay, E);
+    const fx = netAxisLaw(ax, E, spec.macro), fy = netAxisLaw(ay, E, spec.macro);
     if (!fx && !fy) return null;
     const { c0, v1, v2 } = frame;
     const det = v1.x * v2.y - v2.x * v1.y;
@@ -152,9 +194,20 @@ function _netWarpAxisInverse(f, alt, sOut) {
     const k = Math.floor(sOut), l = sOut - k;
     const flip = alt && (k & 1);
     const target = flip ? 1 - l : l;
-    let lo = 0, hi = 1;
-    for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (f(mid) < target) lo = mid; else hi = mid; }
-    const li = (lo + hi) / 2;
+    let li;
+    if (f.pl) {
+        // nested law: piecewise linear, so the inverse is closed form per macro segment - find the segment
+        // whose macro samples bracket the target, then invert the line (no iteration, no evaluation of f)
+        const { M, Em } = f.pl;
+        let lo = 0, hi = Em - 1;
+        while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (M[mid] <= target) lo = mid; else hi = mid - 1; }
+        const seg = M[lo + 1] - M[lo];
+        li = (lo + (seg > 0 ? (target - M[lo]) / seg : 0)) / Em;
+    } else {
+        let lo = 0, hi = 1;
+        for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (f(mid) < target) lo = mid; else hi = mid; }
+        li = (lo + hi) / 2;
+    }
     return k + (flip ? 1 - li : li);
 }
 function invertNetWarp(warp, pt) {
@@ -181,14 +234,18 @@ function netTransformExportData(spec, E) {
             const w = Math.max(-1, Math.min(1, axis.w));
             return { kind: 'trig', law: w < 0 ? 'sinus' : 'tangens', w, a: w < 0 ? -w * NETWARP_A_SIN : w * NETWARP_A_TAN };
         }
-        return { kind: 'geometric', w: axis.w, R: Math.exp(axis.w), q: E >= 2 ? Math.exp(axis.w / (E - 1)) : null, alternate: !!axis.alternate };
+        // q is per MACRO cell (Em = E when not nested)
+        return { kind: 'geometric', w: axis.w, R: Math.exp(axis.w), q: eff.macro >= 2 ? Math.exp(axis.w / (eff.macro - 1)) : null, alternate: !!axis.alternate };
     };
-    return {
-        version: 1, interpretation: true, domain: spec.repeat ? 'per-tile' : 'single', repeat: !!spec.repeat, E,
+    const eff = netMacroEffective(spec.macro, E);
+    const result = {
+        version: 1, interpretation: true, domain: spec.repeat ? 'per-tile' : 'single', repeat: !!spec.repeat, E, macro: eff.macro, micro: eff.micro,
         x: describe(ax), y: describe(ay),
         constants: { A_SIN: NETWARP_A_SIN, A_TAN: NETWARP_A_TAN },
         geometryIsRegular: true, facesOmitted: true
     };
+    if (spec.macro !== undefined && spec.macro !== null && !eff.valid) result.macroIgnored = { requested: spec.macro, reason: eff.reason };
+    return result;
 }
 // The inverse of netTransformExportData(): the spec (as baseNetTransform holds it) from an
 // exported meta.netTransform. Only kind/w/alternate/repeat are read - everything else is derived.
@@ -197,7 +254,9 @@ function netTransformFromExport(exported) {
     const axis = a => (!a || a.kind === 'uniform') ? { kind: 'uniform', w: 0 } : { kind: a.kind, w: a.w, alternate: !!a.alternate };
     // repeat: an export from before the closed-net option has neither field and was drawn repeated
     const repeat = exported.repeat !== undefined ? !!exported.repeat : exported.domain !== 'single';
-    return { x: axis(exported.x), y: axis(exported.y), repeat };
+    const spec = { x: axis(exported.x), y: axis(exported.y), repeat };
+    if (Number.isInteger(exported.micro) && exported.micro > 1 && Number.isInteger(exported.macro)) spec.macro = exported.macro; // absent = not nested
+    return spec;
 }
 
 // ---- Net-line overlay (display aid): the actual grid lines of the warped net ----
@@ -212,8 +271,7 @@ function netTransformFromExport(exported) {
 //   E       divisions per tile and axis (nodeCount - 1)
 //   view    {x0,y0,x1,y1}: the visible rectangle (repeat mode covers it; closed mode ignores it)
 //   opts    {closed: one tile only (the net rectangle), micro: lines whose index i % micro != 0 are
-//           level 'micro' (default 1 = every line is 'macro'). Nesting is not implemented yet; this is the
-//           seam the macro/micro split will use, so the overlay needs no rework then.}
+//           level 'micro' (default: the spec's own micro = E/macro, 1 when not nested = every line 'macro')}
 // Returns [{level: 'macro'|'micro', axis: 'v'|'h', x1, y1, x2, y2}], canvas coordinates. Positions come
 // from the same per-axis function applyNetWarp() uses (so `alternate` parity and repeat are honoured).
 function netGridLines(spec, corners, E, view, opts = {}) {
@@ -223,9 +281,11 @@ function netGridLines(spec, corners, E, view, opts = {}) {
     const det = v1.x * v2.y - v2.x * v1.y;
     if (!det) return [];
     const ax = spec ? spec.x : null, ay = spec ? (spec.y === 'same' ? spec.x : spec.y) : null;
-    const fx = netAxisLaw(ax, E), fy = netAxisLaw(ay, E);
+    const macro = spec ? spec.macro : undefined;
+    const fx = netAxisLaw(ax, E, macro), fy = netAxisLaw(ay, E, macro);
     const altX = !!(ax && ax.alternate), altY = !!(ay && ay.alternate);
-    const micro = Math.max(1, Math.round(opts.micro || 1));
+    // micro = lines per macro cell: from the spec's nesting unless the caller overrides it
+    const micro = Math.max(1, Math.round(opts.micro || netMacroEffective(macro, E).micro));
     const coords = P => { const dx = P.x - c0.x, dy = P.y - c0.y; return { s: (dx * v2.y - dy * v2.x) / det, t: (v1.x * dy - v1.y * dx) / det }; };
     let sLo, sHi, tLo, tHi;
     if (opts.closed) { sLo = 0; sHi = 1; tLo = 0; tHi = 1; }

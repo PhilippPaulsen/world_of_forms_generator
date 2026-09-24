@@ -580,7 +580,7 @@ function setup() {
         function commit() {
             if (ui.axes === 'both') ui.y = Object.assign({}, ui.x);
             const allRegular = ui.x.mode === 'regular' && ui.y.mode === 'regular';
-            baseNetTransform = allRegular ? null : { x: axisSpec(ui.x), y: ui.axes === 'both' ? 'same' : axisSpec(ui.y), repeat: ui.repeat };
+            baseNetTransform = allRegular ? null : { x: axisSpec(ui.x), y: ui.axes === 'both' ? 'same' : axisSpec(ui.y), repeat: ui.repeat, macro: baseNetTransform ? baseNetTransform.macro : undefined }; // macro (nesting) has no control yet - keep it if set from state
             render(); netControlsSync(); redraw();
         }
         function render() {
@@ -3869,12 +3869,12 @@ let faceColorsSignature = null;
 let netControlsSync = null;
 let netFreeNoteTimer = null;
 // Net-line overlay (display aid, off by default): the warped net's own grid lines, edge to edge. Macro lines
-// black, a finer level (once macro/micro nesting exists) red. Not exported; a PNG export of the canvas includes it.
+// black, the finer micro level of a nested net red. Not exported; a PNG export of the canvas includes it.
 let netLinesOn = false;
 function drawNetLinesOverlay() {
     if (!netLinesOn || currentShape !== 'square') return;
     const closed = netWarpActive() && !baseNetTransform.repeat;
-    const lines = netGridLines(baseNetTransform, outerCorners, nodeCount - 1, { x0: 0, y0: 0, x1: width, y1: height }, { closed, micro: 1 });
+    const lines = netGridLines(baseNetTransform, outerCorners, nodeCount - 1, { x0: 0, y0: 0, x1: width, y1: height }, { closed });
     push();
     strokeWeight(1);
     lines.forEach(l => {
