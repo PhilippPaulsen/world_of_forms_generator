@@ -236,3 +236,5 @@ body.dark {
 #face-colors-unassigned { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 4px 0; }
 #face-colors-unassigned[hidden] { display: none; }
 #face-colors-unassigned-text { flex: 1; }
+#face-colors-overlay-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
+#face-colors-overlay-note[hidden] { display: none; }

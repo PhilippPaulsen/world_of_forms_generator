@@ -3792,17 +3792,20 @@ function faceFillsUnavailableReason() {
     return null;
 }
 
+// The active sheet's face inputs. `sheet` = the layer's own shape/symmetry mode/
+// mirror axis override (null for the base), so the panel lists the trails of the
+// SAME face set the canvas draws.
 function faceColorsGrid() {
     return activeLayer === 'base'
-        ? { gridNodes: nodes, conns: connections }
-        : { gridNodes: additionalLayers[activeLayer].nodes, conns: additionalLayers[activeLayer].connections };
+        ? { gridNodes: nodes, conns: connections, sheet: null }
+        : { gridNodes: additionalLayers[activeLayer].nodes, conns: additionalLayers[activeLayer].connections, sheet: faceSheetOverrideOfLayer(additionalLayers[activeLayer]) };
 }
 
 function faceColorsSig() {
     const l = activeLayer === 'base' ? null : additionalLayers[activeLayer];
     return JSON.stringify({
         sheet: activeLayer, conns: faceColorsGrid().conns, shape: currentShape, mode: symmetryMode, n: faceColorsGrid().gridNodes.length,
-        layer: l && [l.enabled, l.shapeSizeFactor, l.rotation], size: shapeSizeFactor, curve: curveType.kind,
+        layer: l && [l.enabled, l.shapeSizeFactor, l.rotation, l.shape, l.symmetryMode], size: shapeSizeFactor, curve: curveType.kind,
         store: faceAssignmentsFor(activeLayer).size
     });
 }
@@ -3815,6 +3818,10 @@ function updateFaceColorsPanel() {
     const visible = activeShowFaces();
     groupEl.hidden = !visible;
     if (!visible) { faceColorsSignature = null; faceHover = null; return; }
+    // The cross-layer overlay (drawn over every sheet's fills at 65% alpha) hides per-sheet colors while a
+    // CURRENT result is displayed - same currency check draw() uses; a plain toggle, no panel rebuild.
+    const overlayNote = document.getElementById('face-colors-overlay-note');
+    if (overlayNote) overlayNote.hidden = !(crossLayerResult && crossLayerResultSignature === crossLayerConfigSignature());
     if (faceColorsSig() !== faceColorsSignature) renderFaceColorsPanel();
 }
 
@@ -3849,10 +3856,10 @@ function faceColorsStepper(k, c, title, onStep) {
 
 // (Re)colors every trail of the active sheet from its palette, then refreshes.
 function applyFaceColorsPalette() {
-    const { gridNodes, conns } = faceColorsGrid();
-    const group = sheetGroupElements(gridNodes);
+    const { gridNodes, conns, sheet } = faceColorsGrid();
+    const group = sheetGroupElements(gridNodes, sheet);
     if (group) {
-        const trails = computeFaceTrails(computeCellFaces(conns, gridNodes), group);
+        const trails = computeFaceTrails(computeCellFaces(conns, gridNodes, null, null, sheet), group);
         applyPaletteToTrails(faceAssignmentsFor(activeLayer), trails, facePaletteFor(activeLayer));
     }
     renderFaceColorsPanel();
@@ -3871,15 +3878,17 @@ function renderFaceColorsPanel() {
     const unassignedText = document.getElementById('face-colors-unassigned-text');
     if (!statusEl || !ruleSel || !axesEl || !noteEl || !listEl || !resetBtn || !unassignedEl || !unassignedText) return;
     unassignedEl.hidden = true;
+    const titleEl = document.getElementById('face-colors-title');
+    if (titleEl) titleEl.textContent = sheet === 'base' ? 'Face Colors \u2014 Base' : `Face Colors \u2014 Layer ${sheet + 1}`; // which sheet's palette state this is
     faceHover = null; // the rows being replaced may have been hovered; restored below if the pointer is still on one
     axesEl.innerHTML = ''; listEl.innerHTML = ''; noteEl.textContent = '';
 
     const store = faceAssignmentsFor(sheet);
     const palette = facePaletteFor(sheet);
     const reason = faceFillsUnavailableReason();
-    const { gridNodes, conns } = faceColorsGrid();
-    const group = reason ? null : sheetGroupElements(gridNodes);
-    const trails = group ? computeFaceTrails(computeCellFaces(conns, gridNodes, store), group) : [];
+    const { gridNodes, conns, sheet: sheetOv } = faceColorsGrid();
+    const group = reason ? null : sheetGroupElements(gridNodes, sheetOv);
+    const trails = group ? computeFaceTrails(computeCellFaces(conns, gridNodes, store, null, sheetOv), group) : [];
 
     resetBtn.disabled = store.size === 0 && !palette.ruleId;
     ruleSel.innerHTML = '';
@@ -3986,9 +3995,9 @@ function initFaceColorsPanel() {
     if (resetBtn) resetBtn.addEventListener('click', () => { resetFaceColors(activeLayer); renderFaceColorsPanel(); redraw(); });
     const spreadBtn = document.getElementById('btn-face-colors-spread');
     if (spreadBtn) spreadBtn.addEventListener('click', () => {
-        const { gridNodes, conns } = faceColorsGrid();
-        const group = sheetGroupElements(gridNodes), store = faceAssignmentsFor(activeLayer);
-        if (group) spreadPaletteToUnassigned(store, computeFaceTrails(computeCellFaces(conns, gridNodes, store), group), facePaletteFor(activeLayer));
+        const { gridNodes, conns, sheet } = faceColorsGrid();
+        const group = sheetGroupElements(gridNodes, sheet), store = faceAssignmentsFor(activeLayer);
+        if (group) spreadPaletteToUnassigned(store, computeFaceTrails(computeCellFaces(conns, gridNodes, store, null, sheet), group), facePaletteFor(activeLayer));
         renderFaceColorsPanel();
         redraw();
     });
