@@ -570,8 +570,14 @@ function setup() {
         const geoRow = select('#net-geo-row'), reverseBtn = select('#net-reverse-btn'), alternateBtn = select('#net-alternate-btn');
         const note = select('#net-locks-note');
         const fresh = () => ({ mode: 'regular', strength: 0.5, reverse: false, alternate: false });
-        const ui = { axes: 'both', repeat: false, x: fresh(), y: fresh() };
+        const ui = { axes: 'both', repeat: false, macro: undefined, x: fresh(), y: fresh() };
         const repeatBtn = select('#net-repeat-btn'), sizeHint = select('#net-size-hint');
+        // Macro cells (nested net): ui.macro = the chosen macro count, undefined = smooth (macro = E). The state's
+        // baseNetTransform.macro is kept equal to it; the row lists the valid divisors of E = nodeCount - 1.
+        const macroRow = select('#net-macro-row'), macroBtns = select('#net-macro-buttons'), macroHint = select('#net-macro-hint'), macroNote = select('#net-macro-note');
+        let macroSig = null, macroNoteTimer = null;
+        const setMacro = v => { ui.macro = v; if (baseNetTransform) baseNetTransform.macro = v; };
+        const showMacroNote = text => { macroNote.html(text); macroNote.elt.hidden = false; clearTimeout(macroNoteTimer); macroNoteTimer = setTimeout(() => { macroNote.elt.hidden = true; }, 9000); };
         const target = () => (ui.axes === 'y' ? ui.y : ui.x);
         const axisSpec = c => c.mode === 'regular' ? { kind: 'uniform', w: 0 }
             : c.mode === 'sinus' ? { kind: 'trig', w: -c.strength }
@@ -580,7 +586,8 @@ function setup() {
         function commit() {
             if (ui.axes === 'both') ui.y = Object.assign({}, ui.x);
             const allRegular = ui.x.mode === 'regular' && ui.y.mode === 'regular';
-            baseNetTransform = allRegular ? null : { x: axisSpec(ui.x), y: ui.axes === 'both' ? 'same' : axisSpec(ui.y), repeat: ui.repeat, macro: baseNetTransform ? baseNetTransform.macro : undefined }; // macro (nesting) has no control yet - keep it if set from state
+            if (baseNetTransform && baseNetTransform.macro !== ui.macro) ui.macro = baseNetTransform.macro; // adopt a macro set from the state
+            baseNetTransform = allRegular ? null : { x: axisSpec(ui.x), y: ui.axes === 'both' ? 'same' : axisSpec(ui.y), repeat: ui.repeat, macro: ui.macro };
             render(); netControlsSync(); redraw();
         }
         function render() {
@@ -617,6 +624,29 @@ function setup() {
             const active = netWarpActive();
             // Closed net (the default) + Shape Size > 1: the net is smaller than the canvas - say why.
             sizeHint.elt.hidden = !(active && !ui.repeat && shapeSizeFactor > 1);
+            // Macro cells: a chosen macro that no longer divides E (Node Count changed) is reset to smooth, visibly -
+            // never silently snapped to another divisor (the core would ignore it anyway: netMacroEffective()).
+            const E = nodeCount - 1;
+            if (ui.macro !== undefined && !netMacroEffective(ui.macro, E).valid) {
+                const was = ui.macro; setMacro(undefined);
+                showMacroNote(`Macro ${was} does not divide E = ${E} (Node Count ${nodeCount}), so the net was reset to smooth (${E}\u00d71).`);
+            }
+            const options = netMacroOptions(E), nested = options.length >= 2;
+            macroRow.elt.hidden = !(active && nested);
+            macroHint.elt.hidden = !(active && !nested);
+            if (active && !nested) macroHint.html(`Macro cells: not available for E = ${E} (Node Count ${nodeCount}) - E needs a divisor from 3 up to E \u2212 1, e.g. E = 6, 8, 9, 10, 12.`);
+            const sig = `${E}|${ui.macro}|${active && nested}`;
+            if (sig !== macroSig) {
+                macroSig = sig; macroBtns.elt.innerHTML = '';
+                if (active && nested) options.forEach(m => {
+                    const b = document.createElement('button'); b.className = 'layer-btn';
+                    const smooth = m === E; b.textContent = `${m}\u00d7${E / m}`;
+                    b.title = smooth ? `${E} macro cells of 1: smooth, no nesting (default)` : `${m} unequal macro cells, each split uniformly into ${E / m}`;
+                    if ((smooth && ui.macro === undefined) || ui.macro === m) b.classList.add('active');
+                    b.addEventListener('click', () => { macroNote.elt.hidden = true; setMacro(smooth ? undefined : m); commit(); });
+                    macroBtns.elt.appendChild(b);
+                });
+            }
             if (active && curveType.kind !== 'straight') { // a curve built on a warped chord is not the warp of a curve
                 curveType = { kind: 'straight' };
                 curveBtn && curveBtn.removeClass('active'); freeBtn && freeBtn.removeClass('active');

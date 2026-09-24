@@ -690,6 +690,14 @@
             <span id="net-strength-value">0.50</span>
           </div>
         </div>
+        <!-- Macro cells (nested net): the divisors of E that are >= 3, as macro x micro - filled by sketch.js's
+             netControlsSync(); hidden without a warp or when E has no such divisor below E. -->
+        <div id="net-macro-row" hidden>
+          <label>Macro cells (macro &times; micro)</label>
+          <div class="icon-row" id="net-macro-buttons"></div>
+        </div>
+        <div id="net-macro-hint" hidden></div>
+        <div id="net-macro-note" hidden></div>
         <div class="icon-row">
           <button class="layer-btn" id="net-repeat-btn" title="Off (default): one closed net, as in Hinterreiter's figures. On: the warped tile is repeated across the canvas by Shape Size, as before.">Repeat tiles</button>
         </div>
@@ -1168,18 +1176,18 @@
        the p5.js CDN tag - that URL already carries its own version
        (p5@1.9.0), so a version bump there naturally changes the URL. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260924e"></script>
-  <script src="core/state.js?v=20260924e"></script>
-  <script src="core/symmetry.js?v=20260924e"></script>
-  <script src="core/curves.js?v=20260924e"></script>
-  <script src="core/netwarp.js?v=20260924e"></script>
-  <script src="core/tiling.js?v=20260924e"></script>
-  <script src="core/faces.js?v=20260924e"></script>
-  <script src="core/orbits.js?v=20260924e"></script>
-  <script src="core/color.js?v=20260924e"></script>
-  <script src="core/facecolor.js?v=20260924e"></script>
-  <script src="core/export.js?v=20260924e"></script>
-  <script src="sketch.js?v=20260924e"></script>
+  <script src="core/forms.js?v=20260924f"></script>
+  <script src="core/state.js?v=20260924f"></script>
+  <script src="core/symmetry.js?v=20260924f"></script>
+  <script src="core/curves.js?v=20260924f"></script>
+  <script src="core/netwarp.js?v=20260924f"></script>
+  <script src="core/tiling.js?v=20260924f"></script>
+  <script src="core/faces.js?v=20260924f"></script>
+  <script src="core/orbits.js?v=20260924f"></script>
+  <script src="core/color.js?v=20260924f"></script>
+  <script src="core/facecolor.js?v=20260924f"></script>
+  <script src="core/export.js?v=20260924f"></script>
+  <script src="sketch.js?v=20260924f"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

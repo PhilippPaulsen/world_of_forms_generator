@@ -96,6 +96,16 @@ function netMacroEffective(macro, E) {
     return { macro, micro: E / macro, valid: true, reason: null };
 }
 
+// The macro values a UI can offer for E divisions: the divisors of E that are >= 3 (a trig law's macro
+// points at Em = 1 or 2 are its fixed points - no effect), up to and including E itself (= smooth, no
+// nesting). Empty beyond the verified ceiling. [E] alone means no nesting is possible for this E.
+function netMacroOptions(E) {
+    const out = [];
+    if (!(E >= 3) || E > NETWARP_MAX_E) return out;
+    for (let m = 3; m <= E; m++) if (E % m === 0) out.push(m);
+    return out;
+}
+
 // f: [0,1] -> [0,1] for one axis spec {kind, w, alternate}; null = identity. E = divisions per tile,
 // macro = macro divisions (optional; see above). A nested law carries f.pl = {M, Em} (its macro samples), which
 // is what makes its inverse closed-form per macro segment.
