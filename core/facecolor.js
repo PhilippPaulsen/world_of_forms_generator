@@ -24,13 +24,14 @@
  * rejected (concentric faces collided in 2 of 80 patterns); the vertex set
  * separates them.
  *
- * WHICH GROUP: the one that GENERATED the faces. collectCellSegments()
- * (core/faces.js) draws through drawShapeCell() without a shape/mode
- * override, i.e. with the GLOBAL currentShape/symmetryMode/outerCorners,
- * even for a layer - so that is the group the face set is symmetric under,
- * and sheetGroupElements() below uses exactly it (with the sheet's own
- * node array as the cache identity). Using a layer's own symmetryMode
- * instead would be wrong whenever it differs from the base's.
+ * WHICH GROUP: the one that GENERATED the faces - the sheet's OWN. A layer's
+ * faces are expanded through drawShapeCell() with that layer's shape,
+ * symmetry mode and mirror axis (collectCellSegments()'s `sheet` override, the
+ * same parameters core/tiling.js draws the layer with), so sheetGroupElements()
+ * builds the group from the same override. (Before the per-layer face-detection
+ * fix both used the base's globals, which mismatched the drawn lines for a layer
+ * with its own mode or shape.) The base sheet passes no override and uses the
+ * globals, exactly as before.
  *
  * ORPHANS: nothing here ever deletes a store entry. An edit that removes
  * or reshapes a face just leaves its key unmatched (see the Phase 2
@@ -481,11 +482,11 @@ function _sameKeySet(a, b) {
 //    snapshot becomes the new state; same key set: nothing at all.
 // Keys are computed once and shared with applyFaceAssignments(). Returns the
 // number of faces recolored.
-function applyAssignmentsLazily(facesResult, store, gridNodes) {
+function applyAssignmentsLazily(facesResult, store, gridNodes, sheet = null) {
     if (!store) return 0;
     if (store.size === 0) { _faceSnapshots.delete(store); return 0; }
     if (!facesResult.faces.length) return 0;
-    const group = sheetGroupElements(gridNodes);
+    const group = sheetGroupElements(gridNodes, sheet);
     if (!group) return 0;
     const keys = computeFaceTrailKeys(facesResult, group);
     const prev = _faceSnapshots.get(store);
@@ -512,13 +513,29 @@ function applyAssignmentsLazily(facesResult, store, gridNodes) {
 // a real bug elsewhere, warned once, never allowed to take rendering down;
 // the caller then simply applies no assignments).
 let faceGroupWarned = false;
-function sheetGroupElements(gridNodes) {
+function sheetGroupElements(gridNodes, sheet = null) {
     try {
-        return getGroupElementsCached(gridNodes, centroid, currentShape, symmetryMode, outerCorners);
+        // A layer's OWN shape/mode/centroid/corners (`sheet`, see
+        // faceSheetOverrideOfLayer()) - the group its faces are generated under;
+        // omitted = the base's globals, as before.
+        return sheet
+            ? getGroupElementsCached(gridNodes, sheet.centroid, sheet.shape, sheet.symmetryMode, sheet.outerCorners)
+            : getGroupElementsCached(gridNodes, centroid, currentShape, symmetryMode, outerCorners);
     } catch (err) {
         if (!faceGroupWarned) { faceGroupWarned = true; console.warn('Group elements unavailable - face color assignments not applied:', err.message); }
         return null;
     }
+}
+
+// What a LAYER's own face pipeline needs (shape, symmetry mode, centroid, outer
+// corners) - the same fields core/tiling.js's override object hands to the
+// tile functions that draw it. null for the base (its globals apply), so every
+// base-sheet call stays exactly as it was.
+function faceSheetOverrideOfLayer(layer) {
+    return { shape: layer.shape, symmetryMode: layer.symmetryMode, centroid: layer.centroid, outerCorners: layer.outerCorners };
+}
+function faceSheetOverrideFor(sheet) {
+    return sheet === 'base' || !additionalLayers[sheet] ? null : faceSheetOverrideOfLayer(additionalLayers[sheet]);
 }
 
 // The assignment store of one sheet: 'base', or an integer index into

@@ -257,7 +257,11 @@ function buildExportData(crossLayerData) {
                 // for a layer that never had one) recolors its assigned
                 // faces (face.color = resolved hex) and tags them with
                 // face.colorSpec; unassigned faces are untouched.
-                const layerFacesResult = computeCellFaces(completeLayerConnections, layer.nodes, layer.faceAssignments || null);
+                // Group D follow-up: the layer's OWN shape/symmetryMode/mirror axis
+                // (faceSheetOverrideOfLayer) - before this its faces were expanded
+                // under the BASE's mode and shape (a defect predating Group D),
+                // mismatching the exported edges of any layer with its own.
+                const layerFacesResult = computeCellFaces(completeLayerConnections, layer.nodes, layer.faceAssignments || null, null, faceSheetOverrideOfLayer(layer));
                 layerData.faceNodes = layerFacesResult.nodes;
                 layerData.faces = layerFacesResult.faces;
             }
@@ -324,6 +328,11 @@ function buildExportData(crossLayerData) {
     // formatVersion + geometry.centroid/outerCorners/nodes/edges - re-confirmed
     // by grep in the Phase 4 session, not re-run against SpaceHarmony itself,
     // which is out of Group D's scope).
+    // NB layerIndex (in meta.faceColoring.layers[]) is the position in the EXPORTED
+    // geometry.layers array - enabled layers only, in tab order - NOT the layer's tab
+    // index: with layer 2 disabled, tab 3 exports as layerIndex 1. A disabled layer's
+    // geometry is not exported, and neither are its color assignments (they stay in
+    // the app). Consumers resolve a layer by geometry.layers[layerIndex].
     const faceColoring = faceColoringExportData(baseFaceAssignments, layerFaceStores);
     if (faceColoring) data.meta.faceColoring = faceColoring;
 

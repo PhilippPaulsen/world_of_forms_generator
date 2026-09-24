@@ -64,12 +64,22 @@
 // same value as the base's by construction (core/forms.js's layerGrid()),
 // so the global `centroid` is already correct regardless of which
 // layer's faces are being computed.
-function collectCellSegments(connSet, gridNodes = nodes) {
+// Group D follow-up (per-layer face detection): `sheet` = {shape, symmetryMode,
+// centroid, outerCorners} of a LAYER (core/facecolor.js faceSheetOverrideOfLayer()),
+// or null/omitted for the base sheet. Threaded to drawShapeCell() through the
+// SAME override parameters core/tiling.js already uses to DRAW that layer
+// (1.12 stage 4 part 2 / stage 5: shapeOverride, symmetryModeOverride, and the
+// layer's own mirror axis via mirrorAxisDir()) - so the segments face detection
+// sees are the segments the layer's lines are drawn from. Before this every
+// sheet was expanded under the BASE's shape and mode. Omitted = byte-identical.
+function collectCellSegments(connSet, gridNodes = nodes, sheet = null) {
     const tagged = [];
+    const ctr = sheet ? sheet.centroid : centroid;
+    const mirrorAxis = sheet ? mirrorAxisDir(sheet.outerCorners, sheet.centroid, sheet.shape) : undefined;
     connSet.forEach((conn, connIndex) => {
         if (conn.length !== 2) return; // mirror drawShapeCell's own completeness filter
         segmentCollector = [];
-        drawShapeCell([conn], centroid, false, gridNodes);
+        drawShapeCell([conn], ctr, false, gridNodes, 0, mirrorAxis, sheet ? sheet.shape : undefined, sheet ? sheet.symmetryMode : undefined);
         segmentCollector.forEach(seg => tagged.push({ ...seg, connIndex }));
         segmentCollector = null;
     });
@@ -947,17 +957,20 @@ function findFaces(segments, realNodes) {
 // null; flags that trail's faces with face.highlight for
 // drawFaceFillsAtTile(). Export never passes it, so exported faces never
 // carry the flag.
-function computeCellFaces(connSet, gridNodes = nodes, assignments = null, highlightKey = null) {
+// `sheet`: a layer's own shape/symmetryMode/centroid/outerCorners (see
+// collectCellSegments()) - also selects that layer's own symmetry group for the
+// trail keys, so segments, faces and keys all describe the same sheet.
+function computeCellFaces(connSet, gridNodes = nodes, assignments = null, highlightKey = null, sheet = null) {
     if (curveType.kind !== 'straight') return { nodes: [], faces: [] };
-    const segments = collectCellSegments(connSet, gridNodes);
+    const segments = collectCellSegments(connSet, gridNodes, sheet);
     const result = findFaces(segments, gridNodes);
     // Group D follow-up step 2: applies the store AFTER reconciling it against the
     // sheet's last real face structure (core/facecolor.js applyAssignmentsLazily()) -
     // an edit that split/merged/reshaped a trail hands its color on before this
     // frame is drawn. A side effect on the store, accepted so every edit path is
     // covered without instrumenting each call site.
-    if (assignments) applyAssignmentsLazily(result, assignments, gridNodes);
-    if (highlightKey) markHighlightedTrail(result, highlightKey, sheetGroupElements(gridNodes));
+    if (assignments) applyAssignmentsLazily(result, assignments, gridNodes, sheet);
+    if (highlightKey) markHighlightedTrail(result, highlightKey, sheetGroupElements(gridNodes, sheet));
     return result;
 }
 

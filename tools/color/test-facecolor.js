@@ -243,7 +243,7 @@ console.log('\n== wiring ==');
 {
     const til = fs.readFileSync(path.join(ROOT, 'core', 'tiling.js'), 'utf8');
     check('tiling.js passes the base store and each layer store to computeCellFaces()',
-        til.includes("computeCellFaces(connections, nodes, faceAssignmentsFor('base'), faceHighlightKeyFor('base'))") && til.includes('computeCellFaces(layer.connections, layer.nodes, faceAssignmentsFor(i), faceHighlightKeyFor(i))'));
+        til.includes("computeCellFaces(connections, nodes, faceAssignmentsFor('base'), faceHighlightKeyFor('base'))") && til.includes('computeCellFaces(layer.connections, layer.nodes, faceAssignmentsFor(i), faceHighlightKeyFor(i), faceSheetOverrideOfLayer(layer))'));
     const st = fs.readFileSync(path.join(ROOT, 'core', 'state.js'), 'utf8');
     check('state.js resets the base store in BOTH grid-rebuild paths', (st.match(/baseFaceAssignments = new Map\(\)/g) || []).length === 3, 'declaration + 2 rebuilds');
     const exp = fs.readFileSync(path.join(ROOT, 'core', 'export.js'), 'utf8');

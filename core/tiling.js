@@ -154,14 +154,14 @@ function drawTessellation() {
 function computeLayerCellFaces() {
     // Roadmap 1.12 stage 3: rotation excluded here too, same principle
     // as the scale exclusion below - computeCellFaces()/
-    // collectCellSegments() (core/faces.js) call drawShapeCell() with no
-    // rotation-awareness at all (not threaded there in this stage), so a
-    // rotated layer's face-fill would be silently computed against its
-    // UNROTATED content. Left deliberately unfixed here, extending the
-    // already-on-record "per-layer face-fill for a genuinely independent
-    // grid is a real follow-on gap" note from stage 1 to also cover
-    // rotation, rather than threading rotation through faces.js in this
-    // pass.
+    // collectCellSegments() (core/faces.js) have no rotation-awareness
+    // (not threaded there), so a rotated layer's face-fill would be
+    // silently computed against its UNROTATED content. Still excluded, as
+    // is a layer of a different SIZE. A layer's own SHAPE and SYMMETRY MODE
+    // (and mirror axis), however, are threaded through (Group D follow-up:
+    // computeCellFaces()'s `sheet` override, the same parameters this file
+    // draws the layer with), so those layers' faces now match their lines -
+    // there is deliberately no shape/mode guard here any more.
     const active = additionalLayers.filter(l => l.enabled && l.showFaces && l.shapeSizeFactor === shapeSizeFactor && (l.rotation || 0) === 0);
     if (active.length === 0) return null;
     const map = new Map();
@@ -174,7 +174,7 @@ function computeLayerCellFaces() {
         // layer - not reachable via any shipped UI yet, flagged in the
         // 1.12 stage-1 node-resolution-fix design session, not fixed
         // here).
-        if (layer.enabled && layer.showFaces && layer.shapeSizeFactor === shapeSizeFactor && (layer.rotation || 0) === 0) map.set(i, computeCellFaces(layer.connections, layer.nodes, faceAssignmentsFor(i), faceHighlightKeyFor(i)));
+        if (layer.enabled && layer.showFaces && layer.shapeSizeFactor === shapeSizeFactor && (layer.rotation || 0) === 0) map.set(i, computeCellFaces(layer.connections, layer.nodes, faceAssignmentsFor(i), faceHighlightKeyFor(i), faceSheetOverrideOfLayer(layer)));
     });
     return map;
 }
