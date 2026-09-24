@@ -504,6 +504,68 @@ function applyAssignmentsLazily(facesResult, store, gridNodes, sheet = null) {
     return applyFaceAssignments(facesResult, store, group, keys);
 }
 
+// ----------------- CROSSFADE (Group D item 4, phase 3) ------------------
+// Face color as an animated parameter of the timeline. During playback the morphing
+// playback layer's faces change every frame (75% or more of the mid-morph area has no
+// counterpart at either keyframe, measured), so a face has no identity to follow and a
+// geometric trail key means nothing on it. Colors are therefore a FIELD over position:
+// each keyframe's coloring is a static field (its faces, each in its displayed color),
+// and a live face takes the mix of the two fields sampled INSIDE it, weights (1-t, t).
+// Mixing is in LINEAR LIGHT - Ostwald's own disc mixing, and this engine's mixing
+// space throughout (core/color.js); complementary hues therefore pass through neutral
+// at t=0.5, an accepted property, not something to work around. Pure functions here;
+// playbackCrossfadeColors() below is the live glue. Nothing is ever written to a store.
+
+// A keyframe's coloring as a field: [{poly, minX, maxX, minY, maxY, lin}] from a
+// computeCellFaces() result (assigned faces carry their hex, others the default hsl).
+function keyframeColorField(facesResult) {
+    const nodeById = new Map(facesResult.nodes.map(n => [n.id, n]));
+    const field = [];
+    facesResult.faces.forEach(f => {
+        const poly = f.nodeIds.map(id => nodeById.get(id)).filter(Boolean).map(n => ({ x: n.x, y: n.y }));
+        if (poly.length < 3) return;
+        const xs = poly.map(p => p.x), ys = poly.map(p => p.y);
+        field.push({ poly, minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys), lin: cssColorToLinear(f.color) });
+    });
+    return field;
+}
+
+function _lookupField(field, p) {
+    for (const f of field) {
+        if (p.x < f.minX || p.x > f.maxX || p.y < f.minY || p.y > f.maxY) continue;
+        if (pointInPolygon(p, f.poly)) return f.lin;
+    }
+    return null;
+}
+
+// The color of each face of `facesResult` at crossfade position t (0 = fieldA, 1 =
+// fieldB): per interior sample point (faceSamplePoints(), the same primitive the
+// inheritance overlap test uses) look up both fields; both present -> the linear-light
+// mix (1-t)*a + t*b; only one present -> that side alone; neither -> the sample is
+// skipped. The face takes the mean of its samples in linear light. Returns [hex | null]
+// parallel to facesResult.faces - null (no sample covered by either keyframe) leaves the
+// face's own default color. At t=0 / t=1 a face that IS a keyframe face gets exactly that
+// face's color. Sample-based, so the "area weighting" is the uniform average over the
+// face's samples, not an exact area integral.
+function crossfadeFaceColors(facesResult, fieldA, fieldB, t) {
+    const nodeById = new Map(facesResult.nodes.map(n => [n.id, n]));
+    return facesResult.faces.map(face => {
+        const poly = face.nodeIds.map(id => nodeById.get(id)).filter(Boolean).map(n => ({ x: n.x, y: n.y }));
+        if (poly.length < 3) return null;
+        const acc = [0, 0, 0];
+        let n = 0;
+        for (const p of faceSamplePoints(poly)) {
+            const a = _lookupField(fieldA, p), b = _lookupField(fieldB, p);
+            let c;
+            if (a && b) c = [0, 1, 2].map(k => (1 - t) * a[k] + t * b[k]);
+            else c = a || b;
+            if (!c) continue;
+            acc[0] += c[0]; acc[1] += c[1]; acc[2] += c[2]; n++;
+        }
+        return n ? linearToHex(acc.map(v => v / n)) : null;
+    });
+}
+
 // ----------------- LIVE-APP GLUE ---------------------------------
 
 // The group elements the CURRENT sheet's faces are symmetric under - see
@@ -567,4 +629,36 @@ function facePaletteFor(sheet) {
 // The trail key to outline on `sheet`'s faces right now (hover), or null.
 function faceHighlightKeyFor(sheet) {
     return faceHover && faceHover.sheet === sheet ? faceHover.key : null;
+}
+
+// ----------------- CROSSFADE: LIVE GLUE ------------------------------
+// The two keyframe fields are rebuilt only when a keyframe's connections, store or grid
+// change (signature below), not per frame - per frame only the sampling runs.
+const _keyframeFieldCache = new WeakMap();
+function keyframeFieldFor(layerIndex) {
+    const layer = additionalLayers[layerIndex];
+    const store = faceAssignmentsFor(layerIndex);
+    const sigOf = () => JSON.stringify([layer.connections, [...store], layer.shape, layer.symmetryMode, layer.nodes.length, layer.outerCorners[0]]);
+    const hit = _keyframeFieldCache.get(layer);
+    if (hit && hit.sig === sigOf()) return hit.field;
+    const field = keyframeColorField(computeCellFaces(layer.connections, layer.nodes, store, null, faceSheetOverrideOfLayer(layer)));
+    // computeCellFaces() may have reconciled the keyframe's store against an edit (inheritance), so the
+    // signature is taken AFTER it: the next frame then hits the cache instead of rebuilding once more.
+    _keyframeFieldCache.set(layer, { sig: sigOf(), field });
+    return field;
+}
+
+// The crossfade colors for the playback layer's current frame, or null when there is
+// nothing to fade between (no timeline frame applied yet, a keyframe layer gone, or
+// NEITHER bracketing keyframe has any color assignment - then the playback layer keeps
+// its default orbit colors, exactly as before). One keyframe colored, the other not:
+// crossfades from the colored look to the default one. timeline.currentFrame =
+// {segmentIndex, localT} is written by sketch.js's applyTimelineFrame().
+function playbackCrossfadeColors(facesResult) {
+    if (!timeline || !timeline.currentFrame) return null;
+    const { segmentIndex, localT } = timeline.currentFrame;
+    const idA = timeline.keyframeLayerIds[segmentIndex], idB = timeline.keyframeLayerIds[segmentIndex + 1];
+    if (!additionalLayers[idA] || !additionalLayers[idB]) return null;
+    if (faceAssignmentsFor(idA).size === 0 && faceAssignmentsFor(idB).size === 0) return null;
+    return crossfadeFaceColors(facesResult, keyframeFieldFor(idA), keyframeFieldFor(idB), localT);
 }

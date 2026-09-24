@@ -23,7 +23,7 @@ const C = vm.runInContext(`({
   resolveColor, registerHarmonyRule, getHarmonyRule, listHarmonyRules, harmonyRuleParams,
   generateHarmonyPalette, buildOklchReferenceRing,
   OSTWALD_REFERENCE_SYSTEM, OSTWALD_GRAY_LETTERS, HARMONY_MIN_FULL_COLOR,
-  HARMONY_SHADOW_V_TOP, HARMONY_SHADOW_V_BOTTOM
+  HARMONY_SHADOW_V_TOP, HARMONY_SHADOW_V_BOTTOM, cssColorToLinear
 })`, ctx);
 
 let failures = 0, checks = 0;
@@ -244,6 +244,29 @@ console.log('\n== 5. rule properties over every hue x level x slot count ==');
     const ctrl = C.generateHarmonyPalette('tetrad', [0, 0], 4);
     const adjResidual = chroma(mix([ctrl[0].linear, ctrl[1].linear], [0.5, 0.5]));
     check('control: adjacent chord members (6 hues apart) do NOT mix to neutral at the cleanest level', adjResidual > 0.03, adjResidual.toFixed(4));
+}
+
+// ---------------- 3b. CSS color strings (the app's face colors) --------------
+console.log('\n== 3b. cssColorToLinear ==');
+{
+    let hexBad = 0;
+    for (let r = 0; r < 256; r += 17) for (let g = 0; g < 256; g += 17) for (let b = 0; b < 256; b += 17) {
+        const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+        if (C.linearToHex(C.cssColorToLinear(hex)) !== hex) hexBad++;
+    }
+    check('#rrggbb -> linear -> #rrggbb is exact', hexBad === 0);
+    // orbitColor()'s format: hsl(h, 65%, 55%) - compare with the textbook conversion, quantized to 8 bit
+    let hslBad = 0, worst = 0;
+    for (let h = 0; h < 360; h += 7) {
+        const lin = C.cssColorToLinear(`hsl(${h}, 65%, 55%)`), back = C.linearToSrgb8 ? lin.map(C.linearToSrgb8) : null;
+        const s = 0.65, l = 0.55, q = l + s - l * s, p = 2 * l - q, hh = h / 360;
+        const f = t => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+        const want = [f(hh + 1 / 3), f(hh), f(hh - 1 / 3)].map(v => Math.round(v * 255));
+        const d = Math.max(...back.map((v, i) => Math.abs(v - want[i]))); worst = Math.max(worst, d); if (d > 0) hslBad++;
+    }
+    check('hsl(h, 65%, 55%) (orbitColor()) converts to the quantized 8-bit sRGB of the textbook formula', hslBad === 0, `worst channel deviation ${worst}`);
+    check('gray fallback hsl(0, 0%, 70%) -> 70% gray (179)', C.linearToSrgb8(C.cssColorToLinear('hsl(0, 0%, 70%)')[0]) === 179);
+    check('an unsupported string is refused', throws(() => C.cssColorToLinear('red')) && throws(() => C.cssColorToLinear('hsl(0,0,70)')));
 }
 
 // ---------------- 6. verification markers (no silent upgrade) -----------

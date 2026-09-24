@@ -134,6 +134,20 @@ function hexToLinear(hex) {
     return [1, 2, 3].map(i => srgbToLinear(parseInt(m[i], 16)));
 }
 
+// The colors the app puts on faces are CSS strings: '#rrggbb' (an assigned color,
+// resolveColor().hex) or 'hsl(h, s%, l%)' (core/faces.js orbitColor()'s default).
+// -> linear sRGB. An hsl() color is first quantized to 8-bit sRGB, the way the canvas
+// does when it fills with it, so the linear value is that of the DISPLAYED color.
+function cssColorToLinear(str) {
+    if (/^#[0-9a-fA-F]{6}$/.test(str)) return hexToLinear(str);
+    const m = /^hsl\(\s*(-?[\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)$/i.exec(str);
+    if (!m) throw new Error(`cssColorToLinear: unsupported color "${str}"`);
+    const h = (((+m[1]) % 360) + 360) % 360 / 360, s = +m[2] / 100, l = +m[3] / 100;
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+    const f = t => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+    return [f(h + 1 / 3), f(h), f(h - 1 / 3)].map(v => srgbToLinear(Math.round(v * 255)));
+}
+
 // True if every linear channel lies within 0..1 (+- eps for float noise).
 function linearInGamut(rgb, eps = 1e-4) {
     return rgb.every(x => x >= -eps && x <= 1 + eps);
