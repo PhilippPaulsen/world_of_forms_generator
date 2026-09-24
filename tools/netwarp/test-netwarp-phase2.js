@@ -138,6 +138,25 @@ console.log('\n== 3. export ==');
     const widths = lat.slice(1).map((v, i) => v - lat[i]);
     check('exported R = last/first mesh and q = consecutive ratio on the warped lattice', Math.abs(widths[E - 1] / widths[0] - nt.x.R) < 1e-9 && widths.slice(1).every((v, i) => Math.abs(v / widths[i] - nt.x.q) < 1e-9), `R ${nt.x.R.toFixed(4)}, q ${nt.x.q.toFixed(4)}`);
     check('exported constants and law names for trig', (() => { sb.baseNetTransform = SPECS.sinus; const t = S.exp().meta.netTransform; sb.baseNetTransform = SPECS.tangens; const u = S.exp().meta.netTransform; return t.x.law === 'sinus' && u.x.law === 'tangens' && Math.abs(t.x.a - 0.8 * 1.3) < 1e-12 && Math.abs(u.x.a - 0.7 * 1.2) < 1e-12; })());
+    // closed net / repeat: domain + repeat round-trip; the default (no repeat) is a single closed net
+    for (const repeat of [false, true, undefined]) {
+        sb.baseNetTransform = repeat === undefined ? { ...SPECS.sinus } : { ...SPECS.sinus, repeat };
+        const nt2 = JSON.parse(JSON.stringify(S.exp())).meta.netTransform, back = sb.netTransformFromExport(nt2);
+        check(`repeat ${repeat}: exports domain '${repeat ? 'per-tile' : 'single'}' and repeat ${!!repeat}, and reads back the same`, nt2.domain === (repeat ? 'per-tile' : 'single') && nt2.repeat === !!repeat && back.repeat === !!repeat);
+    }
+    check('an export from before the closed-net option (no domain/repeat) reads back as repeated', sb.netTransformFromExport({ version: 1, x: { kind: 'trig', w: -0.5 }, y: { kind: 'trig', w: -0.5 } }).repeat === true);
+    check('an export marked domain single without repeat reads back as closed', sb.netTransformFromExport({ version: 1, domain: 'single', x: { kind: 'uniform' }, y: { kind: 'uniform' } }).repeat === false);
+    {   // repeat alone is not a warp: nothing locks, nothing changes
+        sb.baseNetTransform = { x: { kind: 'trig', w: 0 }, y: 'same', repeat: true };
+        check('repeat with w = 0 is still the identity (no warp, no meta.netTransform)', sb.netWarpActive() === false && !('netTransform' in S.exp().meta));
+    }
+    {   // the hit-test helper behind "no free endpoints outside a closed net"
+        sb.baseNetTransform = { ...SPECS.sinus }; const w = sb.netWarpBaseNow(), c = sb.outerCorners, sz = c[1].x - c[0].x;
+        const P = (fx, fy) => ({ x: c[0].x + fx * sz, y: c[0].y + fy * sz });
+        check('netWarpIsClosed / netWarpInsideNet: centre, corners and edges are inside; just outside is not', sb.netWarpIsClosed(w) && sb.netWarpInsideNet(w, P(0.5, 0.5)) && sb.netWarpInsideNet(w, P(0, 0)) && sb.netWarpInsideNet(w, P(1, 1)) && !sb.netWarpInsideNet(w, P(1.01, 0.5)) && !sb.netWarpInsideNet(w, P(0.5, -0.01)));
+        sb.baseNetTransform = { ...SPECS.sinus, repeat: true };
+        check('repeat on: the warp is not a closed net', sb.netWarpIsClosed(sb.netWarpBaseNow()) === false);
+    }
     check('netTransformFromExport() refuses an unknown version', sb.netTransformFromExport({ version: 2 }) === null && sb.netTransformFromExport(null) === null);
 }
 

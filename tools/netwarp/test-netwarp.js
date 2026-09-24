@@ -15,6 +15,9 @@
  *     axes; not for the geometric series (alternate or not), nor for unequal axes. Then the real
  *     drawConnectionWithSymmetry() output under a warp is / is not closed under the group.
  *  6. alternate parity: widths continuous across tile seams; without it they jump by 1/R; inert for trig.
+ *  8. Closed net (repeat off, the default): one tile, nothing outside the net rectangle, equal to the
+ *     repeated drawing restricted to it; a half-size layer keeps its own sub-tiles; an offset layer degrades
+ *     sensibly; repeat on == the previous commit's behaviour.
  *  7. Face fills are skipped on a warped net; the warp never leaks (finally); face detection outside
  *     drawTessellation() sees unwarped geometry.
  */
@@ -138,7 +141,9 @@ check('geometric: E<2 or w=0 is the identity (null law)', law({ kind: 'geometric
 console.log('\n== 3. drawn endpoints lie on the warped node lattice ==');
 {
     const E = 4, order = 5, size = W / SF;
-    for (const [name, spec] of [['sinus', { x: { kind: 'trig', w: -0.8 }, y: 'same' }], ['tangens x / geometric y', { x: { kind: 'trig', w: 0.6 }, y: { kind: 'geometric', w: 1.2 } }]]) {
+    for (const [name0, spec0] of [['sinus', { x: { kind: 'trig', w: -0.8 }, y: 'same' }], ['tangens x / geometric y', { x: { kind: 'trig', w: 0.6 }, y: { kind: 'geometric', w: 1.2 } }]])
+    for (const repeat of [true, false]) {
+        const name = `${name0}, repeat ${repeat ? 'on' : 'off (closed)'}`, spec = { ...spec0, repeat };
         seed = 3; const sb = makeSb(SRC_NEW, 'square', 'none', order); sb.connections = randomConnections(sb, 6); sb.baseNetTransform = spec;
         const lines = draw(sb);
         const fx = sb.netAxisLaw(spec.x, E), fy = sb.netAxisLaw(spec.y === 'same' ? spec.x : spec.y, E);
@@ -159,19 +164,21 @@ console.log('\n== 3. drawn endpoints lie on the warped node lattice ==');
 // ============ 4. sink consistency ============
 console.log('\n== 4. canvas == segment collector == SVG ==');
 {
-    const spec = { x: { kind: 'trig', w: 0.5 }, y: { kind: 'geometric', w: 0.9, alternate: true } };
+    for (const repeat of [true, false]) {
+    const spec = { x: { kind: 'trig', w: 0.5 }, y: { kind: 'geometric', w: 0.9, alternate: true }, repeat };
     seed = 9; const sb = makeSb(SRC_NEW, 'square', 'rotation_reflection6', 3); sb.connections = randomConnections(sb, 4); sb.baseNetTransform = spec;
     const lines = draw(sb);
     sb.segmentCollector = []; sb.drawTessellation(); const segs = sb.segmentCollector; sb.segmentCollector = null;
     sb.svgPathCollector = []; sb.drawTessellation(); const svg = sb.svgPathCollector; sb.svgPathCollector = null;
     const canvasSegs = lines.map(l => l.join(','));
     const collSegs = segs.map(s => [s.x1, s.y1, s.x2, s.y2].join(','));
-    check('segment collector receives exactly the canvas segments, same order', JSON.stringify(canvasSegs) === JSON.stringify(collSegs), `${lines.length} segments`);
+    check(`repeat ${repeat ? 'on' : 'off'}: segment collector receives exactly the canvas segments, same order`, JSON.stringify(canvasSegs) === JSON.stringify(collSegs), `${lines.length} segments`);
     const num = v => v.toFixed(2);
     const svgSegs = svg.map(d => { const m = d.match(/M ([-\d.]+) ([-\d.]+) L ([-\d.]+) ([-\d.]+)/); return m ? m.slice(1).join(',') : d; });
-    check('SVG path data == canvas segments to 2 dp', JSON.stringify(lines.map(l => l.map(num).join(','))) === JSON.stringify(svgSegs), `${svg.length} paths`);
+    check(`repeat ${repeat ? 'on' : 'off'}: SVG path data == canvas segments to 2 dp`, JSON.stringify(lines.map(l => l.map(num).join(','))) === JSON.stringify(svgSegs), `${svg.length} paths`);
     const un = fixture(SRC_NEW, 'square', 'rotation_reflection6', 3, null, 9); seed = 9;
     check('control: the warped output differs from the unwarped one', JSON.stringify(draw(un)) !== JSON.stringify(lines));
+    }
 }
 
 // ============ 5. symmetry commutation ============
@@ -255,6 +262,67 @@ console.log('\n== 7. faces / leak ==');
     const sw = mk({ x: { kind: 'trig', w: -0.5 }, y: 'same' }), sr = mk(null);
     const norm = s => JSON.stringify(s);
     check('collectCellSegments() outside a redraw is unwarped (same as no spec)', norm(sw.collectCellSegments(sw.connections, sw.nodes)) === norm(sr.collectCellSegments(sr.connections, sr.nodes)));
+}
+
+// ============ 8. closed net (repeat off): one tile, nothing outside ============
+console.log('\n== 8. closed net vs repeat ==');
+{
+    const SPEC = { x: { kind: 'trig', w: -0.8 }, y: 'same' };
+    const rectOf = sb => { const c = sb.outerCorners; return { x0: c[0].x, y0: c[0].y, x1: c[2].x, y1: c[2].y }; };
+    const inside = (l, r, tol = 1e-6, m = 0) => [[l[0], l[1]], [l[2], l[3]]].every(([x, y]) => x >= r.x0 - tol - m && x <= r.x1 + tol + m && y >= r.y0 - tol - m && y <= r.y1 + tol + m);
+    const segKey = l => { const q = v => Math.round(v * 1e4) / 1e4, a = [q(l[0]), q(l[1])], b = [q(l[2]), q(l[3])]; return (a[0] < b[0] || (a[0] === b[0] && a[1] <= b[1]) ? [a, b] : [b, a]).join('|'); };
+    let cases = 0, outside = 0, mismatch = 0, tileBad = 0, altDiff = 0;
+    for (const sf of [1, 2, 3, 5, 9]) for (const order of [3, 4, 5]) for (const mode of ['rotation_reflection6', 'rotation6', 'reflection_only', 'none']) {
+        const build = spec => { seed = 40 + order; const sb = makeSb(SRC_NEW, 'square', mode, order); sb.shapeSizeFactor = sf; const g = sb.buildSquareGrid(order, sf, W, W); sb.nodes = g.nodes; sb.centroid = g.centroid; sb.outerCorners = g.outerCorners; sb.connections = randomConnections(sb, 4); sb.baseNetTransform = spec; return sb; };
+        const closed = build(SPEC), rep = build({ ...SPEC, repeat: true }), r = rectOf(closed);
+        let calls = 0; const o = closed.drawShapeCell; closed.drawShapeCell = function (...a) { calls++; return o.apply(this, a); };
+        const lc = draw(closed), lr = draw(rep); cases++;
+        if (calls !== 1) tileBad++;
+        if (!lc.every(l => inside(l, r))) outside++;
+        // exactly what the repeated drawing has inside the net rectangle - nothing lost, nothing added
+        // (a segment lying wholly ON the rectangle's boundary is left out of both: a repeated drawing also carries the
+        // neighbour tile's own edge lines there, which a closed net does not have)
+        const onEdge = l => (l[0] === l[2] || Math.abs(l[0] - l[2]) < 1e-6) && [r.x0, r.x1].some(v => Math.abs(l[0] - v) < 1e-6) || (Math.abs(l[1] - l[3]) < 1e-6 && [r.y0, r.y1].some(v => Math.abs(l[1] - v) < 1e-6));
+        const want = new Set(lr.filter(l => inside(l, r) && !onEdge(l)).map(segKey)), got = new Set(lc.filter(l => !onEdge(l)).map(segKey));
+        if (want.size !== got.size || [...want].some(k => !got.has(k))) mismatch++;
+        const alt = build({ x: { kind: 'geometric', w: 1.1, alternate: true }, y: 'same' }), noalt = build({ x: { kind: 'geometric', w: 1.1 }, y: 'same' });
+        const la = draw(alt), ln = draw(noalt);   // equal up to float noise (a point exactly on the tile edge takes k=1, the odd branch)
+        if (la.length !== ln.length || la.some((l, i) => l.some((v, j) => Math.abs(v - ln[i][j]) > 1e-9))) altDiff++;
+    }
+    check('closed: the base sheet visits exactly one tile (drawShapeCell called once)', tileBad === 0, `${cases} cases (Shape Size 1/2/3/5/9 x order 3/4/5 x 4 modes)`);
+    check('closed: every drawn endpoint lies inside the net rectangle', outside === 0, `${outside} escaping`);
+    check('closed: the drawn segments equal the repeated drawing restricted to the net rectangle', mismatch === 0, `${mismatch} differing`);
+    check('closed: `alternate` has no effect (no seams in one tile)', altDiff === 0);
+
+    // a smaller layer (half the tile size: 2x2 sub-tiles) fills the net with ITS OWN tile count, not one tile
+    const mkLayer = (sb, extra) => { const g = sb.layerGrid(sb.outerCorners, sb.centroid, sb.currentShape, sb.shapeSizeFactor, sb.shapeSizeFactor * 2, 3, 'square', W, W); const l = { connections: [[1, 9], [3, 7]], redoStack: [], offsetX: 0, offsetY: 0, rotation: 0, shape: 'square', symmetryMode: sb.symmetryMode, enabled: true, showFaces: false, nodeCount: 3, shapeSizeFactor: sb.shapeSizeFactor * 2, nodes: g.nodes, centroid: g.centroid, outerCorners: g.outerCorners, ...extra }; sb.additionalLayers.push(l); return l; };
+    {
+        const sb = makeSb(SRC_NEW, 'square', 'rotation_reflection6', 3); sb.shapeSizeFactor = 3; const g = sb.buildSquareGrid(3, 3, W, W); sb.nodes = g.nodes; sb.centroid = g.centroid; sb.outerCorners = g.outerCorners; sb.connections = [[1, 9]];
+        mkLayer(sb, {}); sb.baseNetTransform = SPEC;
+        const layerCalls = []; const o = sb.drawShapeCell; sb.drawShapeCell = function (...a) { layerCalls.push(a[1]); return o.apply(this, a); };
+        const lines = draw(sb), r = rectOf(sb);
+        const layerTiles = layerCalls.length - 1;
+        // the half-size layer's lattice has a tile CENTRED on the shared centroid, so 3 tiles per axis meet the net (its outer
+        // tiles reach half a layer tile past the net: layer spill, a phase 3 question) - and one (0,0) tile would be wrong
+        check('closed: a half-size layer gets every tile that meets the net (3x3), not a single (0,0) tile; spill <= half a layer tile', layerTiles === 9 && lines.every(l => inside(l, r, 1e-6, 25)), `${layerTiles} layer tiles`);
+    }
+    // an OFFSET layer spills past the net: it must degrade sensibly - finite, no crash, bounded by rect + offset
+    {
+        const sb = makeSb(SRC_NEW, 'square', 'rotation_reflection6', 4); sb.shapeSizeFactor = 3; const g = sb.buildSquareGrid(4, 3, W, W); sb.nodes = g.nodes; sb.centroid = g.centroid; sb.outerCorners = g.outerCorners; sb.connections = [[1, 16], [4, 13]];
+        const g2 = sb.layerGrid(sb.outerCorners, sb.centroid, 'square', 3, 3, 4, 'square', W, W);
+        sb.additionalLayers.push({ connections: [[2, 15], [5, 12]], redoStack: [], offsetX: 30, offsetY: -20, rotation: 0, shape: 'square', symmetryMode: 'rotation_reflection6', enabled: true, showFaces: false, nodeCount: 4, shapeSizeFactor: 3, nodes: g2.nodes, centroid: g2.centroid, outerCorners: g2.outerCorners });
+        sb.baseNetTransform = SPEC; let lines, threw = false; try { lines = draw(sb); } catch (e) { threw = true; }
+        const r = rectOf(sb);
+        check('closed + an offset layer: draws, finite, and stays within the net rectangle widened by one tile + the layer offset (its neighbouring tiles show at the edge)', !threw && lines.length > 0 && lines.every(l => l.every(Number.isFinite)) && lines.every(l => inside(l, r, 1e-6, 131)), `${lines && lines.length} lines`);
+    }
+    // repeat on is exactly the previous behaviour: same lines as the HEAD~ code path would draw (the old code always repeated)
+    let same = 0, n = 0;
+    for (const order of [3, 4]) for (const sf of [2, 5]) {
+        const spec = { x: { kind: 'trig', w: -0.6 }, y: { kind: 'geometric', w: 0.8, alternate: true }, repeat: true };
+        const build = src => { seed = 70 + order; const sb = makeSb(src, 'square', 'rotation_reflection6', order); sb.shapeSizeFactor = sf; const g = sb.buildSquareGrid(order, sf, W, W); sb.nodes = g.nodes; sb.centroid = g.centroid; sb.outerCorners = g.outerCorners; sb.connections = randomConnections(sb, 4); sb.baseNetTransform = spec; return sb; };
+        n++; if (JSON.stringify(draw(build(SRC_OLD))) === JSON.stringify(draw(build(SRC_NEW)))) same++;
+    }
+    check('repeat on: byte-identical to the previous commit (the behaviour before the closed-net option)', same === n, `${same}/${n}`);
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
