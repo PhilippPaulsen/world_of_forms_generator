@@ -663,6 +663,41 @@
         </div>
       </div>
 
+      <!-- Roadmap 1.6 / Group E phase 2: net transform (Netzart 1, Hinterreiter's Quadratnetz with
+           non-uniform spacing). BASE sheet and SQUARE shape only - shown/hidden by sketch.js's
+           netControlsSync(), which also disables the curve / free / face toggles while a warp is in
+           force (their note is #net-locks-note). Kind picks the spacing law; Strength is its one
+           continuous scalar (core/netwarp.js's w); Axes: both the same, or X / Y separately;
+           Reverse and Alternate tiles are geometric-only. The laws are this project's
+           interpretation of Hinterreiter's figures, not his equations (see core/netwarp.js). -->
+      <div class="control-group" id="net-group" hidden>
+        <label>Net (Netzart 1)</label>
+        <div class="icon-row">
+          <button class="layer-btn net-kind-btn active" data-kind="regular" title="Regular net">Regular</button>
+          <button class="layer-btn net-kind-btn" data-kind="sinus" title="Sinus spacing - meshes shrink toward the tile edge (Hinterreiter Fig. 14)">Sinus</button>
+          <button class="layer-btn net-kind-btn" data-kind="tangens" title="Tangens spacing - meshes grow toward the tile edge (Hinterreiter Fig. 15)">Tangens</button>
+          <button class="layer-btn net-kind-btn" data-kind="geometric" title="Geometric series spacing (Hinterreiter Fig. 60/61)">Geometric</button>
+        </div>
+        <div class="icon-row" id="net-axes-row">
+          <button class="layer-btn net-axes-btn active" data-axes="both" title="Same law on both axes">Both</button>
+          <button class="layer-btn net-axes-btn" data-axes="x" title="Edit the X axis only">X</button>
+          <button class="layer-btn net-axes-btn" data-axes="y" title="Edit the Y axis only">Y</button>
+        </div>
+        <div id="net-strength-row">
+          <label for="net-strength-input">Strength</label>
+          <div class="icon-row">
+            <input type="range" id="net-strength-input" min="0" max="100" step="1" value="50">
+            <span id="net-strength-value">0.50</span>
+          </div>
+        </div>
+        <div class="icon-row" id="net-geo-row" hidden>
+          <button class="layer-btn" id="net-reverse-btn" title="Reverse the direction in which the meshes grow">Reverse</button>
+          <button class="layer-btn" id="net-alternate-btn" title="Mirror every other tile so mesh widths run on across tile seams (an interpretation - the book shows this for line motifs, not for the spacing function)">Alternate tiles</button>
+        </div>
+      </div>
+      <!-- visible whenever a warp is in force, also from a layer tab (the warp itself is set on the Base sheet) -->
+      <div id="net-locks-note" hidden>Curve, free-clothing and face-fill modes are off while a net transform is active: faces are not detected on a warped net, and lines are kept straight. Set the net back to Regular (Base sheet, square) to use them again.</div>
+
       <!-- Layer Tab Strip (Roadmap 1.9): Base (static, always present)
            + one tab per additional layer, rendered dynamically by
            sketch.js since the layer count is variable - see
@@ -1125,18 +1160,18 @@
        the p5.js CDN tag - that URL already carries its own version
        (p5@1.9.0), so a version bump there naturally changes the URL. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260924a"></script>
-  <script src="core/state.js?v=20260924a"></script>
-  <script src="core/symmetry.js?v=20260924a"></script>
-  <script src="core/curves.js?v=20260924a"></script>
-  <script src="core/netwarp.js?v=20260924a"></script>
-  <script src="core/tiling.js?v=20260924a"></script>
-  <script src="core/faces.js?v=20260924a"></script>
-  <script src="core/orbits.js?v=20260924a"></script>
-  <script src="core/color.js?v=20260924a"></script>
-  <script src="core/facecolor.js?v=20260924a"></script>
-  <script src="core/export.js?v=20260924a"></script>
-  <script src="sketch.js?v=20260924a"></script>
+  <script src="core/forms.js?v=20260924b"></script>
+  <script src="core/state.js?v=20260924b"></script>
+  <script src="core/symmetry.js?v=20260924b"></script>
+  <script src="core/curves.js?v=20260924b"></script>
+  <script src="core/netwarp.js?v=20260924b"></script>
+  <script src="core/tiling.js?v=20260924b"></script>
+  <script src="core/faces.js?v=20260924b"></script>
+  <script src="core/orbits.js?v=20260924b"></script>
+  <script src="core/color.js?v=20260924b"></script>
+  <script src="core/facecolor.js?v=20260924b"></script>
+  <script src="core/export.js?v=20260924b"></script>
+  <script src="sketch.js?v=20260924b"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

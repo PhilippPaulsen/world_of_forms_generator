@@ -962,6 +962,11 @@ function findFaces(segments, realNodes) {
 // trail keys, so segments, faces and keys all describe the same sheet.
 function computeCellFaces(connSet, gridNodes = nodes, assignments = null, highlightKey = null, sheet = null) {
     if (curveType.kind !== 'straight') return { nodes: [], faces: [] };
+    // Roadmap 1.6 / Group E phase 2: refused, not approximated, on a warped net - the segments
+    // detection would collect here are regular-space ones while the canvas shows the warped image,
+    // and the face keys assume the periodicity the warp removes (core/netwarp.js docblock). The UI
+    // says so (sketch.js faceFillsUnavailableReason()); export flags it (meta.netTransform.facesOmitted).
+    if (netWarpActive()) return { nodes: [], faces: [] };
     const segments = collectCellSegments(connSet, gridNodes, sheet);
     const result = findFaces(segments, gridNodes);
     // Group D follow-up step 2: applies the store AFTER reconciling it against the
@@ -1036,6 +1041,7 @@ function _neighborhoodRealNodes(sheetId, residual, K, v1, v2) {
 // result rather than being recomputed a second time by each caller.
 function computeCrossLayerFaces(baseConnSet, layers) {
     if (curveType.kind !== 'straight') return { nodes: [], faces: [], latticeBasis: null };
+    if (netWarpActive()) return { nodes: [], faces: [], latticeBasis: null }; // see computeCellFaces()
 
     const plan = _planCrossLayerNeighborhood(layers);
     const segments = collectCrossLayerSegments(baseConnSet, layers);

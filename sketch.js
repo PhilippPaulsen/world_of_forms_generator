@@ -557,6 +557,72 @@ function setup() {
 
     initFaceColorsPanel();
 
+    // ---- Roadmap 1.6 / Group E phase 2: net transform controls (base sheet, square only) ----
+    // UI state -> baseNetTransform (core/state.js): sinus/tangens = {kind:'trig', w: -/+strength},
+    // geometric = {kind:'geometric', w: +/-strength*ln(NET_R_MAX)} (w = ln R, R = last/first mesh),
+    // 'Both' axes = y:'same'. Strength 0 (or Regular) is the identity: no warp, nothing locked.
+    (function initNetControls() {
+        const group = select('#net-group');
+        if (!group) return;
+        const NET_R_MAX = 8;
+        const kindBtns = selectAll('.net-kind-btn'), axesBtns = selectAll('.net-axes-btn');
+        const strengthInput = select('#net-strength-input'), strengthValue = select('#net-strength-value'), strengthRow = select('#net-strength-row');
+        const geoRow = select('#net-geo-row'), reverseBtn = select('#net-reverse-btn'), alternateBtn = select('#net-alternate-btn');
+        const note = select('#net-locks-note');
+        const fresh = () => ({ mode: 'regular', strength: 0.5, reverse: false, alternate: false });
+        const ui = { axes: 'both', x: fresh(), y: fresh() };
+        const target = () => (ui.axes === 'y' ? ui.y : ui.x);
+        const axisSpec = c => c.mode === 'regular' ? { kind: 'uniform', w: 0 }
+            : c.mode === 'sinus' ? { kind: 'trig', w: -c.strength }
+            : c.mode === 'tangens' ? { kind: 'trig', w: c.strength }
+            : { kind: 'geometric', w: (c.reverse ? -1 : 1) * c.strength * Math.log(NET_R_MAX), alternate: c.alternate };
+        function commit() {
+            if (ui.axes === 'both') ui.y = Object.assign({}, ui.x);
+            const allRegular = ui.x.mode === 'regular' && ui.y.mode === 'regular';
+            baseNetTransform = allRegular ? null : { x: axisSpec(ui.x), y: ui.axes === 'both' ? 'same' : axisSpec(ui.y) };
+            render(); netControlsSync(); redraw();
+        }
+        function render() {
+            const c = target();
+            kindBtns.forEach(b => b.elt.classList.toggle('active', b.elt.dataset.kind === c.mode));
+            axesBtns.forEach(b => b.elt.classList.toggle('active', b.elt.dataset.axes === ui.axes));
+            strengthRow.elt.hidden = c.mode === 'regular';
+            strengthInput.value(Math.round(c.strength * 100));
+            strengthValue.html(c.mode === 'geometric' ? '\u00d7' + Math.pow(NET_R_MAX, c.strength).toFixed(1) : c.strength.toFixed(2));
+            geoRow.elt.hidden = c.mode !== 'geometric';
+            reverseBtn.elt.classList.toggle('active', c.reverse);
+            alternateBtn.elt.classList.toggle('active', c.alternate);
+        }
+        kindBtns.forEach(b => b.mousePressed(() => { target().mode = b.elt.dataset.kind; commit(); }));
+        axesBtns.forEach(b => b.mousePressed(() => {
+            const next = b.elt.dataset.axes;
+            if (next !== 'both' && ui.axes === 'both') ui.y = Object.assign({}, ui.x); // start X and Y from the shared law
+            ui.axes = next; commit();
+        }));
+        strengthInput.input(() => { target().strength = parseInt(strengthInput.value()) / 100; commit(); });
+        reverseBtn.mousePressed(() => { target().reverse = !target().reverse; commit(); });
+        alternateBtn.mousePressed(() => { target().alternate = !target().alternate; commit(); });
+
+        const locked = [curveBtn, freeBtn, faceBtn].filter(Boolean);
+        locked.forEach(b => { b.elt.dataset.title = b.elt.title; });
+        let wasActive = false;
+        netControlsSync = function () {
+            group.elt.hidden = !(currentShape === 'square' && activeLayer === 'base');
+            const active = netWarpActive();
+            if (active && curveType.kind !== 'straight') { // a curve built on a warped chord is not the warp of a curve
+                curveType = { kind: 'straight' };
+                curveBtn && curveBtn.removeClass('active'); freeBtn && freeBtn.removeClass('active');
+                updateCurveTypeControls();
+            }
+            if (active !== wasActive) {
+                locked.forEach(b => { b.elt.disabled = active; b.elt.title = active ? 'Off while a net transform is active' : b.elt.dataset.title; });
+                if (note) note.elt.hidden = !active;
+                wasActive = active;
+            }
+        };
+        render();
+    })();
+
     // Roadmap 1.5-B: kind:'free' controls (roughness/visible/reroll) -
     // a plate-wide curveType setting, not per-layer (see index.html's
     // own comment on these groups), so no layer-switch call site needs
@@ -2057,15 +2123,20 @@ function draw() {
     if (showNodes) {
         push();
         noStroke();
+        // Roadmap 1.6 / Group E phase 2: dots (base and active layer) sit where the lines are drawn -
+        // through the net warp when one is in force (position-based, like the warp itself).
+        const dotWarp = netWarpBaseNow();
+        const dotPos = nd => dotWarp ? applyNetWarp(dotWarp, nd) : nd;
         nodes.forEach(nd => {
+            const p = dotPos(nd);
             if (activeLayer === 'base') {
-                const d = dist(mouseX, mouseY, nd.x, nd.y);
+                const d = dist(mouseX, mouseY, p.x, p.y);
                 // Default: Schwarz (Grid) / Blau (frei) oder Rot bei Hover
                 fill(d < 10 ? color(220, 0, 0) : (nd.free ? color(30, 110, 220) : color(0)));
             } else {
                 fill(200);
             }
-            ellipse(nd.x, nd.y, 6, 6);
+            ellipse(p.x, p.y, 6, 6);
         });
         // The active layer's own persisted nodes (canonical, untransformed
         // positions - same rendering convention as the base's own dots
@@ -2074,9 +2145,10 @@ function draw() {
         // rotation baked in).
         if (activeLayer !== 'base') {
             additionalLayers[activeLayer].nodes.forEach(nd => {
-                const d = dist(mouseX, mouseY, nd.x, nd.y);
+                const p = dotPos(nd);
+                const d = dist(mouseX, mouseY, p.x, p.y);
                 fill(d < 10 ? color(220, 0, 0) : (nd.free ? color(30, 110, 220) : color(0)));
-                ellipse(nd.x, nd.y, 6, 6);
+                ellipse(p.x, p.y, 6, 6);
             });
         }
         pop();
@@ -2139,6 +2211,7 @@ function draw() {
     // Group D Phase 3: Face Colors panel - same once-per-draw, signature-
     // gated pattern (rebuilds only when its contents could have changed).
     updateFaceColorsPanel();
+    if (netControlsSync) netControlsSync();
 }
 
 // ----------------- ALTERNATIVE NET CONSTRUCTION (Roadmap 1.2-C) -----
@@ -3782,12 +3855,15 @@ function patternNameSignature() {
 // whose geometry an edit changed comes back UNASSIGNED (default color, no
 // explanation) - the row just says "default".
 let faceColorsSignature = null;
+// Roadmap 1.6 / Group E phase 2: set by setup() (it needs the curve/free/face button closures); called once per draw().
+let netControlsSync = null;
 
 // Why the active sheet draws no face fills right now, or null when it does.
 // Mirrors core/tiling.js's computeLayerCellFaces() guard (enabled, showFaces,
 // same scale, rotation 0) - duplicated on purpose so those guards stay
 // untouched; a base sheet only needs straight lines (computeCellFaces()).
 function faceFillsUnavailableReason() {
+    if (netWarpActive()) return 'Face fills are off while a net transform is active (faces are not detected on a warped net). Set the net to Regular on the Base sheet to use them.';
     if (curveType.kind !== 'straight') return 'Face fills need straight lines (curve/free mode is on).';
     if (activeLayer === 'base') return null;
     const l = additionalLayers[activeLayer];
@@ -3814,7 +3890,7 @@ function faceColorsSig() {
     const l = activeLayer === 'base' ? null : additionalLayers[activeLayer];
     return JSON.stringify({
         sheet: activeLayer, conns: faceColorsGrid().conns, shape: currentShape, mode: symmetryMode, n: faceColorsGrid().gridNodes.length,
-        layer: l && [l.enabled, l.shapeSizeFactor, l.rotation, l.shape, l.symmetryMode], kf: isTimelineKeyframe(activeLayer), size: shapeSizeFactor, curve: curveType.kind,
+        layer: l && [l.enabled, l.shapeSizeFactor, l.rotation, l.shape, l.symmetryMode], kf: isTimelineKeyframe(activeLayer), size: shapeSizeFactor, curve: curveType.kind, net: netWarpActive(),
         store: faceAssignmentsFor(activeLayer).size
     });
 }
@@ -4175,6 +4251,7 @@ function crossLayerConfigSignature() {
     const { baseConn, layers } = buildCrossLayerInput();
     return JSON.stringify({
         base: baseConn,
+        net: netWarpActive() ? baseNetTransform : null,
         layers: layers.map(l => ({ sheetId: l.sheetId, conns: l.connections, ox: l.offsetX, oy: l.offsetY }))
     });
 }
@@ -4202,6 +4279,10 @@ function updateCrossLayerStatus() {
     const statusEl = select('#cross-layer-status');
     if (!statusEl) return;
 
+    if (netWarpActive()) {
+        statusEl.html('Cross-layer face detection is off while a net transform is active (faces are not detected on a warped net).');
+        return;
+    }
     const mismatched = incompatibleEnabledLayersForCrossLayerFaces();
     if (mismatched.length > 0) {
         const names = mismatched.map(({ index }) => `Layer ${index + 1}`).join(', ');
@@ -4249,6 +4330,7 @@ function computeCrossLayerFacesFlow() {
     // in principle still be clicked while the status text hasn't caught
     // up for some reason, and this is the call that would do real,
     // silently-wrong work.
+    if (netWarpActive()) { updateCrossLayerStatus(); return; } // refused visibly, like the mismatch case below
     const mismatched = incompatibleEnabledLayersForCrossLayerFaces();
     if (mismatched.length > 0) {
         updateCrossLayerStatus();
@@ -4295,11 +4377,16 @@ function mousePressed() {
     // while a layer tab was active silently landed in the BASE's node
     // space (and id range) instead of that layer's own.
     const activeNodeArr = activeNodes();
+    // Roadmap 1.6 / Group E phase 2: under a net warp a node is DRAWN at F(node), so that is where the
+    // click must land; a free endpoint is stored in regular space at F^-1(click) so it is drawn where
+    // it was clicked (core/netwarp.js docblock, "FREE ENDPOINTS").
+    const netWarp = netWarpBaseNow();
     let foundId = null;
-    for (let nd of activeNodeArr) { if (dist(mouseX, mouseY, nd.x, nd.y) < 18) { foundId = nd.id; break; } }
+    for (let nd of activeNodeArr) { const p = netWarp ? applyNetWarp(netWarp, nd) : nd; if (dist(mouseX, mouseY, p.x, p.y) < 18) { foundId = nd.id; break; } }
     if (foundId === null && freeEndpointsEnabled) {
         const newId = Math.max(...activeNodeArr.map(n => n.id), 0) + 1;
-        activeNodeArr.push({ id: newId, x: mouseX, y: mouseY, free: true });
+        const at = netWarp ? invertNetWarp(netWarp, { x: mouseX, y: mouseY }) : { x: mouseX, y: mouseY };
+        activeNodeArr.push({ id: newId, x: at.x, y: at.y, free: true });
         foundId = newId;
     }
     if (foundId !== null) {

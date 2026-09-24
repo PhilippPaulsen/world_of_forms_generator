@@ -166,6 +166,12 @@ function buildExportData(crossLayerData) {
         }
     };
 
+    // Roadmap 1.6 / Group E phase 2: meta.netTransform - present ONLY while a warp is in force, so every
+    // regular export is byte-identical to before (formatVersion stays 1). geometry.nodes/edges stay
+    // regular; the face lists below are omitted on a warped net (see netTransformExportData()).
+    const netWarped = netWarpActive();
+    if (netWarped) data.meta.netTransform = netTransformExportData(baseNetTransform, nodeCount - 1);
+
     const enabledLayers = additionalLayers.filter(layer => layer.enabled);
     const layerFaceStores = []; // Group D Phase 4: filled per exported layer below, for meta.faceColoring
     if (enabledLayers.length > 0) {
@@ -252,7 +258,7 @@ function buildExportData(crossLayerData) {
                 edges: completeLayerConnections.map(c => [c[0], c[1]]),
                 adjacency: computeAdjacency(completeLayerConnections, layerNodeById)
             };
-            if (curveType.kind === 'straight') {
+            if (curveType.kind === 'straight' && !netWarped) {
                 // Group D Phase 4: this layer's assignment store (undefined
                 // for a layer that never had one) recolors its assigned
                 // faces (face.color = resolved hex) and tags them with
@@ -311,7 +317,7 @@ function buildExportData(crossLayerData) {
         });
     }
 
-    if (curveType.kind === 'straight') {
+    if (curveType.kind === 'straight' && !netWarped) {
         const facesResult = computeCellFaces(completeConnections, nodes, baseFaceAssignments);
         data.geometry.faceNodes = facesResult.nodes;
         data.geometry.faces = facesResult.faces;
@@ -415,7 +421,9 @@ function generateSVGString() {
     svg += `  </g>\n`;
     if (showNodes) {
         svg += `  <g fill="#000000">\n`;
-        nodes.forEach(nd => { svg += `    <circle cx="${nd.x.toFixed(2)}" cy="${nd.y.toFixed(2)}" r="3" />\n`; });
+        // Roadmap 1.6: node dots sit where the canvas draws them - through the warp when one is in force.
+        const nodeWarp = netWarpBaseNow();
+        nodes.forEach(nd => { const p = nodeWarp ? applyNetWarp(nodeWarp, nd) : nd; svg += `    <circle cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="3" />\n`; });
         svg += `  </g>\n`;
     }
     // Canvas frame, matching draw()'s rect(0,0,width,height) at strokeWeight(4).

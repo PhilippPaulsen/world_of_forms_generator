@@ -41,10 +41,21 @@
  * (measured in tools/netwarp/test-netwarp.js). A net that breaks the symmetry does so on purpose;
  * the pattern stays valid because it is built in regular space.
  *
- * Phase 1 scope: the base square sheet only (axis-aligned or rotated square frame), straight
- * lines. Face fills are NOT supported on a warped net (measured: the mean gap between F(crossing)
- * and the crossing of the mapped chords is 4.9% of a tile, max 22%) - drawTessellation() skips
- * face detection while a warp is active. No UI, hit-testing or export yet.
+ * SCOPE. The base square sheet only (axis-aligned or rotated square frame; triangle and hex ignore
+ * a set warp, on purpose - Netzart 1 is Parallelenschar + Parallelenschar at right angles), straight
+ * lines only (the UI turns curve/free mode off while a warp is in force). Additional layers are drawn
+ * through the same position-based F.
+ *
+ * FACES ARE REFUSED, NOT APPROXIMATED, on a warped net (measured: the mean gap between F(crossing) and
+ * the crossing of the mapped chords is 4.9% of a tile, max 22%; and the face keys assume the
+ * translation/symmetry equivalence the warp removes). computeCellFaces()/computeCrossLayerFaces()
+ * return nothing, drawTessellation() skips fills, buildExportData() omits the face lists and says so
+ * in meta.netTransform.facesOmitted, the Face Colors panel and the cross-layer status say why.
+ * Warp-aware detection would mean re-deriving orbit keys for a non-periodic net: a project of its own.
+ *
+ * FREE ENDPOINTS (1.3(a)) are stored in REGULAR space and drawn through F like every node, so a click
+ * is stored at F^-1(click) (invertNetWarp()) and lands where it was clicked. Changing the warp later
+ * moves them with the net, as any node moves.
  */
 
 const NETWARP_A_SIN = 1.3;   // provisional cap, tuned with the UI (outer/inner mesh cos(1.3) = 0.27)
@@ -104,4 +115,66 @@ function applyNetWarp(warp, pt) {
     if (warp.fx) { const d = _netWarpAxis(warp.fx, warp.altX, s) - s; x += d * warp.v1.x; y += d * warp.v1.y; }
     if (warp.fy) { const d = _netWarpAxis(warp.fy, warp.altY, t) - t; x += d * warp.v2.x; y += d * warp.v2.y; }
     return { x, y };
+}
+
+// ---- Phase 2: the live base warp, its inverse, and the export description ----
+
+// The ready warp for the CURRENT base sheet (null = regular net or a shape the warp does not apply
+// to). Unlike activeNetWarp - installed only for the duration of one drawTessellation() - this is
+// what UI code, face detection and export use to ask "is a warp in force right now".
+function netWarpBaseNow() { return baseNetTransform ? netWarpForBase(baseNetTransform, currentShape, outerCorners, nodeCount) : null; }
+function netWarpActive() { return netWarpBaseNow() !== null; }
+
+// F^-1: the regular-space point whose image under the warp is `pt` (each axis law is strictly
+// increasing on [0,1], so a bisection per axis finds it; tiles are located by floor as in
+// applyNetWarp()). Used to create a free endpoint at the position that was clicked: a stored free
+// node is a REGULAR-space point and is drawn through F like every other node.
+function _netWarpAxisInverse(f, alt, sOut) {
+    const k = Math.floor(sOut), l = sOut - k;
+    const flip = alt && (k & 1);
+    const target = flip ? 1 - l : l;
+    let lo = 0, hi = 1;
+    for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (f(mid) < target) lo = mid; else hi = mid; }
+    const li = (lo + hi) / 2;
+    return k + (flip ? 1 - li : li);
+}
+function invertNetWarp(warp, pt) {
+    const dx = pt.x - warp.c0.x, dy = pt.y - warp.c0.y;
+    const s = (dx * warp.v2.y - dy * warp.v2.x) / warp.det;
+    const t = (warp.v1.x * dy - warp.v1.y * dx) / warp.det;
+    let x = pt.x, y = pt.y;
+    if (warp.fx) { const d = _netWarpAxisInverse(warp.fx, warp.altX, s) - s; x += d * warp.v1.x; y += d * warp.v1.y; }
+    if (warp.fy) { const d = _netWarpAxisInverse(warp.fy, warp.altY, t) - t; x += d * warp.v2.x; y += d * warp.v2.y; }
+    return { x, y };
+}
+
+// meta.netTransform (export): the warp fully described, so the warped IMAGE is reproducible from
+// the JSON. geometry.nodes/edges stay REGULAR (topology; SpaceHarmony's importer reads only those),
+// hence geometryIsRegular; faces are not exported on a warped net (facesOmitted) - same "refuse
+// visibly rather than export stale data" rule as the curve case, but flagged instead of silent.
+// Resolved per axis (y 'same' expanded); `a` (trig angle, radians) and `R`/`q` (geometric) are
+// derived values, written so a reader need not know the constants.
+function netTransformExportData(spec, E) {
+    const ax = spec.x, ay = spec.y === 'same' ? spec.x : spec.y;
+    const describe = axis => {
+        if (!axis || axis.kind === 'uniform' || !axis.w) return { kind: 'uniform' };
+        if (axis.kind === 'trig') {
+            const w = Math.max(-1, Math.min(1, axis.w));
+            return { kind: 'trig', law: w < 0 ? 'sinus' : 'tangens', w, a: w < 0 ? -w * NETWARP_A_SIN : w * NETWARP_A_TAN };
+        }
+        return { kind: 'geometric', w: axis.w, R: Math.exp(axis.w), q: E >= 2 ? Math.exp(axis.w / (E - 1)) : null, alternate: !!axis.alternate };
+    };
+    return {
+        version: 1, interpretation: true, domain: 'per-tile', E,
+        x: describe(ax), y: describe(ay),
+        constants: { A_SIN: NETWARP_A_SIN, A_TAN: NETWARP_A_TAN },
+        geometryIsRegular: true, facesOmitted: true
+    };
+}
+// The inverse of netTransformExportData(): the spec (as baseNetTransform holds it) from an
+// exported meta.netTransform. Only kind/w/alternate are read - everything else is derived.
+function netTransformFromExport(exported) {
+    if (!exported || exported.version !== 1) return null;
+    const axis = a => (!a || a.kind === 'uniform') ? { kind: 'uniform', w: 0 } : { kind: a.kind, w: a.w, alternate: !!a.alternate };
+    return { x: axis(exported.x), y: axis(exported.y) };
 }
