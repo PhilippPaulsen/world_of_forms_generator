@@ -26,8 +26,11 @@ const vm = require('vm');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
 const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'tiling', 'faces', 'color', 'facecolor', 'export'];
-const load = fromHead => FILES.map(f => fromHead
-    ? execSync(`git show HEAD:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString()
+// "The previous behavior" is pinned to the commit BEFORE the per-layer fix (b992b614), not to HEAD - HEAD
+// contains the fix now, so a HEAD comparison could no longer show the defect.
+const PRE_FIX = 'b992b614';
+const load = old => FILES.map(f => old
+    ? execSync(`git show ${PRE_FIX}:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString()
     : fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
 const SRC_NEW = load(false);
 const SKETCH = fs.readFileSync(path.join(ROOT, 'sketch.js'), 'utf8');
@@ -43,7 +46,7 @@ function makeSandbox(src, shape, mode, order) {
         floor: Math.floor, ceil: Math.ceil, min: Math.min, max: Math.max, dist: (a, b, c, d) => Math.hypot(c - a, d - b), console,
         segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, lineColor: '#000000', altNetSeed: null,
         currentShape: shape, shapeSizeFactor: 1.3, nodeCount: order, symmetryMode: mode, width: 300, height: 300, showFaces: false,
-        connections: [], additionalLayers: [], baseFaceAssignments: new Map(), baseFacePalette: null, faceHover: null, activeLayer: 'base'
+        connections: [], additionalLayers: [], baseFaceAssignments: new Map(), baseFacePalette: null, faceHover: null, activeLayer: 'base', timeline: null
     };
     sb.toTileLocal = (n, tileC, flip180, rot = 0) => {
         let x = n.x - sb.centroid.x, y = n.y - sb.centroid.y;
@@ -159,7 +162,8 @@ console.log('\n== 3. panel "unavailable" predicate vs the render path ==');
 {
     const m = SKETCH.match(/function faceFillsUnavailableReason\(\) \{[\s\S]*?\n\}\n/);
     const sb = makeSandbox(SRC_NEW, 'triangle', 'rotation_reflection6', 3);
-    vm.runInContext(m[0], sb);
+    const kf = SKETCH.match(/function isTimelineKeyframe\(i\)[^\n]*\n/);   // the predicate calls this one-line helper (once it exists)
+    vm.runInContext((kf ? kf[0] : '') + m[0], sb);
     const variants = [];
     for (const shape of ['triangle', 'square', 'hex']) for (const mode of MODES) for (const size of [1.3, 1.0]) for (const rot of [0, 30]) for (const enabled of [true, false]) variants.push({ shape, mode, size, rot, enabled });
     let disagree = 0, wrongFillsRendered = 0;

@@ -162,7 +162,7 @@ function computeLayerCellFaces() {
     // computeCellFaces()'s `sheet` override, the same parameters this file
     // draws the layer with), so those layers' faces now match their lines -
     // there is deliberately no shape/mode guard here any more.
-    const active = additionalLayers.filter(l => l.enabled && l.showFaces && l.shapeSizeFactor === shapeSizeFactor && (l.rotation || 0) === 0);
+    const active = additionalLayers.filter(l => l.enabled && layerShowsFaces(l) && l.shapeSizeFactor === shapeSizeFactor && (l.rotation || 0) === 0);
     if (active.length === 0) return null;
     const map = new Map();
     additionalLayers.forEach((layer, i) => {
@@ -174,9 +174,32 @@ function computeLayerCellFaces() {
         // layer - not reachable via any shipped UI yet, flagged in the
         // 1.12 stage-1 node-resolution-fix design session, not fixed
         // here).
-        if (layer.enabled && layer.showFaces && layer.shapeSizeFactor === shapeSizeFactor && (layer.rotation || 0) === 0) map.set(i, computeCellFaces(layer.connections, layer.nodes, faceAssignmentsFor(i), faceHighlightKeyFor(i), faceSheetOverrideOfLayer(layer)));
+        if (layer.enabled && layerShowsFaces(layer) && layer.shapeSizeFactor === shapeSizeFactor && (layer.rotation || 0) === 0) {
+            // The timeline's PLAYBACK layer (sketch.js applyTimelineFrame()) has no connections of its
+            // own: it is drawn from its render substitute, _morphConnections/_morphNodes (free nodes,
+            // re-interpolated every frame). Its faces are detected from THE SAME substitute, so fills
+            // match the lines drawn at that frame. It takes no assignment store: a geometric trail key
+            // means nothing on geometry that changes every frame (and reconciling against it would
+            // write garbage into a store) - default orbit colors only for now.
+            if (layer.isTimelinePlayback && layer._morphConnections && layer._morphNodes) {
+                map.set(i, computeCellFaces(layer._morphConnections, layer._morphNodes, null, null, faceSheetOverrideOfLayer(layer)));
+            } else if (!layer.isTimelinePlayback) {
+                map.set(i, computeCellFaces(layer.connections, layer.nodes, faceAssignmentsFor(i), faceHighlightKeyFor(i), faceSheetOverrideOfLayer(layer)));
+            }
+        }
     });
     return map;
+}
+
+// Whether a layer's face fill is on. An ordinary layer: its own showFaces toggle. The timeline
+// playback layer has no tab and no toggle of its own (it is created and driven by the timeline),
+// so it shows faces exactly when EVERY keyframe layer of the timeline has its own face fill on -
+// switched with the same button, per keyframe layer, that switches any layer's fill. Pure state
+// (core/* must not depend on sketch.js), so it does not look at the current segment.
+function layerShowsFaces(layer) {
+    if (!layer.isTimelinePlayback) return !!layer.showFaces;
+    return !!(timeline && timeline.keyframeLayerIds.length > 0 &&
+        timeline.keyframeLayerIds.every(id => additionalLayers[id] && additionalLayers[id].showFaces));
 }
 
 // Roadmap 1.2-B: the current shape's own two lattice vectors (v1,v2),
