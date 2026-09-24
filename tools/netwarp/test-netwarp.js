@@ -24,7 +24,7 @@ const vm = require('vm');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
 const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor'];
-const load = fromHead => FILES.filter(f => !fromHead || f !== 'netwarp').map(f => fromHead
+const load = fromHead => FILES.map(f => fromHead
     ? execSync(`git show HEAD:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString()
     : fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
 let failures = 0, checks = 0;

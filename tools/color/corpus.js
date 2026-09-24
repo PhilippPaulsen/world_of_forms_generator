@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
-const CORE = ['forms', 'orbits', 'symmetry', 'curves', 'tiling', 'faces', 'color', 'facecolor'];
+const CORE = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor'];
 const { execSync } = require('child_process');
 // The core sources: the working tree, or (fromHead) the last commit's - for before/after comparisons.
 const loadSrc = fromHead => CORE.map(f => fromHead
@@ -25,7 +25,7 @@ function makeSheet(shape, order, mode, src = SRC) {
     const sb = {
         strokeWeight: () => { }, radians: d => d * Math.PI / 180, cos: Math.cos, sin: Math.sin, sqrt: Math.sqrt, abs: Math.abs,
         dist: (a, b, c, d) => Math.hypot(c - a, d - b),
-        segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' },
+        segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, baseNetTransform: null, activeNetWarp: null,
         centroid: null, symmetryMode: mode, outerCorners: null, currentShape: shape, nodes: null,
         baseFaceAssignments: new Map(), baseFacePalette: null, faceHover: null, additionalLayers: [], console
     };

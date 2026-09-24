@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
-const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'tiling', 'faces', 'color', 'facecolor'];
+const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor'];
 const SRC = FILES.map(f => fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
 const SKETCH = fs.readFileSync(path.join(ROOT, 'sketch.js'), 'utf8');
 const grab = name => { const m = SKETCH.match(new RegExp(`function ${name}\\([\\s\\S]*?\\n\\}\\n`)); if (!m) throw new Error('cannot extract ' + name); return m[0]; };
@@ -35,7 +35,7 @@ function makeSandbox(shape, mode, order) {
         line: () => { }, bezier: () => { }, point: () => { }, push: () => { }, pop: () => { }, noStroke: () => { }, noFill: () => { }, stroke: () => { }, CLOSE: 'close',
         fill: c => { sb._fill = c; }, beginShape: () => { sb._cur = []; }, vertex: (x, y) => { sb._cur.push({ x, y }); },
         endShape: () => { drawnPolys.push({ fill: sb._fill, pts: sb._cur }); sb._cur = null; },
-        segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, lineColor: '#000', altNetSeed: null,
+        segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, baseNetTransform: null, activeNetWarp: null, lineColor: '#000', altNetSeed: null,
         currentShape: shape, shapeSizeFactor: 1.3, nodeCount: order, symmetryMode: mode, width: 300, height: 300, showFaces: false,
         connections: [], additionalLayers: [], baseFaceAssignments: new Map(), baseFacePalette: null, faceHover: null, activeLayer: 'base', timeline: null, drawnPolys
     };

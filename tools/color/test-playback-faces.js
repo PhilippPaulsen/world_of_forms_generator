@@ -21,7 +21,7 @@ const path = require('path');
 const vm = require('vm');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'tiling', 'faces', 'color', 'facecolor'];
+const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor'];
 const load = fromHead => FILES.map(f => fromHead
     ? execSync(`git show HEAD:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString()
     : fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
@@ -45,7 +45,7 @@ function makeSandbox(src, baseShape, baseMode, order) {
         line: () => { }, bezier: () => { }, point: () => { }, push: () => { }, pop: () => { }, noStroke: () => { }, noFill: () => { }, stroke: () => { }, CLOSE: 'close',
         fill: c => { sb._fill = c; }, beginShape: () => { sb._cur = []; }, vertex: (x, y) => { sb._cur.push({ x, y }); },
         endShape: () => { drawnPolys.push({ fill: sb._fill, pts: sb._cur }); sb._cur = null; },
-        segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, lineColor: '#000', altNetSeed: null,
+        segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, baseNetTransform: null, activeNetWarp: null, lineColor: '#000', altNetSeed: null,
         currentShape: baseShape, shapeSizeFactor: 1.3, nodeCount: order, symmetryMode: baseMode, width: 300, height: 300, showFaces: false,
         connections: [], additionalLayers: [], baseFaceAssignments: new Map(), baseFacePalette: null, faceHover: null, activeLayer: 'base', timeline: null, drawnPolys
     };

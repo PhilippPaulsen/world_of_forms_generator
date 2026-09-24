@@ -25,11 +25,11 @@ const path = require('path');
 const vm = require('vm');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'tiling', 'faces', 'color', 'facecolor', 'export'];
+const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'export'];
 // "The previous behavior" is pinned to the commit BEFORE the per-layer fix (b992b614), not to HEAD - HEAD
 // contains the fix now, so a HEAD comparison could no longer show the defect.
 const PRE_FIX = 'b992b614';
-const load = old => FILES.map(f => old
+const load = old => FILES.filter(f => !old || f !== 'netwarp').map(f => old
     ? execSync(`git show ${PRE_FIX}:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString()
     : fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
 const SRC_NEW = load(false);
@@ -44,7 +44,7 @@ function makeSandbox(src, shape, mode, order) {
     const sb = {
         strokeWeight: () => { }, radians: d => d * Math.PI / 180, cos: Math.cos, sin: Math.sin, sqrt: Math.sqrt, abs: Math.abs, degrees: r => r * 180 / Math.PI, atan2: Math.atan2,
         floor: Math.floor, ceil: Math.ceil, min: Math.min, max: Math.max, dist: (a, b, c, d) => Math.hypot(c - a, d - b), console,
-        segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, lineColor: '#000000', altNetSeed: null,
+        segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, baseNetTransform: null, activeNetWarp: null, lineColor: '#000000', altNetSeed: null,
         currentShape: shape, shapeSizeFactor: 1.3, nodeCount: order, symmetryMode: mode, width: 300, height: 300, showFaces: false,
         connections: [], additionalLayers: [], baseFaceAssignments: new Map(), baseFacePalette: null, faceHover: null, activeLayer: 'base', timeline: null
     };

@@ -21,7 +21,7 @@ const path = require('path');
 const vm = require('vm');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'tiling', 'faces', 'color', 'facecolor', 'export'];
+const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'export'];
 const load = fromHead => FILES.map(f => fromHead
     ? execSync(`git show HEAD:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString()
     : fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
@@ -32,7 +32,7 @@ function makeSheet(src, shape, order, mode) {
     const sb = {
         strokeWeight: () => { }, radians: d => d * Math.PI / 180, cos: Math.cos, sin: Math.sin, sqrt: Math.sqrt, abs: Math.abs, degrees: r => r * 180 / Math.PI, atan2: Math.atan2,
         dist: (a, b, c, d) => Math.hypot(c - a, d - b), console,
-        segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, lineColor: '#000000', altNetSeed: null,
+        segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, baseNetTransform: null, activeNetWarp: null, lineColor: '#000000', altNetSeed: null,
         currentShape: shape, shapeSizeFactor: 1.3, nodeCount: order, symmetryMode: mode,
         connections: [], additionalLayers: [], baseFaceAssignments: new Map(), baseFacePalette: null, faceHover: null
     };

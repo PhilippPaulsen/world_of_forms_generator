@@ -20,7 +20,7 @@ const path = require('path');
 const vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
 
-const CORE = ['forms', 'orbits', 'symmetry', 'curves', 'tiling', 'faces', 'color', 'facecolor'];
+const CORE = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor'];
 const SRC = CORE.map(f => fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
 const CANVAS = 300, SIZE_FACTOR = 1.3; // same fixed rendering parameters as the gallery catalog
 const BUILDERS = { triangle: 'buildTriangleGrid', square: 'buildSquareGrid', hex: 'buildHexGrid' };
@@ -29,7 +29,7 @@ function makeSheet(shape, order, mode) {
     const sb = {
         strokeWeight: () => { }, radians: d => d * Math.PI / 180, cos: Math.cos, sin: Math.sin, sqrt: Math.sqrt, abs: Math.abs,
         dist: (a, b, c, d) => Math.hypot(c - a, d - b),
-        segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' },
+        segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, baseNetTransform: null, activeNetWarp: null,
         centroid: null, symmetryMode: mode, outerCorners: null, currentShape: shape, nodes: null,
         baseFaceAssignments: new Map(), baseFacePalette: null, faceHover: null, additionalLayers: [], console
     };
