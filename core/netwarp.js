@@ -17,6 +17,16 @@
  * The tile lattice and every tile-boundary node stay where they are (confirmed against the
  * book: one figure IS the complete repeat unit).
  *
+ * CLOSED NET vs REPEAT (spec.repeat). The app's outer tiling (Shape Size, core/tiling.js's tile loop)
+ * would repeat that one warped unit across the canvas - a "wallpaper" that looks flat, and not what
+ * Hinterreiter's Fig. 14/15 show: ONE closed, self-terminating net. So by default (repeat off) the
+ * tile loops cover only the net's own rectangle (tiling.js: closedNetActive()) and the base sheet
+ * visits a single tile; Shape Size keeps its meaning (the net's size: 1 fills the canvas). repeat: true
+ * restores the repeated tiling, where `alternate` (tile-seam parity) applies. F itself is the same
+ * in both modes - only which tiles are drawn differs. Layers: an offset layer's tiles may reach past
+ * the net rectangle, where F applies a neighbouring tile's law that a closed net does not have; how to
+ * resolve that (clip or not) is a phase 3 decision - it degrades to "drawn, warped by that law".
+ *
  * LAWS (interpretation: true - Hinterreiter gives descriptions and example figures, not
  * equations; these are this project's own closed forms matching the described BEHAVIOUR, checked
  * for monotone mesh widths, not a transcription of his construction). With u = 2l-1:
@@ -92,7 +102,7 @@ function makeNetWarp(spec, frame, E) {
     const { c0, v1, v2 } = frame;
     const det = v1.x * v2.y - v2.x * v1.y;
     if (!det) return null;
-    return { fx, fy, altX: !!(ax && ax.alternate), altY: !!(ay && ay.alternate), c0, v1, v2, det };
+    return { fx, fy, altX: !!(ax && ax.alternate), altY: !!(ay && ay.alternate), repeat: !!spec.repeat, c0, v1, v2, det };
 }
 
 function _netWarpAxis(f, alt, s) {
@@ -106,6 +116,15 @@ function netWarpForBase(spec, shape, corners, nodeCountValue) {
     const c0 = corners[0], c1 = corners[1], c3 = corners[3];
     return makeNetWarp(spec, { c0, v1: { x: c1.x - c0.x, y: c1.y - c0.y }, v2: { x: c3.x - c0.x, y: c3.y - c0.y } }, nodeCountValue - 1);
 }
+
+// Tile coordinates (s,t) of a point in the warp's frame: (0..1, 0..1) is the net's own tile.
+function netWarpTileCoords(warp, pt) {
+    const dx = pt.x - warp.c0.x, dy = pt.y - warp.c0.y;
+    return { s: (dx * warp.v2.y - dy * warp.v2.x) / warp.det, t: (warp.v1.x * dy - warp.v1.y * dx) / warp.det };
+}
+// Whether a warp is a CLOSED net (one tile, no repetition) and whether a point lies inside it.
+function netWarpIsClosed(warp) { return !!warp && !warp.repeat; }
+function netWarpInsideNet(warp, pt) { const c = netWarpTileCoords(warp, pt); return c.s >= 0 && c.s <= 1 && c.t >= 0 && c.t <= 1; }
 
 function applyNetWarp(warp, pt) {
     const dx = pt.x - warp.c0.x, dy = pt.y - warp.c0.y;
@@ -165,16 +184,18 @@ function netTransformExportData(spec, E) {
         return { kind: 'geometric', w: axis.w, R: Math.exp(axis.w), q: E >= 2 ? Math.exp(axis.w / (E - 1)) : null, alternate: !!axis.alternate };
     };
     return {
-        version: 1, interpretation: true, domain: 'per-tile', E,
+        version: 1, interpretation: true, domain: spec.repeat ? 'per-tile' : 'single', repeat: !!spec.repeat, E,
         x: describe(ax), y: describe(ay),
         constants: { A_SIN: NETWARP_A_SIN, A_TAN: NETWARP_A_TAN },
         geometryIsRegular: true, facesOmitted: true
     };
 }
 // The inverse of netTransformExportData(): the spec (as baseNetTransform holds it) from an
-// exported meta.netTransform. Only kind/w/alternate are read - everything else is derived.
+// exported meta.netTransform. Only kind/w/alternate/repeat are read - everything else is derived.
 function netTransformFromExport(exported) {
     if (!exported || exported.version !== 1) return null;
     const axis = a => (!a || a.kind === 'uniform') ? { kind: 'uniform', w: 0 } : { kind: a.kind, w: a.w, alternate: !!a.alternate };
-    return { x: axis(exported.x), y: axis(exported.y) };
+    // repeat: an export from before the closed-net option has neither field and was drawn repeated
+    const repeat = exported.repeat !== undefined ? !!exported.repeat : exported.domain !== 'single';
+    return { x: axis(exported.x), y: axis(exported.y), repeat };
 }

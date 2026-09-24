@@ -446,7 +446,41 @@ function clampTileCount(bounds) {
 // generalizes the old per-shape extraCols/extraRows heuristic to an
 // arbitrary (non-axis-aligned) v1/v2 - see maxLayerOffset()'s own
 // comment for why a shifted layer needs this margin at all.
+// Roadmap 1.6 / Group E: a CLOSED net warp (core/netwarp.js, spec.repeat off) covers only the net's
+// own rectangle instead of the canvas - see closedNetRectCorners().
+function closedNetActive() { return !!activeNetWarp && !activeNetWarp.repeat; }
+
+// The net's own parallelogram (the base tile), pulled in by 1e-6 px so that a tile whose EDGE merely
+// touches it is not admitted, and pushed out by maxLayerOffset() like the canvas rect is (an offset
+// layer's tiles are shifted at render time only - see coveredRectCorners()'s own comment).
+function closedNetRectCorners() {
+    const { c0, v1, v2 } = activeNetWarp, m = maxLayerOffset();
+    const pts = [c0, { x: c0.x + v1.x, y: c0.y + v1.y }, { x: c0.x + v1.x + v2.x, y: c0.y + v1.y + v2.y }, { x: c0.x + v2.x, y: c0.y + v2.y }];
+    const cx = (pts[0].x + pts[2].x) / 2, cy = (pts[0].y + pts[2].y) / 2, EPS = 1e-6;
+    return pts.map(p => {
+        const ux = Math.sign(p.x - cx), uy = Math.sign(p.y - cy), len = Math.hypot(p.x - cx, p.y - cy) || 1;
+        return { x: p.x - (p.x - cx) / len * EPS + ux * m.x, y: p.y - (p.y - cy) / len * EPS + uy * m.y };
+    });
+}
+
+// Tile-index bounds covering EXACTLY the tiles that intersect the rectangle: a parallelogram cell is
+// centred on its lattice point (tile i spans [i-.5, i+.5) in lattice coordinates), so tile i intersects
+// [lo, hi] iff lo-.5 < i < hi+.5 - unlike latticeIJBounds(), which finds the lattice POINTS around the
+// rect and needs a margin. Used with the inset rect above, a rect equal to one tile yields one tile.
+function latticeIJBoundsCovering(v1, v2, origin, rectCorners) {
+    const det = v1.x * v2.y - v2.x * v1.y;
+    let iMin = Infinity, iMax = -Infinity, jMin = Infinity, jMax = -Infinity;
+    rectCorners.forEach(P => {
+        const dx = P.x - origin.x, dy = P.y - origin.y;
+        const i = (v2.y * dx - v2.x * dy) / det, j = (-v1.y * dx + v1.x * dy) / det;
+        if (i < iMin) iMin = i; if (i > iMax) iMax = i;
+        if (j < jMin) jMin = j; if (j > jMax) jMax = j;
+    });
+    return clampTileCount({ iMin: Math.floor(iMin - 0.5) + 1, iMax: Math.ceil(iMax + 0.5) - 1, jMin: Math.floor(jMin - 0.5) + 1, jMax: Math.ceil(jMax + 0.5) - 1 });
+}
+
 function coveredRectCorners() {
+    if (closedNetActive()) return closedNetRectCorners();
     const m = maxLayerOffset();
     const x0 = -m.x, y0 = -m.y, x1 = width + m.x, y1 = height + m.y;
     return [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
@@ -571,7 +605,9 @@ function tileSquare(cellFaces, layerCellFaces, override) {
     const c0 = oc[0], c1 = oc[1], c3 = oc[3];
     const v1 = { x: c1.x - c0.x, y: c1.y - c0.y };
     const v2 = { x: c3.x - c0.x, y: c3.y - c0.y };
-    const b = latticeIJBounds(v1, v2, ctr, coveredRectCorners(), 3);
+    // Closed net warp: exactly the tiles that meet the net rectangle (each sheet with its OWN v1/v2 - a
+    // differently scaled layer gets its sub-tiles, not a single (0,0) tile); otherwise the canvas + margin.
+    const b = closedNetActive() ? latticeIJBoundsCovering(v1, v2, ctr, coveredRectCorners()) : latticeIJBounds(v1, v2, ctr, coveredRectCorners(), 3);
     for (let i = b.iMin; i <= b.iMax; i++) {
         for (let j = b.jMin; j <= b.jMax; j++) {
             const tileC = { x: ctr.x + i * v1.x + j * v2.x + layerOffsetX, y: ctr.y + i * v1.y + j * v2.y + layerOffsetY };

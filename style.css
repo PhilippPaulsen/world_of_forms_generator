@@ -241,7 +241,8 @@ body.dark {
 #face-colors-timeline-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
 #face-colors-timeline-note[hidden] { display: none; }
 #net-locks-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
-#net-locks-note[hidden], #net-geo-row[hidden], #net-group[hidden], #net-strength-row[hidden] { display: none; }
+#net-size-hint, #net-free-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
+#net-size-hint[hidden], #net-free-note[hidden], #net-alternate-btn[hidden], #net-locks-note[hidden], #net-geo-row[hidden], #net-group[hidden], #net-strength-row[hidden] { display: none; }
 #net-strength-row { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
 #net-group .icon-row { flex-wrap: wrap; justify-content: center; }
 #net-group .net-kind-btn, #net-group .net-axes-btn { flex: 0 0 auto; }

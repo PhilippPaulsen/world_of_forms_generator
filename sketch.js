@@ -570,7 +570,8 @@ function setup() {
         const geoRow = select('#net-geo-row'), reverseBtn = select('#net-reverse-btn'), alternateBtn = select('#net-alternate-btn');
         const note = select('#net-locks-note');
         const fresh = () => ({ mode: 'regular', strength: 0.5, reverse: false, alternate: false });
-        const ui = { axes: 'both', x: fresh(), y: fresh() };
+        const ui = { axes: 'both', repeat: false, x: fresh(), y: fresh() };
+        const repeatBtn = select('#net-repeat-btn'), sizeHint = select('#net-size-hint');
         const target = () => (ui.axes === 'y' ? ui.y : ui.x);
         const axisSpec = c => c.mode === 'regular' ? { kind: 'uniform', w: 0 }
             : c.mode === 'sinus' ? { kind: 'trig', w: -c.strength }
@@ -579,7 +580,7 @@ function setup() {
         function commit() {
             if (ui.axes === 'both') ui.y = Object.assign({}, ui.x);
             const allRegular = ui.x.mode === 'regular' && ui.y.mode === 'regular';
-            baseNetTransform = allRegular ? null : { x: axisSpec(ui.x), y: ui.axes === 'both' ? 'same' : axisSpec(ui.y) };
+            baseNetTransform = allRegular ? null : { x: axisSpec(ui.x), y: ui.axes === 'both' ? 'same' : axisSpec(ui.y), repeat: ui.repeat };
             render(); netControlsSync(); redraw();
         }
         function render() {
@@ -590,6 +591,8 @@ function setup() {
             strengthInput.value(Math.round(c.strength * 100));
             strengthValue.html(c.mode === 'geometric' ? '\u00d7' + Math.pow(NET_R_MAX, c.strength).toFixed(1) : c.strength.toFixed(2));
             geoRow.elt.hidden = c.mode !== 'geometric';
+            repeatBtn.elt.classList.toggle('active', ui.repeat);
+            alternateBtn.elt.hidden = !ui.repeat; // tile-seam parity only exists between repeated tiles
             reverseBtn.elt.classList.toggle('active', c.reverse);
             alternateBtn.elt.classList.toggle('active', c.alternate);
         }
@@ -600,6 +603,7 @@ function setup() {
             ui.axes = next; commit();
         }));
         strengthInput.input(() => { target().strength = parseInt(strengthInput.value()) / 100; commit(); });
+        repeatBtn.mousePressed(() => { ui.repeat = !ui.repeat; commit(); });
         reverseBtn.mousePressed(() => { target().reverse = !target().reverse; commit(); });
         alternateBtn.mousePressed(() => { target().alternate = !target().alternate; commit(); });
 
@@ -609,6 +613,8 @@ function setup() {
         netControlsSync = function () {
             group.elt.hidden = !(currentShape === 'square' && activeLayer === 'base');
             const active = netWarpActive();
+            // Closed net (the default) + Shape Size > 1: the net is smaller than the canvas - say why.
+            sizeHint.elt.hidden = !(active && !ui.repeat && shapeSizeFactor > 1);
             if (active && curveType.kind !== 'straight') { // a curve built on a warped chord is not the warp of a curve
                 curveType = { kind: 'straight' };
                 curveBtn && curveBtn.removeClass('active'); freeBtn && freeBtn.removeClass('active');
@@ -3857,6 +3863,7 @@ function patternNameSignature() {
 let faceColorsSignature = null;
 // Roadmap 1.6 / Group E phase 2: set by setup() (it needs the curve/free/face button closures); called once per draw().
 let netControlsSync = null;
+let netFreeNoteTimer = null;
 
 // Why the active sheet draws no face fills right now, or null when it does.
 // Mirrors core/tiling.js's computeLayerCellFaces() guard (enabled, showFaces,
@@ -4383,6 +4390,12 @@ function mousePressed() {
     const netWarp = netWarpBaseNow();
     let foundId = null;
     for (let nd of activeNodeArr) { const p = netWarp ? applyNetWarp(netWarp, nd) : nd; if (dist(mouseX, mouseY, p.x, p.y) < 18) { foundId = nd.id; break; } }
+    if (foundId === null && freeEndpointsEnabled && netWarp && netWarpIsClosed(netWarp) && !netWarpInsideNet(netWarp, { x: mouseX, y: mouseY })) {
+        // Closed net: there is nothing outside the net to attach a free endpoint to - refuse, visibly.
+        const note = document.getElementById('net-free-note');
+        if (note) { note.hidden = false; clearTimeout(netFreeNoteTimer); netFreeNoteTimer = setTimeout(() => { note.hidden = true; }, 3000); }
+        return;
+    }
     if (foundId === null && freeEndpointsEnabled) {
         const newId = Math.max(...activeNodeArr.map(n => n.id), 0) + 1;
         const at = netWarp ? invertNetWarp(netWarp, { x: mouseX, y: mouseY }) : { x: mouseX, y: mouseY };
