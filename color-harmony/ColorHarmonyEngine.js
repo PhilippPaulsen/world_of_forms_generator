@@ -222,6 +222,98 @@ function regularHueSubdivision(register, hueIndex, count) {
     copyColor(register[(hueIndex - 1 + (i + 1) * register.length / count) % register.length]));
 }
 
+/** Continuous analytical segments; endpoints and constraints are renderer-independent.
+ * Shadow rays use homogeneous v:w coordinates so w=0 needs no division by zero.
+ */
+function buildHarmonyPath(type, sourceField, fullColorLab) {
+  const { w, s, v, hueIndex } = sourceField;
+  let constraint, start, end;
+  switch (type) {
+    case 'isotint':
+      constraint = { kind: 'constant', coordinate: 'w', value: w };
+      start = { w, s: 0, v: 1 - w };
+      end = { w, s: 1 - w, v: 0 };
+      break;
+    case 'isotone':
+      constraint = { kind: 'constant', coordinate: 's', value: s };
+      start = { w: 0, s, v: 1 - s };
+      end = { w: 1 - s, s, v: 0 };
+      break;
+    case 'analyticIsochrome':
+      constraint = { kind: 'constant', coordinate: 'v', value: v };
+      start = { w: 1 - v, s: 0, v };
+      end = { w: 0, s: 1 - v, v };
+      break;
+    case 'shadowSeries': {
+      const nonBlack = w + v;
+      if (nonBlack === 0) throw new RangeError('A pure-black source cannot determine a shadow direction (v:w = 0:0)');
+      constraint = {
+        kind: 'proportion', fullColor: v, white: w,
+        equation: 'v * source.w = w * source.v',
+        ratioStatus: w === 0 ? 'white-free' : 'finite', blackEndpoint: 'limit'
+      };
+      start = { w: w / nonBlack, s: 0, v: v / nonBlack };
+      end = { w: 0, s: 1, v: 0 };
+      break;
+    }
+    default:
+      throw new RangeError('Unknown harmony path type: use isotint, isotone, analyticIsochrome or shadowSeries');
+  }
+  return {
+    type, hueIndex, sourceField: copyColor(sourceField), fullColorLab: fullColorLab.slice(),
+    constraint, domain: { parameter: 't', min: 0, max: 1, start, end }
+  };
+}
+
+/** Check a serialized descriptor against its derived canonical geometry.
+ * This accepts JSON round trips, not arbitrary/adulterated endpoints or constraints.
+ */
+function assertPathData(actual, expected, name = 'path') {
+  if (typeof expected === 'number') {
+    if (!Number.isFinite(actual) || Math.abs(actual - expected) > EPSILON) {
+      throw new Error(`${name} does not match the source and path constraint`);
+    }
+  } else if (expected !== null && typeof expected === 'object') {
+    if (!actual || typeof actual !== 'object' || Array.isArray(actual) !== Array.isArray(expected) ||
+        (Array.isArray(expected) && actual.length !== expected.length) ||
+        Object.keys(actual).length !== Object.keys(expected).length) {
+      throw new TypeError(`${name} has an invalid descriptor structure`);
+    }
+    for (const key of Object.keys(expected)) {
+      if (!Object.hasOwn(actual, key)) throw new TypeError(`${name}.${key} is required`);
+      assertPathData(actual[key], expected[key], `${name}.${key}`);
+    }
+  } else if (actual !== expected) {
+    throw new Error(`${name} has an invalid descriptor value`);
+  }
+}
+
+/** Validate source colors and derive a fresh path using its embedded anchor snapshot. */
+function validatedPath(path) {
+  if (!path || typeof path !== 'object') throw new TypeError('path must be a harmony path descriptor');
+  validateHue(path.hueIndex);
+  vector(path.fullColorLab, 'Path fullColorLab');
+  const field = path.sourceField;
+  if (!field || field.hueIndex !== path.hueIndex) throw new Error('path.sourceField must have the path hueIndex');
+  let source;
+  if (field.source === 'atlas') {
+    // Field validation only needs the selected hue's anchor, not a global circle.
+    const circle = [];
+    circle[path.hueIndex - 1] = { lab: path.fullColorLab };
+    source = validateField(field, circle);
+  } else if (field.source === 'interpolated' && field.label === null) {
+    source = { hueIndex: path.hueIndex, ...OstwaldColor.mix(path.fullColorLab, field.w, field.s) };
+    vector(field.lab, 'Path source lab');
+    validateRgb(field.rgb, source.rgb);
+    assertPathData(field, source, 'path.sourceField');
+  } else {
+    throw new Error('path.sourceField must be atlas or interpolated with label=null');
+  }
+  const expected = buildHarmonyPath(path.type, source, path.fullColorLab);
+  assertPathData(path, expected);
+  return expected;
+}
+
 /** Framework-independent contemporary realization of Ostwald's relational structure. */
 class OstwaldColor {
   /**
@@ -301,9 +393,10 @@ class OstwaldColor {
    * @param {object[]} [context.hueCircle] Exactly 24 ordered references with index/rgb/lab.
    * @param {object[]} [context.triangle] Nonempty subset of same-hue discrete fields,
    * including field; must agree with hueCircle. Input order determines series order.
-   * @returns {{isotints:object[],isotones:object[],analyticIsochromes:object[],shadowSeries:object[],isovalent:object[],grayHarmonies:object,hueHarmonies:object[]}}
+   * @returns {{isotints:object[],isotones:object[],analyticIsochromes:object[],shadowSeries:object[],isovalent:object[],grayHarmonies:object,hueHarmonies:object[],paths:object}}
    * Constant-w/s/v series exclude the source. Shadow series include it, sorted by s.
-   * Isovalent registers include all 24 hues, sorted by index. Hue objects have type and complete fields,
+   * Isovalent registers include all 24 hues, sorted by index. Paths exist even
+   * when a relation has no other atlas nodes. Hue objects have type and complete fields,
    * excluding the selected hue: complementary [+12], triad [+8,+16], tetrad [+6,+12,+18].
    * @throws {TypeError|RangeError|Error} For invalid data, unknown fields, duplicates,
    * inconsistent colors/coordinates, wrong-hue triangles or unknown context keys.
@@ -347,9 +440,64 @@ class OstwaldColor {
       },
       hueHarmonies: chords.map(([type, count]) => ({
         type, fields: regularHueSubdivision(isovalent, selected.hueIndex, count)
-      }))
+      })),
+      paths: Object.fromEntries(['isotint', 'isotone', 'analyticIsochrome', 'shadowSeries']
+        .map(type => [type, buildHarmonyPath(type, selected, circle[selected.hueIndex - 1].lab)]))
     };
   }
+
+  /**
+   * Construct a continuous path from any valid analytical point, without atlas labels.
+   * For atlas sources use harmonies(field).paths, which preserves source provenance.
+   * @param {string} type isotint | isotone | analyticIsochrome | shadowSeries.
+   * @param {number} hueIndex Integer in 1..24, defining the path's full-color anchor.
+   * @param {number} w Finite white share >=0, w+s<=1 (EPSILON roundoff allowed).
+   * @param {number} s Finite black share >=0, w+s<=1 (EPSILON roundoff allowed).
+   * @param {object} [context={}] Optional {hueCircle}, exactly 24 ordered references.
+   * @returns {object} Plain descriptor with type, hueIndex, sourceField, fullColorLab,
+   * constraint and domain {parameter:'t',min:0,max:1,start:{v,w,s},end:{v,w,s}}.
+   * @throws {TypeError|RangeError|Error} For invalid input/context/type. A pure-black
+   * shadow source is ambiguous and throws; w=0,v>0 explicitly yields a white-free ray.
+   */
+  static harmonyPath(type, hueIndex, w, s, context = {}) {
+    validateHue(hueIndex);
+    if (!context || typeof context !== 'object' || Array.isArray(context) ||
+        Object.keys(context).some(key => key !== 'hueCircle')) {
+      throw new TypeError('Path context must contain only an optional hueCircle');
+    }
+    const circle = context.hueCircle === undefined ? this.hueCircle() : context.hueCircle;
+    validateCircle(circle);
+    const lab = circle[hueIndex - 1].lab;
+    const source = { hueIndex, ...this.mix(lab, w, s) };
+    return buildHarmonyPath(type, source, lab);
+  }
+
+  /**
+   * Sample a validated analytical segment with the anchor embedded in the descriptor.
+   * Uses uniform t, including endpoints for count>=2; count=1 returns the midpoint.
+   * Sampling is always Oklab-only, with no nearest-atlas rounding or invented labels.
+   * @param {object} path Descriptor from harmonies().paths or harmonyPath(), or JSON copy.
+   * @param {number} count Positive integer within JavaScript's array length limit.
+   * @returns {Array<{hueIndex:number,w:number,s:number,v:number,lab:number[],rgb:number[],label:null,source:string}>}
+   * Every sample has source='interpolated'. Black is the limit endpoint of a shadow
+   * ray: its 0/0 ratio is undefined, while the homogeneous cross-product remains zero.
+   * @throws {TypeError|RangeError|Error} For invalid counts, source colors or descriptors,
+   * including endpoints/constraints inconsistent with their source field.
+   */
+  static sampleHarmonyPath(path, count) {
+    if (!Number.isSafeInteger(count) || count < 1 || count > 0xffffffff) {
+      throw new RangeError('count must be a positive integer within the JavaScript array length limit');
+    }
+    const canonical = validatedPath(path);
+    const { start, end } = canonical.domain;
+    return Array.from({ length: count }, (_, i) => {
+      const t = count === 1 ? 0.5 : i / (count - 1);
+      const w = (1 - t) * start.w + t * end.w;
+      const s = (1 - t) * start.s + t * end.s;
+      return { hueIndex: canonical.hueIndex, ...this.mix(canonical.fullColorLab, w, s) };
+    });
+  }
+
 }
 
 module.exports = OstwaldColor;
