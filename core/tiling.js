@@ -49,7 +49,7 @@ function tileFor(shape) {
 // position-based F. try/finally: the warp must never leak into face detection, export data or
 // the next call. Phase 1: face fills are skipped on a warped net (see the netwarp.js docblock).
 function drawTessellation() {
-    activeNetWarp = netWarpForBase(baseNetTransform, currentShape, outerCorners, nodeCount);
+    activeNetWarp = netWarpForBase(baseNetTransform, currentShape, outerCorners, nodeCount, shapeSizeFactor);
     try { _drawTessellationCore(); } finally { activeNetWarp = null; }
 }
 
@@ -454,7 +454,13 @@ function closedNetActive() { return !!activeNetWarp && !activeNetWarp.repeat; }
 // touches it is not admitted, and pushed out by maxLayerOffset() like the canvas rect is (an offset
 // layer's tiles are shifted at render time only - see coveredRectCorners()'s own comment).
 function closedNetRectCorners() {
-    const { c0, v1, v2 } = activeNetWarp, m = maxLayerOffset();
+    // A FIELD (core/netwarp.js, Model 2) is R x R tiles centred on the base tile: the same rectangle logic, larger
+    // (c0 - h(v1+v2), edges R*v). A single closed tile keeps the original arithmetic untouched.
+    const f = activeNetWarp.field;
+    const { c0, v1, v2 } = f
+        ? { c0: { x: activeNetWarp.c0.x - f.h * (activeNetWarp.v1.x + activeNetWarp.v2.x), y: activeNetWarp.c0.y - f.h * (activeNetWarp.v1.y + activeNetWarp.v2.y) }, v1: { x: f.Rt * activeNetWarp.v1.x, y: f.Rt * activeNetWarp.v1.y }, v2: { x: f.Rt * activeNetWarp.v2.x, y: f.Rt * activeNetWarp.v2.y } }
+        : activeNetWarp;
+    const m = maxLayerOffset();
     const pts = [c0, { x: c0.x + v1.x, y: c0.y + v1.y }, { x: c0.x + v1.x + v2.x, y: c0.y + v1.y + v2.y }, { x: c0.x + v2.x, y: c0.y + v2.y }];
     const cx = (pts[0].x + pts[2].x) / 2, cy = (pts[0].y + pts[2].y) / 2, EPS = 1e-6;
     return pts.map(p => {

@@ -170,7 +170,7 @@ function buildExportData(crossLayerData) {
     // regular export is byte-identical to before (formatVersion stays 1). geometry.nodes/edges stay
     // regular; the face lists below are omitted on a warped net (see netTransformExportData()).
     const netWarped = netWarpActive();
-    if (netWarped) data.meta.netTransform = netTransformExportData(baseNetTransform, nodeCount - 1);
+    if (netWarped) data.meta.netTransform = netTransformExportData(baseNetTransform, nodeCount - 1, shapeSizeFactor);
 
     const enabledLayers = additionalLayers.filter(layer => layer.enabled);
     const layerFaceStores = []; // Group D Phase 4: filled per exported layer below, for meta.faceColoring

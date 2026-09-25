@@ -587,7 +587,7 @@ function setup() {
             if (ui.axes === 'both') ui.y = Object.assign({}, ui.x);
             const allRegular = ui.x.mode === 'regular' && ui.y.mode === 'regular';
             if (baseNetTransform && baseNetTransform.macro !== ui.macro) ui.macro = baseNetTransform.macro; // adopt a macro set from the state
-            baseNetTransform = allRegular ? null : { x: axisSpec(ui.x), y: ui.axes === 'both' ? 'same' : axisSpec(ui.y), repeat: ui.repeat, macro: ui.macro };
+            baseNetTransform = allRegular ? null : { x: axisSpec(ui.x), y: ui.axes === 'both' ? 'same' : axisSpec(ui.y), repeat: ui.repeat, macro: ui.macro, domain: baseNetTransform ? baseNetTransform.domain : undefined }; // domain 'field' has no control yet (phase 2) - keep it if set from the state
             render(); netControlsSync(); redraw();
         }
         function render() {
@@ -3903,8 +3903,8 @@ let netFreeNoteTimer = null;
 let netLinesOn = false;
 function drawNetLinesOverlay() {
     if (!netLinesOn || currentShape !== 'square') return;
-    const closed = netWarpActive() && !baseNetTransform.repeat;
-    const lines = netGridLines(baseNetTransform, outerCorners, nodeCount - 1, { x0: 0, y0: 0, x1: width, y1: height }, { closed });
+    const nw = netWarpBaseNow(), closed = !!nw && !nw.repeat, field = nw && nw.field;
+    const lines = netGridLines(baseNetTransform, outerCorners, nodeCount - 1, { x0: 0, y0: 0, x1: width, y1: height }, field ? { closed, domain: 'field', fieldTiles: field.Rt } : { closed });
     push();
     strokeWeight(1);
     lines.forEach(l => {
@@ -4447,7 +4447,8 @@ function mousePressed() {
     }
     if (foundId === null && freeEndpointsEnabled) {
         const newId = Math.max(...activeNodeArr.map(n => n.id), 0) + 1;
-        const at = netWarp ? invertNetWarp(netWarp, { x: mouseX, y: mouseY }) : { x: mouseX, y: mouseY };
+        // a field: the click is mapped back into the CENTRAL tile's own coordinates (core/netwarp.js netWarpFieldLocal())
+        const at = netWarp && netWarp.field ? netWarpFieldLocal(netWarp, { x: mouseX, y: mouseY }) : (netWarp ? invertNetWarp(netWarp, { x: mouseX, y: mouseY }) : { x: mouseX, y: mouseY });
         activeNodeArr.push({ id: newId, x: at.x, y: at.y, free: true });
         foundId = newId;
     }
