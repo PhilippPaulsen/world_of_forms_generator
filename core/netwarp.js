@@ -51,7 +51,8 @@
  * with the square's symmetry group holds for the whole field. `repeat` (the earlier boolean) is the legacy spelling:
  * domain absent -> repeat ? 'tiled' : 'single'. An invalid field (R even, < 3, > 9) is IGNORED visibly
  * (netDomainEffective(); export domainIgnored) and falls back to the legacy reading. Intra-tile `macro` does not
- * apply in a field (the micro grid is the clicked tile's own, uniform per tile).
+ * apply in a field (the micro grid is the clicked tile's own, uniform per tile). A trig axis's `focus` DOES apply in a field: the widest
+ * (sinus) / narrowest (tangens) tile moves to field position (1+c)/2 (each tile stays an affine copy; the field is no longer odd).
  *
  * SEAMS. A geometric series is asymmetric, so with the plain per-tile domain widths jump by
  * about q^E at every tile seam. `alternate: true` mirrors every odd tile (f -> 1 - f(1-l)) so
@@ -210,8 +211,10 @@ function netDomainEffective(spec, Rt) {
 // The field law for one axis: F(sigma), sigma in tile units over [0,Rt] (the field), P_k = Rt*f(k/Rt), piecewise
 // linear, linearly extended beyond the field. null = identity. F.field = {P, Rt} (its inverse is closed form).
 function netFieldLaw(axis, Rt) {
-    // Focus does not apply in a field (it is a Single/Tiled parameter: it breaks the oddness the field's law is built on) - stripped here
-    const smooth = _netSmoothLaw(axis && axis.focus ? { ...axis, focus: 0 } : axis, Rt);
+    // A trig axis's focus moves the widest/narrowest TILE off the field centre (P_k = Rt*f(k/Rt) stays strictly increasing and
+    // F stays piecewise linear, so every tile is still a per-axis affine copy and Step A's exactness does not depend on it);
+    // it only costs the field's oddness about the centroid, i.e. the rot90/rot180/mirror symmetry of the whole image.
+    const smooth = _netSmoothLaw(axis, Rt);
     if (!smooth) return null;
     const P = Array.from({ length: Rt + 1 }, (_, k) => Rt * smooth(k / Rt));
     const F = sigma => {
@@ -367,9 +370,9 @@ function netTransformExportData(spec, E, Rt) {
         if (!axis || axis.kind === 'uniform' || !axis.w) return { kind: 'uniform' };
         if (axis.kind === 'trig') {
             const w = Math.max(-1, Math.min(1, axis.w));
-            const c = isField ? 0 : netFocusOf(axis), a0 = w < 0 ? -w * NETWARP_A_SIN : w * NETWARP_A_TAN;
+            const c = netFocusOf(axis), a0 = w < 0 ? -w * NETWARP_A_SIN : w * NETWARP_A_TAN;
             // focus only when set (an axis without one exports exactly as before); `a` is the ANGLE USED (rescaled by 1/(1+|c|) under a focus)
-            return c === 0 ? { kind: 'trig', law: w < 0 ? 'sinus' : 'tangens', w, a: a0 } : { kind: 'trig', law: w < 0 ? 'sinus' : 'tangens', w, focus: c, a: a0 / (1 + Math.abs(c)), alternate: !!axis.alternate };
+            return c === 0 ? { kind: 'trig', law: w < 0 ? 'sinus' : 'tangens', w, a: a0 } : { kind: 'trig', law: w < 0 ? 'sinus' : 'tangens', w, focus: c, a: a0 / (1 + Math.abs(c)), alternate: !isField && !!axis.alternate };
         }
         // q is per MACRO cell (Em = E when not nested; the tile count Rt in a field)
         const qCount = isField ? Rt : eff.macro;
@@ -394,7 +397,6 @@ function netTransformExportData(spec, E, Rt) {
         result.tileBoundaries = { unit: 'tiles', x: bounds(spec.x), y: bounds(ay) };   // P_k: where the tile boundaries sit in the field
         if (spec.macro !== undefined && spec.macro !== null) result.macroIgnored = { requested: spec.macro, reason: 'intra-tile macro does not apply in a field (the micro grid is the clicked tile\'s own)' };
     }
-    if (isField && [ax, ay].some(a => netFocusOf(a) !== 0)) result.focusIgnored = { reason: 'focus is a Single/Tiled parameter and does not apply in a field' };
     if (dom.ignored) result.domainIgnored = dom.ignored;
     return result;
 }
