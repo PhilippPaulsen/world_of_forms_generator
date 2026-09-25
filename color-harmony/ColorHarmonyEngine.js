@@ -19,6 +19,8 @@ const GROUPS = Object.freeze([
 ]);
 const WHITE = Object.freeze([1, 0, 0]);
 const BLACK = Object.freeze([0, 0, 0]);
+// Established names retained from Phases 1/2; other divisors remain mathematical.
+const NAMED_SUBDIVISIONS = Object.freeze({ 2: 'complementary', 3: 'triad', 4: 'tetrad' });
 
 /** Require a dense three-component array of finite numbers. */
 function vector(value, name) {
@@ -211,15 +213,38 @@ function copyColor(field) {
   return { ...field, rgb: field.rgb.slice(), lab: field.lab.slice() };
 }
 
-/** Select regular subdivisions of an isovalent register, excluding the source hue.
- * Future equal subdivisions only need another count dividing the circle size.
+/** Select all positions of an exact regular subdivision, beginning at source+offset.
+ * Named relationships describe the established model, not verification of a primary page.
  */
-function regularHueSubdivision(register, hueIndex, count) {
-  if (!Number.isInteger(count) || count < 2 || register.length % count !== 0) {
-    throw new RangeError('Subdivision count must divide the hue circle length');
+function selectRegularSubdivision(register, hueIndex, parts, offset = 0) {
+  if (!Number.isInteger(parts) || parts < 1 || parts > 24 || 24 % parts !== 0) {
+    throw new RangeError('parts must be a positive divisor of 24');
   }
-  return Array.from({ length: count - 1 }, (_, i) =>
-    copyColor(register[(hueIndex - 1 + (i + 1) * register.length / count) % register.length]));
+  if (!Number.isSafeInteger(offset)) throw new RangeError('offset must be a safe integer');
+  const rotation = ((offset % 24) + 24) % 24;
+  const step = 24 / parts;
+  const historicalName = NAMED_SUBDIVISIONS[parts] || null;
+  return {
+    parts, step, offset: rotation,
+    historicalStatus: historicalName ? 'explicit' : 'mathematical',
+    historicalName, implementationStatus: 'implemented',
+    fields: Array.from({ length: parts }, (_, i) =>
+      copyColor(register[(hueIndex - 1 + rotation + i * step) % 24]))
+  };
+}
+
+/** Validate a complete atlas or interpolated source against the selected circle. */
+function validateSubdivisionSource(field, circle) {
+  if (!field || typeof field !== 'object') throw new TypeError('field must be a complete color object');
+  validateHue(field.hueIndex);
+  if (field.source !== 'interpolated') return validateField(field, circle);
+  if (field.label !== null) throw new Error('Interpolated source requires label=null');
+  const expected = { hueIndex: field.hueIndex,
+    ...OstwaldColor.mix(circle[field.hueIndex - 1].lab, field.w, field.s) };
+  vector(field.lab, 'Field lab');
+  validateRgb(field.rgb, expected.rgb);
+  assertPathData(field, expected, 'field');
+  return expected;
 }
 
 /** Continuous analytical segments; endpoints and constraints are renderer-independent.
@@ -439,11 +464,44 @@ class OstwaldColor {
         sameBlack: copyColor(grays.find(gray => Math.abs(gray.s - selected.s) <= EPSILON))
       },
       hueHarmonies: chords.map(([type, count]) => ({
-        type, fields: regularHueSubdivision(isovalent, selected.hueIndex, count)
+        type, fields: selectRegularSubdivision(isovalent, selected.hueIndex, count).fields.slice(1)
       })),
       paths: Object.fromEntries(['isotint', 'isotone', 'analyticIsochrome', 'shadowSeries']
         .map(type => [type, buildHarmonyPath(type, selected, circle[selected.hueIndex - 1].lab)]))
     };
+  }
+
+  /**
+   * Select a complete regular subdivision of a 24-hue isovalent circle.
+   * This mathematical operation is separate from the raw 1921 interval-pair table.
+   * @param {object} field Complete atlas field (legacy source omission allowed), or
+   * complete interpolated color with hueIndex, label=null and source='interpolated'.
+   * @param {number} parts Positive divisor of 24: 1,2,3,4,6,8,12,24.
+   * @param {number} [offset=0] Safe integer hue steps from source, normalized modulo 24.
+   * @param {object} [context={}] Optional {hueCircle} containing 24 ordered references.
+   * @returns {{parts:number,step:number,offset:number,historicalStatus:string,historicalName:?string,implementationStatus:string,fields:object[]}}
+   * All parts are returned in increasing-index circular order from source+offset.
+   * Atlas labels are preserved by register lookup; interpolated sources stay unlabeled.
+   * Only parts 2/3/4 have historicalStatus='explicit'; all others are 'mathematical'.
+   * @throws {TypeError|RangeError|Error} For invalid divisions, offsets, colors or context.
+   */
+  static regularHueSubdivision(field, parts, offset = 0, context = {}) {
+    if (!context || typeof context !== 'object' || Array.isArray(context) ||
+        Object.keys(context).some(key => key !== 'hueCircle')) {
+      throw new TypeError('Subdivision context must contain only an optional hueCircle');
+    }
+    const circle = context.hueCircle === undefined ? this.hueCircle() : context.hueCircle;
+    validateCircle(circle);
+    const selected = validateSubdivisionSource(field, circle);
+    let register;
+    if (selected.source === 'atlas') {
+      const white = SCALE.find(item => item.letter === selected.label.at(-2));
+      const black = SCALE.find(item => item.letter === selected.label.at(-1));
+      register = circle.map(hue => makeField(hue.index, white, black, circle));
+    } else {
+      register = circle.map(hue => ({ hueIndex: hue.index, ...this.mix(hue.lab, selected.w, selected.s) }));
+    }
+    return selectRegularSubdivision(register, selected.hueIndex, parts, offset);
   }
 
   /**
