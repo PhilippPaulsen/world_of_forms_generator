@@ -116,19 +116,19 @@ function netMacroEffective(macro, E) {
 // The macro counts the UI offers for E divisions per tile. Default (no spec): the divisors >= 3, because Em = 2 puts a trig
 // law's only interior macro point on its fixed point 1/2 (measured: |M1 - 1/2| <= 1.1e-16 for sinus and tangens at every
 // strength, so the axis comes out perfectly uniform - a no-op). The geometric law has no such fixed point: Em = 2 is a real
-// two-cell split (widths 1/(1+R) : R/(1+R), the ratio is R itself), so Em = 2 is offered too - but only when EVERY axis that
-// is actually warped is geometric (`spec` = the net spec {x, y}; y 'same' = x): with a trig axis in play Em = 2 would silently
-// flatten that axis. E must still be divisible by the offered count (netMacroEffective()).
-function netSpecAllGeometric(spec) {
+// two-cell split (widths 1/(1+R) : R/(1+R), the ratio is R itself); neither has a trig law WITH FOCUS (its window is off-centre,
+// M1 = f(1/2) != 1/2), so Em = 2 is offered when EVERY warped axis is one of those - `spec` = the net spec {x, y} (y 'same' = x).
+// With a symmetric trig axis in play Em = 2 would silently flatten that axis. E must still be divisible (netMacroEffective()).
+function netSpecMacro2Real(spec) {
     if (!spec) return false;
     const axes = [spec.x, spec.y === 'same' ? spec.x : spec.y].filter(a => a && a.kind !== 'uniform' && a.w);
-    return axes.length > 0 && axes.every(a => a.kind === 'geometric');
+    return axes.length > 0 && axes.every(a => a.kind === 'geometric' || (a.kind === 'trig' && netFocusOf(a) !== 0));
 }
 function netMacroOptions(E, spec) {
     const out = [];
-    if (!(E >= 3) && !(E === 2 && netSpecAllGeometric(spec))) return out;
+    if (!(E >= 3) && !(E === 2 && netSpecMacro2Real(spec))) return out;
     if (E > NETWARP_MAX_E) return out;
-    const from = netSpecAllGeometric(spec) ? 2 : 3;
+    const from = netSpecMacro2Real(spec) ? 2 : 3;
     for (let m = from; m <= E; m++) if (E % m === 0) out.push(m);
     return out;
 }
@@ -150,6 +150,12 @@ function netAxisLaw(axis, E, macro) {
     return f;
 }
 
+// The focus of a trig axis, clamped to [-1,1]; 0 = the symmetric law (also for any non-trig axis: focus is trig-only).
+function netFocusOf(axis) {
+    if (!axis || axis.kind !== 'trig') return 0;
+    const c = Number(axis.focus);
+    return Number.isFinite(c) ? Math.max(-1, Math.min(1, c)) : 0;
+}
 // The smooth single-level law (unchanged since phase 1). E = divisions per tile (macro count when nested).
 function _netSmoothLaw(axis, E) {
     if (!axis || axis.kind === 'uniform' || !axis.w) return null;
@@ -157,8 +163,18 @@ function _netSmoothLaw(axis, E) {
         const w = Math.max(-1, Math.min(1, axis.w));
         const a = (w < 0 ? -w * NETWARP_A_SIN : w * NETWARP_A_TAN);
         if (a < 1e-6) return null;
-        if (w < 0) { const sa = Math.sin(a); return l => (Math.sin(a * (2 * l - 1)) / sa + 1) / 2; }
-        const ta = Math.tan(a); return l => (Math.tan(a * (2 * l - 1)) / ta + 1) / 2;
+        const c = netFocusOf(axis);
+        if (c === 0) { // the symmetric law, unchanged (a separate branch, so focus 0 is byte-identical to before focus existed)
+            if (w < 0) { const sa = Math.sin(a); return l => (Math.sin(a * (2 * l - 1)) / sa + 1) / 2; }
+            const ta = Math.tan(a); return l => (Math.tan(a * (2 * l - 1)) / ta + 1) / 2;
+        }
+        // Focus c in [-1,1]: the window of the trig function is shifted so its extreme sits at u = c (tile position (1+c)/2):
+        //   f = (g(a'(u - c)) + g(a'(1 + c))) / (g(a'(1 - c)) + g(a'(1 + c))),   u = 2l - 1,   a' = a / (1 + |c|)
+        // f(0) = 0 and f(1) = 1 by construction. The rescale keeps the window's half-width a'(1 + |c|) = a - the same as the
+        // symmetric law's, i.e. below pi/2 across the whole strength range (max 1.3 sinus / 1.2 tangens), so g stays monotone and
+        // the window never folds. f is no longer odd about the tile centre.
+        const ap = a / (1 + Math.abs(c)), g = w < 0 ? Math.sin : Math.tan, lo = g(ap * (1 + c)), den = g(ap * (1 - c)) + lo;
+        return l => (g(ap * (2 * l - 1 - c)) + lo) / den;
     }
     if (axis.kind === 'geometric') {
         if (!(E >= 2)) return null;
@@ -194,7 +210,8 @@ function netDomainEffective(spec, Rt) {
 // The field law for one axis: F(sigma), sigma in tile units over [0,Rt] (the field), P_k = Rt*f(k/Rt), piecewise
 // linear, linearly extended beyond the field. null = identity. F.field = {P, Rt} (its inverse is closed form).
 function netFieldLaw(axis, Rt) {
-    const smooth = _netSmoothLaw(axis, Rt);
+    // Focus does not apply in a field (it is a Single/Tiled parameter: it breaks the oddness the field's law is built on) - stripped here
+    const smooth = _netSmoothLaw(axis && axis.focus ? { ...axis, focus: 0 } : axis, Rt);
     if (!smooth) return null;
     const P = Array.from({ length: Rt + 1 }, (_, k) => Rt * smooth(k / Rt));
     const F = sigma => {
@@ -350,7 +367,9 @@ function netTransformExportData(spec, E, Rt) {
         if (!axis || axis.kind === 'uniform' || !axis.w) return { kind: 'uniform' };
         if (axis.kind === 'trig') {
             const w = Math.max(-1, Math.min(1, axis.w));
-            return { kind: 'trig', law: w < 0 ? 'sinus' : 'tangens', w, a: w < 0 ? -w * NETWARP_A_SIN : w * NETWARP_A_TAN };
+            const c = isField ? 0 : netFocusOf(axis), a0 = w < 0 ? -w * NETWARP_A_SIN : w * NETWARP_A_TAN;
+            // focus only when set (an axis without one exports exactly as before); `a` is the ANGLE USED (rescaled by 1/(1+|c|) under a focus)
+            return c === 0 ? { kind: 'trig', law: w < 0 ? 'sinus' : 'tangens', w, a: a0 } : { kind: 'trig', law: w < 0 ? 'sinus' : 'tangens', w, focus: c, a: a0 / (1 + Math.abs(c)), alternate: !!axis.alternate };
         }
         // q is per MACRO cell (Em = E when not nested; the tile count Rt in a field)
         const qCount = isField ? Rt : eff.macro;
@@ -375,6 +394,7 @@ function netTransformExportData(spec, E, Rt) {
         result.tileBoundaries = { unit: 'tiles', x: bounds(spec.x), y: bounds(ay) };   // P_k: where the tile boundaries sit in the field
         if (spec.macro !== undefined && spec.macro !== null) result.macroIgnored = { requested: spec.macro, reason: 'intra-tile macro does not apply in a field (the micro grid is the clicked tile\'s own)' };
     }
+    if (isField && [ax, ay].some(a => netFocusOf(a) !== 0)) result.focusIgnored = { reason: 'focus is a Single/Tiled parameter and does not apply in a field' };
     if (dom.ignored) result.domainIgnored = dom.ignored;
     return result;
 }
@@ -382,7 +402,7 @@ function netTransformExportData(spec, E, Rt) {
 // exported meta.netTransform. Only kind/w/alternate/repeat are read - everything else is derived.
 function netTransformFromExport(exported) {
     if (!exported || exported.version !== 1) return null;
-    const axis = a => (!a || a.kind === 'uniform') ? { kind: 'uniform', w: 0 } : { kind: a.kind, w: a.w, alternate: !!a.alternate };
+    const axis = a => (!a || a.kind === 'uniform') ? { kind: 'uniform', w: 0 } : (a.kind === 'trig' && a.focus) ? { kind: a.kind, w: a.w, focus: a.focus, alternate: !!a.alternate } : { kind: a.kind, w: a.w, alternate: !!a.alternate };
     // repeat: an export from before the closed-net option has neither field and was drawn repeated
     const isField = exported.domain === 'field';
     const repeat = isField ? false : (exported.repeat !== undefined ? !!exported.repeat : exported.domain !== 'single');
