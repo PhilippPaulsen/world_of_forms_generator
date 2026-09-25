@@ -471,13 +471,22 @@ function drawCurvedBezier(p1, p2, curveType, id1, id2) {
     // Roadmap 1.6 (core/netwarp.js): the net transform is applied HERE, once, to the two endpoints
     // of every emitted segment - so canvas, SVG and the segment collector all see the same warped
     // geometry. activeNetWarp is null whenever no warp is set (the common case): untouched path.
-    if (activeNetWarp) { p1 = applyNetWarp(activeNetWarp, p1); p2 = applyNetWarp(activeNetWarp, p2); }
+    // On a FIELD warp a straight segment that crosses a base-tile boundary (a layer's; a base segment never does) is drawn as
+    // the POLYLINE through the images of its crossing points - its exact image - instead of one chord (netWarpSplitSegment()).
+    let polyline = null;
+    if (activeNetWarp) {
+        const split = (!curveType || curveType.kind === 'straight') ? netWarpSplitSegment(activeNetWarp, p1, p2) : null;
+        if (split) polyline = split.map(q => applyNetWarp(activeNetWarp, q));
+        p1 = polyline ? polyline[0] : applyNetWarp(activeNetWarp, p1);
+        p2 = polyline ? polyline[polyline.length - 1] : applyNetWarp(activeNetWarp, p2);
+    }
     if (segmentCollector) {
-        segmentCollector.push({ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y });
+        if (polyline) polyline.slice(1).forEach((q, i) => segmentCollector.push({ x1: polyline[i].x, y1: polyline[i].y, x2: q.x, y2: q.y }));
+        else segmentCollector.push({ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y });
         return;
     }
 
-    const pieces = buildCurvePieces(p1, p2, curveType, id1, id2);
+    const pieces = polyline ? polyline.slice(1).map(q => ({ type: 'line', to: q })) : buildCurvePieces(p1, p2, curveType, id1, id2);
 
     if (svgPathCollector) {
         let d = `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)}`;

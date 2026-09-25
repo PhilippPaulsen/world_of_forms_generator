@@ -291,6 +291,33 @@ function applyNetWarp(warp, pt) {
     return { x, y };
 }
 
+// ---- Exact images of straight segments under a FIELD warp ----
+// F is piecewise affine on a field: its kinks lie on the tile-boundary lines s = k / t = k of the base frame (integer tile
+// coordinates, k = -h+1 .. h; beyond the field's edge tiles F continues with the edge slope and has no further kink). A
+// segment that stays inside one base tile maps to a straight chord EXACTLY; one that crosses a boundary maps to a POLYLINE
+// whose vertices are the images of the crossing points, so drawing the single chord between the mapped endpoints is off by
+// up to a third of a tile (measured: 15.2 px on a 120 px tile). Base-sheet segments never cross (each copy stays in its own
+// tile), only layers - offset, rotated or scaled - do. Returns null when nothing needs splitting (not a field, or no crossing:
+// the caller keeps its single chord, byte-identical to before), else the REGULAR-space points [p1, ...crossings, p2] in order.
+// A crossing counts only when the segment lies strictly on both sides of the line (1e-9 of a tile): a segment along or merely
+// touching a boundary is not split. A corner (s and t both integers at one point) yields one point.
+function netWarpSplitSegment(warp, p1, p2) {
+    if (!warp || !warp.field) return null;
+    const a = netWarpTileCoords(warp, p1), b = netWarpTileCoords(warp, p2), h = warp.field.h, EPS = 1e-9, ts = [];
+    const axis = (u0, u1, law) => {
+        if (!law) return;
+        const lo = Math.min(u0, u1), hi = Math.max(u0, u1);
+        for (let k = Math.max(-h + 1, Math.floor(lo)); k <= Math.min(h, Math.ceil(hi)); k++) if (lo < k - EPS && hi > k + EPS) ts.push((k - u0) / (u1 - u0));
+    };
+    axis(a.s, b.s, warp.fx); axis(a.t, b.t, warp.fy);
+    if (!ts.length) return null;
+    ts.sort((x, y) => x - y);
+    const pts = [p1];
+    ts.forEach((t, i) => { if (i === 0 || t - ts[i - 1] > 1e-12) pts.push({ x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) }); });
+    pts.push(p2);
+    return pts;
+}
+
 // ---- Phase 2: the live base warp, its inverse, and the export description ----
 
 // The ready warp for the CURRENT base sheet (null = regular net or a shape the warp does not apply
