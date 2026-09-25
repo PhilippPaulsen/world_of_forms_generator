@@ -246,6 +246,9 @@ console.log('\n== 10. free endpoints on a field (option b) ==');
     check('the stored free node is drawn at the click in the clicked tile (a scaled copy in every other tile)', lines.some(ln => (Math.abs(ln[2] - click.x) < 1e-9 && Math.abs(ln[3] - click.y) < 1e-9) || (Math.abs(ln[0] - click.x) < 1e-9 && Math.abs(ln[1] - click.y) < 1e-9)) && at.tile.i === 2 && at.tile.j === -1);
     check('a click outside the field, or on a non-field warp, has nothing to map to (null)', sb.netWarpFieldLocal(w, { x: -5, y: 100 }) === null && sb.netWarpFieldLocal(w, { x: 300, y: 605 }) === null && makeSb(SRC_NEW, 4, 3, 'none').netWarpFieldLocal(null, { x: 1, y: 1 }) === null);
     const sk = fs.readFileSync(path.join(ROOT, 'sketch.js'), 'utf8');
+    const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+    check('UI wiring (source): index.html has the Single / Tiled / Field buttons and no Repeat-tiles toggle; sketch.js resets Field for an invalid Shape Size, visibly',
+        ['single', 'tiled', 'field'].every(d => html.includes(`data-domain="${d}"`)) && !html.includes('net-repeat-btn') && sk.includes("netDomainEffective({ domain: 'field' }, R)") && sk.includes('so Field was reset to Single'));
     check('sketch.js wires it: mousePressed() uses netWarpFieldLocal() for a field warp, the overlay passes the field option', sk.includes('netWarp && netWarp.field ? netWarpFieldLocal(') && sk.includes("domain: 'field', fieldTiles: field.Rt"));
 }
 
