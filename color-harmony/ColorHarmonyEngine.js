@@ -605,6 +605,78 @@ class OstwaldColor {
   }
 
   /**
+   * Neutral integer distances on the 24-position circle; assigns no interval name.
+   * @param {number} a Start hue in 1..24.
+   * @param {number} b End hue in 1..24.
+   * @returns {{clockwise:number,counterclockwise:number,minimal:number}}
+   * Clockwise means increasing index; identity has zero in all three fields.
+   * @throws {RangeError} For noninteger or out-of-range indices.
+   */
+  static hueDistance(a, b) {
+    validateHue(a);
+    validateHue(b);
+    const clockwise = (b - a + 24) % 24;
+    const counterclockwise = (a - b + 24) % 24;
+    return { clockwise, counterclockwise, minimal: Math.min(clockwise, counterclockwise) };
+  }
+
+  /**
+   * Detect equal circular gaps after modulo-24 normalization, independent of colors.
+   * @param {number[]} indices Dense array of safe integers; arbitrary order/rotations allowed.
+   * @returns {boolean} Empty=false; singleton=true (one-part subdivision).
+   * @throws {TypeError|RangeError} For nonarrays, invalid integers, or duplicate positions
+   * after normalization (e.g. 1 and 25). Does not mutate or deduplicate input.
+   */
+  static isRegularHueSet(indices) {
+    if (!Array.isArray(indices)) throw new TypeError('indices must be an array of safe integers');
+    const normalized = [];
+    for (let i = 0; i < indices.length; i++) {
+      if (!Object.hasOwn(indices, i) || !Number.isSafeInteger(indices[i])) {
+        throw new RangeError('Every hue-set entry must be a safe integer');
+      }
+      // Reduce before adding/subtracting to avoid overflow at safe-integer limits.
+      normalized.push(((indices[i] % 24 + 23) % 24) + 1);
+    }
+    if (new Set(normalized).size !== normalized.length) throw new RangeError('Duplicate hue positions after modulo-24 normalization');
+    if (normalized.length === 0) return false;
+    normalized.sort((a, b) => a - b);
+    const step = 24 / normalized.length;
+    return normalized.every((hue, i) =>
+      (i + 1 === normalized.length ? normalized[0] + 24 : normalized[i + 1]) - hue === step);
+  }
+
+  /**
+   * Select indices start + k*step from an ordered discrete array; no historical claim.
+   * @param {Array} series Dense array of arbitrary entries (including gray/atlas colors).
+   * @param {object} options Only start, step and count are allowed.
+   * @param {number} [options.start=0] Zero-based safe integer index >=0.
+   * @param {number} [options.step=1] Positive safe integer index stride (no wrapping).
+   * @param {number} options.count Positive safe integer number of entries to return.
+   * @returns {Array} Fresh shallow array; selected element references are preserved.
+   * @throws {TypeError|RangeError} For sparse/nonarray input, invalid options or bounds.
+   */
+  static selectSeriesInterval(series, options) {
+    if (!Array.isArray(series)) throw new TypeError('series must be a dense array');
+    for (let i = 0; i < series.length; i++) {
+      if (!Object.hasOwn(series, i)) throw new TypeError('series must be a dense array');
+    }
+    if (!options || typeof options !== 'object' || Array.isArray(options) ||
+        Object.keys(options).some(key => !['start', 'step', 'count'].includes(key))) {
+      throw new TypeError('options must contain only start, step and count');
+    }
+    const { start = 0, step = 1, count } = options;
+    if (!Number.isSafeInteger(start) || start < 0 ||
+        !Number.isSafeInteger(step) || step < 1 || !Number.isSafeInteger(count) || count < 1) {
+      throw new RangeError('start must be a nonnegative safe integer; step and count must be positive safe integers');
+    }
+    // Division checks the last index without overflowing start + (count-1)*step.
+    if (start >= series.length || count - 1 > Math.floor((series.length - 1 - start) / step)) {
+      throw new RangeError('Series interval selection exceeds array bounds');
+    }
+    return Array.from({ length: count }, (_, i) => series[start + i * step]);
+  }
+
+  /**
    * Construct a continuous path from any valid analytical point, without atlas labels.
    * For atlas sources use harmonies(field).paths, which preserves source provenance.
    * @param {string} type isotint | isotone | analyticIsochrome | shadowSeries.
