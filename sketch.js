@@ -570,8 +570,15 @@ function setup() {
         const geoRow = select('#net-geo-row'), reverseBtn = select('#net-reverse-btn'), alternateBtn = select('#net-alternate-btn');
         const note = select('#net-locks-note');
         const fresh = () => ({ mode: 'regular', strength: 0.5, reverse: false, alternate: false });
-        const ui = { axes: 'both', repeat: false, macro: undefined, x: fresh(), y: fresh() };
-        const repeatBtn = select('#net-repeat-btn'), sizeHint = select('#net-size-hint');
+        const ui = { axes: 'both', domain: 'single', macro: undefined, x: fresh(), y: fresh() };
+        const sizeHint = select('#net-size-hint');
+        // Domain (Single | Tiled | Field): ui.domain mirrors the state (baseNetTransform.domain / .repeat). Field is only valid
+        // for an odd Shape Size 3..9 (netDomainEffective); an even one resets it to Single, visibly.
+        const domainBtns = selectAll('.net-domain-btn'), fieldBtn = select('#net-field-btn'), fieldHint = select('#net-field-hint'), fieldInfo = select('#net-field-info'), fieldNote = select('#net-field-note');
+        let fieldNoteTimer = null;
+        const showFieldNote = text => { fieldNote.html(text); fieldNote.elt.hidden = false; clearTimeout(fieldNoteTimer); fieldNoteTimer = setTimeout(() => { fieldNote.elt.hidden = true; }, 9000); };
+        const stateDomain = () => baseNetTransform ? (baseNetTransform.domain === 'field' ? 'field' : baseNetTransform.domain === 'tiled' ? 'tiled' : baseNetTransform.domain === 'single' ? 'single' : (baseNetTransform.repeat ? 'tiled' : 'single')) : null;
+        const setDomain = d => { ui.domain = d; if (baseNetTransform) { baseNetTransform.domain = d === 'field' ? 'field' : undefined; baseNetTransform.repeat = d === 'tiled'; } };
         // Macro cells (nested net): ui.macro = the chosen macro count, undefined = smooth (macro = E). The state's
         // baseNetTransform.macro is kept equal to it; the row lists the valid divisors of E = nodeCount - 1.
         const macroRow = select('#net-macro-row'), macroBtns = select('#net-macro-buttons'), macroHint = select('#net-macro-hint'), macroNote = select('#net-macro-note');
@@ -587,7 +594,8 @@ function setup() {
             if (ui.axes === 'both') ui.y = Object.assign({}, ui.x);
             const allRegular = ui.x.mode === 'regular' && ui.y.mode === 'regular';
             if (baseNetTransform && baseNetTransform.macro !== ui.macro) ui.macro = baseNetTransform.macro; // adopt a macro set from the state
-            baseNetTransform = allRegular ? null : { x: axisSpec(ui.x), y: ui.axes === 'both' ? 'same' : axisSpec(ui.y), repeat: ui.repeat, macro: ui.macro, domain: baseNetTransform ? baseNetTransform.domain : undefined }; // domain 'field' has no control yet (phase 2) - keep it if set from the state
+            const sd = stateDomain(); if (sd && sd !== ui.domain) ui.domain = sd;   // adopt a domain set from the state
+            baseNetTransform = allRegular ? null : { x: axisSpec(ui.x), y: ui.axes === 'both' ? 'same' : axisSpec(ui.y), repeat: ui.domain === 'tiled', macro: ui.domain === 'field' ? undefined : ui.macro, domain: ui.domain === 'field' ? 'field' : undefined };
             render(); netControlsSync(); redraw();
         }
         function render() {
@@ -598,8 +606,8 @@ function setup() {
             strengthInput.value(Math.round(c.strength * 100));
             strengthValue.html(c.mode === 'geometric' ? '\u00d7' + Math.pow(NET_R_MAX, c.strength).toFixed(1) : c.strength.toFixed(2));
             geoRow.elt.hidden = c.mode !== 'geometric';
-            repeatBtn.elt.classList.toggle('active', ui.repeat);
-            alternateBtn.elt.hidden = !ui.repeat; // tile-seam parity only exists between repeated tiles
+            domainBtns.forEach(b => b.elt.classList.toggle('active', b.elt.dataset.domain === ui.domain));
+            alternateBtn.elt.hidden = ui.domain !== 'tiled'; // tile-seam parity only exists between repeated (Tiled) tiles
             reverseBtn.elt.classList.toggle('active', c.reverse);
             alternateBtn.elt.classList.toggle('active', c.alternate);
         }
@@ -610,7 +618,11 @@ function setup() {
             ui.axes = next; commit();
         }));
         strengthInput.input(() => { target().strength = parseInt(strengthInput.value()) / 100; commit(); });
-        repeatBtn.mousePressed(() => { ui.repeat = !ui.repeat; commit(); });
+        domainBtns.forEach(b => b.mousePressed(() => {
+            const d = b.elt.dataset.domain;
+            if (d === 'field' && b.elt.disabled) return;
+            fieldNote.elt.hidden = true; setDomain(d); commit();
+        }));
         const linesBtn = select('#net-lines-btn');
         linesBtn.mousePressed(() => { netLinesOn = !netLinesOn; linesBtn.elt.classList.toggle('active', netLinesOn); redraw(); });
         reverseBtn.mousePressed(() => { target().reverse = !target().reverse; commit(); });
@@ -622,8 +634,25 @@ function setup() {
         netControlsSync = function () {
             group.elt.hidden = !(currentShape === 'square' && activeLayer === 'base');
             const active = netWarpActive();
-            // Closed net (the default) + Shape Size > 1: the net is smaller than the canvas - say why.
-            sizeHint.elt.hidden = !(active && !ui.repeat && shapeSizeFactor > 1);
+            // Domain: adopt one set from the state; Field needs an odd Shape Size 3..9 - an even one is reset to Single, visibly
+            const sd = stateDomain(); if (sd && sd !== ui.domain) { ui.domain = sd; render(); }
+            const R = shapeSizeFactor, fieldOk = netDomainEffective({ domain: 'field' }, R).ignored === null;
+            if (ui.domain === 'field' && !fieldOk) {
+                setDomain('single'); render();
+                showFieldNote(`Shape Size ${R} ${Number.isInteger(R) && R % 2 === 0 ? 'is even' : 'is not a valid field size'}, so Field was reset to Single (Field needs an odd Shape Size: 3, 5, 7, 9).`);
+            }
+            fieldBtn.elt.disabled = !fieldOk;
+            fieldBtn.elt.title = fieldOk ? fieldBtn.elt.dataset.title : 'Field needs an odd Shape Size (3, 5, 7, 9)';
+            fieldHint.elt.hidden = fieldOk;
+            const isField = ui.domain === 'field', E0 = nodeCount - 1;
+            fieldInfo.elt.hidden = !(active && isField);
+            if (active && isField) fieldInfo.html(`Field: macro = R = ${R} tiles, micro = E = ${E0} per tile.`);
+            // The Shape Size hint says what Shape Size does in the CURRENT mode
+            const hintText = !active ? null
+                : ui.domain === 'single' ? (R > 1 ? 'Single: one closed net. Shape Size 1 fills the canvas, larger sizes give a smaller net; Field (odd Shape Size 3-9) spreads the law over all the tiles instead.' : null)
+                : ui.domain === 'tiled' ? `Tiled: the warped tile is repeated ${R} times across the canvas, every copy alike.`
+                : `Field: Shape Size is the number of macro cells (tiles) per axis; the net always fills the canvas.`;
+            sizeHint.elt.hidden = hintText === null; if (hintText !== null) sizeHint.html(hintText);
             // Macro cells: a chosen macro that no longer divides E (Node Count changed) is reset to smooth, visibly -
             // never silently snapped to another divisor (the core would ignore it anyway: netMacroEffective()).
             const E = nodeCount - 1;
@@ -632,13 +661,13 @@ function setup() {
                 showMacroNote(`Macro ${was} does not divide E = ${E} (Node Count ${nodeCount}), so the net was reset to smooth (${E}\u00d71).`);
             }
             const options = netMacroOptions(E), nested = options.length >= 2;
-            macroRow.elt.hidden = !(active && nested);
-            macroHint.elt.hidden = !(active && !nested);
-            if (active && !nested) macroHint.html(`Macro cells: not available for E = ${E} (Node Count ${nodeCount}) - E needs a divisor from 3 up to E \u2212 1, e.g. E = 6, 8, 9, 10, 12.`);
-            const sig = `${E}|${ui.macro}|${active && nested}`;
+            macroRow.elt.hidden = !(active && nested && !isField);   // in a Field the micro grid is the clicked tile's own (see fieldInfo)
+            macroHint.elt.hidden = !(active && !nested && !isField);
+            if (active && !nested && !isField) macroHint.html(`Macro cells: not available for E = ${E} (Node Count ${nodeCount}) - E needs a divisor from 3 up to E \u2212 1, e.g. E = 6, 8, 9, 10, 12.`);
+            const sig = `${E}|${ui.macro}|${active && nested && !isField}`;
             if (sig !== macroSig) {
                 macroSig = sig; macroBtns.elt.innerHTML = '';
-                if (active && nested) options.forEach(m => {
+                if (active && nested && !isField) options.forEach(m => {
                     const b = document.createElement('button'); b.className = 'layer-btn';
                     const smooth = m === E; b.textContent = `${m}\u00d7${E / m}`;
                     b.title = smooth ? `${E} macro cells of 1: smooth, no nesting (default)` : `${m} unequal macro cells, each split uniformly into ${E / m}`;
@@ -658,6 +687,7 @@ function setup() {
                 wasActive = active;
             }
         };
+        fieldBtn.elt.dataset.title = fieldBtn.elt.title;   // restored when Field becomes available again
         render();
     })();
 

@@ -698,17 +698,25 @@
         </div>
         <div id="net-macro-hint" hidden></div>
         <div id="net-macro-note" hidden></div>
-        <div class="icon-row">
-          <button class="layer-btn" id="net-repeat-btn" title="Off (default): one closed net, as in Hinterreiter's figures. On: the warped tile is repeated across the canvas by Shape Size, as before.">Repeat tiles</button>
+        <!-- Domain: Single = one closed net (default), Tiled = the warped tile repeated by Shape Size, Field = the law
+             over the whole repeated span (odd Shape Size 3-9; each tile an affine copy - Hinterreiter's Netzart 1.1).
+             sketch.js's netControlsSync() disables Field for an even Shape Size and resets it, visibly. -->
+        <div class="icon-row" id="net-domain-row">
+          <button class="layer-btn net-domain-btn active" data-domain="single" title="Single: one closed net, as in Hinterreiter's figures (Shape Size 1 fills the canvas)">Single</button>
+          <button class="layer-btn net-domain-btn" data-domain="tiled" title="Tiled: the warped tile is repeated across the canvas by Shape Size, every copy alike">Tiled</button>
+          <button class="layer-btn net-domain-btn" data-domain="field" id="net-field-btn" title="Field: the law spans all Shape Size x Shape Size tiles; each tile is a scaled copy of the clicked pattern (odd Shape Size 3, 5, 7, 9)">Field</button>
         </div>
+        <div id="net-field-hint" hidden>Field needs an odd Shape Size (3, 5, 7, 9).</div>
+        <div id="net-field-info" hidden></div>
+        <div id="net-field-note" hidden></div>
         <div class="icon-row">
           <button class="layer-btn" id="net-lines-btn" title="Draw the net's own grid lines edge to edge (black; a finer level would be red) - a display aid, not part of any export">Net lines</button>
         </div>
-        <div id="net-size-hint" hidden>Shape Size 1 fills the canvas with the closed net; larger sizes give a smaller net. Switch Repeat tiles on to repeat it instead.</div>
-        <div id="net-free-note" hidden>A free endpoint cannot be placed outside the closed net (Repeat tiles is off).</div>
+        <div id="net-size-hint" hidden></div>
+        <div id="net-free-note" hidden>A free endpoint cannot be placed outside the net (Single and Field are closed nets).</div>
         <div class="icon-row" id="net-geo-row" hidden>
           <button class="layer-btn" id="net-reverse-btn" title="Reverse the direction in which the meshes grow">Reverse</button>
-          <button class="layer-btn" id="net-alternate-btn" title="Only with Repeat tiles on: mirror every other tile so mesh widths run on across tile seams (an interpretation - the book shows this for line motifs, not for the spacing function)" hidden>Alternate tiles</button>
+          <button class="layer-btn" id="net-alternate-btn" title="Only in Tiled mode: mirror every other tile so mesh widths run on across tile seams (an interpretation - the book shows this for line motifs, not for the spacing function)" hidden>Alternate tiles</button>
         </div>
       </div>
       <!-- visible whenever a warp is in force, also from a layer tab (the warp itself is set on the Base sheet) -->
@@ -1176,18 +1184,18 @@
        the p5.js CDN tag - that URL already carries its own version
        (p5@1.9.0), so a version bump there naturally changes the URL. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260925a"></script>
-  <script src="core/state.js?v=20260925a"></script>
-  <script src="core/symmetry.js?v=20260925a"></script>
-  <script src="core/curves.js?v=20260925a"></script>
-  <script src="core/netwarp.js?v=20260925a"></script>
-  <script src="core/tiling.js?v=20260925a"></script>
-  <script src="core/faces.js?v=20260925a"></script>
-  <script src="core/orbits.js?v=20260925a"></script>
-  <script src="core/color.js?v=20260925a"></script>
-  <script src="core/facecolor.js?v=20260925a"></script>
-  <script src="core/export.js?v=20260925a"></script>
-  <script src="sketch.js?v=20260925a"></script>
+  <script src="core/forms.js?v=20260925b"></script>
+  <script src="core/state.js?v=20260925b"></script>
+  <script src="core/symmetry.js?v=20260925b"></script>
+  <script src="core/curves.js?v=20260925b"></script>
+  <script src="core/netwarp.js?v=20260925b"></script>
+  <script src="core/tiling.js?v=20260925b"></script>
+  <script src="core/faces.js?v=20260925b"></script>
+  <script src="core/orbits.js?v=20260925b"></script>
+  <script src="core/color.js?v=20260925b"></script>
+  <script src="core/facecolor.js?v=20260925b"></script>
+  <script src="core/export.js?v=20260925b"></script>
+  <script src="sketch.js?v=20260925b"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides
