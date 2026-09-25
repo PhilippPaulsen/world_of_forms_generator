@@ -248,3 +248,6 @@ body.dark {
 #net-group .icon-row { flex-wrap: wrap; justify-content: center; }
 #net-group .net-kind-btn, #net-group .net-axes-btn { flex: 0 0 auto; }
 .icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.limit-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
+.limit-note[hidden] { display: none; }

@@ -76,13 +76,14 @@ const CATALOG_URL_MODES = ['none', 'reflection_only', 'rotation3', 'rotation6', 
 function isWellFormedCatalogPattern(shape, order, symmetryMode, orbitIds) {
     if (!CATALOG_URL_SHAPES.includes(shape)) return false;
     if (!CATALOG_URL_MODES.includes(symmetryMode)) return false;
-    // 1..7 matches #node-count-input's own min/max (index.html) - every
-    // real manifest entry is within the lower part of this range (max
-    // observed: 5, triangle; the ceiling itself was raised to 7 per
-    // Group A's node-count-limit item, see nodeInput's own clamp
-    // comment in setup()), so this is a syntactic sanity bound, not a
-    // workaround.
-    if (!Number.isInteger(order) || order < 1 || order > 7) return false;
+    // 1..maxNodeCountFor(shape) matches #node-count-input's own bound for
+    // that shape (core/forms.js NODE_COUNT_MAX: triangle/hex 7, square 13)
+    // - every real manifest entry is within the lower part of this range
+    // (max observed: 5, triangle), so this is a syntactic sanity bound, not
+    // a workaround. Shape-aware because a uniform 13 would let a hex link
+    // at order 13 load a grid whose orbit table costs several hundred ms
+    // per click (measured: hex 9 ~87 ms, 11 ~199 ms).
+    if (!Number.isInteger(order) || order < 1 || order > maxNodeCountFor(shape)) return false;
     if (!Array.isArray(orbitIds) || orbitIds.length === 0 || orbitIds.some(id => !Number.isInteger(id) || id < 0)) return false;
     return true;
 }
@@ -244,6 +245,9 @@ function setup() {
             btn.addClass('active');
             // Set shape
             currentShape = btn.attribute('data-shape');
+            // The node count of the shape we came from may exceed this shape's ceiling (square 13 -> hex 7): clamp it,
+            // visibly (a note), before the grid is built from it.
+            clampNodeCountToShape('Shape');
             rebuildGrid(currentShape);
             renderLayerTabs(); // rebuildGrid() clears additionalLayers - keep the tab strip in sync
             updateOffsetControls();
@@ -270,20 +274,43 @@ function setup() {
         });
     }
 
-    // Node count (Number Input)
+    // Node count (Number Input). The ceiling depends on the shape (core/forms.js NODE_COUNT_MAX).
     const nodeInput = select('#node-count-input');
+    const nodeCountNote = select('#node-count-note');
+    let nodeCountNoteTimer = null;
+    function showNodeCountNote(text) {
+        if (!nodeCountNote) return;
+        nodeCountNote.html(text); nodeCountNote.elt.hidden = false;
+        clearTimeout(nodeCountNoteTimer); nodeCountNoteTimer = setTimeout(() => { nodeCountNote.elt.hidden = true; }, 9000);
+    }
+    // Sets the input's own max for currentShape (the HTML attribute is only the universal default of 7) and, when the
+    // current nodeCount is above it, clamps nodeCount and says so. `cause` names what triggered it.
+    function clampNodeCountToShape(cause) {
+        const maxN = maxNodeCountFor(currentShape);
+        if (nodeInput) nodeInput.elt.max = maxN;
+        if (nodeCount > maxN) {
+            showNodeCountNote(`${cause} changed to ${currentShape}: Node Count ${nodeCount} is above its limit of ${maxN}, so it was set to ${maxN}.`);
+            nodeCount = maxN;
+            if (nodeInput) nodeInput.value(nodeCount);
+        }
+    }
     if (nodeInput) {
         nodeCount = parseInt(nodeInput.value()) || 3;
         nodeInput.input(() => {
             let v = parseInt(nodeInput.value());
-            // Roadmap 1.1 (Group A, node-count limit raise): 5 -> 7 -
-            // matches #node-count-input's own max, `isWellFormedCatalogPattern()`'s
-            // order bound, and the layer input's own clamp just below -
-            // see the verification session's real measurement (hex, the
-            // fastest-growing shape: ~41ms at order 6, ~71ms at order 7,
-            // ~119ms at order 8 for updatePatternNameStatus()'s uncached
-            // orbit-table rebuild) for why 7, not higher, was chosen.
-            if (v < 1) v = 1; if (v > 7) v = 7; // Clamp
+            // Roadmap 1.1 (Group A, node-count limit raise): 5 -> 7, and
+            // then shape-dependent (square 13, triangle/hex 7 - see
+            // core/forms.js NODE_COUNT_MAX for the measurements). The same
+            // table bounds `isWellFormedCatalogPattern()`, the layer input
+            // and alignLayerToBase(). An over-limit value is clamped and
+            // the input and a note say so (it used to be silent).
+            const maxN = maxNodeCountFor(currentShape);
+            if (v < 1) v = 1;
+            if (v > maxN) {
+                showNodeCountNote(`Node Count ${v} is above the ${currentShape} limit of ${maxN}, so it was set to ${maxN}.`);
+                v = maxN;
+                nodeInput.value(v);
+            }
             nodeCount = v;
             rebuildGrid(currentShape);
             renderLayerTabs();
@@ -313,6 +340,7 @@ function setup() {
         if (matchingShapeBtn) matchingShapeBtn.addClass('active');
         if (nodeInput) nodeInput.value(nodeCount);
     }
+    clampNodeCountToShape('Shape'); // sets the input's max for the starting shape (a validated catalog order is already within it)
 
     // Symmetry Mode (Spiegeling/Drehling button group + hex-only fold
     // sub-row) - see index.html's own comment on this control for the
@@ -944,6 +972,13 @@ function setup() {
     const nodeCountGroup = select('#layer-node-count-group');
     const shapeSizeGroup = select('#layer-shape-size-group');
     const layerNodeCountInput = select('#layer-node-count-input');
+    const layerNodeCountNote = select('#layer-node-count-note');
+    let layerNodeCountNoteTimer = null;
+    function showLayerNodeCountNote(text) {
+        if (!layerNodeCountNote) return;
+        layerNodeCountNote.html(text); layerNodeCountNote.elt.hidden = false;
+        clearTimeout(layerNodeCountNoteTimer); layerNodeCountNoteTimer = setTimeout(() => { layerNodeCountNote.elt.hidden = true; }, 9000);
+    }
     const layerShapeSizeInput = select('#layer-shape-size-input');
     // Roadmap 1.12 stage 4 (UI): this layer's own shape - same
     // contextual show/hide handling as the fields above, PLUS an
@@ -1039,7 +1074,7 @@ function setup() {
             const layer = additionalLayers[activeLayer];
             if (offsetXInput) offsetXInput.value(layer.offsetX);
             if (offsetYInput) offsetYInput.value(layer.offsetY);
-            if (layerNodeCountInput) layerNodeCountInput.value(layer.nodeCount);
+            if (layerNodeCountInput) { layerNodeCountInput.value(layer.nodeCount); layerNodeCountInput.elt.max = maxNodeCountFor(layer.shape); }
             if (layerShapeSizeInput) layerShapeSizeInput.value(layer.shapeSizeFactor);
             if (layerRotationInput) layerRotationInput.value(layer.rotation || 0);
             syncLayerAnimationDisplay(layer);
@@ -1698,7 +1733,12 @@ function setup() {
                 if (activeLayer === 'base') return;
                 layerShapeBtns.forEach(b => b.removeClass('active'));
                 btn.addClass('active');
-                updateActiveLayerGrid({ shape: btn.attribute('data-shape') });
+                const clamp = updateActiveLayerGrid({ shape: btn.attribute('data-shape') });
+                // updateActiveLayerGrid() clamps this layer's own node count to the new shape's limit; say so, and sync the input
+                if (clamp) {
+                    showLayerNodeCountNote(`Layer shape changed to ${clamp.shape}: Layer Node Count ${clamp.from} is above its limit of ${clamp.to}, so it was set to ${clamp.to}.`);
+                    if (layerNodeCountInput) layerNodeCountInput.value(clamp.to);
+                }
                 // Roadmap 1.12 "Align to base" bugfix: found live while
                 // testing - this handler predates the align button and
                 // never re-synced the layer-contextual controls'
@@ -1851,7 +1891,14 @@ function setup() {
         layerNodeCountInput.input(() => {
             if (activeLayer === 'base') return;
             let v = parseInt(layerNodeCountInput.value());
-            if (v < 1) v = 1; if (v > 7) v = 7; // Roadmap 1.1 (Group A): matches the base input's own 5 -> 7 raise, see its own clamp comment above
+            // Roadmap 1.1 (Group A): bounded by the LAYER'S OWN shape (it may differ from the base's) - see the base input's clamp
+            const maxN = maxNodeCountFor(additionalLayers[activeLayer].shape);
+            if (v < 1) v = 1;
+            if (v > maxN) {
+                showLayerNodeCountNote(`Layer Node Count ${v} is above the ${additionalLayers[activeLayer].shape} limit of ${maxN}, so it was set to ${maxN}.`);
+                v = maxN;
+                layerNodeCountInput.value(v);
+            }
             updateActiveLayerGrid({ nodeCount: v });
             redraw();
         });
@@ -2572,6 +2619,11 @@ function updateActiveLayerGrid(patch) {
     if (activeLayer === 'base') return;
     const layer = additionalLayers[activeLayer];
     Object.assign(layer, patch);
+    // Defence in depth for every caller (shape switch, catalog link, align): a layer's node count never exceeds its OWN
+    // shape's ceiling (core/forms.js NODE_COUNT_MAX). The caller that knows the UI reports it (returned below).
+    let clamped = null;
+    const layerMax = maxNodeCountFor(layer.shape);
+    if (layer.nodeCount > layerMax) { clamped = { shape: layer.shape, from: layer.nodeCount, to: layerMax }; layer.nodeCount = layerMax; }
     layer.connections = [];
     layer.redoStack = [];
     // Roadmap 1.12 stage 4 (UI) bugfix: layer.shape (post-patch, so a
@@ -2592,6 +2644,7 @@ function updateActiveLayerGrid(patch) {
     layer.nodes = grid.nodes;
     layer.centroid = grid.centroid;
     layer.outerCorners = grid.outerCorners;
+    return clamped; // null, or {shape, from, to} when the node count had to be clamped
 }
 
 // Roadmap 1.12 stage 3: normalizes a raw rotation input value into

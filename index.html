@@ -427,7 +427,9 @@
 
       <div class="control-group">
         <label for="node-count-input">Node Count</label>
+        <!-- max is the universal default (triangle/hex); sketch.js sets it per shape (square 13) - core/forms.js NODE_COUNT_MAX -->
         <input type="number" id="node-count-input" min="1" max="7" value="3">
+        <div id="node-count-note" class="limit-note" hidden></div>
       </div>
 
       <!-- Roadmap 1.11: Spiegeling/Drehling selector - reintroduces the
@@ -897,6 +899,7 @@
       <div class="control-group" id="layer-node-count-group" hidden>
         <label for="layer-node-count-input">Layer Node Count</label>
         <input type="number" id="layer-node-count-input" min="1" max="7" value="3">
+        <div id="layer-node-count-note" class="limit-note" hidden></div>
       </div>
 
       <div class="control-group" id="layer-shape-size-group" hidden>
@@ -1184,18 +1187,18 @@
        the p5.js CDN tag - that URL already carries its own version
        (p5@1.9.0), so a version bump there naturally changes the URL. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260925c"></script>
-  <script src="core/state.js?v=20260925c"></script>
-  <script src="core/symmetry.js?v=20260925c"></script>
-  <script src="core/curves.js?v=20260925c"></script>
-  <script src="core/netwarp.js?v=20260925c"></script>
-  <script src="core/tiling.js?v=20260925c"></script>
-  <script src="core/faces.js?v=20260925c"></script>
-  <script src="core/orbits.js?v=20260925c"></script>
-  <script src="core/color.js?v=20260925c"></script>
-  <script src="core/facecolor.js?v=20260925c"></script>
-  <script src="core/export.js?v=20260925c"></script>
-  <script src="sketch.js?v=20260925c"></script>
+  <script src="core/forms.js?v=20260925d"></script>
+  <script src="core/state.js?v=20260925d"></script>
+  <script src="core/symmetry.js?v=20260925d"></script>
+  <script src="core/curves.js?v=20260925d"></script>
+  <script src="core/netwarp.js?v=20260925d"></script>
+  <script src="core/tiling.js?v=20260925d"></script>
+  <script src="core/faces.js?v=20260925d"></script>
+  <script src="core/orbits.js?v=20260925d"></script>
+  <script src="core/color.js?v=20260925d"></script>
+  <script src="core/facecolor.js?v=20260925d"></script>
+  <script src="core/export.js?v=20260925d"></script>
+  <script src="sketch.js?v=20260925d"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides
