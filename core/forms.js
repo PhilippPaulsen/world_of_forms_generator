@@ -420,12 +420,22 @@ function _alignmentConditionMet(baseShapeSizeFactor, baseNodeCount, layerShapeSi
     return D % divisor === 0;
 }
 
+// Node Count ceiling per shape. Triangle and hex stay at 7 (Group A, measured against hex: the orbit table costs ~3n^2
+// nodes there, 40 ms at 7 but 87 ms at 9 and 199 ms at 11 on the measuring machine). The square has real headroom - its
+// per-click cost was measured at ~29-39 ms at 13 (E = 12, drawing and face detection do not depend on the node count;
+// only the orbit table does) - so it goes to 13, not 15 (15 adds one nesting option and a first click of 80 ms).
+// Every place that bounds a node count reads this one table: the UI clamps (base and layer), the shape switches, the
+// catalog-URL validator and alignLayerToBase().
+const NODE_COUNT_MAX = { triangle: 7, square: 13, hex: 7 };
+function maxNodeCountFor(shape) { return NODE_COUNT_MAX[shape] || 7; }
+
 // Roadmap 1.12 "Align to base": searches the layer's own reachable
 // parameter space (shapeSizeFactor 1..baseShapeSizeFactor - Condition C
 // folded directly into the search range rather than checked separately;
-// nodeCount 2..5, matching #layer-node-count-input's own real UI bounds
-// - searching beyond what the UI can actually express would produce an
-// unusable suggestion) for the SMALLEST valid (shapeSizeFactor,
+// nodeCount 2..maxNodeCountFor(shape), matching #layer-node-count-input's
+// own real UI bounds - searching beyond what the UI can actually express
+// would produce an unusable suggestion; this used to be a hard-coded 5,
+// stale since Group A raised the UI limit to 7) for the SMALLEST valid (shapeSizeFactor,
 // nodeCount) pair satisfying _alignmentConditionMet() above - "smallest"
 // meaning fewest nodes first (nodeCount ascending), then coarsest scale
 // (shapeSizeFactor ascending) as the tiebreak, a simple and deterministic
@@ -442,7 +452,7 @@ function _alignmentConditionMet(baseShapeSizeFactor, baseNodeCount, layerShapeSi
 // precedent (core/tiling.js's computeLayerCellFaces(), sketch.js's
 // incompatibleEnabledLayersForCrossLayerFaces()).
 function alignLayerToBase(baseShapeSizeFactor, baseNodeCount, layerCurrentShapeSizeFactor, layerCurrentNodeCount, shape) {
-    for (let nodeCount = 2; nodeCount <= 5; nodeCount++) {
+    for (let nodeCount = 2; nodeCount <= maxNodeCountFor(shape); nodeCount++) {
         for (let shapeSizeFactor = 1; shapeSizeFactor <= baseShapeSizeFactor; shapeSizeFactor++) {
             if (_alignmentConditionMet(baseShapeSizeFactor, baseNodeCount, shapeSizeFactor, nodeCount, shape)) {
                 return { achievable: true, shapeSizeFactor, nodeCount };
