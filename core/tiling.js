@@ -58,7 +58,7 @@ function _drawTessellationCore() {
     // own cost) when the base sheet's face-fill toggle is on (roadmap
     // 1.10a step 5/6's rendering hookup); each tile*() function draws
     // this same face set at every tile position via drawFaceFillsAtTile().
-    const cellFaces = (showFaces && !activeNetWarp) ? computeCellFaces(connections, nodes, faceAssignmentsFor('base'), faceHighlightKeyFor('base')) : null;
+    const cellFaces = (showFaces && !(activeNetWarp && !activeNetWarp.field)) ? computeCellFaces(connections, nodes, faceAssignmentsFor('base'), faceHighlightKeyFor('base')) : null;
     const layerCellFaces = activeNetWarp ? null : computeLayerCellFaces();
     tileFor(currentShape)(cellFaces, layerCellFaces);
 

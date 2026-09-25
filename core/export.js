@@ -317,7 +317,7 @@ function buildExportData(crossLayerData) {
         });
     }
 
-    if (curveType.kind === 'straight' && !netWarped) {
+    if (curveType.kind === 'straight' && !netWarpBlocksFaces()) {   // a FIELD warp keeps its base faces (regular cell coordinates)
         const facesResult = computeCellFaces(completeConnections, nodes, baseFaceAssignments);
         data.geometry.faceNodes = facesResult.nodes;
         data.geometry.faces = facesResult.faces;

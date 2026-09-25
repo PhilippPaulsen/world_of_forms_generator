@@ -265,6 +265,11 @@ function applyNetWarp(warp, pt) {
 // what UI code, face detection and export use to ask "is a warp in force right now".
 function netWarpBaseNow() { return baseNetTransform ? netWarpForBase(baseNetTransform, currentShape, outerCorners, nodeCount, shapeSizeFactor) : null; }
 function netWarpActive() { return netWarpBaseNow() !== null; }
+// Whether face detection/fills are refused for a sheet under the CURRENT warp: on a FIELD the base sheet's faces are exact
+// (F is affine inside every tile: faces are detected once on the regular cell, then mapped per tile), so only layers
+// (`sheet` given: offset layers cross tile boundaries) stay refused; every other warp (Single, Tiled: F smooth inside the
+// tile) refuses all faces.
+function netWarpBlocksFaces(sheet) { const w = netWarpBaseNow(); return w !== null && (!w.field || !!sheet); }
 
 // F^-1: the regular-space point whose image under the warp is `pt` (each axis law is strictly
 // increasing on [0,1], so a bisection per axis finds it; tiles are located by floor as in
@@ -348,6 +353,10 @@ function netTransformExportData(spec, E, Rt) {
     };
     if (spec.macro !== undefined && spec.macro !== null && !eff.valid) result.macroIgnored = { requested: spec.macro, reason: eff.reason };
     if (isField) {
+        // Faces: exact on a field (affine per tile) - the BASE faces are exported in regular central-cell coordinates, the space of
+        // geometry.nodes/edges; layers stay omitted (offset layers cross tile boundaries).
+        result.facesOmitted = false; result.layerFacesOmitted = true;
+        result.facesMapping = 'regular central cell; each tile is the image under the per-tile affine map given by tileBoundaries';
         result.fieldTiles = Rt;   // the outer tile count = the number of macro cells per axis
         const ay = spec.y === 'same' ? spec.x : spec.y, bounds = axis => { const f = netFieldLaw(axis, Rt); return Array.from({ length: Rt + 1 }, (_, k) => f ? f.field.P[k] : k); };
         result.tileBoundaries = { unit: 'tiles', x: bounds(spec.x), y: bounds(ay) };   // P_k: where the tile boundaries sit in the field

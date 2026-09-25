@@ -962,12 +962,15 @@ function findFaces(segments, realNodes) {
 // trail keys, so segments, faces and keys all describe the same sheet.
 function computeCellFaces(connSet, gridNodes = nodes, assignments = null, highlightKey = null, sheet = null) {
     if (curveType.kind !== 'straight') return { nodes: [], faces: [] };
-    // Roadmap 1.6 / Group E phase 2: refused, not approximated, on a warped net - the segments
-    // detection would collect here are regular-space ones while the canvas shows the warped image,
-    // and the face keys assume the periodicity the warp removes (core/netwarp.js docblock). The UI
-    // says so (sketch.js faceFillsUnavailableReason()); export flags it (meta.netTransform.facesOmitted).
-    if (netWarpActive()) return { nodes: [], faces: [] };
-    const segments = collectCellSegments(connSet, gridNodes, sheet);
+    // Roadmap 1.6 / Group E: refused, not approximated, on a warped net - EXCEPT the base sheet of a FIELD warp, where F is
+    // affine inside every tile, so the faces of the regular cell map exactly onto every tile (drawFaceFillsAtTile() maps the
+    // vertices). The UI says why elsewhere (sketch.js faceFillsUnavailableReason()); export flags it (facesOmitted).
+    if (netWarpBlocksFaces(sheet)) return { nodes: [], faces: [] };
+    // Detection stays on REGULAR coordinates: inside drawTessellation() the warp is installed and the sink would hand the
+    // collector WARPED segments (and the fills would then be warped a second time), so switch it off around the collection.
+    const savedWarp = activeNetWarp; activeNetWarp = null;
+    let segments;
+    try { segments = collectCellSegments(connSet, gridNodes, sheet); } finally { activeNetWarp = savedWarp; }
     const result = findFaces(segments, gridNodes);
     // Group D follow-up step 2: applies the store AFTER reconciling it against the
     // sheet's last real face structure (core/facecolor.js applyAssignmentsLazily()) -
@@ -1115,12 +1118,16 @@ function drawFaceFillsAtTile(facesResult, tileCentroid, flip180) {
     // strokes instead of silently going invisible.
     push();
     noStroke();
+    // A FIELD warp (core/netwarp.js): the cell's faces are regular-space polygons; every tile's copy is their image under F,
+    // which is affine inside the tile - so each polygon edge lands exactly on the drawn (warped) chord.
+    const fieldWarp = (typeof activeNetWarp !== 'undefined' && activeNetWarp && activeNetWarp.field) ? activeNetWarp : null;
+    const place = p => fieldWarp ? applyNetWarp(fieldWarp, p) : p;
     faces.forEach(face => {
         fill(face.color);
         beginShape();
         face.nodeIds.forEach(id => {
             const n = nodeById.get(id);
-            const p = toTileLocal(n, tileCentroid, flip180);
+            const p = place(toTileLocal(n, tileCentroid, flip180));
             vertex(p.x, p.y);
         });
         endShape(CLOSE);
@@ -1136,7 +1143,7 @@ function drawFaceFillsAtTile(facesResult, tileCentroid, flip180) {
             if (!face.highlight) return;
             beginShape();
             face.nodeIds.forEach(id => {
-                const p = toTileLocal(nodeById.get(id), tileCentroid, flip180);
+                const p = place(toTileLocal(nodeById.get(id), tileCentroid, flip180));
                 vertex(p.x, p.y);
             });
             endShape(CLOSE);
