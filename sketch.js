@@ -2284,14 +2284,14 @@ function draw() {
             }
             ellipse(p.x, p.y, 6, 6);
         });
-        // The active layer's own persisted nodes (canonical, untransformed
-        // positions - same rendering convention as the base's own dots
-        // above, see layerGrid()/addLayer()'s own comments for why these
-        // are already in the right coordinate space with no offset/
-        // rotation baked in).
+        // The active layer's own persisted nodes. They are STORED canonically (untransformed - orbits, export, morphing and
+        // "Align to base" rely on that), but the dot must stand where the layer's central-tile copy is DRAWN: c + offset +
+        // Rot(n - c) (layerNodeDrawnPosition(), core/tiling.js) - and through the net warp when one is in force. It used to sit at
+        // the stored position, which is only where the layer is drawn at offset 0 / rotation 0.
         if (activeLayer !== 'base') {
-            additionalLayers[activeLayer].nodes.forEach(nd => {
-                const p = dotPos(nd);
+            const dotLayer = additionalLayers[activeLayer];
+            dotLayer.nodes.forEach(nd => {
+                const p = dotPos(layerNodeDrawnPosition(dotLayer, nd));
                 const d = dist(mouseX, mouseY, p.x, p.y);
                 fill(d < 10 ? color(220, 0, 0) : (nd.free ? color(30, 110, 220) : color(0)));
                 ellipse(p.x, p.y, 6, 6);
@@ -4553,7 +4553,9 @@ function mousePressed() {
     // it was clicked (core/netwarp.js docblock, "FREE ENDPOINTS").
     const netWarp = netWarpBaseNow();
     let foundId = null;
-    for (let nd of activeNodeArr) { const p = netWarp ? applyNetWarp(netWarp, nd) : nd; if (dist(mouseX, mouseY, p.x, p.y) < 18) { foundId = nd.id; break; } }
+    // A layer's node is hit where it is DRAWN (layerNodeDrawnPosition(): offset and rotation), not at its stored canonical position.
+    const hitLayer = activeLayer === 'base' ? null : additionalLayers[activeLayer];
+    for (let nd of activeNodeArr) { const q = hitLayer ? layerNodeDrawnPosition(hitLayer, nd) : nd; const p = netWarp ? applyNetWarp(netWarp, q) : q; if (dist(mouseX, mouseY, p.x, p.y) < 18) { foundId = nd.id; break; } }
     if (foundId === null && freeEndpointsEnabled && netWarp && netWarpIsClosed(netWarp) && !netWarpInsideNet(netWarp, { x: mouseX, y: mouseY })) {
         // Closed net: there is nothing outside the net to attach a free endpoint to - refuse, visibly.
         const note = document.getElementById('net-free-note');
@@ -4563,7 +4565,8 @@ function mousePressed() {
     if (foundId === null && freeEndpointsEnabled) {
         const newId = Math.max(...activeNodeArr.map(n => n.id), 0) + 1;
         // a field: the click is mapped back into the CENTRAL tile's own coordinates (core/netwarp.js netWarpFieldLocal())
-        const at = netWarp && netWarp.field ? netWarpFieldLocal(netWarp, { x: mouseX, y: mouseY }) : (netWarp ? invertNetWarp(netWarp, { x: mouseX, y: mouseY }) : { x: mouseX, y: mouseY });
+        // a layer: back through F^-1 and then into the layer's own canonical frame (layerFreeNodeFromClick()), so the node lands where it was clicked
+        const at = hitLayer ? layerFreeNodeFromClick(hitLayer, { x: mouseX, y: mouseY }, netWarp) : netWarp && netWarp.field ? netWarpFieldLocal(netWarp, { x: mouseX, y: mouseY }) : (netWarp ? invertNetWarp(netWarp, { x: mouseX, y: mouseY }) : { x: mouseX, y: mouseY });
         activeNodeArr.push({ id: newId, x: at.x, y: at.y, free: true });
         foundId = newId;
     }

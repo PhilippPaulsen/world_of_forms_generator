@@ -309,6 +309,38 @@ function layerTileCentroid(tileCentroid, layer) {
     return { x: tileCentroid.x + layer.offsetX, y: tileCentroid.y + layer.offsetY };
 }
 
+// Where a layer's node is DRAWN in the layer's central tile (the identity copy - the one the base's own dots stand for): the
+// node's centroid-relative delta, rotated by the layer's rotation, placed at the layer's shifted tile anchor - exactly what
+// drawShapeCell()/toTileLocal() do for tile (0,0): D(n) = c + offset + Rot(n - c) (c = the shared centroid). Layer NODES are stored
+// canonically (untransformed: orbits, export, morphing and "Align to base" all rely on that); this is only for where a person
+// sees and clicks the node. With no offset and no rotation it IS the stored position, returned exactly as it is (byte-identical
+// to before). Verified against the real drawing in tools/layernodes/test-layernode-hit.js (all shapes, offset/rotation/scale).
+function layerNodeDrawnPosition(layer, n) {
+    const ox = layer.offsetX || 0, oy = layer.offsetY || 0, rot = layer.rotation || 0;
+    if (!ox && !oy && !rot) return { x: n.x, y: n.y };
+    let dx = n.x - centroid.x, dy = n.y - centroid.y;
+    if (rot) { const r = rot * Math.PI / 180, cs = Math.cos(r), sn = Math.sin(r), rx = dx * cs - dy * sn, ry = dx * sn + dy * cs; dx = rx; dy = ry; }
+    const ctr = layer.centroid || centroid;
+    return { x: ctr.x + ox + dx, y: ctr.y + oy + dy };
+}
+// The inverse: the canonical (stored) position whose drawn central-tile copy is at q: n = c + Rot^-1(q - c - offset). Used for a
+// NEW free endpoint (1.3(a)), so it lands where it was clicked instead of one offset/rotation away.
+function layerNodeFromDrawn(layer, q) {
+    const ox = layer.offsetX || 0, oy = layer.offsetY || 0, rot = layer.rotation || 0;
+    if (!ox && !oy && !rot) return { x: q.x, y: q.y };
+    const ctr = layer.centroid || centroid;
+    let dx = q.x - ctr.x - ox, dy = q.y - ctr.y - oy;
+    if (rot) { const r = -rot * Math.PI / 180, cs = Math.cos(r), sn = Math.sin(r), rx = dx * cs - dy * sn, ry = dx * sn + dy * cs; dx = rx; dy = ry; }
+    return { x: centroid.x + dx, y: centroid.y + dy };
+}
+// A new free endpoint on a LAYER from a click at `click`: under a net warp the click is a WARPED position, so it is first taken
+// back through F^-1 to the regular position where the layer's copy is drawn, then into the layer's canonical frame. (A layer is not
+// an affine copy of the central base tile, so unlike the base on a Field there is no "map into the central tile" step: the node
+// is drawn in every layer tile and each is placed by the position-based F.)
+function layerFreeNodeFromClick(layer, click, warp) {
+    return layerNodeFromDrawn(layer, warp ? invertNetWarp(warp, click) : click);
+}
+
 // Draws every enabled additional layer at one base tile position -
 // the loop each tile*() function calls once per orientation, right
 // after its own unconditional base-sheet drawShapeCell() call.
