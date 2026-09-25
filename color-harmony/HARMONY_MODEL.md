@@ -98,9 +98,11 @@ screen luminance. Custom anchor calibration does not alter register coordinates.
 
 Mathematical consequence: regular subsets of the isovalent circle have offsets
 `k*24/count`. The internal helper selects complement (count 2), triad (3) and
-tetrad (4), excluding the source from chord output. This contemporary API can
-later support other divisor counts without changing atlas or path logic. The
-full 1921 interval table and additional musical terminology are deferred.
+tetrad (4), excluding the source from chord output. Phase 3 exposes every divisor
+count through `regularHueSubdivision()` without
+changing atlas or path logic. Only the established counts 2/3/4 receive names;
+other counts remain mathematical. The supplied 1921 interval-pair transcription
+is a separate model, described in [INTERVAL_MODEL.md](INTERVAL_MODEL.md).
 
 ## 12. Atlas nodes versus continuous Oklab samples
 
@@ -126,6 +128,7 @@ byte RGB, sampling rules, metadata and serialization are contemporary decisions.
 The 24 hue anchors are not historical pigment or rotating-disc reconstructions.
 
 Per-hue calibration remains replaceable behind the existing API. Historical
-colorimetry and the full 1921 interval taxonomy remain future research, as does
-any source-critical verification beyond the equations explicitly specified in
-this phase. No UI, p5 integration or historical quotation is included.
+colorimetry, full series-interval laws and a primary verification of the supplied
+1921 interval table remain future research, as does source-critical verification
+beyond the equations explicitly specified for the project. No UI, p5 integration
+or historical quotation is included.
