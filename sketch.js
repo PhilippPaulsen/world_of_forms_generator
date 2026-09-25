@@ -636,12 +636,14 @@ function setup() {
             strengthValue.html(c.mode === 'geometric' ? '\u00d7' + Math.pow(NET_R_MAX, c.strength).toFixed(1) : c.strength.toFixed(2));
             // Focus (trig laws, Single/Tiled): moves the widest (sinus) / narrowest (tangens) mesh off the tile centre; not in a Field
             const trig = c.mode === 'sinus' || c.mode === 'tangens', geo = c.mode === 'geometric';
-            focusRow.elt.hidden = !trig || ui.domain === 'field';
+            focusRow.elt.hidden = !trig;
             focusInput.value(Math.round((c.focus || 0) * 100)); focusValue.html((c.focus || 0).toFixed(2));
             const anyFocus = [ui.x, ui.axes === 'both' ? ui.x : ui.y].some(a => (a.mode === 'sinus' || a.mode === 'tangens') && a.focus);
-            focusHint.elt.hidden = !(anyFocus && ui.domain !== 'field');
-            if (!focusHint.elt.hidden) focusHint.html('Focus breaks the 90\u00b0/180\u00b0 rotation and the axis-mirror symmetry of the warped image; the diagonal mirror stays only while X and Y share the same focus. Macro 2 becomes meaningful (see Macro cells).');
-            geoRow.elt.hidden = !(geo || (trig && c.focus));   // Alternate tiles: geometric, or a trig law with a focus (it is inert at focus 0)
+            focusHint.elt.hidden = !anyFocus;
+            if (!focusHint.elt.hidden) focusHint.html(ui.domain === 'field'
+                ? 'Focus moves the widest (sinus) / narrowest (tangens) TILE off the field centre; every tile stays an exact scaled copy, so face fills stay exact. The whole image loses its 90\u00b0/180\u00b0 rotation and axis-mirror symmetry; the diagonal mirror stays only while X and Y share the same focus.'
+                : 'Focus breaks the 90\u00b0/180\u00b0 rotation and the axis-mirror symmetry of the warped image; the diagonal mirror stays only while X and Y share the same focus. Macro 2 becomes meaningful (see Macro cells).');
+            geoRow.elt.hidden = !(geo || (trig && c.focus && ui.domain === 'tiled'));   // Alternate tiles: geometric, or a trig law with a focus in Tiled (inert at focus 0, and in Single/Field there are no seams)
             reverseBtn.elt.hidden = !geo;
             domainBtns.forEach(b => b.elt.classList.toggle('active', b.elt.dataset.domain === ui.domain));
             alternateBtn.elt.hidden = ui.domain !== 'tiled'; // tile-seam parity only exists between repeated (Tiled) tiles
@@ -685,7 +687,7 @@ function setup() {
             fieldHint.elt.hidden = fieldOk;
             const isField = ui.domain === 'field', E0 = nodeCount - 1;
             fieldInfo.elt.hidden = !(active && isField);
-            if (active && isField) fieldInfo.html(`Field: macro = R = ${R} tiles, micro = E = ${E0} per tile.` + ([ui.x, ui.y].some(a => (a.mode === 'sinus' || a.mode === 'tangens') && a.focus) ? ' Focus does not apply in a Field.' : ''));
+            if (active && isField) fieldInfo.html(`Field: macro = R = ${R} tiles, micro = E = ${E0} per tile.`);
             // The Shape Size hint says what Shape Size does in the CURRENT mode
             const hintText = !active ? null
                 : ui.domain === 'single' ? (R > 1 ? 'Single: one closed net. Shape Size 1 fills the canvas, larger sizes give a smaller net; Field (odd Shape Size 3-9) spreads the law over all the tiles instead.' : null)
