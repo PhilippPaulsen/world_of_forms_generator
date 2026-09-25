@@ -720,7 +720,7 @@
         </div>
       </div>
       <!-- visible whenever a warp is in force, also from a layer tab (the warp itself is set on the Base sheet) -->
-      <div id="net-locks-note" hidden>Curve, free-clothing and face-fill modes are off while a net transform is active: faces are not detected on a warped net, and lines are kept straight. Set the net back to Regular (Base sheet, square) to use them again.</div>
+      <div id="net-locks-note" hidden>Curve, free-clothing and face-fill modes are off while a net transform is active: faces are only exact on a Field warp, and lines are kept straight. Set the net back to Regular (Base sheet, square) to use them again.</div>
 
       <!-- Layer Tab Strip (Roadmap 1.9): Base (static, always present)
            + one tab per additional layer, rendered dynamically by
@@ -1184,18 +1184,18 @@
        the p5.js CDN tag - that URL already carries its own version
        (p5@1.9.0), so a version bump there naturally changes the URL. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260925b"></script>
-  <script src="core/state.js?v=20260925b"></script>
-  <script src="core/symmetry.js?v=20260925b"></script>
-  <script src="core/curves.js?v=20260925b"></script>
-  <script src="core/netwarp.js?v=20260925b"></script>
-  <script src="core/tiling.js?v=20260925b"></script>
-  <script src="core/faces.js?v=20260925b"></script>
-  <script src="core/orbits.js?v=20260925b"></script>
-  <script src="core/color.js?v=20260925b"></script>
-  <script src="core/facecolor.js?v=20260925b"></script>
-  <script src="core/export.js?v=20260925b"></script>
-  <script src="sketch.js?v=20260925b"></script>
+  <script src="core/forms.js?v=20260925c"></script>
+  <script src="core/state.js?v=20260925c"></script>
+  <script src="core/symmetry.js?v=20260925c"></script>
+  <script src="core/curves.js?v=20260925c"></script>
+  <script src="core/netwarp.js?v=20260925c"></script>
+  <script src="core/tiling.js?v=20260925c"></script>
+  <script src="core/faces.js?v=20260925c"></script>
+  <script src="core/orbits.js?v=20260925c"></script>
+  <script src="core/color.js?v=20260925c"></script>
+  <script src="core/facecolor.js?v=20260925c"></script>
+  <script src="core/export.js?v=20260925c"></script>
+  <script src="sketch.js?v=20260925c"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides
