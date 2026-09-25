@@ -689,11 +689,16 @@ function setup() {
                 const was = ui.macro; setMacro(undefined);
                 showMacroNote(`Macro ${was} does not divide E = ${E} (Node Count ${nodeCount}), so the net was reset to smooth (${E}\u00d71).`);
             }
-            const options = netMacroOptions(E), nested = options.length >= 2;
+            // Law-aware: Macro 2 is offered only for the geometric law (for a trig law it is a no-op), see netMacroOptions().
+            const options = netMacroOptions(E, baseNetTransform), nested = options.length >= 2;
+            if (ui.macro !== undefined && ui.macro !== E && netMacroEffective(ui.macro, E).valid && !options.includes(ui.macro)) {
+                const was = ui.macro; setMacro(undefined);   // a valid divisor the current law no longer offers (Macro 2 after Geometric -> Sinus/Tangens/mixed)
+                showMacroNote(`Macro ${was} has no effect for this law (a trig law's macro points sit on its fixed points), so the net was reset to smooth (${E}\u00d71).`);
+            }
             macroRow.elt.hidden = !(active && nested && !isField);   // in a Field the micro grid is the clicked tile's own (see fieldInfo)
             macroHint.elt.hidden = !(active && !nested && !isField);
-            if (active && !nested && !isField) macroHint.html(`Macro cells: not available for E = ${E} (Node Count ${nodeCount}) - E needs a divisor from 3 up to E \u2212 1, e.g. E = 6, 8, 9, 10, 12.`);
-            const sig = `${E}|${ui.macro}|${active && nested && !isField}`;
+            if (active && !nested && !isField) { const geo = netSpecAllGeometric(baseNetTransform); macroHint.html(`Macro cells: not available for E = ${E} (Node Count ${nodeCount}) - E needs a divisor from ${geo ? 2 : 3} up to E \u2212 1, e.g. E = ${geo ? '4, 6, 8, 9, 10, 12' : '6, 8, 9, 10, 12'}.`); }
+            const sig = `${E}|${ui.macro}|${active && nested && !isField}|${options.join(',')}`;
             if (sig !== macroSig) {
                 macroSig = sig; macroBtns.elt.innerHTML = '';
                 if (active && nested && !isField) options.forEach(m => {

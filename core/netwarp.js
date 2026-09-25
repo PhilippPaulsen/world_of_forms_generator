@@ -113,10 +113,23 @@ function netMacroEffective(macro, E) {
 // The macro values a UI can offer for E divisions: the divisors of E that are >= 3 (a trig law's macro
 // points at Em = 1 or 2 are its fixed points - no effect), up to and including E itself (= smooth, no
 // nesting). Empty beyond the verified ceiling. [E] alone means no nesting is possible for this E.
-function netMacroOptions(E) {
+// The macro counts the UI offers for E divisions per tile. Default (no spec): the divisors >= 3, because Em = 2 puts a trig
+// law's only interior macro point on its fixed point 1/2 (measured: |M1 - 1/2| <= 1.1e-16 for sinus and tangens at every
+// strength, so the axis comes out perfectly uniform - a no-op). The geometric law has no such fixed point: Em = 2 is a real
+// two-cell split (widths 1/(1+R) : R/(1+R), the ratio is R itself), so Em = 2 is offered too - but only when EVERY axis that
+// is actually warped is geometric (`spec` = the net spec {x, y}; y 'same' = x): with a trig axis in play Em = 2 would silently
+// flatten that axis. E must still be divisible by the offered count (netMacroEffective()).
+function netSpecAllGeometric(spec) {
+    if (!spec) return false;
+    const axes = [spec.x, spec.y === 'same' ? spec.x : spec.y].filter(a => a && a.kind !== 'uniform' && a.w);
+    return axes.length > 0 && axes.every(a => a.kind === 'geometric');
+}
+function netMacroOptions(E, spec) {
     const out = [];
-    if (!(E >= 3) || E > NETWARP_MAX_E) return out;
-    for (let m = 3; m <= E; m++) if (E % m === 0) out.push(m);
+    if (!(E >= 3) && !(E === 2 && netSpecAllGeometric(spec))) return out;
+    if (E > NETWARP_MAX_E) return out;
+    const from = netSpecAllGeometric(spec) ? 2 : 3;
+    for (let m = from; m <= E; m++) if (E % m === 0) out.push(m);
     return out;
 }
 

@@ -199,5 +199,43 @@ console.log('\n== 7. overlay levels ==');
     check('an ignored macro draws un-nested (every line macro)', sb.netGridLines({ ...S1, macro: 4 }, sb.outerCorners, 6, { x0: 0, y0: 0, x1: W, y1: W }, { closed: true }).every(l => l.level === 'macro'));
 }
 
+// ============ 8. Macro 2 is law-dependent ============
+console.log('\n== 8. Macro 2: a no-op for trig laws, a real split for the geometric law ==');
+{
+    const sb = makeSb(SRC_NEW, 7, 1, 'none');
+    let spread = 0, cases = 0;
+    for (const E of [4, 6, 8, 12]) for (let w = -1; w <= 1.0001; w += 0.05) {
+        if (Math.abs(w) < 1e-9) continue;
+        const f = sb.netAxisLaw({ kind: 'trig', w }, E, 2); cases++;
+        const pos = [...Array(E + 1).keys()].map(i => f(i / E));
+        spread = Math.max(spread, Math.abs(f.pl.M[1] - 0.5), Math.max(...pos.slice(1).map((g, i) => g - pos[i])) - Math.min(...pos.slice(1).map((g, i) => g - pos[i])));
+    }
+    check(`trig, Em = 2: the macro point is exactly 1/2 and every gap is equal, for all ${cases} (E x strength) cases (sinus and tangens)`, spread < 1e-14, spread);
+    let ok = true, info = [];
+    for (const R of [1.5, 2, 3, 5, 9]) for (const E of [4, 6]) {
+        const w = Math.log(R), f = sb.netAxisLaw({ kind: 'geometric', w }, E, 2), sm = sb.netAxisLaw({ kind: 'geometric', w }, E, undefined), M = f.pl.M;
+        const ratio = (M[2] - M[1]) / (M[1] - M[0]), pos = [...Array(E + 1).keys()].map(i => f(i / E));
+        const dSmooth = Math.max(...pos.map((p, i) => Math.abs(p - sm(i / E)))), dUni = Math.max(...pos.map((p, i) => Math.abs(p - i / E)));
+        if (!(Math.abs(ratio - R) < 1e-9 && Math.abs(M[1] - 1 / (1 + R)) < 1e-12 && dSmooth > 0.03 && dUni > 0.09)) ok = false;
+        if (E === 4) info.push(`R=${R}: M1=${M[1].toFixed(4)}`);
+    }
+    console.log('   geometric Em = 2, E = 4:', info.join('  '));
+    check('geometric, Em = 2: two macro cells in the ratio R : 1 (M1 = 1/(1+R)), distinct from the smooth law (>= 0.03 tile) and from uniform (>= 0.09), R = 1.5 .. 9', ok);
+    const g2 = sb.netAxisLaw({ kind: 'geometric', w: 1.2 }, 2, 2), g2s = sb.netAxisLaw({ kind: 'geometric', w: 1.2 }, 2, undefined);
+    check('geometric, E = 2: Em = 2 IS the smooth law (no nesting, nothing to offer)', [0, .25, .5, .75, 1].every(t => g2(t) === g2s(t)));
+    const G = { x: { kind: 'geometric', w: Math.log(3) }, y: 'same' }, T = { x: { kind: 'trig', w: -1 }, y: 'same' }, N = null;
+    const o = (E, sp) => JSON.stringify(sb.netMacroOptions(E, sp));
+    check('options, geometric: E=4 -> 2,4 ; 6 -> 2,3,6 ; 8 -> 2,4,8 ; 9 -> 3,9 ; 12 -> 2,3,4,6,12 ; 14 -> 2,7,14', o(4, G) === '[2,4]' && o(6, G) === '[2,3,6]' && o(8, G) === '[2,4,8]' && o(9, G) === '[3,9]' && o(12, G) === '[2,3,4,6,12]' && o(14, G) === '[2,7,14]');
+    check('options, geometric, no nesting possible: E=2 -> [2] (itself), 3,5,7 -> [E], above the ceiling -> none', o(2, G) === '[2]' && o(3, G) === '[3]' && o(5, G) === '[5]' && o(7, G) === '[7]' && o(15, G) === '[]');
+    check('options, trig / no spec / regular: unchanged (divisors >= 3), Macro 2 never offered', [4, 6, 8, 12, 14].every(E => o(E, T) === o(E, undefined) && o(E, N) === o(E, undefined) && !JSON.parse(o(E, T)).includes(2)) && o(6, T) === '[3,6]' && o(12, T) === '[3,4,6,12]');
+    const M1 = { x: { kind: 'geometric', w: 1 }, y: { kind: 'trig', w: -1 } }, M2 = { x: { kind: 'geometric', w: 1 }, y: { kind: 'uniform', w: 0 } }, M3 = { x: { kind: 'uniform', w: 0 }, y: { kind: 'geometric', w: 1 } };
+    check('options, mixed: geometric x + trig y -> no 2 (it would flatten the trig axis); geometric x + regular y, or regular x + geometric y -> 2 offered', !JSON.parse(o(4, M1)).includes(2) && JSON.parse(o(4, M2)).includes(2) && JSON.parse(o(4, M3)).includes(2));
+    check('every offered option (any law) is accepted by netMacroEffective', [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].every(E => [G, T, M1, M2, N, undefined].every(sp => sb.netMacroOptions(E, sp).every(m => sb.netMacroEffective(m, E).valid))));
+    // the overlay: geometric R = 3, Node Count 5 (E = 4), Em = 2 -> macro lines at 0 / 150 / 600 (M1 = 1/4), micro at 75 / 375
+    const sb5 = makeSb(SRC_NEW, 5, 1, 'none'), L = sb5.netGridLines({ ...G, macro: 2 }, sb5.outerCorners, 4, { x0: 0, y0: 0, x1: W, y1: W }, { closed: true }), v = L.filter(l => l.axis === 'v').sort((a, b) => a.x1 - b.x1);
+    console.log('   overlay x:', v.map(l => `${l.level[0]}${l.x1.toFixed(2)}`).join(' '));
+    check('overlay, geometric R = 3, E = 4, Em = 2: macro lines at 0 / 150 / 600, micro at 75 / 375 (unequal, real coordinates)', JSON.stringify(v.filter(l => l.level === 'macro').map(l => +l.x1.toFixed(2))) === '[0,150,600]' && JSON.stringify(v.filter(l => l.level === 'micro').map(l => +l.x1.toFixed(2))) === '[75,375]');
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 process.exit(failures ? 1 : 0);
