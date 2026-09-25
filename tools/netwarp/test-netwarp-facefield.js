@@ -7,7 +7,7 @@
  *
  *  1. Eligibility: faces on a valid field's base sheet == the regular faces exactly (detection on regular
  *     coordinates, also with the warp installed); Single / Tiled / invalid field / layers / cross-layer stay refused.
- *  2. The real drawing: R x R copies of every face; every polygon edge lies ON a drawn (warped) chord; per-tile
+ *  2. The real drawing (also a FOCUSED field: tile widths asymmetric, still affine per tile): R x R copies of every face; every polygon edge lies ON a drawn (warped) chord; per-tile
  *     area = regular area x (w_i/T)(w_j/T) exactly (no gaps, no overlaps); every copy has the same colour.
  *  3. NEGATIVE CONTROL for the activeNetWarp switch-off: with the guard removed the detection runs on warped
  *     segments and the fills miss the lines - proving the guard is what makes the result right.
@@ -84,7 +84,7 @@ function run(src, R, order, spec, mode, conns) {
 console.log('\n== 2. the real drawing: every tile copy exact ==');
 {
     let cfgs = 0, badCount = 0, worst = 0, edges = 0, areaWorst = 0, badColor = 0, checkedTiles = 0;
-    for (const R of [3, 5, 7]) for (const order of [3, 4]) for (const spec of [FIELD, { x: { kind: 'geometric', w: 1.4 }, y: 'same', domain: 'field' }, { x: { kind: 'trig', w: 0.7 }, y: { kind: 'geometric', w: -1 }, domain: 'field' }]) for (const mode of ['rotation_reflection6', 'none']) {
+    for (const R of [3, 5, 7]) for (const order of [3, 4]) for (const spec of [FIELD, { x: { kind: 'geometric', w: 1.4 }, y: 'same', domain: 'field' }, { x: { kind: 'trig', w: 0.7 }, y: { kind: 'geometric', w: -1 }, domain: 'field' }, { x: { kind: 'trig', w: -1, focus: 0.5 }, y: 'same', domain: 'field' }, { x: { kind: 'trig', w: 0.7, focus: -0.6 }, y: { kind: 'trig', w: -0.9, focus: 0.9 }, domain: 'field' }]) for (const mode of ['rotation_reflection6', 'none']) {
         const { sb, regular, lines, polys } = run(SRC, R, order, spec, mode); cfgs++;
         const nf = regular.faces.length; if (polys.length !== nf * R * R) { badCount++; continue; }
         const w = sb.netWarpBaseNow(), T = 600 / R, h = (R - 1) / 2, P = ax => sb.netFieldLaw(ax, R).field.P;
@@ -99,7 +99,7 @@ console.log('\n== 2. the real drawing: every tile copy exact ==');
             }); checkedTiles++;
         }
     }
-    check('exactly faces x R x R polygons are filled (9 / 25 / 49 copies of every face)', badCount === 0, `${cfgs} configurations (R 3/5/7, Node Count 3/4, 3 law pairs, 2 modes)`);
+    check('exactly faces x R x R polygons are filled (9 / 25 / 49 copies of every face)', badCount === 0, `${cfgs} configurations (R 3/5/7, Node Count 3/4, 5 law pairs incl. two with a focus, 2 modes)`);
     check('every polygon edge (both ends and the midpoint) lies ON a chord the real drawing emitted', worst < 1e-8, `${edges} edges, worst ${worst.toExponential(1)} px`);
     check('each tile copy has exactly the regular area x (w_i/T)(w_j/T) - no gaps, no overlaps (affine area scaling)', areaWorst < 1e-9, `${checkedTiles} tiles, worst relative ${areaWorst.toExponential(1)}`);
     check('all R x R copies of a face carry the same fill colour', badColor === 0);

@@ -13,7 +13,7 @@
  *     the anti-diagonal but keeps the main-diagonal swap while c_x == c_y; c_x != c_y breaks that too.
  *  4. `alternate`: inert at c = 0, and at c != 0 it removes the seam jump (the odd tile is the mirrored law).
  *  5. Nesting: Em = 2 is a real split with a focus (M1 != 1/2), offered only when every warped axis allows it; inverse.
- *  6. Field: focus is ignored (stripped), visibly in the export; Step A's face eligibility is unchanged.
+ *  6. Field: the focus applies (tile boundaries P_k), each tile stays affine, Step A's face eligibility is unchanged.
  *  7. Export/import and the net-line overlay.
  */
 const fs = require('fs');
@@ -153,17 +153,52 @@ console.log('\n== 5. nesting, macro options, inverse ==');
     check(`free-endpoint inverse: F^-1(F(p)) = p to ${worst.toExponential(1)} px over ${n} points (smooth, nested, alternate, repeat, per-axis focus)`, worst < 1e-8);
 }
 
-// ============ 6. Field ignores focus; Step A unaffected ============
-console.log('\n== 6. Field: focus ignored; Step A unaffected ==');
+// ============ 6. Field: the focus applies, tiles stay affine, Step A unchanged ============
+console.log('\n== 6. Field: the focus moves the widest tile; each tile stays affine; Step A unchanged ==');
 {
-    const spF = { x: { kind: 'trig', w: -1, focus: 0.6 }, y: 'same', domain: 'field' }, spN = { x: { kind: 'trig', w: -1 }, y: 'same', domain: 'field' };
-    const wF = sbN.makeNetWarp(spF, frame, 3, 3), wN = sbN.makeNetWarp(spN, frame, 3, 3); let same = true;
-    for (let i = 0; i < 300; i++) { const p = { x: rnd() * 600, y: rnd() * 600 }; if (JSON.stringify(sbN.applyNetWarp(wF, p)) !== JSON.stringify(sbN.applyNetWarp(wN, p))) same = false; }
-    check('a Field with a focus warps exactly like a Field without (the focus is stripped)', same && JSON.stringify(sbN.netFieldLaw({ kind: 'trig', w: -1, focus: 0.6 }, 5).field.P) === JSON.stringify(sbN.netFieldLaw({ kind: 'trig', w: -1 }, 5).field.P));
-    const e = sbN.netTransformExportData(spF, 3, 3);
-    check('the Field export says so: focusIgnored, no focus on the axes, faces still exact (facesOmitted false)', !!e.focusIgnored && e.x.focus === undefined && e.facesOmitted === false && JSON.stringify(e.tileBoundaries) === JSON.stringify(sbN.netTransformExportData(spN, 3, 3).tileBoundaries));
+    let cases = 0, bad = 0, minW = 1e9;
+    for (const R of [3, 5, 7, 9]) for (const w of [-1, -0.6, -0.2, 0.2, 0.6, 1]) for (let ci = -10; ci <= 10; ci++) {
+        const P = sbN.netFieldLaw({ kind: 'trig', w, focus: ci / 10 }, R).field.P; cases++;
+        if (Math.abs(P[0]) > 1e-12 || Math.abs(P[R] - R) > 1e-12) bad++;
+        for (let k = 0; k < R; k++) { const d = P[k + 1] - P[k]; if (!(d > 0)) bad++; minW = Math.min(minW, d); }
+    }
+    check(`P_k stay strictly increasing with P_0 = 0, P_R = R: ${cases} (R, w, c) cases, smallest tile ${minW.toFixed(3)} of a regular tile`, bad === 0);
+    const P5 = c => sbN.netFieldLaw({ kind: 'trig', w: -1, focus: c }, 5).field.P, wd = P => P.slice(1).map((v, i) => v - P[i]);
+    const w4 = wd(P5(0.4)), w0 = wd(P5(0)), wm = wd(P5(-0.4));
+    console.log('   R=5 sinus, widths c=0.4:', w4.map(v => v.toFixed(3)).join(' '));
+    check('R = 5, sinus: the widest tile is the central one at c = 0, tile #3 at c = 0.4 and tile #1 at c = -0.4 (the focus at 3.5 / 1.5 of 5)', w0.indexOf(Math.max(...w0)) === 2 && w4.indexOf(Math.max(...w4)) === 3 && wm.indexOf(Math.max(...wm)) === 1);
+    check('c = 0 is exactly the earlier field (P_k === with and without a focus key)', JSON.stringify(P5(0)) === JSON.stringify(sbN.netFieldLaw({ kind: 'trig', w: -1 }, 5).field.P));
+    let worstLin = 0, worstX = 0, cnt = 0;
+    const cross = (p1, p2, p3, p4) => { const d = (p2[0] - p1[0]) * (p4[1] - p3[1]) - (p2[1] - p1[1]) * (p4[0] - p3[0]), t = ((p3[0] - p1[0]) * (p4[1] - p3[1]) - (p3[1] - p1[1]) * (p4[0] - p3[0])) / d; return [p1[0] + t * (p2[0] - p1[0]), p1[1] + t * (p2[1] - p1[1])]; };
+    for (const spec of [{ x: { kind: 'trig', w: -1, focus: 0.5 }, y: 'same' }, { x: { kind: 'trig', w: 0.8, focus: -0.7 }, y: { kind: 'trig', w: -0.6, focus: 0.3 } }, { x: { kind: 'trig', w: -1, focus: 1 }, y: { kind: 'geometric', w: 1.1 } }]) for (const R of [3, 5, 9]) {
+        const T = 600 / R, h = (R - 1) / 2, fr = { c0: { x: 300 - T / 2, y: 300 - T / 2 }, v1: { x: T, y: 0 }, v2: { x: 0, y: T } }, w = sbN.makeNetWarp({ ...spec, domain: 'field' }, fr, 3, R);
+        const at = (i, j, u, v) => ({ x: fr.c0.x + (i - h + u) * T, y: fr.c0.y + (j - h + v) * T }), map = p => { const q = sbN.applyNetWarp(w, { x: p[0], y: p[1] }); return [q.x, q.y]; };
+        for (let n = 0; n < 1500; n++) {
+            const i = Math.floor(rnd() * R), j = Math.floor(rnd() * R), a = at(i, j, rnd(), rnd()), b = at(i, j, rnd(), rnd()), M = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, A = sbN.applyNetWarp(w, a), B = sbN.applyNetWarp(w, b), Mm = sbN.applyNetWarp(w, M);
+            worstLin = Math.max(worstLin, Math.hypot(Mm.x - (A.x + B.x) / 2, Mm.y - (A.y + B.y) / 2));
+            const pt = () => { const q = at(i, j, rnd(), rnd()); return [q.x, q.y]; }, tl = at(i, j, 0, 0), p1 = pt(), p2 = pt(), p3 = pt(), p4 = pt(), X = cross(p1, p2, p3, p4);
+            if (!(X[0] >= tl.x && X[0] <= tl.x + T && X[1] >= tl.y && X[1] <= tl.y + T)) continue;
+            const FX = map(X), Xm = cross(map(p1), map(p2), map(p3), map(p4)); cnt++; worstX = Math.max(worstX, Math.hypot(FX[0] - Xm[0], FX[1] - Xm[1]));
+        }
+    }
+    check(`each tile is affine under a focused field: midpoint non-linearity ${worstLin.toExponential(1)} px (9 configurations, R 3/5/9, per-axis focus, trig + geometric)`, worstLin < 1e-9);
+    check(`crossings inside a tile map exactly under a focused field: worst ${worstX.toExponential(1)} px over ${cnt} crossings`, worstX < 1e-8 && cnt > 5000);
+    const T5 = 120, fr5 = { c0: { x: 240, y: 240 }, v1: { x: T5, y: 0 }, v2: { x: 0, y: T5 } }, sp5 = { x: { kind: 'trig', w: -1, focus: 0.5 }, y: 'same', domain: 'field' }, w5 = sbN.makeNetWarp(sp5, fr5, 3, 5);
+    let inv = 0; for (let n = 0; n < 500; n++) { const p = { x: rnd() * 600, y: rnd() * 600 }, q = sbN.invertNetWarp(w5, sbN.applyNetWarp(w5, p)); inv = Math.max(inv, Math.hypot(q.x - p.x, q.y - p.y)); }
+    check(`closed-form field inverse (free endpoints): F^-1(F(p)) = p to ${inv.toExponential(1)} px over the canvas`, inv < 1e-9);
+    const sym = Tf => { let m = 0; for (let n = 0; n < 300; n++) { const p = { x: rnd() * 600, y: rnd() * 600 }, a = sbN.applyNetWarp(w5, Tf(p)), b = Tf(sbN.applyNetWarp(w5, p)); m = Math.max(m, Math.hypot(a.x - b.x, a.y - b.y)); } return m; };
+    const rot90 = p => ({ x: 600 - p.y, y: p.x }), rot180 = p => ({ x: 600 - p.x, y: 600 - p.y }), swap = p => ({ x: p.y, y: p.x });
+    check(`symmetry of the whole field at focus 0.5: rot90 (${sym(rot90).toFixed(0)} px) and rot180 (${sym(rot180).toFixed(0)} px) break, the diagonal swap stays exact (${sym(swap).toExponential(0)})`, sym(rot90) > 10 && sym(rot180) > 10 && sym(swap) < 1e-11);
+    const wa = sbN.makeNetWarp({ ...sp5, x: { ...sp5.x, alternate: true } }, fr5, 3, 5); let al = 0; for (let n = 0; n < 200; n++) { const p = { x: rnd() * 600, y: rnd() * 600 }, a = sbN.applyNetWarp(wa, p), b = sbN.applyNetWarp(w5, p); al = Math.max(al, Math.hypot(a.x - b.x, a.y - b.y)); }
+    check('alternate is inert in a focused field (no seams: one law spans the field; the flags are forced off)', al === 0);
+    const e = sbN.netTransformExportData(sp5, 4, 5), P = sbN.netFieldLaw(sp5.x, 5).field.P;
+    check('the Field export carries the focus (no focusIgnored): focus 0.5, the rescaled a = 1.3/1.5, alternate false, tileBoundaries === P_k', e.focusIgnored === undefined && e.x.focus === 0.5 && Math.abs(e.x.a - 1.3 / 1.5) < 1e-12 && e.x.alternate === false && JSON.stringify(e.tileBoundaries.x) === JSON.stringify(P));
+    const Lf = sbN.netGridLines({ x: sp5.x, y: 'same' }, [{ x: 240, y: 240 }, { x: 360, y: 240 }, { x: 360, y: 360 }, { x: 240, y: 360 }], 3, { x0: 0, y0: 0, x1: 600, y1: 600 }, { domain: 'field', fieldTiles: 5 });
+    const mac = Lf.filter(l => l.axis === 'v' && l.level === 'macro').map(l => l.x1).sort((a, b) => a - b);
+    check('the overlay\'s macro lines sit at 120 * P_k (the tile boundaries), asymmetric about the centre', mac.length === 6 && mac.every((x, k) => Math.abs(x - 120 * P[k]) < 1e-9) && Math.abs(mac[1] - (600 - mac[4])) > 10);
     const blocks = (spec, sf, sheet) => { const sb = makeSb(SRC_NEW, 4, sf, 'none'); sb.baseNetTransform = spec; return sb.netWarpBlocksFaces(sheet); };
-    check('face eligibility is untouched: Single/Tiled with a focus still refuse faces; a Field base sheet (with or without a focus) still allows them; layers refused', blocks({ x: { kind: 'trig', w: -1, focus: 0.5 }, y: 'same' }, 1) === true && blocks({ x: { kind: 'trig', w: -1, focus: 0.5 }, y: 'same', repeat: true }, 3) === true && blocks(spF, 3) === false && blocks(spN, 3) === false && blocks(spF, 3, {}) === true);
+    const spN = { x: { kind: 'trig', w: -1 }, y: 'same', domain: 'field' };
+    check('face eligibility is untouched: Single/Tiled with a focus still refuse faces; a Field base sheet (focused or not) allows them; layers refused', blocks({ x: { kind: 'trig', w: -1, focus: 0.5 }, y: 'same' }, 1) === true && blocks({ x: { kind: 'trig', w: -1, focus: 0.5 }, y: 'same', repeat: true }, 3) === true && blocks(sp5, 3) === false && blocks(spN, 3) === false && blocks(sp5, 3, {}) === true);
 }
 
 // ============ 7. export/import, overlay, UI wiring ============
@@ -178,7 +213,7 @@ console.log('\n== 7. export, overlay, UI ==');
     console.log('   overlay gaps, sinus c=0.5:', g.join(' '));
     check('the overlay draws the asymmetric net: gaps 50.4 80.8 104.6 119.7 124.9 119.7 from the lines themselves', JSON.stringify(g) === JSON.stringify([50.4, 80.8, 104.6, 119.7, 124.9, 119.7]));
     const ui = fs.readFileSync(path.join(ROOT, 'sketch.js'), 'utf8'), html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-    check('UI wiring present: slider input, per-axis focus in fresh(), focus only in the spec when non-zero, hidden in a Field', /focusInput\.input\(/.test(ui) && /focus: 0 \}\)/.test(ui) && /c\.focus \? \{ kind: 'trig', w: -c\.strength, focus: c\.focus/.test(ui) && /focusRow\.elt\.hidden = !trig \|\| ui\.domain === 'field'/.test(ui) && /id="net-focus-input"/.test(html));
+    check('UI wiring present: slider input, per-axis focus in fresh(), focus only in the spec when non-zero, also in a Field (the row is shown whenever the law is trig)', /focusInput\.input\(/.test(ui) && /focus: 0 \}\)/.test(ui) && /c\.focus \? \{ kind: 'trig', w: -c\.strength, focus: c\.focus/.test(ui) && /focusRow\.elt\.hidden = !trig;/.test(ui) && /id="net-focus-input"/.test(html));
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
