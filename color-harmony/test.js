@@ -119,15 +119,15 @@ test('hueCircle: custom counts and invalid counts', () => {
   }
 });
 
-test('triangle: 36 discrete valid fields per hue and deterministic letter ordering', () => {
+test('triangle: 28 chromatic atlas fields per hue and deterministic letter ordering', () => {
   const letters = ['a', 'c', 'e', 'g', 'i', 'l', 'n', 'p'];
   for (let hue = 1; hue <= 24; hue++) {
     const fields = OstwaldColor.triangle(hue);
-    assert.equal(fields.length, 36);
+    assert.equal(fields.length, 28);
     fields.forEach(complete);
-    assert.equal(fields.filter(f => Math.abs(f.v) < 1e-10).length, 8);
+    assert.ok(fields.every(f => f.v > 0 && f.source === 'atlas'));
     assert.deepEqual(fields.map(f => f.label), letters.flatMap((white, i) =>
-      letters.slice(0, i + 1).map(black => `${hue}${white}${black}`)));
+      letters.slice(0, i).map(black => `${hue}${white}${black}`)));
   }
   near(selected.w, 0.1413);
   near(selected.s, 0.4377);
@@ -147,18 +147,16 @@ test('triangle: invalid hueIndex and undefined resolutions rejected', () => {
 test('harmonies: all fields preserve exact discrete series relationships', () => {
   for (const field of triangle) {
     const harmony = OstwaldColor.harmonies(field);
-    for (const [key, share] of [['isotints', 'w'], ['isotones', 's'], ['shadowSeries', 'v']]) {
+    for (const [key, share] of [['isotints', 'w'], ['isotones', 's'], ['analyticIsochromes', 'v']]) {
       const expected = triangle.filter(f => f.label !== field.label && Math.abs(f[share] - field[share]) <= 1e-10);
       assert.deepEqual(harmony[key], expected);
       harmony[key].forEach(f => { complete(f); near(f[share], field[share]); });
     }
   }
   const harmony = OstwaldColor.harmonies(selected);
-  assert.equal(harmony.isotints.length, 4);
-  assert.equal(harmony.isotones.length, 6);
-  assert.deepEqual(harmony.shadowSeries, []);
-  const neutral = triangle.find(f => f.label === '5aa');
-  assert.equal(OstwaldColor.harmonies(neutral).shadowSeries.length, 7);
+  assert.equal(harmony.isotints.length, 3);
+  assert.equal(harmony.isotones.length, 5);
+  assert.deepEqual(harmony.analyticIsochromes, []);
 });
 
 test('harmonies: complementary, triad and tetrad offsets, including wraparound', () => {
@@ -199,9 +197,9 @@ test('context: custom Oklab anchors drive default triangles and hue transfer', (
     hue.lab = [0.6, hue.lab[1] * 0.8, hue.lab[2] * 0.8];
     hue.rgb = OstwaldColor.mix(hue.lab, 0, 0).rgb;
   }
-  const field = { ...selected, ...OstwaldColor.mix(custom[4].lab, selected.w, selected.s) };
+  const field = { ...selected, ...OstwaldColor.mix(custom[4].lab, selected.w, selected.s), label: selected.label, source: 'atlas' };
   const result = OstwaldColor.harmonies(field, { hueCircle: custom });
-  assert.equal(result.isotints.length, 4);
+  assert.equal(result.isotints.length, 3);
   const complement = result.hueHarmonies[0].fields[0];
   assert.deepEqual(complement.lab, OstwaldColor.mix(custom[16].lab, field.w, field.s).lab);
   assert.throws(() => OstwaldColor.harmonies(selected, { hueCircle: custom }), /lab/);
@@ -230,6 +228,73 @@ test('context: reject malformed circles, triangles and unknown settings', () => 
     Object.assign(invalid[0], patch);
     assert.throws(() => OstwaldColor.harmonies(selected, { hueCircle: invalid }), Error);
   }
+});
+
+test('atlas: 672 chromatic nodes and eight shared grays', () => {
+  const atlas = circle.flatMap(hue => OstwaldColor.triangle(hue.index));
+  assert.equal(atlas.length, 672);
+  assert.equal(new Set(atlas.map(f => f.label)).size, 672);
+  assert.ok(atlas.every(f => f.v > 0));
+  const grays = OstwaldColor.grayAxis();
+  assert.equal(grays.length, 8);
+  assert.deepEqual(grays.map(g => g.letter), ['a', 'c', 'e', 'g', 'i', 'l', 'n', 'p']);
+  grays.forEach((gray, i) => {
+    assert.equal(gray.v, 0);
+    assert.equal(gray.source, 'atlas');
+    assert.equal(gray.label, gray.letter);
+    assert.ok(!Object.hasOwn(gray, 'hueIndex'));
+    near(gray.w, OstwaldColor.letterScale()[i].value);
+    near(gray.w + gray.s, 1);
+    assert.deepEqual(gray.lab, [gray.w, 0, 0]);
+    assert.equal(new Set(gray.rgb).size, 1);
+  });
+});
+
+test('shadow regression: ga–ic–le–ng–pi preserves rounded v/w, not v', () => {
+  const series = OstwaldColor.harmonies(selected).shadowSeries;
+  assert.deepEqual(series.map(f => f.label), ['5ga', '5ic', '5le', '5ng', '5pi']);
+  const expected = [
+    [0.2239, 0.1087, 0.6674], [0.1413, 0.4377, 0.4210],
+    [0.0891, 0.6452, 0.2657], [0.0562, 0.7761, 0.1677], [0.0355, 0.8587, 0.1058]
+  ];
+  series.forEach((f, i) => {
+    complete(f);
+    [f.w, f.s, f.v].forEach((c, j) => near(c, expected[i][j]));
+    if (i) assert.ok(f.s > series[i - 1].s);
+    // First-order plus bounded-denominator propagation of ±0.00005 per letter.
+    const ratioError = item => 0.00005 * ((1 - item.s) + item.w) /
+      (item.w * (item.w - 0.00005));
+    near(f.v / f.w, selected.v / selected.w, ratioError(f) + ratioError(selected));
+  });
+  assert.ok(new Set(series.map(f => f.v)).size > 1);
+  assert.deepEqual(OstwaldColor.harmonies(selected, { triangle: [...triangle].reverse() }).shadowSeries, series);
+});
+
+test('isovalent: all 24 hues at the same register, independent of hue chords', () => {
+  const harmony = OstwaldColor.harmonies(selected);
+  assert.deepEqual(harmony.isovalent.map(f => f.hueIndex), Array.from({ length: 24 }, (_, i) => i + 1));
+  harmony.isovalent.forEach(f => {
+    complete(f);
+    assert.equal(f.label, `${f.hueIndex}ic`);
+    for (const key of ['w', 's', 'v']) near(f[key], selected[key]);
+  });
+  harmony.hueHarmonies.forEach(chord => chord.fields.forEach(f =>
+    assert.deepEqual(f, harmony.isovalent[f.hueIndex - 1])));
+  harmony.hueHarmonies[0].fields[0].rgb[0] = -1;
+  assert.ok(harmony.isovalent[16].rgb[0] >= 0);
+});
+
+test('gray companions: actual shared gray nodes at equal w or s', () => {
+  const grays = OstwaldColor.grayAxis();
+  for (const field of triangle) {
+    const { sameWhite, sameBlack } = OstwaldColor.harmonies(field).grayHarmonies;
+    assert.deepEqual(sameWhite, grays.find(g => g.letter === field.label.at(-2)));
+    assert.deepEqual(sameBlack, grays.find(g => g.letter === field.label.at(-1)));
+    near(sameWhite.w, field.w);
+    near(sameBlack.s, field.s);
+  }
+  grays[0].rgb[0] = -1;
+  assert.ok(OstwaldColor.grayAxis()[0].rgb[0] >= 0);
 });
 
 console.log(`\n${passed} tests passed.`);

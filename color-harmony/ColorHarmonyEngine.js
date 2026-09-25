@@ -5,7 +5,10 @@
  * Oklab is the sole mixing space; historical pigment/disc colors are not reproduced.
  * All `lab` arrays mean Oklab, never CIELAB. No framework or browser state is used.
  */
+// Absolute roundoff tolerance for coordinates, Oklab and continuous constraints.
 const EPSILON = 1e-10;
+// Each tabulated letter value is rounded to four decimal places (half a last unit).
+const LETTER_ROUNDING_EPSILON = 0.00005;
 const SCALE = Object.freeze([
   ['a', 0.8913], ['c', 0.5623], ['e', 0.3548], ['g', 0.2239],
   ['i', 0.1413], ['l', 0.0891], ['n', 0.0562], ['p', 0.0355]
@@ -111,7 +114,7 @@ function buildHueReferences(n) {
     const lab = anchorLab(anchor);
     return {
       index: i + 1, rgb: oklabToRgb(lab), lab,
-      group: GROUPS[Math.floor(i * 8 / n)], calibrated: anchor.calibrated
+      group: GROUPS[Math.floor(i * 8 / n)], calibrated: anchor.calibrated, source: 'reference'
     };
   });
 }
@@ -121,7 +124,7 @@ function makeField(hueIndex, white, black, circle) {
   return {
     hueIndex,
     ...OstwaldColor.mix(circle[hueIndex - 1].lab, white.value, 1 - black.value),
-    label: `${hueIndex}${white.letter}${black.letter}`
+    label: `${hueIndex}${white.letter}${black.letter}`, source: 'atlas'
   };
 }
 
@@ -130,7 +133,7 @@ function buildTriangle(hueIndex, circle) {
   const fields = [];
   for (const white of SCALE) {
     for (const black of SCALE) {
-      if (black.value - white.value >= -EPSILON) {
+      if (black.value - white.value > EPSILON) {
         fields.push(makeField(hueIndex, white, black, circle));
       }
     }
@@ -167,7 +170,8 @@ function validateField(field, circle) {
   if (!match || Number(match[1]) !== field.hueIndex) throw new Error('Unknown field label or mismatched hueIndex');
   const white = SCALE.find(item => item.letter === match[2]);
   const black = SCALE.find(item => item.letter === match[3]);
-  if (white.value > black.value) throw new Error('Unknown field: letter pair is outside the triangle');
+  if (white.value >= black.value) throw new Error('Unknown chromatic atlas field: use grayAxis() for neutral values');
+  if (field.source !== undefined && field.source !== 'atlas') throw new Error('Discrete field source must be atlas');
   coordinates(field.w, field.s);
   const expected = makeField(field.hueIndex, white, black, circle);
   for (const key of ['w', 's', 'v']) {
@@ -183,13 +187,48 @@ function validateField(field, circle) {
   return expected;
 }
 
+/** Rounded atlas ratio interval: v/w = blackLetterValue/whiteLetterValue - 1.
+ * Propagate the letter precision instead of using an empirically fitted ratio epsilon.
+ * Only called for validated chromatic atlas nodes, whose w exceeds the rounding unit.
+ */
+function shadowRatioInterval(field) {
+  const b = 1 - field.s;
+  return [
+    (b - LETTER_ROUNDING_EPSILON) / (field.w + LETTER_ROUNDING_EPSILON) - 1,
+    (b + LETTER_ROUNDING_EPSILON) / (field.w - LETTER_ROUNDING_EPSILON) - 1
+  ];
+}
+
+/** Two rounded atlas nodes match when their possible exact ratio intervals overlap. */
+function sameShadowSeries(left, right) {
+  const a = shadowRatioInterval(left);
+  const b = shadowRatioInterval(right);
+  return Math.max(a[0], b[0]) <= Math.min(a[1], b[1]) + EPSILON;
+}
+
+/** Independent result objects, including their mutable color arrays. */
+function copyColor(field) {
+  return { ...field, rgb: field.rgb.slice(), lab: field.lab.slice() };
+}
+
+/** Select regular subdivisions of an isovalent register, excluding the source hue.
+ * Future equal subdivisions only need another count dividing the circle size.
+ */
+function regularHueSubdivision(register, hueIndex, count) {
+  if (!Number.isInteger(count) || count < 2 || register.length % count !== 0) {
+    throw new RangeError('Subdivision count must divide the hue circle length');
+  }
+  return Array.from({ length: count - 1 }, (_, i) =>
+    copyColor(register[(hueIndex - 1 + (i + 1) * register.length / count) % register.length]));
+}
+
 /** Framework-independent contemporary realization of Ostwald's relational structure. */
 class OstwaldColor {
   /**
    * Build a contemporary Oklab hue circle, not historical Ostwald pigment/disc colors.
    * Constant L=0.72, C=0.10, angles 115 - i*360/n degrees; fresh arrays each call.
    * @param {number} [n=24] Positive safe integer; only n=24 is used for field APIs.
-   * @returns {Array<{index:number, rgb:number[], lab:number[], group:string, calibrated:boolean}>}
+   * @returns {Array<{index:number, rgb:number[], lab:number[], group:string, calibrated:boolean,source:string}>}
    * @throws {RangeError} If n is not a positive safe integer / valid JS array length.
    */
   static hueCircle(n = 24) {
@@ -209,11 +248,11 @@ class OstwaldColor {
   }
 
   /**
-   * Generate the 36 valid fields, including eight v=0 neutral boundary fields.
+   * Generate the 28 chromatic atlas fields; the eight shared grays live in grayAxis().
    * Order: white letter a,c,e,g,i,l,n,p outer; black letter same order inner.
    * @param {number} hueIndex One-based integer in 1..24.
    * @param {number} [steps=8] Exactly 8; other resolutions are not defined.
-   * @returns {Array<{hueIndex:number,w:number,s:number,v:number,label:string,rgb:number[],lab:number[]}>}
+   * @returns {Array<{hueIndex:number,w:number,s:number,v:number,label:string,rgb:number[],lab:number[],source:string}>}
    * @throws {RangeError} For invalid hueIndex or steps other than 8.
    */
   static triangle(hueIndex, steps = 8) {
@@ -223,12 +262,24 @@ class OstwaldColor {
   }
 
   /**
+   * Return the eight shared achromatic atlas nodes, in letter-scale order.
+   * These are counted once for the whole atlas and have no hueIndex.
+   * @returns {Array<{letter:string,label:string,w:number,s:number,v:number,rgb:number[],lab:number[],source:string}>}
+   */
+  static grayAxis() {
+    return SCALE.map(({ letter, value }) => ({
+      ...this.mix(BLACK, value, 1 - value),
+      v: 0, letter, label: letter, source: 'atlas'
+    }));
+  }
+
+  /**
    * Mix v*V + w*[1,0,0] + s*[0,0,0] componentwise exclusively in Oklab.
    * Clip only linear sRGB output before gamma encoding and integer rounding.
    * @param {number[]} fullColorLab Finite Oklab [L,a,b]; out-of-gamut values allowed.
    * @param {number} w White share >=0, with w+s<=1 (roundoff tolerance 1e-10).
    * @param {number} s Black share >=0, with w+s<=1 (roundoff tolerance 1e-10).
-   * @returns {{w:number,s:number,v:number,lab:number[],rgb:number[]}} Unclipped Oklab and display RGB.
+   * @returns {{w:number,s:number,v:number,lab:number[],rgb:number[],label:null,source:string}} Unclipped Oklab and display RGB.
    * @throws {TypeError|RangeError} For malformed Lab, nonfinite shares, invalid geometry or overflow.
    */
   static mix(fullColorLab, w, s) {
@@ -237,11 +288,12 @@ class OstwaldColor {
     oklabToRgb(fullColorLab);
     const shares = coordinates(w, s);
     const lab = fullColorLab.map((c, i) => shares.v * c + shares.w * WHITE[i] + shares.s * BLACK[i]);
-    return { ...shares, lab, rgb: oklabToRgb(lab) };
+    return { ...shares, lab, rgb: oklabToRgb(lab), label: null, source: 'interpolated' };
   }
 
   /**
-   * Find other discrete fields at constant w, s or v, plus 24-part hue chords.
+   * Find discrete constant-w/s/v relations, rounded constant-v/w shadow series,
+   * isovalent registers, gray companions and regular 24-part hue chords.
    * Regular circle relationships are translated into a contemporary programmatic
    * form; this API is not claimed to be a historical formulation by Ostwald.
    * @param {object} field Complete field object from the specified data basis.
@@ -249,8 +301,9 @@ class OstwaldColor {
    * @param {object[]} [context.hueCircle] Exactly 24 ordered references with index/rgb/lab.
    * @param {object[]} [context.triangle] Nonempty subset of same-hue discrete fields,
    * including field; must agree with hueCircle. Input order determines series order.
-   * @returns {{isotints:object[],isotones:object[],shadowSeries:object[],hueHarmonies:object[]}}
-   * Series exclude the selected field. Hue objects have type and complete fields,
+   * @returns {{isotints:object[],isotones:object[],analyticIsochromes:object[],shadowSeries:object[],isovalent:object[],grayHarmonies:object,hueHarmonies:object[]}}
+   * Constant-w/s/v series exclude the source. Shadow series include it, sorted by s.
+   * Isovalent registers include all 24 hues, sorted by index. Hue objects have type and complete fields,
    * excluding the selected hue: complementary [+12], triad [+8,+16], tetrad [+6,+12,+18].
    * @throws {TypeError|RangeError|Error} For invalid data, unknown fields, duplicates,
    * inconsistent colors/coordinates, wrong-hue triangles or unknown context keys.
@@ -277,15 +330,23 @@ class OstwaldColor {
     if (!labels.has(selected.label)) throw new Error('Unknown field: not present in context.triangle');
     const series = key => fields
       .filter(item => item.label !== selected.label && Math.abs(item[key] - selected[key]) <= EPSILON)
-      .map(item => ({ ...item, rgb: item.rgb.slice(), lab: item.lab.slice() }));
+      .map(copyColor);
     const white = SCALE.find(item => item.letter === selected.label.slice(-2, -1));
     const black = SCALE.find(item => item.letter === selected.label.slice(-1));
-    const chords = [['complementary', [12]], ['triad', [8, 16]], ['tetrad', [6, 12, 18]]];
+    const isovalent = circle.map(hue => makeField(hue.index, white, black, circle));
+    const grays = this.grayAxis();
+    const chords = [['complementary', 2], ['triad', 3], ['tetrad', 4]];
     return {
-      isotints: series('w'), isotones: series('s'), shadowSeries: series('v'),
-      hueHarmonies: chords.map(([type, offsets]) => ({
-        type,
-        fields: offsets.map(offset => makeField((selected.hueIndex - 1 + offset) % 24 + 1, white, black, circle))
+      isotints: series('w'), isotones: series('s'), analyticIsochromes: series('v'),
+      shadowSeries: fields.filter(item => sameShadowSeries(item, selected))
+        .sort((a, b) => a.s - b.s || a.label.localeCompare(b.label)).map(copyColor),
+      isovalent,
+      grayHarmonies: {
+        sameWhite: copyColor(grays.find(gray => Math.abs(gray.w - selected.w) <= EPSILON)),
+        sameBlack: copyColor(grays.find(gray => Math.abs(gray.s - selected.s) <= EPSILON))
+      },
+      hueHarmonies: chords.map(([type, count]) => ({
+        type, fields: regularHueSubdivision(isovalent, selected.hueIndex, count)
       }))
     };
   }
