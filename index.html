@@ -670,7 +670,7 @@
            netControlsSync(), which also disables the curve / free / face toggles while a warp is in
            force (their note is #net-locks-note). Kind picks the spacing law; Strength is its one
            continuous scalar (core/netwarp.js's w); Axes: both the same, or X / Y separately;
-           Reverse and Alternate tiles are geometric-only. The laws are this project's
+           Reverse is geometric-only; Alternate tiles: geometric, or a trig law with a Focus. The laws are this project's
            interpretation of Hinterreiter's figures, not his equations (see core/netwarp.js). -->
       <div class="control-group" id="net-group" hidden>
         <label>Net (Netzart 1)</label>
@@ -692,6 +692,16 @@
             <span id="net-strength-value">0.50</span>
           </div>
         </div>
+        <!-- Focus (trig laws, Single/Tiled only): shifts the window of the sinus/tangens law so its widest/narrowest mesh sits at
+             tile position (1 + focus)/2 instead of the centre; 0 = the symmetric law. Hidden in a Field (not applicable there). -->
+        <div id="net-focus-row" hidden>
+          <label for="net-focus-input" title="Where the widest (sinus) / narrowest (tangens) mesh sits in the tile: -1 = left edge, 0 = centre, +1 = right edge">Focus</label>
+          <div class="icon-row">
+            <input type="range" id="net-focus-input" min="-100" max="100" step="5" value="0">
+            <span id="net-focus-value">0.00</span>
+          </div>
+        </div>
+        <div id="net-focus-hint" hidden></div>
         <!-- Macro cells (nested net): the divisors of E that are >= 3, as macro x micro - filled by sketch.js's
              netControlsSync(); hidden without a warp or when E has no such divisor below E. -->
         <div id="net-macro-row" hidden>
@@ -1187,18 +1197,18 @@
        the p5.js CDN tag - that URL already carries its own version
        (p5@1.9.0), so a version bump there naturally changes the URL. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260925e"></script>
-  <script src="core/state.js?v=20260925e"></script>
-  <script src="core/symmetry.js?v=20260925e"></script>
-  <script src="core/curves.js?v=20260925e"></script>
-  <script src="core/netwarp.js?v=20260925e"></script>
-  <script src="core/tiling.js?v=20260925e"></script>
-  <script src="core/faces.js?v=20260925e"></script>
-  <script src="core/orbits.js?v=20260925e"></script>
-  <script src="core/color.js?v=20260925e"></script>
-  <script src="core/facecolor.js?v=20260925e"></script>
-  <script src="core/export.js?v=20260925e"></script>
-  <script src="sketch.js?v=20260925e"></script>
+  <script src="core/forms.js?v=20260925f"></script>
+  <script src="core/state.js?v=20260925f"></script>
+  <script src="core/symmetry.js?v=20260925f"></script>
+  <script src="core/curves.js?v=20260925f"></script>
+  <script src="core/netwarp.js?v=20260925f"></script>
+  <script src="core/tiling.js?v=20260925f"></script>
+  <script src="core/faces.js?v=20260925f"></script>
+  <script src="core/orbits.js?v=20260925f"></script>
+  <script src="core/color.js?v=20260925f"></script>
+  <script src="core/facecolor.js?v=20260925f"></script>
+  <script src="core/export.js?v=20260925f"></script>
+  <script src="sketch.js?v=20260925f"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

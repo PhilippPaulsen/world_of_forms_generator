@@ -595,9 +595,10 @@ function setup() {
         const NET_R_MAX = 8;
         const kindBtns = selectAll('.net-kind-btn'), axesBtns = selectAll('.net-axes-btn');
         const strengthInput = select('#net-strength-input'), strengthValue = select('#net-strength-value'), strengthRow = select('#net-strength-row');
+        const focusRow = select('#net-focus-row'), focusInput = select('#net-focus-input'), focusValue = select('#net-focus-value'), focusHint = select('#net-focus-hint');
         const geoRow = select('#net-geo-row'), reverseBtn = select('#net-reverse-btn'), alternateBtn = select('#net-alternate-btn');
         const note = select('#net-locks-note');
-        const fresh = () => ({ mode: 'regular', strength: 0.5, reverse: false, alternate: false });
+        const fresh = () => ({ mode: 'regular', strength: 0.5, reverse: false, alternate: false, focus: 0 });
         const ui = { axes: 'both', domain: 'single', macro: undefined, x: fresh(), y: fresh() };
         const sizeHint = select('#net-size-hint');
         // Domain (Single | Tiled | Field): ui.domain mirrors the state (baseNetTransform.domain / .repeat). Field is only valid
@@ -615,8 +616,8 @@ function setup() {
         const showMacroNote = text => { macroNote.html(text); macroNote.elt.hidden = false; clearTimeout(macroNoteTimer); macroNoteTimer = setTimeout(() => { macroNote.elt.hidden = true; }, 9000); };
         const target = () => (ui.axes === 'y' ? ui.y : ui.x);
         const axisSpec = c => c.mode === 'regular' ? { kind: 'uniform', w: 0 }
-            : c.mode === 'sinus' ? { kind: 'trig', w: -c.strength }
-            : c.mode === 'tangens' ? { kind: 'trig', w: c.strength }
+            : c.mode === 'sinus' ? (c.focus ? { kind: 'trig', w: -c.strength, focus: c.focus, alternate: c.alternate } : { kind: 'trig', w: -c.strength })
+            : c.mode === 'tangens' ? (c.focus ? { kind: 'trig', w: c.strength, focus: c.focus, alternate: c.alternate } : { kind: 'trig', w: c.strength })
             : { kind: 'geometric', w: (c.reverse ? -1 : 1) * c.strength * Math.log(NET_R_MAX), alternate: c.alternate };
         function commit() {
             if (ui.axes === 'both') ui.y = Object.assign({}, ui.x);
@@ -633,7 +634,15 @@ function setup() {
             strengthRow.elt.hidden = c.mode === 'regular';
             strengthInput.value(Math.round(c.strength * 100));
             strengthValue.html(c.mode === 'geometric' ? '\u00d7' + Math.pow(NET_R_MAX, c.strength).toFixed(1) : c.strength.toFixed(2));
-            geoRow.elt.hidden = c.mode !== 'geometric';
+            // Focus (trig laws, Single/Tiled): moves the widest (sinus) / narrowest (tangens) mesh off the tile centre; not in a Field
+            const trig = c.mode === 'sinus' || c.mode === 'tangens', geo = c.mode === 'geometric';
+            focusRow.elt.hidden = !trig || ui.domain === 'field';
+            focusInput.value(Math.round((c.focus || 0) * 100)); focusValue.html((c.focus || 0).toFixed(2));
+            const anyFocus = [ui.x, ui.axes === 'both' ? ui.x : ui.y].some(a => (a.mode === 'sinus' || a.mode === 'tangens') && a.focus);
+            focusHint.elt.hidden = !(anyFocus && ui.domain !== 'field');
+            if (!focusHint.elt.hidden) focusHint.html('Focus breaks the 90\u00b0/180\u00b0 rotation and the axis-mirror symmetry of the warped image; the diagonal mirror stays only while X and Y share the same focus. Macro 2 becomes meaningful (see Macro cells).');
+            geoRow.elt.hidden = !(geo || (trig && c.focus));   // Alternate tiles: geometric, or a trig law with a focus (it is inert at focus 0)
+            reverseBtn.elt.hidden = !geo;
             domainBtns.forEach(b => b.elt.classList.toggle('active', b.elt.dataset.domain === ui.domain));
             alternateBtn.elt.hidden = ui.domain !== 'tiled'; // tile-seam parity only exists between repeated (Tiled) tiles
             reverseBtn.elt.classList.toggle('active', c.reverse);
@@ -645,6 +654,7 @@ function setup() {
             if (next !== 'both' && ui.axes === 'both') ui.y = Object.assign({}, ui.x); // start X and Y from the shared law
             ui.axes = next; commit();
         }));
+        focusInput.input(() => { target().focus = parseInt(focusInput.value()) / 100; commit(); });
         strengthInput.input(() => { target().strength = parseInt(strengthInput.value()) / 100; commit(); });
         domainBtns.forEach(b => b.mousePressed(() => {
             const d = b.elt.dataset.domain;
@@ -675,7 +685,7 @@ function setup() {
             fieldHint.elt.hidden = fieldOk;
             const isField = ui.domain === 'field', E0 = nodeCount - 1;
             fieldInfo.elt.hidden = !(active && isField);
-            if (active && isField) fieldInfo.html(`Field: macro = R = ${R} tiles, micro = E = ${E0} per tile.`);
+            if (active && isField) fieldInfo.html(`Field: macro = R = ${R} tiles, micro = E = ${E0} per tile.` + ([ui.x, ui.y].some(a => (a.mode === 'sinus' || a.mode === 'tangens') && a.focus) ? ' Focus does not apply in a Field.' : ''));
             // The Shape Size hint says what Shape Size does in the CURRENT mode
             const hintText = !active ? null
                 : ui.domain === 'single' ? (R > 1 ? 'Single: one closed net. Shape Size 1 fills the canvas, larger sizes give a smaller net; Field (odd Shape Size 3-9) spreads the law over all the tiles instead.' : null)
@@ -697,7 +707,7 @@ function setup() {
             }
             macroRow.elt.hidden = !(active && nested && !isField);   // in a Field the micro grid is the clicked tile's own (see fieldInfo)
             macroHint.elt.hidden = !(active && !nested && !isField);
-            if (active && !nested && !isField) { const geo = netSpecAllGeometric(baseNetTransform); macroHint.html(`Macro cells: not available for E = ${E} (Node Count ${nodeCount}) - E needs a divisor from ${geo ? 2 : 3} up to E \u2212 1, e.g. E = ${geo ? '4, 6, 8, 9, 10, 12' : '6, 8, 9, 10, 12'}.`); }
+            if (active && !nested && !isField) { const geo = netSpecMacro2Real(baseNetTransform); macroHint.html(`Macro cells: not available for E = ${E} (Node Count ${nodeCount}) - E needs a divisor from ${geo ? 2 : 3} up to E \u2212 1, e.g. E = ${geo ? '4, 6, 8, 9, 10, 12' : '6, 8, 9, 10, 12'}.`); }
             const sig = `${E}|${ui.macro}|${active && nested && !isField}|${options.join(',')}`;
             if (sig !== macroSig) {
                 macroSig = sig; macroBtns.elt.innerHTML = '';
