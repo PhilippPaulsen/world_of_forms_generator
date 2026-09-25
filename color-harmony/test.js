@@ -297,4 +297,229 @@ test('gray companions: actual shared gray nodes at equal w or s', () => {
   assert.ok(OstwaldColor.grayAxis()[0].rgb[0] >= 0);
 });
 
+const PATH_TYPES = ['isotint', 'isotone', 'analyticIsochrome', 'shadowSeries'];
+function validSample(sample) {
+  assert.equal(sample.source, 'interpolated');
+  assert.equal(sample.label, null);
+  assert.ok(sample.w >= 0 && sample.s >= 0 && sample.v >= 0);
+  near(sample.w + sample.s + sample.v, 1);
+  assert.equal(sample.lab.length, 3);
+  assert.ok(sample.lab.every(Number.isFinite));
+  assert.equal(sample.rgb.length, 3);
+  assert.ok(sample.rgb.every(c => Number.isInteger(c) && c >= 0 && c <= 255));
+}
+function invariant(sample, type, source) {
+  if (type === 'isotint') near(sample.w, source.w);
+  else if (type === 'isotone') near(sample.s, source.s);
+  else if (type === 'analyticIsochrome') near(sample.v, source.v);
+  else {
+    near(sample.v * source.w, sample.w * source.v);
+    if (source.w > 0 && sample.w > 0) near(sample.v / sample.w, source.v / source.w);
+  }
+}
+
+test('paths: explicit constraints and maximal endpoints for all four relations', () => {
+  const paths = OstwaldColor.harmonies(selected).paths;
+  assert.deepEqual(Object.keys(paths), PATH_TYPES);
+  assert.deepEqual(paths.isotint.constraint, { kind: 'constant', coordinate: 'w', value: selected.w });
+  assert.deepEqual(paths.isotone.constraint, { kind: 'constant', coordinate: 's', value: selected.s });
+  assert.deepEqual(paths.analyticIsochrome.constraint, { kind: 'constant', coordinate: 'v', value: selected.v });
+  for (const [type, path] of Object.entries(paths)) {
+    assert.equal(path.type, type);
+    assert.equal(path.hueIndex, 5);
+    assert.deepEqual(path.sourceField, selected);
+    assert.deepEqual(path.fullColorLab, circle[4].lab);
+    assert.equal(path.domain.parameter, 't');
+    assert.equal(path.domain.min, 0);
+    assert.equal(path.domain.max, 1);
+    for (const end of [path.domain.start, path.domain.end]) {
+      near(end.w + end.s + end.v, 1);
+      assert.ok([end.w, end.s, end.v].some(x => x === 0));
+      invariant(end, type, selected);
+    }
+  }
+  assert.equal(paths.shadowSeries.constraint.ratioStatus, 'finite');
+  assert.equal(paths.shadowSeries.constraint.blackEndpoint, 'limit');
+  near(paths.shadowSeries.domain.start.w, selected.w / (selected.w + selected.v));
+  assert.deepEqual(paths.shadowSeries.domain.end, { w: 0, s: 1, v: 0 });
+});
+
+test('sampling: all paths through all 672 atlas nodes preserve analytical invariants', () => {
+  for (const hue of circle) {
+    for (const field of OstwaldColor.triangle(hue.index)) {
+      for (const [type, path] of Object.entries(OstwaldColor.harmonies(field).paths)) {
+        const samples = OstwaldColor.sampleHarmonyPath(path, 9);
+        assert.equal(samples.length, 9);
+        samples.forEach(sample => {
+          validSample(sample);
+          invariant(sample, type, field);
+          assert.deepEqual(sample.lab, OstwaldColor.mix(hue.lab, sample.w, sample.s).lab);
+        });
+      }
+    }
+  }
+});
+
+test('sampling: path survives empty discrete matches and restricted atlas contexts', () => {
+  const result = OstwaldColor.harmonies(selected, { triangle: [selected] });
+  assert.deepEqual(result.analyticIsochromes, []);
+  assert.deepEqual(result.isotints, []);
+  assert.deepEqual(result.isotones, []);
+  assert.deepEqual(result.shadowSeries, [selected]);
+  assert.equal(result.isovalent.length, 24);
+  assert.deepEqual(result.paths, OstwaldColor.harmonies(selected).paths);
+  const samples = OstwaldColor.sampleHarmonyPath(result.paths.analyticIsochrome, 5);
+  assert.equal(samples.length, 5);
+  assert.ok(samples[0].w !== samples[4].w);
+  samples.forEach(sample => invariant(sample, 'analyticIsochrome', selected));
+});
+
+test('sampling: JSON serialization, midpoint for count=1 and inclusive endpoints', () => {
+  for (const path of Object.values(OstwaldColor.harmonies(selected).paths)) {
+    const before = clone(path);
+    const one = OstwaldColor.sampleHarmonyPath(path, 1);
+    const three = OstwaldColor.sampleHarmonyPath(clone(path), 3);
+    assert.deepEqual(one, [three[1]]);
+    for (const key of ['w', 's', 'v']) {
+      near(three[0][key], path.domain.start[key]);
+      near(three[2][key], path.domain.end[key]);
+    }
+    assert.deepEqual(path, before);
+    one[0].lab[0] = -1;
+    assert.deepEqual(path, before);
+  }
+});
+
+test('sampling: custom calibration is captured and does not depend on later context changes', () => {
+  const custom = clone(circle);
+  custom[4].lab = [0.6, 0.04, 0.02];
+  custom[4].rgb = OstwaldColor.mix(custom[4].lab, 0, 0).rgb;
+  const path = OstwaldColor.harmonyPath('shadowSeries', 5, selected.w, selected.s, { hueCircle: custom });
+  const expected = OstwaldColor.sampleHarmonyPath(path, 3);
+  custom[4].lab[0] = 0.1;
+  assert.deepEqual(OstwaldColor.sampleHarmonyPath(path, 3), expected);
+  expected.forEach(sample => assert.deepEqual(sample.lab,
+    OstwaldColor.mix([0.6, 0.04, 0.02], sample.w, sample.s).lab));
+  const paths = OstwaldColor.harmonies(selected).paths;
+  paths.isotint.sourceField.lab[0] = -1;
+  assert.equal(paths.isotone.sourceField.lab[0], selected.lab[0]);
+  paths.isotint.fullColorLab[0] = -1;
+  assert.equal(paths.isotone.fullColorLab[0], circle[4].lab[0]);
+});
+
+test('continuous sources: white-free shadow ray and zero-ratio gray ray', () => {
+  const whiteFree = OstwaldColor.harmonyPath('shadowSeries', 5, 0, 0.4);
+  assert.equal(whiteFree.constraint.ratioStatus, 'white-free');
+  assert.deepEqual(whiteFree.domain.start, { w: 0, s: 0, v: 1 });
+  const gray = OstwaldColor.harmonyPath('shadowSeries', 5, 0.5, 0.5);
+  assert.equal(gray.constraint.ratioStatus, 'finite');
+  assert.deepEqual(gray.domain.start, { w: 1, s: 0, v: 0 });
+  for (const path of [whiteFree, gray]) {
+    OstwaldColor.sampleHarmonyPath(path, 5).forEach(sample => {
+      validSample(sample);
+      invariant(sample, 'shadowSeries', path.sourceField);
+    });
+  }
+  assert.throws(() => OstwaldColor.harmonyPath('shadowSeries', 5, 0, 1), /pure-black.*0:0/);
+  // Other relations remain well-defined at black; constant s=1 is a point.
+  const black = OstwaldColor.harmonyPath('isotone', 5, 0, 1);
+  OstwaldColor.sampleHarmonyPath(black, 3).forEach(sample => {
+    assert.deepEqual(sample.rgb, [0, 0, 0]);
+    validSample(sample);
+  });
+});
+
+test('continuous sources: edges, corners and non-atlas inputs retain unlabeled status', () => {
+  for (const [w, s] of [[0, 0], [1, 0], [0, 1], [0.4, 0], [0, 0.8], [0.25, 0.75], [0.123, 0.321]]) {
+    for (const type of PATH_TYPES) {
+      if (type === 'shadowSeries' && w === 0 && s === 1) continue;
+      const path = OstwaldColor.harmonyPath(type, 5, w, s);
+      assert.equal(path.sourceField.label, null);
+      assert.equal(path.sourceField.source, 'interpolated');
+      OstwaldColor.sampleHarmonyPath(path, 11).forEach(sample => {
+        validSample(sample);
+        invariant(sample, type, path.sourceField);
+      });
+    }
+  }
+  // A sample landing exactly on a real gray node still does not claim atlas provenance.
+  const end = OstwaldColor.sampleHarmonyPath(OstwaldColor.harmonies(selected).paths.isotint, 2)[1];
+  near(end.w, OstwaldColor.grayAxis()[4].w);
+  assert.equal(end.label, null);
+  assert.equal(end.source, 'interpolated');
+});
+
+test('harmonyPath: invalid type, hue, geometry and context rejected', () => {
+  for (const type of ['', 'isochrome', null, undefined, 42]) {
+    assert.throws(() => OstwaldColor.harmonyPath(type, 5, 0.2, 0.3), /path type/);
+  }
+  for (const hue of [0, 25, 5.5, '5', NaN]) {
+    assert.throws(() => OstwaldColor.harmonyPath('isotint', hue, 0.2, 0.3), /hueIndex/);
+  }
+  for (const [w, s] of [[-0.1, 0], [0, -0.1], [0.8, 0.8], [NaN, 0], [0, Infinity]]) {
+    assert.throws(() => OstwaldColor.harmonyPath('isotint', 5, w, s), Error);
+  }
+  for (const context of [null, [], { triangle }, { mode: 'rgb' }, { hueCircle: circle.slice(1) }]) {
+    assert.throws(() => OstwaldColor.harmonyPath('isotint', 5, 0.2, 0.3, context), Error);
+  }
+});
+
+test('sampleHarmonyPath: malformed counts and adulterated descriptors rejected', () => {
+  const path = OstwaldColor.harmonies(selected).paths.shadowSeries;
+  for (const count of [0, -1, 1.5, '3', null, undefined, NaN, Infinity, 2 ** 32]) {
+    assert.throws(() => OstwaldColor.sampleHarmonyPath(path, count), /count/);
+  }
+  for (const invalid of [null, undefined, {}, [], 'shadowSeries']) {
+    assert.throws(() => OstwaldColor.sampleHarmonyPath(invalid, 3), Error);
+  }
+  const mutations = [
+    p => { p.type = 'invented'; }, p => { p.hueIndex = 0; },
+    p => { p.fullColorLab = [0, 0]; }, p => { p.fullColorLab[0] = Infinity; },
+    p => { p.fullColorLab[0] = 0.1; }, p => { p.sourceField.v = 0.9; },
+    p => { p.sourceField.w = -0.1; }, p => { p.sourceField.rgb[0] = -1; },
+    p => { p.sourceField.lab[0] = NaN; }, p => { p.sourceField.label = '5zz'; },
+    p => { p.sourceField.source = 'invented'; }, p => { p.sourceField.hueIndex = 6; },
+    p => { p.constraint.white = 0.8; }, p => { p.constraint.ratioStatus = 'white-free'; },
+    p => { p.domain.start.w = -0.1; }, p => { p.domain.end.v = 0.3; },
+    p => { p.domain.max = 2; }, p => { p.domain.parameter = 's'; },
+    p => { delete p.constraint; }, p => { p.domain = []; }
+  ];
+  mutations.forEach(mutate => {
+    const invalid = clone(path);
+    mutate(invalid);
+    assert.throws(() => OstwaldColor.sampleHarmonyPath(invalid, 3), Error);
+  });
+  const continuous = OstwaldColor.harmonyPath('isotint', 5, 0.123, 0.321);
+  for (const key of ['w', 's', 'v']) {
+    const invalid = clone(continuous);
+    invalid.sourceField[key] = -0.01;
+    assert.throws(() => OstwaldColor.sampleHarmonyPath(invalid, 3), Error);
+  }
+});
+
+test('shadow grouping: all letter-index diagonals, all hues, exclude neighboring ratios', () => {
+  const letters = OstwaldColor.letterScale().map(x => x.letter);
+  for (let hue = 1; hue <= 24; hue++) {
+    for (const field of OstwaldColor.triangle(hue)) {
+      const distance = letters.indexOf(field.label.at(-2)) - letters.indexOf(field.label.at(-1));
+      const expected = letters.slice(distance).map((white, blackIndex) => `${hue}${white}${letters[blackIndex]}`);
+      assert.deepEqual(OstwaldColor.harmonies(field).shadowSeries.map(f => f.label), expected);
+    }
+  }
+});
+
+test('provenance: references, arbitrary mixtures and atlas fields stay distinguishable', () => {
+  assert.ok(circle.every(hue => hue.source === 'reference' && hue.calibrated === false));
+  const mixed = OstwaldColor.mix(circle[4].lab, selected.w, selected.s);
+  assert.equal(mixed.source, 'interpolated');
+  assert.equal(mixed.label, null);
+  assert.ok(triangle.every(field => field.source === 'atlas'));
+  // Phase-1 chromatic objects without a source property remain valid.
+  const oldField = clone(selected);
+  delete oldField.source;
+  assert.deepEqual(OstwaldColor.harmonies(oldField), OstwaldColor.harmonies(selected));
+  assert.throws(() => OstwaldColor.harmonies({ ...selected, source: 'interpolated' }), /atlas/);
+  assert.throws(() => OstwaldColor.harmonies({ ...selected, label: '5aa' }), /grayAxis/);
+});
+
 console.log(`\n${passed} tests passed.`);
