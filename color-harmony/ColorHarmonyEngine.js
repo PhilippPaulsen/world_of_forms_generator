@@ -22,6 +22,41 @@ const BLACK = Object.freeze([0, 0, 0]);
 // Established names retained from Phases 1/2; other divisors remain mathematical.
 const NAMED_SUBDIVISIONS = Object.freeze({ 2: 'complementary', 3: 'triad', 4: 'tetrad' });
 
+// Raw project-supplied transcription of secondary evidence citing Ostwald 1921 p.89.
+// These are literal dyads around reference 24, NOT distance-to-name rules.
+const INTERVAL_PAIRS_1921 = Object.freeze([
+  [[1, 23], 'minor-second', 'kleine Sekunde', false],
+  [[2, 22], 'major-second', 'große Sekunde', false],
+  [[3, 21], 'minor-third', 'kleine Terz', true],
+  [[4, 20], 'major-third', 'große Terz', true],
+  [[5, 19], 'augmented-third', 'übermäßige Terz', false],
+  [[6, 18], 'fourth', 'Quarte', true],
+  [[7, 17], 'augmented-fourth', 'übermäßige Quarte', false],
+  [[8, 16], 'fifth', 'Quinte', true],
+  [[9, 15], 'sixth', 'Sexte', true],
+  [[10, 14], 'minor-seventh', 'kleine Septime', false],
+  [[11, 13], 'major-seventh', 'große Septime', false]
+].map(([pair, interval, german, consonant]) => Object.freeze({
+  pair: Object.freeze(pair), interval, german, consonant
+})));
+
+/** Fresh provenance envelope; future direct transcription can upgrade metadata in place.
+ * The secondary publication is not bibliographically identified in the supplied brief.
+ */
+function intervalProvenance1921() {
+  return {
+    sourceStatus: 'secondary-citing-1921-p89', sourceConfidence: 'secondary-citing-primary',
+    primaryVerified: false, transcriptionBasis: 'project-supplied-transcription',
+    primaryReference: { author: 'Wilhelm Ostwald', title: 'Die Harmonie der Farben', year: 1921, page: 89 },
+    secondaryReference: null, reference: { hueIndex: 24, role: 'identity-or-octave' }
+  };
+}
+
+/** Copy a literal dyad without sharing the private historical pair array. */
+function copyInterval(entry) {
+  return { ...entry, pair: entry.pair.slice() };
+}
+
 /** Require a dense three-component array of finite numbers. */
 function vector(value, name) {
   if (!Array.isArray(value) || value.length !== 3 ||
@@ -502,6 +537,71 @@ class OstwaldColor {
       register = circle.map(hue => ({ hueIndex: hue.index, ...this.mix(hue.lab, selected.w, selected.s) }));
     }
     return selectRegularSubdivision(register, selected.hueIndex, parts, offset);
+  }
+
+  /**
+   * Return the eleven literal 1921 dyads and their separate provenance envelope.
+   * Names/flags are historical data as supplied, never modern aesthetic judgments.
+   * @returns {{entries:object[],sourceStatus:string,sourceConfidence:string,primaryVerified:boolean,transcriptionBasis:string,primaryReference:object,secondaryReference:null,reference:object}}
+   * Reference hue 24 denotes identity/octave; it is not a twelfth listed dyad.
+   * Current evidence is secondary-citing-1921-p89, not a directly verified primary page.
+   */
+  static intervalTable1921() {
+    return { ...intervalProvenance1921(), entries: INTERVAL_PAIRS_1921.map(copyInterval) };
+  }
+
+  /**
+   * Look up an unordered literal pair in the raw table, without rotation or inference.
+   * @param {number} a Hue index in 1..24 (not normalized modulo 24).
+   * @param {number} b Hue index in 1..24; identical indices are valid but unlisted.
+   * @returns {object} Provenance plus {pair:[min,max],listed:boolean,entry:object|null}.
+   * Unlisted means absent from this table, not historically non-consonant.
+   * @throws {RangeError} For indices outside 1..24 or nonintegers.
+   */
+  static intervalRelation1921(a, b) {
+    validateHue(a);
+    validateHue(b);
+    const pair = [Math.min(a, b), Math.max(a, b)];
+    const entry = INTERVAL_PAIRS_1921.find(item => item.pair[0] === pair[0] && item.pair[1] === pair[1]);
+    return { ...intervalProvenance1921(), pair, listed: Boolean(entry), entry: entry ? copyInterval(entry) : null };
+  }
+
+  /**
+   * Describe implemented relations and explicit research gaps; does not execute rules.
+   * 'explicit' marks relationships established by the project, not primary verification.
+   * @returns {{rules:object[],researchPending:object[]}} Fresh metadata, no ranking/weights.
+   * Pending records are not executable harmony rules, especially the attested Heraden.
+   */
+  static harmonyRuleRegistry() {
+    const established = {
+      historicalStatus: 'explicit', period: '1921-system',
+      sourceStatus: 'project-specified-1921-model', implementationStatus: 'implemented'
+    };
+    return {
+      rules: [
+        ...Object.entries(NAMED_SUBDIVISIONS).map(([parts, id]) => ({
+          id, domain: 'isovalent-hue-circle', relation: 'regular-subdivision', parts: Number(parts), ...established
+        })),
+        ...[['isotint', 'constant-w'], ['isotone', 'constant-s'], ['shadowSeries', 'constant-v:w']]
+          .map(([id, relation]) => ({ id, domain: 'one-hue-triangle', relation, ...established })),
+        { id: 'analyticIsochrome', domain: 'analytical-triangle', relation: 'constant-v',
+          historicalStatus: 'mathematical', sourceStatus: 'mathematical', period: null, implementationStatus: 'implemented' },
+        { id: 'isovalent', domain: 'isovalent-hue-circle', relation: 'constant-w-s-v', ...established },
+        { id: 'regularHueSubdivision', domain: 'isovalent-hue-circle', relation: 'regular-subdivision',
+          historicalStatus: 'mathematical', sourceStatus: 'mathematical', period: null, implementationStatus: 'implemented' },
+        { id: 'intervalRelation1921', domain: 'raw-1921-hue-pairs', relation: 'literal-pair-lookup',
+          historicalStatus: 'transcribed', period: '1921-system',
+          sourceStatus: 'secondary-citing-1921-p89', sourceConfidence: 'secondary-citing-primary',
+          implementationStatus: 'implemented', primaryVerified: false }
+      ],
+      researchPending: [
+        { id: 'heraden', term: 'Heraden', historicalStatus: 'attested' },
+        { id: 'shadow-series-interval-laws', term: 'Complete interval rules for Schattenreihen', historicalStatus: 'research-pending' },
+        { id: 'isotint-interval-laws', term: 'Complete interval rules for Weißgleiche', historicalStatus: 'research-pending' },
+        { id: 'isotone-interval-laws', term: 'Complete interval rules for Schwarzgleiche', historicalStatus: 'research-pending' },
+        { id: 'gray-harmothek', term: 'Full Harmothek reconstruction', historicalStatus: 'research-pending' }
+      ].map(item => ({ ...item, implementationStatus: 'research-pending', sourceConfidence: 'research-pending' }))
+    };
   }
 
   /**
