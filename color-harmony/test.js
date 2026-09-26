@@ -609,7 +609,7 @@ test('regular subdivisions: invalid divisions, offsets, colors and contexts reje
   }
 });
 
-test('1921 table: exact eleven dyads, names and historical consonance flags', () => {
+test('1921 p.89: twelve distance-analogy rows, including starred octave', () => {
   const expected = [
     { pair: [1,23], interval: 'minor-second', german: 'kleine Sekunde', consonant: false },
     { pair: [2,22], interval: 'major-second', german: 'große Sekunde', consonant: false },
@@ -621,40 +621,34 @@ test('1921 table: exact eleven dyads, names and historical consonance flags', ()
     { pair: [8,16], interval: 'fifth', german: 'Quinte', consonant: true },
     { pair: [9,15], interval: 'sixth', german: 'Sexte', consonant: true },
     { pair: [10,14], interval: 'minor-seventh', german: 'kleine Septime', consonant: false },
-    { pair: [11,13], interval: 'major-seventh', german: 'große Septime', consonant: false }
+    { pair: [11,13], interval: 'major-seventh', german: 'große Septime', consonant: false },
+    { pair: [12,12], interval: 'octave', german: 'Oktave', consonant: true }
   ];
   const table = OstwaldColor.intervalTable1921();
-  assert.equal(table.entries.length, 11);
-  assert.deepEqual(table.entries, expected);
-  assert.equal(table.sourceStatus, 'secondary-citing-1921-p89');
-  assert.equal(table.sourceConfidence, 'secondary-citing-primary');
-  assert.equal(table.primaryVerified, false);
+  assert.equal(table.entries.length, 12);
+  assert.deepEqual(table.entries, expected.map(({pair,...row}) => ({...row, distance:pair[0], colorEntries:pair, sourceStatus:'primary-1921-p89', primaryVerified:true})));
+  assert.equal(table.sourceStatus, 'primary-1921-p89');
+  assert.equal(table.sourceConfidence, 'primary');
+  assert.equal(table.primaryVerified, true);
   assert.equal(table.primaryReference.year, 1921);
   assert.equal(table.primaryReference.page, 89);
-  assert.equal(table.secondaryReference, null);
-  assert.equal(table.transcriptionBasis, 'project-supplied-transcription');
-  assert.deepEqual(table.reference, { hueIndex: 24, role: 'identity-or-octave' });
+  assert.equal(table.primaryReference.pdfPage, 107);
+  assert.equal(table.transcriptionBasis, 'direct-scan-inspection');
+  assert.deepEqual(table.reference, { distance:12, colorEntry:12, role:'opposite-distance-octave-analogy' });
 });
 
-test('1921 lookup: exact unordered dyads only; distances do not infer names', () => {
-  for (const entry of OstwaldColor.intervalTable1921().entries) {
-    const forward = OstwaldColor.intervalRelation1921(...entry.pair);
-    assert.equal(forward.listed, true);
-    assert.deepEqual(forward.entry, entry);
-    assert.equal(forward.sourceStatus, 'secondary-citing-1921-p89');
-    assert.equal(forward.primaryVerified, false);
-    assert.deepEqual(OstwaldColor.intervalRelation1921(...entry.pair.slice().reverse()), forward);
+test('1921 lookup: distance analogy replaces erroneous literal-dyad interpretation', () => {
+  for (let a=1; a<=24; a++) for (let b=1; b<=24; b++) {
+    const result=OstwaldColor.intervalRelation1921(a,b);
+    assert.equal(result.distance, Math.min(Math.abs(a-b),24-Math.abs(a-b)));
+    assert.deepEqual(result,OstwaldColor.intervalRelation1921(b,a));
+    assert.equal(result.listed,a!==b);
+    assert.equal(result.applicationStatus,'mathematical-distance-lookup');
+    if(a===b) assert.equal(result.entry,null);
+    else assert.equal(result.entry.distance,result.distance);
   }
-  for (const pair of [[1,3], [1,1], [24,24], [12,24], [5,17]]) {
-    const result = OstwaldColor.intervalRelation1921(...pair);
-    assert.equal(result.listed, false);
-    assert.equal(result.entry, null);
-    assert.equal(result.primaryReference.page, 89);
-  }
-  // Identical minimal distances can carry different names even within the raw table.
-  assert.deepEqual(OstwaldColor.hueDistance(23,1), OstwaldColor.hueDistance(11,13));
-  assert.equal(OstwaldColor.intervalRelation1921(1,23).entry.interval, 'minor-second');
-  assert.equal(OstwaldColor.intervalRelation1921(11,13).entry.interval, 'major-seventh');
+  assert.equal(OstwaldColor.intervalRelation1921(1,23).entry.interval,'major-second');
+  assert.equal(OstwaldColor.intervalRelation1921(5,17).entry.interval,'octave');
   for (const bad of [0,25,-1,1.5,'1',null,NaN,Infinity]) {
     assert.throws(() => OstwaldColor.intervalRelation1921(bad, 23), RangeError);
     assert.throws(() => OstwaldColor.intervalRelation1921(1, bad), RangeError);
@@ -664,14 +658,14 @@ test('1921 lookup: exact unordered dyads only; distances do not infer names', ()
 test('1921 table and registry: returned metadata cannot mutate later results', () => {
   const original = OstwaldColor.intervalTable1921();
   const modified = OstwaldColor.intervalTable1921();
-  modified.entries[0].pair[0] = 7;
+  modified.entries[0].colorEntries[0] = 7;
   modified.entries[0].consonant = true;
   modified.primaryReference.page = 1;
-  modified.reference.hueIndex = 5;
+  modified.reference.distance = 5;
   assert.deepEqual(OstwaldColor.intervalTable1921(), original);
   const relation = OstwaldColor.intervalRelation1921(1,23);
-  relation.entry.pair[0] = 5;
-  assert.deepEqual(OstwaldColor.intervalRelation1921(1,23).entry, original.entries[0]);
+  relation.entry.colorEntries[0] = 5;
+  assert.deepEqual(OstwaldColor.intervalRelation1921(1,23).entry, original.entries[1]);
   const registry = OstwaldColor.harmonyRuleRegistry();
   registry.rules[0].parts = 7;
   registry.researchPending[0].implementationStatus = 'implemented';
@@ -739,12 +733,19 @@ test('rule registry: implemented relations and explicitly pending concepts', () 
   }
   assert.equal(new Set(rules.map(r=>r.id)).size,rules.length);
   assert.equal(rules.find(r=>r.id==='analyticIsochrome').historicalStatus,'mathematical');
-  assert.equal(rules.find(r=>r.id==='intervalRelation1921').sourceStatus,'secondary-citing-1921-p89');
-  const heraden = researchPending.find(r=>r.term==='Heraden');
-  assert.equal(heraden.historicalStatus,'attested');
+  assert.equal(rules.find(r=>r.id==='intervalRelation1921').sourceStatus,'primary-1921-p89');
   assert.ok(researchPending.every(r=>r.implementationStatus==='research-pending'));
   assert.ok(!rules.some(r=>r.id==='heraden'));
-  assert.deepEqual(researchPending.map(r=>r.id), ['heraden','shadow-series-interval-laws','isotint-interval-laws','isotone-interval-laws','gray-harmothek']);
+  assert.deepEqual(researchPending.map(r=>r.id), ['shadow-series-interval-laws','isotint-interval-laws','isotone-interval-laws']);
+  for (const term of ['Zweier','Dreier','Triade','Vierer','Tetrade','Schattenreihe','Weißgleiche','Schwarzgleiche','Wertgleiche']) {
+    const rule=rules.find(r=>r.germanTerm===term);
+    for(const key of ['englishTerm','domain','historicalStatus','sourceStatus','sourcePages','implementationStatus']) assert.ok(Object.hasOwn(rule,key));
+    assert.equal(rule.sourceStatus,'primary-1921');
+    assert.ok(rule.sourcePages.length>0);
+  }
+  const {deferred,researchNotes}=OstwaldColor.harmonyRuleRegistry();
+  assert.equal(deferred.find(r=>r.id==='harmothek').implementationStatus,'future-catalog-layer');
+  assert.equal(researchNotes[0].implementationStatus,'not-required-for-current-primary-grammar');
 });
 
 test('gray axis: stable light-to-dark order supports generic intervals', () => {
@@ -790,6 +791,160 @@ test('series intervals: invalid bounds, unsafe arithmetic and unknown options re
   for (const series of [null,{},'abc',Array(3),[]]) {
     assert.throws(()=>OstwaldColor.selectSeriesInterval(series,{count:1}),Error);
   }
+});
+
+
+
+test('Zweier: 276 unique pairs partition exactly into twelve distance classes', () => {
+  const all=new Set();
+  for(let d=1;d<=12;d++) {
+    const pairs=OstwaldColor.dyadsByDistance(d);
+    assert.equal(pairs.length,d===12?12:24);
+    pairs.forEach(([a,b],i)=> {
+      assert.ok(a<b);
+      assert.equal(OstwaldColor.hueDistance(a,b).minimal,d);
+      assert.ok(!all.has(`${a},${b}`)); all.add(`${a},${b}`);
+      if(i) assert.ok(pairs[i-1][0]<a || (pairs[i-1][0]===a && pairs[i-1][1]<b));
+    });
+  }
+  assert.equal(all.size,276);
+  for(const bad of [0,13,1.5,'2',NaN,null]) assert.throws(()=>OstwaldColor.dyadsByDistance(bad),RangeError);
+});
+
+test('Printed Zweier oracle pp.72–74: historical 100-circle numbers mapped by position', () => {
+  // p.72–74 uses these 24 printed positions, not modern indices or display calibration.
+  const printed=['00','04','08','13','17','21','25','29','33','38','42','46','50','54','58','63','67','71','75','79','83','88','92','96'];
+  const fixtures=[
+    [1,'00','04'],[1,'46','50'],[1,'96','00'],
+    [2,'00','08'],[2,'92','00'],[2,'96','04'],
+    [6,'00','25'],[6,'75','00'],[6,'96','21'],
+    [8,'00','33'],[8,'67','00'],[8,'96','29'],
+    [12,'00','50'],[12,'25','75'],[12,'46','96']
+  ];
+  for(const [distance,a,b] of fixtures) {
+    const pair=[printed.indexOf(a)+1,printed.indexOf(b)+1].sort((x,y)=>x-y);
+    assert.ok(OstwaldColor.dyadsByDistance(distance).some(p=>p[0]===pair[0]&&p[1]===pair[1]));
+  }
+});
+
+test('Cyclic signatures: numeric canonicalization, rotations, normalization and reflection separation', () => {
+  assert.deepEqual(OstwaldColor.cyclicGapSignature([1,9,17]),[8,8,8]);
+  assert.deepEqual(OstwaldColor.cyclicGapSignature([1,7,13,19]),[6,6,6,6]);
+  const signature=OstwaldColor.cyclicGapSignature([1,3,8]);
+  assert.deepEqual(signature,[2,5,17]);
+  for(let offset=-24;offset<48;offset++) assert.deepEqual(OstwaldColor.cyclicGapSignature([8+offset,1+offset,3+offset]),signature);
+  assert.notDeepEqual(OstwaldColor.cyclicGapSignature([1,23,18]),signature);
+  assert.deepEqual(OstwaldColor.cyclicGapSignature([1,11]),[10,14]);
+});
+
+test('All 2024 Dreier: positive gaps, gap sum, only eight unique Triaden', () => {
+  let total=0,named=0;
+  for(let a=1;a<=22;a++) for(let b=a+1;b<=23;b++) for(let c=b+1;c<=24;c++) {
+    const set=OstwaldColor.classifyHueSet([a,b,c]); total++;
+    assert.equal(set.className,'Dreier'); assert.equal(set.cardinality,3);
+    assert.ok(set.gaps.every(g=>g>0)); assert.equal(set.gaps.reduce((x,y)=>x+y),24);
+    if(set.historicalName) {named++; assert.equal(set.historicalName,'Triade'); assert.deepEqual(set.gaps,[8,8,8]);}
+  }
+  assert.equal(total,2024); assert.equal(named,8);
+});
+
+test('All 10626 Vierer: only six unique Tetraden; all rotations recognized', () => {
+  let total=0,named=0;
+  for(let a=1;a<=21;a++) for(let b=a+1;b<=22;b++) for(let c=b+1;c<=23;c++) for(let d=c+1;d<=24;d++) {
+    const set=OstwaldColor.classifyHueSet([a,b,c,d]); total++;
+    assert.equal(set.className,'Vierer'); assert.equal(set.gaps.reduce((x,y)=>x+y),24);
+    if(set.historicalName) {named++; assert.equal(set.historicalName,'Tetrade'); assert.deepEqual(set.gaps,[6,6,6,6]);}
+  }
+  assert.equal(total,10626); assert.equal(named,6);
+  for(let i=1;i<=24;i++) {
+    assert.equal(OstwaldColor.classifyHueSet([i,i+8,i+16]).historicalName,'Triade');
+    assert.equal(OstwaldColor.classifyHueSet([i,i+6,i+12,i+18]).historicalName,'Tetrade');
+  }
+});
+
+test('Symmetry: reflection, rotational and dihedral behavior are separate from construction', () => {
+  const C=OstwaldColor;
+  assert.equal(C.classifyHueSet([1,3,8]).symmetry,'asymmetric');
+  assert.equal(C.classifyHueSet([1,3,5]).symmetry,'reflection');
+  assert.equal(C.classifyHueSet([1,9,17]).symmetry,'dihedral');
+  assert.equal(C.classifyHueSet([1,2,4,13,14,16]).symmetry,'rotational');
+  assert.deepEqual(C.classifyHueSet([1,9,17]).symmetries.rotations,[0,8,16]);
+  assert.equal(C.classifyHueSet([1,13]).historicalName,'Gegenfarben');
+  assert.equal(C.classifyHueSet([1,2]).historicalName,null);
+});
+
+test('Larger sets and invalid circular input', () => {
+  for(let n=5;n<=24;n++) {
+    const set=OstwaldColor.classifyHueSet(Array.from({length:n},(_,i)=>i+1));
+    assert.equal(set.cardinality,n); assert.equal(set.gaps.reduce((a,b)=>a+b),24);
+    assert.equal(set.historicalName,null); assert.equal(set.className,null);
+  }
+  for(const bad of [null,{},[],[1],[1,25],[0,24],[1,NaN],[1,2.5],Array(3),[1,Number.MAX_SAFE_INTEGER+1],Array.from({length:25},(_,i)=>i)]) {
+    assert.throws(()=>OstwaldColor.cyclicGapSignature(bad),Error);
+    assert.throws(()=>OstwaldColor.classifyHueSet(bad),Error);
+  }
+});
+
+test('Primary division pp.90–92: both arc midpoints, original 08–25 example', () => {
+  const small=OstwaldColor.divideHueDyad([3,7]); // 08,17,25
+  const large=OstwaldColor.divideHueDyad([3,7],'counterclockwise'); // 08,25,67
+  assert.deepEqual(small.hues,[3,5,7]); assert.deepEqual(large.hues,[3,7,17]);
+  assert.equal(small.construction,'division'); assert.equal(large.constructionEvidence.arc,20);
+  assert.equal(OstwaldColor.divideHueDyad([1,9],'counterclockwise').historicalName,'Triade');
+  assert.throws(()=>OstwaldColor.divideHueDyad([1,2]),/even arc/);
+  assert.throws(()=>OstwaldColor.divideHueDyad([1,3],'shorter'),Error);
+});
+
+test('Augmentation retains original dyad; equal-step Aufbau is not arbitrary addition', () => {
+  const set=OstwaldColor.augmentHueDyad([3,7],11); // p.90: 08,25,42
+  assert.deepEqual(set.hues,[3,7,11]); assert.deepEqual(set.constructionEvidence.baseDyad,[3,7]);
+  assert.equal(set.constructionEvidence.distance,4); assert.equal(set.construction,'augmentation');
+  assert.equal(set.constructionEvidence.sourceStatus,'primary-1921');
+  const free=OstwaldColor.augmentHueDyad([3,7],12);
+  assert.equal(free.constructionEvidence.sourceStatus,'contemporary-implementation');
+  assert.throws(()=>OstwaldColor.augmentHueDyad([3,7],27),/Duplicate/);
+});
+
+test('Spaltung pp.93,99: replacement, wrap, collisions and separate geometric class', () => {
+  const triade=OstwaldColor.splitHueSet([1,13],13,4);
+  assert.equal(triade.historicalName,'Triade'); assert.equal(triade.construction,'split');
+  assert.deepEqual(triade.constructionEvidence.replacements,[9,17]);
+  const first=OstwaldColor.splitHueSet([1,13],1,3);
+  const tetrade=OstwaldColor.splitHueSet(first.hues,13,3);
+  assert.deepEqual(tetrade.hues,[4,10,16,22]); assert.equal(tetrade.historicalName,'Tetrade');
+  assert.equal(tetrade.construction,'split');
+  assert.throws(()=>OstwaldColor.splitHueSet([1,3],1,2),/Duplicate/);
+  for(const d of [0,7,1.5]) assert.throws(()=>OstwaldColor.splitHueSet([1,13],1,d),Error);
+  assert.throws(()=>OstwaldColor.splitHueSet([1,13],2,1),Error);
+});
+
+test('Series grammar: source examples and linear topology for three one-hue families', () => {
+  const h=OstwaldColor.harmonies(selected);
+  const cases=[['shadow-series',h.shadowSeries,[0,2,4],['5ga','5le','5pi']],
+    ['isotint',triangle.filter(f=>f.w===selected.w),[0,1,2],['5ia','5ic','5ie']],
+    ['isotone',triangle.filter(f=>f.s===selected.s),[0,1,2],['5ec','5gc','5ic']]];
+  for(const [family,series,indices,labels] of cases) {
+    const before=clone(series), result=OstwaldColor.seriesHarmony(series,family,indices);
+    assert.deepEqual(result.fields.map(f=>f.label),labels);
+    assert.deepEqual(series,before); assert.equal(result.topology,'linear');
+    assert.equal(result.gapsOrSteps.length,2); assert.equal(result.cardinality,3);
+    assert.equal(result.sourceStatus,'contemporary-implementation');
+    assert.equal(result.relationEvidence.sourceStatus,'primary-1921');
+    assert.equal(OstwaldColor.seriesHarmony(series,family,[0,1]).cardinality,2);
+    result.fields[0].lab[0]=0; assert.deepEqual(series,before);
+  }
+  assert.equal(OstwaldColor.seriesHarmony(h.shadowSeries,'shadow-series',[0,1,4]).step,null);
+});
+
+test('Series validation: wrong family, order, sparse input and no silent wrapping', () => {
+  const series=OstwaldColor.harmonies(selected).shadowSeries;
+  for(const indices of [[0],[0,0],[1,0],[0,5],[0,-1],[0,1.5],Array(2)]) assert.throws(()=>OstwaldColor.seriesHarmony(series,'shadow-series',indices),Error);
+  assert.throws(()=>OstwaldColor.seriesHarmony(series,'isotint',[0,1]),Error);
+  assert.throws(()=>OstwaldColor.seriesHarmony(series,'unknown',[0,1]),Error);
+  assert.throws(()=>OstwaldColor.seriesHarmony([series[1],series[0],series[2]],'shadow-series',[0,1]),Error);
+  assert.throws(()=>OstwaldColor.seriesHarmony(Array(2),'shadow-series',[0,1]),Error);
+  assert.throws(()=>OstwaldColor.seriesHarmony(series,'shadow-series',[0,1],{mode:'rgb'}),Error);
+  assert.deepEqual(OstwaldColor.seriesHarmony(series.slice().reverse(),'shadow-series',[0,1]).fields.map(f=>f.label),['5pi','5ng']);
 });
 
 console.log(`\n${passed} tests passed.`);
