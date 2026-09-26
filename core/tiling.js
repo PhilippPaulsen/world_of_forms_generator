@@ -59,7 +59,8 @@ function _drawTessellationCore() {
     // 1.10a step 5/6's rendering hookup); each tile*() function draws
     // this same face set at every tile position via drawFaceFillsAtTile().
     const cellFaces = (showFaces && !(activeNetWarp && !activeNetWarp.field)) ? computeCellFaces(connections, nodes, faceAssignmentsFor('base'), faceHighlightKeyFor('base')) : null;
-    const layerCellFaces = activeNetWarp ? null : computeLayerCellFaces();
+    // Single/Tiled warps refuse layer faces; a FIELD keeps them for layers whose grid IS the base's (computeLayerCellFaces() filters)
+    const layerCellFaces = (activeNetWarp && !activeNetWarp.field) ? null : computeLayerCellFaces();
     tileFor(currentShape)(cellFaces, layerCellFaces);
 
     // Roadmap 1.12 stage 1: an additional layer whose OWN scale differs
@@ -171,7 +172,9 @@ function computeLayerCellFaces() {
     // computeCellFaces()'s `sheet` override, the same parameters this file
     // draws the layer with), so those layers' faces now match their lines -
     // there is deliberately no shape/mode guard here any more.
-    const active = additionalLayers.filter(l => l.enabled && layerShowsFaces(l) && l.shapeSizeFactor === shapeSizeFactor && (l.rotation || 0) === 0);
+    // On a Field warp only a layer whose grid IS the base's is eligible (re-read per call: a live-animated layer can leave it)
+    const fieldOnly = !!(activeNetWarp && activeNetWarp.field);
+    const active = additionalLayers.filter(l => l.enabled && layerShowsFaces(l) && l.shapeSizeFactor === shapeSizeFactor && (l.rotation || 0) === 0 && (!fieldOnly || layerGridMatchesBase(l)));
     if (active.length === 0) return null;
     const map = new Map();
     additionalLayers.forEach((layer, i) => {
@@ -183,7 +186,7 @@ function computeLayerCellFaces() {
         // layer - not reachable via any shipped UI yet, flagged in the
         // 1.12 stage-1 node-resolution-fix design session, not fixed
         // here).
-        if (layer.enabled && layerShowsFaces(layer) && layer.shapeSizeFactor === shapeSizeFactor && (layer.rotation || 0) === 0) {
+        if (layer.enabled && layerShowsFaces(layer) && layer.shapeSizeFactor === shapeSizeFactor && (layer.rotation || 0) === 0 && (!fieldOnly || layerGridMatchesBase(layer))) {
             // The timeline's PLAYBACK layer (sketch.js applyTimelineFrame()) has no connections of its
             // own: it is drawn from its render substitute, _morphConnections/_morphNodes (free nodes,
             // re-interpolated every frame). Its faces are detected from THE SAME substitute, so fills

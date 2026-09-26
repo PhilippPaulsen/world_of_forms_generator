@@ -593,8 +593,14 @@ function sheetGroupElements(gridNodes, sheet = null) {
 // corners) - the same fields core/tiling.js's override object hands to the
 // tile functions that draw it. null for the base (its globals apply), so every
 // base-sheet call stays exactly as it was.
+// Whether a layer's tile grid IS the base sheet's (same shape and size, no offset, no rotation - true of every timeline playback layer):
+// its segments then never leave a base tile, so on a FIELD warp its faces are as exact as the base's (core/netwarp.js
+// netWarpBlocksFaces()). Read afresh on every call - a live-animated layer (1.8 Stage A) can leave this state mid-playback.
+function layerGridMatchesBase(layer) {
+    return layer.shape === currentShape && layer.shapeSizeFactor === shapeSizeFactor && !layer.offsetX && !layer.offsetY && !layer.rotation;
+}
 function faceSheetOverrideOfLayer(layer) {
-    return { shape: layer.shape, symmetryMode: layer.symmetryMode, centroid: layer.centroid, outerCorners: layer.outerCorners };
+    return { shape: layer.shape, symmetryMode: layer.symmetryMode, centroid: layer.centroid, outerCorners: layer.outerCorners, gridMatchesBase: layerGridMatchesBase(layer) };
 }
 function faceSheetOverrideFor(sheet) {
     return sheet === 'base' || !additionalLayers[sheet] ? null : faceSheetOverrideOfLayer(additionalLayers[sheet]);

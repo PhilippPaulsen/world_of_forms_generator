@@ -326,10 +326,11 @@ function netWarpSplitSegment(warp, p1, p2) {
 function netWarpBaseNow() { return baseNetTransform ? netWarpForBase(baseNetTransform, currentShape, outerCorners, nodeCount, shapeSizeFactor) : null; }
 function netWarpActive() { return netWarpBaseNow() !== null; }
 // Whether face detection/fills are refused for a sheet under the CURRENT warp: on a FIELD the base sheet's faces are exact
-// (F is affine inside every tile: faces are detected once on the regular cell, then mapped per tile), so only layers
-// (`sheet` given: offset layers cross tile boundaries) stay refused; every other warp (Single, Tiled: F smooth inside the
-// tile) refuses all faces.
-function netWarpBlocksFaces(sheet) { const w = netWarpBaseNow(); return w !== null && (!w.field || !!sheet); }
+// (F is affine inside every tile: faces are detected once on the regular cell, then mapped per tile). A LAYER (`sheet` given) is
+// exact only when its grid IS the base's (sheet.gridMatchesBase: same shape and size, offset 0, rotation 0 - every timeline
+// playback layer): its segments never leave a base tile. Any other layer (offset/rotated/other size) crosses tile boundaries and
+// stays refused; every other warp (Single, Tiled: F smooth inside the tile) refuses all faces.
+function netWarpBlocksFaces(sheet) { const w = netWarpBaseNow(); return w !== null && (!w.field || (!!sheet && !sheet.gridMatchesBase)); }
 
 // F^-1: the regular-space point whose image under the warp is `pt` (each axis law is strictly
 // increasing on [0,1], so a bisection per axis finds it; tiles are located by floor as in

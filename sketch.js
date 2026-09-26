@@ -671,7 +671,7 @@ function setup() {
         const locked = [curveBtn, freeBtn, faceBtn].filter(Boolean);
         locked.forEach(b => { b.elt.dataset.title = b.elt.title; });
         let wasActive = null;
-        if (note) { note.elt.dataset.text = note.elt.textContent; note.elt.dataset.fieldText = 'Curve and free-clothing modes are off while a net transform is active (lines are kept straight). Face fills are exact on a Field and work for the base sheet (layers are not filled). Set the net back to Regular (Base sheet, square) to use curves again.'; }
+        if (note) { note.elt.dataset.text = note.elt.textContent; note.elt.dataset.fieldText = 'Curve and free-clothing modes are off while a net transform is active (lines are kept straight). Face fills are exact on a Field and work for the base sheet and for layers on the base grid (same shape and size, no offset, no rotation - every timeline playback layer); other layers are not filled. Set the net back to Regular (Base sheet, square) to use curves again.'; }
         netControlsSync = function () {
             group.elt.hidden = !(currentShape === 'square' && activeLayer === 'base');
             const active = netWarpActive();
@@ -729,13 +729,13 @@ function setup() {
             }
             // Locks: curve and free clothing are off under ANY warp (a curve on a warped chord is not the warp of a curve);
             // face fill is off too - except on a FIELD warp for the BASE sheet, where the faces are exact (affine per tile).
-            const faceOk = isField && active && activeLayer === 'base';
+            const faceOk = isField && active && (activeLayer === 'base' || layerGridMatchesBase(additionalLayers[activeLayer]));
             const lockSig = `${active}|${faceOk}|${isField && active}`;
             if (lockSig !== wasActive) {
                 [curveBtn, freeBtn].filter(Boolean).forEach(b => { b.elt.disabled = active; b.elt.title = active ? 'Off while a net transform is active' : b.elt.dataset.title; });
                 if (faceBtn) {
                     faceBtn.elt.disabled = active && !faceOk;
-                    faceBtn.elt.title = !active ? faceBtn.elt.dataset.title : faceOk ? faceBtn.elt.dataset.title : (isField ? 'Face fills on a Field: base sheet only (layers are not filled)' : 'Off while a net transform is active (faces are exact only on a Field)');
+                    faceBtn.elt.title = !active ? faceBtn.elt.dataset.title : faceOk ? faceBtn.elt.dataset.title : (isField ? 'Face fills on a Field: the base sheet and layers on the base grid (same shape and size, no offset, no rotation) only' : 'Off while a net transform is active (faces are exact only on a Field)');
                 }
                 if (note) {
                     note.elt.hidden = !active;
@@ -4034,7 +4034,7 @@ function faceFillsUnavailableReason() {
     // Faces are exact only on a FIELD warp (affine per tile), and only for the base sheet (offset layers cross tile boundaries)
     const nw = netWarpBaseNow();
     if (nw && !nw.field) return 'Face fills are off on a Single or Tiled net transform (the warp is not affine inside a tile, so faces would not fit the lines). Use Field (odd Shape Size 3-9), or set the net to Regular on the Base sheet.';
-    if (nw && nw.field && activeLayer !== 'base') return 'Face fills on a Field are drawn for the Base sheet only - layers are not filled (their offset crosses tile boundaries).';
+    if (nw && nw.field && activeLayer !== 'base' && !layerGridMatchesBase(additionalLayers[activeLayer])) return 'Face fills on a Field are drawn for the Base sheet and for layers on the base grid (same shape and size, no offset, no rotation) - this layer is offset, rotated or of another size, so its lines cross tile boundaries.';
     if (curveType.kind !== 'straight') return 'Face fills need straight lines (curve/free mode is on).';
     if (activeLayer === 'base') return null;
     const l = additionalLayers[activeLayer];
