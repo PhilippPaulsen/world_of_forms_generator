@@ -112,7 +112,11 @@ function splitHueSet(input, target, distance) {
 /** Fresh terminology metadata. The registry describes evidence, never executes judgments. */
 function registry() {
   const primary = (id, germanTerm, englishTerm, domain, sourcePages, extra = {}) => ({
-    id, germanTerm, englishTerm, domain, sourcePages, historicalStatus: 'explicit',
+    id, germanTerm, englishTerm, domain, sourcePages,
+    relation: ({complementary:'regular-subdivision',triad:'regular-subdivision',tetrad:'regular-subdivision',
+      dyad:'circular-distance',dreier:'cyclic-gap-classification',vierer:'cyclic-gap-classification',
+      isotint:'constant-w',isotone:'constant-s',shadowSeries:'constant-v:w',isovalent:'constant-w-s-v'})[id],
+    historicalStatus: 'explicit',
     sourceStatus: 'primary-1921', sourceConfidence: 'primary', primaryVerified: true,
     period: PERIOD, implementationStatus: 'implemented', ...extra
   });
@@ -129,10 +133,10 @@ function registry() {
       primary('shadowSeries', 'Schattenreihe', 'shadow series', 'one-hue-triangle', [47, 48, 51]),
       primary('isovalent', 'Wertgleiche', 'isovalent circle', 'isovalent-hue-circle', [64]),
       { id: 'analyticIsochrome', germanTerm: 'Analytische Reingleiche', englishTerm: 'analytical isochrome',
-        domain: 'analytical-triangle', historicalStatus: 'mathematical', sourceStatus: 'mathematical',
+        domain: 'analytical-triangle', relation:'constant-v', period:null, historicalStatus: 'mathematical', sourceStatus: 'mathematical',
         sourcePages: [], implementationStatus: 'implemented' },
       { id: 'regularHueSubdivision', germanTerm: 'Regelmäßige Kreisteilung', englishTerm: 'regular subdivision',
-        domain: 'isovalent-hue-circle', historicalStatus: 'mathematical', sourceStatus: 'mathematical',
+        domain: 'isovalent-hue-circle', relation:'regular-subdivision', period:null, historicalStatus: 'mathematical', sourceStatus: 'mathematical',
         sourcePages: [], implementationStatus: 'implemented' },
       primary('intervalRelation1921', 'Vergleich mit der Musik', 'musical interval analogy', 'hue-distance-analogy', [89],
         { sourceStatus: 'primary-1921-p89', relation: 'distance-analogy-lookup' })

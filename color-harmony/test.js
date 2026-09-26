@@ -947,4 +947,20 @@ test('Series validation: wrong family, order, sparse input and no silent wrappin
   assert.deepEqual(OstwaldColor.seriesHarmony(series.slice().reverse(),'shadow-series',[0,1]).fields.map(f=>f.label),['5pi','5ng']);
 });
 
+test('Series grammar: custom calibration and analytical family preserve validation', () => {
+  const custom = circle.map(h=>({...h,lab:circle[0].lab.slice(),rgb:circle[0].rgb.slice()}));
+  const shadow = OstwaldColor.harmonies(selected).shadowSeries.map(f=>({
+    ...f, ...OstwaldColor.mix(custom[4].lab,f.w,f.s),label:f.label,source:'atlas'
+  }));
+  const result=OstwaldColor.seriesHarmony(shadow,'shadow-series',[0,2,4],{hueCircle:custom});
+  assert.deepEqual(result.fields[0].lab,shadow[0].lab);
+  assert.throws(()=>OstwaldColor.seriesHarmony(shadow,'shadow-series',[0,2,4]),Error);
+  // Positive atlas v values are unique here: no fake constant-v neighbor is invented.
+  assert.throws(()=>OstwaldColor.seriesHarmony(shadow,'analytic-isochrome',[0,1]),Error);
+  const before=clone(OstwaldColor.classifyHueSet([1,9,17]));
+  const changed=OstwaldColor.classifyHueSet([1,9,17]);
+  changed.symmetries.rotations[0]=99; changed.sourcePages.push(1);
+  assert.deepEqual(OstwaldColor.classifyHueSet([1,9,17]),before);
+});
+
 console.log(`\n${passed} tests passed.`);

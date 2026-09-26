@@ -26,7 +26,7 @@ const NAMED_SUBDIVISIONS = Object.freeze({ 2: 'complementary', 3: 'triad', 4: 't
 
 // Directly inspected 1921 p.89: two directed distance columns, NOT literal hue dyads.
 // The musical names are an analogy; the final distance 12 is the starred octave.
-const INTERVAL_PAIRS_1921 = Object.freeze([
+const INTERVAL_ANALOGY_1921 = Object.freeze([
   [[1, 23], 'minor-second', 'kleine Sekunde', false],
   [[2, 22], 'major-second', 'große Sekunde', false],
   [[3, 21], 'minor-third', 'kleine Terz', true],
@@ -552,7 +552,7 @@ class OstwaldColor {
    * Starred consonance flags are historical descriptions, never aesthetic scores.
    */
   static intervalTable1921() {
-    return { ...intervalProvenance1921(), entries: INTERVAL_PAIRS_1921.map(copyInterval) };
+    return { ...intervalProvenance1921(), entries: INTERVAL_ANALOGY_1921.map(copyInterval) };
   }
 
   /**
@@ -565,7 +565,7 @@ class OstwaldColor {
    */
   static intervalRelation1921(a, b) {
     const distance = this.hueDistance(a, b).minimal;
-    const entry = INTERVAL_PAIRS_1921.find(item => item.distance === distance);
+    const entry = INTERVAL_ANALOGY_1921.find(item => item.distance === distance);
     return { ...intervalProvenance1921(), pair: [Math.min(a, b), Math.max(a, b)], distance,
       applicationStatus: 'mathematical-distance-lookup',
       listed: Boolean(entry), entry: entry ? copyInterval(entry) : null };
