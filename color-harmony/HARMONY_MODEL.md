@@ -141,5 +141,21 @@ Cyclic gap signatures include the closing gap and sum to 24. Linear series
 selections have only successive index differences. Dreier is not a synonym for
 Triade; Vierer is not a synonym for Tetrade. Construction (division, augmentation,
 split) is distinct from final geometric symmetry. See INTERVAL_MODEL.md and API.md.
-Harmothek is a future catalog layer. Phase 5 candidate: composed / compound
-harmonies (Zusammengesetzte Wohlklänge), outside Phase 4.
+Harmothek remains a future catalog layer.
+
+## 15. Compound composition layer
+
+Phase 5 adds elementary G/F/W groups and recursive compounds above these existing
+relations. The directly inspected pp.103–119 distinguish organized components,
+shared-member connection and equivalent replacement. One generic composer retains
+both child trees, active atlas members and construction provenance. Actual gray
+companions can connect gray and same-hue groups; they are not identical to their
+chromatic partners. W connects to F through a shared chromatic member.
+
+Replacement uses explicit symmetric structural correspondence, not Oklab mixture
+equality (compare the gray-mixture caution on p.108). Software `level` measures
+tree depth, not every nuance of historical Stufe or Ordnung. Phase-4 hue splitting
+and Phase-5 group substitution remain distinct APIs. See
+[COMPOUND_HARMONIES.md](COMPOUND_HARMONIES.md) for source cases, provenance,
+recursive semantics and deferred physical-mixture constructions. No geometry,
+atlas count, mixing, calibration or sampling decision above is changed.

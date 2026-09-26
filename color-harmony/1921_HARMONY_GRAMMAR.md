@@ -169,13 +169,20 @@ organized card collection for repeated examination and comparison.
 Harmothek generation primitive. This is an organizational concept, not a new
 mixing or hue-combination law.
 
-## 14. Composed harmonies — deferred
+## 14. Composed harmonies — Phase-5 extension
 
-**Primary-source fact.** Contents X lists the fourth part, *Zusammengesetzte
-Wohlklänge*, beginning p.103. Only the contents reference is verified here;
-its detailed combination laws are not claimed as transcribed.
-**Roadmap within this module:** Phase 5 candidate: composed / compound harmonies.
-No implementation or repository-wide roadmap modification is part of Phase 4.
+**Primary-source fact.** The fourth part, *Zusammengesetzte Wohlklänge*, pp.103–119,
+has now been directly inspected for Phase 5. Page 105 states gleichwertiger Ersatz
+and Gemeinschaft eines Gliedes; pp.107–116 discuss G/F/W cases; pp.118–119 allow
+higher constructions. Figures 20/21 are historical summary references.
+
+**Software representation.** A separate `CompoundHarmony.js` module composes
+organized atlas groups, preserving children and provenance. Shared-member and
+substitution APIs accept recursive groups. Symmetric replacement is structurally
+validated and never asserts exact optical/Oklab mixture equivalence (p.108).
+Phase-4 `splitHueSet()` still constructs hue sets; Phase-5 `substituteHarmony()`
+composes groups. See [COMPOUND_HARMONIES.md](COMPOUND_HARMONIES.md) for the detailed
+source audit, selected fixtures and limits. No repository-wide roadmap is changed.
 
 ## 15. Historical terms versus software abstractions
 
@@ -187,7 +194,8 @@ required for this operational grammar; no historical nonexistence claim is made.
 
 Remaining limits: complete one-hue interval laws and gray-inclusive catalogs;
 full splitting counts and qualitative categories; unequal division constructions;
-center-retaining split variants; exhaustive larger-group taxonomy; compound
-harmony laws. The implemented bisection, equal-step augmentation and symmetric
+center-retaining hue-set split variants; exhaustive larger-group taxonomy;
+complete compound case catalog and physical-mixture substitutions. The implemented
+bisection, equal-step augmentation and symmetric
 replacement have explicit numeric readings in the inspected source. More general
 variants are not guessed.

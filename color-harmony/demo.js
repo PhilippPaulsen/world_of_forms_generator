@@ -80,3 +80,34 @@ for (const [family,series,indices] of [
     `linear indices=${result.indices}, gaps=${result.gapsOrSteps}, no cyclic closing gap`);
   console.log('  [atlas]',result.fields.map(f=>f.label).join(', '));
 }
+
+console.log('\nPhase 5: COMPOUND harmonies — CONTEMPORARY DATA STRUCTURE');
+const compoundGray = letter => grays.find(gray => gray.letter === letter);
+const grayGroup = letters => OstwaldColor.elementaryHarmony('gray', [...letters].map(compoundGray));
+const elementaryA = grayGroup('ace');
+const elementaryB = grayGroup('egi');
+function printGroup(title, group) {
+  console.log(`${title}: level=${group.level}, domains=${group.domains.join('/')}, ` +
+    `members=${OstwaldColor.flattenHarmonyMembers(group).map(member => member.label).join(', ')}`);
+}
+printGroup('ELEMENTARY gray harmony A', elementaryA);
+printGroup('ELEMENTARY gray harmony B', elementaryB);
+const sharedCompound = OstwaldColor.combineBySharedMember(elementaryA, elementaryB);
+console.log('PRIMARY-SOURCE RELATION: shared member, p.105; GGg example family pp.108–109');
+printGroup('COMPOUND shared-member composition', sharedCompound);
+console.log('Shared identities:', sharedCompound.provenance.sharedElements.join(', '));
+
+const substitutionSource = grayGroup('ceg');
+const replacementGroup = grayGroup('ei');
+console.log('PRIMARY-SOURCE RELATION: substitution, p.105; GGe family pp.107–108');
+printGroup('ELEMENTARY source', substitutionSource);
+console.log('Replaced atlas member: g (symmetric letter neighbors; no mixture-equality claim)');
+printGroup('ELEMENTARY replacement', replacementGroup);
+const substitution = OstwaldColor.substituteHarmony(substitutionSource, compoundGray('g'), replacementGroup);
+printGroup('COMPOUND substitution', substitution);
+console.log('Provenance:', JSON.stringify(substitution.provenance));
+
+const recursiveCompound = OstwaldColor.combineBySharedMember(sharedCompound, grayGroup('iln'));
+printGroup('COMPOUND recursive composition', recursiveCompound);
+console.log('Lower-level operation retained:', recursiveCompound.groups[0].provenance.operation);
+console.log('CONTEMPORARY DATA STRUCTURE: level measures tree depth; sourceCase remains null.');

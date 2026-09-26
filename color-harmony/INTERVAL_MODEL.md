@@ -83,8 +83,13 @@ or full gray-harmony catalog is implemented.
 Complete interval laws for the three one-hue families remain research-pending.
 Heraden is a secondary-attested research note, not required for this operational
 grammar. No assertion that the term does not exist is made. Larger named classes,
-retaining the center of a split group, and full historical construction counts
-are not exhaustively reconstructed. Composed harmonies are a Phase 5 candidate.
+full historical construction counts and center-retaining hue-set split variants
+are not exhaustively reconstructed. Phase 5 implements shared-member composition
+and structured substitution from pp.103–119, including partial group replacement
+retaining the target. This composition layer does not add speculative allowed-step
+tables or alter the Phase-4 hue-set API. See
+[COMPOUND_HARMONIES.md](COMPOUND_HARMONIES.md). Its symmetric correspondence checks
+do not confer historical interval approval on arbitrary selected groups.
 
 ## 11. Source confidence
 

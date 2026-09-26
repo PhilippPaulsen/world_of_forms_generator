@@ -1,4 +1,4 @@
-# Ostwald Farborgel Engine — Phase 4
+# Ostwald Farborgel Engine — Phase 5
 
 ## Scope and historical status
 
@@ -8,6 +8,8 @@ as its reference frame and implements the analytical/psychological distinctions
 specified for this project. Phase 4 grounds the combinatorial grammar in direct inspection of the 1921 scan,
 without changing that geometry. See [1921_HARMONY_GRAMMAR.md](1921_HARMONY_GRAMMAR.md)
 for edition, page mapping, transcription corrections and construction limits.
+Phase 5 adds recursive compound groups from the directly inspected pp.103–119;
+see [COMPOUND_HARMONIES.md](COMPOUND_HARMONIES.md) for laws, cases and limits.
 See [INTERVAL_MODEL.md](INTERVAL_MODEL.md) for interval evidence and research status,
 and [HARMONY_MODEL.md](HARMONY_MODEL.md) for the model,
 mathematical consequences, implementation choices and limits of historical claims.
@@ -35,7 +37,7 @@ node color-harmony/demo.js
 
 The class is exported directly as CommonJS. Node ESM also supports a default
 import of the same file; no package manifest or browser global is required.
-Keep the internal `HarmonyGrammar.js` alongside `ColorHarmonyEngine.js` when
+Keep internal `HarmonyGrammar.js` and `CompoundHarmony.js` alongside `ColorHarmonyEngine.js` when
 copying this module; no npm dependencies are needed.
 
 ```js
@@ -625,8 +627,9 @@ no execution callbacks or aesthetic judgments.
 
 Complete interval-law reconstruction for the three historical one-hue series
 remains `research-pending`. The Harmothek is a `future-catalog-layer`, supported
-by pp.18–19, not a generator. Composed / compound harmonies are a **Phase 5
-candidate**, outside this phase. Heraden is retained only in `researchNotes` as
+by pp.18–19, not a generator. Phase 5 adds implemented `compound-shared-member`
+and `compound-substitution` rules with primary evidence from pp.105–106.
+Heraden is retained only in `researchNotes` as
 `secondary-attested / not-required-for-current-primary-grammar`; it is not an
 implemented rule or required task. No claim of historical nonexistence is made.
 
@@ -766,4 +769,170 @@ Oklab, anchors, letter values, 672+8 atlas nodes, Phase-2 geometry, sampling,
 CommonJS/Node ESM and named field-local harmony shapes are preserved. New grammar
 methods are additive. The incorrect Phase-3 p.89 table semantics are deliberately
 corrected as described above; research registry metadata is updated. There is no
-UI, p5 integration, ranking, full interval-law catalog or compound-harmony engine.
+UI, p5 integration, ranking or full interval-law catalog. Phase 5 extends these
+structures with the composition layer below; previous consumers remain valid.
+
+## Compound harmony API (Phase 5)
+
+These additive static methods use complete atlas colors and plain structured
+groups. They do not accept interpolated samples, hue reference colors or raw
+Phase-4 hue descriptors as compound members. No new color conversion is used.
+Historical law evidence is separate from approval of a particular selection.
+
+### `elementaryHarmony(domain, members, options={})`
+
+Creates an elementary composition group. `members` is a dense array of at least
+two distinct, complete atlas colors. Caller order is retained. `domain` is:
+
+| Domain | Validation | `options.relation` |
+| --- | --- | --- |
+| `gray` (G, Grau) | Actual shared gray-axis entries | `gray-series` (default) |
+| `same-hue` (F, farbtongleich) | One hue, declared family; actual gray endpoints permitted for fixed w/s | Required: `isotint`, `isotone`, `shadow-series` |
+| `isovalent` (W, wertgleich) | Chromatic entries with identical w/s/v | `isovalent` (default) |
+
+`options` accepts only `relation` and optional `hueCircle`. Atlas identity, Oklab,
+RGB and coordinates must agree with that calibration. Existing `EPSILON=1e-10`
+and rounding-derived shadow comparisons are reused; no new permissive tolerance.
+Relation membership alone does not prove a historically allowed interval choice.
+
+Returns fresh plain data:
+
+```js
+{
+  type: 'harmony-set', domain: 'gray', domains: ['gray'], level: 1,
+  relation: 'gray-series', members: [/* complete atlas colors */],
+  historicalStatus: 'structural-selection',
+  sourceStatus: 'contemporary-implementation',
+  provenance: {
+    operation: 'elementary', sourceCase: null, sourcePages: [],
+    sequence: [{ step: 1, action: 'select-members' }]
+  }
+}
+```
+
+To adapt a Phase-4 `seriesHarmony()` descriptor, pass its `.fields` and explicit
+family to this constructor. For a hue descriptor, first resolve `.hues` at the
+desired atlas register. Existing descriptors retain their original API shapes;
+retain their separate construction evidence if needed by the consumer.
+
+### `combineBySharedMember(groupA, groupB, context={})`
+
+Accepts elementary or recursive compound groups. Requires at least one shared
+**active** member. Atlas identity uses `atlas:<label>` (e.g. `atlas:5ic`) or
+`gray:<letter>` (e.g. `gray:e`), after full color validation. Neither object
+reference equality nor matching RGB is enough.
+
+Returns a compound preserving both complete input trees in `groups[0/1]`.
+`members` deduplicates by stable identity: A in its order, then unseen B members.
+`domains` is the first-occurrence union of both source-domain lists. It records
+ancestry even when substitution later removes the last active member of a domain.
+`level` is `1 + max(A.level,B.level)`. All colors retain `source:'atlas'`.
+
+```js
+{
+  type: 'compound-harmony', domain: 'compound', domains: ['gray'], level: 2,
+  groups: [/* complete A, complete B */], members: [/* active unique colors */],
+  relation: 'shared-member', historicalStatus: 'source-backed-law',
+  sourceStatus: 'primary-1921',
+  provenance: {
+    operation: 'shared-member',
+    inputs: [{group:0, role:'component'}, {group:1, role:'component'}],
+    sharedElements: ['gray:e'], replacedElement: null, replacementGroup: null,
+    replacementEvidence: null, sourceCase: null, sourcePages: [105],
+    sequence: [
+      {step:1, action:'use-input', group:0},
+      {step:2, action:'use-input', group:1},
+      {step:3, action:'shared-member'}
+    ]
+  }
+}
+```
+
+`primary-1921` describes the verified law, not every arbitrary palette generated
+through it. No common member throws an `Error`. A gray companion must actually
+occur in the F group to connect it to G; relation alone is not color identity.
+
+### `substituteHarmony(sourceGroup, member, replacementGroup, context={})`
+
+`member` is a complete atlas color whose identity occurs among the source's active
+members. The replacement is a structured group, possibly compound. Supported
+correspondence requires paired symmetric offsets about the target:
+
+- Gray: ordinal gray-letter indices.
+- Isovalent replacement of a chromatic target: hue offsets within ±6 steps.
+- Same-hue replacement: black-letter indices for isotint, white-letter indices
+  for isotone/shadow-series, with existing family validation.
+
+All nonzero offsets must have their negative counterpart; at least one nonzero
+offset is needed. Zero is allowed for partial replacement retaining the target.
+Multiple symmetric pairs are a contemporary structural generalization. Neither
+this symmetry nor the output RGB asserts optical/Oklab mixture equivalence.
+
+The active list replaces the target at its existing position with replacement
+members, then deduplicates by first occurrence. All occurrences of that identity
+in the effective source view are replaced; historical child occurrences remain
+intact. Unrelated members retain order. Original source and replacement groups
+are preserved in `groups[0]` and `groups[1]`.
+
+The compound shape above uses `relation/operation:'substitution'`, input roles
+`source` and `replacement`, `replacedElement:<stable key>`, `replacementGroup:1`.
+`sharedElements` still records any original input overlap. `replacementEvidence`
+contains `basis`, ordered integer `offsets`, `sourcePages`, and `relation` for
+same-hue replacements. Bases are `gray-letter-symmetry` (pp.107–108),
+`isovalent-hue-symmetry` (pp.105/114/116), `same-hue-letter-symmetry`
+(pp.113/115/116). Top-level law evidence is p.105 and `sourceCase:null`.
+
+Missing targets or unsupported correspondence throw; chromatic-to-gray or
+gray-to-W substitution is not silently inferred. This API composes organized
+groups. Phase-4 `splitHueSet()` constructs hue sets and remains unchanged.
+
+### `flattenHarmonyMembers(group, context={})`
+
+Validates the full recursive tree and recomputes its active members according to
+each operation, returning independent complete atlas colors. Substitution history
+is not naively unioned into the active palette. Neither the input nor provenance
+is modified. Same flattened members can belong to different structural trees;
+flattening is not a structural-equivalence test.
+
+### `compoundLevel(group, context={})`
+
+Returns validated recursive depth: elementary 1, compound 1 plus deepest child.
+A forged cached `level` throws. This contemporary depth field is not an exact
+translation of historical Stufe, Ordnung or Rangordnung. Construction sequence
+is retained locally and recursively through child histories.
+
+### Context, errors and serialization
+
+`context` accepts only optional `hueCircle`; default is the engine's current
+24-anchor construction. Use the same explicit calibration for construction,
+composition, flattening and depth validation. Groups do not embed an anchor
+snapshot. Gray colors remain shared, calibration-independent atlas entries.
+
+All operations are deterministic and pure, returning independent copies. JSON
+round trips are supported. Inputs must match constructor-generated schemas:
+derived members, domains, levels and provenance are checked recursively.
+Unknown fields/case IDs or altered histories in group objects are rejected;
+keep application annotations in an external wrapper. Invalid colors/relations,
+missing members, duplicates within elementary groups, unknown options, sparse
+arrays, non-finite data and malformed structures throw descriptive `TypeError`,
+`RangeError` or `Error`. Cyclic structures/provenance throw; repeated acyclic
+subtrees are accepted. Deduplicated active colors do not erase child multiplicity.
+
+### Compound example
+
+```js
+const grays = OstwaldColor.grayAxis();
+const gray = letter => grays.find(g => g.letter === letter);
+const group = letters => OstwaldColor.elementaryHarmony('gray', [...letters].map(gray));
+const a = group('ace'), b = group('egi');
+const ab = OstwaldColor.combineBySharedMember(a, b);
+ab.provenance.sharedElements; // ['gray:e']
+ab.members.map(m => m.label); // ['a','c','e','g','i']
+const replaced = OstwaldColor.substituteHarmony(group('ceg'), gray('g'), group('ei'));
+replaced.members.map(m => m.label); // ['c','e','i']; original g remains in groups[0]
+const higher = OstwaldColor.combineBySharedMember(ab, group('iln'));
+OstwaldColor.compoundLevel(higher); // 3
+```
+
+See [COMPOUND_HARMONIES.md](COMPOUND_HARMONIES.md) for verified GGe/GGg/GFg/WF
+fixtures, page references, Figure 20/21 and intentionally deferred cases.
