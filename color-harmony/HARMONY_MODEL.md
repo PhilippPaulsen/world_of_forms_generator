@@ -1,10 +1,11 @@
 # Harmony model — implementation notes
 
-The historical frame is Wilhelm Ostwald, *Die Harmonie der Farben*, revised 1921
-edition. [The digitized volume's catalog record](https://books.google.com/books/about/Die_Harmonie_der_Farben.html?id=tmFLAQAAMAAJ)
-identifies edition 2, Unesma, 1921. The equations below implement the project's
-specified reading; that bibliographic record is not evidence for every equation,
-and no quotation or full critical reconstruction of the edition is claimed.
+The historical frame is Wilhelm Ostwald, *Die Harmonie der Farben*, revised
+1921 edition. Phase 4 directly inspected the local primary scan; edition, page
+mapping and verified grammar facts are recorded in
+[1921_HARMONY_GRAMMAR.md](1921_HARMONY_GRAMMAR.md). The earlier color geometry and
+contemporary display decisions remain unchanged; primary verification of grammar
+is not a claim of historical Oklab colorimetry.
 
 ## 1. Analytical v/w/s coordinate model
 
@@ -101,7 +102,7 @@ Mathematical consequence: regular subsets of the isovalent circle have offsets
 tetrad (4), excluding the source from chord output. Phase 3 exposes every divisor
 count through `regularHueSubdivision()` without
 changing atlas or path logic. Only the established counts 2/3/4 receive names;
-other counts remain mathematical. The supplied 1921 interval-pair transcription
+other counts remain mathematical. The verified p.89 musical distance analogy
 is a separate model, described in [INTERVAL_MODEL.md](INTERVAL_MODEL.md).
 
 ## 12. Atlas nodes versus continuous Oklab samples
@@ -128,7 +129,17 @@ byte RGB, sampling rules, metadata and serialization are contemporary decisions.
 The 24 hue anchors are not historical pigment or rotating-disc reconstructions.
 
 Per-hue calibration remains replaceable behind the existing API. Historical
-colorimetry, full series-interval laws and a primary verification of the supplied
-1921 interval table remain future research, as does source-critical verification
-beyond the equations explicitly specified for the project. No UI, p5 integration
-or historical quotation is included.
+colorimetry and complete series-interval laws remain future research. Phase 4
+adds cyclic HarmonySets and validated linear series selections without altering
+these geometric relations. Printed p.51 confirms the ga–ic–le–ng–pi series;
+p.64 confirms the 28 Wertgleiche circles. The p.89 analogy is now directly
+verified and corrected. No UI or p5 integration is included.
+
+## 14. Combinatorial grammar and topology
+
+Cyclic gap signatures include the closing gap and sum to 24. Linear series
+selections have only successive index differences. Dreier is not a synonym for
+Triade; Vierer is not a synonym for Tetrade. Construction (division, augmentation,
+split) is distinct from final geometric symmetry. See INTERVAL_MODEL.md and API.md.
+Harmothek is a future catalog layer. Phase 5 candidate: composed / compound
+harmonies (Zusammengesetzte Wohlklänge), outside Phase 4.

@@ -1,123 +1,103 @@
-# Interval model — Phase 3
+# Interval model — Phase 4
 
-## 1. Why Phase 3 separates geometry from interval grammar
+## 1. Geometry and interval grammar
 
-Geometry describes what can be calculated: paths, ring gaps and equally spaced
-selections. Grammar describes named historical relations and their evidence.
-Neither mathematical availability nor a name is an aesthetic recommendation.
-Phase-2 analytical/psychological geometry and Oklab display realization are intact.
+Geometry supplies paths, distances and selections. Grammar identifies historical
+constructions and their evidence. Neither implies aesthetic approval. Phase 4
+uses the directly inspected 1921 scan; the detailed source map and edition
+fingerprint are in [1921_HARMONY_GRAMMAR.md](1921_HARMONY_GRAMMAR.md).
 
 ## 2. Wertgleiche circle
 
-A register fixes `w/s/v` and repeats it at all 24 hue indices. Atlas fields retain
-their letter pair; continuous fields retain their coordinates and unlabeled
-status. Display anchors remain contemporary and uncalibrated. The 672 chromatic
-atlas nodes plus eight shared grays are not enlarged by interval grammar.
+One register fixes w/s/v across 24 hues. Printed p.64 explicitly describes 28
+such circles, each with 24 colors. The screen anchors remain contemporary,
+uncalibrated Oklab references; grammar does not enlarge the 672+8 atlas.
 
 ## 3. Regular subdivisions
 
-Mathematical rule: `step=24/parts`. Integer divisors `1,2,3,4,6,8,12,24` yield exact
-subsets. The public selector starts at source plus an integer hue-step offset,
-returns all positions, and wraps in increasing-index order. Offset normalization
-is a contemporary mathematical operation, not a rotation of the historical table.
-Generic counts have `historicalStatus:'mathematical'`, with no invented names.
+`step=24/parts`, for divisors 1,2,3,4,6,8,12,24. This is a mathematical operation.
+`regularHueSubdivision()` returns all positions, starting at source plus offset.
+Other than named cases 2/3/4, metadata remains mathematical, even where the source
+mentions larger groups: this phase does not implement their historical taxonomy.
 
-## 4. Complement / triad / tetrad
+## 4. Complement / Triade / Tetrade
 
-The established named model relations are counts 2/3/4, with steps 12/8/6. They
-have `historicalStatus:'explicit'` in the project model, which does not assert
-primary verification. `harmonies()` preserves its earlier convention of returning
-only counterpart fields; the public general selector includes the starting field
-at offset zero. Both use the same private selection algorithm.
+Opposites have gap 12 (pp.74/98), Triaden gap 8 (p.94), Tetraden gap 6 (p.98).
+Dreier and Vierer denote general cardinalities, distinct from those special
+regular classes. `harmonies()` still excludes the source from counterpart fields;
+regular subdivision includes it. Both delegate to the same selector.
 
-## 5. 1921 musical-interval analogy
+## 5. 1921 musical analogy
 
-The supplied transcription contains musical interval names around reference hue
-24, described as identity/octave. These labels belong to that mapping; they are
-not a function of minimal circular distance. No acoustic frequencies, modern
-harmony judgments or algorithm for unnamed historical concepts are inferred.
-No extra dyad or label is created for the reference or for hue 12.
+On p.89 Ostwald compares twelve color-distance steps between opposite colors
+with the chromatic scale. He emphasizes the comparison's limitations and mnemonic
+use. The printed color columns give distances on the two halves of the circle.
+They are neither literal hue dyads nor an acoustic basis for the color engine.
 
-## 6. Historical interval table
+## 6. Verified historical table
 
-The raw table is fixed in its supplied frame:
+| Distance | Printed color entries | Interval | German | Starred |
+| --- | --- | --- | --- | --- |
+| 1 | 1,23 | minor-second | kleine Sekunde | no |
+| 2 | 2,22 | major-second | große Sekunde | no |
+| 3 | 3,21 | minor-third | kleine Terz | yes |
+| 4 | 4,20 | major-third | große Terz | yes |
+| 5 | 5,19 | augmented-third | übermäßige Terz | no |
+| 6 | 6,18 | fourth | Quarte | yes |
+| 7 | 7,17 | augmented-fourth | übermäßige Quarte | no |
+| 8 | 8,16 | fifth | Quinte | yes |
+| 9 | 9,15 | sixth | Sexte | yes |
+| 10 | 10,14 | minor-seventh | kleine Septime | no |
+| 11 | 11,13 | major-seventh | große Septime | no |
+| 12 | 12,12 | octave | Oktave | yes |
 
-| Pair | Interval | German | Marked consonant |
-| --- | --- | --- | --- |
-| 1,23 | minor-second | kleine Sekunde | no |
-| 2,22 | major-second | große Sekunde | no |
-| 3,21 | minor-third | kleine Terz | yes |
-| 4,20 | major-third | große Terz | yes |
-| 5,19 | augmented-third | übermäßige Terz | no |
-| 6,18 | fourth | Quarte | yes |
-| 7,17 | augmented-fourth | übermäßige Quarte | no |
-| 8,16 | fifth | Quinte | yes |
-| 9,15 | sixth | Sexte | yes |
-| 10,14 | minor-seventh | kleine Septime | no |
-| 11,13 | major-seventh | große Septime | no |
-
-`intervalTable1921()` returns entries plus a provenance envelope.
-`intervalRelation1921()` recognizes these unordered pairs only. It returns
-`listed:false,entry:null` for absent pairs, including identities; it does not
-infer names through rotation or distance. For example `(1,23)` and `(11,13)`
-both have minimal gap 2 but different names; `(1,3)` has gap 2 and is unlisted.
-No rotation helper is implemented. Any future rotation must explicitly identify
-itself as a contemporary/generalized operation on the historical pattern.
+`intervalTable1921()` preserves these columns as `colorEntries` and adds explicit
+`distance`. `intervalRelation1921(a,b)` now applies the minimal distance to this
+analogy, with `applicationStatus:'mathematical-distance-lookup'`. Identity is
+unlisted. This deliberately corrects Phase 3's literal-pair interpretation,
+missing final row and erroneous hue-24 identity/octave reference.
 
 ## 7. Historical consonance metadata
 
-The boolean `consonant` records only the supplied historical marking. False means
-not marked consonant in this transcription. Unlisted pairs are not assigned
-false: their entry is null. No beauty score, ranking, recommendation weight or
-modern taste judgment is derived from any of these values.
+`consonant` transcribes the printed asterisk. False means unstarred. Neither
+value produces a score, preference, recommendation or contemporary taste claim.
 
-## 8. Ordered series and future interval selection
+## 8. Ordered series
 
-`selectSeriesInterval()` selects zero-based indices `start+k*step` in a supplied
-ordered array. It is generic, bounds-checked, nonwrapping and shallow. It works on
-the existing Weißgleiche, Schwarzgleiche, Schattenreihe and gray axis without
-altering colors, provenance or labels. Array strides are not automatically
-historical letter-step laws, especially if an array is a restricted subset.
-Complete allowed intervals in each kind of series remain research-pending.
+`selectSeriesInterval()` remains a generic shallow array operation.
+`seriesHarmony()` validates one chromatic atlas series and records a linear
+selection, with indices, gapsOrSteps, step and full colors. There is no wrap gap.
+Primary pp.48–51 discuss these families and enumerate examples; arbitrary index
+selections do not inherit historical approval. Source examples are tested, while
+complete rules, gray-inclusive catalogs and all allowed intervals remain deferred.
 
-## 9. Gray Harmothek as future work
+## 9. Gray Harmothek
 
-`grayAxis()` remains ordered from lightest to darkest: `a,c,e,g,i,l,n,p`.
-Generic interval selection can use this order, but does not reconstruct the
-Harmothek or authenticate any particular three-gray combination. The full gray
-harmony collection remains a separate research task with no invented counts or
-selection rules added here.
+The gray axis stays ordered a,c,e,g,i,l,n,p from light to dark. Generic selection
+works on it. The Harmothek on pp.18–19 is an organized collection for retaining
+and comparing harmony cases; metadata says `future-catalog-layer`. No generator
+or full gray-harmony catalog is implemented.
 
-## 10. Research-pending terminology
+## 10. Research boundaries
 
-The registry separates implemented relations from pending records. Heraden is
-marked `historicalStatus:'attested'`, `implementationStatus:'research-pending'`:
-its algorithmic definition is deliberately absent. Other pending records cover
-complete interval laws for Schattenreihen, Weißgleiche and Schwarzgleiche, and
-full Harmothek reconstruction. They have no execution callbacks or allowed-step
-tables. The analytical constant-v relation keeps its distinct mathematical status.
+Complete interval laws for the three one-hue families remain research-pending.
+Heraden is a secondary-attested research note, not required for this operational
+grammar. No assertion that the term does not exist is made. Larger named classes,
+retaining the center of a split group, and full historical construction counts
+are not exhaustively reconstructed. Composed harmonies are a Phase 5 candidate.
 
-## 11. Source-confidence levels
+## 11. Source confidence
 
-| Label | Meaning and use in this phase |
+| Label | Meaning |
 | --- | --- |
-| `primary` | A directly inspected primary passage; **not claimed for p.89** |
-| `secondary-citing-primary` | The supplied eleven-row transcription citing Ostwald 1921 p.89 |
-| `institutional-secondary` | Reserved for identifiable institutional accounts; not assigned to this table |
-| `mathematical` | Divisibility, ring distance, equal-spacing detection and analytical consequences |
-| `contemporary-implementation` | API shapes, normalization, source inclusion, array selection and Oklab output |
-| `research-pending` | Incomplete definitions, series laws and Harmothek reconstruction |
+| `primary` | Specific directly inspected passage; p.89 and the cited grammar pages |
+| `secondary-citing-primary` | Earlier evidence level, superseded for the corrected p.89 table |
+| `institutional-secondary` | Catalog evidence; not a substitute for reading a page |
+| `mathematical` | Exact ring arithmetic, canonical signatures, symmetry and classification |
+| `contemporary-implementation` | API shapes, normalization, array selections, Oklab display |
+| `research-pending` | Not yet fully reconstructed historical laws |
 
-The table explicitly stores `sourceStatus:'secondary-citing-1921-p89'`,
-`sourceConfidence:'secondary-citing-primary'`, `primaryVerified:false` and
-`transcriptionBasis:'project-supplied-transcription'`. The cited primary work is
-Wilhelm Ostwald, *Die Harmonie der Farben*, revised 1921 edition, p.89. This phase
-has not directly inspected that page. The project's supplied secondary source
-has no bibliographic identity in the brief, recorded as `secondaryReference:null`.
-This must not be read as an independently authenticated scholarly citation.
-
-Later source work can fill that identity, compare a direct primary transcription
-and upgrade the provenance without changing consumer APIs. Named subdivisions
-and inherited geometric relations use a separate project-established status;
-'explicit' is not a substitute for a source-confidence level. No historical claim
-is made for arbitrary divisor counts, arbitrary series strides or Oklab itself.
+Only verified passages receive `primary-1921` or `primary-1921-p89`. A primary
+construction's provenance is separate from the resulting set's geometric class.
+The software's increasing-index clockwise direction and index origin are
+conventions, not a claim of historically calibrated display hues.

@@ -1,11 +1,13 @@
-# Ostwald Farborgel Engine — Phase 3
+# Ostwald Farborgel Engine — Phase 4
 
 ## Scope and historical status
 
 This standalone engine translates Ostwald's relational color organization into a
 contemporary screen model. Phase 2 uses the revised 1921 *Die Harmonie der Farben*
 as its reference frame and implements the analytical/psychological distinctions
-specified for this project. Phase 3 adds interval grammar without changing that geometry.
+specified for this project. Phase 4 grounds the combinatorial grammar in direct inspection of the 1921 scan,
+without changing that geometry. See [1921_HARMONY_GRAMMAR.md](1921_HARMONY_GRAMMAR.md)
+for edition, page mapping, transcription corrections and construction limits.
 See [INTERVAL_MODEL.md](INTERVAL_MODEL.md) for interval evidence and research status,
 and [HARMONY_MODEL.md](HARMONY_MODEL.md) for the model,
 mathematical consequences, implementation choices and limits of historical claims.
@@ -33,6 +35,8 @@ node color-harmony/demo.js
 
 The class is exported directly as CommonJS. Node ESM also supports a default
 import of the same file; no package manifest or browser global is required.
+Keep the internal `HarmonyGrammar.js` alongside `ColorHarmonyEngine.js` when
+copying this module; no npm dependencies are needed.
 
 ```js
 const OstwaldColor = require('./color-harmony/ColorHarmonyEngine.js');
@@ -281,7 +285,7 @@ subdivision engine used by the public `regularHueSubdivision()` method below.
 The field-local return convention is unchanged: `fields` excludes the source.
 This is a contemporary programmatic representation of circle relationships,
 not a claim about Ostwald's exact API formulation. The separate supplied 1921
-interval-pair table adds historical data; it does not redefine these selections.
+musical distance analogy adds historical data; it does not redefine these selections.
 
 ### Context and validation
 
@@ -443,7 +447,7 @@ Required semantic corrections are explicit:
 Tests retain Phase-1 conversion, validation, circle and chromatic-consumer checks;
 only superseded shadow semantics and duplicated-gray assumptions are updated.
 
-## Phase-3 regular subdivisions of the isovalent hue circle
+## Regular subdivisions of the isovalent hue circle
 
 ### `regularHueSubdivision(field, parts, offset = 0, context = {})`
 
@@ -477,8 +481,8 @@ const six = OstwaldColor.regularHueSubdivision(selected, 6);
 ```
 
 Only parts 2, 3, 4 are marked `historicalStatus:'explicit'`, with names
-`complementary`, `triad`, `tetrad`. Here **explicit means established in the
-project's model**, not directly verified against a primary page. Other divisors
+`complementary`, `triad`, `tetrad`. These now carry `sourceStatus:'primary-1921'`
+and `sourcePages` (opposites: 74/98, Triade: 94, Tetrade: 98). Other divisors
 are marked `'mathematical'`; their availability does not imply historical
 privilege. `implementationStatus` records implemented geometry, separately from
 historical evidence and pending research.
@@ -492,82 +496,56 @@ Named `harmonies().hueHarmonies` keeps its Phase-2 shape and excludes the source
 its fields equal the corresponding zero-offset subdivision's `fields.slice(1)`.
 `harmonies()` does not embed the historical interval table.
 
-## 1921 interval-pair table
+## 1921 musical distance analogy — primary-source correction
 
 ### `intervalTable1921()`
 
-Returns a fresh **envelope object**, not a subdivision and not a distance-to-name
-map:
+Returns a fresh envelope with **12 rows**, directly inspected on printed p.89
+(PDF page 107):
 
 ```js
 {
-  sourceStatus: 'secondary-citing-1921-p89',
-  sourceConfidence: 'secondary-citing-primary',
-  primaryVerified: false,
-  transcriptionBasis: 'project-supplied-transcription',
-  primaryReference: {
-    author: 'Wilhelm Ostwald', title: 'Die Harmonie der Farben', year: 1921, page: 89
-  },
-  secondaryReference: null,
-  reference: { hueIndex: 24, role: 'identity-or-octave' },
-  entries: [ /* exactly the eleven dyads below */ ]
+  sourceStatus: 'primary-1921-p89', sourceConfidence: 'primary', primaryVerified: true,
+  transcriptionBasis: 'direct-scan-inspection', model: 'musical-analogy-of-hue-distance',
+  primaryReference: {author:'Wilhelm Ostwald', title:'Die Harmonie der Farben',
+    edition:'2.–3., gänzlich umgearbeitete Auflage', year:1921, page:89, pdfPage:107},
+  reference: {distance:12, colorEntry:12, role:'opposite-distance-octave-analogy'},
+  entries: [/* distance, colorEntries, interval, german, consonant,
+               sourceStatus:'primary-1921-p89', primaryVerified:true */]
 }
 ```
 
-The current transcription is supplied by the project as coming from a secondary
-scholarly source citing Ostwald 1921 p.89. Its secondary bibliographic identity
-was not supplied, so `secondaryReference` is explicitly null. The primary page
-was not directly inspected for this phase. Neither a fabricated citation nor a
-primary verification claim is added. Future direct transcription can update the
-private data/provenance and fill the citation without changing this API shape.
-
-Provenance applies to every entry, each shaped `{pair,interval,german,consonant}`:
-
-| Literal pair | interval | german | consonant |
-| --- | --- | --- | --- |
-| 1,23 | minor-second | kleine Sekunde | false |
-| 2,22 | major-second | große Sekunde | false |
-| 3,21 | minor-third | kleine Terz | true |
-| 4,20 | major-third | große Terz | true |
-| 5,19 | augmented-third | übermäßige Terz | false |
-| 6,18 | fourth | Quarte | true |
-| 7,17 | augmented-fourth | übermäßige Quarte | false |
-| 8,16 | fifth | Quinte | true |
-| 9,15 | sixth | Sexte | true |
-| 10,14 | minor-seventh | kleine Septime | false |
-| 11,13 | major-seventh | große Septime | false |
-
-Hue 24 is the reference/identity or octave position in this mapping. It is
-metadata, not an invented twelfth dyad. No additional named role is inferred for
-hue 12. The table remains in its raw reference frame.
+`colorEntries` preserves the two printed distance columns: `[1,23]` through
+`[11,13]`, followed by **`[12,12]`, Oktave, consonant=true**. These are distances
+in opposite directions around the circle, not two literal hue indices to pair.
+There is no identity/octave role for hue 24. The complete table is in
+[INTERVAL_MODEL.md](INTERVAL_MODEL.md). Ostwald explicitly limits the analogy to
+a comparison/memory aid; it is not the mathematical foundation of this engine.
 
 ### `intervalRelation1921(a, b)`
 
-Accepts two integer hue indices in `1..24`; no modulo normalization or rotation
-is applied. Returns the provenance envelope above (without `entries`) plus:
+Accepts canonical integer hue indices `1..24` (no normalization); invalid indices
+throw `RangeError`. Returns the envelope above without `entries`, plus sorted
+`pair`, `distance` (minimal circular distance), `listed`, `entry` and
+`applicationStatus:'mathematical-distance-lookup'`. All distances 1..12 have an
+analogy row; identity has distance 0, `listed:false, entry:null`.
 
 ```js
-{ pair: [3,21], listed: true,
-  entry: {pair:[3,21], interval:'minor-third', german:'kleine Terz', consonant:true} }
+OstwaldColor.intervalRelation1921(5,17).entry.interval; // 'octave', distance 12
+OstwaldColor.intervalRelation1921(1,23).entry.interval; // 'major-second', distance 2
 ```
 
-Pair order is ignored for lookup, and output `pair` is ascending. `(21,3)` matches
-`(3,21)`. An unlisted pair returns `listed:false, entry:null`, including identity
-pairs such as `(24,24)`. Absence is not a non-consonance judgment. Invalid indices
-throw `RangeError`; there are no aesthetic scores or extrapolated interval names.
+**Intentional Phase-3 correction:** the previous literal-dyad lookup, eleven-row
+count, `entry.pair`, secondary provenance and hue-24 reference were incorrect.
+Rows now expose `distance` and `colorEntries`; the top-level lookup `pair` still
+means the actual input hue pair. Applying the distance table to any selected hue
+pair is explicitly a mathematical operation, not a claim that the printed page
+lists that particular pair. Colors and existing named-harmony behavior are unchanged.
 
-For example, `(1,23)` and `(11,13)` both have minimal distance 2 but carry different
-names in the table. `(1,3)` has the same minimal distance and is **unlisted**.
-Distance alone therefore cannot name historical intervals. No rotational helper
-for the historical table is exposed in this phase. A future rotation must be
-marked as a contemporary/generalized mathematical operation, not a transcription.
+### Historical consonance flags
 
-## Historical consonance flags
-
-`consonant` records the supplied historical marking only. `false` means not marked
-as consonant in this transcription. Neither value expresses a contemporary
-beauty judgment, recommendation, palette ranking or weight. The engine does not
-turn these flags into selection policies.
+`consonant` transcribes the printed asterisk only. False means unstarred, not an
+engine verdict. No scores, weights, palette recommendations or ranking follow.
 
 ## Neutral hue geometry
 
@@ -634,45 +612,158 @@ arrays omit the source and preserve context order, so callers must intentionally
 choose their series membership/order before selecting an interval. No allowed-step
 table or claim of historically harmonious selection is attached.
 
-## Harmony-rule registry and research-pending concepts
+## Primary terminology registry and research status
 
 ### `harmonyRuleRegistry()`
 
-Returns fresh plain metadata `{rules:[...], researchPending:[...]}`. No arguments,
-no callbacks, rule execution, scoring or registration side effects.
+Returns fresh `{rules,researchPending,deferred,researchNotes}` metadata. Rules
+include `id,germanTerm,englishTerm,domain,historicalStatus,sourceStatus,sourcePages,
+implementationStatus`. Verified terms include Zweier, Dreier, Triade, Vierer,
+Tetrade, Schattenreihe, Weißgleiche, Schwarzgleiche and Wertgleiche. Primary entries
+also carry `primaryVerified`, `sourceConfidence` and `period`. This registry has
+no execution callbacks or aesthetic judgments.
 
-Implemented rule records have `id`, `domain`, `relation`, `historicalStatus`,
-`sourceStatus`, `period` and `implementationStatus`. Named circle rules also have
-`parts`. Records cover complementary, triad, tetrad, isotint, isotone,
-analyticIsochrome, shadowSeries, isovalent, the generic subdivision operation and
-the literal interval lookup. `analyticIsochrome` and generic subdivision are
-marked mathematical. Historical-model relations use
-`sourceStatus:'project-specified-1921-model'`; this is not primary verification.
-The table lookup carries `secondary-citing-1921-p89`, `secondary-citing-primary`
-and `primaryVerified:false` separately.
+Complete interval-law reconstruction for the three historical one-hue series
+remains `research-pending`. The Harmothek is a `future-catalog-layer`, supported
+by pp.18–19, not a generator. Composed / compound harmonies are a **Phase 5
+candidate**, outside this phase. Heraden is retained only in `researchNotes` as
+`secondary-attested / not-required-for-current-primary-grammar`; it is not an
+implemented rule or required task. No claim of historical nonexistence is made.
 
-Pending records have `id`, `term`, `historicalStatus`, `implementationStatus` and
-`sourceConfidence`. All have `implementationStatus:'research-pending'` and do not
-appear as executable rules. In particular Heraden is `historicalStatus:'attested'`,
-with no guessed algorithm.
+## Cyclic harmony grammar
 
-Explicitly pending:
+All set APIs below accept dense arrays of safe integers, normalize modulo 24 to
+1..24, reject duplicate normalized hues and leave inputs untouched. Integer
+geometry is exact: no floating-point epsilon or silent deduplication is needed.
+No labels or display colors are invented. To resolve a HarmonySet in register
+`ic`, look up its hues in `harmonies(selected).isovalent`.
 
-- Heraden: algorithmic definition and relation to other terms.
-- Complete interval rules for Schattenreihen.
-- Complete interval rules for Weißgleiche.
-- Complete interval rules for Schwarzgleiche.
-- Full Harmothek reconstruction, including gray harmony collections.
+### `dyadsByDistance(distance)`
 
-Primary transcription of p.89 and identification of the cited secondary source
-also remain provenance tasks. Existing `grayAxis()` already provides a stable
-lightest-to-darkest order for future work; arbitrary gray selections gain no
-historical validity from the infrastructure alone.
+`distance` is an integer 1..12; otherwise `RangeError`. Returns numerically sorted
+unordered `[a,b]` arrays with `a<b`: 24 pairs for each distance 1..11, 12 for
+distance 12. Their union has 276 pairs. This realizes the organization of the
+printed *Verzeichnis der Zweier*, pp.72–74. Source-number translation and printed
+regression examples are documented in the source map; the complete table is generated.
 
-## Phase-3 compatibility
+### `cyclicGapSignature(hues)`
 
-Phase-2 method signatures, atlas counts, colors, paths and field-local return
-shapes remain unchanged. All seven Phase-3 methods are additive. The named hue
-chords use the generalized selector internally, while `harmonies()` remains
-field-local. No rotations of historical dyads, new palette schemes, full series
-laws, aesthetic recommendations, UI or generator integration have been added.
+Accepts 2..24 distinct normalized hues. Sorts them, computes successive gaps
+including the closing gap, then returns the numerically lexicographically least
+cyclic rotation of that sequence. Gaps are positive and sum to 24. Invalid arrays,
+cardinality, nonintegers, holes or duplicates throw `TypeError`/`RangeError`.
+
+```js
+OstwaldColor.cyclicGapSignature([1,9,17]); // [8,8,8]
+OstwaldColor.cyclicGapSignature([1,3,8]);  // [2,5,17]
+OstwaldColor.cyclicGapSignature([1,23,18]); // [2,17,5], mirror kept distinct
+```
+
+Input permutations and rotations preserve the signature. Reflection equivalence
+is **not** used to canonicalize it. The canonical gaps need not start at the first
+returned hue; they identify a rotation class, not an ordered traversal origin.
+
+### `classifyHueSet(hues)`
+
+Same validation as `cyclicGapSignature()`. Returns a plain HarmonySet:
+
+```js
+OstwaldColor.classifyHueSet([1,9,17]);
+// { hues:[1,9,17], cardinality:3, gaps:[8,8,8], className:'Dreier',
+//   symmetry:'dihedral', symmetries:{rotations:[0,8,16],reflections:[0,8,16]},
+//   regular:true, construction:'division', historicalName:'Triade',
+//   sourceStatus:'primary-1921', sourcePages:[94],
+//   classificationStatus:'structural-no-aesthetic-verdict' }
+```
+
+`className` is Zweier/Dreier/Vierer for cardinality 2/3/4, otherwise null.
+`historicalName` is Gegenfarben only at `[12,12]`, Triade only at `[8,8,8]`,
+Tetrade only at `[6,6,6,6]`, otherwise null. Unnamed valid sets have mathematical
+status; cardinality alone never authenticates a historical harmony.
+
+`regular` tests all cyclic gaps. Symmetry is `asymmetric`, `reflection`,
+`rotational` or `dihedral` (both). `rotations` lists invariant shifts 0..23,
+including identity 0. `reflections` lists axis parameters k for the map
+`x -> (k-x) mod 24`, where x=hue-1. These are exact mathematical symmetries.
+A recognized named regular class defaults to construction `division`; arbitrary
+sets use `unspecified`. Construction helpers overwrite that field with actual
+provenance while retaining the independent geometric name.
+
+### `divideHueDyad(dyad, direction='clockwise')`
+
+Two distinct hues, with input order retained for arc direction. `clockwise` means
+increasing index; `counterclockwise` means decreasing index. Inserts the exact
+midpoint of the chosen arc. An odd arc throws `RangeError`, since its midpoint
+is not a discrete hue. Both alternatives are described on pp.90–92.
+
+```js
+OstwaldColor.divideHueDyad([3,7]).hues; // [3,5,7], historical 08,17,25
+OstwaldColor.divideHueDyad([3,7], 'counterclockwise').hues; // [3,7,17], 08,25,67
+```
+
+Returns HarmonySet with `construction:'division'` and `constructionEvidence`:
+source status/pages, original ordered `baseDyad`, `direction`, `arc`, `addedHue`.
+
+### `augmentHueDyad(dyad, thirdHue)`
+
+Retains two distinct normalized hues and adds a distinct safe integer hue.
+Returns HarmonySet with `construction:'augmentation'`; evidence retains sorted
+`baseDyad`, its minimal `distance`, `addedHue`, `equalStep` and concept pages.
+Continuation of the same directed step beyond either endpoint matches Aufbau
+(pp.90/92) and has primary construction evidence. Arbitrary additions remain
+`contemporary-implementation` with no claimed historical preference.
+Duplicates or invalid input throw `TypeError`/`RangeError`.
+
+### `splitHueSet(hues, target, distance)`
+
+Accepts two or three distinct hues and a target member. Replaces the target with
+`target-distance` and `target+distance`, modulo 24. The integer distance must be
+1..6, the range explicitly discussed on p.93. Missing targets, collisions or
+invalid parameters throw. It never silently drops coincident colors.
+
+Returns HarmonySet with `construction:'split'`; `constructionEvidence` records
+`sourceHues,target,distance,replacements` and pp.93/99. Repeating a split on the
+returned `.hues` supports the documented Vierer construction. Each call records
+its immediate input; callers can retain previous descriptors as a construction
+history. A resulting Triade or Tetrade still has construction `split`.
+No inferred optical-mixture equivalence is imposed on contemporary Oklab anchors.
+
+## Linear series HarmonySet
+
+### `seriesHarmony(series, relationFamily, indices, context={})`
+
+Adds a validated descriptor around a discrete selection. Families are
+`shadow-series`, `isotint`, `isotone`, and mathematical `analytic-isochrome`.
+`series` must contain at least two complete chromatic atlas fields from one hue,
+all satisfying the declared relation. Use existing rounding-derived shadow
+comparison and `EPSILON=1e-10` for exact w/s/v relations. The supplied order must
+be strictly monotone (either direction), with no duplicates. Order is checked
+by s for isotint/shadow, by w for isotone/analytical isochrome.
+
+`indices` contains at least two strictly increasing zero-based safe integers
+within bounds. Neither indices nor series are silently reordered. Optional
+`context` contains only `hueCircle`, validated like other calibration contexts.
+Invalid input throws `TypeError`, `RangeError` or descriptive `Error`.
+
+```js
+const h = OstwaldColor.harmonies(selected);
+OstwaldColor.seriesHarmony(h.shadowSeries, 'shadow-series', [0,2,4]);
+// topology:'linear', indices:[0,2,4], gapsOrSteps:[2,2], step:2,
+// cardinality:3, fields:[5ga,5le,5pi] (complete independent color objects)
+```
+
+The result also has `relationFamily,hueIndex,sourceStatus:'contemporary-implementation'`,
+`classificationStatus:'structural-no-aesthetic-verdict'` and `relationEvidence`
+with primary discussion pages (48–51), or mathematical status for constant-v.
+`step` is null when successive index differences vary. No closing gap exists.
+A subset's index steps describe that subset, not historical letter distances.
+Gray-axis selection remains available through generic `selectSeriesInterval()`;
+`seriesHarmony()` currently validates chromatic atlas nodes only.
+
+## Phase-4 compatibility and boundaries
+
+Oklab, anchors, letter values, 672+8 atlas nodes, Phase-2 geometry, sampling,
+CommonJS/Node ESM and named field-local harmony shapes are preserved. New grammar
+methods are additive. The incorrect Phase-3 p.89 table semantics are deliberately
+corrected as described above; research registry metadata is updated. There is no
+UI, p5 integration, ranking, full interval-law catalog or compound-harmony engine.

@@ -40,18 +40,43 @@ for (const parts of [2, 3, 4, 6]) {
   console.log(`${result.historicalName || 'generic subdivision'}: parts=${parts}, step=${result.step}, ` +
     `historicalStatus=${result.historicalStatus}; all positions: ` + result.fields.map(f => f.label).join(', '));
 }
-console.log('\nHistorical data: supplied 1921 interval table (separate from subdivisions)');
+console.log('\nHistorical data: primary 1921 musical distance analogy (separate from grammar)');
 const table1921 = OstwaldColor.intervalTable1921();
-console.log(`${table1921.entries.length} literal pairs; ${table1921.sourceStatus}; primaryVerified=${table1921.primaryVerified}`);
-console.log(`Reference hue ${table1921.reference.hueIndex}: ${table1921.reference.role}`);
+console.log(`${table1921.entries.length} distance rows; ${table1921.sourceStatus}; primaryVerified=${table1921.primaryVerified}`);
+console.log(`Octave analogy: distance ${table1921.reference.distance}; color entry ${table1921.reference.colorEntry}`);
 for (const entry of table1921.entries) {
-  console.log(`${entry.pair.join(' + ')}: ${entry.interval} (${entry.german}), historical consonant=${entry.consonant}`);
+  console.log(`distance ${entry.distance}, printed ${entry.colorEntries.join(' / ')}: ${entry.interval} (${entry.german}), historical consonant=${entry.consonant}`);
 }
-console.log('Historical consonant pair:', JSON.stringify(OstwaldColor.intervalRelation1921(3, 21).entry));
-console.log('Historical non-consonant marking:', JSON.stringify(OstwaldColor.intervalRelation1921(1, 23).entry));
+console.log('Historical consonant distance analogy:', JSON.stringify(OstwaldColor.intervalRelation1921(1, 4).entry));
+console.log('Historical non-consonant marking:', JSON.stringify(OstwaldColor.intervalRelation1921(1, 2).entry));
 console.log('\nMathematical generalization: neutral distance and equal-spacing detection');
 console.log('hueDistance(23,1):', JSON.stringify(OstwaldColor.hueDistance(23, 1)));
 console.log('isRegularHueSet([1,9,17]):', OstwaldColor.isRegularHueSet([1, 9, 17]));
 console.log('isRegularHueSet([1,5,12]):', OstwaldColor.isRegularHueSet([1, 5, 12]));
 console.log('Generic gray selection (no historical validity claim):',
   OstwaldColor.selectSeriesInterval(grays, { start: 1, step: 2, count: 3 }).map(gray => gray.letter).join(', '));
+
+
+console.log('\nPhase 4: hue grammar in register ic');
+for (const hues of [OstwaldColor.dyadsByDistance(1)[0], OstwaldColor.dyadsByDistance(12)[0],
+    [1,3,8], [1,9,17], [1,3,5,7], [1,7,13,19]]) {
+  const set = OstwaldColor.classifyHueSet(hues);
+  const label = set.historicalName ? 'PRIMARY-SOURCE NAMED CLASS' : 'STRUCTURAL / MATHEMATICAL CLASSIFICATION';
+  console.log(`[${label}] ${set.className}: ${set.historicalName || 'unnamed'} ` +
+    `hues=${set.hues} gaps=${set.gaps} symmetry=${set.symmetry}`);
+  console.log('  [atlas]', set.hues.map(hue => harmonies.isovalent[hue-1].label).join(', '));
+}
+console.log('PRIMARY-SOURCE CONSTRUCTION: division of historical 08–25',
+  JSON.stringify(OstwaldColor.divideHueDyad([3,7])));
+console.log('PRIMARY-SOURCE CONSTRUCTION: symmetric split retaining its own provenance',
+  JSON.stringify(OstwaldColor.splitHueSet([1,13],13,4)));
+for (const [family,series,indices] of [
+  ['shadow-series',harmonies.shadowSeries,[0,2,4]],
+  ['isotint',triangle.filter(f=>f.w===selected.w),[0,1,2]],
+  ['isotone',triangle.filter(f=>f.s===selected.s),[0,1,2]]
+]) {
+  const result=OstwaldColor.seriesHarmony(series,family,indices);
+  console.log(`[STRUCTURAL / MATHEMATICAL CLASSIFICATION] ${family}: ` +
+    `linear indices=${result.indices}, gaps=${result.gapsOrSteps}, no cyclic closing gap`);
+  console.log('  [atlas]',result.fields.map(f=>f.label).join(', '));
+}
