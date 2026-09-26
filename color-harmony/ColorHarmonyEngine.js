@@ -1,5 +1,7 @@
 'use strict';
 
+const Grammar = require('./HarmonyGrammar.js');
+
 /**
  * Ostwald historical structure, realized as a contemporary screen color model.
  * Oklab is the sole mixing space; historical pigment/disc colors are not reproduced.
@@ -264,6 +266,8 @@ function selectRegularSubdivision(register, hueIndex, parts, offset = 0) {
     parts, step, offset: rotation,
     historicalStatus: historicalName ? 'explicit' : 'mathematical',
     historicalName, implementationStatus: 'implemented',
+    sourceStatus: historicalName ? 'primary-1921' : 'mathematical',
+    sourcePages: ({ 2: [74, 98], 3: [94], 4: [98] })[parts] || [],
     fields: Array.from({ length: parts }, (_, i) =>
       copyColor(register[(hueIndex - 1 + rotation + i * step) % 24]))
   };
@@ -509,7 +513,7 @@ class OstwaldColor {
 
   /**
    * Select a complete regular subdivision of a 24-hue isovalent circle.
-   * This mathematical operation is separate from the raw 1921 interval-pair table.
+   * This mathematical operation is separate from the 1921 musical distance analogy.
    * @param {object} field Complete atlas field (legacy source omission allowed), or
    * complete interpolated color with hueIndex, label=null and source='interpolated'.
    * @param {number} parts Positive divisor of 24: 1,2,3,4,6,8,12,24.
@@ -568,42 +572,66 @@ class OstwaldColor {
   }
 
   /**
-   * Describe implemented relations and explicit research gaps; does not execute rules.
-   * 'explicit' marks relationships established by the project, not primary verification.
-   * @returns {{rules:object[],researchPending:object[]}} Fresh metadata, no ranking/weights.
-   * Pending records are not executable harmony rules, especially the attested Heraden.
+   * Return primary terminology, mathematical infrastructure and separate deferred research.
+   * @returns {object} Fresh {rules,researchPending,deferred,researchNotes}; metadata only.
    */
-  static harmonyRuleRegistry() {
-    const established = {
-      historicalStatus: 'explicit', period: '1921-system',
-      sourceStatus: 'project-specified-1921-model', implementationStatus: 'implemented'
-    };
-    return {
-      rules: [
-        ...Object.entries(NAMED_SUBDIVISIONS).map(([parts, id]) => ({
-          id, domain: 'isovalent-hue-circle', relation: 'regular-subdivision', parts: Number(parts), ...established
-        })),
-        ...[['isotint', 'constant-w'], ['isotone', 'constant-s'], ['shadowSeries', 'constant-v:w']]
-          .map(([id, relation]) => ({ id, domain: 'one-hue-triangle', relation, ...established })),
-        { id: 'analyticIsochrome', domain: 'analytical-triangle', relation: 'constant-v',
-          historicalStatus: 'mathematical', sourceStatus: 'mathematical', period: null, implementationStatus: 'implemented' },
-        { id: 'isovalent', domain: 'isovalent-hue-circle', relation: 'constant-w-s-v', ...established },
-        { id: 'regularHueSubdivision', domain: 'isovalent-hue-circle', relation: 'regular-subdivision',
-          historicalStatus: 'mathematical', sourceStatus: 'mathematical', period: null, implementationStatus: 'implemented' },
-        { id: 'intervalRelation1921', domain: 'raw-1921-hue-pairs', relation: 'literal-pair-lookup',
-          historicalStatus: 'transcribed', period: '1921-system',
-          sourceStatus: 'secondary-citing-1921-p89', sourceConfidence: 'secondary-citing-primary',
-          implementationStatus: 'implemented', primaryVerified: false }
-      ],
-      researchPending: [
-        { id: 'heraden', term: 'Heraden', historicalStatus: 'attested' },
-        { id: 'shadow-series-interval-laws', term: 'Complete interval rules for Schattenreihen', historicalStatus: 'research-pending' },
-        { id: 'isotint-interval-laws', term: 'Complete interval rules for Weißgleiche', historicalStatus: 'research-pending' },
-        { id: 'isotone-interval-laws', term: 'Complete interval rules for Schwarzgleiche', historicalStatus: 'research-pending' },
-        { id: 'gray-harmothek', term: 'Full Harmothek reconstruction', historicalStatus: 'research-pending' }
-      ].map(item => ({ ...item, implementationStatus: 'research-pending', sourceConfidence: 'research-pending' }))
-    };
-  }
+  static harmonyRuleRegistry() { return Grammar.registry(); }
+
+  /**
+   * Enumerate the Zweier distance class (1921 pp.72–74), without aesthetic ranking.
+   * @param {number} distance Integer 1..12, minimal circular distance.
+   * @returns {number[][]} Sorted unordered pairs; 24 for 1..11, 12 for distance 12.
+   * @throws {RangeError} For an invalid distance.
+   */
+  static dyadsByDistance(distance) { return Grammar.dyadsByDistance(distance); }
+
+  /**
+   * Canonical positive cyclic gaps; sum=24. Rotation equivalence excludes reflection.
+   * @param {number[]} hues Dense array of 2..24 distinct safe integers, normalized modulo 24.
+   * @returns {number[]} Numerically lexicographically least rotation of the gap sequence.
+   * @throws {TypeError|RangeError} For invalid input or duplicates after normalization.
+   */
+  static cyclicGapSignature(hues) { return Grammar.cyclicGapSignature(hues); }
+
+  /**
+   * Classify a circular hue set structurally, independently of color coordinates.
+   * @param {number[]} hues Dense array of 2..24 distinct safe integers (modulo 24).
+   * @returns {object} HarmonySet with hues, cardinality, gaps, className, symmetry,
+   * symmetries, regular, construction, historicalName, sourceStatus and sourcePages.
+   * Triade/Tetrade are named special cases; classification is never an aesthetic verdict.
+   * @throws {TypeError|RangeError} For invalid input or duplicate normalized hues.
+   */
+  static classifyHueSet(hues) { return Grammar.classifyHueSet(hues); }
+
+  /**
+   * Insert an exact midpoint on a selected directed dyad arc (1921 pp.90–92).
+   * @param {number[]} dyad Two distinct safe integer hues, normalized modulo 24; order matters.
+   * @param {string} [direction='clockwise'] Increasing-index clockwise or counterclockwise.
+   * @returns {object} HarmonySet with construction='division' and original arc provenance.
+   * @throws {TypeError|RangeError} For invalid input or an odd arc (no discrete midpoint).
+   */
+  static divideHueDyad(dyad, direction = 'clockwise') { return Grammar.divideHueDyad(dyad, direction); }
+
+  /**
+   * Retain a dyad and add one distinct hue; equal-step Aufbau is identified separately.
+   * @param {number[]} dyad Two distinct safe integer hues, normalized modulo 24.
+   * @param {number} thirdHue Safe integer, distinct after normalization.
+   * @returns {object} HarmonySet with construction='augmentation', baseDyad and its distance.
+   * Equal-step continuation cites p.92; arbitrary addition is contemporary infrastructure.
+   * @throws {TypeError|RangeError} For invalid or duplicate hue positions.
+   */
+  static augmentHueDyad(dyad, thirdHue) { return Grammar.augmentHueDyad(dyad, thirdHue); }
+
+  /**
+   * Symmetrically replace a hue by two neighbors (p.93; Dreier to Vierer p.99).
+   * @param {number[]} hues Two or three distinct safe integer hues, normalized modulo 24.
+   * @param {number} target Member to replace (safe integer, normalized modulo 24).
+   * @param {number} distance Integer 1..6 to either side, as discussed on p.93.
+   * @returns {object} HarmonySet with construction='split' and replacement provenance.
+   * Construction remains split even if the resulting geometry is a named regular class.
+   * @throws {TypeError|RangeError} For invalid input or collisions with remaining hues.
+   */
+  static splitHueSet(hues, target, distance) { return Grammar.splitHueSet(hues, target, distance); }
 
   /**
    * Neutral integer distances on the 24-position circle; assigns no interval name.
@@ -675,6 +703,54 @@ class OstwaldColor {
       throw new RangeError('Series interval selection exceeds array bounds');
     }
     return Array.from({ length: count }, (_, i) => series[start + i * step]);
+  }
+
+  /**
+   * Describe a linear discrete selection within one validated chromatic atlas series.
+   * @param {object[]} series At least two complete same-hue atlas fields in monotone order.
+   * @param {string} relationFamily shadow-series | isotint | isotone | analytic-isochrome.
+   * @param {number[]} indices At least two strictly increasing zero-based indices; no wrap.
+   * @param {object} [context={}] Optional {hueCircle} for calibrated/custom reference colors.
+   * @returns {object} Linear series descriptor: relationFamily, indices, gapsOrSteps,
+   * step (null if unequal), cardinality, fields, and separate historical concept evidence.
+   * Index gaps refer to the supplied series, never an inferred historical allowed-step law.
+   * @throws {TypeError|RangeError|Error} For bad colors, family, order, indices or context.
+   */
+  static seriesHarmony(series, relationFamily, indices, context = {}) {
+    const families = { isotint: 'w', isotone: 's', 'analytic-isochrome': 'v', 'shadow-series': null };
+    if (!Object.hasOwn(families, relationFamily)) throw new RangeError('Unknown series relationFamily');
+    if (!context || typeof context !== 'object' || Array.isArray(context) ||
+        Object.keys(context).some(key => key !== 'hueCircle')) throw new TypeError('Series context accepts only hueCircle');
+    const circle = context.hueCircle === undefined ? this.hueCircle() : context.hueCircle;
+    validateCircle(circle);
+    if (!Array.isArray(series) || series.length < 2) throw new TypeError('series requires at least two atlas fields');
+    const fields = Array.from(series, field => validateField(field, circle));
+    const first = fields[0], key = families[relationFamily];
+    const orderKey = relationFamily === 'isotone' || relationFamily === 'analytic-isochrome' ? 'w' : 's';
+    let direction = 0;
+    for (let i = 0; i < fields.length; i++) {
+      const field = fields[i];
+      if (field.hueIndex !== first.hueIndex || (key === null ? !sameShadowSeries(field, first) :
+          Math.abs(field[key] - first[key]) > EPSILON)) throw new Error('Fields do not belong to the declared one-hue series');
+      if (i > 0) {
+        const delta = field[orderKey] - fields[i - 1][orderKey];
+        const sign = Math.sign(delta);
+        if (Math.abs(delta) <= EPSILON || (direction && direction !== sign)) throw new Error('Series must be strictly monotone without duplicates');
+        direction = sign;
+      }
+    }
+    if (!Array.isArray(indices) || indices.length < 2) throw new TypeError('indices requires at least two positions');
+    for (let i = 0; i < indices.length; i++) {
+      if (!Number.isSafeInteger(indices[i]) || indices[i] < 0 || indices[i] >= fields.length ||
+          (i > 0 && indices[i] <= indices[i - 1])) throw new RangeError('indices must be strictly increasing and within series bounds');
+    }
+    const gapsOrSteps = indices.slice(1).map((n, i) => n - indices[i]);
+    const sourcePages = ({ isotint: [48, 49, 50], isotone: [48, 50, 51], 'shadow-series': [48, 51] })[relationFamily] || [];
+    return { topology: 'linear', relationFamily, hueIndex: first.hueIndex, indices: indices.slice(),
+      gapsOrSteps, step: gapsOrSteps.every(g => g === gapsOrSteps[0]) ? gapsOrSteps[0] : null,
+      cardinality: indices.length, fields: indices.map(i => copyColor(fields[i])),
+      sourceStatus: 'contemporary-implementation', classificationStatus: 'structural-no-aesthetic-verdict',
+      relationEvidence: { sourceStatus: sourcePages.length ? 'primary-1921' : 'mathematical', sourcePages } };
   }
 
   /**
