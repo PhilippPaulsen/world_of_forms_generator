@@ -45,7 +45,7 @@ function makeSandbox(src, baseShape, baseMode, order) {
         line: () => { }, bezier: () => { }, point: () => { }, push: () => { }, pop: () => { }, noStroke: () => { }, noFill: () => { }, stroke: () => { }, CLOSE: 'close',
         fill: c => { sb._fill = c; }, beginShape: () => { sb._cur = []; }, vertex: (x, y) => { sb._cur.push({ x, y }); },
         endShape: () => { drawnPolys.push({ fill: sb._fill, pts: sb._cur }); sb._cur = null; },
-        segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, baseNetTransform: null, activeNetWarp: null, lineColor: '#000', altNetSeed: null,
+        segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, baseNetTransform: null, baseNetAnimation: null, activeNetWarp: null, lineColor: '#000', altNetSeed: null,
         currentShape: baseShape, shapeSizeFactor: 1.3, nodeCount: order, symmetryMode: baseMode, width: 300, height: 300, showFaces: false,
         connections: [], additionalLayers: [], baseFaceAssignments: new Map(), baseFacePalette: null, faceHover: null, activeLayer: 'base', timeline: null, drawnPolys
     };

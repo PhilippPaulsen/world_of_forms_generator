@@ -17,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
-const sb = { Math, console, baseNetTransform: null, currentShape: 'square', outerCorners: null, nodeCount: 7 };
+const sb = { Math, console, baseNetTransform: null, baseNetAnimation: null, currentShape: 'square', outerCorners: null, nodeCount: 7 };
 vm.createContext(sb);
 vm.runInContext(fs.readFileSync(path.join(ROOT, 'core', 'netwarp.js'), 'utf8'), sb);
 let failures = 0, checks = 0;

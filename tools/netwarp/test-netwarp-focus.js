@@ -37,7 +37,7 @@ function makeSb(src, order, sf, mode) {
         segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, lineColor: '#000', altNetSeed: null,
         currentShape: 'square', shapeSizeFactor: sf, nodeCount: order, symmetryMode: mode, width: W, height: W, showFaces: false,
         connections: [], additionalLayers: [], baseFaceAssignments: new Map(), baseFacePalette: null, faceHover: null, activeLayer: 'base', timeline: null,
-        baseNetTransform: null, activeNetWarp: null, lines: []
+        baseNetTransform: null, baseNetAnimation: null, activeNetWarp: null, lines: []
     };
     sb.toTileLocal = (n, tileC, flip180, rot = 0) => { let x = n.x - sb.centroid.x, y = n.y - sb.centroid.y; if (flip180) { x = -x; y = -y; } if (rot) { const r = rot * Math.PI / 180, rx = x * Math.cos(r) - y * Math.sin(r), ry = x * Math.sin(r) + y * Math.cos(r); x = rx; y = ry; } return { x: tileC.x + x, y: tileC.y + y }; };
     vm.createContext(sb); vm.runInContext(src, sb);

@@ -44,7 +44,7 @@ function makeSb(src, shape, mode, order) {
         segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, lineColor: '#000', altNetSeed: null,
         currentShape: shape, shapeSizeFactor: SF, nodeCount: order, symmetryMode: mode, width: W, height: W, showFaces: false,
         connections: [], additionalLayers: [], baseFaceAssignments: new Map(), baseFacePalette: null, faceHover: null, activeLayer: 'base', timeline: null,
-        baseNetTransform: null, activeNetWarp: null, lines: [], fills: 0
+        baseNetTransform: null, baseNetAnimation: null, activeNetWarp: null, lines: [], fills: 0
     };
     sb.toTileLocal = (n, tileC, flip180, rot = 0) => {
         let x = n.x - sb.centroid.x, y = n.y - sb.centroid.y;

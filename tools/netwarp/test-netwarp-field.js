@@ -37,7 +37,7 @@ function makeSb(src, order, sf, mode) {
         segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, lineColor: '#000', altNetSeed: null,
         currentShape: 'square', shapeSizeFactor: sf, nodeCount: order, symmetryMode: mode, width: W, height: W, showFaces: false,
         connections: [], additionalLayers: [], baseFaceAssignments: new Map(), baseFacePalette: null, faceHover: null, activeLayer: 'base', timeline: null,
-        baseNetTransform: null, activeNetWarp: null, lines: []
+        baseNetTransform: null, baseNetAnimation: null, activeNetWarp: null, lines: []
     };
     sb.toTileLocal = (n, tileC, flip180, rot = 0) => { let x = n.x - sb.centroid.x, y = n.y - sb.centroid.y; if (flip180) { x = -x; y = -y; } if (rot) { const r = rot * Math.PI / 180, rx = x * Math.cos(r) - y * Math.sin(r), ry = x * Math.sin(r) + y * Math.cos(r); x = rx; y = ry; } return { x: tileC.x + x, y: tileC.y + y }; };
     vm.createContext(sb); vm.runInContext(src, sb);
@@ -223,7 +223,7 @@ console.log('\n== 9. export ==');
     const g = ex({ x: { kind: 'geometric', w: 1.2 }, y: 'same', domain: 'field' }, 3);
     check('geometric q in a field is per tile (Rt = 3): exp(w / 2)', Math.abs(g.x.q - Math.exp(1.2 / 2)) < 1e-12 && g.x.alternate === false);
     const exportSrc = fs.readFileSync(path.join(ROOT, 'core', 'export.js'), 'utf8');
-    check('core/export.js passes shapeSizeFactor (the tile count) to the description', exportSrc.includes('netTransformExportData(baseNetTransform, nodeCount - 1, shapeSizeFactor)'));
+    check('core/export.js passes shapeSizeFactor (the tile count) to the description', exportSrc.includes('netTransformExportData(netTransformNow(), nodeCount - 1, shapeSizeFactor)'));
 }
 
 // ============ 10. free endpoints ============
