@@ -139,7 +139,11 @@ function registry() {
         domain: 'isovalent-hue-circle', relation:'regular-subdivision', period:null, historicalStatus: 'mathematical', sourceStatus: 'mathematical',
         sourcePages: [], implementationStatus: 'implemented' },
       primary('intervalRelation1921', 'Vergleich mit der Musik', 'musical interval analogy', 'hue-distance-analogy', [89],
-        { sourceStatus: 'primary-1921-p89', relation: 'distance-analogy-lookup' })
+        { sourceStatus: 'primary-1921-p89', relation: 'distance-analogy-lookup' }),
+      primary('compound-shared-member', 'Gemeinschaft eines Gliedes', 'shared-member composition', 'compound-harmony', [105],
+        { relation: 'shared-member' }),
+      primary('compound-substitution', 'Gleichwertiger Ersatz', 'structured substitution', 'compound-harmony', [105, 106],
+        { relation: 'substitution' })
     ],
     researchPending: ['shadow-series', 'isotint', 'isotone'].map(family => ({
       id: `${family}-interval-laws`, term: `Complete interval laws: ${family}`,
@@ -147,9 +151,7 @@ function registry() {
     })),
     deferred: [
       { id: 'harmothek', germanTerm: 'Harmothek', sourceStatus: 'primary-1921', sourcePages: [18, 19],
-        implementationStatus: 'future-catalog-layer' },
-      { id: 'compound-harmonies', germanTerm: 'Zusammengesetzte Wohlklänge', sourceStatus: 'primary-1921',
-        sourcePages: ['contents X'], implementationStatus: 'phase-5-candidate' }
+        implementationStatus: 'future-catalog-layer' }
     ],
     researchNotes: [{ term: 'Heraden', historicalStatus: 'secondary-attested',
       implementationStatus: 'not-required-for-current-primary-grammar' }]

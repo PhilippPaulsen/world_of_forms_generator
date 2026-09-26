@@ -1,6 +1,7 @@
 'use strict';
 
 const Grammar = require('./HarmonyGrammar.js');
+const Compound = require('./CompoundHarmony.js');
 
 /**
  * Ostwald historical structure, realized as a contemporary screen color model.
@@ -379,6 +380,29 @@ function validatedPath(path) {
   return expected;
 }
 
+/** Bind the composition layer to validated atlas colors from an explicit calibration. */
+function compoundAPI(engine, context = {}) {
+  if (!context || typeof context !== 'object' || Array.isArray(context) ||
+      Object.keys(context).some(key => key !== 'hueCircle')) throw new TypeError('Compound context accepts only hueCircle');
+  const circle = context.hueCircle === undefined ? engine.hueCircle() : context.hueCircle;
+  validateCircle(circle);
+  const grays = engine.grayAxis();
+  const resolveMember = member => {
+    if (!member || member.source !== 'atlas') throw new TypeError('Compound members must be complete atlas colors; interpolated samples are not composable');
+    if (Object.hasOwn(member, 'hueIndex')) return validateField(member, circle);
+    const expected = grays.find(gray => gray.letter === member.letter);
+    if (!expected || member.label !== expected.label) throw new Error('Unknown gray-axis member');
+    for (const key of ['w', 's', 'v']) {
+      if (!Number.isFinite(member[key]) || Math.abs(member[key] - expected[key]) > EPSILON) throw new Error(`Gray member ${key} does not match its atlas identity`);
+    }
+    vector(member.lab, 'Gray lab');
+    if (!member.lab.every((n, i) => Math.abs(n - expected.lab[i]) <= EPSILON)) throw new Error('Gray member lab does not match its atlas identity');
+    validateRgb(member.rgb, expected.rgb);
+    return copyColor(expected);
+  };
+  return Compound.createAPI({ resolveMember, sameShadowSeries, epsilon: EPSILON, letters: SCALE.map(s => s.letter) });
+}
+
 /** Framework-independent contemporary realization of Ostwald's relational structure. */
 class OstwaldColor {
   /**
@@ -752,6 +776,71 @@ class OstwaldColor {
       sourceStatus: 'contemporary-implementation', classificationStatus: 'structural-no-aesthetic-verdict',
       relationEvidence: { sourceStatus: sourcePages.length ? 'primary-1921' : 'mathematical', sourcePages } };
   }
+
+  /**
+   * Wrap an organized atlas selection in the shared elementary-group interface.
+   * Domain validation is structural, not historical approval of arbitrary selections.
+   * @param {string} domain gray | same-hue | isovalent.
+   * @param {object[]} members At least two distinct complete atlas colors, in caller order.
+   * @param {object} [options={}] Only relation and hueCircle; relation is required for
+   * same-hue (isotint, isotone, shadow-series), otherwise defaults to gray-series/isovalent.
+   * @returns {object} Fresh elementary HarmonySet with members, domain, domains and level=1.
+   * @throws {TypeError|RangeError|Error} For invalid members, domains, relations or options.
+   */
+  static elementaryHarmony(domain, members, options = {}) {
+    if (!options || typeof options !== 'object' || Array.isArray(options) ||
+        Object.keys(options).some(k => !['relation', 'hueCircle'].includes(k))) throw new TypeError('Elementary options accept only relation and hueCircle');
+    const context = options.hueCircle === undefined ? {} : { hueCircle: options.hueCircle };
+    return compoundAPI(this, context).elementary(domain, members, options.relation);
+  }
+
+  /**
+   * Connect two elementary/compound groups through exact shared atlas identities (p.105).
+   * @param {object} groupA First structured group, retained independently in groups[0].
+   * @param {object} groupB Second structured group, retained in groups[1].
+   * @param {object} [context={}] Optional {hueCircle}, matching the inputs' calibration.
+   * @returns {object} CompoundHarmony with deduplicated active members and complete provenance.
+   * @throws {TypeError|RangeError|Error} For invalid/cyclic groups or no shared member.
+   */
+  static combineBySharedMember(groupA, groupB, context = {}) {
+    return compoundAPI(this, context).combine(groupA, groupB);
+  }
+
+  /**
+   * Substitute one active member identity with a structured symmetric replacement (p.105).
+   * Distinct from Phase-4 splitHueSet: this preserves both groups and construction history.
+   * @param {object} sourceGroup Elementary or recursive compound harmony.
+   * @param {object} member Complete atlas color whose active identity is to be replaced.
+   * @param {object} replacementGroup Elementary or recursive compound, structurally symmetric
+   * around member in gray-letter, one-hue-letter or isovalent-hue coordinates.
+   * @param {object} [context={}] Optional {hueCircle}, matching all inputs.
+   * @returns {object} CompoundHarmony; original groups remain intact, flattened members reflect
+   * replacement at the target's position. A retained center represents partial replacement.
+   * @throws {TypeError|RangeError|Error} For missing target, invalid structures or unsupported
+   * correspondence. Symmetry is structural and does not assert exact Oklab mixture equality.
+   */
+  static substituteHarmony(sourceGroup, member, replacementGroup, context = {}) {
+    return compoundAPI(this, context).substitute(sourceGroup, member, replacementGroup);
+  }
+
+  /**
+   * Recompute the active recursive member view; substitution excludes replaced occurrences.
+   * @param {object} group Valid elementary or compound harmony (JSON copies accepted).
+   * @param {object} [context={}] Optional {hueCircle}, matching the group's calibration.
+   * @returns {object[]} Independent complete atlas colors, first-active-occurrence order.
+   * @throws {TypeError|RangeError|Error} For malformed/cyclic structure, provenance or colors.
+   */
+  static flattenHarmonyMembers(group, context = {}) { return compoundAPI(this, context).flatten(group); }
+
+  /**
+   * Compute recursive depth: elementary=1, compound=1+max(child levels).
+   * This software depth is not an exact historical mapping of Stufe and Ordnung.
+   * @param {object} group Valid elementary or compound harmony.
+   * @param {object} [context={}] Optional {hueCircle}, matching the group's calibration.
+   * @returns {number} Validated, recomputed recursive depth.
+   * @throws {TypeError|RangeError|Error} For malformed/cyclic structure or forged level.
+   */
+  static compoundLevel(group, context = {}) { return compoundAPI(this, context).level(group); }
 
   /**
    * Construct a continuous path from any valid analytical point, without atlas labels.
