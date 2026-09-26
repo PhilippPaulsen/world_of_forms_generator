@@ -22,8 +22,8 @@ const BLACK = Object.freeze([0, 0, 0]);
 // Established names retained from Phases 1/2; other divisors remain mathematical.
 const NAMED_SUBDIVISIONS = Object.freeze({ 2: 'complementary', 3: 'triad', 4: 'tetrad' });
 
-// Raw project-supplied transcription of secondary evidence citing Ostwald 1921 p.89.
-// These are literal dyads around reference 24, NOT distance-to-name rules.
+// Directly inspected 1921 p.89: two directed distance columns, NOT literal hue dyads.
+// The musical names are an analogy; the final distance 12 is the starred octave.
 const INTERVAL_PAIRS_1921 = Object.freeze([
   [[1, 23], 'minor-second', 'kleine Sekunde', false],
   [[2, 22], 'major-second', 'große Sekunde', false],
@@ -35,26 +35,27 @@ const INTERVAL_PAIRS_1921 = Object.freeze([
   [[8, 16], 'fifth', 'Quinte', true],
   [[9, 15], 'sixth', 'Sexte', true],
   [[10, 14], 'minor-seventh', 'kleine Septime', false],
-  [[11, 13], 'major-seventh', 'große Septime', false]
-].map(([pair, interval, german, consonant]) => Object.freeze({
-  pair: Object.freeze(pair), interval, german, consonant
+  [[11, 13], 'major-seventh', 'große Septime', false],
+  [[12, 12], 'octave', 'Oktave', true]
+].map(([colorEntries, interval, german, consonant]) => Object.freeze({
+  distance: colorEntries[0], colorEntries: Object.freeze(colorEntries), interval, german, consonant,
+  sourceStatus: 'primary-1921-p89', primaryVerified: true
 })));
 
-/** Fresh provenance envelope; future direct transcription can upgrade metadata in place.
- * The secondary publication is not bibliographically identified in the supplied brief.
- */
+/** Fresh provenance for the scanned revised 1921 edition, printed page 89 (PDF 107). */
 function intervalProvenance1921() {
   return {
-    sourceStatus: 'secondary-citing-1921-p89', sourceConfidence: 'secondary-citing-primary',
-    primaryVerified: false, transcriptionBasis: 'project-supplied-transcription',
-    primaryReference: { author: 'Wilhelm Ostwald', title: 'Die Harmonie der Farben', year: 1921, page: 89 },
-    secondaryReference: null, reference: { hueIndex: 24, role: 'identity-or-octave' }
+    sourceStatus: 'primary-1921-p89', sourceConfidence: 'primary', primaryVerified: true,
+    transcriptionBasis: 'direct-scan-inspection', model: 'musical-analogy-of-hue-distance',
+    primaryReference: { author: 'Wilhelm Ostwald', title: 'Die Harmonie der Farben',
+      edition: '2.–3., gänzlich umgearbeitete Auflage', year: 1921, page: 89, pdfPage: 107 },
+    reference: { distance: 12, colorEntry: 12, role: 'opposite-distance-octave-analogy' }
   };
 }
 
-/** Copy a literal dyad without sharing the private historical pair array. */
+/** Return an independent copy of the two printed distance entries. */
 function copyInterval(entry) {
-  return { ...entry, pair: entry.pair.slice() };
+  return { ...entry, colorEntries: entry.colorEntries.slice() };
 }
 
 /** Require a dense three-component array of finite numbers. */
@@ -540,30 +541,30 @@ class OstwaldColor {
   }
 
   /**
-   * Return the eleven literal 1921 dyads and their separate provenance envelope.
-   * Names/flags are historical data as supplied, never modern aesthetic judgments.
-   * @returns {{entries:object[],sourceStatus:string,sourceConfidence:string,primaryVerified:boolean,transcriptionBasis:string,primaryReference:object,secondaryReference:null,reference:object}}
-   * Reference hue 24 denotes identity/octave; it is not a twelfth listed dyad.
-   * Current evidence is secondary-citing-1921-p89, not a directly verified primary page.
+   * Return twelve musical-analogy rows directly verified on printed p.89 (PDF 107).
+   * colorEntries are directed distances in the two halves of the ring, not hue pairs.
+   * @returns {object} Fresh {entries, reference, primaryReference, sourceStatus,
+   * sourceConfidence, primaryVerified, transcriptionBasis, model}.
+   * Starred consonance flags are historical descriptions, never aesthetic scores.
    */
   static intervalTable1921() {
     return { ...intervalProvenance1921(), entries: INTERVAL_PAIRS_1921.map(copyInterval) };
   }
 
   /**
-   * Look up an unordered literal pair in the raw table, without rotation or inference.
-   * @param {number} a Hue index in 1..24 (not normalized modulo 24).
-   * @param {number} b Hue index in 1..24; identical indices are valid but unlisted.
-   * @returns {object} Provenance plus {pair:[min,max],listed:boolean,entry:object|null}.
-   * Unlisted means absent from this table, not historically non-consonant.
-   * @throws {RangeError} For indices outside 1..24 or nonintegers.
+   * Apply the p.89 distance analogy to a hue pair. Corrects Phase 3's literal-pair reading.
+   * @param {number} a Hue in 1..24.
+   * @param {number} b Hue in 1..24; identity (distance zero) is unlisted.
+   * @returns {object} Provenance, sorted pair, distance, listed, entry or null, and
+   * applicationStatus='mathematical-distance-lookup' (the pair itself is not a transcription).
+   * @throws {RangeError} For invalid hue indices.
    */
   static intervalRelation1921(a, b) {
-    validateHue(a);
-    validateHue(b);
-    const pair = [Math.min(a, b), Math.max(a, b)];
-    const entry = INTERVAL_PAIRS_1921.find(item => item.pair[0] === pair[0] && item.pair[1] === pair[1]);
-    return { ...intervalProvenance1921(), pair, listed: Boolean(entry), entry: entry ? copyInterval(entry) : null };
+    const distance = this.hueDistance(a, b).minimal;
+    const entry = INTERVAL_PAIRS_1921.find(item => item.distance === distance);
+    return { ...intervalProvenance1921(), pair: [Math.min(a, b), Math.max(a, b)], distance,
+      applicationStatus: 'mathematical-distance-lookup',
+      listed: Boolean(entry), entry: entry ? copyInterval(entry) : null };
   }
 
   /**
