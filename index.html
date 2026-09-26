@@ -724,6 +724,23 @@
         <div class="icon-row">
           <button class="layer-btn" id="net-lines-btn" title="Draw the net's own grid lines edge to edge (black; a finer level would be red) - a display aid, not part of any export">Net lines</button>
         </div>
+        <!-- Net animation (Group E, Stage 1): Set Start / Set End capture the AUTHOR net (refused, visibly, when the two differ in anything
+             discrete: domain, macro cells, Alternate tiles, law family); Play / the progress slider then interpolate the strength and
+             focus of a same-family law - sinus <-> tangens passes through the exact regular net. The animation never overwrites the
+             controls above: they keep editing the author net, the frame that is shown is computed from it (netTransformNow()). -->
+        <div id="net-anim-group">
+          <label>Net Animation</label>
+          <div class="icon-row">
+            <button id="btn-net-anim-set-start" class="layer-btn" title="Capture the current net as the Start">Set Start</button>
+            <button id="btn-net-anim-set-end" class="layer-btn" title="Capture the current net as the End">Set End</button>
+          </div>
+          <div id="net-anim-status" hidden></div>
+          <div class="icon-row">
+            <input type="number" id="net-anim-duration-input" min="1" step="1" value="2000" title="Duration (ms)">
+            <button id="btn-net-anim-play" class="icon-btn" title="Play"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 5 L19 12 L7 19 Z" /></svg></button>
+          </div>
+          <input type="range" id="net-anim-progress-input" min="0" max="1" step="0.001" value="0" title="Progress">
+        </div>
         <div id="net-size-hint" hidden></div>
         <div id="net-free-note" hidden>A free endpoint cannot be placed outside the net (Single and Field are closed nets).</div>
         <div class="icon-row" id="net-geo-row" hidden>
@@ -1197,18 +1214,18 @@
        the p5.js CDN tag - that URL already carries its own version
        (p5@1.9.0), so a version bump there naturally changes the URL. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260925j"></script>
-  <script src="core/state.js?v=20260925j"></script>
-  <script src="core/symmetry.js?v=20260925j"></script>
-  <script src="core/curves.js?v=20260925j"></script>
-  <script src="core/netwarp.js?v=20260925j"></script>
-  <script src="core/tiling.js?v=20260925j"></script>
-  <script src="core/faces.js?v=20260925j"></script>
-  <script src="core/orbits.js?v=20260925j"></script>
-  <script src="core/color.js?v=20260925j"></script>
-  <script src="core/facecolor.js?v=20260925j"></script>
-  <script src="core/export.js?v=20260925j"></script>
-  <script src="sketch.js?v=20260925j"></script>
+  <script src="core/forms.js?v=20260925k"></script>
+  <script src="core/state.js?v=20260925k"></script>
+  <script src="core/symmetry.js?v=20260925k"></script>
+  <script src="core/curves.js?v=20260925k"></script>
+  <script src="core/netwarp.js?v=20260925k"></script>
+  <script src="core/tiling.js?v=20260925k"></script>
+  <script src="core/faces.js?v=20260925k"></script>
+  <script src="core/orbits.js?v=20260925k"></script>
+  <script src="core/color.js?v=20260925k"></script>
+  <script src="core/facecolor.js?v=20260925k"></script>
+  <script src="core/export.js?v=20260925k"></script>
+  <script src="sketch.js?v=20260925k"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

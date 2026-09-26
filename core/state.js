@@ -161,6 +161,11 @@ let showFaces = false;
 // duration of one redraw (null otherwise) and drawCurvedBezier() - the single drawing sink -
 // applies to every segment endpoint. Never persisted: derived from the spec per redraw.
 let baseNetTransform = null;
+// Net-warp animation (Group E x 1.8 Stage A pattern): {from, to, durationMs, elapsedMs, playing, startTime, live, t}. STRUCTURALLY SEPARATE
+// from baseNetTransform (the AUTHOR spec the controls read and write): the frame being shown is computed from it by netTransformNow()
+// (core/netwarp.js) and never written back. `live` = the animation frame, not the author net, is what is drawn (while playing, or
+// paused/scrubbed until the next author edit); `t` = progress 0..1 (set by sketch.js's applyNetAnimationFrame(), core/* has no clock).
+let baseNetAnimation = null;
 let activeNetWarp = null;
 
 // Roadmap 1.2-C: null unless the CURRENT net came from
@@ -207,6 +212,7 @@ function rebuildGrid(shape) {
     baseFacePalette = null; faceHover = null;
     activeLayer = 'base'; // an active additional-layer index would otherwise dangle once the array is cleared
     timeline = null; // Roadmap 1.8 Stage C: its keyframeLayerIds/playbackLayerIndex would dangle the same way activeLayer would
+    baseNetAnimation = null; // the captured Start/End nets belong to the old grid setup (Shape Size decides what a Field is)
     altNetSeed = null; // Roadmap 1.2-C: an ordinary shape/order rebuild is never an alt-net construction
     let grid;
     if (shape === 'triangle') grid = buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH);
@@ -248,6 +254,7 @@ function rebuildGridFromConstruction(p, q, n, side) {
     baseFacePalette = null; faceHover = null;
     activeLayer = 'base';
     timeline = null; // Roadmap 1.8 Stage C: see rebuildGrid()'s own comment
+    baseNetAnimation = null;
 
     const { center, vertices } = completeEdgeToRegularPolygon(p, q, n, side);
     let subdivided;

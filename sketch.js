@@ -625,7 +625,10 @@ function setup() {
             if (baseNetTransform && baseNetTransform.macro !== ui.macro) ui.macro = baseNetTransform.macro; // adopt a macro set from the state
             const sd = stateDomain(); if (sd && sd !== ui.domain) ui.domain = sd;   // adopt a domain set from the state
             baseNetTransform = allRegular ? null : { x: axisSpec(ui.x), y: ui.axes === 'both' ? 'same' : axisSpec(ui.y), repeat: ui.domain === 'tiled', macro: ui.domain === 'field' ? undefined : ui.macro, domain: ui.domain === 'field' ? 'field' : undefined };
-            render(); netControlsSync(); redraw();
+            // An author edit while the animation is only paused/scrubbed shows the author net again; while it is PLAYING the frame keeps
+            // running and the edit lands in the author spec only (baseNetTransform is never overwritten by the frame).
+            if (baseNetAnimation && baseNetAnimation.live && !baseNetAnimation.playing) baseNetAnimation.live = false;
+            render(); netControlsSync(); redraw(); if (window.syncNetAnimationDisplay) window.syncNetAnimationDisplay();
         }
         function render() {
             const c = target();
@@ -745,6 +748,32 @@ function setup() {
             }
         };
         fieldBtn.elt.dataset.title = fieldBtn.elt.title;   // restored when Field becomes available again
+        // Net animation controls (Stage A conventions: Set Start / Set End / duration / Play / progress). They only capture and
+        // drive baseNetAnimation - the author controls above are untouched by it.
+        const naStart = select('#btn-net-anim-set-start'), naEnd = select('#btn-net-anim-set-end'), naStatus = select('#net-anim-status'), naDur = select('#net-anim-duration-input'), naPlay = select('#btn-net-anim-play'), naProg = select('#net-anim-progress-input');
+        let naFixed = '';
+        window.setNetAnimStatusText = text => { naFixed = text; naStatus.html(text); naStatus.elt.hidden = !text; };
+        const PLAY_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 5 L19 12 L7 19 Z" /></svg>', PAUSE_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="5" width="4" height="14" /><rect x="14" y="5" width="4" height="14" /></svg>';
+        window.syncNetAnimationDisplay = () => {
+            const a = baseNetAnimation;
+            if (a && a.live) {
+                naStatus.html(a.playing ? `Playing (${Math.round((a.t || 0) * 100)} %). The controls above edit the author net, not this frame.` : `Showing the animation frame at ${Math.round((a.t || 0) * 100)} %. The controls edit the author net - any edit (or Set Start/End) shows it again.`);
+                naStatus.elt.hidden = false;
+            } else { naStatus.html(naFixed); naStatus.elt.hidden = !naFixed; }
+            if (a) {
+                if (document.activeElement !== naDur.elt) naDur.value(a.durationMs);
+                if (a.live && document.activeElement !== naProg.elt) naProg.value(a.t || 0);
+                naPlay.attribute('title', a.playing ? 'Pause' : 'Play');
+                const state = a.playing ? 'pause' : 'play';
+                if (naPlay.elt.dataset.icon !== state) { naPlay.html(a.playing ? PAUSE_ICON : PLAY_ICON); naPlay.elt.dataset.icon = state; }
+            }
+        };
+        naStart.mousePressed(() => { captureNetAnimationEnd('from'); window.syncNetAnimationDisplay(); redraw(); });
+        naEnd.mousePressed(() => { captureNetAnimationEnd('to'); window.syncNetAnimationDisplay(); redraw(); });
+        naDur.input(() => { const v = parseInt(naDur.value()); if (v > 0) ensureNetAnimation().durationMs = v; });
+        naPlay.mousePressed(() => { naFixed = ''; toggleNetAnimationPlayback(); window.syncNetAnimationDisplay(); });
+        naProg.input(() => { naFixed = ''; setNetAnimationProgress(parseFloat(naProg.value())); window.syncNetAnimationDisplay(); });
+        naStatus.elt.hidden = true;
         render();
     })();
 
@@ -2198,6 +2227,8 @@ function draw() {
     // calls applyLayerAnimationFrame() itself, directly, exactly once
     // per scrub action, never relying on this per-frame loop.
     additionalLayers.forEach(layer => { if (layer.animation && layer.animation.playing) applyLayerAnimationFrame(layer); });
+    applyNetAnimationFrame();   // the net animation's progress for this frame (only while it is live; never touches baseNetTransform)
+    if (window.syncNetAnimationDisplay && baseNetAnimation) window.syncNetAnimationDisplay();
     // Roadmap 1.8 Stage C phase (i): same "recompute while actively
     // playing, re-check isAnythingAnimating() afterward" pattern as the
     // per-layer loop just above - applyTimelineFrame() may itself flip
@@ -3013,7 +3044,59 @@ function applyLayerConnectionsMorphFrame(layer, anim, t) {
 // persistent-layer timeline (Stage C), same "loop() only while
 // something is actually moving" discipline for both.
 function isAnythingAnimating() {
-    return additionalLayers.some(l => l.animation && l.animation.playing) || !!(timeline && timeline.playing);
+    return additionalLayers.some(l => l.animation && l.animation.playing) || !!(timeline && timeline.playing) || !!(baseNetAnimation && baseNetAnimation.playing);
+}
+
+// ----------------- NET ANIMATION (Group E, Stage 1 - the Stage A "capture two states, lerp" pattern) --------------------
+// baseNetAnimation (core/state.js) holds two captured AUTHOR nets and a clock. It NEVER writes the frame it computes into
+// baseNetTransform: the controls read and write the author spec, and netTransformNow() (core/netwarp.js) derives the net that is
+// drawn / hit-tested / exported from (author spec, animation, t). Stage A's layer animation overwrote the edited value on every
+// redraw; here that cannot happen, because there is nothing to overwrite. Only the continuous parameters (strength, focus) of a
+// same-family law animate; anything discrete that differs between Start and End is refused at capture, visibly.
+function ensureNetAnimation() {
+    if (!baseNetAnimation) baseNetAnimation = { from: null, to: null, durationMs: 2000, elapsedMs: 0, playing: false, startTime: 0, live: false, t: 0 };
+    return baseNetAnimation;
+}
+function setNetAnimationStatus(text) { if (window.setNetAnimStatusText) window.setNetAnimStatusText(text); }
+// which = 'from' | 'to': captures the AUTHOR net (a regular net is captured as {regular: true} - compatible with any domain)
+function captureNetAnimationEnd(which) {
+    const a = ensureNetAnimation(), label = which === 'from' ? 'Start' : 'End';
+    const spec = baseNetTransform ? JSON.parse(JSON.stringify(baseNetTransform)) : { regular: true };
+    const other = which === 'from' ? a.to : a.from;
+    if (other) {
+        const c = which === 'from' ? netAnimationCompat(spec, other) : netAnimationCompat(other, spec);
+        if (!c.ok) { setNetAnimationStatus(`${label} NOT captured: ${c.reason}. Only the strength and focus of a same-family law (sinus/tangens, or geometric) can be animated - set the discrete choices (domain, macro cells, Alternate tiles, law family) the same at both ends.`); return false; }
+    }
+    a.playing = false; a.live = false; a[which] = spec;   // re-capturing shows the author net again (as Stage B's Set Start/End clear their render substitute)
+    syncAnimationLoopState();
+    setNetAnimationStatus(a.from && a.to ? `${label} captured. Ready: Play or drag the progress slider.` : `${label} captured. Now set the other end.`);
+    return true;
+}
+// Recomputes the frame's progress from the clock (the Stage A applyLayerAnimationFrame() bookkeeping); called every draw().
+function applyNetAnimationFrame() {
+    const a = baseNetAnimation;
+    if (!a || !a.live || !a.from || !a.to) return;
+    let elapsed = a.playing ? (millis() - a.startTime) : a.elapsedMs;
+    elapsed = Math.max(0, Math.min(a.durationMs, elapsed));
+    if (a.playing) { a.elapsedMs = elapsed; if (elapsed >= a.durationMs) a.playing = false; }
+    a.t = a.durationMs > 0 ? elapsed / a.durationMs : 1;
+}
+function toggleNetAnimationPlayback() {
+    const a = baseNetAnimation;
+    if (!a || !a.from || !a.to) { setNetAnimationStatus('Set Start and Set End first.'); return; }
+    if (a.playing) { a.elapsedMs = Math.max(0, Math.min(a.durationMs, millis() - a.startTime)); a.playing = false; }
+    else { if (a.elapsedMs >= a.durationMs) a.elapsedMs = 0; a.startTime = millis() - a.elapsedMs; a.playing = true; a.live = true; }
+    syncAnimationLoopState();
+    applyNetAnimationFrame();
+    redraw();
+}
+function setNetAnimationProgress(t) {
+    const a = baseNetAnimation;
+    if (!a || !a.from || !a.to) { setNetAnimationStatus('Set Start and Set End first.'); return; }
+    a.elapsedMs = Math.max(0, Math.min(1, t)) * a.durationMs; a.playing = false; a.live = true;
+    syncAnimationLoopState();
+    applyNetAnimationFrame();
+    redraw();
 }
 
 // Roadmap 1.8 Stage A (design session point 1's own scoping condition):
@@ -4016,7 +4099,7 @@ let netLinesOn = false;
 function drawNetLinesOverlay() {
     if (!netLinesOn || currentShape !== 'square') return;
     const nw = netWarpBaseNow(), closed = !!nw && !nw.repeat, field = nw && nw.field;
-    const lines = netGridLines(baseNetTransform, outerCorners, nodeCount - 1, { x0: 0, y0: 0, x1: width, y1: height }, field ? { closed, domain: 'field', fieldTiles: field.Rt } : { closed });
+    const lines = netGridLines(netTransformNow(), outerCorners, nodeCount - 1, { x0: 0, y0: 0, x1: width, y1: height }, field ? { closed, domain: 'field', fieldTiles: field.Rt } : { closed });
     push();
     strokeWeight(1);
     lines.forEach(l => {
@@ -4422,7 +4505,7 @@ function crossLayerConfigSignature() {
     const { baseConn, layers } = buildCrossLayerInput();
     return JSON.stringify({
         base: baseConn,
-        net: netWarpActive() ? baseNetTransform : null,
+        net: netWarpActive() ? netTransformNow() : null,
         layers: layers.map(l => ({ sheetId: l.sheetId, conns: l.connections, ox: l.offsetX, oy: l.offsetY }))
     });
 }

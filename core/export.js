@@ -170,7 +170,8 @@ function buildExportData(crossLayerData) {
     // regular export is byte-identical to before (formatVersion stays 1). geometry.nodes/edges stay
     // regular; the face lists below are omitted on a warped net (see netTransformExportData()).
     const netWarped = netWarpActive();
-    if (netWarped) data.meta.netTransform = netTransformExportData(baseNetTransform, nodeCount - 1, shapeSizeFactor);
+    // the DRAWN net (the animation frame while one is live), not the author spec; animationFrame says which progress it is
+    if (netWarped) { data.meta.netTransform = netTransformExportData(netTransformNow(), nodeCount - 1, shapeSizeFactor); if (baseNetAnimation && baseNetAnimation.live) data.meta.netTransform.animationFrame = baseNetAnimation.t || 0; }
 
     const enabledLayers = additionalLayers.filter(layer => layer.enabled);
     const layerFaceStores = []; // Group D Phase 4: filled per exported layer below, for meta.faceColoring

@@ -243,7 +243,7 @@ function makeNetWarp(spec, frame, E, Rt) {
     const ax = spec.x, ay = spec.y === 'same' ? spec.x : spec.y;
     const isField = dom.domain === 'field';
     const fx = isField ? netFieldLaw(ax, Rt) : netAxisLaw(ax, E, spec.macro), fy = isField ? netFieldLaw(ay, Rt) : netAxisLaw(ay, E, spec.macro);
-    if (!fx && !fy) return null;
+    if (!fx && !fy && !spec.keep) return null;   // `keep` (an animation frame that happens to be exactly regular): stay a warp - closed net, domain and locks do not flicker
     const { c0, v1, v2 } = frame;
     const det = v1.x * v2.y - v2.x * v1.y;
     if (!det) return null;
@@ -291,6 +291,58 @@ function applyNetWarp(warp, pt) {
     return { x, y };
 }
 
+// ---- Net animation (Stage 1: same-family lerp of the continuous parameters) ----
+// The author spec (baseNetTransform) is what the controls edit; the frame that is DRAWN, hit-tested, overlaid and exported is
+// netTransformNow(): the author spec, or - while the animation is `live` - the lerp of its captured Start and End at progress
+// `t`. It is computed on demand and never written back (the Stage-A layer animation once overwrote the edited state on every
+// redraw; here the two are separate values by construction).
+// What can be animated: the continuous parameters w (strength; sinus <-> tangens passes through w = 0, the exact regular net) and
+// focus, per axis. What cannot - refused at Set Start / Set End, visibly: a different domain (Single / Tiled / Field: different
+// geometry), different macro cells, a different `alternate`, a different law FAMILY on an axis (trig vs geometric). A regular
+// axis (uniform or w = 0) counts as w = 0 of the other side's family, and a regular net (no spec) is compatible with any domain.
+function _netAnimNorm(spec) {
+    if (!spec || spec.regular) return { x: { kind: 'uniform', w: 0 }, y: { kind: 'uniform', w: 0 }, ysame: true, any: true, dom: null, macro: null };   // {regular: true} = a captured regular net
+    const ax = spec.x || { kind: 'uniform', w: 0 }, ysame = spec.y === 'same' || !spec.y;
+    return { x: ax, y: ysame ? ax : spec.y, ysame, any: false, dom: spec.domain === 'field' ? 'field' : (spec.repeat ? 'tiled' : 'single'), macro: spec.macro === undefined || spec.macro === null ? null : spec.macro, repeat: !!spec.repeat, domain: spec.domain };
+}
+function _netAnimFamily(a) { return (!a || a.kind === 'uniform' || !a.w) ? null : a.kind; }
+function netAnimationCompat(from, to) {
+    const A = _netAnimNorm(from), B = _netAnimNorm(to);
+    if (!A.any && !B.any && A.dom !== B.dom) return { ok: false, reason: `the domain differs (${A.dom} vs ${B.dom}) - a different geometry cannot be interpolated` };
+    const dom = A.any ? B.dom : A.dom;
+    if (dom !== 'field' && !A.any && !B.any && A.macro !== B.macro) return { ok: false, reason: `the macro cells differ (${A.macro === null ? 'none' : A.macro} vs ${B.macro === null ? 'none' : B.macro})` };
+    for (const axis of ['x', 'y']) {
+        const fa = _netAnimFamily(A[axis]), fb = _netAnimFamily(B[axis]);
+        if (fa && fb && fa !== fb) return { ok: false, reason: `the law family differs on the ${axis.toUpperCase()} axis (${fa} vs ${fb})` };
+        if (fa && fb && !!A[axis].alternate !== !!B[axis].alternate) return { ok: false, reason: `Alternate tiles differs on the ${axis.toUpperCase()} axis` };
+    }
+    return { ok: true, reason: null };
+}
+function netLerpSpecs(from, to, t) {
+    if (!netAnimationCompat(from, to).ok) return null;
+    const A = _netAnimNorm(from), B = _netAnimNorm(to), base = A.any ? B : A;
+    const lerp = (a, b) => (1 - t) * a + t * b;   // exactly a at t = 0 and exactly b at t = 1
+    const axis = (a, b) => {
+        const fam = _netAnimFamily(a) || _netAnimFamily(b);
+        if (!fam) return { kind: 'uniform', w: 0 };
+        const wa = _netAnimFamily(a) ? a.w : 0, wb = _netAnimFamily(b) ? b.w : 0, out = { kind: fam, w: lerp(wa, wb) };
+        if (fam === 'trig') { const fa = _netAnimFamily(a) ? (a.focus || 0) : 0, fb = _netAnimFamily(b) ? (b.focus || 0) : 0, f = lerp(fa, fb); if (f) out.focus = f; }
+        const alt = _netAnimFamily(a) ? a : b; if (alt.alternate) out.alternate = true;
+        return out;
+    };
+    const x = axis(A.x, B.x), y = (A.ysame && B.ysame) ? 'same' : axis(A.y, B.y);
+    const spec = { x, y, repeat: base.any ? false : base.repeat, keep: true };
+    if (!base.any && base.domain === 'field') spec.domain = 'field';
+    if (!base.any && base.macro !== null && base.dom !== 'field') spec.macro = base.macro;
+    return spec;
+}
+// The net that is in force RIGHT NOW: the author spec, or the animation frame while it is live (see the block comment above).
+function netTransformNow() {
+    const a = baseNetAnimation;
+    if (!a || !a.live || !a.from || !a.to) return baseNetTransform;
+    return netLerpSpecs(a.from, a.to, a.t || 0) || baseNetTransform;
+}
+
 // ---- Exact images of straight segments under a FIELD warp ----
 // F is piecewise affine on a field: its kinks lie on the tile-boundary lines s = k / t = k of the base frame (integer tile
 // coordinates, k = -h+1 .. h; beyond the field's edge tiles F continues with the edge slope and has no further kink). A
@@ -323,7 +375,7 @@ function netWarpSplitSegment(warp, p1, p2) {
 // The ready warp for the CURRENT base sheet (null = regular net or a shape the warp does not apply
 // to). Unlike activeNetWarp - installed only for the duration of one drawTessellation() - this is
 // what UI code, face detection and export use to ask "is a warp in force right now".
-function netWarpBaseNow() { return baseNetTransform ? netWarpForBase(baseNetTransform, currentShape, outerCorners, nodeCount, shapeSizeFactor) : null; }
+function netWarpBaseNow() { const spec = netTransformNow(); return spec ? netWarpForBase(spec, currentShape, outerCorners, nodeCount, shapeSizeFactor) : null; }
 function netWarpActive() { return netWarpBaseNow() !== null; }
 // Whether face detection/fills are refused for a sheet under the CURRENT warp: on a FIELD the base sheet's faces are exact
 // (F is affine inside every tile: faces are detected once on the regular cell, then mapped per tile). A LAYER (`sheet` given) is
