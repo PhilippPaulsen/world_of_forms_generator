@@ -750,40 +750,8 @@ function setup() {
             }
         };
         fieldBtn.elt.dataset.title = fieldBtn.elt.title;   // restored when Field becomes available again
-        // Net animation controls (Stage A conventions: Set Start / Set End / duration / Play / progress). They only capture and
-        // drive baseNetAnimation - the author controls above are untouched by it.
-        const naStart = select('#btn-net-anim-set-start'), naEnd = select('#btn-net-anim-set-end'), naStatus = select('#net-anim-status'), naDur = select('#net-anim-duration-input'), naPlay = select('#btn-net-anim-play'), naProg = select('#net-anim-progress-input');
-        let naFixed = '';
-        window.setNetAnimStatusText = text => { naFixed = text; naStatus.html(text); naStatus.elt.hidden = !text; };
-        const PLAY_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 5 L19 12 L7 19 Z" /></svg>', PAUSE_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="5" width="4" height="14" /><rect x="14" y="5" width="4" height="14" /></svg>';
-        window.syncNetAnimationDisplay = () => {
-            const a = baseNetAnimation;
-            if (a && a.live) {
-                naStatus.html(a.playing ? `Playing (${Math.round((a.t || 0) * 100)} %). The controls above edit the author net, not this frame.` : `Showing the animation frame at ${Math.round((a.t || 0) * 100)} %. The controls edit the author net - any edit (or Set Start/End) shows it again.`);
-                naStatus.elt.hidden = false;
-            } else { naStatus.html(naFixed); naStatus.elt.hidden = !naFixed; }
-            if (a) {
-                if (document.activeElement !== naDur.elt) naDur.value(a.durationMs);
-                if (a.live && document.activeElement !== naProg.elt) naProg.value(a.t || 0);
-                naPlay.attribute('title', a.playing ? 'Pause' : 'Play');
-                const state = a.playing ? 'pause' : 'play';
-                if (naPlay.elt.dataset.icon !== state) { naPlay.html(a.playing ? PAUSE_ICON : PLAY_ICON); naPlay.elt.dataset.icon = state; }
-            }
-        };
-        naStart.mousePressed(() => { captureNetAnimationEnd('from'); window.syncNetAnimationDisplay(); redraw(); });
-        naEnd.mousePressed(() => { captureNetAnimationEnd('to'); window.syncNetAnimationDisplay(); redraw(); });
-        naDur.input(() => { const v = parseInt(naDur.value()); if (v > 0) ensureNetAnimation().durationMs = v; });
-        naPlay.mousePressed(() => { naFixed = ''; toggleNetAnimationPlayback(); window.syncNetAnimationDisplay(); });
-        naProg.input(() => { naFixed = ''; setNetAnimationProgress(parseFloat(naProg.value())); window.syncNetAnimationDisplay(); });
-        // Case B1: while the Timeline drives the net (>= 2 keyframes, a net state at every one) these controls are locked
-        const naLockNote = select('#net-anim-lock-note');
-        window.syncNetAnimationLock = () => {
-            const locked = timelineNetCoupled();
-            [naStart, naEnd, naDur, naPlay, naProg].forEach(c => { c.elt.disabled = locked; });
-            naLockNote.elt.hidden = !locked;
-        };
-        naStatus.elt.hidden = true;
-        window.syncNetAnimationLock();
+        // (The standalone net animation's controls - Set Start / Set End / Play / progress - were removed from the UI: see the comment above
+        // ensureNetAnimation(). Its window.sync* / setNetAnimStatusText hooks are therefore not defined any more; every caller guards for that.)
         render();
     })();
 
@@ -3100,6 +3068,13 @@ function isAnythingAnimating() {
 }
 
 // ----------------- NET ANIMATION (Group E, Stage 1 - the Stage A "capture two states, lerp" pattern) --------------------
+// STATUS: FUNCTIONAL, TESTED, BUT WITHOUT A UI ENTRY POINT (as of this change). This standalone net animation (Case B2: baseNetAnimation, Set Start /
+// Set End / Play / progress) was superseded by the Timeline-coupled net animation (Case B1, timeline.netStates, driven by the Timeline's own clock) and
+// its controls were REMOVED FROM THE UI by the person's decision (their workflow always builds Timelines with a different pattern per keyframe). The
+// state, these functions, netTransformNow()'s standalone branch (core/netwarp.js) and tools/netwarp/test-netwarp-animation.js were deliberately LEFT IN
+// PLACE - unreachable from the UI, not abandoned and not broken - so that the mechanism can be given a control again without re-deriving it. Nothing
+// here can become live any more (nothing calls captureNetAnimationEnd / toggleNetAnimationPlayback / setNetAnimationProgress), so baseNetAnimation stays
+// null and netTransformNow() falls straight through to the author net (or the Timeline frame). Do not delete it as dead code without asking.
 // baseNetAnimation (core/state.js) holds two captured AUTHOR nets and a clock. It NEVER writes the frame it computes into
 // baseNetTransform: the controls read and write the author spec, and netTransformNow() (core/netwarp.js) derives the net that is
 // drawn / hit-tested / exported from (author spec, animation, t). Stage A's layer animation overwrote the edited value on every

@@ -161,6 +161,8 @@ let showFaces = false;
 // duration of one redraw (null otherwise) and drawCurvedBezier() - the single drawing sink -
 // applies to every segment endpoint. Never persisted: derived from the spec per redraw.
 let baseNetTransform = null;
+// NO UI ENTRY POINT (as of the removal of its controls): the standalone net animation below is functional and tested but unreachable from the UI - superseded
+// by the Timeline-coupled net animation (timeline.netStates); kept on purpose, see sketch.js "NET ANIMATION". It stays null unless something sets it.
 // Net-warp animation (Group E x 1.8 Stage A pattern): {from, to, durationMs, elapsedMs, playing, startTime, live, t}. STRUCTURALLY SEPARATE
 // from baseNetTransform (the AUTHOR spec the controls read and write): the frame being shown is computed from it by netTransformNow()
 // (core/netwarp.js) and never written back. `live` = the animation frame, not the author net, is what is drawn (while playing, or

@@ -371,6 +371,8 @@ function netTransformNow() {
         if (!timeline.netLive) return baseNetTransform;
         return timelineNetSegment().spec || baseNetTransform;
     }
+    // The standalone animation branch: kept and tested but with no UI entry point any more (see sketch.js "NET ANIMATION"); baseNetAnimation stays null,
+    // so this falls through to the author net.
     const a = baseNetAnimation;
     if (!a || !a.live || !a.from || !a.to) return baseNetTransform;
     return netLerpSpecs(a.from, a.to, a.t || 0) || baseNetTransform;
