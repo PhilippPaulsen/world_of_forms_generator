@@ -375,6 +375,32 @@ function netTransformNow() {
     if (!a || !a.live || !a.from || !a.to) return baseNetTransform;
     return netLerpSpecs(a.from, a.to, a.t || 0) || baseNetTransform;
 }
+// Whether the AUTHOR net is a real warp right now (a Regular net, or a shape the warp does not apply to, is not).
+function netAuthorWarpActive() { return !!(baseNetTransform && netWarpForBase(baseNetTransform, currentShape, outerCorners, nodeCount, shapeSizeFactor)); }
+// "Include net" on Add to Timeline: `override` = null (automatic) or true/false (chosen by the person). Automatic = ON exactly when a net warp
+// is active at that moment. The toggle flips the shown value; choosing the automatic value again returns to automatic.
+function timelineIncludeNetValue(override) { return override === null || override === undefined ? netAuthorWarpActive() : !!override; }
+function timelineIncludeNetToggle(override) { const next = !timelineIncludeNetValue(override); return next === netAuthorWarpActive() ? null : next; }
+// The state of the Timeline's net, for the persistent indicator: {state, text}, or null without a timeline.
+//   none / partial / incompatible (orange or red: the net is NOT animated), pending (waiting for a second keyframe), constant (informational:
+//   every pair of keyframes has the same net), animated (green).
+function timelineNetSummary() {
+    const tl = timeline;
+    if (!tl || !tl.keyframeLayerIds.length) return null;
+    const n = tl.keyframeLayerIds.length, st = tl.netStates || [];
+    const missing = tl.keyframeLayerIds.map((_, i) => (st[i] ? 0 : i + 1)).filter(Boolean);
+    if (missing.length === n) return { state: 'none', text: 'Net NOT animated: no keyframe has a net captured. Turn on "Include net" when adding a keyframe, or use the "Net" button on a keyframe.' };
+    if (missing.length) return { state: 'partial', text: `Net NOT animated: keyframe${missing.length > 1 ? 's' : ''} ${missing.join(', ')} ${missing.length > 1 ? 'have' : 'has'} no net captured. Use ${missing.length > 1 ? 'their' : 'its'} "Net" button.` };
+    if (n < 2) return { state: 'pending', text: 'Net captured. Add a second keyframe with a net to animate it.' };
+    let constant = true;
+    for (let k = 0; k + 1 < n; k++) {
+        const c = netAnimationCompat(st[k], st[k + 1]);
+        if (!c.ok) return { state: 'incompatible', text: `Net NOT animated between keyframes ${k + 1} and ${k + 2}: ${c.reason}. The author net is shown there.` };
+        if (JSON.stringify(netLerpSpecs(st[k], st[k + 1], 0)) !== JSON.stringify(netLerpSpecs(st[k], st[k + 1], 1))) constant = false;
+    }
+    if (constant) return { state: 'constant', text: 'Net constant: every keyframe has the same net, so it does not change. Capture a different net on a keyframe to animate it.' };
+    return { state: 'animated', text: `Net animated with the timeline (${n} keyframes).` };
+}
 // meta.netTransform.animationFrame & co. for the export: null when the drawn net is the author net.
 function netAnimationExportInfo() {
     if (timelineNetCoupled() && timeline.netLive && timelineNetSegment().spec && timeline.currentFrame) {

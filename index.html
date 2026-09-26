@@ -795,10 +795,12 @@
         <label>Timeline</label>
         <div class="icon-row">
           <button id="btn-add-to-timeline" class="layer-btn" title="Add to Timeline">Add to Timeline</button>
-          <label class="timeline-include-net" title="Also capture the current net as this keyframe's net state - once every keyframe has one, the timeline drives the net (strength and focus of a same-family law change together with the pattern)"><input type="checkbox" id="timeline-include-net"> Include net</label>
+<button id="btn-timeline-include-net" class="layer-btn" title="Also capture the current net when a keyframe is added">Include net: off</button>
           <button id="btn-remove-timeline" class="layer-btn" title="Remove Timeline" hidden>Remove Timeline</button>
         </div>
+        <div id="timeline-net-warning" hidden></div>
         <div class="icon-row" id="timeline-keyframe-list" hidden></div>
+        <div id="timeline-net-state" hidden></div>
         <div class="icon-row" id="timeline-playback-controls" hidden>
           <button id="btn-timeline-play" class="icon-btn" title="Play">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
@@ -1216,18 +1218,18 @@
        the p5.js CDN tag - that URL already carries its own version
        (p5@1.9.0), so a version bump there naturally changes the URL. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260925l"></script>
-  <script src="core/state.js?v=20260925l"></script>
-  <script src="core/symmetry.js?v=20260925l"></script>
-  <script src="core/curves.js?v=20260925l"></script>
-  <script src="core/netwarp.js?v=20260925l"></script>
-  <script src="core/tiling.js?v=20260925l"></script>
-  <script src="core/faces.js?v=20260925l"></script>
-  <script src="core/orbits.js?v=20260925l"></script>
-  <script src="core/color.js?v=20260925l"></script>
-  <script src="core/facecolor.js?v=20260925l"></script>
-  <script src="core/export.js?v=20260925l"></script>
-  <script src="sketch.js?v=20260925l"></script>
+  <script src="core/forms.js?v=20260925m"></script>
+  <script src="core/state.js?v=20260925m"></script>
+  <script src="core/symmetry.js?v=20260925m"></script>
+  <script src="core/curves.js?v=20260925m"></script>
+  <script src="core/netwarp.js?v=20260925m"></script>
+  <script src="core/tiling.js?v=20260925m"></script>
+  <script src="core/faces.js?v=20260925m"></script>
+  <script src="core/orbits.js?v=20260925m"></script>
+  <script src="core/color.js?v=20260925m"></script>
+  <script src="core/facecolor.js?v=20260925m"></script>
+  <script src="core/export.js?v=20260925m"></script>
+  <script src="sketch.js?v=20260925m"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

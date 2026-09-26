@@ -630,6 +630,7 @@ function setup() {
             if (baseNetAnimation && baseNetAnimation.live && !baseNetAnimation.playing) baseNetAnimation.live = false;
             if (timeline && timeline.netLive && !timeline.playing) timeline.netLive = false;   // the same for a Timeline-driven net
             render(); netControlsSync(); redraw(); if (window.syncNetAnimationDisplay) window.syncNetAnimationDisplay();
+            if (window.syncTimelineNetUi) window.syncTimelineNetUi();   // the automatic "Include net" value and the warning follow the author net
         }
         function render() {
             const c = target();
@@ -990,8 +991,34 @@ function setup() {
     // updateTimelineControls() based on whether `timeline` exists and
     // how many keyframes it currently has (phase (ii)).
     const addToTimelineBtn = select('#btn-add-to-timeline');
-    const includeNetInput = select('#timeline-include-net');
-    window.timelineIncludeNet = () => !!(includeNetInput && includeNetInput.elt.checked);   // Case B1: "Include net" (default off): Add to Timeline also captures the author net
+    // Case B1: "Include net" - a toggle button (the labels of a control group are hidden by style.css, a checkbox inside one would be
+    // invisible). null = automatic (ON exactly when a net warp is active), true/false = chosen; the shown value is timelineIncludeNetValue().
+    const includeNetBtn = select('#btn-timeline-include-net'), includeNetWarn = select('#timeline-net-warning'), netStateEl = select('#timeline-net-state');
+    let includeNetOverride = null;
+    window.timelineIncludeNet = () => timelineIncludeNetValue(includeNetOverride);
+    let netUiSig = '';
+    // The persistent Timeline-net indicator, the toggle's state and the warning; cheap, called whenever any of their inputs can change
+    window.syncTimelineNetUi = () => {
+        const on = timelineIncludeNetValue(includeNetOverride), active = netAuthorWarpActive(), sum = timelineNetSummary();
+        const sig = `${on}|${active}|${includeNetOverride}|${sum ? sum.state + sum.text : ''}`;
+        if (sig === netUiSig) return;
+        netUiSig = sig;
+        if (includeNetBtn) {
+            includeNetBtn.elt.classList.toggle('active', on);
+            includeNetBtn.elt.textContent = on ? 'Include net: on' : 'Include net: off';
+            includeNetBtn.attribute('title', `Also capture the current net when a keyframe is added, so the net moves with the timeline. ${includeNetOverride === null ? 'Automatic: on while a net warp is active.' : 'Set by you (click to change).'}`);
+        }
+        if (includeNetWarn) {
+            const warn = active && !on;
+            includeNetWarn.elt.hidden = !warn;
+            if (warn) includeNetWarn.html('A net warp is active but "Include net" is off: it will NOT move with the timeline.');
+        }
+        if (netStateEl) {
+            netStateEl.elt.hidden = !sum;
+            if (sum) { netStateEl.html(sum.text); netStateEl.elt.dataset.state = sum.state; }
+        }
+    };
+    if (includeNetBtn) includeNetBtn.mousePressed(() => { includeNetOverride = timelineIncludeNetToggle(includeNetOverride); window.syncTimelineNetUi(); });
     const removeTimelineBtn = select('#btn-remove-timeline');
     const timelineKeyframeList = select('#timeline-keyframe-list');
     const timelinePlaybackControls = select('#timeline-playback-controls');
@@ -1368,7 +1395,9 @@ function setup() {
             tab.className = 'layer-tab';
 
             const label = document.createElement('span');
-            label.textContent = `${pos + 1}. Layer ${layerIndex + 1}` + (timeline.netStates && timeline.netStates[pos] ? ' \u00b7 net' : '');
+            const hasNet = !!(timeline.netStates && timeline.netStates[pos]);
+            label.textContent = `${pos + 1}. Layer ${layerIndex + 1} \u00b7 ` + (hasNet ? 'net' : 'no net');
+            label.className = hasNet ? 'kf-net' : 'kf-net kf-no-net';
             label.style.fontSize = '13px';
 
             // Case B1: captures the current AUTHOR net for this keyframe (refused when it cannot be interpolated with a neighbour's)
@@ -1661,6 +1690,7 @@ function setup() {
         renderTimelinePairingEditor();
         if (playable) syncTimelineDisplay();
         enforceNetAnimationLockout();   // Case B1: the standalone net animation locks/unlocks with the coupling
+        if (window.syncTimelineNetUi) window.syncTimelineNetUi();
     }
     window.updateTimelineControls = updateTimelineControls;
 
@@ -2249,6 +2279,7 @@ function draw() {
     // per scrub action, never relying on this per-frame loop.
     additionalLayers.forEach(layer => { if (layer.animation && layer.animation.playing) applyLayerAnimationFrame(layer); });
     applyNetAnimationFrame();   // the net animation's progress for this frame (only while it is live; never touches baseNetTransform)
+    if (window.syncTimelineNetUi) window.syncTimelineNetUi();
     if (window.syncNetAnimationDisplay && baseNetAnimation) window.syncNetAnimationDisplay();
     // Roadmap 1.8 Stage C phase (i): same "recompute while actively
     // playing, re-check isAnythingAnimating() afterward" pattern as the
@@ -3806,7 +3837,8 @@ function applyTimelineFrame() {
     const segCount = timeline.segmentDurationsMs.length;
     // Case B1: what the net is doing this frame (a missing state or an incompatible neighbouring pair is said, not silently ignored)
     const missingNet = timelineNetMissing(), netSeg = timelineNetSegment();
-    const netNote = missingNet.length ? ` | Net not animated: keyframe${missingNet.length > 1 ? 's' : ''} ${missingNet.join(', ')} ha${missingNet.length > 1 ? 've' : 's'} no net captured (use "Net" on the keyframe)` : (netSeg.reason ? ` | Net: ${netSeg.reason} - the author net is shown` : '');
+    const sep = segCount > 1 ? ' | ' : '';   // no stray separator when there is no segment text before the note
+    const netNote = missingNet.length ? `${sep}Net not animated: keyframe${missingNet.length > 1 ? 's' : ''} ${missingNet.join(', ')} ha${missingNet.length > 1 ? 've' : 's'} no net captured (use "Net" on the keyframe)` : (netSeg.reason ? `${sep}Net: ${netSeg.reason} - the author net is shown` : '');
     setTimelineStatus((segCount > 1
         ? `Segment ${segment.segmentIndex + 1}/${segCount} (Layer ${timeline.keyframeLayerIds[segment.segmentIndex] + 1} → Layer ${timeline.keyframeLayerIds[segment.segmentIndex + 1] + 1})`
         : '') + netNote);
