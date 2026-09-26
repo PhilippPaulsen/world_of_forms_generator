@@ -25,7 +25,7 @@ function makeSheet(shape, order, mode, src = SRC) {
     const sb = {
         strokeWeight: () => { }, radians: d => d * Math.PI / 180, cos: Math.cos, sin: Math.sin, sqrt: Math.sqrt, abs: Math.abs,
         dist: (a, b, c, d) => Math.hypot(c - a, d - b),
-        segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, baseNetTransform: null, baseNetAnimation: null, activeNetWarp: null,
+        segmentCollector: null, svgPathCollector: null, curveType: { kind: 'straight' }, baseNetTransform: null, baseNetAnimation: null, timeline: null, activeNetWarp: null,
         centroid: null, symmetryMode: mode, outerCorners: null, currentShape: shape, nodes: null,
         baseFaceAssignments: new Map(), baseFacePalette: null, faceHover: null, additionalLayers: [], console
     };
