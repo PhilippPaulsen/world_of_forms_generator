@@ -216,5 +216,54 @@ console.log('\n== 7. real pipeline: pattern and net together ==');
     check('the net is continuous across the segment boundary at t = 0.5 (w = 1, the shared keyframe) while the pattern also passes through its keyframe there', Math.abs(fr[4].w - 1) < 1e-9 && Math.abs(cap(0.5 - 1e-7).w - cap(0.5 + 1e-7).w) < 1e-5);
 }
 
+// ============ 8. the persistent indicator, the default and the warning condition (the seven cases of the visibility investigation) ============
+console.log('\n== 8. indicator states, automatic default, warning, separator ==');
+{
+    const A = F({ kind: 'trig', w: -1 }), B = F({ kind: 'trig', w: 1 });
+    const build = (a, b) => { const sb = mk(SRC, SKETCH); sb.baseNetTransform = a.spec; sb.includeNet = a.inc; const i0 = addLayer(sb, PATS[0].map(c => c.slice())); sb.activeLayer = i0; sb.addLayerToTimeline(); sb.baseNetTransform = b.spec; sb.includeNet = b.inc; const i1 = addLayer(sb, PATS[1].map(c => c.slice())); sb.activeLayer = i1; sb.addLayerToTimeline(); return sb; };
+    const state = sb => { const r = sb.timelineNetSummary(); return r && r.state; };
+    check('S1 (net captured at both keyframes, different nets): animated (green)', state(build({ spec: A, inc: true }, { spec: B, inc: true })) === 'animated');
+    const v1 = build({ spec: A, inc: false }, { spec: B, inc: false });
+    check('V1 (never included): "none" - the loud state, and the text tells what to do', state(v1) === 'none' && /NOT animated: no keyframe has a net/.test(v1.timelineNetSummary().text) && /Include net/.test(v1.timelineNetSummary().text));
+    const v2 = build({ spec: A, inc: false }, { spec: B, inc: true });
+    check('V2 (only keyframe 2 has a net): "partial", naming keyframe 1', state(v2) === 'partial' && /keyframe 1 has no net/.test(v2.timelineNetSummary().text));
+    check('V3 (included, the same net twice): "constant" (informational)', state(build({ spec: A, inc: true }, { spec: A, inc: true })) === 'constant');
+    check('V4 (included, both regular): "constant"', state(build({ spec: null, inc: true }, { spec: null, inc: true })) === 'constant');
+    const v5 = build({ spec: A, inc: false }, { spec: B, inc: false }); v5.baseNetTransform = B; v5.recaptureTimelineKeyframeNet(0); v5.recaptureTimelineKeyframeNet(1);
+    check('V5 ("Net" on both rows without changing the net): "constant" - not silent any more', state(v5) === 'constant');
+    const v6 = build({ spec: A, inc: false }, { spec: B, inc: false }); v6.baseNetTransform = A; v6.recaptureTimelineKeyframeNet(0); v6.baseNetTransform = B; v6.recaptureTimelineKeyframeNet(1);
+    check('V6 ("Net" on row 1, change the net, "Net" on row 2): animated', state(v6) === 'animated');
+    const one = mk(SRC, SKETCH); one.baseNetTransform = A; one.includeNet = true; one.activeLayer = addLayer(one, PATS[0].map(c => c.slice())); one.addLayerToTimeline();
+    check('a single keyframe with a net: "pending" (waiting for the second), never "animated"', state(one) === 'pending' && state(mk(SRC, SKETCH)) === null);
+    const inc = mk(SRC, SKETCH); [F({ kind: 'trig', w: -1 }), F({ kind: 'trig', w: 0.4 }), S('trig', 0.5)].forEach((sp, i) => addKf(inc, i, sp, true));   // the third add is refused (domain) -> only two keyframes
+    inc.timeline.netStates[1] = F({ kind: 'trig', w: 0.4 }); inc.timeline.keyframeLayerIds.push(99); inc.timeline.netStates.push(S('trig', 0.5));
+    check('an incompatible adjacent pair: "incompatible", naming the two keyframes and the reason', state(inc) === 'incompatible' && /keyframes 2 and 3/.test(inc.timelineNetSummary().text) && /domain differs/.test(inc.timelineNetSummary().text));
+    // automatic default and the toggle
+    const d = mk(SRC, SKETCH);
+    d.baseNetTransform = A; const on1 = d.timelineIncludeNetValue(null); d.baseNetTransform = null; const off1 = d.timelineIncludeNetValue(null);
+    check('default: ON while a net warp is active, OFF for a regular net', on1 === true && off1 === false);
+    d.baseNetTransform = A; d.currentShape = 'triangle';
+    check('default: OFF for a shape the warp does not apply to (a spec alone is not an active warp)', d.timelineIncludeNetValue(null) === false); d.currentShape = 'square';
+    check('an explicit choice wins over the automatic value: on without a warp, off with one', (d.baseNetTransform = null, d.timelineIncludeNetValue(true)) === true && (d.baseNetTransform = A, d.timelineIncludeNetValue(false)) === false);
+    d.baseNetTransform = A;
+    check('toggle: from automatic-on it turns off (an override); from off back to on returns to automatic (null)', d.timelineIncludeNetToggle(null) === false && d.timelineIncludeNetToggle(false) === null);
+    d.baseNetTransform = null;
+    check('toggle: from automatic-off it turns on (an override); back off returns to automatic', d.timelineIncludeNetToggle(null) === true && d.timelineIncludeNetToggle(true) === null);
+    // the warning condition = (author warp active) && !(shown value)
+    const warn = (spec, ov) => { d.baseNetTransform = spec; return d.netAuthorWarpActive() && !d.timelineIncludeNetValue(ov); };
+    check('warning condition: only when a warp is active AND the toggle is off (automatic never warns; a chosen "off" with a warp does; no warp never does)', warn(A, null) === false && warn(A, false) === true && warn(A, true) === false && warn(null, false) === false && warn(null, null) === false);
+    // the stray separator
+    const two = build({ spec: A, inc: false }, { spec: B, inc: true });   // one segment, keyframe 1 without a net
+    two.setTimelineProgress(0.3); const st2 = two.status[two.status.length - 1];
+    check('one segment: the net note has no stray leading " | "', /^Net not animated/.test(st2) && !/^\s*\|/.test(st2), st2);
+    const three = mk(SRC, SKETCH); [A, B, F({ kind: 'trig', w: 0.2 })].forEach((sp, i) => addKf(three, i, sp, i !== 1)); three.setTimelineProgress(0.3); const st3 = three.status[three.status.length - 1];
+    check('several segments: the note follows the segment text with " | "', /^Segment 1\/2 \(Layer 1 .+ Layer 2\) \| Net not animated/.test(st3), st3);
+    // wiring
+    const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
+    check('the include control is a .layer-btn button (not a label + checkbox, which style.css hides inside a control group); the indicator and the warning are divs', /<button id="btn-timeline-include-net" class="layer-btn"/.test(html) && !/type="checkbox"/.test(html.slice(html.indexOf('id="timeline-group"'), html.indexOf('id="timeline-group"') + 3000)) && /<div id="timeline-net-state"/.test(html) && /<div id="timeline-net-warning"/.test(html) && css.length > 0);
+    check('index.html keeps NO label element inside the timeline group that the control depends on', !/<div class="control-group" id="timeline-group">[\s\S]*?<label[^>]*timeline-include/.test(html));
+    check('sketch.js: the toggle, the indicator and the warning are synced from updateTimelineControls(), the net commit() and draw()', /syncTimelineNetUi\(\);\n    \}\n    window\.updateTimelineControls/.test(SKETCH) && /window\.syncTimelineNetUi\) window\.syncTimelineNetUi\(\);   \/\/ the automatic/.test(SKETCH) && /applyNetAnimationFrame\(\);[^\n]*\n    if \(window\.syncTimelineNetUi\)/.test(SKETCH));
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 process.exit(failures ? 1 : 0);
