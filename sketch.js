@@ -628,6 +628,7 @@ function setup() {
             // An author edit while the animation is only paused/scrubbed shows the author net again; while it is PLAYING the frame keeps
             // running and the edit lands in the author spec only (baseNetTransform is never overwritten by the frame).
             if (baseNetAnimation && baseNetAnimation.live && !baseNetAnimation.playing) baseNetAnimation.live = false;
+            if (timeline && timeline.netLive && !timeline.playing) timeline.netLive = false;   // the same for a Timeline-driven net
             render(); netControlsSync(); redraw(); if (window.syncNetAnimationDisplay) window.syncNetAnimationDisplay();
         }
         function render() {
@@ -773,7 +774,15 @@ function setup() {
         naDur.input(() => { const v = parseInt(naDur.value()); if (v > 0) ensureNetAnimation().durationMs = v; });
         naPlay.mousePressed(() => { naFixed = ''; toggleNetAnimationPlayback(); window.syncNetAnimationDisplay(); });
         naProg.input(() => { naFixed = ''; setNetAnimationProgress(parseFloat(naProg.value())); window.syncNetAnimationDisplay(); });
+        // Case B1: while the Timeline drives the net (>= 2 keyframes, a net state at every one) these controls are locked
+        const naLockNote = select('#net-anim-lock-note');
+        window.syncNetAnimationLock = () => {
+            const locked = timelineNetCoupled();
+            [naStart, naEnd, naDur, naPlay, naProg].forEach(c => { c.elt.disabled = locked; });
+            naLockNote.elt.hidden = !locked;
+        };
         naStatus.elt.hidden = true;
+        window.syncNetAnimationLock();
         render();
     })();
 
@@ -981,6 +990,8 @@ function setup() {
     // updateTimelineControls() based on whether `timeline` exists and
     // how many keyframes it currently has (phase (ii)).
     const addToTimelineBtn = select('#btn-add-to-timeline');
+    const includeNetInput = select('#timeline-include-net');
+    window.timelineIncludeNet = () => !!(includeNetInput && includeNetInput.elt.checked);   // Case B1: "Include net" (default off): Add to Timeline also captures the author net
     const removeTimelineBtn = select('#btn-remove-timeline');
     const timelineKeyframeList = select('#timeline-keyframe-list');
     const timelinePlaybackControls = select('#timeline-playback-controls');
@@ -1357,8 +1368,16 @@ function setup() {
             tab.className = 'layer-tab';
 
             const label = document.createElement('span');
-            label.textContent = `${pos + 1}. Layer ${layerIndex + 1}`;
+            label.textContent = `${pos + 1}. Layer ${layerIndex + 1}` + (timeline.netStates && timeline.netStates[pos] ? ' \u00b7 net' : '');
             label.style.fontSize = '13px';
+
+            // Case B1: captures the current AUTHOR net for this keyframe (refused when it cannot be interpolated with a neighbour's)
+            const netBtn = document.createElement('button');
+            netBtn.className = 'layer-remove-btn';
+            netBtn.textContent = 'Net';
+            netBtn.style.fontSize = '11px';
+            netBtn.title = `Capture the current net for keyframe ${pos + 1} (the timeline drives the net once every keyframe has one)`;
+            netBtn.addEventListener('click', () => { recaptureTimelineKeyframeNet(pos); });
 
             const removeBtn = document.createElement('button');
             removeBtn.className = 'layer-remove-btn';
@@ -1369,6 +1388,7 @@ function setup() {
             });
 
             tab.appendChild(label);
+            tab.appendChild(netBtn);
             tab.appendChild(removeBtn);
             container.appendChild(tab);
         });
@@ -1640,6 +1660,7 @@ function setup() {
         renderTimelineKeyframeList();
         renderTimelinePairingEditor();
         if (playable) syncTimelineDisplay();
+        enforceNetAnimationLockout();   // Case B1: the standalone net animation locks/unlocks with the coupling
     }
     window.updateTimelineControls = updateTimelineControls;
 
@@ -3060,6 +3081,7 @@ function ensureNetAnimation() {
 function setNetAnimationStatus(text) { if (window.setNetAnimStatusText) window.setNetAnimStatusText(text); }
 // which = 'from' | 'to': captures the AUTHOR net (a regular net is captured as {regular: true} - compatible with any domain)
 function captureNetAnimationEnd(which) {
+    if (timelineNetCoupled()) { setNetAnimationStatus('The timeline drives the net.'); return false; }
     const a = ensureNetAnimation(), label = which === 'from' ? 'Start' : 'End';
     const spec = baseNetTransform ? JSON.parse(JSON.stringify(baseNetTransform)) : { regular: true };
     const other = which === 'from' ? a.to : a.from;
@@ -3072,6 +3094,34 @@ function captureNetAnimationEnd(which) {
     setNetAnimationStatus(a.from && a.to ? `${label} captured. Ready: Play or drag the progress slider.` : `${label} captured. Now set the other end.`);
     return true;
 }
+// Case B1: while the Timeline drives the net (>= 2 keyframes, a net state at every one) the standalone animation is locked out: two clocks on
+// one net make no sense. Called whenever the coupling can change (add, re-capture, remove).
+function enforceNetAnimationLockout() {
+    if (timelineNetCoupled() && baseNetAnimation && (baseNetAnimation.playing || baseNetAnimation.live)) {
+        baseNetAnimation.playing = false; baseNetAnimation.live = false;
+        syncAnimationLoopState();
+    }
+    if (window.syncNetAnimationLock) window.syncNetAnimationLock();
+}
+// The per-keyframe "Net" button: captures the current AUTHOR net for keyframe `pos`, refused (visibly) when it cannot be interpolated with
+// an adjacent keyframe's net.
+function recaptureTimelineKeyframeNet(pos) {
+    if (!timeline || pos < 0 || pos >= timeline.keyframeLayerIds.length) return;
+    const snap = netSpecSnapshot();
+    for (const n of [pos - 1, pos + 1]) {
+        const other = timeline.netStates && timeline.netStates[n];
+        if (n < 0 || n >= timeline.keyframeLayerIds.length || !other) continue;
+        const c = n < pos ? netAnimationCompat(other, snap) : netAnimationCompat(snap, other);
+        if (!c.ok) { setTimelineStatus(`Net of keyframe ${pos + 1} NOT captured: it cannot be interpolated with keyframe ${n + 1}'s net - ${c.reason}.`); return; }
+    }
+    if (!timeline.netStates) timeline.netStates = timeline.keyframeLayerIds.map(() => null);
+    timeline.netStates[pos] = snap;
+    timeline.netLive = false;
+    enforceNetAnimationLockout();
+    if (timeline.playbackLayerIndex !== null) applyTimelineFrame(); else setTimelineStatus('');
+    if (window.updateTimelineControls) window.updateTimelineControls();
+    redraw();
+}
 // Recomputes the frame's progress from the clock (the Stage A applyLayerAnimationFrame() bookkeeping); called every draw().
 function applyNetAnimationFrame() {
     const a = baseNetAnimation;
@@ -3082,6 +3132,7 @@ function applyNetAnimationFrame() {
     a.t = a.durationMs > 0 ? elapsed / a.durationMs : 1;
 }
 function toggleNetAnimationPlayback() {
+    if (timelineNetCoupled()) { setNetAnimationStatus('The timeline drives the net.'); return; }
     const a = baseNetAnimation;
     if (!a || !a.from || !a.to) { setNetAnimationStatus('Set Start and Set End first.'); return; }
     if (a.playing) { a.elapsedMs = Math.max(0, Math.min(a.durationMs, millis() - a.startTime)); a.playing = false; }
@@ -3091,6 +3142,7 @@ function toggleNetAnimationPlayback() {
     redraw();
 }
 function setNetAnimationProgress(t) {
+    if (timelineNetCoupled()) { setNetAnimationStatus('The timeline drives the net.'); return; }
     const a = baseNetAnimation;
     if (!a || !a.from || !a.to) { setNetAnimationStatus('Set Start and Set End first.'); return; }
     a.elapsedMs = Math.max(0, Math.min(1, t)) * a.durationMs; a.playing = false; a.live = true;
@@ -3207,6 +3259,9 @@ function addLayerToTimeline() {
             segmentPairings: [],
             segmentFlips: [],
             segmentMembers: [],
+            // Case B1: one captured net per KEYFRAME, parallel to keyframeLayerIds (null = none); netLive = the Timeline's frame, not the author
+            // net, is what is drawn (set by play/scrub, ended by an author edit of the net controls while paused)
+            netStates: [window.timelineIncludeNet && window.timelineIncludeNet() ? netSpecSnapshot() : null], netLive: false,
             elapsedMs: 0, startTime: null, playing: false,
         };
         layer._timelineSavedEnabled = layer.enabled;
@@ -3233,6 +3288,16 @@ function addLayerToTimeline() {
         return;
     }
 
+    // Case B1: "Include net" captures the current AUTHOR net as this keyframe's net state; it must be interpolable with the previous
+    // keyframe's (same rule as the standalone animation), else this add is refused like a shape / line-count mismatch.
+    let netState = null;
+    if (window.timelineIncludeNet && window.timelineIncludeNet()) {
+        netState = netSpecSnapshot();
+        const prevNet = timeline.netStates && timeline.netStates[timeline.netStates.length - 1];
+        const c = prevNet ? netAnimationCompat(prevNet, netState) : { ok: true };
+        if (!c.ok) { setTimelineStatus(`Layer ${idx + 1} not added: its net cannot be interpolated with Layer ${prevIdx + 1}'s net - ${c.reason}. Only the strength and focus of a same-family law can change between keyframes.`); return; }
+    }
+
     // Roadmap 1.8 Stage C phase (ii): the playback layer is created
     // LAZILY, here, the first time a real segment becomes possible (the
     // second keyframe) - not at the first "Add to Timeline" click, which
@@ -3257,6 +3322,8 @@ function addLayerToTimeline() {
     }
 
     timeline.keyframeLayerIds.push(idx);
+    if (!timeline.netStates) timeline.netStates = timeline.keyframeLayerIds.slice(0, -1).map(() => null);
+    timeline.netStates.push(netState);   // lockstep with keyframeLayerIds (mutation point 2 of 3)
     // Design session point 2: each segment's own FIXED duration,
     // captured once here - not derived by dividing one total evenly.
     // Currently always the same default (2000ms); a later session could
@@ -3273,7 +3340,7 @@ function addLayerToTimeline() {
     applyTimelineFrame();
     renderLayerTabs();
     updateOffsetControls();
-    updateTimelineControls();
+    updateTimelineControls();   // also enforces the standalone net animation's lockout
     redraw();
 }
 
@@ -3737,9 +3804,12 @@ function applyTimelineFrame() {
     // core/facecolor.js's playbackCrossfadeColors() (core/* cannot call back into sketch.js).
     timeline.currentFrame = { segmentIndex: segment.segmentIndex, localT: segment.localT };
     const segCount = timeline.segmentDurationsMs.length;
-    setTimelineStatus(segCount > 1
+    // Case B1: what the net is doing this frame (a missing state or an incompatible neighbouring pair is said, not silently ignored)
+    const missingNet = timelineNetMissing(), netSeg = timelineNetSegment();
+    const netNote = missingNet.length ? ` | Net not animated: keyframe${missingNet.length > 1 ? 's' : ''} ${missingNet.join(', ')} ha${missingNet.length > 1 ? 've' : 's'} no net captured (use "Net" on the keyframe)` : (netSeg.reason ? ` | Net: ${netSeg.reason} - the author net is shown` : '');
+    setTimelineStatus((segCount > 1
         ? `Segment ${segment.segmentIndex + 1}/${segCount} (Layer ${timeline.keyframeLayerIds[segment.segmentIndex] + 1} → Layer ${timeline.keyframeLayerIds[segment.segmentIndex + 1] + 1})`
-        : '');
+        : '') + netNote);
     applyLayerConnectionsMorphFrame(playbackLayer, { fromConnections: resolved.from, toConnections: resolved.to }, segment.localT);
 }
 
@@ -3760,6 +3830,7 @@ function toggleTimelinePlayback() {
         if (timeline.elapsedMs >= totalDuration) timeline.elapsedMs = 0;
         timeline.startTime = millis() - timeline.elapsedMs;
         timeline.playing = true;
+        timeline.netLive = true;
     }
     syncAnimationLoopState();
 }
@@ -3773,6 +3844,7 @@ function setTimelineProgress(t) {
     const totalDuration = totalTimelineDurationMs(timeline);
     timeline.elapsedMs = Math.max(0, Math.min(1, t)) * totalDuration;
     timeline.playing = false;
+    timeline.netLive = true;
     syncAnimationLoopState();
     applyTimelineFrame();
 }
@@ -3791,6 +3863,7 @@ function previewTimelineSegmentMidpoint(segmentIndex) {
     for (let i = 0; i < segmentIndex; i++) acc += timeline.segmentDurationsMs[i];
     timeline.elapsedMs = acc + timeline.segmentDurationsMs[segmentIndex] / 2;
     timeline.playing = false;
+    timeline.netLive = true;
     syncAnimationLoopState();
     applyTimelineFrame();
     if (window.syncTimelineDisplay) window.syncTimelineDisplay();
@@ -3920,6 +3993,7 @@ function spliceKeyframeOutOfTimeline(layerIndex) {
     }
     const segCountBefore = timeline.segmentDurationsMs.length;
     timeline.keyframeLayerIds.splice(pos, 1);
+    if (timeline.netStates) timeline.netStates.splice(pos, 1);   // lockstep with keyframeLayerIds (mutation point 3 of 3): the neighbours become adjacent, revalidated at runtime
     // segmentPairings (Stage D phase (i)) is spliced in lockstep with
     // segmentDurationsMs - a merged interior segment gets a fresh null
     // (default) pairing, since its two neighbours' pairings referred to

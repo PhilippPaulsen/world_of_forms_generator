@@ -241,8 +241,8 @@ body.dark {
 #face-colors-timeline-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
 #face-colors-timeline-note[hidden] { display: none; }
 #net-locks-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
-#net-anim-status, #net-focus-hint, #net-size-hint, #net-free-note, #net-macro-hint, #net-macro-note, #net-field-hint, #net-field-info, #net-field-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
-#net-anim-status[hidden], #net-focus-hint[hidden], #net-focus-row[hidden], #net-size-hint[hidden], #net-free-note[hidden], #net-field-hint[hidden], #net-field-info[hidden], #net-field-note[hidden], #net-macro-hint[hidden], #net-macro-note[hidden], #net-macro-row[hidden], #net-alternate-btn[hidden], #net-locks-note[hidden], #net-geo-row[hidden], #net-group[hidden], #net-strength-row[hidden] { display: none; }
+#net-anim-lock-note, #net-anim-status, #net-focus-hint, #net-size-hint, #net-free-note, #net-macro-hint, #net-macro-note, #net-field-hint, #net-field-info, #net-field-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
+#net-anim-lock-note[hidden], #net-anim-status[hidden], #net-focus-hint[hidden], #net-focus-row[hidden], #net-size-hint[hidden], #net-free-note[hidden], #net-field-hint[hidden], #net-field-info[hidden], #net-field-note[hidden], #net-macro-hint[hidden], #net-macro-note[hidden], #net-macro-row[hidden], #net-alternate-btn[hidden], #net-locks-note[hidden], #net-geo-row[hidden], #net-group[hidden], #net-strength-row[hidden] { display: none; }
 #net-macro-row { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
 #net-focus-row, #net-strength-row { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
 #net-group .icon-row { flex-wrap: wrap; justify-content: center; }
@@ -251,3 +251,5 @@ body.dark {
 
 .limit-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
 .limit-note[hidden] { display: none; }
+
+.timeline-include-net { font-size: 12px; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }

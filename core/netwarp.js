@@ -336,11 +336,53 @@ function netLerpSpecs(from, to, t) {
     if (!base.any && base.macro !== null && base.dom !== 'field') spec.macro = base.macro;
     return spec;
 }
-// The net that is in force RIGHT NOW: the author spec, or the animation frame while it is live (see the block comment above).
+// ---- Timeline-coupled net (Case B1): the net follows the layer-keyframe Timeline's own clock ----
+// timeline.netStates is parallel to timeline.keyframeLayerIds: one captured net (a spec, {regular: true}, or null = none) PER KEYFRAME,
+// so segment k lerps netStates[k] -> netStates[k+1] with the same localT as the pattern morph, and two neighbouring segments share
+// their boundary state (the net cannot jump where the pattern does not). The coupling is active only with >= 2 keyframes and a state
+// at EVERY keyframe; otherwise the net is not driven (the author net shows) and the Timeline status says which keyframe lacks one.
+// Reads timeline.currentFrame = {segmentIndex, localT} (written by sketch.js's applyTimelineFrame()), like playbackCrossfadeColors().
+// A snapshot of the AUTHOR net for capture: a clone of the spec, or {regular: true} for a regular net.
+function netSpecSnapshot() { return baseNetTransform ? JSON.parse(JSON.stringify(baseNetTransform)) : { regular: true }; }
+function timelineNetCoupled() {
+    const tl = timeline;
+    return !!(tl && tl.netStates && tl.keyframeLayerIds.length >= 2 && tl.netStates.length === tl.keyframeLayerIds.length && tl.netStates.every(s => !!s));
+}
+// {spec, reason}: the lerp of the current segment's two captured nets, or why there is none (an incompatible neighbouring pair, e.g.
+// after an inner keyframe was removed) - the caller then shows the author net and says why.
+function timelineNetSegment() {
+    if (!timelineNetCoupled() || !timeline.currentFrame) return { spec: null, reason: null };
+    const { segmentIndex, localT } = timeline.currentFrame, A = timeline.netStates[segmentIndex], B = timeline.netStates[segmentIndex + 1];
+    if (!A || !B) return { spec: null, reason: null };
+    const c = netAnimationCompat(A, B);
+    if (!c.ok) return { spec: null, reason: `the net states of keyframes ${segmentIndex + 1} and ${segmentIndex + 2} cannot be interpolated: ${c.reason}` };
+    return { spec: netLerpSpecs(A, B, localT), reason: null };
+}
+// Which keyframes lack a net state (1-based), for the Timeline status; [] when none do (or there are no states at all).
+function timelineNetMissing() {
+    const tl = timeline;
+    if (!tl || !tl.netStates || !tl.netStates.some(s => !!s)) return [];
+    return tl.keyframeLayerIds.map((_, i) => (tl.netStates[i] ? 0 : i + 1)).filter(Boolean);
+}
+// The net that is in force RIGHT NOW. Priority: the Timeline (coupled: its live frame, else the author net - the standalone
+// animation is locked out while coupled), then the standalone animation's live frame, then the author spec (see the blocks above).
 function netTransformNow() {
+    if (timelineNetCoupled()) {
+        if (!timeline.netLive) return baseNetTransform;
+        return timelineNetSegment().spec || baseNetTransform;
+    }
     const a = baseNetAnimation;
     if (!a || !a.live || !a.from || !a.to) return baseNetTransform;
     return netLerpSpecs(a.from, a.to, a.t || 0) || baseNetTransform;
+}
+// meta.netTransform.animationFrame & co. for the export: null when the drawn net is the author net.
+function netAnimationExportInfo() {
+    if (timelineNetCoupled() && timeline.netLive && timelineNetSegment().spec && timeline.currentFrame) {
+        const total = timeline.segmentDurationsMs.reduce((x, y) => x + y, 0);
+        return { animationFrame: total > 0 ? timeline.elapsedMs / total : 0, animationSource: 'timeline', segmentIndex: timeline.currentFrame.segmentIndex, localT: timeline.currentFrame.localT };
+    }
+    if (!timelineNetCoupled() && baseNetAnimation && baseNetAnimation.live && baseNetAnimation.from && baseNetAnimation.to) return { animationFrame: baseNetAnimation.t || 0 };
+    return null;
 }
 
 // ---- Exact images of straight segments under a FIELD warp ----
