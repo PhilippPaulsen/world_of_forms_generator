@@ -936,3 +936,11 @@ OstwaldColor.compoundLevel(higher); // 3
 
 See [COMPOUND_HARMONIES.md](COMPOUND_HARMONIES.md) for verified GGe/GGg/GFg/WF
 fixtures, page references, Figure 20/21 and intentionally deferred cases.
+
+## Standalone visual research instrument (Phase 6A)
+
+The optional browser interface in [ui/README.md](ui/README.md) exposes Kreis,
+Dreieck, Register and Harmonie through the unchanged public engine API. It uses
+German by default, a bilingual dictionary, local Suisse Intl and separate atlas
+and contemporary continuous samples. Run `node color-harmony/ui/serve.js` from
+the worktree root. This is separate from the generator; no p5 integration is made.
