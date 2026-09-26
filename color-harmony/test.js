@@ -963,4 +963,262 @@ test('Series grammar: custom calibration and analytical family preserve validati
   assert.deepEqual(OstwaldColor.classifyHueSet([1,9,17]),before);
 });
 
+
+
+// Phase 5 fixtures use actual atlas objects; historical cases remain data, not engines.
+const gray = letter => OstwaldColor.grayAxis().find(g=>g.letter===letter);
+const field = label => OstwaldColor.triangle(Number.parseInt(label,10)).find(f=>f.label===label);
+const grayGroup = letters => OstwaldColor.elementaryHarmony('gray',[...letters].map(gray));
+const labels = group => group.members.map(m=>m.label);
+const sameHueGroup = (names, relation='isotint') => OstwaldColor.elementaryHarmony('same-hue',names.map(field),{relation});
+const isovalentGroup = names => OstwaldColor.elementaryHarmony('isovalent',names.map(field));
+
+test('Compound elementary interface: G/F/W domains and existing relations', () => {
+  const groups=[grayGroup('ace'),sameHueGroup(['5ia','5ic','5ie']),
+    isovalentGroup(['5ic','13ic','21ic'])];
+  assert.deepEqual(groups.map(g=>g.domain),['gray','same-hue','isovalent']);
+  for(const group of groups) {
+    assert.equal(group.type,'harmony-set'); assert.equal(group.level,1);
+    assert.equal(OstwaldColor.compoundLevel(group),1);
+    assert.deepEqual(group.domains,[group.domain]);
+    assert.deepEqual(OstwaldColor.flattenHarmonyMembers(group),group.members);
+    assert.equal(group.sourceStatus,'contemporary-implementation');
+  }
+  assert.deepEqual(labels(sameHueGroup(['5ec','5gc','5ic'],'isotone')),['5ec','5gc','5ic']);
+  assert.deepEqual(labels(sameHueGroup(['5ga','5ic','5le'],'shadow-series')),['5ga','5ic','5le']);
+});
+
+test('GGg pp.108–109: common gray joins two groups without losing either occurrence', () => {
+  const a=grayGroup('ace'),b=grayGroup('egi');
+  const compound=OstwaldColor.combineBySharedMember(a,b);
+  assert.equal(compound.type,'compound-harmony'); assert.equal(compound.domain,'compound');
+  assert.equal(compound.relation,'shared-member'); assert.equal(compound.level,2);
+  assert.deepEqual(compound.domains,['gray']); assert.deepEqual(labels(compound),['a','c','e','g','i']);
+  assert.deepEqual(compound.groups,[a,b]); assert.deepEqual(compound.provenance.sharedElements,['gray:e']);
+  assert.equal(compound.groups.flatMap(g=>g.members).filter(m=>m.letter==='e').length,2);
+  assert.equal(compound.members.filter(m=>m.letter==='e').length,1);
+  assert.equal(compound.provenance.sourceCase,null); // exact selected fixture, not a printed triplet claim
+  assert.deepEqual(compound.provenance.sourcePages,[105]);
+});
+
+test('Shared-member identity: cloned objects match; all common members are recorded', () => {
+  const a=grayGroup('ace'),b=grayGroup('ceg');
+  const result=OstwaldColor.combineBySharedMember(clone(a),clone(b));
+  assert.deepEqual(result.provenance.sharedElements,['gray:c','gray:e']);
+  assert.deepEqual(labels(result),['a','c','e','g']);
+  const doubled=OstwaldColor.combineBySharedMember(a,a);
+  assert.deepEqual(doubled.provenance.sharedElements,['gray:a','gray:c','gray:e']);
+  assert.equal(doubled.groups.length,2); assert.deepEqual(doubled.members,a.members);
+});
+
+test('Shared-member rejection: disjoint identities do not join even with identical display RGB', () => {
+  assert.throws(()=>OstwaldColor.combineBySharedMember(grayGroup('ac'),grayGroup('np')),/common member/);
+  const a=isovalentGroup(['1pn','2pn']),b=isovalentGroup(['3pn','4pn']);
+  assert.ok([...a.members,...b.members].every(m=>m.rgb.every(c=>c===0)));
+  assert.throws(()=>OstwaldColor.combineBySharedMember(a,b),/common member/);
+  const joined=OstwaldColor.combineBySharedMember(a,isovalentGroup(['2pn','3pn']));
+  assert.deepEqual(labels(joined),['1pn','2pn','3pn']);
+  assert.deepEqual(joined.provenance.sharedElements,['atlas:2pn']);
+});
+
+test('GFg p.110: shared gray is the actual white/black companion of 5ic', () => {
+  const h=OstwaldColor.harmonies(field('5ic'));
+  for(const [relation,companion,names] of [
+    ['isotint',h.grayHarmonies.sameWhite,['5ia','5ic']],
+    ['isotone',h.grayHarmonies.sameBlack,['5ec','5ic']]
+  ]) {
+    const g=OstwaldColor.elementaryHarmony('gray',[gray('a'),companion]);
+    const f=OstwaldColor.elementaryHarmony('same-hue',[...names.map(field),clone(companion)],{relation});
+    const result=OstwaldColor.combineBySharedMember(g,f);
+    assert.deepEqual(result.domains,['gray','same-hue']);
+    assert.deepEqual(result.provenance.sharedElements,[`gray:${companion.letter}`]);
+    assert.equal(result.level,2); assert.equal(result.members.length,4);
+  }
+});
+
+test('WFg p.116 and GWg pp.111–112: explicit one-hue bridge, no false gray/chromatic identity', () => {
+  const w=isovalentGroup(['5ic','13ic','21ic']);
+  const bridge=OstwaldColor.elementaryHarmony('same-hue',[field('5ia'),field('5ic'),gray('i')],{relation:'isotint'});
+  const wf=OstwaldColor.combineBySharedMember(w,bridge);
+  assert.deepEqual(wf.provenance.sharedElements,['atlas:5ic']);
+  const gw=OstwaldColor.combineBySharedMember(wf,grayGroup('egi'));
+  assert.equal(gw.level,3); assert.deepEqual(gw.domains,['isovalent','same-hue','gray']);
+  assert.deepEqual(gw.provenance.sharedElements,['gray:i']);
+  assert.throws(()=>OstwaldColor.combineBySharedMember(w,grayGroup('egi')),/common member/);
+});
+
+test('GGe p.107: full substitution preserves source, replacement and target provenance', () => {
+  const source=grayGroup('ceg'),replacement=grayGroup('ei');
+  const result=OstwaldColor.substituteHarmony(source,gray('g'),replacement);
+  assert.equal(result.relation,'substitution'); assert.equal(result.level,2);
+  assert.deepEqual(result.groups,[source,replacement]); assert.deepEqual(labels(result),['c','e','i']);
+  assert.equal(result.provenance.replacedElement,'gray:g'); assert.equal(result.provenance.replacementGroup,1);
+  assert.equal(result.provenance.replacementEvidence.basis,'gray-letter-symmetry');
+  assert.deepEqual(result.provenance.replacementEvidence.offsets,[-1,1]);
+  assert.deepEqual(result.provenance.replacementEvidence.sourcePages,[107,108]);
+  assert.deepEqual(result.provenance.inputs,[{group:0,role:'source'},{group:1,role:'replacement'}]);
+  assert.ok(result.groups[0].members.some(m=>m.letter==='g')); // retained history
+  assert.ok(!OstwaldColor.flattenHarmonyMembers(result).some(m=>m.letter==='g')); // active view
+});
+
+test('GGe pp.107–108: partial replacement retains center without duplicate members', () => {
+  const result=OstwaldColor.substituteHarmony(grayGroup('ceg'),gray('g'),grayGroup('egi'));
+  assert.deepEqual(labels(result),['c','e','g','i']); // printed c e(g)i -> cegi
+  assert.deepEqual(result.provenance.sharedElements,['gray:e','gray:g']);
+  const inner=OstwaldColor.substituteHarmony(grayGroup('ceg'),gray('e'),grayGroup('ceg'));
+  assert.deepEqual(labels(inner),['c','e','g']); // same active members, different construction
+  assert.equal(inner.type,'compound-harmony');
+});
+
+test('FWe p.114: substitute a same-hue member by its symmetric isovalent neighbors', () => {
+  const source=sameHueGroup(['5ia','5ic','5ie']);
+  const result=OstwaldColor.substituteHarmony(source,field('5ic'),isovalentGroup(['4ic','6ic']));
+  assert.deepEqual(labels(result),['5ia','4ic','6ic','5ie']);
+  assert.deepEqual(result.domains,['same-hue','isovalent']);
+  assert.equal(result.provenance.replacementEvidence.basis,'isovalent-hue-symmetry');
+  assert.deepEqual(result.provenance.replacementEvidence.offsets,[-1,1]);
+  assert.equal(OstwaldColor.splitHueSet([5,13],5,1).construction,'split');
+  assert.equal(result.provenance.operation,'substitution');
+});
+
+test('WFe pp.114–116: same-hue symmetric replacements preserve one-hue relation', () => {
+  const source=isovalentGroup(['5ic','13ic','21ic']);
+  const alternatives=[['isotint',['5ia','5ie']],['isotone',['5gc','5lc']],['shadow-series',['5ga','5le']]];
+  for(const [relation,names] of alternatives) {
+    const result=OstwaldColor.substituteHarmony(source,field('5ic'),sameHueGroup(names,relation));
+    assert.deepEqual(labels(result),[...names,'13ic','21ic']);
+    assert.equal(result.provenance.replacementEvidence.basis,'same-hue-letter-symmetry');
+    assert.equal(result.provenance.replacementEvidence.relation,relation);
+  }
+});
+
+test('Substitution rejects missing targets, asymmetric replacements and unsupported G/W equivalence', () => {
+  assert.throws(()=>OstwaldColor.substituteHarmony(grayGroup('ceg'),gray('l'),grayGroup('in')),/target not found/);
+  assert.throws(()=>OstwaldColor.substituteHarmony(grayGroup('ceg'),gray('g'),grayGroup('en')),/correspondence/);
+  assert.throws(()=>OstwaldColor.substituteHarmony(isovalentGroup(['5ic','13ic']),field('5ic'),grayGroup('ce')),/correspondence/);
+  assert.throws(()=>OstwaldColor.substituteHarmony(grayGroup('ceg'),gray('g'),isovalentGroup(['4ic','6ic'])),/correspondence/);
+  assert.throws(()=>OstwaldColor.substituteHarmony(isovalentGroup(['5ic','13ic']),field('5ic'),isovalentGroup(['6ic','7ic'])),/correspondence/);
+});
+
+test('Recursive compounds pp.118–119: level three, complete lower provenance and operation sequence', () => {
+  const ab=OstwaldColor.combineBySharedMember(grayGroup('ace'),grayGroup('egi'));
+  const abc=OstwaldColor.combineBySharedMember(ab,grayGroup('iln'));
+  assert.equal(OstwaldColor.compoundLevel(abc),3);
+  assert.deepEqual(abc.groups[0],ab); assert.deepEqual(abc.groups[0].provenance.sharedElements,['gray:e']);
+  assert.deepEqual(abc.provenance.sharedElements,['gray:i']);
+  assert.deepEqual(labels(abc),['a','c','e','g','i','l','n']);
+  assert.deepEqual(abc.provenance.sequence,[{step:1,action:'use-input',group:0},{step:2,action:'use-input',group:1},{step:3,action:'shared-member'}]);
+  const fourth=OstwaldColor.combineBySharedMember(abc,grayGroup('np'));
+  assert.equal(fourth.level,4);
+});
+
+test('Recursive substitution: source/replacement may be compounds; all active target occurrences are replaced', () => {
+  const source=OstwaldColor.combineBySharedMember(grayGroup('ceg'),grayGroup('egi'));
+  const result=OstwaldColor.substituteHarmony(source,gray('g'),grayGroup('ei'));
+  assert.equal(result.level,3); assert.deepEqual(labels(result),['c','e','i']);
+  assert.equal(result.groups[0].groups.flatMap(g=>g.members).filter(m=>m.letter==='g').length,2);
+  const replacement=OstwaldColor.combineBySharedMember(grayGroup('cei'),grayGroup('il'));
+  const nested=OstwaldColor.substituteHarmony(grayGroup('agn'),gray('g'),replacement);
+  assert.equal(nested.level,3); assert.deepEqual(labels(nested),['a','c','e','i','l','n']);
+  assert.deepEqual(nested.groups[1],replacement);
+  assert.throws(()=>OstwaldColor.substituteHarmony(result,gray('g'),grayGroup('ei')),/target not found/);
+});
+
+test('Same flattened colors do not imply the same compound structure', () => {
+  const a=OstwaldColor.combineBySharedMember(grayGroup('ace'),grayGroup('egi'));
+  const b=OstwaldColor.combineBySharedMember(grayGroup('acg'),grayGroup('gei'));
+  const c=OstwaldColor.substituteHarmony(grayGroup('acg'),gray('g'),grayGroup('egi'));
+  const identities=g=>labels(g).slice().sort();
+  assert.deepEqual(identities(a),identities(b)); assert.deepEqual(identities(a),identities(c));
+  assert.notDeepEqual(a,b); assert.notDeepEqual(a,c);
+  assert.notDeepEqual(a.provenance.sharedElements,b.provenance.sharedElements);
+  assert.notEqual(a.relation,c.relation);
+});
+
+test('Pure operations: deterministic, input-immutable, independent output trees and JSON round trips', () => {
+  const a=grayGroup('ceg'),b=grayGroup('egi'),snapshots=[clone(a),clone(b)];
+  for(const operation of [()=>OstwaldColor.combineBySharedMember(a,b),()=>OstwaldColor.substituteHarmony(a,gray('g'),b)]) {
+    const result=operation(),snapshot=clone(result);
+    assert.deepEqual(operation(),result); assert.deepEqual([a,b],snapshots);
+    assert.deepEqual(OstwaldColor.flattenHarmonyMembers(clone(result)),result.members);
+    const flattened=OstwaldColor.flattenHarmonyMembers(result);
+    flattened[0].rgb[0]=99; assert.deepEqual(result,snapshot);
+    result.members[0].lab[0]=99; assert.deepEqual(result.groups,snapshot.groups);
+    result.groups[0].members[0].lab[0]=98; assert.deepEqual([a,b],snapshots);
+    assert.deepEqual(operation(),snapshot);
+  }
+});
+
+test('Elementary validation: missing, sparse, duplicated, counterfeit and interpolated members', () => {
+  for(const members of [null,[],[gray('a')],Array(2),[gray('a'),clone(gray('a'))],
+    [gray('a'),{...gray('c'),letter:'p'}],[gray('a'),{...gray('c'),w:-1}],
+    [gray('a'),{...gray('c'),lab:[0,0,0]}],[gray('a'),{...gray('c'),rgb:[0,0,0]}],
+    [gray('a'),OstwaldColor.mix([.7,.1,0],.2,.1)]]) {
+    assert.throws(()=>OstwaldColor.elementaryHarmony('gray',members),Error);
+  }
+  assert.throws(()=>OstwaldColor.elementaryHarmony('unknown',[gray('a'),gray('c')]),Error);
+  assert.throws(()=>OstwaldColor.elementaryHarmony('same-hue',[field('5ic'),field('5ie')]),/relation/);
+  assert.throws(()=>sameHueGroup(['5ic','6ic']),/same-hue/);
+  assert.throws(()=>isovalentGroup(['5ic','6ie']),/register/);
+  assert.throws(()=>OstwaldColor.elementaryHarmony('same-hue',[field('5ic'),gray('p')],{relation:'isotint'}),/same-hue/);
+  assert.throws(()=>OstwaldColor.elementaryHarmony('gray',[gray('a'),gray('c')],{sourceCase:'GGg'}),/options/);
+});
+
+test('Compound validation: forged levels, member caches, domains and provenance are rejected', () => {
+  const good=OstwaldColor.combineBySharedMember(grayGroup('ace'),grayGroup('egi'));
+  const changes=[g=>{delete g.members;},g=>{g.level=8;},g=>{g.members.pop();},g=>{g.domains=['isovalent'];},
+    g=>{delete g.provenance;},g=>{g.provenance.operation='substitution';},
+    g=>{g.provenance.sharedElements=[];},g=>{g.provenance.replacedElement='gray:e';},
+    g=>{g.provenance.replacementGroup=1;},g=>{g.provenance.sourceCase='GGg';},
+    g=>{g.provenance.sourcePages=[999];},g=>{g.provenance.sequence.reverse();},
+    g=>{g.groups[0].provenance.sequence=[];},g=>{g.groups=[];},g=>{g.members[0].rgb=[2,2,2];}];
+  for(const change of changes) {
+    const bad=clone(good); change(bad);
+    assert.throws(()=>OstwaldColor.flattenHarmonyMembers(bad),Error);
+    assert.throws(()=>OstwaldColor.compoundLevel(bad),Error);
+    assert.throws(()=>OstwaldColor.combineBySharedMember(bad,grayGroup('ace')),Error);
+  }
+  for(const bad of [null,{},[],{members:[]}]) assert.throws(()=>OstwaldColor.compoundLevel(bad),Error);
+});
+
+test('Cycles and malformed provenance: reject graph cycles and executable/non-plain payloads', () => {
+  const good=OstwaldColor.combineBySharedMember(grayGroup('ace'),grayGroup('egi'));
+  const self=clone(good); self.groups[0]=self;
+  assert.throws(()=>OstwaldColor.flattenHarmonyMembers(self),/Cyclic/);
+  const indirect=clone(good); indirect.groups[0].provenance.parent=indirect;
+  assert.throws(()=>OstwaldColor.compoundLevel(indirect),/Cyclic/);
+  for(const value of [undefined,()=>1,NaN,new Date()]) {
+    const bad=clone(good); bad.provenance.extra=value;
+    assert.throws(()=>OstwaldColor.flattenHarmonyMembers(bad),Error);
+  }
+  const accessor=clone(good); Object.defineProperty(accessor.provenance,'getter',{enumerable:true,get(){throw new Error('should not execute');}});
+  assert.throws(()=>OstwaldColor.flattenHarmonyMembers(accessor),/data properties/);
+  const shared=grayGroup('ace');
+  assert.equal(OstwaldColor.combineBySharedMember(shared,shared).level,2); // sharing is not a cycle
+});
+
+test('Compound calibration: one explicit context validates every node and shared identity', () => {
+  const custom=circle.map(h=>({...h,lab:circle[0].lab.slice(),rgb:circle[0].rgb.slice()}));
+  const recolor=label=>{const f=field(label);return {...f,...OstwaldColor.mix(custom[f.hueIndex-1].lab,f.w,f.s),label:f.label,source:'atlas'};};
+  const a=OstwaldColor.elementaryHarmony('isovalent',['5ic','13ic','21ic'].map(recolor),{hueCircle:custom});
+  const b=OstwaldColor.elementaryHarmony('same-hue',['5ia','5ic','5ie'].map(recolor),{relation:'isotint',hueCircle:custom});
+  const context={hueCircle:custom};
+  const result=OstwaldColor.combineBySharedMember(a,b,context);
+  assert.deepEqual(result.provenance.sharedElements,['atlas:5ic']);
+  assert.equal(OstwaldColor.compoundLevel(result,context),2);
+  assert.deepEqual(OstwaldColor.flattenHarmonyMembers(result,context),result.members);
+  assert.throws(()=>OstwaldColor.flattenHarmonyMembers(result),/lab/);
+  assert.throws(()=>OstwaldColor.combineBySharedMember(a,b,{mode:'rgb'}),/context/);
+});
+
+test('Compound registry: implemented primary laws replace the Phase-5 candidate marker', () => {
+  const registry=OstwaldColor.harmonyRuleRegistry();
+  for(const id of ['compound-shared-member','compound-substitution']) {
+    const rule=registry.rules.find(r=>r.id===id);
+    assert.equal(rule.implementationStatus,'implemented'); assert.equal(rule.sourceStatus,'primary-1921');
+    assert.ok(rule.sourcePages.includes(105));
+  }
+  assert.ok(!registry.deferred.some(r=>r.id==='compound-harmonies'));
+});
+
 console.log(`\n${passed} tests passed.`);
