@@ -41,7 +41,7 @@ test('All 672 cells resolve through the engine with eight nonduplicated grays',(
 });
 test('View switches preserve selected color and register without mutating input',()=>{
   const original=step(createState(),'cell',{hue:5,register:'ng'});const snapshot=JSON.stringify(original);
-  for(const view of ['circle','triangle','register','harmony']){const result=step(original,'activeView',view);assert.equal(result.activeView,view);assert.deepEqual(result.selectedField,original.selectedField);}
+  for(const view of ['circle','triangle','register']){const result=step(original,'activeView',view);assert.equal(result.activeView,view);assert.deepEqual(result.selectedField,original.selectedField);}
   assert.equal(JSON.stringify(original),snapshot);
 });
 test('Atlas and continuum transitions clear samples without generating atlas notation',()=>{
@@ -85,5 +85,101 @@ test('Isovalence never silently falls back to an unrelated continuous path',()=>
 test('Scientific disclosure remains explicit shared UI state',()=>{
   const state=step(createState(),'detailOpen',true);assert.equal(step(state,'selectedHue',5).detailOpen,true);
   assert.throws(()=>step(state,'detailOpen',1));
+});
+
+const {MAPPINGS,DEFAULT_MAPPING,displayAttenuation,historicalToDisplay,grayDiagnostic}=await import('./DisplayCalibration.mjs');
+const {views,selectionFields}=await import('./state.mjs');
+test('Historical reflectance values and all engine fields remain unchanged after calibration',()=>{
+  const expected=[.8913,.5623,.3548,.2239,.1413,.0891,.0562,.0355];
+  assert.deepEqual(Engine.letterScale().map(x=>x.value),expected);
+  const fields=[...atlas.flat(),...grays], before=JSON.stringify(fields);
+  for(const mapping of MAPPINGS)for(const field of fields)historicalToDisplay(field,mapping);
+  assert.equal(JSON.stringify(fields),before);
+  assert.deepEqual(grays.map(x=>x.w),expected);
+});
+test('Comparison A exactly reproduces every Phase-6A atlas lab and RGB',()=>{
+  for(const field of [...atlas.flat(),...grays]){
+    const display=historicalToDisplay(field,'current');
+    assert.deepEqual(display.lab,field.lab);assert.deepEqual(display.rgb,field.rgb);
+  }
+});
+test('All three transfer functions are strictly monotonic with preserved endpoints',()=>{
+  for(const mapping of MAPPINGS){
+    assert.equal(displayAttenuation(0,mapping),0);assert.equal(displayAttenuation(1,mapping),1);
+    let previous=-1;
+    for(let i=0;i<=10000;i++){const value=displayAttenuation(i/10000,mapping);assert.ok(value>previous);previous=value;}
+  }
+});
+test('Display gray neighbors are ordered and distinct after integer sRGB encoding',()=>{
+  assert.equal(DEFAULT_MAPPING,'logarithmic');
+  for(const mapping of MAPPINGS){
+    const rows=grayDiagnostic(mapping);
+    assert.deepEqual(rows.map(x=>x.letter),['a','c','e','g','i','l','n','p']);
+    for(let i=1;i<rows.length;i++){
+      assert.ok(rows[i-1].displayLightness>rows[i].displayLightness);
+      assert.ok(rows[i-1].rgb[0]>rows[i].rgb[0]);
+      assert.ok(Math.abs(rows[i].deltaL-rows[i].deltaE)<1e-12);
+    }
+  }
+  assert.ok(grayDiagnostic('logarithmic').at(-1).deltaL>grayDiagnostic('current').at(-1).deltaL);
+});
+test('Equal-spacing comparison uses derived common endpoints; default is not forced equal',()=>{
+  const b=grayDiagnostic('perceptual'),c=grayDiagnostic('logarithmic');
+  assert.equal(b[0].displayLightness,c[0].displayLightness);
+  assert.ok(Math.abs(b[7].displayLightness-c[7].displayLightness)<1e-12);
+  assert.ok(b.slice(1).every(x=>Math.abs(x.deltaL-b[1].deltaL)<1e-12));
+  assert.ok(Math.abs(c[1].deltaL-c[7].deltaL)>.01);
+});
+test('Calibration applies to chromatic registers and preserves full anchors, hue direction and finite outputs',()=>{
+  for(const hue of Engine.hueCircle()){
+    const full=Engine.mix(hue.lab,0,0);assert.deepEqual(historicalToDisplay(full).lab,full.lab);
+    for(const register of ['ca','ic','pn']){
+      const field=fieldAt(hue.index,register),display=historicalToDisplay(field);
+      assert.ok(display.lab[0]>field.lab[0]);
+      assert.ok(Math.abs(display.lab[1]*field.lab[2]-display.lab[2]*field.lab[1])<1e-12);
+    }
+  }
+  for(const field of [...atlas.flat(),...grays])for(const mapping of MAPPINGS){
+    const display=historicalToDisplay(field,mapping);
+    assert.ok(display.lab.every(Number.isFinite));
+    assert.ok(display.rgb.every(x=>Number.isInteger(x)&&x>=0&&x<=255));
+  }
+});
+test('Display records never invent historical labels, including continuous black endpoints',()=>{
+  for(const relation of ['isotint','isotone','shadowSeries'])for(const field of pathSamples(createState({relation}))){
+    const before=JSON.stringify(field),display=historicalToDisplay(field);
+    assert.equal(field.label,null);assert.equal(field.source,'interpolated');
+    assert.equal('label' in display,false);assert.equal('source' in display,false);
+    assert.equal(JSON.stringify(field),before);
+  }
+  const black=historicalToDisplay(Engine.mix([0,0,0],0,1));assert.deepEqual(black.rgb,[0,0,0]);
+});
+test('Invalid calibration requests fail explicitly',()=>{
+  for(const bad of [-.01,1.01,NaN,Infinity,'0.5'])assert.throws(()=>displayAttenuation(bad));
+  assert.throws(()=>displayAttenuation(.5,'unknown'));
+  for(const bad of [null,{}, {...grays[0],w:-1}, {...grays[0],v:.5}, {...grays[0],lab:[NaN,0,0]}])assert.throws(()=>historicalToDisplay(bad));
+});
+test('Primary navigation is exactly three views; result expansion is independent',()=>{
+  assert.deepEqual(views,['circle','triangle','register']);
+  const state=step(createState(),'resultOpen',true);
+  assert.equal(state.activeView,'circle');assert.equal(state.resultOpen,true);
+  assert.throws(()=>step(state,'activeView','harmony'));assert.throws(()=>step(state,'resultOpen',1));
+});
+test('Visible selection follows chord, register and hue across every primary view',()=>{
+  let state=step(createState(),'selectedHue',5);assert.deepEqual(selectionFields(state).map(f=>f.label),['5ic']);
+  state=step(state,'harmonyMode',3);
+  for(const view of views){state=step(state,'activeView',view);assert.deepEqual(selectionFields(state).map(f=>f.label),['5ic','13ic','21ic']);}
+  state=step(state,'selectedRegister','le');assert.deepEqual(selectionFields(state).map(f=>f.label),['5le','13le','21le']);
+  state=step(state,'cell',{hue:24,register:'pn'});assert.deepEqual(selectionFields(state).map(f=>f.label),['24pn','8pn','16pn']);
+  state=step(state,'harmonyMode',3);assert.equal(state.selectionKind,'color');assert.equal(selectionFields(state).length,1);
+});
+test('Contextual relations and single gray/sample selections remain explicit persistent results',()=>{
+  let state=createState({selectedHue:5,relation:'shadowSeries'});
+  assert.equal(state.selectionKind,'relation');
+  assert.deepEqual(new Set(selectionFields(state).map(f=>f.label)),new Set(['5ga','5ic','5le','5ng','5pi']));
+  for(const view of views)assert.deepEqual(selectionFields(step(state,'activeView',view)),selectionFields(state));
+  state=step(state,'gray','p');assert.deepEqual(selectionFields(state),[grays[7]]);
+  state=step(step(state,'displayMode','continuum'),'sample',15);
+  assert.equal(selectionFields(state)[0].label,null);assert.equal(selectionFields(state).length,1);
 });
 console.log(`\n${passed} UI test groups passed.`);
