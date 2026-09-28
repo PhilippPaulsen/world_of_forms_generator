@@ -4,18 +4,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>World of Forms Generator</title>
-  <link rel="stylesheet" href="style.css">
+  <!-- Typeface, tokens, body font stack and .control-group live in
+       style.css (UI rework Phase 0); do not redeclare them below. -->
+  <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css?v=20260928a">
 
   <!-- Material Icons -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 
   <style>
     body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
       background: var(--background);
       color: var(--text);
       display: flex;
+      /* was inherited from style.css's old body rule; explicit here so the
+         page layout no longer depends on another file */
+      flex-direction: column;
       justify-content: center;
       align-items: center;
       height: 100vh;
@@ -98,23 +102,10 @@
       width: 100%;
     }
 
-    .control-group {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 0;
-      width: auto; /* overrides legacy .control-group{width:100%} in style.css,
-                       which was written for the old CSS-Grid layout */
-    }
-
-    /* Same specificity as .control-group{display:flex} above, so without
-       this the native [hidden] UA rule (also display:none at that
-       specificity) loses the cascade tie to it and never actually hides
-       anything - this is what the layer offset/preset control-groups
-       (contextually hidden while Base is the active tab) rely on. */
-    .control-group[hidden] {
-      display: none;
-    }
+    /* .control-group, .control-group[hidden] and the label rule now live
+       in style.css (one definition, documented there). The layer offset/
+       preset control-groups (hidden while Base is the active tab) rely on
+       the [hidden] rule there. */
 
     /* Roadmap 1.8 Stage C phase (i): same cascade-tie problem as
        .control-group[hidden] above, found live while verifying
@@ -128,10 +119,6 @@
        these three classes today, so this is purely additive - it
        changes nothing about the elements that already work. */
     .layer-btn[hidden], .icon-btn[hidden], .icon-row[hidden] {
-      display: none;
-    }
-
-    .control-group label {
       display: none;
     }
 
@@ -1200,18 +1187,18 @@
        the p5.js CDN tag - that URL already carries its own version
        (p5@1.9.0), so a version bump there naturally changes the URL. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260925n"></script>
-  <script src="core/state.js?v=20260925n"></script>
-  <script src="core/symmetry.js?v=20260925n"></script>
-  <script src="core/curves.js?v=20260925n"></script>
-  <script src="core/netwarp.js?v=20260925n"></script>
-  <script src="core/tiling.js?v=20260925n"></script>
-  <script src="core/faces.js?v=20260925n"></script>
-  <script src="core/orbits.js?v=20260925n"></script>
-  <script src="core/color.js?v=20260925n"></script>
-  <script src="core/facecolor.js?v=20260925n"></script>
-  <script src="core/export.js?v=20260925n"></script>
-  <script src="sketch.js?v=20260925n"></script>
+  <script src="core/forms.js?v=20260928a"></script>
+  <script src="core/state.js?v=20260928a"></script>
+  <script src="core/symmetry.js?v=20260928a"></script>
+  <script src="core/curves.js?v=20260928a"></script>
+  <script src="core/netwarp.js?v=20260928a"></script>
+  <script src="core/tiling.js?v=20260928a"></script>
+  <script src="core/faces.js?v=20260928a"></script>
+  <script src="core/orbits.js?v=20260928a"></script>
+  <script src="core/color.js?v=20260928a"></script>
+  <script src="core/facecolor.js?v=20260928a"></script>
+  <script src="core/export.js?v=20260928a"></script>
+  <script src="sketch.js?v=20260928a"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

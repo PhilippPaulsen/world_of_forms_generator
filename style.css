@@ -1,20 +1,93 @@
-/* 
-  Modernized styles for a compact, elegant GUI with an Apple-Glass effect.
+/*
+  Base stylesheet. UI rework, Phase 0 (foundations): this file owns the
+  design tokens, the typeface, the one body font stack and the one
+  .control-group definition. index.html's inline <style> keeps the
+  component rules and page layout and must not redeclare any of these.
 */
 
-/* Reset margins/padding, set background color, 
-   center everything for phone use */
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  margin: 20px;
-  background-color: #fff;
-  color: #333;
+/* --- Typeface: SuisseIntl, weights 400 and 600 only ---------------------
+   Copies of the files in die-welt-der-formen/assets (web use confirmed by
+   the owner). font-display: swap never blocks text; index.html preloads
+   Book. */
+@font-face {
+  font-family: "SuisseIntl";
+  src: url("assets/fonts/SuisseIntl-Book.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  min-height: 100vh;
+@font-face {
+  font-family: "SuisseIntl";
+  src: url("assets/fonts/SuisseIntl-Semibold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Fallback face with SuisseIntl's proportions, so the swap moves as
+   little text as possible. Values measured with fontTools, not guessed:
+   SuisseIntl Book upm 1000, hhea ascent 1174 / descent 556 / lineGap 0,
+   mean lowercase advance 0.5357 em; Arial mean lowercase advance 0.4895
+   em. size-adjust = 0.5357 / 0.4895 = 109.4%; ascent-override =
+   1.174 / 1.094 = 107.3%; descent-override = 0.556 / 1.094 = 50.8%. */
+@font-face {
+  font-family: "SuisseIntl Fallback";
+  src: local("Arial");
+  size-adjust: 109.4%;
+  ascent-override: 107.3%;
+  descent-override: 50.8%;
+  line-gap-override: 0%;
+}
+
+/* --- Design tokens ------------------------------------------------------
+   Colors: black, one secondary grey, one disabled grey, one hairline
+   grey, white. Weights: 400 and 600 only. Sizes: 12 secondary, 16 base,
+   22 tabs (28 on tablet/desktop). Touch: targets >= 44px, gaps >= 8px.
+   These are the tokens for the new UI; the older --background / --text /
+   --hover-bg variables in index.html stay until Phase 1 migrates the
+   components that use them. */
+:root {
+  --color-text: #000000;
+  --color-secondary: #757575;
+  --color-disabled: #b3b3b3;
+  --color-hairline: #d9d9d9;
+  --color-bg: #ffffff;
+
+  --font-ui: "SuisseIntl", "SuisseIntl Fallback", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --weight-regular: 400;
+  --weight-strong: 600;
+
+  --size-secondary: 12px;
+  --size-base: 16px;
+  --size-tab: 22px;
+
+  --target: 44px;
+  --gap: 8px;
+  --radius: 6px;
+}
+
+@media (min-width: 768px) {
+  :root { --size-tab: 28px; }
+}
+
+/* The one body rule for font and reset. Page layout (flex centering,
+   height, colors via --background/--text) is owned by index.html's inline
+   <style>. tabular-nums is essential here: SuisseIntl's default digits
+   have nine different advance widths (374..675 units in Book), so
+   changing numbers would shift their neighbours without it. */
+body {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-regular);
+  font-size: var(--size-base);
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+
+/* Form controls do not inherit the font by default. */
+button, input, select, textarea {
+  font-family: inherit;
+  font-variant-numeric: inherit;
 }
 
 /* The container for the p5 canvas - flat, no glass/blur/shadow
@@ -34,19 +107,43 @@ body {
    fought with that flex layout. */
 .controls-container {
   padding: 15px;
+  /* Without border-box, width:100% (set in index.html) plus this padding
+     was 30px wider than its container: a 5px horizontal page overflow at
+     375px (found in the Phase 0 measurement). */
+  box-sizing: border-box;
 }
 
+/* The one .control-group definition (this used to exist twice, here and
+   in index.html's inline <style>; the merged values below are exactly
+   what the cascade computed before, so nothing moves). */
 .control-group {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: auto;
 }
 
+/* Same specificity as .control-group{display:flex}, so the native [hidden]
+   rule would lose the tie without this. */
+.control-group[hidden] {
+  display: none;
+}
+
+/* LABEL RULE: every <label> inside a .control-group is hidden with
+   display:none. The interface is icon/numeral based. Consequences for
+   anyone adding a control:
+   - a <label> here is NEVER visible: do not put a control, checkbox or
+     any state the person must see inside one (this hid the "Include net"
+     checkbox once);
+   - do not rely on the label for the accessible name either (browsers
+     treat display:none content inconsistently): every control must carry
+     its own aria-label and a tooltip (title). */
 .control-group label {
-    font-size: 12px;
-    font-weight: 500;
+  display: none;
+  font-size: var(--size-secondary);
+  font-weight: var(--weight-regular);
 }
 
 .control-group input,
