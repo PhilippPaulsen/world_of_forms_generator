@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260928o">
+  <link rel="stylesheet" href="style.css?v=20260928r">
 
   <!-- Material Icons -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -470,7 +470,33 @@
       </button>
       <span class="nav-break" aria-hidden="true"></span>
     </div>
-    <div id="nav-farbe" class="nav-row" role="group" aria-labelledby="tab-farbe" hidden></div>
+    <!-- Farbe nav row (UI rework 4d): the four harmony rules (#face-colors-rule, moved here as a hidden carrier
+         its 'change' handler is unchanged - see ui-farbe.js) as a segmented row, then the two axis steppers
+         (#face-colors-axes, also moved here unchanged: sketch.js's renderFaceColorsPanel() still builds its
+         "<- value ->" rows the same way, just inside this row now). Rules isotone/shadow-series are unverified
+         (core/color.js) - selectable, greyed, the reason in the tooltip; never hidden. Applies to the BASE sheet
+         and eligible layers, as today (sketch.js's faceFillsUnavailableReason()); everywhere else, and whenever
+         face fill itself is off, the row stays visible and aria-disabled with the reason (ui-farbe.js) - never
+         hidden. A reserved slot marks where the later Farborgel modes (circle/triangle/grid | 2/3/4) will sit;
+         no width is reserved for it yet (no screenshot to size it from). -->
+    <div id="nav-farbe" class="nav-row nav-farbe" role="group" aria-labelledby="tab-farbe" hidden>
+      <div class="nav-cluster nav-rules" role="radiogroup" aria-label="Regel" data-i18n="group.colorRule">
+        <button class="icon-btn fc-rule-btn" data-rule="isotint" type="button" role="radio" aria-checked="false" title="Isotints (Weißgleiche)" aria-label="Isotints (Weißgleiche)" data-i18n="rule.isotint">1</button>
+        <button class="icon-btn fc-rule-btn unverified" data-rule="isotone" type="button" role="radio" aria-checked="false" title="Isotones (Schwarzgleiche) – unverified" aria-label="Isotones (Schwarzgleiche), unverified" data-i18n="rule.isotone">2</button>
+        <button class="icon-btn fc-rule-btn unverified" data-rule="shadow-series" type="button" role="radio" aria-checked="false" title="Shadow series (Schattenreihe) – unverified" aria-label="Shadow series (Schattenreihe), unverified" data-i18n="rule.shadowSeries">3</button>
+        <button class="icon-btn fc-rule-btn" data-rule="tetrad" type="button" role="radio" aria-checked="false" title="Tetrad (Vierklang)" aria-label="Tetrad (Vierklang)" data-i18n="rule.tetrad">4</button>
+      </div>
+      <span class="nav-divider nav-divider-a" aria-hidden="true"></span>
+      <!-- #face-colors-axes: sketch.js's own "<- value ->" axis rows (hue, then level/ratio - the exact label
+           and value name depend on the chosen rule); empty and reserved-width when no rule is chosen. -->
+      <div id="face-colors-axes" class="fc-axes"></div>
+      <button id="btn-more-farbe" class="icon-btn nav-more" type="button" title="Mehr" aria-label="Mehr" aria-controls="more-farbe" data-i18n="more">
+        <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></g></svg>
+      </button>
+      <!-- reserved: the later Farborgel navigation (circle/triangle/grid | 2/3/4) goes here (step 5+) -->
+      <span class="nav-break" aria-hidden="true"></span>
+      <select id="face-colors-rule" hidden tabindex="-1" aria-hidden="true"></select>
+    </div>
     <!-- Netz nav row (UI rework 4c): Aus | Sin | Tan | Geo, the strength stepper, More. The net applies to the SQUARE on
          the BASE sheet only; everywhere else the whole row stays visible but is aria-disabled with the reason (a tap
          shows it) - see ui-net.js. Aus = the regular net. The defaults (both axes, Field) are applied by sketch.js when
@@ -860,27 +886,19 @@
            a trail's own stepper then moves it to another slot of the SAME
            series (no free color picker, by design). "Reset colors" clears
            the sheet's assignments back to the default orbit coloring. -->
+      <!-- UI rework 4d: the rule choice (#face-colors-rule) and the axis steppers (#face-colors-axes) moved into
+           the Farbe nav row (#nav-farbe, above the canvas); "Spread colors", "Reset colors", the unassigned-trails
+           note and the cross-layer overlay note moved into its "Mehr" overlay (#more-farbe). What stays here for
+           now (step 5 moves it into the organ strip): the title, the timeline note, the status line, the rule's
+           own descriptive note, and the per-trail list with its hover highlight and override stepper. -->
       <div class="control-group" id="face-colors-group" hidden>
         <label id="face-colors-title">Face Colors</label>
-        <!-- shown only while a current cross-layer compute result is displayed (sketch.js
-             updateFaceColorsPanel()): that overlay is drawn on top of every sheet's fills -->
-        <div id="face-colors-overlay-note" hidden>The cross-layer overlay is on and covers the sheet colors (Compute Cross-Layer Faces to refresh, or edit a sheet to clear it).</div>
         <!-- shown while the active sheet is a timeline keyframe layer (sketch.js
              renderFaceColorsPanel()): its colors are what the timeline crossfades on playback -->
         <div id="face-colors-timeline-note" hidden>This layer is a timeline keyframe: playback crossfades its colors with the neighboring keyframe's (in linear light).</div>
         <div id="face-colors-status"></div>
-        <select id="face-colors-rule" title="Harmony rule"></select>
-        <div id="face-colors-axes"></div>
         <div id="face-colors-note"></div>
-        <!-- follow-up step 3: shown only while a rule is applied and some trail holds no
-             assignment (a new region, or one an edit could not hand a color to). "Spread colors"
-             colors ONLY those trails, from the series already in force. -->
-        <div id="face-colors-unassigned" hidden>
-          <span id="face-colors-unassigned-text"></span>
-          <button id="btn-face-colors-spread" class="layer-btn" title="Give the uncolored trails a color from the current series (colored trails are not touched)">Spread colors</button>
-        </div>
         <div id="face-colors-list"></div>
-        <button id="btn-face-colors-reset" class="layer-btn" title="Back to the default symmetry-orbit colors">Reset colors</button>
       </div>
 
       <!-- Roadmap 1.11-B: read-only theme-line orbit name for whichever
@@ -1317,29 +1335,49 @@
       </div>
   </div>
 
+  <!-- "Mehr" (More) for the Farbe row: "Spread colors", "Reset colors", the unassigned-trails note and the
+       cross-layer overlay note - moved here unchanged (ids and sketch.js's handlers/logic untouched). The
+       per-trail list and its own override stepper stay in the old panel below the canvas for now (step 5
+       moves them into the organ strip). -->
+  <div id="more-farbe" class="overlay" role="dialog" aria-label="Mehr" data-i18n="more.farbe" hidden>
+    <div class="overlay-section">
+      <!-- shown only while a current cross-layer compute result is displayed (sketch.js updateFaceColorsPanel()):
+           that overlay is drawn on top of every sheet's fills -->
+      <p id="face-colors-overlay-note" class="overlay-hint" hidden>The cross-layer overlay is on and covers the sheet colors (Compute Cross-Layer Faces to refresh, or edit a sheet to clear it).</p>
+      <!-- shown only while a rule is applied and some trail holds no assignment (a new region, or one an edit
+           could not hand a color to). "Spread colors" colors ONLY those trails, from the series already in force. -->
+      <div id="face-colors-unassigned" hidden>
+        <span id="face-colors-unassigned-text"></span>
+        <button id="btn-face-colors-spread" class="layer-btn" title="Give the uncolored trails a color from the current series (colored trails are not touched)">Spread colors</button>
+      </div>
+      <button id="btn-face-colors-reset" class="layer-btn" title="Back to the default symmetry-orbit colors">Reset colors</button>
+    </div>
+  </div>
+
   <!-- Messages that must not move the layout: the Node Count clamp note (written by sketch.js) and the
        reason a disabled control gives when tapped (ui.js). Both are fixed-position toasts, dismissible. -->
   <div id="node-count-note" class="limit-note toast" role="status" hidden></div>
   <div id="ui-toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260928o"></script>
-  <script src="core/state.js?v=20260928o"></script>
-  <script src="core/symmetry.js?v=20260928o"></script>
-  <script src="core/curves.js?v=20260928o"></script>
-  <script src="core/netwarp.js?v=20260928o"></script>
-  <script src="core/tiling.js?v=20260928o"></script>
-  <script src="core/faces.js?v=20260928o"></script>
-  <script src="core/orbits.js?v=20260928o"></script>
-  <script src="core/color.js?v=20260928o"></script>
-  <script src="core/facecolor.js?v=20260928o"></script>
-  <script src="core/export.js?v=20260928o"></script>
-  <script src="core/symmetry-toggles.js?v=20260928o"></script>
-  <script src="sketch.js?v=20260928o"></script>
-  <script src="nav.js?v=20260928o"></script>
-  <script src="ui.js?v=20260928o"></script>
-  <script src="ui-form.js?v=20260928o"></script>
-  <script src="ui-net.js?v=20260928o"></script>
+  <script src="core/forms.js?v=20260928r"></script>
+  <script src="core/state.js?v=20260928r"></script>
+  <script src="core/symmetry.js?v=20260928r"></script>
+  <script src="core/curves.js?v=20260928r"></script>
+  <script src="core/netwarp.js?v=20260928r"></script>
+  <script src="core/tiling.js?v=20260928r"></script>
+  <script src="core/faces.js?v=20260928r"></script>
+  <script src="core/orbits.js?v=20260928r"></script>
+  <script src="core/color.js?v=20260928r"></script>
+  <script src="core/facecolor.js?v=20260928r"></script>
+  <script src="core/export.js?v=20260928r"></script>
+  <script src="core/symmetry-toggles.js?v=20260928r"></script>
+  <script src="sketch.js?v=20260928r"></script>
+  <script src="nav.js?v=20260928r"></script>
+  <script src="ui.js?v=20260928r"></script>
+  <script src="ui-form.js?v=20260928r"></script>
+  <script src="ui-net.js?v=20260928r"></script>
+  <script src="ui-farbe.js?v=20260928r"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides
