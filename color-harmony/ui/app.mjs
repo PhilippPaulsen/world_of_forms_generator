@@ -1,7 +1,8 @@
-import {createState,transition,pathSamples,grays,atlas,circle,fieldRelations} from './state.mjs';
+import {createState,transition,pathSamples,grays,atlas,circle,fieldRelations,isReferenceCircle} from './state.mjs';
 import {t} from './i18n.mjs';
 import {el,colorButton,fieldAction} from './components/dom.mjs';
 import {Toolbar,RelationControls,ModeControls} from './components/Toolbar.mjs';
+import {Navigator} from './components/Navigator.mjs';
 import {Inspector} from './components/Inspector.mjs';
 import {installTooltip} from './components/Tooltip.mjs';
 import {CircleView} from './views/CircleView.mjs';
@@ -18,14 +19,14 @@ function dispatch(type,value) {
   const previousView=state.activeView;
   state=transition(state,{type,value});hideTooltip();render();
   let restore=focused;
-  if(type==='selectedHue'&&focused?.startsWith('hue-'))restore=`hue-${state.selectedHue}`;
+  if(['selectedHue','nextHue','previousHue'].includes(type)&&focused?.startsWith('hue-'))restore=`hue-${state.selectedHue}`;
   if(type==='selectedRegister'&&focused?.startsWith('triangle-'))restore=`triangle-${state.selectedRegister}`;
-  if(type==='cell'&&focused?.startsWith('cell-'))restore=`cell-${state.selectedHue}${state.selectedRegister}`;
+  if(['cell','previousHue','nextHue','previousRegister','nextRegister'].includes(type)&&focused?.startsWith('cell-'))restore=`cell-${state.selectedHue}${state.selectedRegister}`;
   if(restore)root.querySelector(`[data-focus="${CSS.escape(restore)}"]`)?.focus({preventScroll:true});
   const newScroll=root.querySelector('.register-scroll');
   if(newScroll&&scrollPosition){newScroll.scrollLeft=scrollPosition[0];newScroll.scrollTop=scrollPosition[1];}
   if(type==='resultOpen'&&value)root.querySelector('#result-detail')?.scrollIntoView({block:'start'});
-  if(state.activeView==='register'&&(previousView!=='register'||type==='cell'))root.querySelector('.grid-swatch.selected')?.scrollIntoView({block:'nearest',inline:'nearest'});
+  if(state.activeView==='register'&&(previousView!=='register'||['cell','previousHue','nextHue','previousRegister','nextRegister'].includes(type)))root.querySelector('.grid-swatch.selected')?.scrollIntoView({block:'nearest',inline:'nearest'});
 }
 function sampleStrip() {
   const strip=el('section',{class:'sample-section','aria-label':t('samples',state.locale)});
@@ -48,8 +49,9 @@ function render() {
     el('span',{class:'edition'},t('research',state.locale)));
   const main=el('main',{id:'workspace',tabindex:'-1'});
   const workspaceHeader=el('div',{class:'workspace-heading'},el('div',{},el('h2',{},t(state.activeView,state.locale))),
-    el('div',{class:'workspace-code'},String(state.selectedHue).padStart(2,'0'),el('span',{},state.selectedRegister)));
+    el('div',{class:'workspace-code'},String(state.selectedHue).padStart(2,'0'),el('span',{},isReferenceCircle(state)?t('reference',state.locale):state.selectedRegister)));
   main.append(workspaceHeader);
+  if(state.activeView!=='register')main.append(Navigator(state,dispatch));
   const contextual=el('div',{class:'context-controls'});
   if(state.activeView!=='circle')contextual.append(RelationControls(state,dispatch));
   if(state.activeView==='triangle')contextual.append(ModeControls(state,dispatch));

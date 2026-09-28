@@ -704,3 +704,37 @@ button { display:inline-flex; align-items:center; justify-content:center; font-w
   /* SVG scales down with its viewBox; keep ring numbers readable on phones. */
   .hue-number { font-size:var(--text-primary); }
 }
+
+/* Atlas cells are continuous color surfaces, separate from rounded navigation controls. */
+.register-grid { border-collapse:collapse; border-spacing:0; }
+.register-grid td,.register-grid tr.selected-row td,.register-grid td.selected-column { padding:0; border:0; }
+.register-grid .grid-swatch { border-radius:0; border:0; margin:0; }
+.register-grid td.selected-column { box-shadow:inset 1px 0 #0008,inset -1px 0 #0008; }
+.register-grid tr.selected-row .grid-swatch { box-shadow:inset 0 1px #0008,inset 0 -1px #0008; }
+.grid-swatch.selected { outline:2px solid #000; outline-offset:-2px; z-index:1; }
+.sequence-nav { display:flex; align-items:center; justify-content:center; gap:16px; margin:16px 0 0; }
+.sequence-nav span { min-width:76px; text-align:center; }
+.sequence-nav button { width:40px; padding:0; }
+button:disabled { opacity:.35; cursor:default; }
+.anchor-comparison { overflow:auto; margin-top:32px; }
+.anchor-comparison table { min-width:980px; }
+.anchor-preview { display:inline-block; width:56px; height:40px; vertical-align:middle; margin-right:8px; }
+.anchor-data { display:block; margin-top:4px; }
+.calibration-columns { grid-template-columns:repeat(4,minmax(0,1fr)); }
+@media(max-width:1000px) { .calibration-columns { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:700px) { .calibration-columns { grid-template-columns:1fr; } }
+
+.calibration-chromatic { grid-template-columns:repeat(4,minmax(0,1fr)); }
+/* Eliminate the inline-flex baseline and header-height gutters inside atlas rows. */
+.register-grid td { line-height:0; vertical-align:top; }
+.register-grid .grid-swatch { display:block; height:28px; min-height:28px; }
+.register-grid td.selected-column .grid-swatch { box-shadow:inset 1px 0 #0008,inset -1px 0 #0008; }
+.register-grid tr.selected-row td.selected-column .grid-swatch { box-shadow:inset 1px 0 #0008,inset -1px 0 #0008,inset 0 1px #0008,inset 0 -1px #0008; }
+@media(max-width:700px),(pointer:coarse) { .register-grid .grid-swatch { height:44px; min-height:44px; } }
+@media(max-width:700px) {
+  .gray-axis { overflow:visible; }
+  .gray-step { flex:1; min-width:0; }
+  .gray-step .swatch { width:100%; min-width:0; height:44px; }
+}
+.calibration-columns>section>h2 { min-height:2.5em; }
+.calibration-chromatic .status { min-height:6em; }

@@ -1,5 +1,5 @@
-import {svg,el,color,activateSVG,button} from '../components/dom.mjs';
-import {hueHarmony,fieldAt,circle} from '../state.mjs';
+import {svg,el,color,activateSVG,fieldLabel} from '../components/dom.mjs';
+import {hueHarmony,circleField,circle} from '../state.mjs';
 import {t} from '../i18n.mjs';
 const point=(angle,r)=>[320+Math.sin(angle)*r,320-Math.cos(angle)*r];
 export function CircleView(state,dispatch) {
@@ -8,12 +8,12 @@ export function CircleView(state,dispatch) {
   const points=harmony.fields.map(f=>point((f.hueIndex-1)*Math.PI/12,199));
   if(state.selectionKind==='harmony')chart.append(svg('polygon',{points:points.map(p=>p.join(',')).join(' '),class:'chord-line'}));
   for(const h of circle) {
-    const field=fieldAt(h.index,state.selectedRegister),a=(h.index-1)*Math.PI/12;
+    const field=circleField(state,h.index),a=(h.index-1)*Math.PI/12;
     const start=a-Math.PI/24+.012,end=a+Math.PI/24-.012;
     const [p1,p2,p3,p4]=[point(start,277),point(end,277),point(end,222),point(start,222)];
     const path=svg('path',{d:`M${p1}A277 277 0 0 1 ${p2}L${p3}A222 222 0 0 0 ${p4}Z`,fill:color(field),
       class:`hue-segment ${state.selectedHue===h.index?'selected':''}`});
-    activateSVG(path,()=>dispatch('selectedHue',h.index),`${t('hue',state.locale)} ${h.index} · ${field.label}`,`hue-${h.index}`,state.selectedHue===h.index);
+    activateSVG(path,()=>dispatch('selectedHue',h.index),`${t('hue',state.locale)} ${h.index} · ${fieldLabel(field,state.locale)}`,`hue-${h.index}`,state.selectedHue===h.index);
     chart.append(path);
     const label=point(a,303);
     chart.append(svg('text',{x:label[0],y:label[1]+4,'text-anchor':'middle',class:`hue-number ${selected.has(h.index)?'marked':''}`},String(h.index).padStart(2,'0')));
@@ -21,18 +21,14 @@ export function CircleView(state,dispatch) {
       const [cx,cy]=point(a,199),node=svg('g',{},
         svg('circle',{cx,cy,r:22,fill:'transparent'}),
         svg('circle',{cx,cy,r:7,fill:color(field),stroke:'#171717','stroke-width':2}));
-      activateSVG(node,()=>dispatch('selectedHue',h.index),`${t('harmony',state.locale)} · ${field.label}`,`chord-point-${h.index}`);
+      activateSVG(node,()=>dispatch('selectedHue',h.index),`${t('harmony',state.locale)} · ${fieldLabel(field,state.locale)}`,`chord-point-${h.index}`);
       chart.append(node);
     }
   }
-  chart.append(svg('rect',{x:275,y:270,width:90,height:90,fill:color(fieldAt(state.selectedHue,state.selectedRegister))}),
-    svg('text',{x:320,y:398,'text-anchor':'middle',class:'center-label'},`${state.selectedHue}${state.selectedRegister}`));
+  chart.append(svg('rect',{x:275,y:270,width:90,height:90,fill:color(circleField(state,state.selectedHue))}),
+    svg('text',{x:320,y:398,'text-anchor':'middle',class:'center-label'},fieldLabel(circleField(state,state.selectedHue),state.locale)));
   chart.addEventListener('keydown',event=>{
-    if(['ArrowRight','ArrowLeft'].includes(event.key)){event.preventDefault();dispatch('selectedHue',state.selectedHue+(event.key==='ArrowRight'?1:-1));}
+    if(['ArrowRight','ArrowLeft'].includes(event.key)){event.preventDefault();dispatch(event.key==='ArrowRight'?'nextHue':'previousHue');}
   });
-  const stepper=el('div',{class:'hue-stepper'},
-    button('‹','previousHue',state,()=>dispatch('selectedHue',state.selectedHue-1),false,'previous-hue'),
-    el('span',{},`${String(state.selectedHue).padStart(2,'0')} / ${circle.length}`),
-    button('›','nextHue',state,()=>dispatch('selectedHue',state.selectedHue+1),false,'next-hue'));
-  return el('div',{class:'circle-view'},chart,stepper);
+  return el('div',{class:'circle-view'},chart);
 }

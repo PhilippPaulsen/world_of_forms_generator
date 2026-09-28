@@ -15,7 +15,7 @@ export const relationKeys={isotint:'white',isotone:'black',shadowSeries:'shadow'
 export function Toolbar(state,dispatch) {
   const nav=el('nav',{'aria-label':t('views',state.locale),class:'toolbar'});
   const section=(key,children)=>el('div',{class:'tool-group',role:'group','aria-label':t(key,state.locale)},children);
-  nav.append(section('views',views.map(view=>button(icon(view),view,state,()=>dispatch('activeView',view),state.activeView===view,`view-${view}`))));
+  nav.append(section('views',views.map(view=>button(icon(view),view==='circle'?'homeCircle':view,state,()=>dispatch(view==='circle'&&state.activeView==='circle'?'goToDefaultCircle':'activeView',view),state.activeView===view,`view-${view}`))));
   nav.append(section('cardinality',[2,3,4].map(n=>button(String(n),`select${n}`,state,()=>dispatch('harmonyMode',n),state.selectionKind==='harmony'&&state.harmonyMode===n,`chord-${n}`))));
   nav.append(button(icon('info'),'info',state,()=>dispatch('inspectorOpen',!state.inspectorOpen),state.inspectorOpen,'info'));
   return nav;
