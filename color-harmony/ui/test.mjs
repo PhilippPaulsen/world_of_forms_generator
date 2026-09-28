@@ -19,9 +19,9 @@ test('Browser adapter is behaviorally identical to CommonJS engine',()=>{
   assert.deepEqual(Engine.harmonies(fieldAt(5,'ic')),CJS.harmonies(fieldAt(5,'ic')));
   assert.deepEqual(Engine.intervalTable1921(),CJS.intervalTable1921());
 });
-test('Initial selection matches required state and actual atlas color',()=>{
+test('Initial selection uses explicit full-color home state and retains atlas anchor',()=>{
   const state=createState();assert.equal(state.activeView,'circle');assert.equal(state.displayMode,'atlas');
-  assert.equal(state.selectedHue,1);assert.equal(state.selectedRegister,'ic');assert.equal(state.selectedField.label,'1ic');
+  assert.equal(state.selectedHue,1);assert.equal(state.selectedRegister,'ic');assert.equal(state.selectedField.label,null);assert.equal(state.selectedField.source,'reference');assert.equal(state.selectedField.v,1);
   assert.equal(state.harmonyMode,3);assert.equal(state.inspectorOpen,false);
 });
 test('Hue normalization handles cyclic and safe integer boundaries',()=>{
@@ -59,7 +59,7 @@ test('All sample paths reuse engine colors and preserve unlabelled status',()=>{
 });
 test('Gray inspection keeps chromatic anchor for subsequent views',()=>{
   const state=step(step(createState(),'selectedHue',5),'gray','c');assert.equal(state.selectedField.label,'c');
-  assert.equal(state.selectedHue,5);assert.equal(state.selectedRegister,'ic');assert.equal(step(state,'selectedHue',6).selectedField.label,'6ic');
+  assert.equal(state.selectedHue,5);assert.equal(state.selectedRegister,'ic');for(const view of ['circle','triangle','register'])assert.equal(step(state,'activeView',view).selectedField.label,'c');assert.equal(step(state,'selectedHue',6).selectedField.source,'reference');assert.equal(step(state,'selectedHue',6).selectedField.hueIndex,6);
 });
 test('Cardinality updates use engine regular subdivisions and classification',()=>{
   for(const n of [2,3,4]){const harmony=hueHarmony(step(createState(),'harmonyMode',n));assert.equal(harmony.fields.length,n);assert.deepEqual(harmony.classification.gaps,Array(n).fill(24/n));}
@@ -87,6 +87,7 @@ test('Scientific disclosure remains explicit shared UI state',()=>{
   assert.throws(()=>step(state,'detailOpen',1));
 });
 
+const {fullColorAnchors,hueIdentity,HUE_MAPPINGS,maxChroma,fromLch,inGamut,mapToGamut}=await import('./FullColorCalibration.mjs');
 const {MAPPINGS,DEFAULT_MAPPING,displayAttenuation,historicalToDisplay,grayDiagnostic}=await import('./DisplayCalibration.mjs');
 const {views,selectionFields}=await import('./state.mjs');
 test('Historical reflectance values and all engine fields remain unchanged after calibration',()=>{
@@ -103,7 +104,7 @@ test('Comparison A exactly reproduces every Phase-6A atlas lab and RGB',()=>{
     assert.deepEqual(display.lab,field.lab);assert.deepEqual(display.rgb,field.rgb);
   }
 });
-test('All three transfer functions are strictly monotonic with preserved endpoints',()=>{
+test('All four transfer functions are strictly monotonic with preserved endpoints',()=>{
   for(const mapping of MAPPINGS){
     assert.equal(displayAttenuation(0,mapping),0);assert.equal(displayAttenuation(1,mapping),1);
     let previous=-1;
@@ -111,7 +112,7 @@ test('All three transfer functions are strictly monotonic with preserved endpoin
   }
 });
 test('Display gray neighbors are ordered and distinct after integer sRGB encoding',()=>{
-  assert.equal(DEFAULT_MAPPING,'logarithmic');
+  assert.equal(DEFAULT_MAPPING,'endpoint');
   for(const mapping of MAPPINGS){
     const rows=grayDiagnostic(mapping);
     assert.deepEqual(rows.map(x=>x.letter),['a','c','e','g','i','l','n','p']);
@@ -123,7 +124,7 @@ test('Display gray neighbors are ordered and distinct after integer sRGB encodin
   }
   assert.ok(grayDiagnostic('logarithmic').at(-1).deltaL>grayDiagnostic('current').at(-1).deltaL);
 });
-test('Equal-spacing comparison uses derived common endpoints; default is not forced equal',()=>{
+test('Previous equal-spacing and soft-log comparisons retain their documented endpoints',()=>{
   const b=grayDiagnostic('perceptual'),c=grayDiagnostic('logarithmic');
   assert.equal(b[0].displayLightness,c[0].displayLightness);
   assert.ok(Math.abs(b[7].displayLightness-c[7].displayLightness)<1e-12);
@@ -132,11 +133,12 @@ test('Equal-spacing comparison uses derived common endpoints; default is not for
 });
 test('Calibration applies to chromatic registers and preserves full anchors, hue direction and finite outputs',()=>{
   for(const hue of Engine.hueCircle()){
-    const full=Engine.mix(hue.lab,0,0);assert.deepEqual(historicalToDisplay(full).lab,full.lab);
+    const full={...Engine.mix(hue.lab,0,0),hueIndex:hue.index};assert.deepEqual(historicalToDisplay(full).lab,fullColorAnchors()[hue.index-1].lab);
     for(const register of ['ca','ic','pn']){
       const field=fieldAt(hue.index,register),display=historicalToDisplay(field);
       assert.ok(display.lab[0]>field.lab[0]);
-      assert.ok(Math.abs(display.lab[1]*field.lab[2]-display.lab[2]*field.lab[1])<1e-12);
+      const calibrated=fullColorAnchors()[hue.index-1].lab;
+      assert.ok(Math.abs(display.lab[1]*calibrated[2]-display.lab[2]*calibrated[1])<1e-12);
     }
   }
   for(const field of [...atlas.flat(),...grays])for(const mapping of MAPPINGS){
@@ -166,7 +168,7 @@ test('Primary navigation is exactly three views; result expansion is independent
   assert.throws(()=>step(state,'activeView','harmony'));assert.throws(()=>step(state,'resultOpen',1));
 });
 test('Visible selection follows chord, register and hue across every primary view',()=>{
-  let state=step(createState(),'selectedHue',5);assert.deepEqual(selectionFields(state).map(f=>f.label),['5ic']);
+  let state=step(createState({selectedRegister:'ic'}),'selectedHue',5);assert.deepEqual(selectionFields(state).map(f=>f.label),['5ic']);
   state=step(state,'harmonyMode',3);
   for(const view of views){state=step(state,'activeView',view);assert.deepEqual(selectionFields(state).map(f=>f.label),['5ic','13ic','21ic']);}
   state=step(state,'selectedRegister','le');assert.deepEqual(selectionFields(state).map(f=>f.label),['5le','13le','21le']);
@@ -181,5 +183,99 @@ test('Contextual relations and single gray/sample selections remain explicit per
   state=step(state,'gray','p');assert.deepEqual(selectionFields(state),[grays[7]]);
   state=step(step(state,'displayMode','continuum'),'sample',15);
   assert.equal(selectionFields(state)[0].label,null);assert.equal(selectionFields(state).length,1);
+});
+
+test('Full-color candidates retain all hue identities and exact opposite index topology',()=>{
+  for(const mapping of HUE_MAPPINGS){const anchors=fullColorAnchors(mapping);
+    assert.equal(anchors.length,24);
+    assert.deepEqual(anchors.map(x=>x.index),Array.from({length:24},(_,i)=>i+1));
+    for(const anchor of anchors){
+      assert.equal(Engine.hueDistance(anchor.index,normalizeHue(anchor.index+12)).minimal,12);
+      assert.ok(anchor.lab.every(Number.isFinite));assert.ok(anchor.rgb.every(x=>Number.isInteger(x)&&x>=0&&x<=255));
+      assert.equal(anchor.calibrated,false);assert.equal('referenceHue' in anchor,false);
+    }
+  }
+});
+test('Selected gamut-aware anchors use controlled radial chroma with bounded smooth lightness',()=>{
+  const anchors=fullColorAnchors();
+  for(let i=0;i<24;i++){
+    const x=anchors[i];assert.ok(inGamut(x.lab));assert.ok(x.oklch[1]>.1);
+    assert.ok(Math.abs(x.oklch[1]-.92*maxChroma(x.oklch[0],x.oklch[2]))<1e-12);
+    assert.ok(Math.abs(x.oklch[0]-anchors[(i+1)%24].oklch[0])<.12);
+  }
+  assert.ok(fullColorAnchors('fixedHigh').some(x=>!x.inGamut));
+  const snapshot=fullColorAnchors();snapshot[0].lab[0]=0;assert.notEqual(fullColorAnchors()[0].lab[0],0);
+});
+test('1921 p32 nomenclature maps all eight named groups and printed positions by ordinal index',()=>{
+  const groups=['yellow','orange','red','violet','blue','iceBlue','seaGreen','leafGreen'];
+  for(let i=1;i<=24;i++){
+    const identity=hueIdentity(i);assert.equal(identity.nameKey,groups[Math.floor((i-1)/3)]);
+    assert.equal(identity.ordinal,(i-1)%3+1);assert.equal(identity.sourceStatus,'primary-1921-p32');
+  }
+  for(const [i,printed] of [[1,'00'],[7,'25'],[13,'50'],[19,'75']])assert.equal(hueIdentity(i).printed,printed);
+  for(const x of [0,25,1.1,NaN])assert.throws(()=>hueIdentity(x));
+});
+test('Radial gamut mapping preserves L and hue, reports correction and rejects invalid input',()=>{
+  const input=fromLch(.7,.4,40),mapped=mapToGamut(input);
+  assert.equal(mapped.gamutMapped,true);assert.equal(mapped.rawInGamut,false);assert.ok(inGamut(mapped.lab));
+  assert.equal(mapped.lab[0],input[0]);assert.ok(Math.abs(mapped.lab[1]*input[2]-mapped.lab[2]*input[1])<1e-12);
+  assert.deepEqual(mapToGamut([.5,0,0]).lab,[.5,0,0]);
+  for(const x of [[-1,0,0],[2,0,0],[NaN,0,0],[]])assert.throws(()=>mapToGamut(x));
+  assert.throws(()=>fullColorAnchors('unknown'));assert.throws(()=>maxChroma(-1,0));
+});
+test('Every atlas mixture is in gamut after display mapping, including all dark n/p registers',()=>{
+  let mapped=0;
+  for(const field of atlas.flat()){
+    const display=historicalToDisplay(field);assert.ok(inGamut(display.lab));mapped+=Number(display.gamutMapped);
+  }
+  assert.ok(mapped>0,'Regression exercises mapping, not just already-in-gamut inputs');
+  for(const register of ['nl','pn'])assert.equal(new Set(atlas.map((_,i)=>historicalToDisplay(fieldAt(i+1,register)).rgb.join(','))).size,24);
+});
+test('Endpoint gray mapping separates vertices and strongly reduces adjacent distance imbalance',()=>{
+  const original=grayDiagnostic('logarithmic'),rows=grayDiagnostic('endpoint');
+  assert.ok(Math.abs(rows[0].lab[0]-.99)<1e-12);assert.ok(Math.abs(rows[7].lab[0]-.08)<1e-12);
+  assert.ok(rows[0].rgb[0]<255&&rows[0].rgb[0]>=250);assert.ok(rows[7].rgb[0]>0&&rows[7].rgb[0]<=3);
+  const imbalance=xs=>Math.max(...xs.slice(1).map(x=>x.deltaE))/Math.min(...xs.slice(1).map(x=>x.deltaE));
+  assert.ok(imbalance(rows)<1.01);assert.ok(imbalance(rows)<imbalance(original));
+  assert.ok(rows[6].rgb[0]-rows[7].rgb[0]>=20);
+});
+test('White/black UI relations preserve their own coefficients at every register and hue',()=>{
+  for(const field of atlas.flat())for(const [relation,key] of [['isotint','w'],['isotone','s']]){
+    const state=createState({selectedHue:field.hueIndex,selectedRegister:field.label.replace(/^\d+/,''),relation});
+    const members=selectionFields(state);assert.ok(members.length>0);
+    assert.ok(members.every(x=>Math.abs(x[key]-field[key])<1e-10));
+  }
+  assert.equal(t('isotint'),'Weiß · Gleicher Weißanteil');assert.equal(t('isotone'),'Schwarz · Gleicher Schwarzanteil');
+});
+test('Shared register navigation visits all 28 circles, stops at endpoints and preserves hue/chord/mode',()=>{
+  let state=createState({selectedHue:5,harmonyMode:3});const visited=[];
+  for(let i=0;i<28;i++){
+    state=step(state,'nextRegister');visited.push(state.selectedRegister);
+    assert.equal(state.selectedHue,5);assert.equal(state.harmonyMode,3);assert.equal(state.displayMode,'atlas');
+    assert.equal(selectionFields(state).length,3);
+  }
+  assert.deepEqual(visited,registers);assert.deepEqual(step(state,'nextRegister'),state);
+  for(let i=0;i<28;i++)state=step(state,'previousRegister');
+  assert.equal(state.circleMode,'reference');assert.equal(state.selectedField.label,null);
+  assert.deepEqual(step(state,'previousRegister'),state);
+});
+test('Shared hue navigation wraps all 24 triangles while preserving register and display state',()=>{
+  let state=createState({selectedRegister:'pn',activeView:'triangle',harmonyMode:4,displayMode:'continuum'});
+  const visited=[];
+  for(let i=0;i<24;i++){visited.push(state.selectedHue);state=step(state,'nextHue');assert.equal(state.selectedRegister,'pn');assert.equal(state.displayMode,'continuum');assert.equal(state.harmonyMode,4);}
+  assert.deepEqual(visited,Array.from({length:24},(_,i)=>i+1));assert.equal(state.selectedHue,1);
+  assert.equal(step(state,'previousHue').selectedHue,24);
+});
+test('One home action restores reference circle without resetting hue, chord, locale or display preference',()=>{
+  let state=createState({selectedHue:17,selectedRegister:'pn',activeView:'triangle',harmonyMode:4,displayMode:'continuum',locale:'en'});
+  state=step(state,'goToDefaultCircle');assert.equal(state.activeView,'circle');assert.equal(state.circleMode,'reference');
+  assert.equal(state.selectedHue,17);assert.equal(state.selectedRegister,'pn');assert.equal(state.harmonyMode,4);assert.equal(state.displayMode,'continuum');assert.equal(state.locale,'en');
+  const fields=selectionFields(state);assert.equal(fields.length,4);assert.ok(fields.every(x=>x.source==='reference'&&x.label===null&&x.v===1));
+});
+test('Register CSS separates square contiguous atlas geometry from rounded controls',()=>{
+  const css=require('node:fs').readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+  assert.match(css,/\.register-grid \{ border-collapse:collapse; border-spacing:0;/);
+  assert.match(css,/\.register-grid \.grid-swatch \{ border-radius:0; border:0; margin:0;/);
+  assert.match(css,/border-radius:4px/);
 });
 console.log(`\n${passed} UI test groups passed.`);
