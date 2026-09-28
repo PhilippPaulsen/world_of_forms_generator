@@ -1,3 +1,4 @@
+import {memberIdentity,activeColor} from '../composition.mjs';
 import {el,color} from '../components/dom.mjs';
 import {atlas,registers,circle} from '../state.mjs';
 import {t} from '../i18n.mjs';
@@ -8,12 +9,14 @@ export function RegisterView(state,dispatch) {
   registers.forEach((pair,row)=>{
     const tr=el('tr',{class:pair===state.selectedRegister?'selected-row':''},el('th',{scope:'row'},pair));
     atlas.forEach((triangle,col)=>{
-      const field=triangle[row],selected=field.label===`${state.selectedHue}${state.selectedRegister}`;
-      const cell=el('button',{type:'button',style:`--color:${color(field)}`,class:`grid-swatch ${selected?'selected':''}`,
-        tabindex:selected?0:-1,'aria-pressed':selected,'aria-label':field.label,'data-tooltip':field.label,'data-focus':`cell-${field.label}`,
+      const field=triangle[row],selected=memberIdentity(field)===memberIdentity(activeColor(state.composition));
+      const member=state.composition.activeHarmony.members.some(f=>memberIdentity(f)===memberIdentity(field));
+      const focused=field.label===`${state.selectedHue}${state.selectedRegister}`;
+      const cell=el('button',{type:'button',style:`--color:${color(field)}`,class:`grid-swatch ${selected?'selected':''} ${member?'harmony-member':''}`,
+        tabindex:focused?0:-1,'aria-pressed':selected,'aria-label':field.label,'data-tooltip':field.label,'data-focus':`cell-${field.label}`,
         onclick:()=>dispatch('cell',{hue:col+1,register:pair}),onkeydown:event=>{
           const deltas={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};
-          if(deltas[event.key]) {event.preventDefault();const [dx,dy]=deltas[event.key];dispatch('cell',{hue:col+1,register:pair});dispatch(dx?(dx>0?'nextHue':'previousHue'):(dy>0?'nextRegister':'previousRegister'));}
+          if(deltas[event.key]) {event.preventDefault();const [dx,dy]=deltas[event.key];dispatch('browseCell',{hue:col+1,register:pair});dispatch(dx?(dx>0?'nextHue':'previousHue'):(dy>0?'nextRegister':'previousRegister'));}
         }});
       tr.append(el('td',{style:`background:${color(field)}`,class:col+1===state.selectedHue?'selected-column':''},cell));
     });body.append(tr);
