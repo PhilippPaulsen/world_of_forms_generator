@@ -16,8 +16,8 @@
  *   fold       the hexagon's 3-/6-fold choice, under More. Default 6 (sketch.js: symmetryFold = 6); a catalog
  *              back-link that sets 3-fold is respected (sketch.js bestEffortCategoryFold).
  *
- * uiSync() re-reads the state and is called on every redraw (sketch.js draw()) and after symmetry changes; it only
- * writes an attribute when the value actually changed. Nothing here is ever hidden: a control that is not available
+ * The sync function (registered with UI.onSync) re-reads the state; ui.js calls it on every redraw (sketch.js draw())
+ * and after symmetry changes; it only writes an attribute when the value actually changed. Nothing here is ever hidden: a control that is not available
  * is aria-disabled.
  *
  * The German texts below are the reasons/notes for now; the dictionary (data-i18n keys) comes in a later phase.
@@ -26,6 +26,7 @@
   // reasons and notes (key -> text); moved into the dictionary later
   const T = {
     'reason.node.min': 'Mindestens 1 Knoten.',
+    'reason.node.min.trig': 'Sin und Tan brauchen mindestens 4 Knoten.',
     'reason.node.max.square': function (n) { return 'Höchstens ' + n + ' Knoten beim Quadrat.'; },
     'reason.node.max.other': function (n) { return 'Höchstens ' + n + ' Knoten bei Dreieck und Sechseck.'; },
     'reason.size.min': 'Kleinste Größe: 1.',
@@ -50,6 +51,15 @@
   function fieldActive() {
     return typeof baseNetTransform !== 'undefined' && !!baseNetTransform && baseNetTransform.domain === 'field';
   }
+  // A Sin or Tan net needs at least 4 nodes (at 3 the law sits on its fixed points and shows no effect), so the stepper
+  // does not go below 4 while one is active (sketch.js raises a lower count when the kind is chosen, and says so).
+  function trigNetActive() {
+    if (typeof baseNetTransform === 'undefined' || !baseNetTransform) return false;
+    const x = baseNetTransform.x, y = baseNetTransform.y;
+    return (x && x.kind === 'trig') || (y && y !== 'same' && y.kind === 'trig');
+  }
+  function nodeMin() { return trigNetActive() ? 4 : 1; }
+  function nodeMinMsg() { return trigNetActive() ? T['reason.node.min.trig'] : T['reason.node.min']; }
   function nodeMax() { return typeof maxNodeCountFor === 'function' ? maxNodeCountFor(currentShape) : 7; }
   function nodeMaxMsg(max) { return (currentShape === 'square' ? T['reason.node.max.square'] : T['reason.node.max.other'])(max); }
 
@@ -58,13 +68,13 @@
     const cur = parseInt(nodeInput.value, 10) || 1;
     const max = nodeMax();
     const to = cur + dir;
-    if (to < 1) return { to: null, reason: T['reason.node.min'] };
+    if (to < nodeMin()) return { to: null, reason: nodeMinMsg() };
     if (to > max) return { to: null, reason: nodeMaxMsg(max) };
     return { to: to };
   }
   function nodeRange() {
     const max = nodeMax();
-    return { min: 1, max: max, minMsg: T['reason.node.min'], maxMsg: nodeMaxMsg(max) };
+    return { min: nodeMin(), max: max, minMsg: nodeMinMsg(), maxMsg: nodeMaxMsg(max) };
   }
 
   // Shape Size: 1..9. While a Field net is active only odd sizes 3..9 are valid (a Field needs an odd size), so the
@@ -129,8 +139,8 @@
 
   UI.overlay(moreBtn, $('#more-form'), { onOpen: syncSymmetry });
 
-  window.uiSync = function () {
+  UI.onSync(function () {
     steppers.forEach(function (s) { s.refresh(); });
     syncSymmetry();
-  };
+  });
 })();
