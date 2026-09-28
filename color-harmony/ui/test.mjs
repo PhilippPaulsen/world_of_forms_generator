@@ -3,7 +3,7 @@ import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 require('./build.js').build();
 const {messages,t,DEFAULT_LOCALE}=await import('./i18n.mjs');
-const {Engine,createState,transition,normalizeHue,fieldAt,registers,atlas,grays,hueHarmony,pathSamples,compoundExamples}=await import('./state.mjs');
+const {Engine,createState,transition,normalizeHue,fieldAt,registers,atlas,grays,hueHarmony,pathSamples,compoundExamples,relationFields}=await import('./state.mjs');
 const CJS=require('../ColorHarmonyEngine.js');
 let passed=0;
 function test(name,run){run();passed++;console.log(`ok ${passed} - ${name}`);}
@@ -44,12 +44,12 @@ test('View switches preserve selected color and register without mutating input'
   for(const view of ['circle','triangle','register']){const result=step(original,'activeView',view);assert.equal(result.activeView,view);assert.deepEqual(result.selectedField,original.selectedField);}
   assert.equal(JSON.stringify(original),snapshot);
 });
-test('Atlas and continuum transitions clear samples without generating atlas notation',()=>{
+test('Atlas and continuum navigation preserves explicit samples without inventing notation',()=>{
   let state=step(createState(),'displayMode','continuum');state=step(state,'sample',17);
   assert.equal(state.selectedField.source,'interpolated');assert.equal(state.selectedField.label,null);
   assert.equal(state.selectedRegister,'ic');assert.equal(state.selectedHue,1);
   state=step(state,'activeView','triangle');assert.equal(state.selectedField.label,null);
-  state=step(state,'displayMode','atlas');assert.equal(state.selectedField.label,'1ic');
+  state=step(state,'displayMode','atlas');assert.equal(state.selectedField.label,null);assert.equal(state.selectedField.source,'interpolated');
 });
 test('All sample paths reuse engine colors and preserve unlabelled status',()=>{
   for(const relation of ['isotint','isotone','shadowSeries']){
@@ -68,7 +68,7 @@ test('Read-only compound examples preserve validated provenance and recursion',(
   const examples=compoundExamples();assert.equal(examples.shared.relation,'shared-member');assert.equal(examples.substitution.relation,'substitution');assert.equal(Engine.compoundLevel(examples.recursive),3);
   for(const example of Object.values(examples))assert.deepEqual(Engine.flattenHarmonyMembers(example),example.members);
   const state=step(createState(),'harmonyExample','recursive');assert.equal(state.selectedHarmony.level,3);
-  assert.equal(step(state,'harmonyMode',4).selectedHarmony,null);
+  assert.equal(step(state,'harmonyMode',4).composition.activeHarmony.members.length,4);
 });
 test('Locale and inspector transitions do not affect analytical coordinates',()=>{
   const before=createState(),after=step(step(before,'locale','en'),'inspectorOpen',true);
@@ -167,18 +167,18 @@ test('Primary navigation is exactly three views; result expansion is independent
   assert.equal(state.activeView,'circle');assert.equal(state.resultOpen,true);
   assert.throws(()=>step(state,'activeView','harmony'));assert.throws(()=>step(state,'resultOpen',1));
 });
-test('Visible selection follows chord, register and hue across every primary view',()=>{
+test('Explicit members persist across views; color edits replace one member instead of regenerating',()=>{
   let state=step(createState({selectedRegister:'ic'}),'selectedHue',5);assert.deepEqual(selectionFields(state).map(f=>f.label),['5ic']);
   state=step(state,'harmonyMode',3);
   for(const view of views){state=step(state,'activeView',view);assert.deepEqual(selectionFields(state).map(f=>f.label),['5ic','13ic','21ic']);}
-  state=step(state,'selectedRegister','le');assert.deepEqual(selectionFields(state).map(f=>f.label),['5le','13le','21le']);
-  state=step(state,'cell',{hue:24,register:'pn'});assert.deepEqual(selectionFields(state).map(f=>f.label),['24pn','8pn','16pn']);
-  state=step(state,'harmonyMode',3);assert.equal(state.selectionKind,'color');assert.equal(selectionFields(state).length,1);
+  state=step(state,'selectedRegister','le');assert.deepEqual(selectionFields(state).map(f=>f.label),['5le','13ic','21ic']);
+  state=step(state,'cell',{hue:24,register:'pn'});assert.deepEqual(selectionFields(state).map(f=>f.label),['24pn','13ic','21ic']);
+  state=step(state,'harmonyMode',3);assert.deepEqual(selectionFields(state).map(f=>f.label),['24pn','8pn','16pn']);
 });
 test('Contextual relations and single gray/sample selections remain explicit persistent results',()=>{
   let state=createState({selectedHue:5,relation:'shadowSeries'});
   assert.equal(state.selectionKind,'relation');
-  assert.deepEqual(new Set(selectionFields(state).map(f=>f.label)),new Set(['5ga','5ic','5le','5ng','5pi']));
+  assert.deepEqual(new Set(relationFields(state).map(f=>f.label)),new Set(['5ga','5ic','5le','5ng','5pi']));
   for(const view of views)assert.deepEqual(selectionFields(step(state,'activeView',view)),selectionFields(state));
   state=step(state,'gray','p');assert.deepEqual(selectionFields(state),[grays[7]]);
   state=step(step(state,'displayMode','continuum'),'sample',15);
@@ -242,7 +242,7 @@ test('Endpoint gray mapping separates vertices and strongly reduces adjacent dis
 test('White/black UI relations preserve their own coefficients at every register and hue',()=>{
   for(const field of atlas.flat())for(const [relation,key] of [['isotint','w'],['isotone','s']]){
     const state=createState({selectedHue:field.hueIndex,selectedRegister:field.label.replace(/^\d+/,''),relation});
-    const members=selectionFields(state);assert.ok(members.length>0);
+    const members=relationFields(state);assert.ok(members.length>0);
     assert.ok(members.every(x=>Math.abs(x[key]-field[key])<1e-10));
   }
   assert.equal(t('isotint'),'Weiß · Gleicher Weißanteil');assert.equal(t('isotone'),'Schwarz · Gleicher Schwarzanteil');
@@ -270,7 +270,7 @@ test('One home action restores reference circle without resetting hue, chord, lo
   let state=createState({selectedHue:17,selectedRegister:'pn',activeView:'triangle',harmonyMode:4,displayMode:'continuum',locale:'en'});
   state=step(state,'goToDefaultCircle');assert.equal(state.activeView,'circle');assert.equal(state.circleMode,'reference');
   assert.equal(state.selectedHue,17);assert.equal(state.selectedRegister,'pn');assert.equal(state.harmonyMode,4);assert.equal(state.displayMode,'continuum');assert.equal(state.locale,'en');
-  const fields=selectionFields(state);assert.equal(fields.length,4);assert.ok(fields.every(x=>x.source==='reference'&&x.label===null&&x.v===1));
+  const fields=selectionFields(state);assert.equal(fields.length,4);assert.ok(fields.every(x=>x.source==='atlas'&&x.label.endsWith('pn')));
 });
 test('Register CSS separates square contiguous atlas geometry from rounded controls',()=>{
   const css=require('node:fs').readFileSync(new URL('./styles.css',import.meta.url),'utf8');
