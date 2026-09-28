@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260928f">
+  <link rel="stylesheet" href="style.css?v=20260928m">
 
   <!-- Material Icons -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -66,7 +66,7 @@
       align-items: center;
       width: 95%;
       max-width: 900px;
-      gap: 10px;
+      gap: 0;   /* was 10px; the canvas carries its own --gap margins */
     }
 
     /* Flat, opaque look matching die-welt-der-formen.de - no glass/blur/shadow.
@@ -89,9 +89,9 @@
       width: var(--canvas-size);
       height: var(--canvas-size);
       flex: none;
-      /* 16px above (nav row) and 16px below (controls): the parent's own
-         10px flex gap adds to the 6px bottom margin */
-      margin: 16px 0 6px;
+      /* --gap (8px) above (nav row) and below (controls); .main-container has no flex gap of its own,
+         so the space between canvas and the controls below is exactly this margin */
+      margin: var(--gap) 0;
       display: block;
       background: var(--background);
     }
@@ -398,13 +398,13 @@
        switching tabs moves nothing below them. The rows are filled in 4b
        (Form), 4c (Netz) and 4d (Farbe). -->
   <header class="app-header">
-    <nav class="app-tabs" aria-label="Bereiche">
-      <a id="tab-form" href="#form" aria-controls="nav-form" aria-current="page">Form</a>
-      <a id="tab-farbe" href="#farbe" aria-controls="nav-farbe">Farbe</a>
-      <a id="tab-netz" href="#netz" aria-controls="nav-netz">Netz</a>
+    <nav class="app-tabs" aria-label="Bereiche" data-i18n="tabs.nav">
+      <a id="tab-form" href="#form" aria-controls="nav-form" aria-current="page" data-i18n="tab.form">Form</a>
+      <a id="tab-farbe" href="#farbe" aria-controls="nav-farbe" data-i18n="tab.farbe">Farbe</a>
+      <a id="tab-netz" href="#netz" aria-controls="nav-netz" data-i18n="tab.netz">Netz</a>
     </nav>
-    <button id="btn-help" class="icon-btn" type="button" title="Hilfe" aria-label="Hilfe">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+    <button id="btn-help" class="icon-btn" type="button" title="Hilfe" aria-label="Hilfe" data-i18n="help">
+      <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="12" cy="12" r="10"></circle>
         <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
         <line x1="12" y1="17" x2="12.01" y2="17"></line>
@@ -412,7 +412,64 @@
     </button>
   </header>
   <div class="nav-rows">
-    <div id="nav-form" class="nav-row" role="group" aria-labelledby="tab-form"></div>
+    <!-- Form nav row (UI rework 4b). The DOM (= tab order) is the desktop
+         order: shapes | node stepper | size stepper | symmetry | More.
+         Tablet/desktop: ONE row in that order. Phone: two fixed lines -
+         line 1 shapes | symmetry | More, line 2 the two steppers (CSS `order`
+         plus the .nav-break element, which only exists as a line break
+         there). Every item has a fixed slot: nothing appears, disappears or
+         moves when the shape, the symmetry, a net or the timeline changes;
+         a control that is not available is aria-disabled (a tap shows the
+         reason), never hidden. data-i18n = the key of the label/title/
+         aria-label (the dictionary comes in a later phase; the text stays
+         here for now).
+         Symmetry is ONE exclusive choice with two options: rotation, or
+         rotation + mirror (the default). "None" and "mirror only" (and the
+         hexagon's 3-/6-fold) are under More (#more-form). -->
+    <div id="nav-form" class="nav-row nav-form" role="group" aria-labelledby="tab-form">
+      <div class="nav-cluster nav-shapes" role="group" aria-label="Form" data-i18n="group.shape">
+        <button class="shape-icon-btn icon-btn active" data-shape="triangle" type="button" title="Dreieck" aria-label="Dreieck" aria-pressed="true" data-i18n="shape.triangle">
+          <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5 L21 19.5 H3 Z"/></svg>
+        </button>
+        <button class="shape-icon-btn icon-btn" data-shape="square" type="button" title="Quadrat" aria-label="Quadrat" aria-pressed="false" data-i18n="shape.square">
+          <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15"/></svg>
+        </button>
+        <button class="shape-icon-btn icon-btn" data-shape="hex" type="button" title="Sechseck" aria-label="Sechseck" aria-pressed="false" data-i18n="shape.hex">
+          <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 L20 7.5 V16.5 L12 21 L4 16.5 V7.5 Z"/></svg>
+        </button>
+      </div>
+      <span class="nav-divider nav-divider-a" aria-hidden="true"></span>
+      <div class="stepper" role="group" aria-label="Knoten" data-i18n="node.group">
+        <svg class="ico stepper-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor" stroke="none"><circle cx="6" cy="6" r="1.5"/><circle cx="6" cy="12" r="1.5"/><circle cx="6" cy="18" r="1.5"/><circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="18" r="1.5"/><circle cx="18" cy="6" r="1.5"/><circle cx="18" cy="12" r="1.5"/><circle cx="18" cy="18" r="1.5"/></g></svg>
+        <!-- max is the universal default (triangle/hex); sketch.js sets it per shape (square 13) - core/forms.js NODE_COUNT_MAX -->
+        <input type="number" id="node-count-input" min="1" max="7" value="3" inputmode="none" aria-label="Knoten" data-i18n="node.input">
+        <div class="stepper-chevrons">
+          <button class="stepper-btn" type="button" data-dir="1" title="Knoten mehr" aria-label="Knoten mehr" data-i18n="node.more"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15 L12 9 L18 15"/></svg></button>
+          <button class="stepper-btn" type="button" data-dir="-1" title="Knoten weniger" aria-label="Knoten weniger" data-i18n="node.less"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9 L12 15 L18 9"/></svg></button>
+        </div>
+      </div>
+      <div class="stepper" role="group" aria-label="Größe" data-i18n="size.group">
+        <svg class="ico stepper-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9 V4 H9 M15 4 H20 V9 M20 15 V20 H15 M9 20 H4 V15"/></svg>
+        <input type="number" id="shape-size-input" min="1" max="9" value="5" inputmode="none" aria-label="Größe" data-i18n="size.input">
+        <div class="stepper-chevrons">
+          <button class="stepper-btn" type="button" data-dir="1" title="Größe mehr" aria-label="Größe mehr" data-i18n="size.more"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15 L12 9 L18 15"/></svg></button>
+          <button class="stepper-btn" type="button" data-dir="-1" title="Größe weniger" aria-label="Größe weniger" data-i18n="size.less"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9 L12 15 L18 9"/></svg></button>
+        </div>
+      </div>
+      <span class="nav-divider nav-divider-b" aria-hidden="true"></span>
+      <div class="nav-cluster nav-symmetry" role="radiogroup" aria-label="Symmetrie" data-i18n="group.symmetry">
+        <button id="btn-sym-rotation" class="icon-btn sym-radio" type="button" role="radio" aria-checked="false" title="Drehung" aria-label="Drehung" data-i18n="sym.rotation">
+          <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12 A7.5 7.5 0 1 1 17.3 6.7"/><path d="M19.5 4.5 V8.7 H15.3"/></svg>
+        </button>
+        <button id="btn-sym-rotation-mirror" class="icon-btn sym-radio" type="button" role="radio" aria-checked="true" title="Drehung und Spiegelung" aria-label="Drehung und Spiegelung" data-i18n="sym.rotationMirror">
+          <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 V21" stroke-dasharray="2 3"/><path d="M9 7 L3.5 12 L9 17 Z"/><path d="M15 7 L20.5 12 L15 17 Z"/></svg>
+        </button>
+      </div>
+      <button id="btn-more-form" class="icon-btn nav-more" type="button" title="Mehr" aria-label="Mehr" aria-controls="more-form" data-i18n="more">
+        <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></g></svg>
+      </button>
+      <span class="nav-break" aria-hidden="true"></span>
+    </div>
     <div id="nav-farbe" class="nav-row" role="group" aria-labelledby="tab-farbe" hidden></div>
     <div id="nav-netz" class="nav-row" role="group" aria-labelledby="tab-netz" hidden></div>
   </div>
@@ -423,39 +480,12 @@
 
     <!-- Controls container -->
     <div class="controls-container">
-      <!-- Shape Icons -->
-      <div class="control-group">
-        <label>Shape</label>
-        <div class="icon-row">
-          <button class="shape-icon-btn icon-btn active" data-shape="triangle" title="Triangle">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 4L4 20h16L12 4z" />
-            </svg>
-          </button>
-          <button class="shape-icon-btn icon-btn" data-shape="square" title="Square">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="4" y="4" width="16" height="16" />
-            </svg>
-          </button>
-          <button class="shape-icon-btn icon-btn" data-shape="hex" title="Hexagon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2l8.66 5v10L12 22 3.34 17V7L12 2z" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <div class="control-group">
-        <label for="shape-size-input">Shape Size</label>
-        <input type="number" id="shape-size-input" min="1" max="9" value="5">
-      </div>
-
-      <div class="control-group">
-        <label for="node-count-input">Node Count</label>
-        <!-- max is the universal default (triangle/hex); sketch.js sets it per shape (square 13) - core/forms.js NODE_COUNT_MAX -->
-        <input type="number" id="node-count-input" min="1" max="7" value="3">
-        <div id="node-count-note" class="limit-note" hidden></div>
-      </div>
+      <!-- Shape, Node Count, Shape Size and the symmetry mode moved to the
+           Form nav row (#nav-form, above the canvas) in UI rework 4b; their
+           ids and handlers are unchanged. The old .mode-btn/.fold-btn
+           groups below stay here, hidden but functional (legacy-controls):
+           sketch.js still drives them and the nav row's toggles go through
+           the same code path. -->
 
       <!-- Roadmap 1.11: Spiegeling/Drehling selector - reintroduces the
            symmetry-mode choice the original #symmetry-dropdown offered
@@ -482,7 +512,14 @@
            40x40 icon box, same active-invert/hover chrome. Tooltip
            wording pairs a plain-English description with the German
            term in parens (not dropped) - matters more now that the
-           button has no visible text label of its own to carry it. -->
+           button has no visible text label of its own to carry it.
+
+           UI rework 4b: superseded by the two toggles (rotation, mirror) in
+           the Form nav row; this three-button group and the fold group
+           below stay in the DOM, hidden, because sketch.js still owns them
+           (.mode-btn/.fold-btn handlers, the catalog back-link highlight).
+           'mirror' (mirror only) has no button here. -->
+      <div class="legacy-controls" hidden>
       <div class="control-group">
         <div class="icon-row">
           <button id="btn-mode-none" class="icon-btn mode-btn" data-mode="none" title="No symmetry">
@@ -519,6 +556,7 @@
           <button id="btn-fold-6" class="layer-btn fold-btn active" data-fold="6" title="6-fold">6-fold</button>
         </div>
       </div>
+      </div><!-- /.legacy-controls -->
 
       <!-- Visibility Toggle, Curve Toggle & Free Endpoints Toggle -->
       <div class="control-group">
@@ -1217,20 +1255,54 @@
        ANY of index.html's own core/*.js or sketch.js. Not needed on
        the p5.js CDN tag - that URL already carries its own version
        (p5@1.9.0), so a version bump there naturally changes the URL. -->
+  <!-- "Mehr" (More) for the Form row: a popover under its button, a bottom sheet on the phone (ui.js UI.overlay).
+       "Andere Symmetrie" holds the two modes the main control does not show (none, mirror only), so they stay
+       reachable and representable; the hexagon's 3-/6-fold lives here too. -->
+  <div id="overlay-scrim" class="overlay-scrim" hidden></div>
+  <div id="more-form" class="overlay" role="dialog" aria-label="Mehr" data-i18n="more.form" hidden>
+    <div class="overlay-section">
+      <h3 id="ov-sym-title" class="overlay-title" data-i18n="sym.other">Andere Symmetrie</h3>
+      <div id="ov-sym-other" class="overlay-opts" role="radiogroup" aria-labelledby="ov-sym-title">
+        <button id="btn-sym-none" class="opt" type="button" role="radio" aria-checked="false" data-i18n="sym.none">
+          <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg><span>Keine</span>
+        </button>
+        <button id="btn-sym-mirror-only" class="opt" type="button" role="radio" aria-checked="false" data-i18n="sym.mirrorOnly">
+          <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 V21" stroke-dasharray="2 3"/><path d="M9 7 L3.5 12 L9 17 Z"/><path d="M15 7 L20.5 12 L15 17 Z"/></svg><span>Nur Spiegelung</span>
+        </button>
+      </div>
+    </div>
+    <div class="overlay-section">
+      <h3 id="ov-fold-title" class="overlay-title" data-i18n="fold.title">Zähligkeit (Sechseck)</h3>
+      <div id="ov-fold" class="overlay-opts" role="radiogroup" aria-labelledby="ov-fold-title">
+        <button id="btn-fold-opt-3" class="opt" type="button" role="radio" aria-checked="false" title="3-zählig" aria-label="3-zählig" data-i18n="fold.3">3</button>
+        <button id="btn-fold-opt-6" class="opt" type="button" role="radio" aria-checked="false" title="6-zählig" aria-label="6-zählig" data-i18n="fold.6">6</button>
+      </div>
+      <p id="ov-fold-hint" class="overlay-hint" data-i18n="fold.hint" hidden>Nur beim Sechseck, und nur mit Drehung.</p>
+    </div>
+  </div>
+
+  <!-- Messages that must not move the layout: the Node Count clamp note (written by sketch.js) and the
+       reason a disabled control gives when tapped (ui.js). Both are fixed-position toasts, dismissible. -->
+  <div id="node-count-note" class="limit-note toast" role="status" hidden></div>
+  <div id="ui-toast" class="toast" role="status" aria-live="polite" hidden></div>
+
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260928f"></script>
-  <script src="core/state.js?v=20260928f"></script>
-  <script src="core/symmetry.js?v=20260928f"></script>
-  <script src="core/curves.js?v=20260928f"></script>
-  <script src="core/netwarp.js?v=20260928f"></script>
-  <script src="core/tiling.js?v=20260928f"></script>
-  <script src="core/faces.js?v=20260928f"></script>
-  <script src="core/orbits.js?v=20260928f"></script>
-  <script src="core/color.js?v=20260928f"></script>
-  <script src="core/facecolor.js?v=20260928f"></script>
-  <script src="core/export.js?v=20260928f"></script>
-  <script src="sketch.js?v=20260928f"></script>
-  <script src="nav.js?v=20260928f"></script>
+  <script src="core/forms.js?v=20260928m"></script>
+  <script src="core/state.js?v=20260928m"></script>
+  <script src="core/symmetry.js?v=20260928m"></script>
+  <script src="core/curves.js?v=20260928m"></script>
+  <script src="core/netwarp.js?v=20260928m"></script>
+  <script src="core/tiling.js?v=20260928m"></script>
+  <script src="core/faces.js?v=20260928m"></script>
+  <script src="core/orbits.js?v=20260928m"></script>
+  <script src="core/color.js?v=20260928m"></script>
+  <script src="core/facecolor.js?v=20260928m"></script>
+  <script src="core/export.js?v=20260928m"></script>
+  <script src="core/symmetry-toggles.js?v=20260928m"></script>
+  <script src="sketch.js?v=20260928m"></script>
+  <script src="nav.js?v=20260928m"></script>
+  <script src="ui.js?v=20260928m"></script>
+  <script src="ui-form.js?v=20260928m"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

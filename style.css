@@ -63,7 +63,15 @@
   --size-base: 16px;
   --fs-tab: 18px;
 
-  --target: 44px;
+  /* Sizes that change in ONE place.
+     --target  the height of EVERY control (shape buttons, symmetry choice, More, Help, steppers): 36px with a
+               mouse (pointer: fine), 48px on touch (pointer: coarse) - see the media query below.
+     --bar-h   the height of ONE top bar: the header, the nav row (one row on tablet/desktop), and each of the two
+               rows of a nav row on a phone. --target plus 12px above and below.
+     --icon    the size of every icon. */
+  --target: 48px;
+  --icon: 18px;
+  --bar-h: calc(var(--target) + 24px);   /* fine pointer 60px, coarse 72px */
   --gap: 8px;
   --radius: 6px;
   --gutter: 16px;          /* page side margin */
@@ -72,6 +80,11 @@
      the height of #canvas-container (never derived through aspect-ratio
      or a percentage), so it cannot be resolved differently by an engine. */
   --canvas-size: min(var(--canvas-max), calc(100vw - 2 * var(--gutter)));
+}
+
+/* Mouse: smaller controls. Touch keeps 48px and the 8px gap. */
+@media (pointer: fine) {
+  :root { --target: 36px; }
 }
 
 /* The one body rule for font and reset. Page layout (flex centering,
@@ -364,38 +377,39 @@ body.dark {
    Header: the three tabs (in-page hash links, nav.js) on the left, Help on
    the right. Active tab = Semibold + black, the others secondary grey;
    never a ring (a ring is reserved for keyboard focus, below).
-   Nav rows: one per tab, ALL the same fixed height, so switching tabs
-   moves nothing below them. Desktop/tablet: one 44px row. Phone: two fixed
-   44px rows (no wrapping), hence the taller value. */
-:root { --nav-row-h: 76px; }          /* 44 target + 2 x 16 padding */
+   Nav rows: one per tab, ALL the same fixed height (see below), so switching
+   tabs moves nothing below them. */
+/* Both top bars have the SAME height, --bar-h (60px fine pointer, 72px coarse), and centre their content vertically:
+   the header, the nav row on tablet/desktop (one row), and on a phone each of the two rows of a nav row (so a
+   phone nav row is 2 x --bar-h). Every nav row (Form, Farbe, Netz) has this height, so switching tabs moves
+   nothing below. The tab links fill the bar height as their click area; only the text is small (18px). */
+:root { --nav-h: var(--bar-h); }
 @media (max-width: 767px) {
-  :root { --nav-row-h: 128px; }       /* 2 x 44 target + 8 gap + 2 x 16 padding */
+  :root { --nav-h: calc(2 * var(--bar-h)); }
 }
 
 .app-header {
   align-self: stretch;
   box-sizing: border-box;
+  height: var(--bar-h);              /* the 1px bottom border is inside this height */
   display: flex;
   align-items: center;
   gap: 20px;
-  /* 44px targets + 2 x 4px = 52px; only the tab TEXT is small (18px), the
-     click area stays a full 44px tall */
-  padding: 4px var(--gutter);
+  padding: 0 var(--gutter);
   border-bottom: 1px solid var(--color-hairline);
 }
 @media (min-width: 768px) {
-  .app-header { gap: 32px; padding: 4px 24px; }
+  .app-header { gap: 32px; padding: 0 24px; }
 }
 
-.app-tabs { display: flex; align-items: center; gap: 12px; }
+.app-tabs { display: flex; align-items: stretch; align-self: stretch; gap: 12px; }
 @media (min-width: 768px) {
   .app-tabs { gap: 16px; }
 }
 
 .app-tabs a {
   display: inline-flex;
-  align-items: center;
-  min-height: var(--target);
+  align-items: center;               /* the text is centred in the full-height click area */
   padding: 0 4px;
   font-size: var(--fs-tab);
   font-weight: var(--weight-regular);
@@ -419,17 +433,263 @@ body.dark {
 .nav-rows { align-self: stretch; }
 .nav-row {
   box-sizing: border-box;
-  height: var(--nav-row-h);
-  padding: 16px var(--gutter);
+  height: var(--nav-h);              /* the 1px bottom border is inside this height */
+  padding: 0 var(--gutter);
   border-bottom: 1px solid var(--color-hairline);
   display: flex;
   align-items: center;
   gap: var(--gap);
 }
 @media (min-width: 768px) {
-  .nav-row { padding: 16px 24px; }
+  .nav-row { padding: 0 24px; }
 }
 .nav-row[hidden] { display: none; }
+
+/* === UI rework 4b: Form row ==============================================
+   Every control has a fixed slot; nothing appears, disappears or moves when
+   the shape, symmetry, net or timeline changes. A control that is not
+   available is aria-disabled (dimmed, still focusable and tappable - a tap
+   shows the reason, ui.js), never hidden. All sizes come from the tokens
+   --target / --icon / --bar-h (top of this file). */
+.ico {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
+  flex: none;
+  width: var(--icon);
+  height: var(--icon);
+}
+
+.nav-row .icon-btn {
+  width: var(--target);
+  height: var(--target);
+  border-radius: var(--radius);
+  flex: none;
+  touch-action: manipulation;   /* no double-tap zoom on the buttons */
+}
+.nav-row .icon-btn[aria-disabled="true"] {
+  color: var(--color-disabled);
+  border-color: var(--color-hairline);
+  cursor: not-allowed;
+}
+.nav-row .icon-btn[aria-disabled="true"]:hover { background: var(--background); }
+
+.nav-cluster { display: flex; align-items: center; gap: var(--gap); flex: none; }
+.nav-divider { width: 1px; height: var(--target); background: var(--color-hairline); margin: 0 4px; flex: none; }
+.nav-break { display: none; }
+
+/* "Other symmetry" set (none / mirror only): the More button shows a dot then. */
+.nav-more { position: relative; }
+.nav-more.has-state::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* The DOM (and so the tab order) is shapes | node | size | symmetry | More. Tablet/desktop shows exactly that in ONE
+   row. Phone (< 768px): two rows, each one --bar-h high with its content centred - shapes | symmetry | More, then the
+   two steppers - made with `order` and a full-width, zero-height .nav-break between them. The divider between shapes
+   and symmetry is dropped there: with 48px controls line 1 is shapes 160 + symmetry 104 + More 48 + 2 gaps of 8 =
+   328px and must fit the 343px that a 375px phone leaves.
+   KNOWN LIMIT (open until Phase 2, see ROADMAP.md Group B): this fits 360px and up; at 320px line 1 wraps into three
+   rows and overflows the fixed nav-row height. */
+@media (max-width: 767px) {
+  .nav-form { flex-wrap: wrap; align-content: flex-start; align-items: center; gap: 0 var(--gap); }
+  .nav-form > * { margin-top: 12px; margin-bottom: 12px; }   /* (--bar-h - --target) / 2 */
+  .nav-form .nav-shapes { order: 1; }
+  .nav-form .nav-symmetry { order: 2; }
+  .nav-form .nav-more { order: 3; }
+  .nav-form .nav-break { order: 4; display: block; flex: 0 0 100%; height: 0; margin: 0; }
+  .nav-form .stepper { order: 5; }
+  .nav-form .nav-divider { display: none; }
+}
+
+/* Stepper: [icon  number | up/down chevrons] around an existing number input. It is exactly --target high, like every
+   other control. The number is in the middle; the two stacked chevron halves on the right (like a compact native
+   spinner) are --target / 2 each: 24px on a coarse pointer, 18px on a fine pointer.
+   The 18px halves are a DELIBERATE exception to the 24x24 target size of WCAG 2.5.8 (Target Size, Minimum), which
+   allows an exception where an equivalent control is available: the field is typable, the arrow keys step it, and a
+   held chevron repeats - all of which reach the same result without hitting a small target. On a coarse pointer
+   (touch) the halves are the full 24px and there is no exception.
+   Fixed width: nothing moves when the number gets longer (tabular figures come from the body). The border is drawn
+   by ::after so it takes no room: the halves measure exactly --target / 2. */
+.stepper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  box-sizing: border-box;
+  height: var(--target);
+  padding-left: 8px;
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--color-text);
+}
+.stepper::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border: 1px solid var(--color-text);
+  border-radius: var(--radius);
+  pointer-events: none;
+}
+.stepper-icon { color: var(--color-secondary); }
+.stepper input[type="number"] {
+  width: 2.4ch;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--size-base);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  /* the native spinners are replaced by the chevrons: WebKit/Blink and Firefox */
+  -webkit-appearance: none;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.stepper input[type="number"]::-webkit-outer-spin-button,
+.stepper input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.stepper-chevrons {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  width: 32px;
+  margin-left: 2px;
+  border-left: 1px solid var(--color-hairline);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  overflow: hidden;
+}
+.stepper-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+/* Chevron icon: 12px, and a 1.75px line ON SCREEN: the viewBox is 24 units wide, so it is drawn at half scale and needs
+   3.5 units (the other icons keep the .ico value of 1.75 units, as before). */
+.stepper-btn .ico { width: 12px; height: 12px; stroke-width: 3.5; }
+/* the hairline between the halves is an inset shadow, not a border: it takes no room, so both halves are exactly --target / 2 */
+.stepper-btn + .stepper-btn { box-shadow: inset 0 1px 0 var(--color-hairline); }
+.stepper-btn:hover { background: var(--hover-bg); }
+.stepper-btn[aria-disabled="true"] { color: var(--color-disabled); cursor: not-allowed; }
+.stepper-btn[aria-disabled="true"]:hover { background: transparent; }
+.stepper-btn:focus-visible { outline-offset: -2px; }
+
+/* Overlay ("More"): a popover under its button on wide screens, a bottom sheet on the phone. One at a time. */
+.overlay {
+  position: fixed;
+  z-index: 40;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(92vw, 360px);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-text);
+  border-radius: var(--radius);
+  font-size: var(--size-base);
+  line-height: 1.25;
+}
+.overlay[hidden] { display: none; }
+.overlay.sheet {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  width: auto;
+  max-width: none;
+  max-height: 80vh;
+  overflow: auto;
+  border-width: 1px 0 0 0;
+  border-radius: 12px 12px 0 0;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+.overlay-scrim { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 39; background: rgba(0, 0, 0, 0.25); }
+.overlay-scrim[hidden] { display: none; }
+.overlay-section { display: flex; flex-direction: column; gap: 8px; }
+.overlay-title { margin: 0; font-size: var(--size-secondary); font-weight: var(--weight-strong); color: var(--color-secondary); }
+.overlay-opts { display: flex; flex-wrap: wrap; gap: var(--gap); }
+.overlay-hint { margin: 0; font-size: var(--size-secondary); color: var(--color-secondary); }
+.overlay-hint[hidden] { display: none; }
+.opt {
+  min-width: var(--target);
+  min-height: var(--target);
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--color-text);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.opt:hover { background: var(--hover-bg); }
+.opt.active { background: var(--color-text); color: var(--color-bg); }
+.opt[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
+.opt[aria-disabled="true"]:hover { background: var(--background); }
+
+/* The old three-button symmetry group and the fold group stay in the DOM (sketch.js owns them) but are hidden. */
+.legacy-controls[hidden] { display: none; }
+
+/* Toasts: fixed-position messages that never move the layout - the reason a disabled control gives when tapped
+   (#ui-toast, ui.js) and the sketch's own notes (#node-count-note). Dismissible: Escape, a click on it, or the next tap. */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 60;
+  box-sizing: border-box;
+  max-width: min(92vw, 480px);
+  margin: 0;
+  padding: 12px 16px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-text);
+  border-radius: var(--radius);
+  font-size: var(--size-base);
+  line-height: 1.25;
+  text-align: left;
+  opacity: 1;
+}
+.toast[hidden] { display: none; }
 
 /* Keyboard focus: its own 2px outline with a 2px offset, never the same
    as the active state (black fill). :focus-visible = keyboard only. */
