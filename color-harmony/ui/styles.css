@@ -738,3 +738,32 @@ button:disabled { opacity:.35; cursor:default; }
 }
 .calibration-columns>section>h2 { min-height:2.5em; }
 .calibration-chromatic .status { min-height:6em; }
+
+/* Composition is a persistent working set, not a palette-card collection. */
+.composition-bar { gap:16px; }
+.composition-bar .result-swatches { gap:0; padding:4px; }
+.composition-bar .swatch,.tree-members .swatch { border-radius:0; }
+.composition-bar .result-swatches .swatch { flex:0 0 44px; }
+.composition-actions { display:flex; gap:4px; margin-left:auto; flex-shrink:0; }
+.composition-actions button { width:40px; padding:0; }
+.composition-message:empty { display:none; }
+.composition-message { position:absolute; bottom:100%; left:0; width:100%; background:white; border-top:1px solid var(--line); padding:10px 16px; font-size:var(--text-meta); }
+.composition-title { margin-top:24px; }
+.alternative-nav,.advanced-composition,.language-controls { display:flex; align-items:center; gap:8px; margin:16px 0; }
+.alternative-nav span { min-width:40px; text-align:center; }
+.replacement-options { display:flex; flex-wrap:wrap; gap:6px; max-height:200px; overflow:auto; padding:4px; }
+.replacement-options button { font-size:var(--text-meta); }
+.grid-swatch.harmony-member:before { content:''; position:absolute; inset:3px; border:1px solid white; outline:1px solid #111; pointer-events:none; }
+.grid-swatch.harmony-member.selected:before { display:none; }
+.inspector .compound-tree { margin:16px 0; }
+.inspector .tree-branches { flex-direction:column; gap:12px; }
+.inspector .tree-branch { min-width:0; }
+@media(max-width:700px) {
+  .composition-bar { gap:6px; }
+  .composition-bar .result-heading { display:none; }
+  .composition-bar .result-swatches { flex:1; }
+  .composition-bar .result-swatches .swatch { min-width:44px; width:44px; }
+  .composition-actions button { min-width:44px; width:44px; min-height:44px; }
+  .inspector-open .inspector { bottom:78px; max-height:60vh; }
+}
+.tree-members .shared-member { outline:2px solid #111; outline-offset:2px; }

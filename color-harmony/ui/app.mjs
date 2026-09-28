@@ -19,14 +19,14 @@ function dispatch(type,value) {
   const previousView=state.activeView;
   state=transition(state,{type,value});hideTooltip();render();
   let restore=focused;
-  if(['selectedHue','nextHue','previousHue'].includes(type)&&focused?.startsWith('hue-'))restore=`hue-${state.selectedHue}`;
-  if(type==='selectedRegister'&&focused?.startsWith('triangle-'))restore=`triangle-${state.selectedRegister}`;
-  if(['cell','previousHue','nextHue','previousRegister','nextRegister'].includes(type)&&focused?.startsWith('cell-'))restore=`cell-${state.selectedHue}${state.selectedRegister}`;
+  if(['selectedHue','chooseColor','nextHue','previousHue'].includes(type)&&focused?.startsWith('hue-'))restore=`hue-${state.selectedHue}`;
+  if(['selectedRegister','browseCell'].includes(type)&&focused?.startsWith('triangle-'))restore=`triangle-${state.selectedRegister}`;
+  if(['cell','browseCell','previousHue','nextHue','previousRegister','nextRegister'].includes(type)&&focused?.startsWith('cell-'))restore=`cell-${state.selectedHue}${state.selectedRegister}`;
   if(restore)root.querySelector(`[data-focus="${CSS.escape(restore)}"]`)?.focus({preventScroll:true});
   const newScroll=root.querySelector('.register-scroll');
   if(newScroll&&scrollPosition){newScroll.scrollLeft=scrollPosition[0];newScroll.scrollTop=scrollPosition[1];}
   if(type==='resultOpen'&&value)root.querySelector('#result-detail')?.scrollIntoView({block:'start'});
-  if(state.activeView==='register'&&(previousView!=='register'||['cell','previousHue','nextHue','previousRegister','nextRegister'].includes(type)))root.querySelector('.grid-swatch.selected')?.scrollIntoView({block:'nearest',inline:'nearest'});
+  if(state.activeView==='register'&&(previousView!=='register'||['cell','browseCell','previousHue','nextHue','previousRegister','nextRegister'].includes(type)))root.querySelector(`[data-focus="cell-${state.selectedHue}${state.selectedRegister}"]`)?.scrollIntoView({block:'nearest',inline:'nearest'});
 }
 function sampleStrip() {
   const strip=el('section',{class:'sample-section','aria-label':t('samples',state.locale)});
@@ -34,7 +34,7 @@ function sampleStrip() {
   const rail=el('div',{class:'sample-scroll'});
   const samples=pathSamples(state);
   samples.forEach((sample,i)=>{
-    const selected=state.selectedField.source==='interpolated'&&sample.w===state.selectedField.w&&sample.s===state.selectedField.s;
+    const selected=state.selectedField.source==='interpolated'&&sample.hueIndex===state.selectedField.hueIndex&&sample.w===state.selectedField.w&&sample.s===state.selectedField.s;
     const node=colorButton(sample,state,()=>dispatch('sample',i),selected,`sample-${i}`);
     node.setAttribute('aria-label',`${t('sample',state.locale)} ${i+1} · ${t('noAtlas',state.locale)}`);
     node.setAttribute('tabindex',selected||i===0?'0':'-1');

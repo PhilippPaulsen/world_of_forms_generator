@@ -1,54 +1,80 @@
 import {historicalToDisplay} from '../DisplayCalibration.mjs';
-import {el,color,button,colorButton,fieldAction,fieldLabel,fieldStatus} from './dom.mjs';
+import {el,color,button,colorButton,fieldLabel,fieldStatus} from './dom.mjs';
 import {hueIdentity} from '../FullColorCalibration.mjs';
 import {t} from '../i18n.mjs';
-import {hueHarmony,Engine,selectionFields} from '../state.mjs';
+import {activeColor,substitutionCandidates,connectionResult} from '../composition.mjs';
+import {HarmonyView} from '../views/HarmonyView.mjs';
+export function compositionTitle(state) {
+  const a=state.composition.activeHarmony,n=a.members.length;
+  return n===1?fieldLabel(a.members[0],state.locale):a.classification.compound?t('compound',state.locale):t(n===2?'pair':n===3?'three':n===4?'four':'harmony',state.locale);
+}
+const nameKey={Gegenfarben:'complementary',Triade:'triad',Tetrade:'tetrad'};
 export function Inspector(state,dispatch) {
-  const field=state.selectedField,locale=state.locale,group=state.selectionKind==='compound'?state.selectedHarmony:null;
-  const label=fieldLabel(field,locale),status=fieldStatus(field,locale);
-  const heading=el('div',{class:'selection-summary'},el('span',{class:'selection-color',style:`--color:${color(field)}`}),el('div',{},el('strong',{},label),el('span',{class:'status'},status)));
-  const brief=el('div',{class:'selection-brief'},field.hueIndex?
-    `${t('hue',locale)} ${field.hueIndex} / ${t(field.source==='atlas'?'register':'originRegister',locale)} ${state.selectedRegister}`:t('graySelected',locale));
-  const members=selectionFields(state);
-  const result=el('div',{class:'result-swatches'},members.map(member=>colorButton(member,state,
-    member.source!=='interpolated'?fieldAction(member,dispatch):()=>{},member.hueIndex===field.hueIndex&&member.label===field.label,`result-${member.label||member.hueIndex||'sample'}`)));
-  const resultLabel=state.selectionKind==='harmony'?t(state.harmonyMode===2?'complementary':state.harmonyMode===3?'three':'four',locale):
-    state.selectionKind==='relation'?t({isotint:'white',isotone:'black',shadowSeries:'shadow',isovalent:'value'}[state.relation],locale):
-    state.selectionKind==='compound'?t('compound',locale):label;
-  const canExpand=['harmony','compound'].includes(state.selectionKind);
-  const detailAction=()=>canExpand?dispatch('resultOpen',!state.resultOpen):dispatch('inspectorOpen',!state.inspectorOpen);
-  const bar=el('section',{class:'selection-bar','aria-label':t('selection',locale)},
-    el('div',{class:'result-heading'},el('strong',{},resultLabel),el('span',{class:'status'},members.length===1?status:String(members.length))),result,
-    button(t(canExpand?'resultDetail':'info',locale),canExpand?'resultDetail':'info',state,detailAction,canExpand?state.resultOpen:state.inspectorOpen,'result-detail'));
-  bar.querySelector('[data-focus="result-detail"]').setAttribute('aria-expanded',String(canExpand?state.resultOpen:state.inspectorOpen));
-  bar.querySelector('[data-focus="result-detail"]').setAttribute('aria-controls',canExpand?'result-detail':'inspector');
+  const c=state.composition,a=c.activeHarmony,field=activeColor(c),locale=state.locale,group=a.group;
+  const title=compositionTitle(state),label=fieldLabel(field,locale);
+  const result=el('div',{class:'result-swatches',role:'group','aria-label':t('activeHarmony',locale)});
+  a.members.forEach((f,i)=>{
+    const node=colorButton(f,state,()=>dispatch('setActiveMember',i),i===a.activeMemberIndex,`member-${i}`);
+    node.setAttribute('aria-label',`${t('activeMember',locale)} ${i+1} · ${fieldLabel(f,locale)} · ${fieldStatus(f,locale)}`);
+    result.append(node);
+  });
+  const actions=el('div',{class:'composition-actions'});
+  for(const [symbol,key,disabled] of [['×','clearHarmony',a.members.length===1],['↶','undoComposition',!c.past.length],['↷','redoComposition',!c.future.length]]) {
+    const node=button(symbol,key,state,()=>dispatch(key));node.disabled=disabled;actions.append(node);
+  }
+  const bar=el('section',{class:'selection-bar composition-bar','aria-label':t('activeHarmony',locale)},
+    el('div',{class:'result-heading'},el('strong',{},title),el('span',{class:'status'},`${a.activeMemberIndex+1} / ${a.members.length}`)),result,actions,
+    el('span',{class:'composition-message',role:'status','aria-live':'polite'},c.message?t(c.message,locale):''));
   const panel=el('aside',{id:'inspector',class:'inspector','aria-label':t('info',locale)});
   if(!state.inspectorOpen)return {bar,panel:null};
-  panel.append(el('div',{class:'inspector-heading'},el('h2',{},t('selection',locale)),button('×','close',state,()=>dispatch('inspectorOpen',false),false,'close-inspector')));
-  panel.append(heading.cloneNode(true),el('p',{class:'inspector-context'},brief.textContent));
+  panel.append(el('div',{class:'inspector-heading'},el('h2',{},t('activeHarmony',locale)),button('×','close',state,()=>dispatch('inspectorOpen',false),false,'close-inspector')));
+  panel.append(el('div',{class:'selection-summary'},el('span',{class:'selection-color',style:`--color:${color(field)}`}),el('div',{},el('strong',{},label),el('span',{class:'status'},`${t('activeMember',locale)} ${a.activeMemberIndex+1} · ${fieldStatus(field,locale)}`))));
   if(field.hueIndex){const identity=hueIdentity(field.hueIndex);panel.append(el('p',{},`${t(identity.nameKey,locale)} ${identity.ordinal} · 1921 / 32`));}
-  if(group) {
-    panel.append(el('h3',{},t('compound',locale)),el('p',{},t(group.relation==='shared-member'?'shared':'substitution',locale)),el('p',{},`${t('level',locale)} ${group.level}`));
-  } else if(state.selectionKind==='relation'||field.source==='interpolated') {
-    panel.append(el('h3',{},t(state.relation==='isotint'?'isotintTerm':state.relation==='isotone'?'isotoneTerm':state.relation,locale)));
-  } else if(state.selectionKind==='harmony') {
-    const harmony=hueHarmony(state);
-    panel.append(el('h3',{},t(state.harmonyMode===2?'complementary':state.harmonyMode===3?'three':'four',locale)),
-      el('p',{},state.harmonyMode===2?harmony.classification.gaps.join(' · '):`${t(state.harmonyMode===3?'triad':'tetrad',locale)} / ${harmony.classification.gaps.join(' · ')}`));
+  panel.append(el('h3',{class:'composition-title'},title));
+  if(a.members.length>1){
+    const classification=a.classification;
+    if(classification.historicalName)panel.append(el('p',{'data-classification':'name'},t(nameKey[classification.historicalName],locale)));
+    if(classification.hueGeometry&&classification.hueGeometry.cardinality!==a.members.length)panel.append(el('p',{class:'status'},t('hueProjection',locale)));
+    if(classification.hueGeometry)panel.append(el('p',{'data-classification':'gaps'},classification.hueGeometry.gaps.join(' · ')));
+    if(classification.hueGeometry&&!classification.isovalent)panel.append(el('p',{class:'status'},t('differentRegisters',locale)));
+    if(classification.oppositePairs.length)panel.append(el('p',{class:'status'},`${t('oppositePairs',locale)}: ${classification.oppositePairs.map(pair=>pair.map(i=>i+1).join('↔')).join(', ')}`));
+    panel.append(el('p',{class:'status'},t(a.source==='manual'?'manual':a.source==='compound'?'compound':'generated',locale)));
   }
+  if(c.generation?.total>1)panel.append(el('div',{class:'alternative-nav',role:'group','aria-label':t('alternatives',locale)},
+    button('‹','previousAlternative',state,()=>dispatch('previousAlternative')),el('span',{},`${c.generation.index+1} / ${c.generation.total}`),button('›','nextAlternative',state,()=>dispatch('nextAlternative'))));
   const details=el('details',{...(state.detailOpen?{open:''}:{}),ontoggle:event=>{if(event.target.open!==state.detailOpen)dispatch('detailOpen',event.target.open);}},el('summary',{'data-focus':'scientific-detail'},t('detail',locale))),table=el('dl',{class:'value-table'});
   const display=historicalToDisplay(field);
-  for(const [key,value] of [['white',field.w.toFixed(4)],['black',field.s.toFixed(4)],['full',field.v.toFixed(4)],
-    ['engineLab',field.lab.map(x=>x.toFixed(5)).join(' / ')],['displayLab',display.lab.map(x=>x.toFixed(5)).join(' / ')],['rgb',display.rgb.join(' / ')],['gamut',t(display.gamutMapped?'mapped':'inGamut',locale)]])table.append(el('dt',{},t(key,locale)),el('dd',{},value));
-  const relationEvidence=Engine.harmonyRuleRegistry().rules.find(rule=>rule.id===state.relation);
-  const sourcePages=group?.provenance.sourcePages||
-    ((state.selectionKind==='relation'||field.source==='interpolated')?relationEvidence.sourcePages:
-      state.selectionKind==='harmony'?hueHarmony(state).classification.sourcePages:null);
+  for(const [key,value] of [['white',field.w.toFixed(4)],['black',field.s.toFixed(4)],['full',field.v.toFixed(4)],['engineLab',field.lab.map(x=>x.toFixed(5)).join(' / ')],['displayLab',display.lab.map(x=>x.toFixed(5)).join(' / ')],['rgb',display.rgb.join(' / ')]])table.append(el('dt',{},t(key,locale)),el('dd',{},value));
   details.append(table);
-  if(sourcePages)details.append(el('h3',{},t('source',locale)),el('p',{},t('primary',locale)),
-    el('p',{},`${t('pages',locale)} ${sourcePages.join(', ')}`));
-  details.append(el('p',{class:'source-note'},t('sourceNote',locale)),el('p',{class:'source-note'},t('displayNote',locale)));
-  if(group)details.append(el('p',{class:'source-note'},t('depthNote',locale)));
+  const sourcePages=(group?.provenance.sourcePages.length?group.provenance.sourcePages:null)||a.construction?.constructionEvidence?.sourcePages||
+    (a.classification.historicalName?a.classification.hueGeometry.sourcePages:[]);
+  if(sourcePages.length)details.append(el('h3',{},t('source',locale)),el('p',{},`${t('primary',locale)} · ${t('pages',locale)} ${sourcePages.join(', ')}`));
+  const advanced=el('div',{class:'advanced-composition'});
+  const sub=button('↳','beginSubstitution',state,()=>dispatch('beginSubstitution'));
+  sub.disabled=!group||!substitutionCandidates(c).length;
+  const connect=button('⋈','beginConnection',state,()=>dispatch('beginConnection'));connect.disabled=!group;
+  advanced.append(sub,connect);
+  details.append(el('h3',{},t('resultDetail',locale)),advanced);
+  if(!group)details.append(el('p',{class:'source-note'},t('compoundAtlasOnly',locale)));
+  if(c.pending){
+    details.append(button('×','cancelCompound',state,()=>dispatch('cancelCompound')));
+    if(c.pending.type==='substitution') {
+      details.append(el('p',{},`${t('chooseReplacement',locale)} · ${fieldLabel(c.pending.target,locale)}`));
+      const options=el('div',{class:'replacement-options'});
+      substitutionCandidates(c).forEach((candidate,i)=>{
+        const text=candidate.replacement.members.map(f=>fieldLabel(f,locale)).join(' · ');
+        options.append(el('button',{type:'button','aria-label':`${t('replacement',locale)} ${text}`,'data-focus':`replacement-${i}`,onclick:()=>dispatch('applySubstitution',i)},text));
+      });details.append(options);
+    }else {
+      details.append(el('p',{},t('connectionHint',locale)),el('p',{},`${t('groupA',locale)}: ${c.pending.source.members.map(f=>fieldLabel(f,locale)).join(' · ')}`));
+      const confirm=button('⋈','connectGroups',state,()=>dispatch('connectGroups'));confirm.disabled=!connectionResult(c);details.append(confirm);
+      if(!connectionResult(c))details.append(el('p',{class:'status'},t('noSharedMember',locale)));
+    }
+  }
+  if(group?.type==='compound-harmony')details.append(HarmonyView(state,dispatch));
+  if(a.previousStructure)details.append(el('h3',{},t('previousStructure',locale)),HarmonyView(state,dispatch,a.previousStructure));
+  details.append(el('p',{class:'source-note'},t('sourceNote',locale)),el('p',{class:'source-note'},t('displayNote',locale)),
+    el('div',{class:'language-controls',role:'group','aria-label':t('language',locale)},['de','en'].map(lang=>el('button',{type:'button','aria-label':lang==='de'?'Deutsch':'English','aria-pressed':locale===lang,'data-focus':`locale-${lang}`,onclick:()=>dispatch('locale',lang)},lang.toUpperCase()))));
   panel.append(details);
   return {bar,panel};
 }

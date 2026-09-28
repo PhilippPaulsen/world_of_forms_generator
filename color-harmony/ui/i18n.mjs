@@ -1,6 +1,23 @@
 /** Change only DEFAULT_LOCALE to switch the entire interface. */
 export const DEFAULT_LOCALE = 'de';
 const pairs = {
+  activeHarmony:['Aktive Harmonie','Active harmony'], activeMember:['Aktives Glied','Active member'],
+  clearHarmony:['Harmonie lösen','Clear harmony'], undoComposition:['Rückgängig','Undo'], redoComposition:['Wiederholen','Redo'],
+  beginSubstitution:['Glied ersetzen','Replace member'], beginConnection:['Gruppen verbinden','Connect groups'], connectGroups:['Gruppen verbinden','Connect groups'],
+  cancelCompound:['Abbrechen','Cancel'], manual:['Manuell geändert','Manually edited'], generated:['Strukturell erzeugt','Structurally generated'],
+  duplicateMember:['Diese Farbe ist bereits ein anderes Glied.','This color is already another member.'],
+  grayGenerationUnavailable:['Für Grau ist keine Standardfolge für 2/3/4 festgelegt. Vorhandene Glieder können einzeln durch Grau ersetzt werden.','No 2/3/4 default is established for gray. Existing members can individually be replaced with gray.'],
+  compoundUnavailable:['Aufbau benötigt eine unterstützte Gruppe aus Atlasfarben oder Grauwerten.','Construction requires a supported group of atlas colors or gray values.'],
+  noSharedMember:['Die Gruppen haben kein gültiges gemeinsames Glied.','The groups have no valid shared member.'],
+  chooseReplacement:['Ersatzgruppe wählen','Choose a replacement group'],
+  connectionHint:['Gruppe A bleibt erhalten. Jetzt mit 2/3/4 eine zweite Atlasgruppe bilden oder verändern; anschließend verbinden.','Group A is retained. Use 2/3/4 to form or edit a second atlas group, then connect.'],
+  previousAlternative:['Vorige Struktur','Previous structure'], nextAlternative:['Nächste Struktur','Next structure'],
+  alternatives:['Weitere Strukturen','Alternative structures'], pair:['Zweier','Two-color group'], memberCount:['Glieder','Members'],
+  hueProjection:['Farbton-Geometrie','Hue geometry'], differentRegisters:['Verschiedene Register · keine Wertgleiche','Different registers · not isovalent'],
+  oppositePairs:['Gegenüberliegende Glieder','Opposite members'], previousStructure:['Vorheriger Aufbau','Previous construction'],
+  compoundAtlasOnly:['Compound-Aktionen gelten für unterstützte Atlasgruppen. Vollfarben und Verlauf bleiben eigenständige Farben.','Compound actions apply to supported atlas groups. Full colors and samples remain distinct colors.'],
+  language:['Sprache','Language'],
+
   isotintTerm:['Weißgleiche','Isotint'], isotoneTerm:['Schwarzgleiche','Isotone'],
   reference:['Vollfarben','Full colors'], homeCircle:['Kreis · erneut wählen: Vollfarben','Circle · select again: full colors'],
   previousRegister:['Vorheriges Register','Previous register'], nextRegister:['Nächstes Register','Next register'],
@@ -41,7 +58,7 @@ const pairs = {
   primary:['Primärquelle · Ostwald 1921','Primary source · Ostwald 1921'],
   contemporary:['Zeitgenössische Oklab-Interpolation','Contemporary Oklab interpolation'],
   displayNote:['Heutige Oklab-Bildschirmfarben · keine historischen Pigmentrekonstruktionen','Contemporary Oklab screen colors · not historical pigment reconstructions'],
-  research:['Forschungsinstrument / 6A.2','Research instrument / 6A.2'],
+  research:['Forschungsinstrument / 6B','Research instrument / 6B'],
   sourceNote:['Historische Struktur, zeitgenössische Darstellung.','Historical structure, contemporary rendering.'],
   depthNote:['Stufe bezeichnet hier die Tiefe des Gruppenbaums.','Level here means depth of the group tree.'],
   valueNote:['Wertgleiche: 24 diskrete Atlaswerte. Kein kontinuierlicher Pfad.','Isovalent: 24 discrete atlas values. No continuous path.'],
