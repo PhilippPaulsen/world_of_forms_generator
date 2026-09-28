@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260928b">
+  <link rel="stylesheet" href="style.css?v=20260928c">
 
   <!-- Material Icons -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -72,13 +72,18 @@
     /* Flat, opaque look matching die-welt-der-formen.de - no glass/blur/shadow.
        The visible canvas frame is drawn by the sketch itself (see sketch.js draw()),
        not by CSS.
-       Fixed 600px box (matching canvasW in sketch.js) instead of flex:1 -
+       An explicit width instead of flex:1 -
        flex-growing this to fill leftover vertical space fought with
        aspect-ratio:1/1 and produced a non-square box that clipped/offset
        the actual <canvas> element. max-width:100% is the responsive
        fallback for narrow viewports. */
     #canvas-container {
-      width: 600px;
+      /* Display size: 560px, or the viewport minus a gutter on each side
+         when that is smaller. The sketch itself stays 600x600 units
+         (canvasW); the canvas is CSS-scaled and p5 maps pointer positions
+         back through scrollWidth/width (checked by
+         tools/ui/check-pointer-mapping.js). */
+      width: min(var(--canvas-max), calc(100vw - 2 * var(--gutter)));
       max-width: 100%;
       aspect-ratio: 1 / 1;
       display: flex;
@@ -1194,18 +1199,18 @@
        the p5.js CDN tag - that URL already carries its own version
        (p5@1.9.0), so a version bump there naturally changes the URL. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260928b"></script>
-  <script src="core/state.js?v=20260928b"></script>
-  <script src="core/symmetry.js?v=20260928b"></script>
-  <script src="core/curves.js?v=20260928b"></script>
-  <script src="core/netwarp.js?v=20260928b"></script>
-  <script src="core/tiling.js?v=20260928b"></script>
-  <script src="core/faces.js?v=20260928b"></script>
-  <script src="core/orbits.js?v=20260928b"></script>
-  <script src="core/color.js?v=20260928b"></script>
-  <script src="core/facecolor.js?v=20260928b"></script>
-  <script src="core/export.js?v=20260928b"></script>
-  <script src="sketch.js?v=20260928b"></script>
+  <script src="core/forms.js?v=20260928c"></script>
+  <script src="core/state.js?v=20260928c"></script>
+  <script src="core/symmetry.js?v=20260928c"></script>
+  <script src="core/curves.js?v=20260928c"></script>
+  <script src="core/netwarp.js?v=20260928c"></script>
+  <script src="core/tiling.js?v=20260928c"></script>
+  <script src="core/faces.js?v=20260928c"></script>
+  <script src="core/orbits.js?v=20260928c"></script>
+  <script src="core/color.js?v=20260928c"></script>
+  <script src="core/facecolor.js?v=20260928c"></script>
+  <script src="core/export.js?v=20260928c"></script>
+  <script src="sketch.js?v=20260928c"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides
