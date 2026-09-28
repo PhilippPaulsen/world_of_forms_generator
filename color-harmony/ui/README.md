@@ -1,8 +1,8 @@
-# Farborgel — standalone research instrument (Phase 6A.2)
+# Farborgel — standalone research instrument (Phase 6B)
 
 A browser interface to the existing Ostwald engine. It is separate from the p5.js
 generator and has no external runtime dependencies, network fonts, export actions,
-palette ranking or editing of compound harmonies.
+palette ranking. The active harmony supports member editing and structured compound actions.
 
 ## Run locally
 
@@ -35,67 +35,52 @@ translated accessible name, focus styling and a tooltip. Selected state includes
 outlines, marks or inversion, not only color. Tooltips appear on hover/focus/tap;
 important selection information is also available in the compact inspector.
 
-Tab, Enter and Space operate controls. Left/Right move the circle anchor or the
-atlas triangle selection; all four arrows navigate the register grid. Arrow keys
-also move through the sample strip. Escape dismisses the inspector and tooltip.
-Small screens get a bottom inspector; the register and sample rails scroll within
-the workspace. Larger SVG hit regions improve triangle selection. The narrow
-circle view also provides explicit previous/next hue buttons.
+## Compose and explore
 
-## Views
+Choose a color → press **2 / 3 / 4** → select a strip member → choose its new color.
+Only the active member changes. The square harmony strip remains visible in every
+view. **×** keeps only the active color; **↶ / ↷** undo/redo composition edits.
+Clicking an existing member activates it without duplication or regeneration.
 
-- **Kreis:** the 24 engine colors at the selected register, with an engine-generated
-  regular 2/3/4-part relation when activated. Clicking a hue or another harmony point reanchors it.
-  Inspector classification distinguishes Dreier/Triade and Vierer/Tetrade.
-- **Dreieck:** 28 actual atlas nodes in a regular **letter-index display layout**.
-  This is an ordered atlas diagram, not the continuous analytical barycentric
-  triangle. Weiß/Schwarz/Schatten highlight existing discrete neighbors; Wert
-  exposes the 24 actual isovalent counterparts below the diagram. In Verlauf,
-  the three one-hue paths use analytical v/w/s positions with labeled vertices.
-- **Register:** 28 register rows by 24 hue columns. Row and column marks identify
-  the selection; a double outline marks the selected cell. The 672 cells use engine
-  data only. Sticky headers and a scroll container retain their ordered structure.
-- **Aufbau (expandable result, not primary navigation):** spatial hue chords with their engine classification, or read-only
-  Phase-5 examples of shared-member connection, substitution and recursion.
-  Child groups, original/replacement roles, active results and repeated members
-  remain visible. The examples do not provide a compound editor.
+**Kreis = browse registers. Dreieck = browse hues. Register = full overview.**
+The default is the saturated full-color reference circle, v=1,w=s=0,label=null.
+Circle ‹/› browses reference → 28 atlas registers, stopping at bounds. Triangle
+‹/› wraps all 24 hues. Navigation, Atlas/Verlauf and return home never destroy or
+replace explicit members. Click a displayed field to commit a color selection.
+An active reference member enters the atlas only through explicit node selection.
 
-Eight shared grays appear separately, never duplicated per hue. Inspecting a gray
-preserves the last chromatic hue/register anchor for subsequent chromatic work.
+Circle shows occupied hue positions; markers activate exact members. Triangle
+shows 28 nodes in letter-index layout, or analytical engine paths in Verlauf.
+Weiß/Schwarz/Schatten/Wert highlight or expose contextual relations independently
+of the active harmony. Register shows all 672 atlas cells, marking every actual
+member cell without inventing positions for full colors, gray nodes or samples.
+The eight shared grays remain separately selectable.
 
-## State model and source of truth
+Tab, Enter and Space operate controls. Circle/triangle/grid arrows move the browse
+cursor; Enter/Space commits a selection. Sample-strip arrows select samples.
+The inspector displays live cardinality, exact named class where applicable,
+cyclic hue geometry and manual/generated status. Alternative structures are
+secondary ‹/› controls there. **Info → Wissenschaftliche Details → Aufbau** exposes
+substitution and shared-member composition with intact recursive provenance.
+The engine's atlas-only compound boundary is explicit; no full-color/sample is
+silently converted. No default gray interval law is invented.
 
-`state.mjs` owns pure initialization, validation, transitions and derived views.
-State contains `locale`, `activeView`, `displayMode`, `selectedHue`,
-`selectedRegister`, `selectedField`, `harmonyMode`, `relation`, `harmonyExample`,
-`selectedHarmony`, `inspectorOpen`, `detailOpen`, `selectionKind`, `resultOpen` and `circleMode`.
-Initial values are German, Kreis, Atlas display preference, hue 1, circleMode='reference',
-single reference-color selection and a closed inspector. The separate retained atlas
-register starts at ic; it is not the initial reference circle. Cardinality 3 is retained as the inactive initial setting.
+`composition.mjs` owns the pure composition reducer, stable identities, engine
+orchestration and bounded undo/redo. `state.mjs` keeps navigation separate and
+projects the active color for inspection. Detailed actions, identity rules,
+alternative ordering, compound limits and exact selection semantics are documented
+in [COMPOSITION.md](COMPOSITION.md). Historical logic remains in the engine.
 
-View changes preserve atlas selection. Leaving the reference circle for Triangle
-or Register activates the retained atlas register. Hue changes preserve the register, register
-changes preserve hue, and a grid cell changes both. Gray/sample inspection does
-not invent a new register; the last discrete anchor remains explicit. Returning
-to Atlas restores that anchor. Choosing a compound example inspects its first
-active member while retaining the chromatic anchor; choosing the regular relation
-restores the anchor. These gray examples are fixed research fixtures, not palettes
-adapted to the current chromatic hue. Construction depth is a software tree depth.
-
-All historical fields, path coordinates, classifications and compound trees come
-from public `OstwaldColor` methods. Display calibration remixes those unchanged
-coordinates with separate full-color display references, exclusively in Oklab.
-DisplayCalibration.mjs provides a separate contemporary display transfer function.
-There is no duplicate color-space conversion, hue reference table or harmony grammar
-in CSS, markup or view modules. The engine conversion functions have moved unchanged into shared ColorSpace.js;
-historical engine behavior and grammar are unchanged.
+DisplayCalibration.mjs derives contemporary display records from unchanged engine
+coordinates using the Phase-6A.2 gamut-aware full colors and gray transfer. Shared
+ColorSpace.js supplies conversion; no harmony or colorimetry is duplicated in views.
 
 ## i18n
 
 All visible UI wording is in `i18n.mjs`, with `de` and `en` entries. Change the
 single `DEFAULT_LOCALE` constant to `'en'` to switch the interface, accessible
-names, tooltips and document language. German is the committed default; there is
-no visible language switcher yet. Atlas labels, numeric values and mathematical
+names, tooltips and document language. German is the committed default; a compact
+DE/EN switch is also available in the inspector's scientific details. Atlas labels, numeric values and mathematical
 symbols are data, not translated prose. Missing translation keys throw explicitly.
 
 ## Typography
@@ -132,56 +117,35 @@ Primary-source status and pages in the inspector refer to the engine's **relatio
 metadata, never to historically verified RGB colors. All 24 uncalibrated references
 and displayed mixtures remain the contemporary Oklab realization described in
 [API.md](../API.md). The details drawer exposes w/s/v, engine Oklab, display Oklab, sRGB and evidence;
-[COMPOUND_HARMONIES.md](../COMPOUND_HARMONIES.md) explains the composition fixtures.
+[COMPOUND_HARMONIES.md](../COMPOUND_HARMONIES.md) explains the underlying composition laws.
 
 ## Validation and browser QA
 
 ```sh
 node color-harmony/test.js
 node color-harmony/ui/test.mjs
+node color-harmony/ui/composition.test.mjs
 node color-harmony/demo.js
 ```
 
-The engine retains all 79 prior test groups. The UI retains the 16 existing groups (the four-view presentation test now checks
-three primary views) and now has 22 additional calibration/navigation groups, for 117 total.
-Default-state and display-anchor expectations follow the explicitly requested 6A.2
-reference-circle and gamut-calibration behavior; historical assertions are retained.
-The existing groups cover:
-bilingual lookup, initial state, normalization, register/cell transitions, view
-persistence, gray/sample status, discrete isovalence, engine adapter parity,
-cardinality, compound examples, scientific disclosure and invalid inputs.
-`ui/test.mjs` regenerates the adapter before importing it. No browser test framework
-or package manifest is introduced.
+The engine retains 79 groups; the 38 UI baseline groups retain calibration,
+historical identity and grammar checks. 28 composition groups cover generation,
+member edits, live classification, exact identities, duplicates, view/navigation
+persistence, alternatives, bounded undo/redo, substitution, shared connections,
+recursive provenance and invalid inputs. **145 test groups total.** Intentional
+baseline expectation changes reflect the new explicit-member interaction rather
+than automatic regeneration. Both UI suites rebuild the ESM adapter before import.
+CommonJS, Node ESM and browser ESM are checked. No test framework is required.
 
-Phase-6A.1 browser checks cover desktop, tablet and mobile portrait: three-size
-local typography, outlined rounded controls, selection synchronization, keyboard
-activation, persistent triads across register/view changes, gray axis, optional
-inspector, construction details and unlabelled continuous samples. The dedicated
-comparison shows A/B/C gray ladders and light/middle/dark chromatic fixtures.
-Narrow register views intentionally scroll rather than shrinking 672 cells.
-Real-device touch, screen-reader and measured-display studies remain follow-up work.
+Browser checks cover the simple workflow (choose → 3 → second member → triangle
+variant → circle), generic Dreier after editing and Triade after undo, and actual
+atlas substitution/shared-member workflows. Desktop and mobile maintain visible
+square swatches, focus styling and 44px touch controls. Register scrolling stays
+inside its own container. Real-device and screen-reader studies remain follow-up work.
 
-## Refined interaction
-
-The primary navigation is **Kreis / Dreieck / Register**. Start with one color;
-press **2 / 3 / 4** to see a chord immediately. Press its active digit again to
-return to single-color selection. Hue and register changes reanchor an active
-chord; the same sticky result swatches remain visible across all three views.
-Weiß / Schwarz / Schatten / Wert are contextual to Dreieck and Register and
-immediately populate the result. Selecting a gray or path sample selects one color.
-
-**Aufbau** expands the former HarmonyView below the main visualization, including
-the read-only compound examples. **Info** remains optional. Atlas/Verlauf appears
-only alongside the triangle, leaving the primary toolbar focused on exploration.
-No tutorial, editing, export or copying controls were added.
-
-The page is white. Controls reuse generator `index.html` .icon-btn/.layer-btn:
-1px black border, 4px corner radius, 40px height, 10px word-button horizontal
-padding, #f0f0f0 hover and black/white selected inversion. Touch controls use a
-44px height. Icons use the generator's 24-unit / 2px stroke convention.
-Three font-size tokens (22 / 13 / 11px) replace the former scattered size values;
-weight and spacing provide hierarchy. Small SVG ring numbers use the primary
-size in SVG space to remain readable after viewBox scaling on phones.
+The page remains white with local Suisse Intl, generator-style 1px outlined controls,
+4px control corners, square contiguous atlas cells and three type sizes (22/13/11px).
+The new composition strip uses adjacent square fields, not rounded palette chips.
 
 ## Display calibration diagnostic
 
@@ -194,70 +158,26 @@ The normal interface has no calibration controls. See [CALIBRATION.md](CALIBRATI
 for the code audit, formulas, measurements, decision and limits. Historical field
 objects, labels, w/s/v, 28×24+8 atlas and harmony grammar remain unchanged.
 
-## Limitations and next phase
+## Limits and scope
 
-- Only regular 2/3/4-part hue chords are selectable in this prototype; the richer
-  engine grammar is available through its API, not an additional control panel.
-- Compound examples are read-only gray fixtures, not a full G/F/W case browser.
-- No persistent sessions, full provenance editor, animated performance mode or
-  exhaustive exploration/search. All selection state resets on page reload.
-- Phase 6B: compound construction/editing, palette/JSON/image export or copying,
-  and further exploration controls. Generator integration remains a later,
-  separately reviewed phase. Nothing is merged into `main`.
+No export, clipboard palette copy, generator integration, persistent sessions,
+full provenance editor, exhaustive grammar search or aesthetic recommendations.
+Compound actions apply to engine-supported atlas/gray groups only. Arbitrary
+manual sets remain editable even when they do not form such a group. Reloading
+starts a fresh single-color session. Nothing is merged into main.
 
-## Phase 6A.2: fluid atlas navigation
+Source-verified hue names, gamut-aware references and gray endpoint calibration
+remain exactly the Phase-6A.2 baseline; see [CALIBRATION.md](CALIBRATION.md).
+No special Urfarben markers were introduced. Weiß/Schwarz still preserve w/s
+respectively across all 672 atlas fields. Home retains the active harmony.
 
-**Kreis = browse registers. Dreieck = browse hues. Register = full overview.**
+## Files changed in Phase 6B
 
-The saturated reference circle is home. It represents v=1,w=s=0, source='reference'
-and label=null, rather than pretending to be an atlas register. References get the
-visible status Vollfarben; they are distinct from both atlas nodes and samples.
-There are still exactly 28 historical register circles, plus this display-reference
-view. No historical letter labels are assigned to full-color vertices.
+All paths below are relative to `color-harmony/ui/`:
 
-Circle's compact ‹ / value / › steps through reference → ca → … → pn in the
-engine's deterministic register order, preserving hue, cardinality and display
-preference. It stops at the endpoints; disabled controls expose those bounds.
-Triangle's navigator steps through 24 hues with cyclic 24↔1 wrapping, preserving
-register and harmony mode. Shared state actions own the logic: previousHue,
-nextHue, previousRegister, nextRegister and goToDefaultCircle. Grid arrows also
-use them: left/right change hue; up/down change register and stop at row endpoints.
-The selected cell is scrolled into view and retains keyboard focus.
+- New: `composition.mjs`, `composition.test.mjs`, `COMPOSITION.md`.
+- Updated: `state.mjs`, `app.mjs`, `i18n.mjs`, `styles.css`, `test.mjs`, `README.md`,
+  `components/Toolbar.mjs`, `components/Inspector.mjs`, `views/CircleView.mjs`,
+  `views/TriangleView.mjs`, `views/RegisterView.mjs`, `views/HarmonyView.mjs`.
 
-Click Kreis to return from another view at the current register. Clicking its
-active icon again invokes goToDefaultCircle in one action. This preserves the
-current hue and harmonic cardinality, locale and display preference; it clears
-incompatible relation/compound selection. The previous atlas register is retained
-for the next triangle or overview visit. No additional home button is needed.
-
-Reference names come from directly inspected 1921 p.32, using all eight groups
-and their first/second/third norm positions. Names are shown in optional inspector
-and diagnostic. No Urfarben markers or styling metadata distinguish selected groups.
-
-Weiß and Schwarz were not reversed in data or wiring. All 672 fields are covered
-by regressions proving constant w and s respectively. Their revised tooltips say
-Weiß · Gleicher Weißanteil / Schwarz · Gleicher Schwarzanteil.
-
-The register is a contiguous atlas: square cells, zero gutters, no row-padding
-or inline baseline gaps. Selection is an inset indicator plus row/column marks;
-geometry stays unchanged. Navigation buttons retain their 4px corner radius.
-
-### Manual review record
-
-Desktop 1280×1000 and mobile 390×844 checks cover the reference circle, hue/chord
-selection, all 28 register steps, endpoint disabling, triangle wrap, matrix arrow
-navigation, zero measured inter-row gaps, and optional inspector. Gray and anchor
-candidates are visible on the development diagnostic. The 15 requested review
-questions are answered in the completion report; perceptual judgments are browser
-observations, not colorimeter or multi-observer measurements.
-
-### Files changed in Phase 6A.2
-
-New: `color-harmony/ColorSpace.js`, `ui/FullColorCalibration.mjs`,
-`ui/components/Navigator.mjs`.
-
-Modified: `color-harmony/ColorHarmonyEngine.js`; under `color-harmony/ui/`:
-`DisplayCalibration.mjs`, `app.mjs`, `build.js`, `state.mjs`, `i18n.mjs`,
-`styles.css`, `test.mjs`, `components/Inspector.mjs`, `components/Toolbar.mjs`,
-`components/dom.mjs`, `views/CalibrationView.mjs`, `views/CircleView.mjs`,
-`views/HarmonyView.mjs`, `views/RegisterView.mjs`, `CALIBRATION.md`, `README.md`.
+Engine files, calibration modules and generator files are unchanged.
