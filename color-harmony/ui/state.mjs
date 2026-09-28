@@ -1,3 +1,4 @@
+import {createComposition,reduceComposition,compositionActions,activeColor,colorAtHue} from './composition.mjs';
 import Engine from './engine.generated.mjs';
 import { DEFAULT_LOCALE } from './i18n.mjs';
 // All atlas colors, classifications and composition operations come from the engine.
@@ -21,26 +22,27 @@ export function createState(overrides={}) {
   const initial={locale:DEFAULT_LOCALE,activeView:'circle',displayMode:'atlas',selectedHue:1,
     selectedRegister:'ic',circleMode:'reference',selectedField:referenceAt(1),harmonyMode:3,relation:'shadowSeries',
     selectionKind:'color',resultOpen:false,harmonyExample:'regular',selectedHarmony:null,inspectorOpen:false,detailOpen:false};
-  let state=initial;
+  let state={...initial,composition:createComposition(initial.selectedField)};
   for(const [key,value] of Object.entries(overrides)) state=transition(state,{type:key,value});
   return state;
 }
 /** Pure transitions preserve the chromatic anchor when inspecting samples or shared grays. */
-export function transition(state,action) {
+function viewTransition(state,action) {
   const {type,value}=action;
   let next={...state};
   switch(type) {
-    case 'previousHue': return transition(state,{type:'selectedHue',value:state.selectedHue-1});
-    case 'nextHue': return transition(state,{type:'selectedHue',value:state.selectedHue+1});
+    case 'previousHue': return viewTransition(state,{type:'selectedHue',value:state.selectedHue-1});
+    case 'nextHue': return viewTransition(state,{type:'selectedHue',value:state.selectedHue+1});
     case 'previousRegister': case 'nextRegister': {
       const sequence=state.activeView==='circle'?['reference',...registers]:registers;
       const current=state.activeView==='circle'&&state.circleMode==='reference'?'reference':state.selectedRegister;
       const index=Math.max(0,Math.min(sequence.length-1,sequence.indexOf(current)+(type==='nextRegister'?1:-1)));
-      return sequence[index]==='reference'?transition(state,{type:'goToDefaultCircle'}):transition(state,{type:'selectedRegister',value:sequence[index]});
+      return sequence[index]==='reference'?viewTransition(state,{type:'goToDefaultCircle'}):viewTransition(state,{type:'selectedRegister',value:sequence[index]});
     }
     case 'goToDefaultCircle':
       next.activeView='circle';next.circleMode='reference';next.resultOpen=false;next.selectedHarmony=null;
       next.selectionKind=state.selectionKind==='harmony'?'harmony':'color';next.selectedField=referenceAt(next.selectedHue);return next;
+    case 'browseCell': return viewTransition(state,{type:'cell',value});
     case 'selectedHue': next.selectedHue=normalizeHue(value); break;
     case 'selectedRegister': if(!registers.includes(value)) throw new RangeError('Unknown register'); next.selectedRegister=value;next.circleMode='atlas'; break;
     case 'cell': next.selectedHue=normalizeHue(value.hue); if(!registers.includes(value.register)) throw new RangeError('Unknown register');next.selectedRegister=value.register;next.circleMode='atlas';break;
@@ -68,6 +70,28 @@ export function transition(state,action) {
   }
   if(next.selectionKind==='compound'){next.selectionKind='color';next.selectedHarmony=null;next.harmonyExample='regular';next.resultOpen=false;}
   next.selectedField=anchor(next);
+  return next;
+}
+/** Orchestrate explicit color edits separately from view-only navigation. */
+export function transition(state,action) {
+  const {type,value}=action;
+  let next=state,composition=state.composition;
+  if(compositionActions.includes(type))composition=reduceComposition(composition,type,value);
+  else if(type==='harmonyMode')composition=reduceComposition(composition,'generateHarmony',value);
+  else {
+    next=viewTransition(state,action);
+    if(['selectedHue','selectedRegister','cell','gray','sample'].includes(type)) {
+      const field=type==='selectedHue'?colorAtHue(activeColor(composition),normalizeHue(value)):next.selectedField;
+      composition=reduceComposition(composition,'chooseColor',field);
+    }
+  }
+  next={...next,composition,selectedField:activeColor(composition),harmonyMode:composition.requestedCardinality||state.harmonyMode};
+  if(composition!==state.composition&&!['undoComposition','redoComposition','beginSubstitution','beginConnection','cancelCompound'].includes(type)) {
+    const field=next.selectedField;
+    if(field.hueIndex)next.selectedHue=field.hueIndex;
+    if(field.source==='atlas'&&field.hueIndex){next.selectedRegister=field.label.slice(-2);next.circleMode='atlas';}
+    else if(field.source==='reference'&&next.activeView==='circle')next.circleMode='reference';
+  }
   return next;
 }
 /** Reference colors are explicit non-atlas vertices; they never receive letter labels. */
@@ -101,13 +125,9 @@ export function compoundExamples() {
 export { Engine };
 
 /** Current result is derived from the same state across all three primary views. */
-export function selectionFields(state) {
-  if (state.selectionKind === 'harmony') return hueHarmony(state).fields;
-  if (state.selectionKind === 'compound') return state.selectedHarmony.members;
-  if (state.selectionKind === 'relation') {
-    const relation = fieldRelations(state);
-    const key = {isotint:'isotints',isotone:'isotones',shadowSeries:'shadowSeries',isovalent:'isovalent'}[state.relation];
-    return [anchor(state), ...relation[key]].filter((f,i,a)=>a.findIndex(x=>x.label===f.label)===i);
-  }
-  return [state.selectedField];
+export function selectionFields(state) {return state.composition.activeHarmony.members;}
+/** Relation highlights describe the browsed atlas context, independently of composition. */
+export function relationFields(state) {
+  const data=fieldRelations(state),key={isotint:'isotints',isotone:'isotones',shadowSeries:'shadowSeries',isovalent:'isovalent'}[state.relation];
+  return [anchor(state),...data[key]].filter((f,i,a)=>a.findIndex(x=>x.label===f.label)===i);
 }
