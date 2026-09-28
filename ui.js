@@ -218,13 +218,13 @@
   /*
    * p5's element.mousePressed(fn) listens for 'mousedown' only. Enter/Space on a focused button fires only 'click'
    * (event.detail === 0), so such a button did nothing from the keyboard. This bridge turns a keyboard-activated click
-   * on a button in the header, a nav row or an overlay into a 'mousedown' on it, which the p5 handler then receives.
-   * Buttons with plain click handlers (ui.js's own) have no mousedown listener, so the extra event is harmless.
-   * A mouse/touch click has detail >= 1 and already produced a real mousedown.
+   * on a button in the header, a nav row, an overlay or the canvas rail (UI rework 5a) into a 'mousedown' on it,
+   * which the p5 handler then receives. Buttons with plain click handlers (ui.js's own) have no mousedown listener,
+   * so the extra event is harmless. A mouse/touch click has detail >= 1 and already produced a real mousedown.
    */
   document.addEventListener('click', function (e) {
     if (e.detail !== 0) return;
-    const b = e.target.closest && e.target.closest('.app-header button, .nav-rows button, .overlay button');
+    const b = e.target.closest && e.target.closest('.app-header button, .nav-rows button, .overlay button, .canvas-row button');
     if (!b || b.disabled || b.getAttribute('aria-disabled') === 'true') return;
     b.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
   }, true);
@@ -305,7 +305,13 @@
       // for a merely off-screen-but-laid-out one, so this excludes exactly the elements .focus() would ignore.
       const candidates = panel.querySelectorAll('[tabindex="0"], button:not([disabled])');
       const first = Array.prototype.find.call(candidates, function (el) { return el.offsetParent !== null; });
-      if (first) first.focus();
+      // A content-sparse panel (e.g. #info-card: a status text with nothing focusable in it) has no candidate
+      // here, so focus would otherwise stay on `trigger` - outside the panel - and a real Escape keypress then
+      // never reaches the panel's own keydown listener below (it only catches events bubbling from a focused
+      // descendant). Falling back to the panel itself (made programmatically focusable via tabindex="-1", set
+      // once below - not tab-reachable, so it does not add a stop to normal Tab order) keeps Escape working for
+      // any overlay, regardless of what it contains.
+      if (first) first.focus(); else panel.focus();
     }
     function close(returnFocus) {
       if (!api.isOpen) return;
@@ -333,6 +339,7 @@
     window.addEventListener('resize', function () { if (api.isOpen) close(false); });
     window.addEventListener('scroll', function () { if (api.isOpen && !window.matchMedia(SHEET_QUERY).matches) close(false); }, { passive: true });
     panel.hidden = true;
+    if (!panel.hasAttribute('tabindex')) panel.tabIndex = -1;
     trigger.setAttribute('aria-haspopup', 'dialog');
     trigger.setAttribute('aria-expanded', 'false');
     return api;
