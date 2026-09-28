@@ -1,4 +1,4 @@
-# Farborgel — standalone research instrument (Phase 6A)
+# Farborgel — standalone research instrument (Phase 6A.1)
 
 A browser interface to the existing Ostwald engine. It is separate from the p5.js
 generator and has no external runtime dependencies, network fonts, export actions,
@@ -28,7 +28,7 @@ An existing static HTTP server also works after `node color-harmony/ui/build.js`
 ## UI principles
 
 A neutral grid, local Suisse Intl, thin lines and a single principal view. Color
-is reserved for actual engine colors. View icons follow the generator's existing
+is reserved for calibrated display realizations of actual engine fields. View icons follow the generator's existing
 24-unit outlined SVG shape language; no unrelated icon library is loaded.
 Controls are short German words or geometry. Every icon/digit control has a
 translated accessible name, focus styling and a tooltip. Selected state includes
@@ -45,7 +45,7 @@ circle view also provides explicit previous/next hue buttons.
 ## Views
 
 - **Kreis:** the 24 engine colors at the selected register, with an engine-generated
-  regular 2/3/4-part relation. Clicking a hue or another harmony point reanchors it.
+  regular 2/3/4-part relation when activated. Clicking a hue or another harmony point reanchors it.
   Inspector classification distinguishes Dreier/Triade and Vierer/Tetrade.
 - **Dreieck:** 28 actual atlas nodes in a regular **letter-index display layout**.
   This is an ordered atlas diagram, not the continuous analytical barycentric
@@ -55,7 +55,7 @@ circle view also provides explicit previous/next hue buttons.
 - **Register:** 28 register rows by 24 hue columns. Row and column marks identify
   the selection; a double outline marks the selected cell. The 672 cells use engine
   data only. Sticky headers and a scroll container retain their ordered structure.
-- **Harmonie:** spatial hue chords with their engine classification, or read-only
+- **Aufbau (expandable result, not primary navigation):** spatial hue chords with their engine classification, or read-only
   Phase-5 examples of shared-member connection, substitution and recursion.
   Child groups, original/replacement roles, active results and repeated members
   remain visible. The examples do not provide a compound editor.
@@ -68,8 +68,9 @@ preserves the last chromatic hue/register anchor for subsequent chromatic work.
 `state.mjs` owns pure initialization, validation, transitions and derived views.
 State contains `locale`, `activeView`, `displayMode`, `selectedHue`,
 `selectedRegister`, `selectedField`, `harmonyMode`, `relation`, `harmonyExample`,
-`selectedHarmony`, `inspectorOpen`, and `detailOpen`. Initial values are German,
-Kreis, Atlas, hue 1, register ic, 3-part relation and a closed inspector.
+`selectedHarmony`, `inspectorOpen`, `detailOpen`, `selectionKind` and `resultOpen`.
+Initial values are German, Kreis, Atlas, hue 1, register ic, single-color selection
+and a closed inspector. Cardinality 3 is retained as the inactive initial setting.
 
 View changes preserve selection. Hue changes preserve the register, register
 changes preserve hue, and a grid cell changes both. Gray/sample inspection does
@@ -81,7 +82,8 @@ adapted to the current chromatic hue. Construction depth is a software tree dept
 
 All colors, path samples, classifications and compound trees come from public
 `OstwaldColor` methods. UI geometry only places those results on the screen.
-There is no independent color conversion, hue reference table or harmony grammar
+DisplayCalibration.mjs provides a separate contemporary display transfer function.
+There is no duplicate color-space conversion, hue reference table or harmony grammar
 in CSS, markup or view modules. The original three engine modules are unchanged.
 
 ## i18n
@@ -118,14 +120,14 @@ coordinates are not assigned historical letters by rounding.
 
 Wert is discrete: this engine has no continuous isovalent hue path. Selecting it
 shows the actual 24-node circle and an explicit note, rather than silently using
-a different path. Other views keep their discrete reference structures visible
-alongside the selected continuous path strip. The path is always tied to the
+a different path. Other views keep their discrete reference structures visible; the continuous
+path strip belongs to Dreieck. The path is always tied to the
 retained chromatic anchor; it is not a continuous interpolation of a compound tree.
 
 Primary-source status and pages in the inspector refer to the engine's **relation**
 metadata, never to historically verified RGB colors. All 24 uncalibrated references
 and displayed mixtures remain the contemporary Oklab realization described in
-[API.md](../API.md). The details drawer exposes w/s/v, Oklab, sRGB and evidence;
+[API.md](../API.md). The details drawer exposes w/s/v, engine Oklab, display Oklab, sRGB and evidence;
 [COMPOUND_HARMONIES.md](../COMPOUND_HARMONIES.md) explains the composition fixtures.
 
 ## Validation and browser QA
@@ -136,21 +138,53 @@ node color-harmony/ui/test.mjs
 node color-harmony/demo.js
 ```
 
-The engine retains all 79 prior test groups. The UI adds 16 pure-function groups:
+The engine retains all 79 prior test groups. The UI retains the 16 existing groups (the four-view presentation test now checks
+three primary views) and adds 11 calibration/selection groups, for 106 total.
+The existing groups cover:
 bilingual lookup, initial state, normalization, register/cell transitions, view
 persistence, gray/sample status, discrete isovalence, engine adapter parity,
 cardinality, compound examples, scientific disclosure and invalid inputs.
 `ui/test.mjs` regenerates the adapter before importing it. No browser test framework
 or package manifest is introduced.
 
-Manual browser checks include desktop 1440×1000, tablet 820×1180, portrait
-390×844 and landscape 844×390: local typography, translated controls, tooltips,
-selection synchronization, 672 cells, keyboard cell navigation, gray axis,
-compound tree, scientific details and unlabeled interpolation. Both locale
-configurations were opened; German was restored afterwards. Narrow register
-views intentionally scroll horizontally/vertically rather than shrinking all
-672 cells into untappable marks. Real-device touch and screen-reader testing
-remain broader follow-up work beyond these browser/keyboard checks.
+Phase-6A.1 browser checks cover desktop, tablet and mobile portrait: three-size
+local typography, outlined rounded controls, selection synchronization, keyboard
+activation, persistent triads across register/view changes, gray axis, optional
+inspector, construction details and unlabelled continuous samples. The dedicated
+comparison shows A/B/C gray ladders and light/middle/dark chromatic fixtures.
+Narrow register views intentionally scroll rather than shrinking 672 cells.
+Real-device touch, screen-reader and measured-display studies remain follow-up work.
+
+## Refined interaction
+
+The primary navigation is **Kreis / Dreieck / Register**. Start with one color;
+press **2 / 3 / 4** to see a chord immediately. Press its active digit again to
+return to single-color selection. Hue and register changes reanchor an active
+chord; the same sticky result swatches remain visible across all three views.
+Weiß / Schwarz / Schatten / Wert are contextual to Dreieck and Register and
+immediately populate the result. Selecting a gray or path sample selects one color.
+
+**Aufbau** expands the former HarmonyView below the main visualization, including
+the read-only compound examples. **Info** remains optional. Atlas/Verlauf appears
+only alongside the triangle, leaving the primary toolbar focused on exploration.
+No tutorial, editing, export or copying controls were added.
+
+The page is white. Controls reuse generator `index.html` .icon-btn/.layer-btn:
+1px black border, 4px corner radius, 40px height, 10px word-button horizontal
+padding, #f0f0f0 hover and black/white selected inversion. Touch controls use a
+44px height. Icons use the generator's 24-unit / 2px stroke convention.
+Three font-size tokens (22 / 13 / 11px) replace the former scattered size values;
+weight and spacing provide hierarchy. Small SVG ring numbers use the primary
+size in SVG space to remain readable after viewBox scaling on phones.
+
+## Display calibration diagnostic
+
+Open **http://127.0.0.1:4173/?calibration=1** (substitute your selected port).
+It compares the exact previous mapping, equal Oklab gray spacing and the selected
+soft logarithmic mapping, with L/ΔL/ΔE and chromatic ca/ic/pn registers at six hues.
+The normal interface has no calibration controls. See [CALIBRATION.md](CALIBRATION.md)
+for the code audit, formulas, measurements, decision and limits. Historical field
+objects, labels, w/s/v, 28×24+8 atlas and harmony grammar remain unchanged.
 
 ## Limitations and next phase
 
