@@ -1,4 +1,4 @@
-# Farborgel — standalone research instrument (Phase 6A.1)
+# Farborgel — standalone research instrument (Phase 6A.2)
 
 A browser interface to the existing Ostwald engine. It is separate from the p5.js
 generator and has no external runtime dependencies, network fonts, export actions,
@@ -68,11 +68,13 @@ preserves the last chromatic hue/register anchor for subsequent chromatic work.
 `state.mjs` owns pure initialization, validation, transitions and derived views.
 State contains `locale`, `activeView`, `displayMode`, `selectedHue`,
 `selectedRegister`, `selectedField`, `harmonyMode`, `relation`, `harmonyExample`,
-`selectedHarmony`, `inspectorOpen`, `detailOpen`, `selectionKind` and `resultOpen`.
-Initial values are German, Kreis, Atlas, hue 1, register ic, single-color selection
-and a closed inspector. Cardinality 3 is retained as the inactive initial setting.
+`selectedHarmony`, `inspectorOpen`, `detailOpen`, `selectionKind`, `resultOpen` and `circleMode`.
+Initial values are German, Kreis, Atlas display preference, hue 1, circleMode='reference',
+single reference-color selection and a closed inspector. The separate retained atlas
+register starts at ic; it is not the initial reference circle. Cardinality 3 is retained as the inactive initial setting.
 
-View changes preserve selection. Hue changes preserve the register, register
+View changes preserve atlas selection. Leaving the reference circle for Triangle
+or Register activates the retained atlas register. Hue changes preserve the register, register
 changes preserve hue, and a grid cell changes both. Gray/sample inspection does
 not invent a new register; the last discrete anchor remains explicit. Returning
 to Atlas restores that anchor. Choosing a compound example inspects its first
@@ -80,11 +82,13 @@ active member while retaining the chromatic anchor; choosing the regular relatio
 restores the anchor. These gray examples are fixed research fixtures, not palettes
 adapted to the current chromatic hue. Construction depth is a software tree depth.
 
-All colors, path samples, classifications and compound trees come from public
-`OstwaldColor` methods. UI geometry only places those results on the screen.
+All historical fields, path coordinates, classifications and compound trees come
+from public `OstwaldColor` methods. Display calibration remixes those unchanged
+coordinates with separate full-color display references, exclusively in Oklab.
 DisplayCalibration.mjs provides a separate contemporary display transfer function.
 There is no duplicate color-space conversion, hue reference table or harmony grammar
-in CSS, markup or view modules. The original three engine modules are unchanged.
+in CSS, markup or view modules. The engine conversion functions have moved unchanged into shared ColorSpace.js;
+historical engine behavior and grammar are unchanged.
 
 ## i18n
 
@@ -139,7 +143,9 @@ node color-harmony/demo.js
 ```
 
 The engine retains all 79 prior test groups. The UI retains the 16 existing groups (the four-view presentation test now checks
-three primary views) and adds 11 calibration/selection groups, for 106 total.
+three primary views) and now has 22 additional calibration/navigation groups, for 117 total.
+Default-state and display-anchor expectations follow the explicitly requested 6A.2
+reference-circle and gamut-calibration behavior; historical assertions are retained.
 The existing groups cover:
 bilingual lookup, initial state, normalization, register/cell transitions, view
 persistence, gray/sample status, discrete isovalence, engine adapter parity,
@@ -180,8 +186,10 @@ size in SVG space to remain readable after viewBox scaling on phones.
 ## Display calibration diagnostic
 
 Open **http://127.0.0.1:4173/?calibration=1** (substitute your selected port).
-It compares the exact previous mapping, equal Oklab gray spacing and the selected
-soft logarithmic mapping, with L/ΔL/ΔE and chromatic ca/ic/pn registers at six hues.
+It compares the exact previous mapping, equal Oklab gray spacing, soft-log and the selected
+endpoint-anchored mapping, with L/ΔL/ΔE and chromatic ca/ic/nl/pn registers at six hues.
+A separate full-anchor table compares original, fixed higher chroma and gamut-aware
+calibrations at all 24 positions, reporting Lab/Lch/RGB and out-of-gamut candidates.
 The normal interface has no calibration controls. See [CALIBRATION.md](CALIBRATION.md)
 for the code audit, formulas, measurements, decision and limits. Historical field
 objects, labels, w/s/v, 28×24+8 atlas and harmony grammar remain unchanged.
@@ -196,3 +204,60 @@ objects, labels, w/s/v, 28×24+8 atlas and harmony grammar remain unchanged.
 - Phase 6B: compound construction/editing, palette/JSON/image export or copying,
   and further exploration controls. Generator integration remains a later,
   separately reviewed phase. Nothing is merged into `main`.
+
+## Phase 6A.2: fluid atlas navigation
+
+**Kreis = browse registers. Dreieck = browse hues. Register = full overview.**
+
+The saturated reference circle is home. It represents v=1,w=s=0, source='reference'
+and label=null, rather than pretending to be an atlas register. References get the
+visible status Vollfarben; they are distinct from both atlas nodes and samples.
+There are still exactly 28 historical register circles, plus this display-reference
+view. No historical letter labels are assigned to full-color vertices.
+
+Circle's compact ‹ / value / › steps through reference → ca → … → pn in the
+engine's deterministic register order, preserving hue, cardinality and display
+preference. It stops at the endpoints; disabled controls expose those bounds.
+Triangle's navigator steps through 24 hues with cyclic 24↔1 wrapping, preserving
+register and harmony mode. Shared state actions own the logic: previousHue,
+nextHue, previousRegister, nextRegister and goToDefaultCircle. Grid arrows also
+use them: left/right change hue; up/down change register and stop at row endpoints.
+The selected cell is scrolled into view and retains keyboard focus.
+
+Click Kreis to return from another view at the current register. Clicking its
+active icon again invokes goToDefaultCircle in one action. This preserves the
+current hue and harmonic cardinality, locale and display preference; it clears
+incompatible relation/compound selection. The previous atlas register is retained
+for the next triangle or overview visit. No additional home button is needed.
+
+Reference names come from directly inspected 1921 p.32, using all eight groups
+and their first/second/third norm positions. Names are shown in optional inspector
+and diagnostic. No Urfarben markers or styling metadata distinguish selected groups.
+
+Weiß and Schwarz were not reversed in data or wiring. All 672 fields are covered
+by regressions proving constant w and s respectively. Their revised tooltips say
+Weiß · Gleicher Weißanteil / Schwarz · Gleicher Schwarzanteil.
+
+The register is a contiguous atlas: square cells, zero gutters, no row-padding
+or inline baseline gaps. Selection is an inset indicator plus row/column marks;
+geometry stays unchanged. Navigation buttons retain their 4px corner radius.
+
+### Manual review record
+
+Desktop 1280×1000 and mobile 390×844 checks cover the reference circle, hue/chord
+selection, all 28 register steps, endpoint disabling, triangle wrap, matrix arrow
+navigation, zero measured inter-row gaps, and optional inspector. Gray and anchor
+candidates are visible on the development diagnostic. The 15 requested review
+questions are answered in the completion report; perceptual judgments are browser
+observations, not colorimeter or multi-observer measurements.
+
+### Files changed in Phase 6A.2
+
+New: `color-harmony/ColorSpace.js`, `ui/FullColorCalibration.mjs`,
+`ui/components/Navigator.mjs`.
+
+Modified: `color-harmony/ColorHarmonyEngine.js`; under `color-harmony/ui/`:
+`DisplayCalibration.mjs`, `app.mjs`, `build.js`, `state.mjs`, `i18n.mjs`,
+`styles.css`, `test.mjs`, `components/Inspector.mjs`, `components/Toolbar.mjs`,
+`components/dom.mjs`, `views/CalibrationView.mjs`, `views/CircleView.mjs`,
+`views/HarmonyView.mjs`, `views/RegisterView.mjs`, `CALIBRATION.md`, `README.md`.
