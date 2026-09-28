@@ -350,27 +350,49 @@ function setup() {
     // (defensive, matches the function's existing role elsewhere)
     // even though every reachable combination is already one of the
     // six real values by construction.
-    let symmetryCategory = 'spiegeling'; // 'none' | 'spiegeling' | 'drehling' - matches the pre-existing rotation_reflection6 default
-    let symmetryFold = 6; // 3 | 6 - hex only, ignored for triangle/square
+    // UI rework 4b: 'none' | 'drehling' | 'mirror' | 'spiegeling'. 'mirror' (mirror only -> reflection_only)
+    // is new as a UI state; the other three are the old ones. The mapping lives in core/symmetry-toggles.js
+    // (pure, tested); the two toggles in the Form nav row (ui-form.js) derive their state from this category.
+    let symmetryCategory = 'spiegeling'; // matches the pre-existing rotation_reflection6 default
+    let symmetryFold = 6; // 3 | 6 - hex only, ignored for triangle/square and while rotation is off
 
     function resolveSymmetryMode(shape, category, fold) {
-        if (category === 'none') return 'none';
-        if (shape === 'hex') {
-            if (category === 'spiegeling') return fold === 3 ? 'rotation_reflection3' : 'rotation_reflection6';
-            return fold === 3 ? 'rotation3' : 'rotation6';
-        }
-        // Triangle/square: rotation3 ≡ rotation6 and rotation_reflection3 ≡
-        // rotation_reflection6 (confirmed collapse, group-verification
-        // session) - fold is meaningless there, so one representative
-        // raw mode per category is picked arbitrarily but consistently.
-        return category === 'spiegeling' ? 'rotation_reflection6' : 'rotation3';
+        return symmetryModeFor(shape, category, fold); // core/symmetry-toggles.js (moved there unchanged, plus 'mirror')
     }
 
     function updateSymmetryModeControl() {
         symmetryMode = normSym(resolveSymmetryMode(currentShape, symmetryCategory, symmetryFold));
         const foldGroup = select('#mode-fold-group');
         if (foldGroup) foldGroup.elt.hidden = currentShape !== 'hex';
+        if (window.uiSync) window.uiSync(); // the nav row's toggles follow the category
     }
+
+    // One path for every change of the category - the old .mode-btn handlers and the nav row's toggles both go
+    // through it. The old buttons stay in the DOM (hidden, see index.html) and keep their 'active' class in step;
+    // 'mirror' has no old button, so none of them is active then.
+    function applySymmetryCategory(category) {
+        modeBtns.forEach(b => b.removeClass('active'));
+        const match = modeBtns.find(b => b.attribute('data-mode') === category);
+        if (match) match.addClass('active');
+        symmetryCategory = category;
+        updateSymmetryModeControl();
+        redraw();
+    }
+    function applySymmetryFold(fold) {
+        foldBtns.forEach(b => b.removeClass('active'));
+        const match = foldBtns.find(b => parseInt(b.attribute('data-fold')) === fold);
+        if (match) match.addClass('active');
+        symmetryFold = fold;
+        updateSymmetryModeControl();
+        redraw();
+    }
+    // What the nav row reads and drives (ui-form.js).
+    window.symmetryUi = {
+        category: () => symmetryCategory,
+        fold: () => symmetryFold,
+        setCategory: applySymmetryCategory,
+        setFold: applySymmetryFold,
+    };
 
     // Roadmap 1.12 stage 5 (symmetryMode axis) part 3: the best-effort
     // INVERSE of resolveSymmetryMode() directly above - reused by both
@@ -384,37 +406,19 @@ function setup() {
     // design session. currentFold is the caller's own fallback for
     // whichever entries don't have a real fold of their own (none/Z2),
     // so a fold click doesn't lose the user's last real fold choice.
+    // UI rework 4b: now exact for reflection_only too ('mirror'); the table moved to core/symmetry-toggles.js.
     function bestEffortCategoryFold(mode, currentFold) {
-        return {
-            none: { category: 'none', fold: currentFold },
-            reflection_only: { category: 'spiegeling', fold: currentFold },
-            rotation3: { category: 'drehling', fold: 3 },
-            rotation6: { category: 'drehling', fold: 6 },
-            rotation_reflection3: { category: 'spiegeling', fold: 3 },
-            rotation_reflection6: { category: 'spiegeling', fold: 6 },
-        }[mode];
+        return symmetryCategoryFoldFor(mode, currentFold);
     }
 
     const modeBtns = selectAll('.mode-btn');
     modeBtns.forEach(btn => {
-        btn.mousePressed(() => {
-            modeBtns.forEach(b => b.removeClass('active'));
-            btn.addClass('active');
-            symmetryCategory = btn.attribute('data-mode');
-            updateSymmetryModeControl();
-            redraw();
-        });
+        btn.mousePressed(() => applySymmetryCategory(btn.attribute('data-mode')));
     });
 
     const foldBtns = selectAll('.fold-btn');
     foldBtns.forEach(btn => {
-        btn.mousePressed(() => {
-            foldBtns.forEach(b => b.removeClass('active'));
-            btn.addClass('active');
-            symmetryFold = parseInt(btn.attribute('data-fold'));
-            updateSymmetryModeControl();
-            redraw();
-        });
+        btn.mousePressed(() => applySymmetryFold(parseInt(btn.attribute('data-fold'))));
     });
 
     updateSymmetryModeControl(); // initial sync - keeps symmetryMode/fold-row-visibility correct on load without waiting for a click
@@ -451,6 +455,7 @@ function setup() {
             const matchingFoldBtn = foldBtns.find(b => parseInt(b.attribute('data-fold')) === symmetryFold);
             if (matchingFoldBtn) matchingFoldBtn.addClass('active');
         }
+        if (window.uiSync) window.uiSync(); // the nav row's toggles show the loaded pattern's category
     }
 
     // Line Color (Color Picker)
@@ -2205,6 +2210,8 @@ function setup() {
 
 // ----------------- DRAW -----------------------------------------
 function draw() {
+    // UI rework: the nav rows (steppers, toggles) read the state on every redraw (ui-form.js); cheap, attribute-only.
+    if (window.uiSync) window.uiSync();
     // Force Light Mode / Standard Style
     // Hintergrund exakt wie Bedienfeld (oder weiß)
     const bgColor = getComputedStyle(document.body).getPropertyValue('--panel-bg-color') || '#ffffff';

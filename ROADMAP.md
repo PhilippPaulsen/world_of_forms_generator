@@ -142,6 +142,7 @@ Agreed in a planning session, not yet reflected in code. Distinct from the numbe
 
 **Group B — deferred UI cleanup, now due**
 - A general UI cleanup pass, bundling the three known issues already documented under `1.8` (stale `#timeline-status` message, Safari-specific layer-deletion bug, no feedback for a single-keyframe timeline) with a broader UI simplification/review.
+- *UI rework in progress* (Phases 0-4b committed or under review; the tabs/nav rows, canvas sizing, Form row, steppers and the symmetry choice are done, the Netz and Farbe rows and the canvas rail/strips follow). **Known limit (open until Phase 2, touch and accessibility):** on a phone the Form row is two fixed rows, and with the 48px touch controls its first row needs 328px. That fits 360px and 375px phones but **at 320px the first row wraps into three rows** and overlaps the fixed row height. Not fixed yet on purpose: the options are smaller phone controls below 360px or moving "More" to the second row, a decision that belongs with the touch sizing work.
 
 **Group C — reproducibility**
 - Seed-based reconstruction of random connections — `addRandomConnection()` currently uses unseeded `Math.random()`; reuse the existing `curveType.seed` pattern (`1.5-A`) rather than inventing a new mechanism.
