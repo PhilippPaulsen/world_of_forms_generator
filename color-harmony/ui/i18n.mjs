@@ -1,6 +1,15 @@
 /** Change only DEFAULT_LOCALE to switch the entire interface. */
 export const DEFAULT_LOCALE = 'de';
 const pairs = {
+  select2:['2 — Gegenfarben','2 — Complementary'], select3:['3 — Dreier','3 — Three-color group'], select4:['4 — Vierer','4 — Four-color group'],
+  resultDetail:['Aufbau','Construction'], displayLab:['Display-Oklab','Display Oklab'], engineLab:['Engine-Oklab','Engine Oklab'],
+  calibration:['Displayvergleich','Display comparison'], current:['A · Bisherige Abbildung','A · Previous mapping'],
+  perceptual:['B · Gleichmäßige Oklab-Stufen','B · Equal Oklab steps'], logarithmic:['C · Logarithmische Abbildung','C · Logarithmic mapping'],
+  historicalValue:['Historischer Wert','Historical value'], displayL:['Display L','Display L'], deltaL:['ΔL zum Vorgänger','ΔL from previous'], deltaE:['ΔE zum Vorgänger','ΔE from previous'],
+  calibrationNote:['Displayvergleich · unveränderte Atlaswerte · keine historische Farbrekonstruktion','Display comparison · unchanged atlas values · not a historical color reconstruction'],
+  chromaticComparison:['Chromatische Register · ca / ic / pn','Chromatic registers · ca / ic / pn'],
+  back:['Zum Instrument','Back to instrument'],
+
   title:['Farborgel','Color organ'], subtitle:['Ein Instrument für Farbbeziehungen','An instrument for color relationships'],
   circle:['Kreis','Circle'], triangle:['Dreieck','Triangle'], register:['Register','Register'], harmony:['Harmonie','Harmony'],
   complementary:['Gegenfarben','Complementary'], three:['Dreier','Three-color group'], four:['Vierer','Four-color group'],
@@ -20,7 +29,7 @@ const pairs = {
   primary:['Primärquelle · Ostwald 1921','Primary source · Ostwald 1921'],
   contemporary:['Zeitgenössische Oklab-Interpolation','Contemporary Oklab interpolation'],
   displayNote:['Heutige Oklab-Bildschirmfarben · keine historischen Pigmentrekonstruktionen','Contemporary Oklab screen colors · not historical pigment reconstructions'],
-  research:['Forschungsinstrument / 6A','Research instrument / 6A'],
+  research:['Forschungsinstrument / 6A.1','Research instrument / 6A.1'],
   sourceNote:['Historische Struktur, zeitgenössische Darstellung.','Historical structure, contemporary rendering.'],
   depthNote:['Stufe bezeichnet hier die Tiefe des Gruppenbaums.','Level here means depth of the group tree.'],
   valueNote:['Wertgleiche: 24 diskrete Atlaswerte. Kein kontinuierlicher Pfad.','Isovalent: 24 discrete atlas values. No continuous path.'],

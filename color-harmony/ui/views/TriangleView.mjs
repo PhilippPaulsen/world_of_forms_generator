@@ -4,7 +4,7 @@ import {t} from '../i18n.mjs';
 export function TriangleView(state,dispatch) {
   const chart=svg('svg',{viewBox:state.displayMode==='continuum'&&state.relation!=='isovalent'?'0 0 720 580':'85 10 550 525',class:'triangle-chart','aria-label':t('triangle',state.locale)});
   const selected=anchor(state),data=fieldRelations(state);
-  const set=new Set([selected.label,...(state.relation==='isovalent'?[]:data[state.relation==='isotint'?'isotints':state.relation==='isotone'?'isotones':'shadowSeries']).map(f=>f.label)]);
+  const set=new Set([selected.label,...(state.selectionKind!=='relation'||state.relation==='isovalent'?[]:data[state.relation==='isotint'?'isotints':state.relation==='isotone'?'isotones':'shadowSeries']).map(f=>f.label)]);
   if(state.displayMode==='continuum'&&state.relation!=='isovalent') {
     const position=f=>[65*f.w+655*f.s+360*f.v,500*(f.w+f.s)+55*f.v];
     chart.append(svg('path',{d:'M65 500 360 55 655 500Z',class:'triangle-outline'}));

@@ -1,3 +1,4 @@
+import {historicalToDisplay} from '../DisplayCalibration.mjs';
 import {t} from '../i18n.mjs';
 export const el=(tag,attrs={},...children)=>{
   const node=document.createElement(tag);
@@ -13,7 +14,7 @@ export const svg=(tag,attrs={},...children)=>{
   Object.entries(attrs).forEach(([k,v])=>node.setAttribute(k,String(v)));
   children.flat().forEach(child=>node.append(child));return node;
 };
-export const color=field=>`rgb(${field.rgb.join(' ')})`;
+export const color=field=>`rgb(${historicalToDisplay(field).rgb.join(' ')})`;
 export function button(text,key,state,run,selected=false,id=key) {
   return el('button',{type:'button','aria-label':t(key,state.locale),'data-tooltip':t(key,state.locale),
     'data-focus':id,'aria-pressed':String(selected),onclick:run},text);
