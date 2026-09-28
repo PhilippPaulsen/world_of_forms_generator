@@ -197,6 +197,21 @@
     new MutationObserver(sync).observe(el, { attributes: true, attributeFilter: ['class'] });
   }
 
+  // ---- keyboard activation of buttons that sketch.js binds with p5's mousePressed() ------
+  /*
+   * p5's element.mousePressed(fn) listens for 'mousedown' only. Enter/Space on a focused button fires only 'click'
+   * (event.detail === 0), so such a button did nothing from the keyboard. This bridge turns a keyboard-activated click
+   * on a button in the header, a nav row or an overlay into a 'mousedown' on it, which the p5 handler then receives.
+   * Buttons with plain click handlers (ui.js's own) have no mousedown listener, so the extra event is harmless.
+   * A mouse/touch click has detail >= 1 and already produced a real mousedown.
+   */
+  document.addEventListener('click', function (e) {
+    if (e.detail !== 0) return;
+    const b = e.target.closest && e.target.closest('.app-header button, .nav-rows button, .overlay button');
+    if (!b || b.disabled || b.getAttribute('aria-disabled') === 'true') return;
+    b.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+  }, true);
+
   // ---- radio group ------------------------------------------------------------
   /*
    * UI.radiogroup(container, onSelect) - an exclusive choice: role="radiogroup" with role="radio" children, aria-checked,
