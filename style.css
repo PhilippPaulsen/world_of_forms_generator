@@ -65,6 +65,8 @@
   --target: 44px;
   --gap: 8px;
   --radius: 6px;
+  --gutter: 16px;          /* page side margin */
+  --canvas-max: 560px;     /* canvas display size on tablet/desktop */
 }
 
 @media (min-width: 768px) {
