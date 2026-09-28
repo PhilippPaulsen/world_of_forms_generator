@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260928c">
+  <link rel="stylesheet" href="style.css?v=20260928f">
 
   <!-- Material Icons -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -72,35 +72,37 @@
     /* Flat, opaque look matching die-welt-der-formen.de - no glass/blur/shadow.
        The visible canvas frame is drawn by the sketch itself (see sketch.js draw()),
        not by CSS.
-       An explicit width instead of flex:1 -
-       flex-growing this to fill leftover vertical space fought with
-       aspect-ratio:1/1 and produced a non-square box that clipped/offset
-       the actual <canvas> element. max-width:100% is the responsive
-       fallback for narrow viewports. */
+       Explicit width AND height (not flex:1, not aspect-ratio) - see below. */
     #canvas-container {
       /* Display size: 560px, or the viewport minus a gutter on each side
-         when that is smaller. The sketch itself stays 600x600 units
-         (canvasW); the canvas is CSS-scaled and p5 maps pointer positions
-         back through scrollWidth/width (checked by
-         tools/ui/check-pointer-mapping.js). */
-      width: min(var(--canvas-max), calc(100vw - 2 * var(--gutter)));
-      max-width: 100%;
-      aspect-ratio: 1 / 1;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+         when that is smaller (--canvas-size, style.css). The sketch itself
+         stays 600x600 units (canvasW); the canvas is CSS-scaled and p5 maps
+         pointer positions back through scrollWidth/width (checked by
+         tools/ui/check-pointer-mapping.js).
+         Width and height are BOTH set from the same definite length. The
+         height used to come only from aspect-ratio:1/1, with the canvas
+         capped by max-height:100%: an engine that does not resolve a
+         percentage against an aspect-ratio-derived height skipped the cap,
+         left p5's inline 600px height, and the overflow:hidden container
+         cropped 20px off the top and bottom (the frame lines). Nothing
+         here depends on a percentage resolving any more. */
+      width: var(--canvas-size);
+      height: var(--canvas-size);
+      flex: none;
+      /* 16px above (nav row) and 16px below (controls): the parent's own
+         10px flex gap adds to the 6px bottom margin */
+      margin: 16px 0 6px;
+      display: block;
       background: var(--background);
-      overflow: hidden;
     }
 
-    /* p5.js sets width/height as inline style="" attributes on the canvas
-       element itself, which override height:auto here directly (same
-       property, inline always wins) - but max-width/max-height always cap
-       the computed size regardless of where width/height came from, so
-       those are what actually keep this square inside #canvas-container. */
+    /* p5.js sets width/height as inline style="" on the canvas element
+       (600px). !important is the only way a stylesheet beats an inline
+       style: the canvas simply fills its (definite-size) container. */
     #canvas-container canvas {
-      max-width: 100%;
-      max-height: 100%;
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
     }
 
     .controls-container {
@@ -391,6 +393,30 @@
 </head>
 
 <body>
+  <!-- UI rework 4a: header with the three tabs (in-page hash links, see
+       nav.js) and Help; one nav row per tab, all the same fixed height so
+       switching tabs moves nothing below them. The rows are filled in 4b
+       (Form), 4c (Netz) and 4d (Farbe). -->
+  <header class="app-header">
+    <nav class="app-tabs" aria-label="Bereiche">
+      <a id="tab-form" href="#form" aria-controls="nav-form" aria-current="page">Form</a>
+      <a id="tab-farbe" href="#farbe" aria-controls="nav-farbe">Farbe</a>
+      <a id="tab-netz" href="#netz" aria-controls="nav-netz">Netz</a>
+    </nav>
+    <button id="btn-help" class="icon-btn" type="button" title="Hilfe" aria-label="Hilfe">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+    </button>
+  </header>
+  <div class="nav-rows">
+    <div id="nav-form" class="nav-row" role="group" aria-labelledby="tab-form"></div>
+    <div id="nav-farbe" class="nav-row" role="group" aria-labelledby="tab-farbe" hidden></div>
+    <div id="nav-netz" class="nav-row" role="group" aria-labelledby="tab-netz" hidden></div>
+  </div>
+
   <div class="main-container">
     <!-- Canvas container -->
     <div id="canvas-container"></div>
@@ -1129,13 +1155,6 @@
             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
           </svg>
         </button>
-        <button id="btn-help" class="icon-btn" title="Help">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle>
-            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-          </svg>
-        </button>
         <!-- Roadmap 1.11: plain navigation to the pattern catalog
              (gallery.html) - a real <a>, not a JS-wired button, since
              this is just a link elsewhere, not a sketch action. .icon-btn
@@ -1199,18 +1218,19 @@
        the p5.js CDN tag - that URL already carries its own version
        (p5@1.9.0), so a version bump there naturally changes the URL. -->
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260928c"></script>
-  <script src="core/state.js?v=20260928c"></script>
-  <script src="core/symmetry.js?v=20260928c"></script>
-  <script src="core/curves.js?v=20260928c"></script>
-  <script src="core/netwarp.js?v=20260928c"></script>
-  <script src="core/tiling.js?v=20260928c"></script>
-  <script src="core/faces.js?v=20260928c"></script>
-  <script src="core/orbits.js?v=20260928c"></script>
-  <script src="core/color.js?v=20260928c"></script>
-  <script src="core/facecolor.js?v=20260928c"></script>
-  <script src="core/export.js?v=20260928c"></script>
-  <script src="sketch.js?v=20260928c"></script>
+  <script src="core/forms.js?v=20260928f"></script>
+  <script src="core/state.js?v=20260928f"></script>
+  <script src="core/symmetry.js?v=20260928f"></script>
+  <script src="core/curves.js?v=20260928f"></script>
+  <script src="core/netwarp.js?v=20260928f"></script>
+  <script src="core/tiling.js?v=20260928f"></script>
+  <script src="core/faces.js?v=20260928f"></script>
+  <script src="core/orbits.js?v=20260928f"></script>
+  <script src="core/color.js?v=20260928f"></script>
+  <script src="core/facecolor.js?v=20260928f"></script>
+  <script src="core/export.js?v=20260928f"></script>
+  <script src="sketch.js?v=20260928f"></script>
+  <script src="nav.js?v=20260928f"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

@@ -43,7 +43,7 @@
 /* --- Design tokens ------------------------------------------------------
    Colors: black, one secondary grey, one disabled grey, one hairline
    grey, white. Weights: 400 and 600 only. Sizes: 12 secondary, 16 base,
-   22 tabs (28 on tablet/desktop). Touch: targets >= 44px, gaps >= 8px.
+   18 tabs. Touch: targets >= 44px, gaps >= 8px.
    These are the tokens for the new UI; the older --background / --text /
    --hover-bg variables in index.html stay until Phase 1 migrates the
    components that use them. */
@@ -58,19 +58,20 @@
   --weight-regular: 400;
   --weight-strong: 600;
 
+  /* the only three font sizes */
   --size-secondary: 12px;
   --size-base: 16px;
-  --size-tab: 22px;
+  --fs-tab: 18px;
 
   --target: 44px;
   --gap: 8px;
   --radius: 6px;
   --gutter: 16px;          /* page side margin */
   --canvas-max: 560px;     /* canvas display size on tablet/desktop */
-}
-
-@media (min-width: 768px) {
-  :root { --size-tab: 28px; }
+  /* Canvas display size: one definite length, used for BOTH the width and
+     the height of #canvas-container (never derived through aspect-ratio
+     or a percentage), so it cannot be resolved differently by an engine. */
+  --canvas-size: min(var(--canvas-max), calc(100vw - 2 * var(--gutter)));
 }
 
 /* The one body rule for font and reset. Page layout (flex centering,
@@ -99,7 +100,6 @@ button, input, select, textarea {
 #canvas-container {
   display: flex;
   justify-content: center;
-  margin-bottom: 20px;
   border: none;
 }
 
@@ -359,3 +359,81 @@ body.dark {
 #timeline-net-state[data-state="constant"], #timeline-net-state[data-state="pending"] { border-left-color: #888; background: #f4f4f4; }
 #timeline-net-warning[hidden], #timeline-net-state[hidden] { display: none; }
 .kf-no-net { color: #c0392b; }
+
+/* === UI rework 4a: header, tabs, nav rows ===============================
+   Header: the three tabs (in-page hash links, nav.js) on the left, Help on
+   the right. Active tab = Semibold + black, the others secondary grey;
+   never a ring (a ring is reserved for keyboard focus, below).
+   Nav rows: one per tab, ALL the same fixed height, so switching tabs
+   moves nothing below them. Desktop/tablet: one 44px row. Phone: two fixed
+   44px rows (no wrapping), hence the taller value. */
+:root { --nav-row-h: 76px; }          /* 44 target + 2 x 16 padding */
+@media (max-width: 767px) {
+  :root { --nav-row-h: 128px; }       /* 2 x 44 target + 8 gap + 2 x 16 padding */
+}
+
+.app-header {
+  align-self: stretch;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  /* 44px targets + 2 x 4px = 52px; only the tab TEXT is small (18px), the
+     click area stays a full 44px tall */
+  padding: 4px var(--gutter);
+  border-bottom: 1px solid var(--color-hairline);
+}
+@media (min-width: 768px) {
+  .app-header { gap: 32px; padding: 4px 24px; }
+}
+
+.app-tabs { display: flex; align-items: center; gap: 12px; }
+@media (min-width: 768px) {
+  .app-tabs { gap: 16px; }
+}
+
+.app-tabs a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  padding: 0 4px;
+  font-size: var(--fs-tab);
+  font-weight: var(--weight-regular);
+  line-height: 1.1;
+  color: var(--color-secondary);
+  text-decoration: none;
+}
+.app-tabs a[aria-current="page"] {
+  font-weight: var(--weight-strong);
+  color: var(--color-text);
+}
+
+.app-header .icon-btn {
+  margin-left: auto;
+  width: var(--target);
+  height: var(--target);
+  border-radius: var(--radius);
+  font-size: var(--size-base);   /* no browser-default 13.33px */
+}
+
+.nav-rows { align-self: stretch; }
+.nav-row {
+  box-sizing: border-box;
+  height: var(--nav-row-h);
+  padding: 16px var(--gutter);
+  border-bottom: 1px solid var(--color-hairline);
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+@media (min-width: 768px) {
+  .nav-row { padding: 16px 24px; }
+}
+.nav-row[hidden] { display: none; }
+
+/* Keyboard focus: its own 2px outline with a 2px offset, never the same
+   as the active state (black fill). :focus-visible = keyboard only. */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}
