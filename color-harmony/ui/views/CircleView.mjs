@@ -4,9 +4,9 @@ import {t} from '../i18n.mjs';
 const point=(angle,r)=>[320+Math.sin(angle)*r,320-Math.cos(angle)*r];
 export function CircleView(state,dispatch) {
   const chart=svg('svg',{viewBox:'0 0 640 640',class:'circle-chart','aria-label':t('circle',state.locale)});
-  const harmony=hueHarmony(state),selected=new Set(harmony.fields.map(f=>f.hueIndex));
+  const harmony=hueHarmony(state),selected=new Set(state.selectionKind==='harmony'?harmony.fields.map(f=>f.hueIndex):[state.selectedHue]);
   const points=harmony.fields.map(f=>point((f.hueIndex-1)*Math.PI/12,199));
-  chart.append(svg('polygon',{points:points.map(p=>p.join(',')).join(' '),class:'chord-line'}));
+  if(state.selectionKind==='harmony')chart.append(svg('polygon',{points:points.map(p=>p.join(',')).join(' '),class:'chord-line'}));
   for(const h of circle) {
     const field=fieldAt(h.index,state.selectedRegister),a=(h.index-1)*Math.PI/12;
     const start=a-Math.PI/24+.012,end=a+Math.PI/24-.012;
@@ -17,7 +17,7 @@ export function CircleView(state,dispatch) {
     chart.append(path);
     const label=point(a,303);
     chart.append(svg('text',{x:label[0],y:label[1]+4,'text-anchor':'middle',class:`hue-number ${selected.has(h.index)?'marked':''}`},String(h.index).padStart(2,'0')));
-    if(selected.has(h.index)) {
+    if(state.selectionKind==='harmony'&&selected.has(h.index)) {
       const [cx,cy]=point(a,199),node=svg('g',{},
         svg('circle',{cx,cy,r:22,fill:'transparent'}),
         svg('circle',{cx,cy,r:7,fill:color(field),stroke:'#171717','stroke-width':2}));
