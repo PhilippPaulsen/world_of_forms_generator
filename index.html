@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260928r">
+  <link rel="stylesheet" href="style.css?v=20260928t">
 
   <!-- Material Icons -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -528,10 +528,89 @@
     </div>
   </div>
 
-  <div class="main-container">
-    <!-- Canvas container -->
-    <div id="canvas-container"></div>
+  <!-- Canvas row (UI rework 5a, revised 5a-fix): the canvas flanked by ONE action rail on the LEFT - undo/
+       redo/clear | random | points/curves/fill | info/save | more (>=768px, CSS Grid, gutter-aligned like the
+       header/nav rows above - a sibling of .main-container, NOT nested inside it, exactly like .app-header/
+       .nav-rows: .main-container's own 900px max-width would otherwise cap this row's gutter short of the
+       header's actual edge above ~948px viewport width). A matching empty column on the right keeps the canvas
+       centered (style.css). Help stays in the header; Gallery stays in the old panel (both would have pushed
+       the rail past the canvas's height at a coarse pointer - measured in the 5a-fix report, not guessed).
+       Below 768px the rail becomes three fixed rows under the canvas: row 1 undo/redo/clear/random, row 2
+       points/curves/fill/info/save, row 3 more (flex-wrap + order + two .rail-break spans, same technique as
+       .nav-form's phone reflow), left-aligned at the gutter like everything else. Every button below is the
+       SAME element sketch.js already wires by id (select('#btn-...').mousePressed()) - relocated here, not
+       duplicated; no logic changed. Free Clothing/Free Endpoints/Alternative Net were in the same old
+       .control-group as Points/Curves/Fill but are not part of this rail's visible slots - they move into
+       #more-rail instead (below), same DOM-move-only rule. Info opens #info-card, the relocated
+       #pattern-name-group - today's only "status" content; Netzart/Farbwert stay in #nav-netz/#nav-farbe, not
+       duplicated here (see ROADMAP.md). Keyboard: ui.js's bridge (4b-fix) now also covers '.canvas-row button',
+       so Enter/Space activate every button here exactly like the header/nav-row/overlay ones. -->
+  <!-- Layer tiles (Base + additional layers + "+") stay in the old panel below, NOT in this rail: renderLayerTabs()
+       builds each as a checkbox + text button ("Layer N") + remove button, not a single icon, and even a
+       hypothetical digit-only redesign was measured to overflow the rail past the canvas height at N=2-4
+       (5a-fix report) - they move into their own horizontally-scrolling strip in step 5c instead. -->
+  <div class="canvas-row">
+      <div id="canvas-container"></div>
+      <div class="rail-left">
+      <button id="btn-undo" class="icon-btn" title="Undo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 14 4 9l5-5" />
+          <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11" />
+        </svg>
+      </button>
+      <button id="btn-redo" class="icon-btn" title="Redo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M15 14 20 9l-5-5" />
+          <path d="M20 9h-10.5a5.5 5.5 0 0 0 -5.5 5.5v0a5.5 5.5 0 0 0 5.5 5.5H13" />
+        </svg>
+      </button>
+      <button id="btn-clear" class="icon-btn" title="Clear">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+        </svg>
+      </button>
+      <button id="btn-random" class="icon-btn" title="Random Connection">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l-5 5M4 4l5 5" />
+        </svg>
+      </button>
+      <button id="btn-toggle-nodes" class="icon-btn active" title="Toggle Nodes">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      </button>
+      <button id="btn-toggle-curve" class="icon-btn" title="Toggle Curve">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 12c2-4 6-4 8 0s6 4 8 0" />
+        </svg>
+      </button>
+      <button id="btn-toggle-faces" class="icon-btn" title="Toggle Face Fill">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+          <path d="M12 2 L22 20 L2 20 Z" />
+        </svg>
+      </button>
+      <button id="btn-info" class="icon-btn" type="button" title="Info" aria-label="Info" aria-controls="info-card" data-i18n="info">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="11" x2="12" y2="16" />
+          <circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      </button>
+      <button id="btn-save" class="icon-btn" title="Download Image">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+        </svg>
+      </button>
+      <button id="btn-more-rail" class="icon-btn" type="button" title="Mehr" aria-label="Mehr" aria-controls="more-rail" data-i18n="more">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+      </button>
+      </div><!-- /.rail-left -->
+      <span class="rail-break rail-break-1" aria-hidden="true"></span>
+      <span class="rail-break rail-break-2" aria-hidden="true"></span>
+  </div>
 
+  <div class="main-container">
     <!-- Controls container -->
     <div class="controls-container">
       <!-- Shape, Node Count, Shape Size and the symmetry mode moved to the
@@ -611,63 +690,6 @@
         </div>
       </div>
       </div><!-- /.legacy-controls -->
-
-      <!-- Visibility Toggle, Curve Toggle & Free Endpoints Toggle -->
-      <div class="control-group">
-        <div class="icon-row">
-          <button id="btn-toggle-nodes" class="icon-btn active" title="Toggle Nodes">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-          </button>
-          <button id="btn-toggle-curve" class="icon-btn" title="Toggle Curve">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M4 12c2-4 6-4 8 0s6 4 8 0" />
-            </svg>
-          </button>
-          <!-- Roadmap 1.5-B: kind:'free' toggle, separate from (not a
-               redesign of) the curve toggle above - three-way mutually
-               exclusive with it and with face-fill (see sketch.js). -->
-          <button id="btn-toggle-free" class="icon-btn" title="Toggle Free Clothing">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M2 17c1.5-3 2-5 3.5-3s1 5 3 3-.5-6 2-6 1 6 3 4 0-6 2-4 1 4 3 2" />
-            </svg>
-          </button>
-          <!-- Roadmap 1.10a: face-fill toggle, contextual to whichever
-               layer tab is active (see updateFaceToggleControl() in
-               sketch.js) and mutually exclusive with the curve toggle
-               above (straight-line-only face detection - see
-               core/faces.js's computeCellFaces()). -->
-          <button id="btn-toggle-faces" class="icon-btn" title="Toggle Face Fill">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-              <path d="M12 2 L22 20 L2 20 Z" />
-            </svg>
-          </button>
-          <button id="btn-toggle-free-endpoints" class="icon-btn" title="Toggle Free Endpoints">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="22" y1="12" x2="18" y2="12" />
-              <line x1="6" y1="12" x2="2" y2="12" />
-              <line x1="12" y1="6" x2="12" y2="2" />
-              <line x1="12" y1="22" x2="12" y2="18" />
-            </svg>
-          </button>
-          <!-- Roadmap 1.2-C: alternative net construction - one-shot
-               tool-like toggle (not a persistent mode), see sketch.js's
-               altNetActive/altNetPending state machine. Icon: a dashed
-               polygon outline with one solid edge and its two endpoints
-               marked, suggesting "click an edge, complete to a shape". -->
-          <button id="btn-alternative-net" class="icon-btn" title="Alternative Net Construction (click two points, then a third to confirm the side)">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="12,3 20,9 17,19 7,19 4,9" stroke-dasharray="3,2" />
-              <line x1="7" y1="19" x2="17" y2="19" stroke-width="3" />
-              <circle cx="7" cy="19" r="1.6" fill="currentColor" stroke="none" />
-              <circle cx="17" cy="19" r="1.6" fill="currentColor" stroke="none" />
-            </svg>
-          </button>
-        </div>
-      </div>
 
       <!-- Roadmap 1.4-A/1.5-A (Group A, node-count-limit session's
            follow-up): live controls for curveType's own fold/strength -
@@ -901,20 +923,9 @@
         <div id="face-colors-list"></div>
       </div>
 
-      <!-- Roadmap 1.11-B: read-only theme-line orbit name for whichever
-           sheet is currently active (Base or a layer tab) - contextual
-           the same way the offset controls below are, since each sheet
-           has its own connections[] and hence its own name. Compute-
-           and-display only (1.11 design session's scope decision) - no
-           browse/enumerate UI, and no cross-layer/combined name (1.9's
-           offset overlay is a continuous parameter with no orbit
-           structure - see core/orbits.js's own docblock). Updated by
-           sketch.js's updatePatternNameStatus(), same "called once per
-           draw(), cheap" pattern as #cross-layer-status. -->
-      <div class="control-group" id="pattern-name-group">
-        <label>Pattern Name</label>
-        <span id="pattern-name-status"></span>
-      </div>
+      <!-- #pattern-name-group (Roadmap 1.11-B: read-only theme-line orbit name for whichever sheet is active,
+           updated by sketch.js's updatePatternNameStatus()) moved into #info-card, UI rework 5a - see the
+           canvas-row comment above the canvas. -->
 
       <!-- Roadmap 1.12 stage 4 (UI): this layer's own shape - contextual
            the same way the other layer-own controls below are (hidden
@@ -1146,40 +1157,10 @@
         <span id="cross-layer-status"></span>
       </div>
 
-      <!-- Action Buttons -->
+      <!-- Clear/Undo/Redo/Random/Download moved into the canvas rail, UI rework 5a (see the canvas-row comment
+           above the canvas). Gallery ("Formorgel") is NOT part of the rail - it stays here until Step 5b moves
+           it into the per-tab organ strip; a real <a>, not a JS-wired button, since it is just a link elsewhere. -->
       <div class="button-group">
-        <button id="btn-clear" class="icon-btn" title="Clear">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-          </svg>
-        </button>
-        <button id="btn-undo" class="icon-btn" title="Undo">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 14 4 9l5-5" />
-            <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11" />
-          </svg>
-        </button>
-        <button id="btn-redo" class="icon-btn" title="Redo">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M15 14 20 9l-5-5" />
-            <path d="M20 9h-10.5a5.5 5.5 0 0 0 -5.5 5.5v0a5.5 5.5 0 0 0 5.5 5.5H13" />
-          </svg>
-        </button>
-        <button id="btn-random" class="icon-btn" title="Random Connection">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l-5 5M4 4l5 5" />
-          </svg>
-        </button>
-        <button id="btn-save" class="icon-btn" title="Download Image">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-          </svg>
-        </button>
-        <!-- Roadmap 1.11: plain navigation to the pattern catalog
-             (gallery.html) - a real <a>, not a JS-wired button, since
-             this is just a link elsewhere, not a sketch action. .icon-btn
-             styling and the style.css tooltip rule both apply to any
-             element with the class + title, not just <button>. -->
         <a id="btn-gallery" class="icon-btn" href="gallery.html" target="_blank" rel="noopener" title="Pattern Catalog">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
             <rect x="3" y="3" width="8" height="8" rx="1.5" />
@@ -1354,30 +1335,80 @@
     </div>
   </div>
 
+  <!-- "Mehr" (More) for the canvas rail (UI rework 5a): the three toggles that are not among the rail's 4
+       visible slots - Free Clothing, Free Endpoints, Alternative Net Construction - moved here unchanged (ids,
+       classes, icons and handlers untouched; sketch.js still owns them via select('#btn-...').mousePressed()). -->
+  <div id="more-rail" class="overlay" role="dialog" aria-label="Mehr" data-i18n="more.rail" hidden>
+    <div class="overlay-section">
+      <!-- Roadmap 1.5-B: kind:'free' toggle, separate from (not a
+           redesign of) the curve toggle - three-way mutually
+           exclusive with it and with face-fill (see sketch.js). -->
+      <button id="btn-toggle-free" class="icon-btn" title="Toggle Free Clothing">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M2 17c1.5-3 2-5 3.5-3s1 5 3 3-.5-6 2-6 1 6 3 4 0-6 2-4 1 4 3 2" />
+        </svg>
+      </button>
+      <button id="btn-toggle-free-endpoints" class="icon-btn" title="Toggle Free Endpoints">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="22" y1="12" x2="18" y2="12" />
+          <line x1="6" y1="12" x2="2" y2="12" />
+          <line x1="12" y1="6" x2="12" y2="2" />
+          <line x1="12" y1="22" x2="12" y2="18" />
+        </svg>
+      </button>
+      <!-- Roadmap 1.2-C: alternative net construction - one-shot
+           tool-like toggle (not a persistent mode), see sketch.js's
+           altNetActive/altNetPending state machine. Icon: a dashed
+           polygon outline with one solid edge and its two endpoints
+           marked, suggesting "click an edge, complete to a shape". -->
+      <button id="btn-alternative-net" class="icon-btn" title="Alternative Net Construction (click two points, then a third to confirm the side)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="12,3 20,9 17,19 7,19 4,9" stroke-dasharray="3,2" />
+          <line x1="7" y1="19" x2="17" y2="19" stroke-width="3" />
+          <circle cx="7" cy="19" r="1.6" fill="currentColor" stroke="none" />
+          <circle cx="17" cy="19" r="1.6" fill="currentColor" stroke="none" />
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Info card (UI rework 5a): the active sheet's pattern name (#pattern-name-group, moved here unchanged -
+       sketch.js's updatePatternNameStatus() still writes #pattern-name-status by id, same element). Netzart/
+       Farbwert are NOT duplicated here - they are already visible in #nav-netz/#nav-farbe; a combined summary
+       is a deliberate later step, not an oversight (see ROADMAP.md). -->
+  <div id="info-card" class="overlay" role="dialog" aria-label="Info" data-i18n="info.card" hidden>
+    <div class="control-group" id="pattern-name-group">
+      <label>Pattern Name</label>
+      <span id="pattern-name-status"></span>
+    </div>
+  </div>
+
   <!-- Messages that must not move the layout: the Node Count clamp note (written by sketch.js) and the
        reason a disabled control gives when tapped (ui.js). Both are fixed-position toasts, dismissible. -->
   <div id="node-count-note" class="limit-note toast" role="status" hidden></div>
   <div id="ui-toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260928r"></script>
-  <script src="core/state.js?v=20260928r"></script>
-  <script src="core/symmetry.js?v=20260928r"></script>
-  <script src="core/curves.js?v=20260928r"></script>
-  <script src="core/netwarp.js?v=20260928r"></script>
-  <script src="core/tiling.js?v=20260928r"></script>
-  <script src="core/faces.js?v=20260928r"></script>
-  <script src="core/orbits.js?v=20260928r"></script>
-  <script src="core/color.js?v=20260928r"></script>
-  <script src="core/facecolor.js?v=20260928r"></script>
-  <script src="core/export.js?v=20260928r"></script>
-  <script src="core/symmetry-toggles.js?v=20260928r"></script>
-  <script src="sketch.js?v=20260928r"></script>
-  <script src="nav.js?v=20260928r"></script>
-  <script src="ui.js?v=20260928r"></script>
-  <script src="ui-form.js?v=20260928r"></script>
-  <script src="ui-net.js?v=20260928r"></script>
-  <script src="ui-farbe.js?v=20260928r"></script>
+  <script src="core/forms.js?v=20260928t"></script>
+  <script src="core/state.js?v=20260928t"></script>
+  <script src="core/symmetry.js?v=20260928t"></script>
+  <script src="core/curves.js?v=20260928t"></script>
+  <script src="core/netwarp.js?v=20260928t"></script>
+  <script src="core/tiling.js?v=20260928t"></script>
+  <script src="core/faces.js?v=20260928t"></script>
+  <script src="core/orbits.js?v=20260928t"></script>
+  <script src="core/color.js?v=20260928t"></script>
+  <script src="core/facecolor.js?v=20260928t"></script>
+  <script src="core/export.js?v=20260928t"></script>
+  <script src="core/symmetry-toggles.js?v=20260928t"></script>
+  <script src="sketch.js?v=20260928t"></script>
+  <script src="nav.js?v=20260928t"></script>
+  <script src="ui.js?v=20260928t"></script>
+  <script src="ui-form.js?v=20260928t"></script>
+  <script src="ui-net.js?v=20260928t"></script>
+  <script src="ui-farbe.js?v=20260928t"></script>
+  <script src="ui-rail.js?v=20260928t"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

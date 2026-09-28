@@ -846,6 +846,121 @@ body.dark {
   .nav-farbe .nav-divider { display: none; }
 }
 
+/* === UI rework 5a: canvas rail ===========================================
+   The action rail - undo/redo/clear | random | points/curves/fill | info/save | more - flanks the canvas on
+   tablet/desktop as ONE single-button-wide column, gutter-aligned like the header/nav rows (CSS Grid: `--target`
+   left column, `1fr` canvas column, a matching `--target` EMPTY right column so the canvas stays centered now
+   that nothing sits on the right - see the phase 5a-fix report for why an `auto` column would not do this: an
+   empty `auto` track collapses to 0, it does not mirror the left column's width on its own). Below 768px it
+   collapses into three fixed rows under the canvas - row 1 undo/redo/clear/random, row 2 points/curves/fill/
+   info/save, row 3 more (flex-wrap + order + .rail-break, the same technique .nav-form's phone reflow uses).
+   Help stays in the header (#btn-help, untouched); Gallery stays in the old panel (moves with the Formorgel
+   link in step 5b) - both were measured to overflow the rail at a coarse pointer if added here, see the report.
+   Every button is the SAME element sketch.js already wires by id (select('#btn-...').mousePressed()) - a DOM
+   move, not a new one; see the canvas-row comment in index.html for what moved from where. */
+:root {
+  --rail-gap: 4px;        /* within a group - tighter than the row's own --gap, see the 5a-fix report */
+  --rail-group-gap: 12px; /* between groups - the same ~3:1 ratio measured on .nav-form's divider spacing */
+}
+.canvas-row {
+  display: grid;
+  grid-template-columns: var(--target) 1fr var(--target);
+  grid-template-rows: auto;
+  column-gap: var(--gap);
+  align-items: start;
+  justify-items: center;
+  align-self: stretch;
+  box-sizing: border-box;
+  padding: 0 var(--gutter);
+}
+@media (min-width: 768px) {
+  .canvas-row { padding: 0 24px; }
+}
+.canvas-row #canvas-container { grid-column: 2; grid-row: 1; }
+/* .rail-left is its OWN flex column, grid-row 1 next to the canvas but NOT spanning/sharing its row track: a
+   grid item that spans (or shares an auto row track with) a taller sibling gets that track's auto-sizing
+   algorithm applied to it too, which silently stretched every margin-top below to fill the canvas's 560px
+   instead of the --rail-gap/--rail-group-gap values (found while measuring the 5a-fix report - the rail came
+   out ~120px taller than the sum of its own declared spacing). A flex column sizes only to its own content
+   regardless of how tall row 1 is, so it is immune to that. */
+.rail-left { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; }
+.canvas-row .icon-btn {
+  width: var(--target);
+  height: var(--target);
+  border-radius: var(--radius);
+  flex: none;
+  touch-action: manipulation;
+}
+.canvas-row .rail-break { display: none; }
+
+/* Top to bottom: undo, redo, clear | random | points, curves, fill | info, save | more. Spacing is margin-top
+   (a flex column has one `gap` value too; these need two): --rail-gap within a group, --rail-group-gap between
+   groups. #btn-undo's own margin-top is the row's own --gap instead of either of those - not a group boundary,
+   but the "top alignment" fix: #canvas-container carries its own `margin: var(--gap) 0` (index.html), so
+   without this the rail's first button sits var(--gap) above the canvas's actual top edge, flush with the
+   row's own top instead of with the canvas. */
+#btn-undo         { margin-top: var(--gap); }
+#btn-redo         { margin-top: var(--rail-gap); }
+#btn-clear        { margin-top: var(--rail-gap); }
+#btn-random       { margin-top: var(--rail-group-gap); }
+#btn-toggle-nodes { margin-top: var(--rail-group-gap); }
+#btn-toggle-curve { margin-top: var(--rail-gap); }
+#btn-toggle-faces { margin-top: var(--rail-gap); }
+#btn-info         { margin-top: var(--rail-group-gap); }
+#btn-save         { margin-top: var(--rail-gap); }
+#btn-more-rail    { margin-top: var(--rail-group-gap); }
+
+/* Divider between groups: a hairline centered in the --rail-group-gap above the group's first button (like
+   .nav-divider, but horizontal - this rail is vertical). Drawn with ::before so it takes no row space (same
+   technique as .nav-more.has-state::after); hidden on the phone, where the rail is three plain rows (no
+   dividers there either, matching .nav-divider's own mobile hiding). */
+#btn-random, #btn-toggle-nodes, #btn-info, #btn-more-rail { position: relative; }
+@media (min-width: 768px) {
+  #btn-random::before, #btn-toggle-nodes::before, #btn-info::before, #btn-more-rail::before {
+    content: "";
+    position: absolute;
+    top: calc(-1 * var(--rail-group-gap) / 2 - 0.5px);
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--color-hairline);
+  }
+}
+
+@media (max-width: 767px) {
+  .canvas-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--gap);
+  }
+  /* Unwraps .rail-left: its 10 buttons become direct flex children of .canvas-row, so the order/.rail-break
+     reflow below can freely interleave them with the (former) canvas-right items across three rows - a grid
+     cell can't do that, but a flex container's own children can once they're all its direct children. */
+  .rail-left { display: contents; }
+  .canvas-row #canvas-container { flex: 0 0 100%; order: 0; }
+  #btn-undo, #btn-redo, #btn-clear, #btn-random,
+  #btn-toggle-nodes, #btn-toggle-curve, #btn-toggle-faces, #btn-info, #btn-save,
+  #btn-more-rail { margin-top: 0; }
+  #btn-random::before, #btn-toggle-nodes::before, #btn-info::before, #btn-more-rail::before { display: none; }
+  /* Row 1: undo, redo, clear, random. */
+  #btn-undo         { order: 1; }
+  #btn-redo         { order: 2; }
+  #btn-clear        { order: 3; }
+  #btn-random       { order: 4; }
+  .canvas-row .rail-break-1 { display: block; order: 5; flex: 0 0 100%; height: 0; }
+  /* Row 2: points, curves, fill, info, save. */
+  #btn-toggle-nodes { order: 6; }
+  #btn-toggle-curve { order: 7; }
+  #btn-toggle-faces { order: 8; }
+  #btn-info         { order: 9; }
+  #btn-save         { order: 10; }
+  .canvas-row .rail-break-2 { display: block; order: 11; flex: 0 0 100%; height: 0; }
+  /* Row 3: more. */
+  #btn-more-rail    { order: 12; }
+}
+
 /* Keyboard focus: its own 2px outline with a 2px offset, never the same
    as the active state (black fill). :focus-visible = keyboard only. */
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
