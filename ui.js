@@ -297,7 +297,14 @@
       api.isOpen = true; openOverlay = api;
       trigger.setAttribute('aria-expanded', 'true');
       place();
-      const first = panel.querySelector('[tabindex="0"], button:not([disabled])');
+      // querySelector alone would also match a button inside a `hidden` ancestor (e.g. #more-farbe's Spread
+      // button, normally hidden inside #face-colors-unassigned, sits before the always-visible Reset button in
+      // the DOM): .focus() silently no-ops on such an element, so focus never actually enters the panel and
+      // Escape (which needs a focused descendant to bubble the keydown up to the panel) then does nothing.
+      // offsetParent is null for a `display:none` element AND for any element with a `hidden` ancestor, but not
+      // for a merely off-screen-but-laid-out one, so this excludes exactly the elements .focus() would ignore.
+      const candidates = panel.querySelectorAll('[tabindex="0"], button:not([disabled])');
+      const first = Array.prototype.find.call(candidates, function (el) { return el.offsetParent !== null; });
       if (first) first.focus();
     }
     function close(returnFocus) {
