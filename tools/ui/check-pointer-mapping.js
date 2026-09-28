@@ -24,6 +24,14 @@
  * node hit radius (18 sketch units, sketch.js mousePressed()) as it
  * appears on screen at the current scale.
  *
+ * Edge nodes: for each shape at Shape Size 1 (the grid then reaches the
+ * canvas border) every node in the first/last row and column is clicked
+ * for real; `edge.<shape>` reports how many were hit, the misses, and
+ * `offCanvas` (edge nodes that lie outside the canvas - the hexagon at
+ * Shape Size 1 - which cannot be clicked and are not counted as misses).
+ * checkPointerMapping({ edges: false }) skips this; the shape and size it
+ * changed are restored afterwards.
+ *
  * Touch events are synthetic: this checks p5's coordinate mapping for
  * touches, NOT that a real phone delivers touch-then-mouse events only
  * once (that needs a real device).
@@ -105,8 +113,82 @@
     // to 1 screen pixel off the intended point: allow 1 px, expressed in
     // sketch units (1 / scale). Touch positions keep fractions.
     out.tolerance = Math.round((1 / sx) * 100) / 100;
+
+    // Nodes at the edges. At Shape Size 1 the grid reaches the canvas
+    // border, so this covers the first/last row and column of every shape.
+    // Each edge node is clicked for real (first click = the edge node,
+    // second = the node nearest the centre; the connection must contain
+    // both ids), then undone. Reported per shape: how many edge nodes were
+    // hit, and for the misses the node, its position and where p5 put the
+    // pointer.
+    if (!(opts && opts.edges === false)) {
+      out.edge = {};
+      const sizeInput = document.querySelector('#shape-size-input');
+      const shapeBtns = [...document.querySelectorAll('.shape-icon-btn')];
+      const setSize = async (v) => {
+        sizeInput.value = String(v);
+        sizeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        sizeInput.dispatchEvent(new Event('change', { bubbles: true }));
+        await sleep(200);
+      };
+      const originalSize = sizeInput ? sizeInput.value : null;
+      const originalShape = shapeBtns.findIndex((b) => b.classList.contains('active'));
+      const btnClick = (el) => { for (const t of ['mousedown', 'mouseup', 'click']) el.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window })); };
+      for (const [i, name] of [[0, 'triangle'], [1, 'square'], [2, 'hex']]) {
+        if (!shapeBtns[i] || !sizeInput) continue;
+        btnClick(shapeBtns[i]); await sleep(250);
+        await setSize(1);
+        const ns = nodes.slice();
+        const eps = 1e-6;
+        const minX = Math.min(...ns.map((n) => n.x)), maxX = Math.max(...ns.map((n) => n.x));
+        const minY = Math.min(...ns.map((n) => n.y)), maxY = Math.max(...ns.map((n) => n.y));
+        const sets = { firstRow: ns.filter((n) => n.y - minY < eps), lastRow: ns.filter((n) => maxY - n.y < eps),
+                       firstCol: ns.filter((n) => n.x - minX < eps), lastCol: ns.filter((n) => maxX - n.x < eps) };
+        const allEdge = [...new Map(Object.values(sets).flat().map((n) => [n.id, n])).values()];
+        // A node outside the canvas (the hexagon at Shape Size 1 reaches
+        // x = -46..646 on a 0..600 canvas) has nothing to click on, and
+        // mousePressed() drops pointers outside the canvas: reported
+        // separately, not counted as a miss.
+        const onCanvas = (n) => n.x >= 0 && n.x <= width && n.y >= 0 && n.y <= height;
+        const edgeNodes = allEdge.filter(onCanvas);
+        const offCanvas = allEdge.filter((n) => !onCanvas(n)).map((n) => ({ id: n.id, at: [Math.round(n.x * 100) / 100, Math.round(n.y * 100) / 100] }));
+        const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+        const centre = ns.filter((n) => !edgeNodes.includes(n)).sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy))[0] || ns[0];
+        const r2 = cv.getBoundingClientRect();
+        const s2 = r2.width / width;
+        const click2 = async (px, py) => {
+          const o = { bubbles: true, cancelable: true, view: window, button: 0, clientX: r2.left + px * s2, clientY: r2.top + py * s2 };
+          cv.dispatchEvent(new MouseEvent('mousemove', o)); await sleep(30);
+          const seen = [mouseX, mouseY];
+          cv.dispatchEvent(new MouseEvent('mousedown', o)); cv.dispatchEvent(new MouseEvent('mouseup', o)); cv.dispatchEvent(new MouseEvent('click', o));
+          await sleep(80);
+          return seen;
+        };
+        let hit = 0; const misses = []; let maxErr = 0;
+        for (const e of edgeNodes) {
+          const before = connections.length;
+          const seen = await click2(e.x, e.y); await click2(centre.x, centre.y);
+          const last = connections.length > before ? connections[connections.length - 1] : null;
+          const ok = !!last && last.indexOf(e.id) >= 0 && last.indexOf(centre.id) >= 0;
+          const err = Math.max(Math.abs(seen[0] - e.x), Math.abs(seen[1] - e.y)); if (err > maxErr) maxErr = err;
+          if (ok) hit++; else misses.push({ id: e.id, at: [Math.round(e.x * 100) / 100, Math.round(e.y * 100) / 100], pointer: [Math.round(seen[0] * 100) / 100, Math.round(seen[1] * 100) / 100] });
+          if (last) { btnClick(document.querySelector('#btn-undo')); await sleep(60); }
+          else if (connections.length && connections[connections.length - 1].length === 1) { btnClick(document.querySelector('#btn-undo')); await sleep(60); }
+        }
+        out.edge[name] = { size: 1, nodes: ns.length, edgeNodes: edgeNodes.length,
+                           rows_cols: { firstRow: sets.firstRow.length, lastRow: sets.lastRow.length, firstCol: sets.firstCol.length, lastCol: sets.lastCol.length },
+                           extent: [[Math.round(minX * 10) / 10, Math.round(minY * 10) / 10], [Math.round(maxX * 10) / 10, Math.round(maxY * 10) / 10]],
+                           hit, misses, offCanvas, maxPointerErr: Math.round(maxErr * 100) / 100 };
+      }
+      // restore what the check changed
+      if (sizeInput && originalSize !== null) await setSize(originalSize);
+      if (originalShape >= 0 && shapeBtns[originalShape]) { btnClick(shapeBtns[originalShape]); await sleep(250); }
+      out.edgeOk = Object.values(out.edge).every((e) => e.hit === e.edgeNodes);
+    }
+
     out.ok = out.maxErrMouse <= out.tolerance + 0.01 &&
-             (!canTouch || out.maxErrTouch <= out.tolerance + 0.01) && out.hit.ok;
+             (!canTouch || out.maxErrTouch <= out.tolerance + 0.01) && out.hit.ok &&
+             (out.edgeOk === undefined || out.edgeOk);
     const text = JSON.stringify(out);
     if (!(opts && opts.raw)) console.log(text);
     return opts && opts.raw ? out : text;
