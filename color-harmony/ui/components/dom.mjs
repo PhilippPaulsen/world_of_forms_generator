@@ -19,10 +19,12 @@ export function button(text,key,state,run,selected=false,id=key) {
   return el('button',{type:'button','aria-label':t(key,state.locale),'data-tooltip':t(key,state.locale),
     'data-focus':id,'aria-pressed':String(selected),onclick:run},text);
 }
+export const fieldLabel=(field,locale)=>field.source==='reference'?`${field.hueIndex} · ${t('full',locale)}`:field.label||t('noAtlas',locale);
+export const fieldStatus=(field,locale)=>t(field.source==='reference'?'reference':field.source==='atlas'?'atlas':'continuum',locale);
 export function colorButton(field,state,run,selected=false,id=field.label) {
   return el('button',{type:'button',class:`swatch ${selected?'selected':''}`,style:`--color:${color(field)}`,
-    'aria-label':`${field.label||t('noAtlas',state.locale)} · ${t(field.source==='atlas'?'atlas':'continuum',state.locale)}`,
-    'data-tooltip':field.label||t('noAtlas',state.locale),'data-focus':id,'aria-pressed':selected,onclick:run});
+    'aria-label':`${fieldLabel(field,state.locale)} · ${fieldStatus(field,state.locale)}`,
+    'data-tooltip':fieldLabel(field,state.locale),'data-focus':id,'aria-pressed':selected,onclick:run});
 }
 export function activateSVG(node,run,label,id,selected=false) {
   node.setAttribute('role','button');node.setAttribute('aria-label',label);node.setAttribute('aria-pressed',String(selected));
@@ -33,5 +35,6 @@ export function activateSVG(node,run,label,id,selected=false) {
   node.append(svg('title',{},label));return node;
 }
 export function fieldAction(field,dispatch) {
+  if(field.source==='reference')return ()=>dispatch('selectedHue',field.hueIndex);
   return ()=>field.hueIndex?dispatch('cell',{hue:field.hueIndex,register:field.label.replace(/^\d+/,'')}):dispatch('gray',field.letter);
 }

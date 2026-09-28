@@ -1,4 +1,4 @@
-import {el,svg,color,colorButton,fieldAction,button} from '../components/dom.mjs';
+import {el,svg,color,colorButton,fieldAction,button,fieldLabel} from '../components/dom.mjs';
 import {hueHarmony} from '../state.mjs';
 import {t} from '../i18n.mjs';
 export function HarmonyView(state,dispatch) {
@@ -13,8 +13,8 @@ export function HarmonyView(state,dispatch) {
     chart.append(svg('polygon',{points:positions.map(p=>p.join(',')).join(' '),class:'chord-line'}));
     harmony.fields.forEach((field,i)=>{
       const [x,y]=positions[i],foreign=svg('foreignObject',{x:x-36,y:y-36,width:72,height:72});
-      foreign.append(colorButton(field,state,fieldAction(field,dispatch),field.hueIndex===state.selectedHue,`harmony-${field.label}`));
-      chart.append(foreign,svg('text',{x,y:y+60,'text-anchor':'middle',class:'axis-label'},field.label));
+      foreign.append(colorButton(field,state,fieldAction(field,dispatch),field.hueIndex===state.selectedHue,`harmony-${field.label||field.hueIndex}`));
+      chart.append(foreign,svg('text',{x,y:y+60,'text-anchor':'middle',class:'axis-label'},fieldLabel(field,state.locale)));
     });
     const name=state.harmonyMode===2?'complementary':state.harmonyMode===3?'triad':'tetrad';
     chart.append(svg('text',{x:320,y:225,'text-anchor':'middle',class:'harmony-name'},t(name,state.locale)),

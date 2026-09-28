@@ -19,7 +19,7 @@ export function fieldAt(hue,register) {
 }
 export function createState(overrides={}) {
   const initial={locale:DEFAULT_LOCALE,activeView:'circle',displayMode:'atlas',selectedHue:1,
-    selectedRegister:'ic',selectedField:fieldAt(1,'ic'),harmonyMode:3,relation:'shadowSeries',
+    selectedRegister:'ic',circleMode:'reference',selectedField:referenceAt(1),harmonyMode:3,relation:'shadowSeries',
     selectionKind:'color',resultOpen:false,harmonyExample:'regular',selectedHarmony:null,inspectorOpen:false,detailOpen:false};
   let state=initial;
   for(const [key,value] of Object.entries(overrides)) state=transition(state,{type:key,value});
@@ -30,11 +30,22 @@ export function transition(state,action) {
   const {type,value}=action;
   let next={...state};
   switch(type) {
+    case 'previousHue': return transition(state,{type:'selectedHue',value:state.selectedHue-1});
+    case 'nextHue': return transition(state,{type:'selectedHue',value:state.selectedHue+1});
+    case 'previousRegister': case 'nextRegister': {
+      const sequence=state.activeView==='circle'?['reference',...registers]:registers;
+      const current=state.activeView==='circle'&&state.circleMode==='reference'?'reference':state.selectedRegister;
+      const index=Math.max(0,Math.min(sequence.length-1,sequence.indexOf(current)+(type==='nextRegister'?1:-1)));
+      return sequence[index]==='reference'?transition(state,{type:'goToDefaultCircle'}):transition(state,{type:'selectedRegister',value:sequence[index]});
+    }
+    case 'goToDefaultCircle':
+      next.activeView='circle';next.circleMode='reference';next.resultOpen=false;next.selectedHarmony=null;
+      next.selectionKind=state.selectionKind==='harmony'?'harmony':'color';next.selectedField=referenceAt(next.selectedHue);return next;
     case 'selectedHue': next.selectedHue=normalizeHue(value); break;
-    case 'selectedRegister': if(!registers.includes(value)) throw new RangeError('Unknown register'); next.selectedRegister=value; break;
-    case 'cell': next.selectedHue=normalizeHue(value.hue); if(!registers.includes(value.register)) throw new RangeError('Unknown register');next.selectedRegister=value.register;break;
-    case 'activeView': if(!views.includes(value)) throw new RangeError('Unknown view');next.activeView=value;return next;
-    case 'displayMode': if(!['atlas','continuum'].includes(value)) throw new RangeError('Unknown mode');next.displayMode=value;break;
+    case 'selectedRegister': if(!registers.includes(value)) throw new RangeError('Unknown register'); next.selectedRegister=value;next.circleMode='atlas'; break;
+    case 'cell': next.selectedHue=normalizeHue(value.hue); if(!registers.includes(value.register)) throw new RangeError('Unknown register');next.selectedRegister=value.register;next.circleMode='atlas';break;
+    case 'activeView': if(!views.includes(value)) throw new RangeError('Unknown view');next.activeView=value;if(value!=='circle'&&next.circleMode==='reference'){next.circleMode='atlas';if(next.selectedField.source==='reference')next.selectedField=fieldAt(next.selectedHue,next.selectedRegister);}return next;
+    case 'displayMode': if(!['atlas','continuum'].includes(value)) throw new RangeError('Unknown mode');next.displayMode=value;next.circleMode='atlas';break;
     case 'harmonyMode':
       if(![2,3,4].includes(value)) throw new RangeError('Invalid cardinality');
       next.harmonyMode=value;next.harmonyExample='regular';next.selectedHarmony=null;
@@ -42,7 +53,7 @@ export function transition(state,action) {
       next.selectedField=anchor(next);
       if(next.selectionKind==='color')next.resultOpen=false;
       return next;
-    case 'relation': if(!relations.includes(value)) throw new RangeError('Unknown relation');next.relation=value;next.selectionKind='relation';next.selectedHarmony=null;next.resultOpen=false;break;
+    case 'relation': if(!relations.includes(value)) throw new RangeError('Unknown relation');next.relation=value;next.circleMode='atlas';next.selectionKind='relation';next.selectedHarmony=null;next.resultOpen=false;break;
     case 'locale': if(!['de','en'].includes(value)) throw new RangeError('Unknown locale');next.locale=value;return next;
     case 'inspectorOpen': case 'detailOpen': case 'resultOpen': if(typeof value!=='boolean') throw new TypeError('Expected boolean');next[type]=value;return next;
     case 'gray': {const gray=grays.find(g=>g.letter===value);if(!gray) throw new RangeError('Unknown gray');next.selectedField=gray;next.selectionKind='color';next.resultOpen=false;return next;}
@@ -56,15 +67,22 @@ export function transition(state,action) {
     default: throw new RangeError('Unknown state transition');
   }
   if(next.selectionKind==='compound'){next.selectionKind='color';next.selectedHarmony=null;next.harmonyExample='regular';next.resultOpen=false;}
-  next.selectedField=fieldAt(next.selectedHue,next.selectedRegister);
+  next.selectedField=anchor(next);
   return next;
 }
-export function anchor(state) {return fieldAt(state.selectedHue,state.selectedRegister);}
+/** Reference colors are explicit non-atlas vertices; they never receive letter labels. */
+export function referenceAt(hue) {const h=normalizeHue(hue);return {...Engine.mix(circle[h-1].lab,0,0),hueIndex:h,source:'reference'};}
+export function isReferenceCircle(state) {return state.activeView==='circle'&&state.circleMode==='reference';}
+export function circleField(state,hue) {return isReferenceCircle(state)?referenceAt(hue):fieldAt(hue,state.selectedRegister);}
+export function anchor(state) {return circleField(state,state.selectedHue);}
+
 export function hueHarmony(state) {
-  const subdivision=Engine.regularHueSubdivision(anchor(state),state.harmonyMode);
+  const field=anchor(state);
+  const subdivision=Engine.regularHueSubdivision(field.source==='reference'?{...field,source:'interpolated'}:field,state.harmonyMode);
+  if(isReferenceCircle(state))subdivision.fields=subdivision.fields.map(f=>referenceAt(f.hueIndex));
   return {...subdivision,classification:Engine.classifyHueSet(subdivision.fields.map(f=>f.hueIndex))};
 }
-export function fieldRelations(state) {return Engine.harmonies(anchor(state));}
+export function fieldRelations(state) {return Engine.harmonies(fieldAt(state.selectedHue,state.selectedRegister));}
 export function pathSamples(state,count=49) {
   const paths=fieldRelations(state).paths;
   // No invented continuous isovalent path: that relation remains an atlas circle.
