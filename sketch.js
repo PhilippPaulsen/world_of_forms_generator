@@ -624,6 +624,27 @@ function setup() {
             : c.mode === 'sinus' ? (c.focus ? { kind: 'trig', w: -c.strength, focus: c.focus, alternate: c.alternate } : { kind: 'trig', w: -c.strength })
             : c.mode === 'tangens' ? (c.focus ? { kind: 'trig', w: c.strength, focus: c.focus, alternate: c.alternate } : { kind: 'trig', w: c.strength })
             : { kind: 'geometric', w: (c.reverse ? -1 : 1) * c.strength * Math.log(NET_R_MAX), alternate: c.alternate };
+        // UI rework 4c: a value on the 0.1 grid shows one decimal (0.8), any other value two (0.86) - the stored value is
+        // never rounded, the display just says what it is.
+        function fmtNetValue(v) { return Math.abs(v * 10 - Math.round(v * 10)) < 1e-9 ? v.toFixed(1) : v.toFixed(2); }
+        // UI rework 4c: what happens when a kind is chosen. A net switched on from "Aus" starts as Both axes + Field (the
+        // defaults are not shown; More has the other choices). Field needs an odd Shape Size 3..9 - with an even one it stays
+        // Single and SAYS so; the Shape Size itself is never changed. Sin and Tan need at least 4 nodes (at 3 the law sits
+        // on its fixed points and shows no effect): a lower Node Count is raised to 4, and that is said too.
+        function applyNetKindChoice(kind, fromRegular) {
+            const notes = [];
+            if (fromRegular) {
+                ui.axes = 'both';
+                const R = shapeSizeFactor;
+                if (netDomainEffective({ domain: 'field' }, R).ignored === null) setDomain('field');
+                else { setDomain('single'); notes.push(`Feld braucht eine ungerade Größe (3, 5, 7, 9); ${R} passt nicht, deshalb Einzelnetz. Die Größe bleibt ${R}.`); }
+            }
+            if ((kind === 'sinus' || kind === 'tangens') && nodeCount < 4) {
+                notes.push(`Sin und Tan brauchen mindestens 4 Knoten; Knoten von ${nodeCount} auf 4 gesetzt.`);
+                if (nodeInput) { nodeInput.value(4); nodeInput.elt.dispatchEvent(new Event('input', { bubbles: true })); }
+            }
+            if (notes.length && window.UI) UI.toast(notes.join(' '), 6000);
+        }
         function commit() {
             if (ui.axes === 'both') ui.y = Object.assign({}, ui.x);
             const allRegular = ui.x.mode === 'regular' && ui.y.mode === 'regular';
@@ -643,11 +664,11 @@ function setup() {
             axesBtns.forEach(b => b.elt.classList.toggle('active', b.elt.dataset.axes === ui.axes));
             strengthRow.elt.hidden = c.mode === 'regular';
             strengthInput.value(Math.round(c.strength * 100));
-            strengthValue.html(c.mode === 'geometric' ? '\u00d7' + Math.pow(NET_R_MAX, c.strength).toFixed(1) : c.strength.toFixed(2));
+            strengthValue.html(c.mode === 'geometric' ? '\u00d7' + Math.pow(NET_R_MAX, c.strength).toFixed(1) : fmtNetValue(c.strength));
             // Focus (trig laws, Single/Tiled): moves the widest (sinus) / narrowest (tangens) mesh off the tile centre; not in a Field
             const trig = c.mode === 'sinus' || c.mode === 'tangens', geo = c.mode === 'geometric';
             focusRow.elt.hidden = !trig;
-            focusInput.value(Math.round((c.focus || 0) * 100)); focusValue.html((c.focus || 0).toFixed(2));
+            focusInput.value(Math.round((c.focus || 0) * 100)); focusValue.html(fmtNetValue(c.focus || 0));
             const anyFocus = [ui.x, ui.axes === 'both' ? ui.x : ui.y].some(a => (a.mode === 'sinus' || a.mode === 'tangens') && a.focus);
             focusHint.elt.hidden = !anyFocus;
             if (!focusHint.elt.hidden) focusHint.html(ui.domain === 'field'
@@ -660,7 +681,12 @@ function setup() {
             reverseBtn.elt.classList.toggle('active', c.reverse);
             alternateBtn.elt.classList.toggle('active', c.alternate);
         }
-        kindBtns.forEach(b => b.mousePressed(() => { target().mode = b.elt.dataset.kind; commit(); }));
+        kindBtns.forEach(b => b.mousePressed(() => {
+            const kind = b.elt.dataset.kind, fromRegular = ui.x.mode === 'regular' && ui.y.mode === 'regular';
+            target().mode = kind;
+            if (kind !== 'regular') applyNetKindChoice(kind, fromRegular);
+            commit();
+        }));
         axesBtns.forEach(b => b.mousePressed(() => {
             const next = b.elt.dataset.axes;
             if (next !== 'both' && ui.axes === 'both') ui.y = Object.assign({}, ui.x); // start X and Y from the shared law

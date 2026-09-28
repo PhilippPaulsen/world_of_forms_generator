@@ -691,6 +691,71 @@ body.dark {
 }
 .toast[hidden] { display: none; }
 
+/* === UI rework 4c: Netz row ===============================================
+   Aus | Sin | Tan | Geo, the strength stepper, More. Same rules as the Form row: every control is --target high, a
+   control that does not apply is aria-disabled (never hidden), nothing moves. */
+.nav-kinds .net-kind-btn {
+  width: calc(var(--target) + 12px);   /* four equal slots wide enough for "Aus" / "Sin" / "Tan" / "Geo" */
+  font-size: var(--size-base);
+  font-weight: var(--weight-regular);
+}
+
+/* A stepper whose number is a display (strength, focus): a focusable spinbutton, fixed width so nothing moves when
+   "0.5" becomes "0.86" or "x3.2". The state itself lives in a hidden range input (percent), as with the old slider. */
+.stepper-display {
+  display: inline-block;
+  min-width: 4ch;
+  text-align: center;
+  font-size: var(--size-base);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--color-text);
+}
+.stepper-display:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+
+/* Exact two-decimal value field (under More). */
+.exact-field {
+  box-sizing: border-box;
+  width: 96px;
+  height: var(--target);
+  padding: 0 8px;
+  border: 1px solid var(--color-text);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--size-base);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.exact-field[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
+
+/* The net group (#net-group) now sits inside the Netz overlay: its rows read left-aligned, its buttons follow --target. */
+.overlay-wide { max-width: min(92vw, 420px); }
+.overlay .control-group { align-items: stretch; gap: 8px; width: 100%; }
+.overlay .icon-row { justify-content: flex-start; flex-wrap: wrap; gap: var(--gap); }
+.overlay .layer-btn {
+  height: auto;
+  min-height: var(--target);
+  padding: 0 12px;
+  border-radius: var(--radius);
+  font-size: var(--size-base);
+  font-weight: var(--weight-regular);
+}
+.overlay #net-focus-row, .overlay #net-macro-row { width: 100%; }
+
+/* Phone: two rows of --bar-h (Aus/Sin/Tan/Geo + More, then the strength stepper). 4 x (--target + 12) + 3 x 8 gaps + 8 +
+   More = 320px at --target 48 (fits a 360px phone). */
+@media (max-width: 767px) {
+  .nav-netz { flex-wrap: wrap; align-content: flex-start; align-items: center; gap: 0 var(--gap); }
+  .nav-netz > * { margin-top: 12px; margin-bottom: 12px; }
+  .nav-netz .nav-kinds { order: 1; }
+  .nav-netz .nav-more { order: 2; }
+  .nav-netz .nav-break { order: 3; display: block; flex: 0 0 100%; height: 0; margin: 0; }
+  .nav-netz .stepper { order: 4; }
+  .nav-netz .nav-divider { display: none; }
+}
+
 /* Keyboard focus: its own 2px outline with a 2px offset, never the same
    as the active state (black fill). :focus-visible = keyboard only. */
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {

@@ -100,6 +100,9 @@
    *                   { to: null, reason: string }   blocked: that button is aria-disabled with the reason
    *   range() -> { min, max, minMsg, maxMsg }  the valid range for TYPED values: an out-of-range number is clamped
    *            and a toast says why; an emptied field is restored on blur
+   *   noTyping  true when `input` is only a state carrier (a hidden range input, value = percent): no typed-value
+   *            handling. keyEl  the element that takes ArrowUp/Down (default: the input; a focusable spinbutton
+   *            display otherwise)
    *   Hold a button: it repeats after 600 ms, faster after a while. Arrow keys on the input step too.
    *   refresh() re-reads compute() for both directions and updates the buttons; call it after any state change.
    */
@@ -116,24 +119,26 @@
     // sketch.js's own (ui-form.js runs before setup()), so it sees the event first: an emptied/NaN field is
     // mid-typing and never reaches the sketch; an out-of-range number is clamped, with a toast, BEFORE the sketch
     // reads it.
-    input.addEventListener('input', function (e) {
-      const v = parseInt(input.value, 10);
-      if (input.value === '' || isNaN(v)) { e.stopImmediatePropagation(); return; }
-      const rg = opts.range ? opts.range() : null;
-      if (rg && (v < rg.min || v > rg.max)) {
-        const c = v < rg.min ? rg.min : rg.max;
-        input.value = String(c);
-        toast(v < rg.min ? rg.minMsg : rg.maxMsg, 4000);
-      }
-      last = parseInt(input.value, 10);
-    });
-    function normalise() {
-      const v = parseInt(input.value, 10);
-      if (isNaN(v)) { if (!isNaN(last)) input.value = String(last); }
-      else if (String(v) !== input.value) input.value = String(v); // "3.5" -> "3"
+    if (!opts.noTyping) {
+      input.addEventListener('input', function (e) {
+        const v = parseInt(input.value, 10);
+        if (input.value === '' || isNaN(v)) { e.stopImmediatePropagation(); return; }
+        const rg = opts.range ? opts.range() : null;
+        if (rg && (v < rg.min || v > rg.max)) {
+          const c = v < rg.min ? rg.min : rg.max;
+          input.value = String(c);
+          toast(v < rg.min ? rg.minMsg : rg.maxMsg, 4000);
+        }
+        last = parseInt(input.value, 10);
+      });
+      const normalise = function () {
+        const v = parseInt(input.value, 10);
+        if (isNaN(v)) { if (!isNaN(last)) input.value = String(last); }
+        else if (String(v) !== input.value) input.value = String(v); // "3.5" -> "3"
+      };
+      input.addEventListener('change', normalise);
+      input.addEventListener('blur', normalise);
     }
-    input.addEventListener('change', normalise);
-    input.addEventListener('blur', normalise);
     function step(dir) {
       const r = opts.compute(dir);
       if (r.to === null || r.to === undefined) { toast(r.reason, 4000); return false; }
@@ -180,7 +185,7 @@
       });
       b.style.touchAction = 'manipulation';
     });
-    input.addEventListener('keydown', function (e) {
+    (opts.keyEl || input).addEventListener('keydown', function (e) {
       if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); step(1); }
       else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
     });
@@ -192,6 +197,18 @@
     function sync() {
       const on = el.classList.contains('active') ? 'true' : 'false';
       if (el.getAttribute('aria-pressed') !== on) el.setAttribute('aria-pressed', on);
+    }
+    sync();
+    new MutationObserver(sync).observe(el, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  // ---- aria-checked follows the 'active' class (radios whose state sketch.js owns) -------
+  function checkedFromActive(el) {
+    function sync() {
+      const on = el.classList.contains('active') ? 'true' : 'false';
+      if (el.getAttribute('aria-checked') !== on) el.setAttribute('aria-checked', on);
+      const tab = on === 'true' ? 0 : -1;
+      if (el.tabIndex !== tab) el.tabIndex = tab;
     }
     sync();
     new MutationObserver(sync).observe(el, { attributes: true, attributeFilter: ['class'] });
@@ -314,5 +331,12 @@
     return api;
   }
 
-  window.UI = { toast: toast, hideToast: hideToast, setDisabled: setDisabled, guard: guard, stepper: stepper, pressed: pressed, isDisabled: isDisabled, radiogroup: radiogroup, overlay: overlay };
+  // ---- one sync entry point -------------------------------------------------------
+  // sketch.js calls window.uiSync() at the start of every draw() and after symmetry changes; each nav row registers
+  // its own state-reading function here with UI.onSync(fn).
+  const syncFns = [];
+  window.uiSync = function () { for (let i = 0; i < syncFns.length; i++) syncFns[i](); };
+  function onSync(fn) { syncFns.push(fn); }
+
+  window.UI = { onSync: onSync, toast: toast, hideToast: hideToast, setDisabled: setDisabled, guard: guard, stepper: stepper, pressed: pressed, isDisabled: isDisabled, radiogroup: radiogroup, overlay: overlay, checkedFromActive: checkedFromActive, showReason: showReason };
 })();
