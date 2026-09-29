@@ -665,6 +665,39 @@ body.dark {
 .opt[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
 .opt[aria-disabled="true"]:hover { background: var(--background); }
 
+/* Group D Phase B3: the Kreis/Dreieck/Register anchor widgets (#more-farbe) - a visual/text alternative to
+   the B2 numeric steppers over the same anchor state. Point styling mirrors .opt's active/hover language
+   above (fill swap instead of background swap, since these are SVG circles, not boxed buttons). */
+.anchor-widget-svg { width: 100%; max-width: 240px; height: auto; display: block; margin: 0 auto; }
+.anchor-widget-svg[hidden] { display: none; }
+.anchor-point circle.anchor-point-hit { fill: transparent; }
+.anchor-point circle.anchor-point-face { fill: var(--background); stroke: var(--color-text); stroke-width: 1.5; }
+.anchor-point:hover circle.anchor-point-face { fill: var(--hover-bg); }
+.anchor-point.active circle.anchor-point-face { fill: var(--color-text); }
+.anchor-point text { font-size: 8px; fill: var(--color-text); pointer-events: none; text-anchor: middle; dominant-baseline: central; }
+.anchor-point.active text { fill: var(--color-bg); }
+.anchor-point[aria-disabled="true"] circle.anchor-point-face { fill: var(--background); stroke: var(--color-hairline); cursor: not-allowed; }
+.anchor-register-list { display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow-y: auto; }
+.anchor-register-list[hidden] { display: none; }
+.anchor-register-row {
+  min-height: var(--target);
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--color-text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.anchor-register-row:hover { background: var(--hover-bg); }
+.anchor-register-row.active { background: var(--color-text); color: var(--color-bg); }
+
 /* The old three-button symmetry group and the fold group stay in the DOM (sketch.js owns them) but are hidden. */
 .legacy-controls[hidden] { display: none; }
 

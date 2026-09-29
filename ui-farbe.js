@@ -85,6 +85,142 @@
     if (rCnt) rCnt.textContent = a.registerIndex === null ? `–/${ANCHOR_REGISTER_COUNT}` : `${a.registerIndex + 1}/${ANCHOR_REGISTER_COUNT}`;
   }
 
+  // ---- anchor widgets (Group D Phase B3): a visual/text alternative to the two numeric steppers above,
+  // over the SAME anchor state - never a second source of truth. Kreis: a 24-point hue ring (hueRingPoints(),
+  // core/farborgel-bridge.js - now loaded in the browser for the first time, this widget's real consumer).
+  // Dreieck: the real 28-register triangle (registerTrianglePoints(), same file) FOR THE CURRENT HUE.
+  // Register: the same 28 registers (FARBORGEL_REGISTER_ORDER) as a per-hue text list - a design choice
+  // made this phase (not the full 24x28/672-cell atlas Farborgel's own standalone tool shows, since Kreis
+  // already owns hue selection here - see the Phase B3 report). Switching view mode never touches the
+  // anchor, only which of the three containers is visible (anchorViewMode is UI-only state).
+  //
+  // Both SVG widgets reuse color-harmony/ui/components/dom.mjs's activateSVG() pattern (role="button"/here
+  // "radio", a hit-target circle bigger than the visible face, Enter/Space -> click, an appended <title> for
+  // native SVG accessibility) - reimplemented locally, not imported (per the Phase B3 design: no ESM import).
+  // Keyboard arrow-navigation is UI.radiogroup() itself, reused verbatim on the SVG <g> elements exactly as
+  // it already is on plain <button>s elsewhere in this file - it only touches attributes/classes/tabIndex,
+  // which work identically on any DOM element, SVG included.
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  function svgEl(tag, attrs) {
+    const el = document.createElementNS(SVG_NS, tag);
+    if (attrs) for (const k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  }
+  // hitR: a bigger transparent circle, easier to hit/tap than the visible face - same "hit target larger
+  // than the visible control" idea as this project's existing swatch rows, just circular instead of a row.
+  function anchorPoint(cx, cy, label, hitR, faceR) {
+    const g = svgEl('g', { class: 'anchor-point', role: 'radio', 'aria-checked': 'false', tabindex: '-1' });
+    g.appendChild(svgEl('circle', { class: 'anchor-point-hit', cx: cx, cy: cy, r: hitR }));
+    g.appendChild(svgEl('circle', { class: 'anchor-point-face', cx: cx, cy: cy, r: faceR }));
+    if (label !== null) {
+      const t = svgEl('text', { x: cx, y: cy });
+      t.textContent = label;
+      g.appendChild(t);
+    }
+    // UI.radiogroup() below attaches its own 'click' listener per radio (native semantics for a <button>,
+    // but a plain SVG <g> fires no click on Enter/Space by itself) - bridge that gap by dispatching a real
+    // click, which radiogroup's listener then handles exactly like a pointer click.
+    g.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); g.dispatchEvent(new MouseEvent('click', { bubbles: true })); }
+    });
+    return g;
+  }
+
+  const anchorKreisSvg = $('#farbe-anchor-kreis'), anchorDreieckSvg = $('#farbe-anchor-dreieck'), anchorRegisterList = $('#farbe-anchor-register-list');
+  const anchorViewModeRow = $('#farbe-anchor-view-mode'), anchorHueContext = $('#farbe-anchor-hue-context');
+  const anchorViewBtns = { kreis: $('#btn-anchor-view-kreis'), dreieck: $('#btn-anchor-view-dreieck'), register: $('#btn-anchor-view-register') };
+  let anchorViewMode = 'kreis'; // UI-only: which of the three is showing, never part of the anchor itself
+  let anchorKreisGroup = null, anchorDreieckGroup = null, anchorRegisterGroup = null, anchorViewModeGroup = null;
+
+  if (anchorKreisSvg && anchorDreieckSvg && anchorRegisterList && anchorViewModeRow &&
+      typeof anchorFor === 'function' && typeof hueRingPoints === 'function' && typeof registerTrianglePoints === 'function' && typeof FARBORGEL_REGISTER_ORDER !== 'undefined') {
+    // Kreis: built once - the ring's geometry never changes, only which point ends up marked active.
+    hueRingPoints(120, 120, 95).forEach(function (p) {
+      const g = anchorPoint(p.x, p.y, String(p.hueIndex), 15, 11);
+      g.dataset.hueIndex = String(p.hueIndex);
+      const title = svgEl('title'); title.textContent = 'Farbton ' + p.hueIndex; g.appendChild(title);
+      anchorKreisSvg.appendChild(g);
+    });
+    anchorKreisGroup = UI.radiogroup(anchorKreisSvg, function (r) {
+      const a = anchorFor(activeLayer);
+      if (!a) return;
+      a.hueIndex = parseInt(r.dataset.hueIndex, 10);
+      sync();
+    });
+
+    // Dreieck: also built once (the triangle's 28 positions are fixed; only the active slot and what hue
+    // it currently represents change - the latter is shown via anchorHueContext, not a rebuild).
+    registerTrianglePoints(120, 24, 32, 26).forEach(function (p) {
+      const g = anchorPoint(p.x, p.y, null, 15, 11);
+      g.dataset.registerIndex = String(p.registerIndex);
+      const title = svgEl('title'); title.textContent = 'Register ' + p.label + ' (' + (p.registerIndex + 1) + '/28)'; g.appendChild(title);
+      anchorDreieckSvg.appendChild(g);
+    });
+    anchorDreieckGroup = UI.radiogroup(anchorDreieckSvg, function (r) {
+      const a = anchorFor(activeLayer);
+      if (!a || a.registerIndex === null) return; // hue-only state (Wert, Phase B4): no register axis to set
+      a.registerIndex = parseInt(r.dataset.registerIndex, 10);
+      sync();
+    });
+
+    // Register: the SAME 28 registers as Dreieck, as plain <button> rows (native Enter/Space, no bridge needed).
+    FARBORGEL_REGISTER_ORDER.forEach(function (label, registerIndex) {
+      const rowEl = document.createElement('button');
+      rowEl.type = 'button'; rowEl.className = 'anchor-register-row';
+      rowEl.setAttribute('role', 'radio'); rowEl.setAttribute('aria-checked', 'false'); rowEl.tabIndex = -1;
+      rowEl.dataset.registerIndex = String(registerIndex);
+      const num = document.createElement('span'); num.textContent = (registerIndex + 1) + '/28';
+      const lab = document.createElement('span'); lab.textContent = label;
+      rowEl.appendChild(num); rowEl.appendChild(lab);
+      anchorRegisterList.appendChild(rowEl);
+    });
+    anchorRegisterGroup = UI.radiogroup(anchorRegisterList, function (r) {
+      const a = anchorFor(activeLayer);
+      if (!a || a.registerIndex === null) return;
+      a.registerIndex = parseInt(r.dataset.registerIndex, 10);
+      sync();
+    });
+
+    // View-mode picker: a UI-only choice (anchorViewMode) - never writes to the anchor itself.
+    anchorViewModeGroup = UI.radiogroup(anchorViewModeRow, function (r) {
+      anchorViewMode = r === anchorViewBtns.dreieck ? 'dreieck' : r === anchorViewBtns.register ? 'register' : 'kreis';
+      syncAnchorWidgets();
+    });
+    anchorViewModeGroup.set(anchorViewBtns.kreis); // Kreis is the default view on first render
+  }
+
+  // Refreshes which point/row is marked active in whichever view is showing, plus the view-mode picker
+  // itself and the hue-context hint - called from sync() below, same cadence as syncAnchor(). Switching
+  // anchorViewMode never mutates anchorFor(activeLayer); this function only ever READS it.
+  function syncAnchorWidgets() {
+    if (!anchorKreisGroup) return;
+    const a = anchorFor(activeLayer);
+
+    // toggleAttribute(), not the .hidden property: SVGSVGElement doesn't reflect .hidden the way
+    // HTMLElement does (an assignment to it silently no-ops in at least some browsers), so
+    // anchorKreisSvg/anchorDreieckSvg would otherwise get stuck showing - found by real browser testing.
+    anchorKreisSvg.toggleAttribute('hidden', anchorViewMode !== 'kreis');
+    anchorDreieckSvg.toggleAttribute('hidden', anchorViewMode !== 'dreieck');
+    anchorRegisterList.toggleAttribute('hidden', anchorViewMode !== 'register');
+    anchorHueContext.toggleAttribute('hidden', anchorViewMode === 'kreis' || !a);
+    if (a && anchorViewMode !== 'kreis') anchorHueContext.textContent = 'für Farbton ' + a.hueIndex + '/24';
+
+    anchorViewModeGroup.set(anchorViewMode === 'dreieck' ? anchorViewBtns.dreieck : anchorViewMode === 'register' ? anchorViewBtns.register : anchorViewBtns.kreis);
+
+    if (!a) { anchorKreisGroup.set(null); anchorDreieckGroup.set(null); anchorRegisterGroup.set(null); return; }
+
+    const kreisPoints = Array.prototype.slice.call(anchorKreisSvg.querySelectorAll('[role="radio"]'));
+    anchorKreisGroup.set(kreisPoints.find(function (g) { return parseInt(g.dataset.hueIndex, 10) === a.hueIndex; }) || null);
+
+    const dreieckPoints = Array.prototype.slice.call(anchorDreieckSvg.querySelectorAll('[role="radio"]'));
+    const registerRows = Array.prototype.slice.call(anchorRegisterList.querySelectorAll('[role="radio"]'));
+    if (a.registerIndex === null) { anchorDreieckGroup.set(null); anchorRegisterGroup.set(null); }
+    else {
+      anchorDreieckGroup.set(dreieckPoints.find(function (g) { return parseInt(g.dataset.registerIndex, 10) === a.registerIndex; }) || null);
+      anchorRegisterGroup.set(registerRows.find(function (r) { return parseInt(r.dataset.registerIndex, 10) === a.registerIndex; }) || null);
+    }
+  }
+
   function reason() {
     if (typeof activeShowFaces !== 'function' || !activeShowFaces()) return T['reason.fill.off'];
     return (typeof faceFillsUnavailableReason === 'function' && faceFillsUnavailableReason()) || null;
@@ -100,6 +236,7 @@
   function sync() {
     if (typeof updateFaceColorsPanel === 'function') updateFaceColorsPanel(); // this frame's rule/axis DOM, not stale
     syncAnchor();
+    syncAnchorWidgets();
     const why = reason();
     ruleBtns.forEach(function (b) { UI.setDisabled(b, why); });
     UI.setDisabled(moreBtn, why);

@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260929b">
+  <link rel="stylesheet" href="style.css?v=20260929c">
 
   <!-- Material Icons -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -1344,6 +1344,23 @@
         <span class="fc-axis-label">Anker &middot; Register</span>
       </div>
     </div>
+    <!-- Group D Phase B3: a visual, clickable alternative to the two numeric steppers above - same anchor
+         state (anchorFor(), core/facecolor.js), never a second source of truth. Kreis picks hueIndex on a
+         24-point hue ring; Dreieck picks registerIndex on the real 28-register triangle FOR THE CURRENT hue;
+         Register lists those same 28 registers as text rows (per-hue, not the full 24x28 atlas - a design
+         choice made this phase, see ui-farbe.js's own comment). Switching view/mode never changes the
+         anchor, only how it's displayed - see ui-farbe.js's syncAnchorWidgets(). -->
+    <div class="overlay-section" id="farbe-anchor-widget-section">
+      <div id="farbe-anchor-view-mode" class="overlay-opts" role="radiogroup" aria-label="Anker-Ansicht">
+        <button id="btn-anchor-view-kreis" class="opt" type="button" role="radio" aria-checked="false">Kreis</button>
+        <button id="btn-anchor-view-dreieck" class="opt" type="button" role="radio" aria-checked="false">Dreieck</button>
+        <button id="btn-anchor-view-register" class="opt" type="button" role="radio" aria-checked="false">Register</button>
+      </div>
+      <p id="farbe-anchor-hue-context" class="overlay-hint" hidden></p>
+      <svg id="farbe-anchor-kreis" class="anchor-widget-svg" viewBox="0 0 240 240" role="radiogroup" aria-label="Anker: Farbton (Kreis)" hidden></svg>
+      <svg id="farbe-anchor-dreieck" class="anchor-widget-svg" viewBox="0 0 240 200" role="radiogroup" aria-label="Anker: Register (Dreieck, aktueller Farbton)" hidden></svg>
+      <div id="farbe-anchor-register-list" class="anchor-register-list" role="radiogroup" aria-label="Anker: Register (Liste, aktueller Farbton)" hidden></div>
+    </div>
   </div>
 
   <!-- "Mehr" (More) for the canvas rail (UI rework 5a): the three toggles that are not among the rail's 4
@@ -1401,25 +1418,26 @@
   <div id="ui-toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260929b"></script>
-  <script src="core/state.js?v=20260929b"></script>
-  <script src="core/symmetry.js?v=20260929b"></script>
-  <script src="core/curves.js?v=20260929b"></script>
-  <script src="core/netwarp.js?v=20260929b"></script>
-  <script src="core/tiling.js?v=20260929b"></script>
-  <script src="core/faces.js?v=20260929b"></script>
-  <script src="core/orbits.js?v=20260929b"></script>
-  <script src="core/color.js?v=20260929b"></script>
-  <script src="core/facecolor.js?v=20260929b"></script>
-  <script src="core/export.js?v=20260929b"></script>
-  <script src="core/symmetry-toggles.js?v=20260929b"></script>
-  <script src="sketch.js?v=20260929b"></script>
-  <script src="nav.js?v=20260929b"></script>
-  <script src="ui.js?v=20260929b"></script>
-  <script src="ui-form.js?v=20260929b"></script>
-  <script src="ui-net.js?v=20260929b"></script>
-  <script src="ui-farbe.js?v=20260929b"></script>
-  <script src="ui-rail.js?v=20260929b"></script>
+  <script src="core/forms.js?v=20260929c"></script>
+  <script src="core/state.js?v=20260929c"></script>
+  <script src="core/symmetry.js?v=20260929c"></script>
+  <script src="core/curves.js?v=20260929c"></script>
+  <script src="core/netwarp.js?v=20260929c"></script>
+  <script src="core/tiling.js?v=20260929c"></script>
+  <script src="core/faces.js?v=20260929c"></script>
+  <script src="core/orbits.js?v=20260929c"></script>
+  <script src="core/color.js?v=20260929c"></script>
+  <script src="core/facecolor.js?v=20260929c"></script>
+  <script src="core/farborgel-bridge.js?v=20260929c"></script>
+  <script src="core/export.js?v=20260929c"></script>
+  <script src="core/symmetry-toggles.js?v=20260929c"></script>
+  <script src="sketch.js?v=20260929c"></script>
+  <script src="nav.js?v=20260929c"></script>
+  <script src="ui.js?v=20260929c"></script>
+  <script src="ui-form.js?v=20260929c"></script>
+  <script src="ui-net.js?v=20260929c"></script>
+  <script src="ui-farbe.js?v=20260929c"></script>
+  <script src="ui-rail.js?v=20260929c"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides
