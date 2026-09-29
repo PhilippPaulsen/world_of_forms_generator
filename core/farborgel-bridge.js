@@ -60,6 +60,42 @@ const FARBORGEL_REGISTER_ORDER = Object.freeze([
     'nl', 'pa', 'pc', 'pe', 'pg', 'pi', 'pl', 'pn'
 ]);
 
+// Phase B3: pure geometry for the Kreis (hue-ring) and Dreieck (register-triangle) widgets - kept here,
+// not in ui-farbe.js, specifically so it stays headlessly testable (tools/color/test-anchor-widgets.js)
+// with no DOM. Neither function touches the DOM or any generator state; both just turn an index into a
+// 2D point, for ui-farbe.js to build real SVG elements from.
+
+// 24 points evenly spaced on a circle, hueIndex 1 at angle 0 (12 o'clock/straight up), increasing hueIndex
+// CLOCKWISE - the exact convention color-harmony/ui/views/CircleView.mjs's own point(angle,r) helper uses
+// (reimplemented here, not imported - per the Phase B3 design: standalone widget, no ESM import).
+function hueRingPoints(cx, cy, r) {
+    const points = [];
+    for (let hueIndex = 1; hueIndex <= 24; hueIndex++) {
+        const angle = (hueIndex - 1) * Math.PI / 12; // 24 steps of 15 degrees
+        points.push({ hueIndex, angle, x: cx + Math.sin(angle) * r, y: cy - Math.cos(angle) * r });
+    }
+    return points;
+}
+
+// Letter -> index in SCALE's own a,c,e,g,i,l,n,p order (0-7) - the same table
+// color-harmony/ColorHarmonyEngine.js's SCALE and this file's FARBORGEL_REGISTER_ORDER derivation share.
+const FARBORGEL_LETTER_INDEX = Object.freeze({ a: 0, c: 1, e: 2, g: 3, i: 4, l: 5, n: 6, p: 7 });
+
+// The 28 registers of FARBORGEL_REGISTER_ORDER laid out as a right-triangle grid in letter-index space -
+// row = the white/black letter-index distance (0..6, 7 rows of 1..7 cells summing to 28), column position
+// centers each row - the exact layout color-harmony/ui/views/TriangleView.mjs's atlas-mode branch uses
+// (reimplemented here, not imported). NOT an equilateral/barycentric triangle (that's the OTHER, continuum
+// mode TriangleView.mjs also has, for a fully continuous w/s pick - out of scope here, the anchor's
+// registerIndex is discrete). colSpacing/rowSpacing let the caller size the widget; TriangleView.mjs's own
+// numbers (79, 70) were tuned for its own 640x640 canvas, not reused verbatim.
+function registerTrianglePoints(cx, cy, colSpacing, rowSpacing) {
+    return FARBORGEL_REGISTER_ORDER.map((label, registerIndex) => {
+        const white = FARBORGEL_LETTER_INDEX[label[0]], black = FARBORGEL_LETTER_INDEX[label[1]];
+        const row = 6 - (white - black - 1);
+        return { registerIndex, label, row, x: cx + (black - row / 2) * colSpacing, y: cy + row * rowSpacing };
+    });
+}
+
 /**
  * Colors `trails` from a Farborgel HarmonySelection (version 1), cyclically:
  * trail i gets selection.members[i % M] (A B C A B C ... for M members).
