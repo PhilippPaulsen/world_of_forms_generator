@@ -30,7 +30,7 @@ export function CircleView(state,dispatch) {
     });
   }
   chart.append(svg('rect',{x:275,y:270,width:90,height:90,fill:color(current)}),
-    svg('text',{x:320,y:398,'text-anchor':'middle',class:'center-label'},fieldLabel(current,state.locale)));
+    svg('text',{x:320,y:398,'text-anchor':'middle',class:'center-label'},current.source==='reference'?String(current.hueIndex).padStart(2,'0')+' •':fieldLabel(current,state.locale)));
   chart.addEventListener('keydown',event=>{
     if(['ArrowRight','ArrowLeft'].includes(event.key)){event.preventDefault();dispatch(event.key==='ArrowRight'?'nextHue':'previousHue');}
   });

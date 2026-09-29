@@ -1,3 +1,4 @@
+import {ModeControls,icon} from './Toolbar.mjs';
 import {historicalToDisplay} from '../DisplayCalibration.mjs';
 import {el,color,button,colorButton,fieldLabel,fieldStatus} from './dom.mjs';
 import {hueIdentity} from '../FullColorCalibration.mjs';
@@ -22,9 +23,10 @@ export function Inspector(state,dispatch) {
   for(const [symbol,key,disabled] of [['×','clearHarmony',a.members.length===1],['↶','undoComposition',!c.past.length],['↷','redoComposition',!c.future.length]]) {
     const node=button(symbol,key,state,()=>dispatch(key));node.disabled=disabled;actions.append(node);
   }
+  actions.append(button(icon('transfer'),'transferHarmony',state,()=>dispatch('transferHarmony')));
   const bar=el('section',{class:'selection-bar composition-bar','aria-label':t('activeHarmony',locale)},
-    el('div',{class:'result-heading'},el('strong',{},title),el('span',{class:'status'},`${a.activeMemberIndex+1} / ${a.members.length}`)),result,actions,
-    el('span',{class:'composition-message',role:'status','aria-live':'polite'},c.message?t(c.message,locale):''));
+    el('div',{class:'result-heading'},el('strong',{},a.members.length===1&&field.source==='reference'?String(field.hueIndex).padStart(2,'0')+' •':title),el('span',{class:'status'},`${a.activeMemberIndex+1} / ${a.members.length}`)),result,actions,
+    el('span',{class:'composition-message',role:'status','aria-live':'polite'},c.message?t(c.message,locale):state.transferNotice?t('transferReady',locale):''));
   const panel=el('aside',{id:'inspector',class:'inspector','aria-label':t('info',locale)});
   if(!state.inspectorOpen)return {bar,panel:null};
   panel.append(el('div',{class:'inspector-heading'},el('h2',{},t('activeHarmony',locale)),button('×','close',state,()=>dispatch('inspectorOpen',false),false,'close-inspector')));
@@ -38,15 +40,15 @@ export function Inspector(state,dispatch) {
     if(classification.hueGeometry)panel.append(el('p',{'data-classification':'gaps'},classification.hueGeometry.gaps.join(' · ')));
     if(classification.hueGeometry&&!classification.isovalent)panel.append(el('p',{class:'status'},t('differentRegisters',locale)));
     if(classification.oppositePairs.length)panel.append(el('p',{class:'status'},`${t('oppositePairs',locale)}: ${classification.oppositePairs.map(pair=>pair.map(i=>i+1).join('↔')).join(', ')}`));
-    panel.append(el('p',{class:'status'},t(a.source==='manual'?'manual':a.source==='compound'?'compound':'generated',locale)));
+    panel.append(el('p',{class:'status'},t(a.source==='manual'?'manual':a.source==='compound'?'compound':a.source==='series'?'adoptedSeries':'generated',locale)));
   }
   if(c.generation?.total>1)panel.append(el('div',{class:'alternative-nav',role:'group','aria-label':t('alternatives',locale)},
     button('‹','previousAlternative',state,()=>dispatch('previousAlternative')),el('span',{},`${c.generation.index+1} / ${c.generation.total}`),button('›','nextAlternative',state,()=>dispatch('nextAlternative'))));
   const details=el('details',{...(state.detailOpen?{open:''}:{}),ontoggle:event=>{if(event.target.open!==state.detailOpen)dispatch('detailOpen',event.target.open);}},el('summary',{'data-focus':'scientific-detail'},t('detail',locale))),table=el('dl',{class:'value-table'});
   const display=historicalToDisplay(field);
   for(const [key,value] of [['white',field.w.toFixed(4)],['black',field.s.toFixed(4)],['full',field.v.toFixed(4)],['engineLab',field.lab.map(x=>x.toFixed(5)).join(' / ')],['displayLab',display.lab.map(x=>x.toFixed(5)).join(' / ')],['rgb',display.rgb.join(' / ')]])table.append(el('dt',{},t(key,locale)),el('dd',{},value));
-  details.append(table);
-  const sourcePages=(group?.provenance.sourcePages.length?group.provenance.sourcePages:null)||a.construction?.constructionEvidence?.sourcePages||
+  details.append(table,el('h3',{},t('researchMode',locale)),ModeControls(state,dispatch));
+  const sourcePages=a.series?.rule?.sourcePages||(group?.provenance.sourcePages.length?group.provenance.sourcePages:null)||a.construction?.constructionEvidence?.sourcePages||
     (a.classification.historicalName?a.classification.hueGeometry.sourcePages:[]);
   if(sourcePages.length)details.append(el('h3',{},t('source',locale)),el('p',{},`${t('primary',locale)} · ${t('pages',locale)} ${sourcePages.join(', ')}`));
   const advanced=el('div',{class:'advanced-composition'});

@@ -1,6 +1,15 @@
 /** Change only DEFAULT_LOCALE to switch the entire interface. */
 export const DEFAULT_LOCALE = 'de';
 const pairs = {
+  seriesW:['W — Gleicher Weißanteil','W — Equal white content'], seriesB:['B — Gleicher Schwarzanteil','B — Equal black content'],
+  seriesS:['S — Schattenreihe','S — Shadow series'], seriesV:['V — Wertgleich','V — Isovalent'],
+  adoptRelation:['Vorschau als Harmonie übernehmen','Use preview as active harmony'],
+  relationPreview:['Serienvorschau','Series preview'], adoptedSeries:['Übernommene Serie','Adopted series'],
+  transferHarmony:['In Muster übernehmen','Apply to pattern'],
+  transferReady:['Auswahl bereitgestellt · noch kein Muster verbunden','Selection emitted · no pattern connected yet'],
+  integrationPreview:['Integration · letzte Übergabe','Integration · last selection'],
+  researchMode:['Forschungsansicht','Research view'],
+
   activeHarmony:['Aktive Harmonie','Active harmony'], activeMember:['Aktives Glied','Active member'],
   clearHarmony:['Harmonie lösen','Clear harmony'], undoComposition:['Rückgängig','Undo'], redoComposition:['Wiederholen','Redo'],
   beginSubstitution:['Glied ersetzen','Replace member'], beginConnection:['Gruppen verbinden','Connect groups'], connectGroups:['Gruppen verbinden','Connect groups'],
@@ -58,7 +67,7 @@ const pairs = {
   primary:['Primärquelle · Ostwald 1921','Primary source · Ostwald 1921'],
   contemporary:['Zeitgenössische Oklab-Interpolation','Contemporary Oklab interpolation'],
   displayNote:['Heutige Oklab-Bildschirmfarben · keine historischen Pigmentrekonstruktionen','Contemporary Oklab screen colors · not historical pigment reconstructions'],
-  research:['Forschungsinstrument / 6B','Research instrument / 6B'],
+  research:['Forschungsinstrument / 6B.1','Research instrument / 6B.1'],
   sourceNote:['Historische Struktur, zeitgenössische Darstellung.','Historical structure, contemporary rendering.'],
   depthNote:['Stufe bezeichnet hier die Tiefe des Gruppenbaums.','Level here means depth of the group tree.'],
   valueNote:['Wertgleiche: 24 diskrete Atlaswerte. Kein kontinuierlicher Pfad.','Isovalent: 24 discrete atlas values. No continuous path.'],
@@ -78,7 +87,7 @@ const pairs = {
   swatch:['Farbe auswählen','Select color'], skip:['Zum Farbfeld','Skip to color field'],
   relation:['Beziehung','Relation'], views:['Ansicht','View'], mode:['Darstellung','Display mode'],
   cardinality:['Farben im Kreis','Colors in circle'], graySelected:['Gemeinsamer Grauwert','Shared gray value'],
-  previousHue:['Voriger Farbton','Previous hue'], nextHue:['Nächster Farbton','Next hue'],
+  previousHue:['Vorheriger Farbton','Previous hue'], nextHue:['Nächster Farbton','Next hue'],
   hueKeys:['Pfeiltasten: Farbton wechseln','Arrow keys: change hue'],
   gridKeys:['Pfeiltasten: Farbton und Register wechseln','Arrow keys: change hue and register'],
   originRegister:['Ausgangsregister','Source register'],
