@@ -119,6 +119,18 @@ export function connectionResult(c) {
   if(JSON.stringify(c.pending.source)===JSON.stringify(c.activeHarmony.group))return null;
   try{return Engine.combineBySharedMember(c.pending.source,c.activeHarmony.group);}catch{return null;}
 }
+/** Public shared series operation: actual discrete nodes in engine-defined order.
+ * No gray/interpolated-to-atlas coercion and no inferred series interval law. */
+export function seriesMembers(anchor,relation) {
+  const keys={isotint:'isotints',isotone:'isotones',shadowSeries:'shadowSeries',isovalent:'isovalent'};
+  if(!Object.hasOwn(keys,relation))throw new RangeError('Unknown series relation');
+  const field=validateColor(anchor);
+  if(field.source!=='atlas'||!field.hueIndex)throw new Error('Series selection requires a chromatic atlas anchor');
+  const data=Engine.harmonies(field),values=data[keys[relation]];
+  if(relation==='shadowSeries'||relation==='isovalent')return values;
+  const labels=new Set([field.label,...values.map(f=>f.label)]);
+  return Engine.triangle(field.hueIndex).filter(f=>labels.has(f.label));
+}
 /** Central pure composition actions; navigation never enters this reducer. */
 export function reduceComposition(c,type,value) {
   const a=c.activeHarmony;
@@ -135,6 +147,18 @@ export function reduceComposition(c,type,value) {
     const members=a.members.map((f,i)=>i===a.activeMemberIndex?field:f),group=structuredGroup(members);
     return commit(c,{activeHarmony:active(members,a.activeMemberIndex,a.members.length>1?'manual':'selected',group,
       a.group?.type==='compound-harmony'?{previousStructure:a.group}:a.previousStructure?{previousStructure:a.previousStructure}:{}),generation:null});
+  }
+  if(type==='toggleCircleRelation') {
+    if(![2,3,4].includes(value))throw new RangeError('Cardinality must be 2, 3 or 4');
+    return c.requestedCardinality===value?reduceComposition(c,'clearHarmony'):generate(c,value);
+  }
+  if(type==='adoptSeries') {
+    const members=seriesMembers(value.anchor,value.relation);
+    const identity=value.activeIdentity||memberIdentity(value.anchor),index=members.findIndex(f=>memberIdentity(f)===identity);
+    if(index<0)throw new Error('Active member is not in the series');
+    const rule=Engine.harmonyRuleRegistry().rules.find(r=>r.id===value.relation);
+    return commit(c,{activeHarmony:active(members,index,'series',structuredGroup(members),{
+      series:{relation:value.relation,anchor:validateColor(value.anchor),rule}}),requestedCardinality:null,generation:null,pending:null});
   }
   if(type==='generateHarmony')return generate(c,value);
   if(type==='previousAlternative'||type==='nextAlternative') {
@@ -163,4 +187,4 @@ export function reduceComposition(c,type,value) {
   if(type==='cancelCompound')return {...c,pending:null,message:null};
   throw new RangeError('Unknown composition action');
 }
-export const compositionActions=['setActiveMember','replaceActiveMember','chooseColor','generateHarmony','previousAlternative','nextAlternative','clearHarmony','undoComposition','redoComposition','beginSubstitution','applySubstitution','beginConnection','connectGroups','cancelCompound'];
+export const compositionActions=['toggleCircleRelation','adoptSeries','setActiveMember','replaceActiveMember','chooseColor','generateHarmony','previousAlternative','nextAlternative','clearHarmony','undoComposition','redoComposition','beginSubstitution','applySubstitution','beginConnection','connectGroups','cancelCompound'];
