@@ -632,6 +632,26 @@ function facePaletteFor(sheet) {
     return layer.facePalette;
 }
 
+// Group D Phase B2: the atlas position Weiß/Schwarz/Schatten/Wert will read from (B4, not wired yet) -
+// Farborgel's OWN 1-based hue convention (core/color.js's hue stays 0-based; that conversion happens once,
+// at the point of consumption - see core/farborgel-bridge.js's _farborgelHueToCoreHue() - never here).
+// registerIndex indexes the real 28-register atlas order per hue (core/farborgel-bridge.js's
+// FARBORGEL_REGISTER_ORDER); null = hue-only (Wert has no register axis, only the 24-hue circle).
+function newFaceAnchor() {
+    return { hueIndex: 1, registerIndex: 0 };
+}
+
+// Same lazy, per-sheet lifecycle as facePaletteFor() above: independent per layer, reset with the grid
+// (core/state.js rebuildGrid()/rebuildGridFromConstruction()), an additional layer's own anchor lives on
+// the layer object and is discarded along with it when additionalLayers is cleared.
+function anchorFor(sheet) {
+    if (sheet === 'base') { if (!baseFaceAnchor) baseFaceAnchor = newFaceAnchor(); return baseFaceAnchor; }
+    const layer = additionalLayers[sheet];
+    if (!layer) return null;
+    if (!layer.faceAnchor) layer.faceAnchor = newFaceAnchor();
+    return layer.faceAnchor;
+}
+
 // The trail key to outline on `sheet`'s faces right now (hover), or null.
 function faceHighlightKeyFor(sheet) {
     return faceHover && faceHover.sheet === sheet ? faceHover.key : null;

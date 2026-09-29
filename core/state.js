@@ -67,6 +67,13 @@ let baseFaceAssignments = new Map();
 // store. faceHover = {sheet, key} while a Face Colors swatch row is hovered
 // (drives the on-canvas outline), else null.
 let baseFacePalette = null;
+// Group D Phase B2: the base sheet's Farborgel anchor (core/facecolor.js
+// anchorFor()/newFaceAnchor()) - {hueIndex: 1-24, registerIndex: 0-27 |
+// null}, Farborgel's own 1-based hue convention (converted to core/color.js's
+// 0-based index only at the point of consumption, not here). null = fresh,
+// created lazily by anchorFor(), exactly like baseFacePalette above. Reset
+// with the grid, like the palette and the store.
+let baseFaceAnchor = null;
 let faceHover = null;
 let activeLayer = 'base'; // 'base' | integer index into additionalLayers - which sheet mousePressed()/addRandomConnection()/undo/redo/clear target
 
@@ -211,7 +218,7 @@ function rebuildGrid(shape) {
     connections = [];
     additionalLayers = [];
     baseFaceAssignments = new Map(); // keys are geometry of the OLD grid
-    baseFacePalette = null; faceHover = null;
+    baseFacePalette = null; baseFaceAnchor = null; faceHover = null;
     activeLayer = 'base'; // an active additional-layer index would otherwise dangle once the array is cleared
     timeline = null; // Roadmap 1.8 Stage C: its keyframeLayerIds/playbackLayerIndex would dangle the same way activeLayer would
     baseNetAnimation = null; // the captured Start/End nets belong to the old grid setup (Shape Size decides what a Field is)
@@ -253,7 +260,7 @@ function rebuildGridFromConstruction(p, q, n, side) {
     connections = [];
     additionalLayers = [];
     baseFaceAssignments = new Map();
-    baseFacePalette = null; faceHover = null;
+    baseFacePalette = null; baseFaceAnchor = null; faceHover = null;
     activeLayer = 'base';
     timeline = null; // Roadmap 1.8 Stage C: see rebuildGrid()'s own comment
     baseNetAnimation = null;

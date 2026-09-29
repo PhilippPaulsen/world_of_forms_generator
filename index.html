@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260929a">
+  <link rel="stylesheet" href="style.css?v=20260929b">
 
   <!-- Material Icons -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -1333,6 +1333,17 @@
       </div>
       <button id="btn-face-colors-reset" class="layer-btn" title="Back to the default symmetry-orbit colors">Reset colors</button>
     </div>
+    <!-- Group D Phase B2: the anchor Weiß/Schwarz/Schatten/Wert will read from (B4 - not wired to a
+         harmony yet, so it has no effect on the pattern's colors right now; see ui-farbe.js's own comment).
+         Per-sheet (core/facecolor.js anchorFor()) - switching tabs/layers shows THAT sheet's own anchor. -->
+    <div class="overlay-section" id="farbe-anchor-section">
+      <div class="fc-axis" id="farbe-anchor-hue-row">
+        <span class="fc-axis-label">Anker &middot; Farbton</span>
+      </div>
+      <div class="fc-axis" id="farbe-anchor-register-row">
+        <span class="fc-axis-label">Anker &middot; Register</span>
+      </div>
+    </div>
   </div>
 
   <!-- "Mehr" (More) for the canvas rail (UI rework 5a): the three toggles that are not among the rail's 4
@@ -1390,25 +1401,25 @@
   <div id="ui-toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260929a"></script>
-  <script src="core/state.js?v=20260929a"></script>
-  <script src="core/symmetry.js?v=20260929a"></script>
-  <script src="core/curves.js?v=20260929a"></script>
-  <script src="core/netwarp.js?v=20260929a"></script>
-  <script src="core/tiling.js?v=20260929a"></script>
-  <script src="core/faces.js?v=20260929a"></script>
-  <script src="core/orbits.js?v=20260929a"></script>
-  <script src="core/color.js?v=20260929a"></script>
-  <script src="core/facecolor.js?v=20260929a"></script>
-  <script src="core/export.js?v=20260929a"></script>
-  <script src="core/symmetry-toggles.js?v=20260929a"></script>
-  <script src="sketch.js?v=20260929a"></script>
-  <script src="nav.js?v=20260929a"></script>
-  <script src="ui.js?v=20260929a"></script>
-  <script src="ui-form.js?v=20260929a"></script>
-  <script src="ui-net.js?v=20260929a"></script>
-  <script src="ui-farbe.js?v=20260929a"></script>
-  <script src="ui-rail.js?v=20260929a"></script>
+  <script src="core/forms.js?v=20260929b"></script>
+  <script src="core/state.js?v=20260929b"></script>
+  <script src="core/symmetry.js?v=20260929b"></script>
+  <script src="core/curves.js?v=20260929b"></script>
+  <script src="core/netwarp.js?v=20260929b"></script>
+  <script src="core/tiling.js?v=20260929b"></script>
+  <script src="core/faces.js?v=20260929b"></script>
+  <script src="core/orbits.js?v=20260929b"></script>
+  <script src="core/color.js?v=20260929b"></script>
+  <script src="core/facecolor.js?v=20260929b"></script>
+  <script src="core/export.js?v=20260929b"></script>
+  <script src="core/symmetry-toggles.js?v=20260929b"></script>
+  <script src="sketch.js?v=20260929b"></script>
+  <script src="nav.js?v=20260929b"></script>
+  <script src="ui.js?v=20260929b"></script>
+  <script src="ui-form.js?v=20260929b"></script>
+  <script src="ui-net.js?v=20260929b"></script>
+  <script src="ui-farbe.js?v=20260929b"></script>
+  <script src="ui-rail.js?v=20260929b"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

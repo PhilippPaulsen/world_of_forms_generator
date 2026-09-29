@@ -47,6 +47,19 @@ function _farborgelHueToCoreHue(hueIndex) {
 // different substituted hues and checking the results are byte-identical.
 const FARBORGEL_GRAY_HUE_SUBSTITUTE = 0;
 
+// The real 28-register atlas order for one hue, exactly as color-harmony/ColorHarmonyEngine.js's
+// buildTriangle() emits it: white letters outer loop, black letters inner loop (both in SCALE's
+// a,c,e,g,i,l,n,p order), keeping only pairs where black.value - white.value > EPSILON. NOT hand-derived -
+// verified by directly running that filter in Node against SCALE's real values and counting exactly 28
+// results in exactly this order. core/facecolor.js's anchorFor() registerIndex (0-27) indexes this array;
+// Phase B2 only stores the index (this list isn't consumed by that file, to avoid a second copy of it) -
+// Phase B4's dropdown wiring is the first real consumer, for turning an index back into an atlas position.
+const FARBORGEL_REGISTER_ORDER = Object.freeze([
+    'ca', 'ea', 'ec', 'ga', 'gc', 'ge', 'ia', 'ic', 'ie', 'ig',
+    'la', 'lc', 'le', 'lg', 'li', 'na', 'nc', 'ne', 'ng', 'ni',
+    'nl', 'pa', 'pc', 'pe', 'pg', 'pi', 'pl', 'pn'
+]);
+
 /**
  * Colors `trails` from a Farborgel HarmonySelection (version 1), cyclically:
  * trail i gets selection.members[i % M] (A B C A B C ... for M members).

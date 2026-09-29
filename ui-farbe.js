@@ -34,6 +34,57 @@
   const ruleSelect = $('#face-colors-rule'), ruleBtns = Array.prototype.slice.call(row.querySelectorAll('.fc-rule-btn'));
   const fillBtn = $('#btn-toggle-faces');
 
+  // ---- anchor (Group D Phase B2): the atlas position a future Weiß/Schwarz/Schatten/Wert selection will
+  // read from (Phase B4 - not built yet, so these steppers have no effect on the pattern's colors right
+  // now). Per-sheet, exactly like the rule/axes above: anchorFor(activeLayer) (core/facecolor.js), reset
+  // with the grid. The two rows reuse sketch.js's faceColorsStepper() verbatim (same "<n>/<c>" chrome as
+  // the rule axes above) - built ONCE here, then just refreshed on every sync() (not rebuilt - the
+  // onStep closures always resolve anchorFor(activeLayer) fresh, so a sheet switch never needs new
+  // buttons, only a re-read of that sheet's own numbers, the same querySelector('.pairing-variant-count')
+  // update sketch.js's own per-trail slot stepper already uses).
+  //
+  // Register count: matches core/farborgel-bridge.js's FARBORGEL_REGISTER_ORDER.length (28), kept as a
+  // plain number here rather than referencing that array directly - farborgel-bridge.js isn't loaded in
+  // the browser yet (Phase A only exercised it headlessly; Phase B4 is its first real UI consumer, and is
+  // also when a register's letter label becomes worth showing here). tools/color/test-anchor.js cross-
+  // checks this same count and the wraparound arithmetic against the real array.
+  const ANCHOR_HUE_COUNT = 24, ANCHOR_REGISTER_COUNT = 28;
+  const anchorHueRow = $('#farbe-anchor-hue-row'), anchorRegisterRow = $('#farbe-anchor-register-row');
+  let anchorHueStepper = null, anchorRegisterStepper = null;
+  if (anchorHueRow && anchorRegisterRow && typeof anchorFor === 'function' && typeof faceColorsStepper === 'function') {
+    anchorHueStepper = faceColorsStepper(0, ANCHOR_HUE_COUNT, 'Anker: Farbton (1–24, Farborgel-Zählung)', function (delta) {
+      const a = anchorFor(activeLayer);
+      if (!a) return;
+      a.hueIndex = ((a.hueIndex - 1 + delta + ANCHOR_HUE_COUNT) % ANCHOR_HUE_COUNT) + 1;
+      sync();
+    });
+    anchorHueRow.appendChild(anchorHueStepper);
+    anchorRegisterStepper = faceColorsStepper(0, ANCHOR_REGISTER_COUNT, 'Anker: Register (Atlas-Position)', function (delta) {
+      const a = anchorFor(activeLayer);
+      if (!a || a.registerIndex === null) return; // hue-only state (Wert, Phase B4): no register axis to step
+      a.registerIndex = (a.registerIndex + delta + ANCHOR_REGISTER_COUNT) % ANCHOR_REGISTER_COUNT;
+      sync();
+    });
+    anchorRegisterRow.appendChild(anchorRegisterStepper);
+  }
+  // Reads the active sheet's own anchor into the two steppers' displayed counts - called from sync() below,
+  // same cadence as everything else in this row (every redraw), but touches only two textContent writes
+  // (no rebuild) unless there is no active sheet's anchor to show (defensive; anchorFor() is null only for
+  // a layer index that no longer exists, which sync()'s own eligibility check already guards against).
+  function syncAnchor() {
+    if (!anchorHueStepper || typeof anchorFor !== 'function') return;
+    const a = anchorFor(activeLayer);
+    const hCnt = anchorHueStepper.querySelector('.pairing-variant-count');
+    const rCnt = anchorRegisterStepper.querySelector('.pairing-variant-count');
+    if (!a) {
+      if (hCnt) hCnt.textContent = `–/${ANCHOR_HUE_COUNT}`;
+      if (rCnt) rCnt.textContent = `–/${ANCHOR_REGISTER_COUNT}`;
+      return;
+    }
+    if (hCnt) hCnt.textContent = `${a.hueIndex}/${ANCHOR_HUE_COUNT}`;
+    if (rCnt) rCnt.textContent = a.registerIndex === null ? `–/${ANCHOR_REGISTER_COUNT}` : `${a.registerIndex + 1}/${ANCHOR_REGISTER_COUNT}`;
+  }
+
   function reason() {
     if (typeof activeShowFaces !== 'function' || !activeShowFaces()) return T['reason.fill.off'];
     return (typeof faceFillsUnavailableReason === 'function' && faceFillsUnavailableReason()) || null;
@@ -48,6 +99,7 @@
   // ---- sync (on every redraw) ------------------------------------------------------------------------------------
   function sync() {
     if (typeof updateFaceColorsPanel === 'function') updateFaceColorsPanel(); // this frame's rule/axis DOM, not stale
+    syncAnchor();
     const why = reason();
     ruleBtns.forEach(function (b) { UI.setDisabled(b, why); });
     UI.setDisabled(moreBtn, why);
