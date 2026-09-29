@@ -1,4 +1,4 @@
-import {createComposition,reduceComposition,compositionActions,activeColor,colorAtHue} from './composition.mjs';
+import {createComposition,reduceComposition,compositionActions,activeColor,colorAtHue,seriesMembers} from './composition.mjs';
 import Engine from './engine.generated.mjs';
 import { DEFAULT_LOCALE } from './i18n.mjs';
 // All atlas colors, classifications and composition operations come from the engine.
@@ -20,7 +20,7 @@ export function fieldAt(hue,register) {
 }
 export function createState(overrides={}) {
   const initial={locale:DEFAULT_LOCALE,activeView:'circle',displayMode:'atlas',selectedHue:1,
-    selectedRegister:'ic',circleMode:'reference',selectedField:referenceAt(1),harmonyMode:3,relation:'shadowSeries',
+    selectedRegister:'ic',circleMode:'reference',selectedField:referenceAt(1),harmonyMode:3,circleRelation:null,seriesRelation:null,relation:'shadowSeries',
     selectionKind:'color',resultOpen:false,harmonyExample:'regular',selectedHarmony:null,inspectorOpen:false,detailOpen:false};
   let state={...initial,composition:createComposition(initial.selectedField)};
   for(const [key,value] of Object.entries(overrides)) state=transition(state,{type:key,value});
@@ -46,16 +46,13 @@ function viewTransition(state,action) {
     case 'selectedHue': next.selectedHue=normalizeHue(value); break;
     case 'selectedRegister': if(!registers.includes(value)) throw new RangeError('Unknown register'); next.selectedRegister=value;next.circleMode='atlas'; break;
     case 'cell': next.selectedHue=normalizeHue(value.hue); if(!registers.includes(value.register)) throw new RangeError('Unknown register');next.selectedRegister=value.register;next.circleMode='atlas';break;
-    case 'activeView': if(!views.includes(value)) throw new RangeError('Unknown view');next.activeView=value;if(value!=='circle'&&next.circleMode==='reference'){next.circleMode='atlas';if(next.selectedField.source==='reference')next.selectedField=fieldAt(next.selectedHue,next.selectedRegister);}return next;
+    case 'activeView': if(!views.includes(value)) throw new RangeError('Unknown view');next.activeView=value;return next;
     case 'displayMode': if(!['atlas','continuum'].includes(value)) throw new RangeError('Unknown mode');next.displayMode=value;next.circleMode='atlas';break;
-    case 'harmonyMode':
-      if(![2,3,4].includes(value)) throw new RangeError('Invalid cardinality');
-      next.harmonyMode=value;next.harmonyExample='regular';next.selectedHarmony=null;
-      next.selectionKind=state.selectionKind==='harmony'&&state.harmonyMode===value?'color':'harmony';
-      next.selectedField=anchor(next);
-      if(next.selectionKind==='color')next.resultOpen=false;
+    case 'relation':
+      if(!relations.includes(value))throw new RangeError('Unknown relation');
+      next.seriesRelation=state.seriesRelation===value?null:value;
+      next.relation=value;next.selectionKind=next.seriesRelation?'relation':'color';
       return next;
-    case 'relation': if(!relations.includes(value)) throw new RangeError('Unknown relation');next.relation=value;next.circleMode='atlas';next.selectionKind='relation';next.selectedHarmony=null;next.resultOpen=false;break;
     case 'locale': if(!['de','en'].includes(value)) throw new RangeError('Unknown locale');next.locale=value;return next;
     case 'inspectorOpen': case 'detailOpen': case 'resultOpen': if(typeof value!=='boolean') throw new TypeError('Expected boolean');next[type]=value;return next;
     case 'gray': {const gray=grays.find(g=>g.letter===value);if(!gray) throw new RangeError('Unknown gray');next.selectedField=gray;next.selectionKind='color';next.resultOpen=false;return next;}
@@ -76,8 +73,12 @@ function viewTransition(state,action) {
 export function transition(state,action) {
   const {type,value}=action;
   let next=state,composition=state.composition;
-  if(compositionActions.includes(type))composition=reduceComposition(composition,type,value);
-  else if(type==='harmonyMode')composition=reduceComposition(composition,'generateHarmony',value);
+  if(type==='adoptRelation') {
+    if(!state.seriesRelation)throw new Error('No series preview selected');
+    composition=reduceComposition(composition,'adoptSeries',{anchor:fieldAt(state.selectedHue,state.selectedRegister),relation:state.seriesRelation,activeIdentity:value});
+  }
+  else if(compositionActions.includes(type))composition=reduceComposition(composition,type,value);
+  else if(type==='harmonyMode')composition=reduceComposition(composition,'toggleCircleRelation',value);
   else {
     next=viewTransition(state,action);
     if(['selectedHue','selectedRegister','cell','gray','sample'].includes(type)) {
@@ -85,8 +86,8 @@ export function transition(state,action) {
       composition=reduceComposition(composition,'chooseColor',field);
     }
   }
-  next={...next,composition,selectedField:activeColor(composition),harmonyMode:composition.requestedCardinality||state.harmonyMode};
-  if(composition!==state.composition&&!['undoComposition','redoComposition','beginSubstitution','beginConnection','cancelCompound'].includes(type)) {
+  next={...next,composition,selectedField:activeColor(composition),circleRelation:composition.requestedCardinality,harmonyMode:composition.requestedCardinality||state.harmonyMode};
+  if(composition!==state.composition&&!['undoComposition','redoComposition','beginSubstitution','beginConnection','cancelCompound','harmonyMode','toggleCircleRelation','clearHarmony','adoptRelation'].includes(type)) {
     const field=next.selectedField;
     if(field.hueIndex)next.selectedHue=field.hueIndex;
     if(field.source==='atlas'&&field.hueIndex){next.selectedRegister=field.label.slice(-2);next.circleMode='atlas';}
@@ -128,6 +129,5 @@ export { Engine };
 export function selectionFields(state) {return state.composition.activeHarmony.members;}
 /** Relation highlights describe the browsed atlas context, independently of composition. */
 export function relationFields(state) {
-  const data=fieldRelations(state),key={isotint:'isotints',isotone:'isotones',shadowSeries:'shadowSeries',isovalent:'isovalent'}[state.relation];
-  return [anchor(state),...data[key]].filter((f,i,a)=>a.findIndex(x=>x.label===f.label)===i);
+  return seriesMembers(fieldAt(state.selectedHue,state.selectedRegister),state.seriesRelation||state.relation);
 }
