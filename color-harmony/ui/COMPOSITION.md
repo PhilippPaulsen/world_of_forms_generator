@@ -1,4 +1,4 @@
-# Interactive harmony composition — Phase 6B
+# Interactive harmony composition — Phase 6B.1
 
 ## 1. Active Harmony
 
@@ -14,9 +14,10 @@ mutations run through the pure reducer in `composition.mjs`:
   activeHarmony: {
     members: [],                 // complete engine colors; at least one
     activeMemberIndex: 0,
-    source: 'selected',           // selected | generated | manual | compound
+    source: 'selected',           // selected | generated | manual | compound | series
     group: null,                 // validated HarmonySet / CompoundHarmony, if supported
     classification: {},         // cardinality, hue geometry, isovalence, opposites
+    // series: {relation, anchor, rule} for an explicitly adopted series
     // construction: engine construction evidence for generated sets
     // previousStructure: retained compound before a manual edit
   },
@@ -48,8 +49,11 @@ member when it belongs to the browsed hue; browsing another hue is independent.
 
 `generateHarmony(n)` delegates to `regularHueSubdivision()` at the current active
 color's w/s/v position. Defaults are opposite (+12), Triade (+8/+16) and Tetrade
-(+6/+12/+18). The anchor is member 0 and stays active. Pressing the digit again
-regenerates from the current active member; clearing is the separate × action.
+(+6/+12/+18). The anchor is member 0 and stays active. Digit buttons use
+`toggleCircleRelation(n)`: pressing the active digit again keeps only the active
+member and clears the circle relation. A different digit generates its new set.
+The explicit `generateHarmony(n)` API still regenerates (useful for a future
+dropdown); × also keeps only the active member. Toggle-off retains browse state.
 No score, preference ranking or recommended palette is computed.
 
 For full-color vertices, the existing engine's unlabeled subdivision input is
@@ -94,7 +98,8 @@ Selection semantics:
 | Register cell | Replace active member with that exact atlas color. |
 | Shared gray | Replace active member with that shared gray node. |
 | Verlauf point / sample strip | Replace active member with the exact unlabeled engine sample. |
-| View, ‹/› navigator, home, Atlas/Verlauf, relation controls | Browse only; retain every explicit member. |
+| View, compact hue/register ‹/›, home, inspector Atlas/Verlauf, W/B/S/V preview | Browse only; retain every explicit member. |
+| Preview swatch / ↓ | Adopt the entire series; clicked swatch / preview anchor becomes active. |
 
 Thus browsing a different register changes the ring preview, not the harmony;
 clicking a visible field explicitly commits that new register. Home shows full
@@ -177,22 +182,62 @@ collection is introduced. Both compound operations remain secondary.
 ↶/↷ restore at most 100 in-memory composition snapshots: members, active index,
 requested cardinality, generation descriptor and structured provenance. Supported
 operations include generation/alternative changes, replacement, clearing and
-both compound operations. A new composition edit discards redo history.
+both compound operations, circle toggle-off and explicit series adoption. A new
+composition edit discards redo history.
 
 View, browse coordinates, inspector, locale and tooltip state are not restored.
 Selecting an active member or staging/canceling an advanced operation does not
 add history. Undo/redo cancels pending compound staging to avoid applying a stale
 target. Reloading starts a fresh session. Pure transitions do not mutate inputs.
 
-## 10. Deferred export and integration
+## 10. Preview and composition are separate
 
-No persistence, export, clipboard copy, generator transfer, aesthetic scoring,
+`circleRelation: null | 2 | 3 | 4` mirrors the composition reducer's requested
+cardinality. It is restored with composition undo/redo. `seriesRelation: null |
+'isotint' | 'isotone' | 'shadowSeries' | 'isovalent'` controls one contextual preview.
+W/B/S/V toggles it on/off or replaces it with another preview without a history edit.
+The retained `relation` field selects the scientific continuous path independently
+of whether a discrete preview is currently visible. `harmonyMode` remains a legacy
+research-fixture preference; button pressed state uses `circleRelation` only.
+
+The compact upper-right hue code wraps 01…24; its separate register code uses the
+engine's 28-node ordering. Circle adds the reference • state before those nodes;
+triangle/register browse the 28 atlas positions only. View switches retain both
+coordinates, both relation states and the reference context. Clicking the active
+circle view icon returns to • in one action without changing composition.
+
+Series come from `seriesMembers()` and actual engine atlas nodes. W/B include the
+anchor and follow triangle order, S follows light-to-dark engine order, V follows
+hues 1…24. The short preview source label states the retained atlas context. This
+context remains distinct from any selected full-color vertex, sample or gray.
+
+Click a preview swatch to adopt the entire series with that member active, or ↓
+to adopt it with the context anchor active. `adoptRelation` calls the pure
+`adoptSeries({anchor,relation,activeIdentity?})` reducer action. It stores ordered
+members and `{relation,anchor,rule}` provenance, resets circle generation and
+staging, and records one undo step. Preview state and navigation remain unchanged.
+No historical letter is fabricated and no extra interval-selection law is applied.
+The bottom strip can scroll for long series and keeps the active member visible.
+
+Atlas/Verlauf remains in Info → Wissenschaftliche Details → Forschungsansicht.
+There are no large workspace view headings or primary mode text buttons.
+
+## 11. Transfer boundary and deferred work
+
+The strip icon builds a version-1 `HarmonySelection` and emits
+`farborgel:harmony-selection` through an explicit callback. It transfers the
+current ordered working set, not the preview. This is not a history edit and does
+not apply colors to a pattern. See [INTEGRATION_INTERFACE.md](INTEGRATION_INTERFACE.md)
+for the schema, proposed Farbe menu, shared API and future adapter contract.
+
+No persistence, export, clipboard copy, generator implementation, aesthetic scoring,
 full historical interval-table browser or unrestricted graph editing. The p5.js
 generator is untouched. No claim of historical RGB/pigment reconstruction.
 
 ## Verification
 
-Run the engine tests, UI baseline, and `node color-harmony/ui/composition.test.mjs`.
+Run the engine tests, UI baseline, `node color-harmony/ui/composition.test.mjs`
+and `node color-harmony/ui/integration.test.mjs`.
 The baseline's intentional expectation updates concern persistence: no automatic
 regeneration on member edit, no sample-to-atlas conversion on mode change, and no
 loss of atlas members on home. Calibration/atlas/grammar assertions are unchanged.
@@ -201,3 +246,8 @@ Manual browser review covers the requested simple, structural and compound flows
 desktop 1280×1000 and mobile 390×844, keyboard selection, the active strip,
 register highlights, bilingual inspector and shared-member validity. Display
 perception and assistive technology beyond the browser review remain unmeasured.
+
+Phase 6B.1 adds 37 integration/UI groups. All 28 composition groups are retained.
+Browser QA additionally covers all seven on/off controls, both compact navigators,
+series adoption/undo, the 24-member mobile strip, bilingual research controls and
+the actual debug transfer record.
