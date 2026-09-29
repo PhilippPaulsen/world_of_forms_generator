@@ -173,7 +173,7 @@ test('Explicit members persist across views; color edits replace one member inst
   for(const view of views){state=step(state,'activeView',view);assert.deepEqual(selectionFields(state).map(f=>f.label),['5ic','13ic','21ic']);}
   state=step(state,'selectedRegister','le');assert.deepEqual(selectionFields(state).map(f=>f.label),['5le','13ic','21ic']);
   state=step(state,'cell',{hue:24,register:'pn'});assert.deepEqual(selectionFields(state).map(f=>f.label),['24pn','13ic','21ic']);
-  state=step(state,'harmonyMode',3);assert.deepEqual(selectionFields(state).map(f=>f.label),['24pn','8pn','16pn']);
+  state=step(state,'harmonyMode',3);assert.deepEqual(selectionFields(state).map(f=>f.label),['24pn']);assert.equal(state.circleRelation,null);
 });
 test('Contextual relations and single gray/sample selections remain explicit persistent results',()=>{
   let state=createState({selectedHue:5,relation:'shadowSeries'});
