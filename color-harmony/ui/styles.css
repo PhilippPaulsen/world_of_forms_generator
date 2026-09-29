@@ -767,3 +767,37 @@ button:disabled { opacity:.35; cursor:default; }
   .inspector-open .inspector { bottom:78px; max-height:60vh; }
 }
 .tree-members .shared-member { outline:2px solid #111; outline-offset:2px; }
+
+/* Phase 6B.1: names move to semantic labels; browsing sits directly on the codes. */
+.workspace-chrome { display:flex; justify-content:flex-end; position:relative; min-height:44px; margin-bottom:8px; }
+.workspace-chrome .relation-controls { position:absolute; top:0; left:0; display:flex; flex-direction:column; gap:6px; margin:0; z-index:2; }
+.workspace-chrome .relation-controls button { width:40px; padding:0; font-size:var(--text-ui); }
+.code-navigation { display:flex; gap:16px; align-items:center; font-variant-numeric:tabular-nums; }
+.code-navigator { display:flex; align-items:center; gap:2px; }
+.code-navigator button { min-width:32px; width:32px; min-height:36px; padding:0; border-color:transparent; }
+.code-navigator button:hover,.code-navigator button:focus-visible { border-color:#000; }
+.code-value { min-width:32px; text-align:center; font-size:var(--text-ui); }
+.code-value:focus-visible { outline:2px solid #111; outline-offset:3px; }
+.code-hue .code-value { font-weight:700; }
+.workspace-chrome ~ .circle-view,.workspace-chrome ~ .triangle-view,.workspace-chrome ~ .register-scroll { margin-left:52px; }
+.series-preview { display:flex; align-items:center; gap:8px; margin:12px 0 12px 52px; padding:8px 0; border-top:1px solid var(--line); }
+.series-preview>button { flex-shrink:0; width:40px; padding:0; }
+.preview-origin { font-size:var(--text-meta); color:var(--muted); }
+.preview-swatches { display:flex; gap:0; overflow-x:auto; min-width:0; padding:4px; }
+.preview-swatches .swatch { flex:0 0 32px; width:32px; min-width:32px; height:36px; border-radius:0; }
+.integration-preview { margin-top:20px; }
+.integration-preview pre { overflow:auto; max-height:360px; font-size:var(--text-meta); white-space:pre; }
+.inspector .mode-controls { margin:10px 0 16px; }
+.composition-actions button[data-focus=transferHarmony] { margin-left:8px; }
+@media(max-width:700px) {
+  .workspace-chrome { min-height:44px; }
+  .workspace-chrome .relation-controls button { min-width:40px; width:40px; height:44px; }
+  .code-navigation { gap:6px; }
+  .code-navigator button { min-width:32px; min-height:44px; }
+  .code-value { min-width:28px; }
+  .workspace-chrome ~ .circle-view,.workspace-chrome ~ .triangle-view,.workspace-chrome ~ .register-scroll { margin-left:44px; }
+  .series-preview { margin-left:0; }
+  .preview-swatches .swatch { flex-basis:44px; width:44px; min-width:44px; height:44px; }
+  .composition-actions { gap:2px; }
+  .composition-actions button[data-focus=transferHarmony] { margin-left:2px; }
+}
