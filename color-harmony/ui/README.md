@@ -1,4 +1,4 @@
-# Farborgel — standalone research instrument (Phase 6B)
+# Farborgel — standalone research instrument (Phase 6B.1)
 
 A browser interface to the existing Ostwald engine. It is separate from the p5.js
 generator and has no external runtime dependencies, network fonts, export actions,
@@ -42,19 +42,33 @@ Only the active member changes. The square harmony strip remains visible in ever
 view. **×** keeps only the active color; **↶ / ↷** undo/redo composition edits.
 Clicking an existing member activates it without duplication or regeneration.
 
-**Kreis = browse registers. Dreieck = browse hues. Register = full overview.**
 The default is the saturated full-color reference circle, v=1,w=s=0,label=null.
-Circle ‹/› browses reference → 28 atlas registers, stopping at bounds. Triangle
-‹/› wraps all 24 hues. Navigation, Atlas/Verlauf and return home never destroy or
-replace explicit members. Click a displayed field to commit a color selection.
-An active reference member enters the atlas only through explicit node selection.
+Two compact upper-right navigators, **‹ 01 › ‹ • ›**, independently browse hue
+(wrapping 01…24) and register (engine order, stopping at bounds). Circle adds the
+reference • state before its 28 atlas registers; the other views show the retained
+atlas register. Clicking the active circle icon returns to • in one action.
+Navigation and view switching preserve the explicit harmony and relation state.
+Click a displayed field to commit a color selection.
+
+**2 / 3 / 4 toggle:** pressing an active digit again keeps only the active member;
+pressing another generates that cardinality. **W / B / S / V toggle** one contextual
+series preview independently. They sit vertically near the view icons. The compact
+preview shows its actual atlas anchor (e.g. 5ic); it never invents atlas coordinates
+for the selected full-color vertex. Click a preview swatch to adopt the whole
+series with that member active, or **↓** to adopt with the context anchor active.
+Adoption participates in undo/redo. Turning off a preview retains the adopted set.
 
 Circle shows occupied hue positions; markers activate exact members. Triangle
-shows 28 nodes in letter-index layout, or analytical engine paths in Verlauf.
-Weiß/Schwarz/Schatten/Wert highlight or expose contextual relations independently
-of the active harmony. Register shows all 672 atlas cells, marking every actual
-member cell without inventing positions for full colors, gray nodes or samples.
-The eight shared grays remain separately selectable.
+shows 28 atlas nodes; Register shows all 672 chromatic cells and actual members.
+Eight shared grays remain separately selectable. No large view titles repeat the
+icon state. Atlas/Verlauf is available only under **Info → Wissenschaftliche Details
+→ Forschungsansicht**; continuous engine paths remain available there.
+
+The strip's new **In Muster übernehmen / Apply to pattern** icon emits a neutral
+version-1 selection. Standalone confirms delivery without claiming a changed
+pattern. `?integration=1` shows the last emitted payload for development inspection;
+normal mode has no JSON display, logging, copy or export. The schema and future
+Farbe menu contract are in [INTEGRATION_INTERFACE.md](INTEGRATION_INTERFACE.md).
 
 Tab, Enter and Space operate controls. Circle/triangle/grid arrows move the browse
 cursor; Enter/Space commits a selection. Sample-strip arrows select samples.
@@ -102,7 +116,7 @@ throughout. Bold is limited to the current hue readout. Source notes use italic.
 ## Historical vs contemporary display
 
 Atlas nodes retain their actual engine labels (`5ic`, gray `c`) and `source:'atlas'`.
-Verlauf enables 49 contemporary Oklab samples from an engine harmony path. They
+The inspector’s Verlauf mode enables 49 contemporary Oklab samples from an engine harmony path. They
 remain `label:null`, `source:'interpolated'`, including coincident atlas positions.
 The inspector says **Kein Atlaswert / Verlauf**. Analytical vertices and source
 coordinates are not assigned historical letters by rounding.
@@ -125,6 +139,7 @@ and displayed mixtures remain the contemporary Oklab realization described in
 node color-harmony/test.js
 node color-harmony/ui/test.mjs
 node color-harmony/ui/composition.test.mjs
+node color-harmony/ui/integration.test.mjs
 node color-harmony/demo.js
 ```
 
@@ -132,15 +147,18 @@ The engine retains 79 groups; the 38 UI baseline groups retain calibration,
 historical identity and grammar checks. 28 composition groups cover generation,
 member edits, live classification, exact identities, duplicates, view/navigation
 persistence, alternatives, bounded undo/redo, substitution, shared connections,
-recursive provenance and invalid inputs. **145 test groups total.** Intentional
-baseline expectation changes reflect the new explicit-member interaction rather
-than automatic regeneration. Both UI suites rebuild the ESM adapter before import.
+recursive provenance and invalid inputs. 37 new groups cover compact navigation,
+independent toggles, ordered series adoption/undo, all transfer source types,
+serialization, structural provenance and exactly-once callbacks. **182 test groups
+total (145 retained + 37 new).** The one new baseline expectation change makes
+pressing an already active digit toggle it off. All UI suites rebuild the ESM
+adapter before import.
 CommonJS, Node ESM and browser ESM are checked. No test framework is required.
 
 Browser checks cover the simple workflow (choose → 3 → second member → triangle
 variant → circle), generic Dreier after editing and Triade after undo, and actual
 atlas substitution/shared-member workflows. Desktop and mobile maintain visible
-square swatches, focus styling and 44px touch controls. Register scrolling stays
+square swatches, focus styling and 44px primary touch controls; compact code arrows use 32×44px mobile targets. Register scrolling stays
 inside its own container. Real-device and screen-reader studies remain follow-up work.
 
 The page remains white with local Suisse Intl, generator-style 1px outlined controls,
@@ -171,13 +189,27 @@ remain exactly the Phase-6A.2 baseline; see [CALIBRATION.md](CALIBRATION.md).
 No special Urfarben markers were introduced. Weiß/Schwarz still preserve w/s
 respectively across all 672 atlas fields. Home retains the active harmony.
 
-## Files changed in Phase 6B
+## Files changed in Phase 6B.1
 
 All paths below are relative to `color-harmony/ui/`:
 
-- New: `composition.mjs`, `composition.test.mjs`, `COMPOSITION.md`.
-- Updated: `state.mjs`, `app.mjs`, `i18n.mjs`, `styles.css`, `test.mjs`, `README.md`,
+- New: `HarmonySelection.mjs`, `integration.test.mjs`, `INTEGRATION_INTERFACE.md`.
+- Updated: `composition.mjs`, `state.mjs`, `app.mjs`, `i18n.mjs`, `styles.css`,
+  `test.mjs`, `README.md`, `COMPOSITION.md`, `components/Navigator.mjs`,
   `components/Toolbar.mjs`, `components/Inspector.mjs`, `views/CircleView.mjs`,
-  `views/TriangleView.mjs`, `views/RegisterView.mjs`, `views/HarmonyView.mjs`.
+  `views/TriangleView.mjs`.
 
 Engine files, calibration modules and generator files are unchanged.
+
+## Phase-6B.1 browser verification
+
+Desktop (1280px) and mobile (390×844px) checks cover the compact hue/register
+controls, • home action, absence of primary headings/mode toggles, vertical
+W/B/S/V, every toggle-off action, direct preview adoption, composition persistence
+across views, undo/redo, keyboard controls and bilingual tooltips. A 24-member
+isovalent transfer retains ordered identities, active index 23 and 24 calibrated
+display colors; the mobile strip scrolls to keep that active member visible.
+The actual browser ESM app emits a serializable record visible at `?integration=1`.
+The callback/event unit tests require no generator. No page-wide horizontal
+overflow was observed at mobile width. Real-device and screen-reader studies
+remain follow-up work.
