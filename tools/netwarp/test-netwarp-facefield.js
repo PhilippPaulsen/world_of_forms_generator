@@ -138,10 +138,14 @@ console.log('\n== 4. colour assignments across law / strength / axes / domain / 
     // the panel path: the trail list (keys) is identical under any field warp
     sb.baseNetTransform = FIELD; const tA = sb.computeFaceTrails(sb.computeCellFaces(sb.connections, sb.nodes, store), group).map(t => t.key), tB = (sb.baseNetTransform = { x: { kind: 'geometric', w: 1.5 }, y: 'same', domain: 'field' }, sb.computeFaceTrails(sb.computeCellFaces(sb.connections, sb.nodes, store), group).map(t => t.key));
     check('the trail keys (what the Face Colors panel lists) do not depend on the warp', JSON.stringify(tA) === JSON.stringify(tB) && JSON.stringify(tA) === JSON.stringify(trails.map(t => t.key)));
-    // Shape Size: NOT preserved
+    // Shape Size: NOT preserved. `colorSpec` (not the color STRING's own format) is the real
+    // assignment marker (applyFaceAssignments() only sets it when a store entry actually resolved
+    // for that face) - since Phase B1 both assigned faces (resolveColor().hex) and the unassigned
+    // default (also now a hex gray, no longer hsl(...)) share the same "#..." format, `/^#/` can no
+    // longer distinguish them.
     const big = makeSb(SRC, 4, 5, 'rotation_reflection6'); big.connections = sb.connections; big.baseFaceAssignments = store; big.baseNetTransform = null;
     const r5 = big.computeCellFaces(big.connections, big.nodes, store);
-    check('a change of Shape Size does NOT keep them: the keys are pixel geometry, so at Shape Size 5 none of the Shape-Size-3 assignments applies (and the real UI rebuilds the grid, which clears connections and assignments)', r5.faces.filter(f => /^#/.test(f.color)).length === 0 && /baseFaceAssignments = new Map\(\)/.test(fs.readFileSync(path.join(ROOT, 'core', 'state.js'), 'utf8').split('function rebuildGrid')[1]));
+    check('a change of Shape Size does NOT keep them: the keys are pixel geometry, so at Shape Size 5 none of the Shape-Size-3 assignments applies (and the real UI rebuilds the grid, which clears connections and assignments)', r5.faces.filter(f => f.colorSpec !== undefined).length === 0 && /baseFaceAssignments = new Map\(\)/.test(fs.readFileSync(path.join(ROOT, 'core', 'state.js'), 'utf8').split('function rebuildGrid')[1]));
 }
 
 // ============ 5. export ============

@@ -164,9 +164,15 @@ console.log('\n== 3. no store access ==');
 }
 
 // ============ 4. regression ============
+// Phase B1: orbitColor() (core/faces.js) now returns evenly-spaced Ostwald grays instead of
+// evenly-spaced HSL hues, so an unassigned layer face's OWN .color legitimately differs from the
+// previous commit. Compared with .color stripped (everything else must still match exactly);
+// separately confirms the new colors are genuine gray hexes.
 console.log('\n== 4. ordinary layers vs the previous commit ==');
 {
-    let n = 0, bad = 0;
+    let n = 0, bad = 0, colorBad = 0;
+    const GRAY_HEX = /^#([0-9a-f]{2})\1\1$/i;
+    const stripMap = map => [...map].map(([k, v]) => [k, { ...v, faces: (v.faces || []).map(f => { const { color, ...rest } = f; return rest; }) }]);
     for (const [shape, mode] of [['triangle', 'rotation_reflection6'], ['square', 'rotation6'], ['hex', 'rotation3']]) {
         const A = makeSandbox(load(false), shape, mode, 3), B = makeSandbox(load(true), shape, mode, 3);
         for (const [S, tag] of [[A, 'new'], [B, 'old']]) {
@@ -176,9 +182,11 @@ console.log('\n== 4. ordinary layers vs the previous commit ==');
         }
         n++;
         const ma = A.computeLayerCellFaces(), mb = B.computeLayerCellFaces();
-        if (JSON.stringify([...ma]) !== JSON.stringify([...mb])) bad++;
+        if (JSON.stringify(stripMap(ma)) !== JSON.stringify(stripMap(mb))) bad++;
+        for (const [, v] of ma) (v.faces || []).forEach(f => { if (!GRAY_HEX.test(f.color)) colorBad++; });
     }
-    check('ordinary layers: computeLayerCellFaces() byte-identical to the previous commit', bad === 0, `${n} configs`);
+    check('ordinary layers: computeLayerCellFaces() structurally identical to the previous commit, apart from face.color', bad === 0, `${n} configs`);
+    check('ordinary layers: every unassigned face.color is a valid Ostwald gray hex (Phase B1 default)', colorBad === 0, `${colorBad} not a gray hex`);
 }
 console.log(`\n${checks - failures}/${checks} checks passed`);
 process.exit(failures ? 1 : 0);

@@ -248,18 +248,30 @@ console.log('\n== 5. reset, rebuild, per-sheet independence ==');
 }
 
 // ---------------- 6. regression + real timing against the previous commit ----------------
+// Phase B1: orbitColor() (core/faces.js) now returns evenly-spaced Ostwald grays instead of
+// evenly-spaced HSL hues - an unassigned face's OWN .color legitimately differs from HEAD now.
+// "byte-identical" below is therefore compared with .color stripped from every face (structure/
+// geometry/orbit assignment must still match exactly); a separate check confirms the new colors
+// are genuine gray hexes, so this stays a real regression guard, not a weakened one.
 console.log('\n== 6. regression and timing vs the previous commit (real measurements) ==');
 {
     const oldPatterns = buildPatterns(loadSrc(true));
-    let diffEmpty = 0, diffNull = 0, diffSteady = 0;
+    let diffEmpty = 0, diffNull = 0, diffSteady = 0, colorBad = 0;
     const perPat = [];
+    const GRAY_HEX = /^#([0-9a-f]{2})\1\1$/i;
+    const stripColors = res => ({ ...res, faces: (res.faces || []).map(f => { const { color, ...rest } = f; return rest; }) });
+    const checkColors = res => (res.faces || []).forEach(f => { if (!GRAY_HEX.test(f.color)) colorBad++; });
     const time = (fn, reps) => { const t = process.hrtime.bigint(); for (let i = 0; i < reps; i++) fn(); return Number(process.hrtime.bigint() - t) / 1e3 / reps; };
     for (let p = 0; p < patterns.length; p++) {
         const n = patterns[p], o = oldPatterns[p];
         if (n.ids.join() !== o.ids.join() || n.sh.label !== o.sh.label) throw new Error('corpus mismatch between HEAD and working tree');
         const cn = conns(n.sh, n.ids), co = conns(o.sh, o.ids);
-        if (JSON.stringify(n.sh.sb.computeCellFaces(cn, n.sh.grid.nodes, new Map())) !== JSON.stringify(o.sh.sb.computeCellFaces(co, o.sh.grid.nodes, new Map()))) diffEmpty++;
-        if (JSON.stringify(n.sh.sb.computeCellFaces(cn, n.sh.grid.nodes)) !== JSON.stringify(o.sh.sb.computeCellFaces(co, o.sh.grid.nodes))) diffNull++;
+        const resEmptyN = n.sh.sb.computeCellFaces(cn, n.sh.grid.nodes, new Map()), resEmptyO = o.sh.sb.computeCellFaces(co, o.sh.grid.nodes, new Map());
+        if (JSON.stringify(stripColors(resEmptyN)) !== JSON.stringify(stripColors(resEmptyO))) diffEmpty++;
+        checkColors(resEmptyN);
+        const resNullN = n.sh.sb.computeCellFaces(cn, n.sh.grid.nodes), resNullO = o.sh.sb.computeCellFaces(co, o.sh.grid.nodes);
+        if (JSON.stringify(stripColors(resNullN)) !== JSON.stringify(stripColors(resNullO))) diffNull++;
+        checkColors(resNullN);
         const sN = colored(n.sh, n.ids), sO = colored(o.sh, o.ids);
         if (JSON.stringify(n.sh.sb.computeCellFaces(cn, n.sh.grid.nodes, sN)) !== JSON.stringify(o.sh.sb.computeCellFaces(co, o.sh.grid.nodes, sO))) diffSteady++;
         // timings, interleaved old/new to cancel drift; 12 rounds
@@ -275,7 +287,8 @@ console.log('\n== 6. regression and timing vs the previous commit (real measurem
         const med = a => a.slice().sort((x, y) => x - y)[a.length >> 1];
         perPat.push({ eO: med(r.eO), eN: med(r.eN), sO: med(r.sO), sN: med(r.sN) });
     }
-    check('no store / empty store: results byte-identical to the previous commit\'s (258 patterns)', diffEmpty === 0 && diffNull === 0);
+    check('no store / empty store: structure identical to the previous commit\'s, apart from face.color (258 patterns)', diffEmpty === 0 && diffNull === 0);
+    check('no store / empty store: every face.color is now a valid Ostwald gray hex (Phase B1 default)', colorBad === 0, `${colorBad} not a gray hex`);
     check('non-empty store, unchanged geometry: results byte-identical to the previous commit\'s', diffSteady === 0);
     const tot = k => perPat.reduce((s, x) => s + x[k], 0);
     const eRatio = tot('eN') / tot('eO'), sRatio = tot('sN') / tot('sO');

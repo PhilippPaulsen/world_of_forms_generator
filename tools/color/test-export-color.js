@@ -61,9 +61,24 @@ const rand = rng(20260924);
 function randomIds(n, k) { const ids = []; while (ids.length < Math.min(k, n)) { const i = Math.floor(rand() * n); if (!ids.includes(i)) ids.push(i); } return ids.sort((a, b) => a - b); }
 
 // ---------------- 1. unassigned regression ----------------
-console.log('== 1. unassigned export is byte-identical to the last commit ==');
+// Phase B1 revision: orbitColor() (core/faces.js) now returns evenly-spaced Ostwald grays
+// instead of evenly-spaced HSL hues - an INTENDED default-color change, so an unassigned
+// export's face.color no longer stays byte-identical to HEAD by itself. Everything else
+// about an unassigned export still must: this check now compares structure with face.color
+// stripped out, and separately confirms the new color is a genuine gray hex, not an
+// unrelated/broken value - still a real regression guard, just for the new baseline.
+console.log('== 1. unassigned export: structure identical to the last commit; color is now a valid gray (Phase B1) ==');
 {
-    let n = 0, bad = 0, withFaces = 0, withLayer = 0, leaked = 0;
+    let n = 0, structBad = 0, colorBad = 0, withFaces = 0, withLayer = 0, leaked = 0;
+    const GRAY_HEX = /^#([0-9a-f]{2})\1\1$/i;
+    const stripColor = faces => (faces || []).map(f => { const { color, ...rest } = f; return rest; });
+    // orbitColor() colors BOTH geometry.faces (base) and geometry.layers[].faces (each
+    // enabled layer, core/export.js:179) - strip and gray-check both, not just the base.
+    const stripStruct = geom => ({
+        ...geom, faces: stripColor(geom.faces),
+        layers: (geom.layers || []).map(l => ({ ...l, faces: stripColor(l.faces) }))
+    });
+    const allFaceColors = geom => [...(geom.faces || []), ...((geom.layers || []).flatMap(l => l.faces || []))].map(f => f.color);
     for (const [shape, order, mode] of CONFIGS) {
         const A = makeSheet(SRC_NEW, shape, order, mode), B = makeSheet(SRC_OLD, shape, order, mode);
         const N = A.table.orbits.length;
@@ -73,11 +88,15 @@ console.log('== 1. unassigned export is byte-identical to the last commit ==');
             const a = A.exp(), b = B.exp();
             n++; if (useLayer) withLayer++;
             if ((a.geometry.faces || []).length) withFaces++;
-            if (JSON.stringify(a) !== JSON.stringify(b)) bad++;
+            const aStruct = { ...a, geometry: stripStruct(a.geometry) };
+            const bStruct = { ...b, geometry: stripStruct(b.geometry) };
+            if (JSON.stringify(aStruct) !== JSON.stringify(bStruct)) structBad++;
+            allFaceColors(a.geometry).forEach(c => { if (!GRAY_HEX.test(c)) colorBad++; });
             const s = JSON.stringify(a); if (s.includes('colorSpec') || s.includes('faceColoring')) leaked++;
         }
     }
-    check('no assignments: export JSON identical to the previous commit\'s (exportedAt aside)', bad === 0, `${n} exports (${withLayer} with a layer, ${withFaces} with faces), ${bad} differing`);
+    check('no assignments: export structure identical to the previous commit\'s (every field but face.color)', structBad === 0, `${n} exports (${withLayer} with a layer, ${withFaces} with faces), ${structBad} differing`);
+    check('no assignments: every face.color is a valid Ostwald gray hex (#rrggbb, R=G=B) - the Phase B1 default', colorBad === 0, `${colorBad} not a gray hex`);
     check('no assignments: no colorSpec / meta.faceColoring anywhere', leaked === 0);
 }
 
@@ -128,7 +147,11 @@ console.log('\n== 2. round trip: assign -> export -> JSON -> re-derive ==');
                 faceRows++;
                 const assigned = store.has(keysNow[i]) && keysNow[i] !== 'orphan-key';
                 if (!assigned) {
-                    if (f.colorSpec !== undefined || !/^hsl\(/.test(f.color)) unassignedBad++;
+                    // Phase B1: an unassigned face's default is now an Ostwald gray hex, not hsl(...) -
+                    // dormant in this specific round-trip scenario (applyPaletteToTrails colors every
+                    // detected trail, so there is normally nothing left unassigned here), fixed anyway
+                    // so it stays correct if that ever changes.
+                    if (f.colorSpec !== undefined || !/^#([0-9a-f]{2})\1\1$/i.test(f.color)) unassignedBad++;
                     return;
                 }
                 assignedRows++; assignedHere++;
@@ -157,7 +180,7 @@ console.log('\n== 2. round trip: assign -> export -> JSON -> re-derive ==');
     check('(rule, params) regenerate the same (hue, w, s) - the assignment is reconstructable, not just descriptive', regenBad === 0);
     check('meta.faceColoring lists every store entry of the sheet (orphans included) with identical values', metaBad === 0);
     check('per-trail override survives the round trip (slot != rank, in params)', overrideBad === 0, `${overrideRuns} override runs, all 4 rules, base and layer`);
-    check('unassigned faces: hsl color, no colorSpec', unassignedBad === 0);
+    check('unassigned faces: gray hex color, no colorSpec', unassignedBad === 0);
     check('sheet isolation: an assignment on one sheet leaves the other sheet\'s faces and meta untouched', isolBad === 0);
     check('face count unchanged by assigning; formatVersion stays 1', countBad === 0 && fmtBad === 0);
     check('apart from face.color/colorSpec and meta.faceColoring, the export equals the unassigned export', restBad === 0);
@@ -166,6 +189,7 @@ console.log('\n== 2. round trip: assign -> export -> JSON -> re-derive ==');
 console.log('\n== 3. mixed: one assigned trail among unassigned faces ==');
 {
     let runs = 0, bad = 0, ctrlBad = 0, multi = 0;
+    const GRAY_HEX = /^#([0-9a-f]{2})\1\1$/i;
     for (const [shape, order, mode] of CONFIGS) {
         const A = makeSheet(SRC_NEW, shape, order, mode), B = makeSheet(SRC_OLD, shape, order, mode), sb = A.sb;
         const N = A.table.orbits.length;
@@ -182,7 +206,15 @@ console.log('\n== 3. mixed: one assigned trail among unassigned faces ==');
             const out = JSON.parse(JSON.stringify(A.exp())), old = JSON.parse(JSON.stringify(B.exp()));
             out.geometry.faces.forEach((f, i) => {
                 if (keys[i] === pick) { if (!f.colorSpec || f.colorSpec.rule !== null || f.colorSpec.params !== null || f.color !== sb.resolveColor(out.meta.faceColoring.system, { hue: 7, w: 0.1, s: 0.2 }).hex) bad++; }
-                else if (f.colorSpec !== undefined || JSON.stringify(f) !== JSON.stringify(old.geometry.faces[i])) bad++;   // other faces byte-identical to the previous commit's
+                else {
+                    // Phase B1: an unassigned face's OWN color now legitimately differs from the
+                    // previous commit's (evenly-spaced gray instead of evenly-spaced hue) - compare
+                    // everything else byte-identical, and separately require the new color to be a
+                    // genuine gray hex, not compare it away entirely.
+                    const { color: newColor, ...restNew } = f;
+                    const { color: oldColor, ...restOld } = old.geometry.faces[i];
+                    if (f.colorSpec !== undefined || JSON.stringify(restNew) !== JSON.stringify(restOld) || !GRAY_HEX.test(newColor)) bad++;
+                }
             });
             if (JSON.stringify(out.geometry.faces) === JSON.stringify(old.geometry.faces)) ctrlBad++;      // control: the assignment must change SOMETHING
         }
