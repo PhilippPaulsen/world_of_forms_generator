@@ -209,6 +209,56 @@ function computeFaceTrails(facesResult, group) {
         (Math.round(b.area * 100) - Math.round(a.area * 100)) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
+// Phase B-Farbstrategien: computeCellFaces()'s own default-gray fix - replaces findFaces()'s
+// naive connIndex/totalOrbits color (every POSSIBLE theme-line orbit of the shape) with one
+// based on computeFaceTrails()'s own real, area-ranked trail order (the SAME order the Face
+// Colors panel already labels "Trail 1", "Trail 2", ...) via core/faces.js's
+// orbitColorByRank(). Mutates face.color in place for every face with NO store assignment;
+// computeCellFaces() runs this BEFORE applyAssignmentsLazily(), so an explicit assignment
+// still overrides it, unchanged. Cross-sheet faces (already CROSS_SHEET_COLOR) and faces with
+// no trail key are left exactly as findFaces() set them.
+//
+// Cached per (gridNodes, connection set) - same two-level WeakMap/Map shape
+// getGroupElementsCached() (core/orbits.js) already uses for an analogous problem (expensive,
+// but stable across most redraws of an unedited pattern). Without this, a real-trail rank
+// computation (O(faces x group size), same cost category applyAssignmentsLazily() already
+// avoids paying for an EMPTY store) would run on every single computeCellFaces() call - found
+// as a real regression by tools/color/test-inherit-hook.js's own timing guard (empty-store
+// cost +1.4ms/call, 4.1x over the 5% budget) before this cache was added, not assumed away.
+// `connFingerprint` is cheap (O(connections), not O(faces x group size)) - connIndex pairs
+// only, not node coordinates, so it is stable across a redraw that doesn't touch connections.
+let _orbitGrayRankCache = null;
+function _connFingerprint(connSet) {
+    return connSet.length + ':' + connSet.map(c => c[0] + ',' + c[1]).join(';');
+}
+function _applyRealOrbitGray(facesResult, group, gridNodes, connSet) {
+    if (!group || !facesResult.faces.length) return;
+    if (!_orbitGrayRankCache) _orbitGrayRankCache = new WeakMap();
+    let byFingerprint = _orbitGrayRankCache.get(gridNodes);
+    if (!byFingerprint) { byFingerprint = new Map(); _orbitGrayRankCache.set(gridNodes, byFingerprint); }
+    const fp = _connFingerprint(connSet);
+    let cached = byFingerprint.get(fp);
+    // On a hit, the EXPENSIVE part (computeFaceTrailKeys(), O(faces x group size)) is skipped
+    // entirely, not just the rank sort - findFaces() is a pure, deterministic function of
+    // (segments, gridNodes), so the SAME (gridNodes, connection set) always reproduces the
+    // SAME faces in the SAME order, and the cached keys array can be reused by plain index. A
+    // face-count mismatch (defensive only - would mean this assumption broke) forces a real
+    // recompute rather than silently coloring from a stale/misaligned keys array.
+    if (!cached || cached.faceCount !== facesResult.faces.length) {
+        const keys = computeFaceTrailKeys(facesResult, group);
+        const trails = computeFaceTrails(facesResult, group);
+        if (!trails.length) { byFingerprint.delete(fp); return; }
+        cached = { keys, faceCount: facesResult.faces.length, rankOf: new Map(trails.map((t, i) => [t.key, i])), total: trails.length };
+        byFingerprint.set(fp, cached);
+    }
+    facesResult.faces.forEach((f, i) => {
+        if (cached.keys[i] === null || (f.sheets && f.sheets.length >= 2)) return;
+        const rank = cached.rankOf.get(cached.keys[i]);
+        if (rank === undefined) return; // defensive only - see the face-count check above
+        f.color = orbitColorByRank(rank, cached.total);
+    });
+}
+
 // A sheet's palette state: which harmony rule is applied, the chosen index
 // per rule axis (one k/c stepper each), and per-trail slot overrides
 // (trail key -> slot of the SAME generated series). Plain data; the

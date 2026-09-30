@@ -140,7 +140,7 @@ console.log('\n== 3. resolveColor ==');
 console.log('\n== 4. harmony-rule registry ==');
 {
     const ids = C.listHarmonyRules().map(r => r.id);
-    check('four built-in rules registered, in order', JSON.stringify(ids) === JSON.stringify(['isotint', 'isotone', 'shadow-series', 'tetrad']), ids.join(','));
+    check('five built-in rules registered, in order (max-contrast-gray added, Phase B-Farbstrategien)', JSON.stringify(ids) === JSON.stringify(['isotint', 'isotone', 'shadow-series', 'tetrad', 'max-contrast-gray']), ids.join(','));
     check('rules expose param axes with resolved counts (hue = 24, level = 8; tetrad level = 4)',
         JSON.stringify(C.harmonyRuleParams(C.getHarmonyRule('isotint'), SYS).map(p => p.count)) === '[24,8]' &&
         JSON.stringify(C.harmonyRuleParams(C.getHarmonyRule('tetrad'), SYS).map(p => p.count)) === '[24,4]');
@@ -165,6 +165,27 @@ console.log('\n== 4. harmony-rule registry ==');
     check('a newly registered rule works through generateHarmonyPalette() unchanged', pal.length === 3 && pal[0].hue === 3 && pal[1].hue === 15 && pal[2].hue === 3);
     C.registerHarmonyRule({ id: 'test-wrong-count', label: 'test', verified: false, params: [{ id: 'a', count: 1 }], generate: () => [{ hue: 0, w: 0, s: 0 }] });
     check('output contract enforced: a rule returning != slots colors is caught', throws(() => C.generateHarmonyPalette('test-wrong-count', [0], 4)));
+}
+
+// ---------------- 4b. max-contrast-gray (Phase B-Farbstrategien) --------
+console.log('\n== 4b. max-contrast-gray: widest available letter spread for N trails ==');
+{
+    const letters = C.OSTWALD_GRAY_LETTERS;
+    const seqOf = (n, dir) => C.generateHarmonyPalette('max-contrast-gray', [dir], n, SYS)
+        .map(c => letters[SYS.grayScale.white.findIndex(w => Math.abs(w - c.w) < 1e-9)]);
+    const EXPECTED = { 1: ['i'], 2: ['a', 'p'], 3: ['a', 'i', 'p'], 8: letters, 9: letters.concat(['a']) };
+    for (const n of [1, 2, 3, 8, 9]) {
+        check(`N=${n}: light-to-dark sequence matches the investigation's own verified values`,
+            JSON.stringify(seqOf(n, 0)) === JSON.stringify(EXPECTED[n]), seqOf(n, 0).join(','));
+    }
+    check('direction reverses ORDER only, never WHICH letters are chosen (same set, opposite traversal)',
+        [1, 2, 3, 8, 9].every(n => JSON.stringify(seqOf(n, 1)) === JSON.stringify(seqOf(n, 0).slice().reverse())));
+    check('N=8 matches the old unconditional 8-letter default exactly (all 8 letters, in order)',
+        JSON.stringify(seqOf(8, 0)) === JSON.stringify(letters));
+    check('every generated spec resolves to a real, well-formed gray hex (R=G=B)',
+        [1, 2, 3, 5, 8, 15].every(n => C.generateHarmonyPalette('max-contrast-gray', [0], n, SYS).every(c => /^#([0-9a-f]{2})\1\1$/i.test(c.hex))));
+    check('deterministic: same N and direction always produce the same sequence',
+        seqOf(7, 0).join(',') === seqOf(7, 0).join(',') && JSON.stringify(seqOf(7, 0)) === JSON.stringify(seqOf(7, 0)));
 }
 
 // ---------------- 5. per-rule properties --------------------------------
@@ -285,8 +306,15 @@ console.log('\n== 6. verification markers ==');
         flags['shadow-series'] === false && flags['isotone'] === false, JSON.stringify(flags));
     check("no rule and no datum claims a 'primary' verification",
         !Object.values(flags).includes('primary') && SYS.grayScale.verified !== 'primary' && SYS.fullColorLevels.verified !== 'primary');
-    check('every built-in rule declares a verified marker (false or "secondary")',
-        Object.values(flags).every(v => v === false || v === 'secondary'));
+    // max-contrast-gray (Phase B-Farbstrategien) is NOT an Ostwald-sourced rule - the historical
+    // verified:false/'secondary' question does not apply to it at all (it's a contemporary UI
+    // default, not a claim about Ostwald's system), so it's deliberately excluded here rather
+    // than forced into a marker that would misrepresent what kind of rule it is.
+    const historicalFlags = Object.fromEntries(Object.entries(flags).filter(([id]) => id !== 'max-contrast-gray'));
+    check('every OSTWALD-SOURCED built-in rule declares a verified marker (false or "secondary")',
+        Object.values(historicalFlags).every(v => v === false || v === 'secondary'), JSON.stringify(historicalFlags));
+    check('max-contrast-gray has no verified marker at all (deliberately - not a historical-accuracy claim)',
+        flags['max-contrast-gray'] === undefined, flags['max-contrast-gray']);
 }
 
 // ---------------- summary ------------------------------------------------

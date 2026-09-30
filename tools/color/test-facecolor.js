@@ -255,10 +255,16 @@ console.log('\n== 5. Phase 3 logic (trails, palette, override, reset, highlight)
 {
     const sb0 = patterns[0].sh.sb;
     const rules = sb0.listHarmonyRules();
-    check('registry exposes what the UI needs: id, label, verified marker, note, and axes with label + resolved count',
-        rules.length >= 4 && rules.every(r => typeof r.id === 'string' && typeof r.label === 'string' && (r.verified === false || r.verified === 'secondary')
+    // max-contrast-gray (Phase B-Farbstrategien) is deliberately excluded from the verified-marker
+    // half of this check - it's a contemporary UI default, not an Ostwald-sourced claim, so
+    // false/'secondary' (a historical-confidence marker) does not apply to it at all (see
+    // core/color.js's own comment on the rule, and test-color.js's dedicated coverage).
+    check('registry exposes what the UI needs: id, label, note, and axes with label + resolved count',
+        rules.length >= 4 && rules.every(r => typeof r.id === 'string' && typeof r.label === 'string'
             && typeof r.note === 'string' && sb0.harmonyRuleParams(r, sb0.REF).every(a => typeof a.label === 'string' && Number.isInteger(a.count) && a.count >= 1)),
         rules.map(r => `${r.id}:${sb0.harmonyRuleParams(r, sb0.REF).map(a => a.count).join('x')}`).join(' '));
+    check('every Ostwald-sourced rule (all but max-contrast-gray) declares a verified marker (false or "secondary")',
+        rules.filter(r => r.id !== 'max-contrast-gray').every(r => r.verified === false || r.verified === 'secondary'));
 
     let orderBad = 0, sumBad = 0, unstableOrder = 0, palMismatch = 0, palCount = 0, slotBad = 0, renderBad = 0, palRuns = 0;
     let ovBad = 0, ovRuns = 0, ovOutside = 0, othersChanged = 0, orphanLost = 0, resetBad = 0, hlBad = 0, hlLeak = 0;
