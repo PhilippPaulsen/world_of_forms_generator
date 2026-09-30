@@ -25,8 +25,9 @@ function check(name, ok, detail) {
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 async function main() {
-    const { buildHarmonySelection, anchorField, SERIES_RELATIONS } = await import(path.join(ROOT, 'core/farborgel-selection.mjs'));
+    const { buildHarmonySelection, anchorField, anchorDisplayColor, SERIES_RELATIONS } = await import(path.join(ROOT, 'core/farborgel-selection.mjs'));
     const Engine = (await import(path.join(ROOT, 'core/farborgel-engine.mjs'))).default;
+    const { historicalToDisplay } = await import(path.join(ROOT, 'color-harmony/ui/DisplayCalibration.mjs'));
 
     // ------------------------------------------------------------------------
     console.log('== 1. anchorField(): resolves to the real atlas field, not a stub ==');
@@ -38,6 +39,28 @@ async function main() {
         check('anchorField() throws for an out-of-range registerIndex (defensive, not silently wrong)', (() => {
             try { anchorField({ hueIndex: 1, registerIndex: 999 }); return false; } catch { return true; }
         })());
+    }
+
+    // ------------------------------------------------------------------------
+    console.log('\n== 1b. anchorDisplayColor(): the anchor\'s own calibrated color, not a re-derived one ==');
+    {
+        // hue=1/"pa" (registerIndex 21) - the exact anchor the muted-appearance investigation used.
+        const anchor = { hueIndex: 1, registerIndex: 21 };
+        const rgb = anchorDisplayColor(anchor);
+        check('returns a deterministic [r,g,b] byte triple (0-255 ints)', Array.isArray(rgb) && rgb.length === 3 && rgb.every(c => Number.isInteger(c) && c >= 0 && c <= 255), JSON.stringify(rgb));
+        check('deterministic: calling again for the same anchor gives byte-identical results', same(rgb, anchorDisplayColor(anchor)));
+        // Independently recompute via DisplayCalibration.mjs's own historicalToDisplay(), called
+        // directly here (not through anchorDisplayColor), against the real atlas field.
+        const expected = historicalToDisplay(anchorField(anchor)).rgb;
+        check('matches historicalToDisplay(anchorField(anchor)).rgb, computed independently', same(rgb, expected), `got ${JSON.stringify(rgb)}, expected ${JSON.stringify(expected)}`);
+        check('matches the known real value from the muted-appearance investigation (hue=1/"pa")', same(rgb, [226, 243, 75]), JSON.stringify(rgb));
+        // Cross-check against a REAL HarmonySelection built from the same field: an isotint (W) series'
+        // active member IS the anchor field itself (per section 3 below), so its srgb must be identical -
+        // proves anchorDisplayColor() uses the exact same calibration pipeline a real harmony member does,
+        // not a parallel reimplementation that could silently drift from it.
+        const isotint = buildHarmonySelection(anchor, 'W');
+        const activeMemberSrgb = isotint.members[isotint.activeMemberIndex].srgb;
+        check('matches a real HarmonySelection\'s active-member srgb for the same anchor (same pipeline, not a reimplementation)', same(rgb, activeMemberSrgb), `anchorDisplayColor=${JSON.stringify(rgb)}, member.srgb=${JSON.stringify(activeMemberSrgb)}`);
     }
 
     // ------------------------------------------------------------------------
