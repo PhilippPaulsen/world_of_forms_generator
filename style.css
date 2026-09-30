@@ -681,26 +681,9 @@ body.dark {
 .anchor-point text { font-size: 8px; fill: var(--color-text); pointer-events: none; text-anchor: middle; dominant-baseline: central; }
 .anchor-point.active text { fill: var(--color-bg); }
 .anchor-point[aria-disabled="true"] circle.anchor-point-face { fill: var(--background); stroke: var(--color-hairline); cursor: not-allowed; }
-.anchor-register-list { display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow-y: auto; }
-.anchor-register-list[hidden] { display: none; }
-.anchor-register-row {
-  min-height: var(--target);
-  padding: 0 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius);
-  background: var(--background);
-  color: var(--color-text);
-  font: inherit;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-.anchor-register-row:hover { background: var(--hover-bg); }
-.anchor-register-row.active { background: var(--color-text); color: var(--color-bg); }
+/* Group D Phase B4 follow-up: .anchor-register-list/.anchor-register-row (the Register linear-list widget)
+   removed along with the Register button/overlay - it duplicated the register stepper. .anchor-widget-svg/
+   .anchor-point above stay: both Kreis and Dreieck still use them. */
 
 /* The old three-button symmetry group and the fold group stay in the DOM (sketch.js owns them) but are hidden. */
 .legacy-controls[hidden] { display: none; }
@@ -794,63 +777,12 @@ body.dark {
 }
 
 /* === UI rework 4d: Farbe row ===============================================
-   The four harmony rules as a segmented row, then the two axis steppers, then More. Same rules as the Form/Netz
-   rows: every control is --target high, a control that does not apply is aria-disabled (never hidden), nothing
-   moves. isotone/shadow-series are unverified (core/color.js): selectable, greyed, the reason in the tooltip. */
-.fc-rule-btn.unverified { color: var(--color-secondary); }
-
-/* #face-colors-axes: sketch.js's own "<- value ->" axis rows (core/color.js's rule axes), relocated here
-   unchanged - only sized/spaced to fit. Group D Phase B4 follow-up: this used to reserve a FIXED 610px (so
-   nothing in the wide nav row moved when a rule/value changed) - now that it lives inside #more-farbe
-   (.overlay's own max-width: min(92vw, 360px) caps it well under that, on every viewport, not just phone),
-   that rationale no longer applies: a popover resizing slightly is normal, and 610px overflowed its own
-   360px box (verified: axis text rendered past the popover's border). Sized to the overlay's own width
-   instead, with the same label/count-hiding, value-ellipsis truncation the phone-only layout already used -
-   promoted here to apply unconditionally, since every context this now renders in is narrow. */
-#face-colors-axes {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  height: var(--target);
-  width: 100%;
-}
-#face-colors-axes .fc-axis {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: var(--target);
-  margin: 0;
-  font-size: var(--size-secondary);
-  flex: 1 1 0;
-  min-width: 0;
-}
-#face-colors-axes .fc-axis-label, #face-colors-axes .pairing-variant-count { display: none; }
-#face-colors-axes .fc-axis-value {
-  color: var(--color-text);
-  font-variant-numeric: tabular-nums;
-  flex: 1 1 0;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-#face-colors-axes .pairing-variant { gap: 2px; }
-#face-colors-axes .pairing-move-btn {
-  min-width: var(--target);
-  min-height: var(--target);
-  font-size: var(--size-base);
-  border: 1px solid var(--color-text);
-  border-radius: var(--radius);
-  background: var(--color-bg);
-  color: var(--color-text);
-}
-#face-colors-axes .pairing-move-btn:hover { background: var(--hover-bg); }
-#face-colors-axes .pairing-variant-count { font-size: var(--size-secondary); min-width: 30px; }
-
-/* The whole row disabled (fill off, or an ineligible sheet): the rule buttons and More already show aria-disabled
-   (the shared .nav-row .icon-btn[aria-disabled] rule dims them); the axis rows, which have no aria-disabled of
-   their own, are dimmed and inert the same way. */
-#more-farbe.row-disabled #face-colors-axes { opacity: 0.4; pointer-events: none; }
+   Group D Phase B4 follow-up: the old rule row (four harmony rules + axis steppers) is gone entirely, per
+   explicit decision - not just hidden. #face-colors-rule/#face-colors-axes/#face-colors-unassigned live on as
+   permanently-hidden, permanently-empty state carriers (index.html's own comment on #nav-farbe explains why
+   they can't just be deleted: renderFaceColorsPanel()'s own guard hard-requires them to exist for the
+   STILL-VISIBLE per-trail list to render at all) - nothing here needs to style them for display any more,
+   they are never shown. */
 
 /* "Fläche füllen einschalten": the old toolbar's fill button gets the same small dot More uses for "a state is
    set behind it" (UI rework 4b's .nav-more.has-state), pointing at the fix while the Farbe tab is open. */
@@ -866,16 +798,12 @@ body.dark {
   background: currentColor;
 }
 
-/* Phone: #nav-farbe's own anchor row wraps into 2 lines (see the comment below); #face-colors-axes's
-   truncated sizing is unconditional now (promoted above, out of this media query) since it always lives in
-   #more-farbe's narrow overlay, on every viewport, not just phone. */
+/* Phone: #nav-farbe's own anchor row wraps into 2 lines if needed (see the comment below). */
 @media (max-width: 767px) {
-  /* Group D Phase B4 follow-up: #nav-farbe is back to just the anchor row (Kreis/Dreieck/Register, 2/3/4,
-     the two steppers, the preview swatch) - the old rule row (rules/More/axes) moved into #more-farbe,
-     whose .overlay-section is its own vertical flex column and stacks them without needing order/width
-     tricks. This row still wraps on its own via flex-wrap (.nav-row has none by default; #nav-farbe's own
-     content is narrower than a phone screen at 6+ icon buttons plus two steppers, so it wraps naturally
-     into 2 lines here - matching Form's own established pattern, not a special case). */
+  /* Group D Phase B4 follow-up: #nav-farbe is just the anchor row (Kreis/Dreieck, 2/3/4, the two steppers,
+     the preview swatch) - the old rule row is gone entirely (not moved anywhere). This row wraps on its own
+     via flex-wrap if it ever needs to (.nav-row has none by default) - matching Form's own established
+     pattern, not a special case). */
   .nav-farbe { flex-wrap: wrap; align-content: flex-start; align-items: center; gap: 0 var(--gap); }
   .nav-farbe > * { margin-top: 12px; margin-bottom: 12px; }
   .nav-farbe .nav-divider { display: none; }
