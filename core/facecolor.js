@@ -760,6 +760,22 @@ function setLastHarmonyTypeFor(sheet, type) {
     if (layer) layer.lastHarmonyType = type;
 }
 
+// Phase B-Farbstrategien: which distribution strategy (core/farborgel-bridge.js's
+// DISTRIBUTION_STRATEGIES) `sheet`'s last harmony application used - null (ui-farbe.js treats
+// this as 'cyclic', today's default) until one has been explicitly chosen. Exact same
+// lifecycle/shape as lastHarmonyTypeFor()/setLastHarmonyTypeFor() just above - see their own
+// comment for why base/layer are stored differently.
+function distributionStrategyFor(sheet) {
+    if (sheet === 'base') return baseDistributionStrategy;
+    const layer = additionalLayers[sheet];
+    return layer ? (layer.distributionStrategy === undefined ? null : layer.distributionStrategy) : null;
+}
+function setDistributionStrategyFor(sheet, strategy) {
+    if (sheet === 'base') { baseDistributionStrategy = strategy; return; }
+    const layer = additionalLayers[sheet];
+    if (layer) layer.distributionStrategy = strategy;
+}
+
 // The trail key to outline on `sheet`'s faces right now (hover), or null.
 function faceHighlightKeyFor(sheet) {
     return faceHover && faceHover.sheet === sheet ? faceHover.key : null;

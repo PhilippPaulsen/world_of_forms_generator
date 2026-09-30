@@ -327,6 +327,163 @@ console.log('\n== 6. inheritance (Phase B-Farbstrategien): a pre-existing params
     }
 }
 
+// ---------------- 7. distribution strategies (Phase B-Farbstrategien step 2) -----------------
+console.log('\n== 7. distribution strategies: area/symmetry/rings against real patterns ==');
+{
+    const computeFaceTrails = sheet.sb.computeFaceTrails;
+    const computeTrailRingDistances = sheet.sb.computeTrailRingDistances;
+
+    // ---- Cyclic: the refactor must be a byte-identical extraction, not a new formula ----
+    {
+        for (const M of [2, 3, 4]) {
+            const store = new Map();
+            const sel = { version: 1, source: 'farborgel', members: Array.from({ length: M }, (_, k) => member(1 + k * 3, 0.1, 0.1)) };
+            applyHarmonyToPattern(sel, store, trails, 'cyclic');
+            const ok = trails.every((t, i) => store.get(t.key).params.memberIndex === i % M);
+            check(`Cyclic, M=${M}: memberIndex === i % M for every trail, exactly the pre-refactor formula`, ok);
+        }
+        // default (no strategy argument at all) must still mean cyclic - the old call shape.
+        const store = new Map();
+        applyHarmonyToPattern({ version: 1, source: 'farborgel', members: [member(1, 0.1, 0.1), member(13, 0.1, 0.1)] }, store, trails);
+        check('omitting the strategy argument entirely still means cyclic (old call shape unaffected)',
+            trails.every((t, i) => store.get(t.key).params.memberIndex === i % 2));
+    }
+
+    // ---- A richer real pattern for Area/Symmetry/Rings: hex/2/rotation_reflection6, which has
+    // THREE distinct faceCount values (a real symmetry-role mix) and enough trails to make
+    // contiguous bucketing visibly different from interleaving. ----
+    const hexSheet = makeSheet('hex', 2, 'rotation_reflection6');
+    const hexIds = hexSheet.table.orbits.map((_, i) => i).slice(0, 5);
+    const hexRes = hexSheet.faces(hexIds);
+    const hexTrails = computeFaceTrails(hexRes, hexSheet.group);
+    check('setup: the richer pattern has several distinct faceCount values (a real symmetry-role mix)',
+        new Set(hexTrails.map(t => t.faceCount)).size >= 3, JSON.stringify([...new Set(hexTrails.map(t => t.faceCount))]));
+
+    // ---- Area: CONTIGUOUS buckets, not interleaved - independently recomputed ----
+    {
+        const M = 4;
+        const store = new Map();
+        const sel = { version: 1, source: 'farborgel', members: Array.from({ length: M }, (_, k) => member(1 + k * 3, 0.1, 0.1)) };
+        applyHarmonyToPattern(sel, store, hexTrails, 'area');
+        const N = hexTrails.length;
+        const bucketSize = Math.ceil(N / M);
+        const expected = hexTrails.map((t, i) => Math.min(M - 1, Math.floor(i / bucketSize)));
+        const actual = hexTrails.map(t => store.get(t.key).params.memberIndex);
+        check('Area: every trail\'s bucket matches an independently recomputed floor(i/ceil(N/M)), clamped',
+            JSON.stringify(actual) === JSON.stringify(expected), `actual=${actual.join(',')} expected=${expected.join(',')}`);
+        // contiguity: once memberIndex increases along area-rank order, it must never decrease again
+        let monotonic = true;
+        for (let i = 1; i < actual.length; i++) if (actual[i] < actual[i - 1]) monotonic = false;
+        check('Area buckets are CONTIGUOUS by area rank (monotonically non-decreasing), not interleaved like Cyclic', monotonic);
+    }
+
+    // ---- Symmetry: groups EXACTLY the trails sharing faceCount - independently recomputed ----
+    {
+        const M = 3;
+        const store = new Map();
+        const sel = { version: 1, source: 'farborgel', members: Array.from({ length: M }, (_, k) => member(1 + k * 3, 0.1, 0.1)) };
+        applyHarmonyToPattern(sel, store, hexTrails, 'symmetry', { groupOpsCount: hexSheet.group.ops.length });
+        // Independently recompute: for each distinct faceCount, its own trails (sorted by area
+        // rank i, since none have an inherited inheritance rank here) get 0,1,2,... % M.
+        const byFaceCount = new Map();
+        hexTrails.forEach((t, i) => { if (!byFaceCount.has(t.faceCount)) byFaceCount.set(t.faceCount, []); byFaceCount.get(t.faceCount).push(i); });
+        let groupingOk = true, ok = true;
+        for (const idxs of byFaceCount.values()) {
+            idxs.forEach((trailIdx, localPos) => {
+                if (store.get(hexTrails[trailIdx].key).params.memberIndex !== localPos % M) ok = false;
+            });
+        }
+        // every trail sharing a memberIndex-cycle-position within ITS OWN group must share faceCount with its groupmates (checked by construction above); additionally confirm NO cross-group contamination: two trails with DIFFERENT faceCount that happen to land on the same memberIndex must not have been forced into one shared cycle (this is structural - true by the grouping code itself, but assert group count too)
+        check('Symmetry: every trail\'s memberIndex matches an independently recomputed WITHIN-faceCount-group local cycle',
+            ok, hexTrails.map(t => `${t.faceCount}:${store.get(t.key).params.memberIndex}`).join(' '));
+        check('Symmetry: the number of distinct faceCount groups matches the pattern\'s own real symmetry-role count',
+            byFaceCount.size === new Set(hexTrails.map(t => t.faceCount)).size);
+    }
+
+    // ---- Rings: CONTIGUOUS buckets by centroid-distance rank, not area rank - independently recomputed ----
+    {
+        const M = 4;
+        const store = new Map();
+        const sel = { version: 1, source: 'farborgel', members: Array.from({ length: M }, (_, k) => member(1 + k * 3, 0.1, 0.1)) };
+        const ringDistances = computeTrailRingDistances(hexRes, hexSheet.group, hexTrails);
+        check('computeTrailRingDistances: every real trail gets a real, non-negative distance',
+            hexTrails.every(t => typeof ringDistances.get(t.key) === 'number' && ringDistances.get(t.key) >= 0));
+        applyHarmonyToPattern(sel, store, hexTrails, 'rings', { ringDistances });
+        // Independently recompute: sort trail KEYS by distance (not by the existing area order),
+        // bucket that NEW order the same contiguous way Area does.
+        const byDistance = hexTrails.slice().sort((a, b) => ringDistances.get(a.key) - ringDistances.get(b.key));
+        const distanceRankOf = new Map(byDistance.map((t, i) => [t.key, i]));
+        const N = hexTrails.length, bucketSize = Math.ceil(N / M);
+        const expected = hexTrails.map(t => Math.min(M - 1, Math.floor(distanceRankOf.get(t.key) / bucketSize)));
+        const actual = hexTrails.map(t => store.get(t.key).params.memberIndex);
+        check('Rings: every trail\'s bucket matches an independently recomputed distance-rank bucket, not the area-rank one',
+            JSON.stringify(actual) === JSON.stringify(expected), `actual=${actual.join(',')} expected=${expected.join(',')}`);
+        // Confirm rings genuinely differs from what Area (same M, same trails) would have given -
+        // proves distance, not area, actually drove the bucketing (not a coincidental match).
+        const areaBucketSize = Math.ceil(N / M);
+        const areaExpected = hexTrails.map((t, i) => Math.min(M - 1, Math.floor(i / areaBucketSize)));
+        check('Rings bucketing really differs from Area bucketing on this pattern (distance, not area, is doing the work)',
+            JSON.stringify(actual) !== JSON.stringify(areaExpected));
+    }
+
+    // ---- Inheritance must keep working under every non-cyclic strategy too ----
+    {
+        const M = 3;
+        const store = new Map();
+        // Pre-seed an inherited order (a fixed rotation, mirroring section 6's own approach).
+        hexTrails.forEach((t, i) => {
+            const slot = (i + 5) % hexTrails.length;
+            store.set(t.key, { hue: 0, w: 0.5, s: 0.1, rule: 'max-contrast-gray', params: { idx: [0], slot, slots: hexTrails.length }, displayColor: null });
+        });
+        const sel = { version: 1, source: 'farborgel', members: Array.from({ length: M }, (_, k) => member(1 + k * 3, 0.1, 0.1)) };
+        applyHarmonyToPattern(sel, store, hexTrails, 'area');
+        const N = hexTrails.length, bucketSize = Math.ceil(N / M);
+        const expected = hexTrails.map((t, i) => Math.min(M - 1, Math.floor(((i + 5) % N) / bucketSize)));
+        const actual = hexTrails.map(t => store.get(t.key).params.memberIndex);
+        check('inheritance still works under a non-Cyclic strategy (Area): buckets follow the INHERITED rank, not the fresh area rank',
+            JSON.stringify(actual) === JSON.stringify(expected), `actual=${actual.join(',')} expected=${expected.join(',')}`);
+    }
+
+    check('an unknown strategy name throws rather than silently falling back', (() => {
+        try { applyHarmonyToPattern({ version: 1, source: 'farborgel', members: [member(1, 0.1, 0.1)] }, new Map(), trails, 'nonsense'); return false; }
+        catch (e) { return true; }
+    })());
+
+    // ---- Switching strategies must NOT misread the old strategy's small memberIndex range as
+    // a full rank - a real bug found live in the browser: Cyclic (M=4) writes memberIndex 0..3,
+    // then switching to Area (bucketSize=6 for 23 trails) read that 0..3 value back as if it
+    // were a full 0..22 rank, collapsing every trail into bucket 0. Fixed by only honoring
+    // params.memberIndex as an inherited rank when params.strategy matches the NEW call's own
+    // strategy; a real strategy switch must start that strategy's own natural order fresh. ----
+    {
+        const M1 = 4, M2 = 4;
+        const store = new Map();
+        const selCyclic = { version: 1, source: 'farborgel', members: Array.from({ length: M1 }, (_, k) => member(1 + k * 3, 0.1, 0.1)) };
+        applyHarmonyToPattern(selCyclic, store, hexTrails, 'cyclic');
+        const selArea = { version: 1, source: 'farborgel', members: Array.from({ length: M2 }, (_, k) => member(2 + k * 3, 0.1, 0.1)) };
+        applyHarmonyToPattern(selArea, store, hexTrails, 'area');
+        const N = hexTrails.length, bucketSize = Math.ceil(N / M2);
+        const expectedFresh = hexTrails.map((t, i) => Math.min(M2 - 1, Math.floor(i / bucketSize)));
+        const actual = hexTrails.map(t => store.get(t.key).params.memberIndex);
+        check('switching Cyclic -> Area does NOT collapse into one bucket (starts Area\'s own fresh area-rank order, not Cyclic\'s small memberIndex range)',
+            JSON.stringify(actual) === JSON.stringify(expectedFresh), `actual=${actual.join(',')} expected=${expectedFresh.join(',')}`);
+        check('...and is not degenerately all-zero (the concrete symptom the live-browser bug showed)',
+            new Set(actual).size > 1, JSON.stringify(actual));
+
+        // Reapplying the SAME strategy (Area -> Area again, different M) should still chain
+        // correctly from the previous Area application's own memberIndex - the legitimate case
+        // this fix must not have broken.
+        const selArea2 = { version: 1, source: 'farborgel', members: Array.from({ length: 2 }, (_, k) => member(5 + k * 3, 0.1, 0.1)) };
+        applyHarmonyToPattern(selArea2, store, hexTrails, 'area');
+        const prevMemberIndexes = actual; // Area(M2) output, just recorded above
+        const bucketSize2 = Math.ceil(N / 2);
+        const expectedChained = hexTrails.map((t, i) => Math.min(1, Math.floor(prevMemberIndexes[i] / bucketSize2)));
+        const actual2 = hexTrails.map(t => store.get(t.key).params.memberIndex);
+        check('reapplying the SAME strategy (Area -> Area) still chains from its own prior memberIndex, unaffected by the strategy-switch fix',
+            JSON.stringify(actual2) === JSON.stringify(expectedChained), `actual=${actual2.join(',')} expected=${expectedChained.join(',')}`);
+    }
+}
+
 // ------------------------------------------------------------------------
 console.log(`\n${checks - failures}/${checks} checks passed`);
 if (failures > 0) process.exit(1);

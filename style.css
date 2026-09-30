@@ -380,12 +380,17 @@ body.dark {
    Nav rows: one per tab, ALL the same fixed height (see below), so switching
    tabs moves nothing below them. */
 /* Both top bars have the SAME height, --bar-h (60px fine pointer, 72px coarse), and centre their content vertically:
-   the header, the nav row on tablet/desktop (one row), and on a phone each of the two rows of a nav row (so a
-   phone nav row is 2 x --bar-h). Every nav row (Form, Farbe, Netz) has this height, so switching tabs moves
-   nothing below. The tab links fill the bar height as their click area; only the text is small (18px). */
+   the header, the nav row on tablet/desktop (one row), and on a phone each of the THREE rows of a nav row (so a
+   phone nav row is 3 x --bar-h - Phase B-Farbstrategien step 2's new strategy stepper pushed #nav-farbe's own
+   mobile wrap from 2 lines to 3, measured: 104+160 | 95+112+131 | 18+48 at 375px, none of several DOM/CSS
+   `order` reshuffles tried got it back under 2 without real compromises - so the shared height grows instead,
+   same choice already made once before for this exact class of problem). Every nav row (Form, Farbe, Netz) has
+   this height, so switching tabs moves nothing below - Form/Netz keep an extra, empty --bar-h of space on
+   mobile now too, accepted the same way the earlier bump already accepted it. The tab links fill the bar
+   height as their click area; only the text is small (18px). */
 :root { --nav-h: var(--bar-h); }
 @media (max-width: 767px) {
-  :root { --nav-h: calc(2 * var(--bar-h)); }
+  :root { --nav-h: calc(3 * var(--bar-h)); }
 }
 
 .app-header {

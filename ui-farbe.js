@@ -78,6 +78,42 @@
       afterAnchorChange();
     });
   }
+
+  // ---- distribution strategy stepper (Phase B-Farbstrategien step 2): which harmony member
+  // each trail gets - same .stepper-display pattern as the register stepper above (a short
+  // text label, not a number), cycling core/farborgel-bridge.js's own DISTRIBUTION_STRATEGIES
+  // in order. Persisted per sheet (distributionStrategyFor()/setDistributionStrategyFor(),
+  // core/facecolor.js) - lazy, reset with the grid, same lifecycle as lastHarmonyTypeFor().
+  // Changing it goes through afterAnchorChange() - the SAME live-reapply path an anchor change
+  // already uses, not a second trigger - so it only recolors when a harmony is already in
+  // effect (lastHarmonyTypeFor() non-null), exactly matching every other control in this row.
+  const STRATEGY_LABELS = { cyclic: 'Zyklisch', area: 'Fläche', symmetry: 'Symmetrie', rings: 'Ringe' };
+  const strategyStepperRoot = $('#farbe-strategy-stepper'), strategyInput = $('#farbe-strategy-input'), strategyDisplay = $('#farbe-strategy-display');
+  let strategyStepperApi = null;
+  if (strategyStepperRoot && strategyInput && strategyDisplay && typeof DISTRIBUTION_STRATEGIES !== 'undefined' && typeof UI !== 'undefined' && UI.stepper) {
+    strategyStepperApi = UI.stepper(strategyStepperRoot, {
+      input: strategyInput,
+      noTyping: true,
+      keyEl: strategyDisplay,
+      compute: function (dir) {
+        const cur = parseInt(strategyInput.value, 10) || 0;
+        return { to: (cur + dir + DISTRIBUTION_STRATEGIES.length) % DISTRIBUTION_STRATEGIES.length };
+      }
+    });
+    strategyInput.addEventListener('change', function () {
+      const idx = parseInt(strategyInput.value, 10) || 0;
+      setDistributionStrategyFor(activeLayer, DISTRIBUTION_STRATEGIES[idx]);
+      afterAnchorChange();
+    });
+  }
+  function syncStrategy() {
+    if (!strategyInput || typeof distributionStrategyFor !== 'function') return;
+    const strategy = distributionStrategyFor(activeLayer) || 'cyclic';
+    const idx = DISTRIBUTION_STRATEGIES.indexOf(strategy);
+    if (idx >= 0 && parseInt(strategyInput.value, 10) !== idx) strategyInput.value = String(idx);
+    strategyDisplay.textContent = STRATEGY_LABELS[strategy] || STRATEGY_LABELS.cyclic;
+    if (strategyStepperApi) strategyStepperApi.refresh();
+  }
   // Reads the active sheet's own anchor into the two steppers - called from sync() below, same cadence as
   // before. Writes hueInput.value/registerInput.value directly (not through UI.stepper()'s own setValue(),
   // which dispatches input/change and would re-trigger the listeners above pointlessly) and refreshes the
@@ -249,12 +285,24 @@
     const { gridNodes, conns, sheet } = faceColorsGrid();
     const group = sheetGroupElements(gridNodes, sheet);
     if (!group) return;
-    const trails = computeFaceTrails(computeCellFaces(conns, gridNodes, null, null, sheet), group);
+    const facesResult = computeCellFaces(conns, gridNodes, null, null, sheet);
+    const trails = computeFaceTrails(facesResult, group);
     if (!trails.length) return;
     let selection;
     try { selection = window.farborgelBuildHarmonySelection(a, type); }
     catch (e) { UI.toast('Farborgel: ' + e.message); return; }
-    applyHarmonyToPattern(selection, faceAssignmentsFor(activeLayer), trails);
+    // Phase B-Farbstrategien step 2: the sheet's chosen distribution strategy (default
+    // 'cyclic', today's original behavior) and its context - groupOpsCount for 'symmetry'
+    // (core/farborgel-bridge.js's own bucket-ordering, see its comment); ringDistances for
+    // 'rings' only, computed here (real geometry is only available at this call site, not
+    // inside applyHarmonyToPattern() itself) and ONLY when that strategy is actually selected,
+    // never paid for on the Cyclic/Area/Symmetry path.
+    const strategy = (typeof distributionStrategyFor === 'function' && distributionStrategyFor(activeLayer)) || 'cyclic';
+    const context = { groupOpsCount: group.ops.length };
+    if (strategy === 'rings' && typeof computeTrailRingDistances === 'function') {
+      context.ringDistances = computeTrailRingDistances(facesResult, group, trails);
+    }
+    applyHarmonyToPattern(selection, faceAssignmentsFor(activeLayer), trails, strategy, context);
     // Group D Phase B4 follow-up: remember this as the sheet's last-applied type (only on a real
     // success - a thrown selection above never reaches here) - the ONE place this is recorded, so a
     // direct button/dropdown click and an anchor-triggered reapply (below) are always in exact sync,
@@ -313,11 +361,12 @@
     syncAnchorPreview();
     syncAnchorWidgets();
     syncHarmonyActive();
+    syncStrategy();
     const why = reason();
     UI.setDisabled(moreBtn, why);
     [kreisTrigger, dreieckTrigger].forEach(function (b) { if (b) UI.setDisabled(b, why); });
     Object.keys(harmonyBtns).forEach(function (type) { if (harmonyBtns[type]) UI.setDisabled(harmonyBtns[type], why); });
-    [hueStepperRoot, registerStepperRoot].forEach(function (root) {
+    [hueStepperRoot, registerStepperRoot, strategyStepperRoot].forEach(function (root) {
       if (root) root.querySelectorAll('.stepper-btn').forEach(function (b) { UI.setDisabled(b, why); });
     });
     if (harmonySelect) harmonySelect.disabled = !!why;

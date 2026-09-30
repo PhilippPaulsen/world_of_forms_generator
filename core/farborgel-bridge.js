@@ -96,9 +96,136 @@ function registerTrianglePoints(cx, cy, colSpacing, rowSpacing) {
     });
 }
 
+// Phase B-Farbstrategien step 2: which harmony member each trail gets is now a pluggable
+// function of (trails, inheritedRanks, M, context) -> memberIndex[] (parallel to `trails`), not
+// a hardcoded `rank % M`. `inheritedRanks[i]` is trail i's OWN inherited rank (an old-system
+// rule's params.slot, or a prior farborgel call's own params.memberIndex - see
+// applyHarmonyToPattern()'s own docblock below) or `undefined` when nothing is there yet -
+// undefined, not pre-resolved to `i`, so a strategy whose OWN natural order differs from the
+// plain area-sort (Rings) can tell "nothing inherited, use MY natural order" apart from "the
+// inherited value happens to equal i" - collapsing that distinction earlier (an initial version
+// of this code did) is a real, silent bug for any trail whose inherited rank and area rank
+// coincide, not just an edge case to wave away.
+const DISTRIBUTION_STRATEGIES = Object.freeze(['cyclic', 'area', 'symmetry', 'rings']);
+
+// Cyclic (today's original, unchanged default): trail i gets member rank % M - A B C A B C.
+// Natural order = area-sorted position i (trails' own existing order) when nothing inherited.
+function _cyclicStrategy(trails, inheritedRanks, M) {
+    return trails.map((t, i) => {
+        const r = inheritedRanks[i] !== undefined ? inheritedRanks[i] : i;
+        return ((r % M) + M) % M;
+    });
+}
+
+// Area: CONTIGUOUS buckets instead of an interleaved cycle - trails 0..bucketSize-1 (by rank)
+// all get member 0, the next bucketSize get member 1, and so on, so a real, rendered pattern
+// reads as "the big trails are one color, the small ones another", not alternating. bucketSize
+// = ceil(N/M) spreads the M buckets as evenly as N allows; the final clamp only matters when a
+// stale inherited rank (e.g. from a since-edited pattern) exceeds the current trail count.
+// Natural order = area-sorted position i, same as Cyclic, when nothing inherited.
+function _areaStrategy(trails, inheritedRanks, M) {
+    const N = trails.length;
+    const bucketSize = Math.max(1, Math.ceil(N / M));
+    return trails.map((t, i) => {
+        const r = inheritedRanks[i] !== undefined ? inheritedRanks[i] : i;
+        return Math.min(M - 1, Math.max(0, Math.floor(r / bucketSize)));
+    });
+}
+
+// Symmetry: groups trails by their REAL symmetry role (t.faceCount - the size of this trail's
+// own orbit under the sheet's group; core/facecolor.js's computeFaceTrails() already computes
+// it) - a face lying on a mirror axis or rotation center has a SMALLER faceCount than a
+// "generic" one (faceCount === group.ops.length), a real, already-available distinction (see
+// the investigation session's own hex example: a lone faceCount=1 trail among otherwise
+// faceCount=6/12 ones). Cycles members WITHIN each faceCount group independently (a LOCAL
+// index 0,1,2.. per group, sorted by each trail's own inherited-or-area rank so an override
+// still shifts things sensibly) instead of across the whole mixed list - the point of this
+// strategy is that trails sharing a symmetry role stay visually grouped, which a single global
+// cycle mixing every role together would not achieve. Groups are processed in DESCENDING
+// faceCount order (generic trails - those closest to context.groupOpsCount - first) for a
+// deterministic, meaningful bucket order, not arbitrary Map iteration order; groupOpsCount
+// itself isn't otherwise needed by the grouping logic (faceCount alone already partitions
+// correctly), but is threaded through per the confirmed design and used for this ordering.
+function _symmetryStrategy(trails, inheritedRanks, M, context) {
+    const rankOrI = i => inheritedRanks[i] !== undefined ? inheritedRanks[i] : i;
+    const groups = new Map(); // faceCount -> [trail index, ...]
+    trails.forEach((t, i) => {
+        if (!groups.has(t.faceCount)) groups.set(t.faceCount, []);
+        groups.get(t.faceCount).push(i);
+    });
+    const orderedFaceCounts = Array.from(groups.keys()).sort((a, b) => b - a);
+    const memberIndex = new Array(trails.length);
+    orderedFaceCounts.forEach(fc => {
+        const idxs = groups.get(fc).slice().sort((a, b) => rankOrI(a) - rankOrI(b));
+        idxs.forEach((trailIdx, localPos) => { memberIndex[trailIdx] = ((localPos % M) + M) % M; });
+    });
+    return memberIndex;
+}
+
+// Phase B-Farbstrategien: each trail's distance from the sheet's centroid, for the 'rings'
+// strategy - computed LAZILY (the caller only needs to call this when 'rings' is the active
+// strategy, never on the hot Cyclic/Area/Symmetry path) from a REAL computeCellFaces() result,
+// not reimplemented from trails alone (computeFaceTrails()'s own {key,faceCount,area,connIndex,
+// color} records carry no geometry). Representative point = this trail's FIRST face's own
+// centroid (the mean of its boundary node coordinates) - matching computeFaceTrails()'s
+// existing "first face represents the trail" convention for its own .color/.connIndex fields,
+// not a new, second convention invented for this one strategy. Returns Map(trail key ->
+// distance); a trail with no locatable face (should not happen for a real result) is omitted,
+// letting _ringsStrategy()'s own `distances.get(key) || 0` fall back safely.
+function computeTrailRingDistances(facesResult, group, trails) {
+    const keys = computeFaceTrailKeys(facesResult, group);
+    const nodeById = new Map(facesResult.nodes.map(n => [n.id, n]));
+    const firstFaceIndexOf = new Map();
+    facesResult.faces.forEach((f, i) => {
+        if (keys[i] === null || (f.sheets && f.sheets.length >= 2)) return;
+        if (!firstFaceIndexOf.has(keys[i])) firstFaceIndexOf.set(keys[i], i);
+    });
+    const distances = new Map();
+    trails.forEach(t => {
+        const faceIdx = firstFaceIndexOf.get(t.key);
+        if (faceIdx === undefined) return;
+        const pts = facesResult.faces[faceIdx].nodeIds.map(id => nodeById.get(id)).filter(Boolean);
+        if (!pts.length) return;
+        const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+        const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+        distances.set(t.key, Math.hypot(cx - group.centroid.x, cy - group.centroid.y));
+    });
+    return distances;
+}
+
+// Topology-as-rings: the SAME contiguous-bucket shape as Area, but keyed by distance from the
+// sheet's centroid instead of by area - "sort/bucket by that instead of by area" (confirmed
+// design). Each trail's representative point is its FIRST face's own centroid (matching
+// computeFaceTrails()'s existing "first face represents the trail" convention for .color/
+// .connIndex - not reinventing a second convention). Distance-rank is this strategy's OWN
+// natural order (replacing area-rank i, which Cyclic/Area use); an inherited rank, when
+// present, still overrides it - same uniform inheritance rule as every other strategy, just
+// applied on top of a different natural ordering. context.ringDistances is a Map(trail key ->
+// distance), computed lazily by applyHarmonyToPattern() below ONLY when this strategy is
+// selected (never on the hot Cyclic/Area/Symmetry path).
+function _ringsStrategy(trails, inheritedRanks, M, context) {
+    const distances = context && context.ringDistances;
+    if (!distances) return _cyclicStrategy(trails, inheritedRanks, M); // defensive: no distance data given, never silently miscolor
+    const N = trails.length;
+    const bucketSize = Math.max(1, Math.ceil(N / M));
+    const naturalRank = new Map(
+        trails.slice().sort((a, b) => (distances.get(a.key) || 0) - (distances.get(b.key) || 0))
+            .map((t, i) => [t.key, i])
+    );
+    return trails.map((t, i) => {
+        const r = inheritedRanks[i] !== undefined ? inheritedRanks[i] : naturalRank.get(t.key);
+        return Math.min(M - 1, Math.max(0, Math.floor(r / bucketSize)));
+    });
+}
+
+const _DISTRIBUTION_FNS = Object.freeze({
+    cyclic: _cyclicStrategy, area: _areaStrategy, symmetry: _symmetryStrategy, rings: _ringsStrategy
+});
+
 /**
- * Colors `trails` from a Farborgel HarmonySelection (version 1), cyclically:
- * trail i gets selection.members[rank % M] (A B C A B C ... for M members), where `rank` is
+ * Colors `trails` from a Farborgel HarmonySelection (version 1) using `strategy` (one of
+ * DISTRIBUTION_STRATEGIES, default 'cyclic' - today's original A B C A B C behavior, unchanged)
+ * to decide which member each trail gets. Every strategy is fed the SAME inherited-rank array:
  * trail i's OWN INHERITED rank if one exists (Phase B-Farbstrategien: an old-system rule - e.g.
  * core/color.js's max-contrast-gray, applied in Form-mode - already wrote a real `params.slot`
  * for this exact trail key into `store`, OR an earlier click here already wrote its own
@@ -130,32 +257,50 @@ function registerTrianglePoints(cx, cy, colSpacing, rowSpacing) {
  * @param {Array} trails  the sheet's current trail list (computeFaceTrails()), in
  *   its existing area-then-key order - trail i's member comes from its own inherited
  *   `params.slot` if `store` already has one for that trail key, else from `i` itself.
+ * @param {string} [strategy='cyclic']  one of DISTRIBUTION_STRATEGIES.
+ * @param {object} [context]  strategy-specific extra data - { groupOpsCount } for 'symmetry',
+ *   { ringDistances: Map(key -> number) } for 'rings'. Unused by 'cyclic'/'area'.
  * @returns {number} trails.length (assignments written).
  */
-function applyHarmonyToPattern(selection, store, trails) {
+function applyHarmonyToPattern(selection, store, trails, strategy = 'cyclic', context = undefined) {
     if (!selection || !Array.isArray(selection.members) || !selection.members.length) {
         throw new Error('applyHarmonyToPattern: selection needs at least one member');
     }
+    const fn = _DISTRIBUTION_FNS[strategy];
+    if (!fn) throw new Error(`applyHarmonyToPattern: unknown strategy "${strategy}"`);
     const M = selection.members.length;
-    trails.forEach((t, i) => {
-        // Inherited rank: an old-system rule's own entry (core/color.js, _writeSlot()) carries
-        // params.slot; a PRIOR farborgel entry (this same function, an earlier click) carries
-        // params.memberIndex instead (no separate "slot" field - would only ever duplicate
-        // memberIndex) - read whichever this trail's existing entry actually has, so BOTH a
-        // grayscale-rule-established order and an earlier harmony's own order chain correctly,
-        // not just the former.
+    // Inherited rank: an old-system rule's own entry (core/color.js, _writeSlot()) carries
+    // params.slot, a real 0..N-1 rank regardless of which NEW strategy is about to run - always
+    // honored. A PRIOR farborgel entry (this same function, an earlier click) carries
+    // params.memberIndex instead - but that is only ever a small 0..M-1 value, meaningful as a
+    // "rank" ONLY when reapplying the SAME strategy that produced it (successive Cyclic clicks:
+    // memberIndex IS the trail's effective rank; successive Area/Rings clicks: same reasoning).
+    // Switching strategies (e.g. Cyclic, M=4, wrote memberIndex 0..3 -> then Area, bucketSize=6)
+    // would otherwise misread that small range as a full rank and collapse every trail into
+    // bucket 0 - a real bug caught live in the browser, not assumed away. So memberIndex is only
+    // read back when existing.params.strategy === this call's own strategy; a genuine strategy
+    // SWITCH intentionally starts that strategy's own natural order fresh, exactly as it would
+    // for a sheet with nothing applied yet. `undefined` (not a fallback to i) when nothing
+    // inheritable is there - each strategy resolves its OWN fallback (area-sorted i for
+    // Cyclic/Area/Symmetry, distance-rank for Rings), so a real inherited value is never
+    // confused with one that only coincides with a strategy's natural order.
+    const inheritedRanks = trails.map(t => {
         const existing = store.get(t.key);
-        const inherited = existing && existing.params && (Number.isInteger(existing.params.slot) ? existing.params.slot
-            : Number.isInteger(existing.params.memberIndex) ? existing.params.memberIndex : undefined);
-        const rank = inherited === undefined ? i : inherited;
-        const memberIndex = ((rank % M) + M) % M; // rank is always >= 0 in practice, but a negative-safe modulo costs nothing
+        if (!existing || !existing.params) return undefined;
+        if (Number.isInteger(existing.params.slot)) return existing.params.slot;
+        if (Number.isInteger(existing.params.memberIndex) && existing.params.strategy === strategy) return existing.params.memberIndex;
+        return undefined;
+    });
+    const memberIndexes = fn(trails, inheritedRanks, M, context);
+    trails.forEach((t, i) => {
+        const memberIndex = memberIndexes[i];
         const m = selection.members[memberIndex];
         const c = m.analyticalCoordinate;
         const hue = c.hueIndex === null ? FARBORGEL_GRAY_HUE_SUBSTITUTE : _farborgelHueToCoreHue(c.hueIndex);
         setFaceAssignment(store, t.key, {
             hue, w: c.w, s: c.s,
             rule: 'farborgel',
-            params: { source: 'harmonySelection', memberIndex, cardinality: M },
+            params: { source: 'harmonySelection', memberIndex, cardinality: M, strategy },
             // Farborgel follow-up: paint with the engine's OWN calibrated display color
             // (Oklab-mixed, gamut-mapped - color-harmony/ui/CALIBRATION.md) instead of
             // letting the render path re-resolve hue/w/s through this app's OWN, older,
