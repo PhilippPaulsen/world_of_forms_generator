@@ -260,6 +260,13 @@ console.log('\n== 6. regression and timing vs the previous commit (real measurem
     const perPat = [];
     const GRAY_HEX = /^#([0-9a-f]{2})\1\1$/i;
     const stripColors = res => ({ ...res, faces: (res.faces || []).map(f => { const { color, ...rest } = f; return rest; }) });
+    // Farborgel follow-up: face.colorSpec now additionally carries `displayColor` (null for every
+    // face here - colored() only ever uses the old rule-registry system, never Farborgel), a real,
+    // deliberate schema addition the previous commit's colorSpec never had. Stripped the same way
+    // Phase B1 stripped .color above (byte-identity would otherwise fail on the new key alone, not
+    // on an actual behavior change) - hue/w/s/rule/params/trail, the fields that matter here, still
+    // compare exactly.
+    const stripDisplayColorSpec = res => ({ ...res, faces: (res.faces || []).map(f => { if (!f.colorSpec) return f; const { displayColor, ...restSpec } = f.colorSpec; return { ...f, colorSpec: restSpec }; }) });
     const checkColors = res => (res.faces || []).forEach(f => { if (!GRAY_HEX.test(f.color)) colorBad++; });
     const time = (fn, reps) => { const t = process.hrtime.bigint(); for (let i = 0; i < reps; i++) fn(); return Number(process.hrtime.bigint() - t) / 1e3 / reps; };
     for (let p = 0; p < patterns.length; p++) {
@@ -273,7 +280,7 @@ console.log('\n== 6. regression and timing vs the previous commit (real measurem
         if (JSON.stringify(stripColors(resNullN)) !== JSON.stringify(stripColors(resNullO))) diffNull++;
         checkColors(resNullN);
         const sN = colored(n.sh, n.ids), sO = colored(o.sh, o.ids);
-        if (JSON.stringify(n.sh.sb.computeCellFaces(cn, n.sh.grid.nodes, sN)) !== JSON.stringify(o.sh.sb.computeCellFaces(co, o.sh.grid.nodes, sO))) diffSteady++;
+        if (JSON.stringify(stripDisplayColorSpec(n.sh.sb.computeCellFaces(cn, n.sh.grid.nodes, sN))) !== JSON.stringify(stripDisplayColorSpec(o.sh.sb.computeCellFaces(co, o.sh.grid.nodes, sO)))) diffSteady++;
         // timings, interleaved old/new to cancel drift; 12 rounds
         const emptyN = new Map(), emptyO = new Map();
         const r = { eN: [], eO: [], sN: [], sO: [] };

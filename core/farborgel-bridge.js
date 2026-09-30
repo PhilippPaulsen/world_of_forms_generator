@@ -134,7 +134,16 @@ function applyHarmonyToPattern(selection, store, trails) {
         setFaceAssignment(store, t.key, {
             hue, w: c.w, s: c.s,
             rule: 'farborgel',
-            params: { source: 'harmonySelection', memberIndex, cardinality: M }
+            params: { source: 'harmonySelection', memberIndex, cardinality: M },
+            // Farborgel follow-up: paint with the engine's OWN calibrated display color
+            // (Oklab-mixed, gamut-mapped - color-harmony/ui/CALIBRATION.md) instead of
+            // letting the render path re-resolve hue/w/s through this app's OWN, older,
+            // uncalibrated OSTWALD_REFERENCE_SYSTEM (core/color.js) - the two hue circles
+            // disagree (this app's is the "Old"/pre-calibration reference Farborgel itself
+            // used to use), which is what made real Farborgel harmonies look muted, like
+            // the old tetrad/isotint system. m.srgb is a deterministic, already-validated
+            // [r,g,b] byte triple straight from HarmonySelection.mjs - safe to store as-is.
+            displayColor: m.srgb
         });
     });
     return trails.length;

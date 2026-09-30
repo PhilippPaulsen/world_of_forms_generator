@@ -76,6 +76,13 @@ function member(hueIndex, w, s) {
     return { analyticalCoordinate: { hueIndex, v: hueIndex === null ? 0 : 1 - w - s, w, s } };
 }
 
+// Farborgel follow-up: a member that ALSO carries a real-shaped srgb (HarmonySelection.mjs's
+// own calibrated display color) - the field applyHarmonyToPattern() now additionally reads.
+function memberWithDisplay(hueIndex, w, s, srgb) {
+    return Object.assign(member(hueIndex, w, s), { srgb });
+}
+const _toHex = rgb => '#' + rgb.map(x => x.toString(16).padStart(2, '0')).join('');
+
 // ---------------- 1. real trail-color correctness, M = 2/3/4 --------------
 console.log('\n== 1. cyclic assignment correctness (independently recomputed) ==');
 {
@@ -202,6 +209,65 @@ console.log('\n== 4. reconciliation, split/merge and crossfade stay unaware ==')
         survivingFarborgel.length > 0, `${survivingFarborgel.length}/${trailsEdited.length} surviving trails still farborgel-tagged`);
     check('the store never lost the pre-edit entries (orphans kept inert, per core/facecolor.js\'s own contract)',
         [...before].every(k => store.has(k)), `${[...before].filter(k => store.has(k)).length}/${before.size} kept`);
+}
+
+// ---------------- 5. displayColor: Farborgel's own calibrated color actually paints the face --
+console.log('\n== 5. displayColor: real member.srgb, not a core/color.js re-resolve, is what gets painted ==');
+{
+    // Two visually distinct, deliberately NOT-round srgb triples - if the render path fell back
+    // to resolveColor(hue,w,s) instead of using these, the painted hex could not coincidentally
+    // match them (resolveColor's own gamut/mix math has no way to land on an arbitrary triple).
+    const srgbA = [226, 243, 75], srgbB = [12, 34, 200];
+    const selection = { version: 1, source: 'farborgel', members: [memberWithDisplay(1, 0.0355, 0.1087, srgbA), memberWithDisplay(13, 0.0355, 0.1087, srgbB)] };
+    const store = new Map();
+    applyHarmonyToPattern(selection, store, trails);
+
+    check('stored displayColor === member.srgb, byte-identical, for every trail',
+        trails.every((t, i) => same(store.get(t.key).displayColor, selection.members[i % 2].srgb)));
+    check('hue/w/s recipe is STILL stored alongside displayColor (provenance kept, not replaced)',
+        trails.every((t, i) => store.get(t.key).w === selection.members[i % 2].analyticalCoordinate.w));
+
+    // Actually paint: computeCellFaces(..., store) is the real render-path entry point
+    // (applyAssignmentsLazily -> applyFaceAssignments), exactly what core/tiling.js's
+    // drawTessellation() triggers on every redraw - not a hand-rolled shortcut. The store
+    // must be passed to THIS call (not a separate unassigned one) so face.color is real.
+    const painted = sheet.sb.computeCellFaces(allIds.map(i => sheet.reps[i]), sheet.grid.nodes, store);
+    let paintOk = true, specOk = true, notOldResolveOk = true;
+    const nodeById = new Map(painted.nodes.map(n => [n.id, n]));
+    trails.forEach((t, i) => {
+        const expected = selection.members[i % 2].srgb;
+        const expectedHex = _toHex(expected);
+        // find one face of this trail among the painted result via its key
+        const faceIdx = sheet.sb.computeFaceTrailKeys(painted, sheet.group).findIndex(k => k === t.key);
+        if (faceIdx < 0) { paintOk = false; return; }
+        const f = painted.faces[faceIdx];
+        if (f.color !== expectedHex) paintOk = false;
+        if (!f.colorSpec || !same(f.colorSpec.displayColor, expected)) specOk = false;
+        // the color this WOULD have been under the old (pre-fix) re-resolve path, for contrast
+        const a = store.get(t.key);
+        const oldPathHex = resolveColor(REF, a).hex;
+        if (oldPathHex === expectedHex) notOldResolveOk = false; // would only coincide by chance with this deliberately odd srgb
+    });
+    check('face.color === Farborgel\'s own srgb (hex), for every trail, via the REAL computeCellFaces() render path', paintOk);
+    check('face.colorSpec.displayColor carries the same srgb through to export', specOk);
+    check('this differs from the old core/color.js resolveColor(hue,w,s) path (proves displayColor, not a coincidental match, painted the face)', notOldResolveOk);
+
+    // Export: faceColoringExportData must carry displayColor per entry too.
+    const exportData = sheet.sb.faceColoringExportData(store, []);
+    check('faceColoringExportData: every entry carries the real displayColor',
+        exportData && exportData.base && exportData.base.length === store.size &&
+        exportData.base.every(e => same(e.displayColor, store.get(e.trail).displayColor)));
+
+    // Reconciliation: a structural edit must hand displayColor to inherited child faces too,
+    // not just hue/w/s (same edit shape as section 4, checked for displayColor specifically here).
+    const editedIds2 = allIds.slice(0, Math.max(1, allIds.length - 1));
+    const resEdited2 = sheet.faces(editedIds2);
+    const trailsEdited2 = sheet.sb.computeFaceTrails(resEdited2, sheet.group);
+    sheet.sb.computeCellFaces(editedIds2.map(i => sheet.reps[i]), sheet.grid.nodes, store);
+    const survivingWithDisplay = trailsEdited2.filter(t => store.has(t.key) && store.get(t.key).rule === 'farborgel');
+    check('after a structural edit, every surviving/inherited farborgel trail still carries a valid 3-byte displayColor (not dropped by reconciliation)',
+        survivingWithDisplay.length > 0 && survivingWithDisplay.every(t => Array.isArray(store.get(t.key).displayColor) && store.get(t.key).displayColor.length === 3),
+        `${survivingWithDisplay.length}/${trailsEdited2.length}`);
 }
 
 // ------------------------------------------------------------------------

@@ -132,7 +132,7 @@ console.log('\n== 2. round trip: assign -> export -> JSON -> re-derive ==');
             if (!fc || !eq(fc.system, JSON.parse(JSON.stringify(REF)))) sysBad++;
             const metaList = target === 'base' ? fc.base : (fc.layers && fc.layers[0] && fc.layers[0].assignments);
             if (!metaList || metaList.length !== store.size) metaBad++;
-            else for (const e of metaList) { const a = store.get(e.trail); if (!a || !eq({ hue: e.hue, w: e.w, s: e.s, rule: e.rule, params: e.params }, a)) metaBad++; }
+            else for (const e of metaList) { const a = store.get(e.trail); if (!a || !eq({ hue: e.hue, w: e.w, s: e.s, rule: e.rule, params: e.params, displayColor: e.displayColor }, a)) metaBad++; }
             // sheet isolation: the other sheet has no assignments -> no meta entry, no colorSpec on its faces
             if (target === 'base' ? fc.layers !== undefined : fc.base !== undefined) isolBad++;
             const otherFaces = target === 'base' ? parsed.geometry.layers[0].faces : parsed.geometry.faces;
@@ -156,7 +156,7 @@ console.log('\n== 2. round trip: assign -> export -> JSON -> re-derive ==');
                 }
                 assignedRows++; assignedHere++;
                 const cs = f.colorSpec, a = store.get(keysNow[i]);
-                if (!cs || cs.trail !== keysNow[i] || cs.system !== fc.system.id || !eq({ hue: cs.hue, w: cs.w, s: cs.s, rule: cs.rule, params: cs.params }, a)) specBad++;
+                if (!cs || cs.trail !== keysNow[i] || cs.system !== fc.system.id || !eq({ hue: cs.hue, w: cs.w, s: cs.s, rule: cs.rule, params: cs.params, displayColor: cs.displayColor }, a)) specBad++;
                 // reconstruct the resolved color from the PARSED data only (exported system + colorSpec)
                 if (sb.resolveColor(fc.system, { hue: cs.hue, w: cs.w, s: cs.s }).hex !== f.color) resolveBad++;
                 // (rule, params) regenerate the same (hue, w, s)

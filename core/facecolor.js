@@ -77,18 +77,39 @@ function computeFaceTrailKeys(facesResult, group) {
     });
 }
 
-// Validates and stores one assignment: {hue, w, s, rule, params}. hue/w/s
-// are checked by actually resolving them (resolveColor() throws outside
-// the Ostwald triangle), so a bad entry can never get in and later break
-// rendering. rule/params are provenance for the Phase 3 UI (which rule +
-// stepper positions produced this color); the render path only reads
-// hue/w/s. The stored record is a copy.
+// Farborgel follow-up (real display color, not core/color.js's re-resolved recipe): a raw,
+// already-calibrated sRGB byte triple an assignment can carry alongside its hue/w/s recipe.
+// Validated the same way HarmonySelection.mjs's own toDisplayColors() validates member.srgb -
+// same contract, so a value straight from that module always passes.
+function _validDisplayColor(c) {
+    return Array.isArray(c) && c.length === 3 && c.every(x => Number.isInteger(x) && x >= 0 && x <= 255);
+}
+function _srgbBytesToHex(rgb) {
+    return '#' + rgb.map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+// Validates and stores one assignment: {hue, w, s, rule, params, displayColor?}. hue/w/s
+// are checked by actually resolving them (resolveColor() throws outside the Ostwald
+// triangle), so a bad entry can never get in and later break rendering - this stays true
+// even for a Farborgel-sourced entry, whose hue/w/s are real analytical coordinates, kept
+// for provenance/export/reconciliation even though rendering no longer resolves through
+// them when displayColor is present (see applyFaceAssignments below). rule/params are
+// provenance for the Phase 3 UI (which rule + stepper positions produced this color).
+// displayColor, when supplied, is an already-calibrated [r,g,b] byte triple (e.g.
+// Farborgel's own HarmonySelection member.srgb) that PAINTS the face directly instead of
+// core/color.js's OSTWALD_REFERENCE_SYSTEM recipe - optional, null by default, so every
+// existing caller (the old rule-registry system) is byte-identical to before this field
+// existed. The stored record is a copy.
 function setFaceAssignment(store, key, assignment) {
     resolveColor(OSTWALD_REFERENCE_SYSTEM, assignment); // throws if invalid
+    if (assignment.displayColor !== undefined && assignment.displayColor !== null && !_validDisplayColor(assignment.displayColor)) {
+        throw new Error('setFaceAssignment: displayColor must be a [r,g,b] byte triple (0-255 integers) or null');
+    }
     store.set(key, {
         hue: assignment.hue, w: assignment.w, s: assignment.s,
         rule: assignment.rule === undefined ? null : assignment.rule,
-        params: assignment.params === undefined ? null : assignment.params
+        params: assignment.params === undefined ? null : assignment.params,
+        displayColor: (assignment.displayColor === undefined || assignment.displayColor === null) ? null : assignment.displayColor.slice()
     });
 }
 
@@ -115,12 +136,24 @@ function applyFaceAssignments(facesResult, store, group, keys = null) {
         const a = keys[i] === null ? undefined : store.get(keys[i]);
         if (!a) return;
         try {
-            face.color = resolveColor(OSTWALD_REFERENCE_SYSTEM, a).hex;
+            // Farborgel follow-up: a displayColor paints the face directly - it is already
+            // calibrated (Oklab-mixed, gamut-mapped), and re-resolving hue/w/s through
+            // OSTWALD_REFERENCE_SYSTEM here would silently replace it with that OTHER
+            // system's (uncalibrated, muted) color, the exact bug this fixes. hue/w/s are
+            // still validated below (resolveColor throws on a stale/invalid entry) even
+            // when displayColor is used, so an assignment that no longer resolves is still
+            // correctly skipped rather than painting a face from bad data.
+            const resolved = resolveColor(OSTWALD_REFERENCE_SYSTEM, a);
+            face.color = a.displayColor ? _srgbBytesToHex(a.displayColor) : resolved.hex;
             // Phase 4: the full Ostwald-space data rides on the face (export:
             // face.colorSpec) so an assignment is reconstructable, not just
             // visually reproducible. Present on ASSIGNED faces only; `trail`
             // is the key that joins the face to meta.faceColoring's entry.
-            face.colorSpec = { system: OSTWALD_REFERENCE_SYSTEM.id, hue: a.hue, w: a.w, s: a.s, rule: a.rule, params: a.params, trail: keys[i] };
+            // displayColor is additive/null by default - a consumer re-deriving color from
+            // system+hue/w/s alone gets the OLD (uncalibrated) result for a Farborgel entry;
+            // displayColor is the authoritative one when present, a deliberate, documented
+            // exception to the "system alone reconstructs every color" Phase 4 invariant.
+            face.colorSpec = { system: OSTWALD_REFERENCE_SYSTEM.id, hue: a.hue, w: a.w, s: a.s, rule: a.rule, params: a.params, displayColor: a.displayColor, trail: keys[i] };
             applied++;
         } catch (err) { /* stale/invalid entry: keep the default color */ }
     });
@@ -130,14 +163,19 @@ function applyFaceAssignments(facesResult, store, group, keys = null) {
 // Phase 4 (export): meta.faceColoring - {system, base?, layers?}. `system`
 // is the WHOLE reference color system as plain data (hue anchors, white/
 // black, gray-letter table, mix rule, and its verified/calibrated tags), so a
-// consumer can re-derive every color without this code. base / layers[] hold
-// every store entry of that sheet, orphans included (an orphan is inert but
-// returns on Undo - see the header): [{trail, hue, w, s, rule, params}].
+// consumer can re-derive every color without this code - EXCEPT an entry with
+// a non-null displayColor (Farborgel follow-up): that color was calibrated by
+// a different pipeline (Oklab-mixed, gamut-mapped - see core/farborgel-bridge.js),
+// not derivable from `system`+hue/w/s at all, so displayColor rides along
+// as the authoritative, already-resolved [r,g,b] a consumer should use
+// directly for those entries. base / layers[] hold every store entry of that
+// sheet, orphans included (an orphan is inert but returns on Undo - see the
+// header): [{trail, hue, w, s, rule, params, displayColor}].
 // `layerStores` = [{layerIndex, store}], layerIndex = position in the
 // EXPORTED geometry.layers array (enabled layers only). Returns null when no
 // sheet has an assignment, so unassigned patterns export byte-identically.
 function faceColoringExportData(baseStore, layerStores) {
-    const entries = store => Array.from(store.entries()).map(([trail, a]) => ({ trail, hue: a.hue, w: a.w, s: a.s, rule: a.rule, params: a.params }));
+    const entries = store => Array.from(store.entries()).map(([trail, a]) => ({ trail, hue: a.hue, w: a.w, s: a.s, rule: a.rule, params: a.params, displayColor: a.displayColor }));
     const out = { system: JSON.parse(JSON.stringify(OSTWALD_REFERENCE_SYSTEM)) };
     let any = false;
     if (baseStore && baseStore.size) { out.base = entries(baseStore); any = true; }
@@ -418,7 +456,7 @@ function reconcileFaceAssignments(store, oldSnap, newSnap) {
         comp.written = comp.written || [];
         comp.newKeys.forEach(child => {
             if (store.has(child)) return; // fill only
-            setFaceAssignment(store, child, { hue: a.hue, w: a.w, s: a.s, rule: a.rule, params: a.params == null ? null : JSON.parse(JSON.stringify(a.params)) });
+            setFaceAssignment(store, child, { hue: a.hue, w: a.w, s: a.s, rule: a.rule, params: a.params == null ? null : JSON.parse(JSON.stringify(a.params)), displayColor: a.displayColor == null ? null : a.displayColor.slice() });
             comp.written.push(child);
             inherited++;
         });

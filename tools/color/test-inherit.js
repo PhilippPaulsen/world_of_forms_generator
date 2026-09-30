@@ -184,7 +184,11 @@ console.log('\n== merge tie-breaks (constructed) ==');
     const sq = (x0, y0, x1, y1) => [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
     const mkFace = (key, poly) => ({ key, poly, area: Math.abs((poly[1].x - poly[0].x) * (poly[2].y - poly[1].y)), samples: sb.faceSamplePoints(poly) });
     const mkSnap = faces => { const s = { faceCount: faces.length, keys: new Set(), trails: new Map(), faces }; faces.forEach((f, i) => { s.keys.add(f.key); if (!s.trails.has(f.key)) s.trails.set(f.key, []); s.trails.get(f.key).push(i); }); return s; };
-    const entry = slot => ({ hue: slot, w: 0.1, s: 0.1, rule: 'r', params: { slot } });
+    // displayColor: null matches what setFaceAssignment()/give() actually stores (Farborgel
+    // follow-up: every entry now carries this field, null for a non-Farborgel one) - without it
+    // here, eq()'s JSON.stringify comparison against a real inherited store entry would fail on
+    // the extra key alone, not on an actual inheritance-rule regression.
+    const entry = slot => ({ hue: slot, w: 0.1, s: 0.1, rule: 'r', params: { slot }, displayColor: null });
     const merged = mkFace('M', sq(0, 0, 20, 10));
     const run = (fa, fb, ea, eb) => {
         const store = new Map(); if (ea) store.set('A', ea); if (eb) store.set('B', eb);
