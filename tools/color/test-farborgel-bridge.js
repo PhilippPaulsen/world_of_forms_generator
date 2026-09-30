@@ -270,6 +270,63 @@ console.log('\n== 5. displayColor: real member.srgb, not a core/color.js re-reso
         `${survivingWithDisplay.length}/${trailsEdited2.length}`);
 }
 
+// ---------------- 6. inheritance: a prior params.slot overrides the plain area rank ---------
+console.log('\n== 6. inheritance (Phase B-Farbstrategien): a pre-existing params.slot wins over i ==');
+{
+    // No prior entries at all: every trail falls back to its own area rank i - byte-identical
+    // to the pre-inheritance behavior (same assertion section 1 already made, restated here
+    // explicitly as the "nothing to inherit" baseline this section's real cases are compared
+    // against).
+    {
+        const store = new Map();
+        const selection = { version: 1, source: 'farborgel', members: [member(1, 0.1, 0.1), member(13, 0.2, 0.3), member(5, 0.15, 0.15)] };
+        applyHarmonyToPattern(selection, store, trails);
+        const noPriorOk = trails.every((t, i) => store.get(t.key).params.memberIndex === i % 3);
+        check('no prior store entries: every trail falls back to plain area rank i (unchanged baseline)', noPriorOk);
+    }
+
+    // A prior rule (NOT farborgel - e.g. a Form-mode grayscale rule) already wrote real
+    // params.slot values, deliberately in a DIFFERENT order than the trails' own area rank
+    // (slot = (i + 3) % trails.length, a fixed rotation - never equal to i itself for
+    // trails.length > 3, so this could not pass by the old i-based behavior coinciding by
+    // chance). applyHarmonyToPattern() must read THOSE slots, not recompute fresh area ranks.
+    {
+        const store = new Map();
+        trails.forEach((t, i) => {
+            const slot = (i + 3) % trails.length;
+            store.set(t.key, { hue: 0, w: 0.5, s: 0.1, rule: 'max-contrast-gray', params: { idx: [0], slot, slots: trails.length }, displayColor: null });
+        });
+        const M = 4;
+        const selection = { version: 1, source: 'farborgel', members: [member(1, 0.1, 0.1), member(7, 0.1, 0.1), member(13, 0.1, 0.1), member(19, 0.1, 0.1)] };
+        applyHarmonyToPattern(selection, store, trails);
+        const inheritedOk = trails.every((t, i) => {
+            const expectedSlot = (i + 3) % trails.length;
+            return store.get(t.key).params.memberIndex === expectedSlot % M;
+        });
+        check('a prior rule\'s params.slot (here, a fixed rotation, never equal to i) is what memberIndex actually follows', inheritedOk);
+        check('at least one trail\'s inherited member really differs from what i % M alone would have given (the inheritance is doing real work, not a no-op)',
+            trails.some((t, i) => (((i + 3) % trails.length) % M) !== (i % M)));
+    }
+
+    // The read happens BEFORE this same call's own write: a second applyHarmonyToPattern()
+    // call (e.g. clicking a different harmony button right after) reads the FIRST call's own
+    // farborgel-tagged params.slot as its new inheritance source. With M=2 then M=4 and every
+    // inherited slot < 2 (hence already < 4), the second call's memberIndex must come out
+    // IDENTICAL to the first's, trail for trail - confirms a farborgel entry inherits from a
+    // previous farborgel entry too, not just from an unrelated rule.
+    {
+        const store = new Map();
+        const selA = { version: 1, source: 'farborgel', members: [member(1, 0.1, 0.1), member(13, 0.2, 0.3)] };
+        applyHarmonyToPattern(selA, store, trails);
+        const ranksAfterA = trails.map(t => store.get(t.key).params.memberIndex);
+        const selB = { version: 1, source: 'farborgel', members: [member(2, 0.1, 0.1), member(8, 0.1, 0.1), member(14, 0.1, 0.1), member(20, 0.1, 0.1)] };
+        applyHarmonyToPattern(selB, store, trails);
+        const ranksAfterB = trails.map(t => store.get(t.key).params.memberIndex);
+        check('successive harmony applications keep trails in the SAME relative order (a farborgel entry inherits from the previous farborgel entry too)',
+            JSON.stringify(ranksAfterA) === JSON.stringify(ranksAfterB), `A=${ranksAfterA.join(',')} B=${ranksAfterB.join(',')}`);
+    }
+}
+
 // ------------------------------------------------------------------------
 console.log(`\n${checks - failures}/${checks} checks passed`);
 if (failures > 0) process.exit(1);

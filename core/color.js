@@ -484,3 +484,45 @@ function _hueChordRule(id, label, count, verified, note) {
     };
 }
 registerHarmonyRule(_hueChordRule('tetrad', 'Tetrad (Vierklang)', 4, 'secondary', '4-chord = 6 apart on 24 hues (one worked secondary-source example); level list unverified'));
+
+// Max-contrast grayscale (Phase B-Farbstrategien follow-up): NOT an Ostwald-sourced rule
+// (no `verified` field - the question doesn't apply, this is a contemporary UI default, not
+// a historical-accuracy claim). For N = slots trails, picks the N gray letters that spread
+// WIDEST across the 8-letter scale for that specific N, rather than always using all 8:
+// letterIndex(k) = round(k * (letters.length - 1) / (n - 1)) for k = 0..n-1 (n = min(slots,
+// letters.length)) - N=2 -> {a,p} (the two extremes), N=3 -> {a,i,p}, N=8 -> all 8 letters in
+// order (byte-identical spread to what orbitColor()'s old, unconditional 8-letter default
+// already gave at exactly 8 trails). N=1 has no natural "spread" - defaults to the middle of
+// the scale (index round((letters.length-1)/2) = 4, "i"), same rounding convention as every
+// other k. N > 8 cycles the N=8 sequence (this rule's own natural set is 8 colors; the
+// registry's own generate() contract already expects cycling when slots exceeds it, same as
+// every other rule here). direction is the one required param axis (registerHarmonyRule()
+// requires >=1) - light-to-dark (the letterIndex order above, as-is) or dark-to-light (the
+// SAME letter SET, reversed order) - deliberately a plain array reversal, not an independently
+// mirrored index computation: mirroring each index (letterCount-1-i) separately would pick a
+// DIFFERENT middle letter for an odd-sized spread (e.g. N=3's index 4 mirrors to index 3, "g",
+// not the same "i" reversed) - direction must only change ORDER, never WHICH letters a given N
+// selects.
+function _maxContrastGrayIndices(n, letterCount) {
+    if (n <= 1) return [Math.round((letterCount - 1) / 2)];
+    const spreadN = Math.min(n, letterCount);
+    const spread = [];
+    for (let k = 0; k < spreadN; k++) spread.push(Math.round(k * (letterCount - 1) / (spreadN - 1)));
+    if (n <= letterCount) return spread;
+    return Array.from({ length: n }, (_, k) => spread[k % letterCount]);
+}
+registerHarmonyRule({
+    id: 'max-contrast-gray',
+    label: 'Max-Kontrast-Graustufen',
+    note: 'this app\'s own default for unassigned trails - widest available letter spread for the real trail count, not always all 8',
+    params: [{ id: 'direction', label: 'Richtung', count: 2 }],
+    generate(idx, system, slots) {
+        const white = system.grayScale.white;
+        const indices = _maxContrastGrayIndices(slots, white.length);
+        const ordered = idx[0] === 1 ? indices.slice().reverse() : indices;
+        return ordered.map(i => {
+            const w = white[i];
+            return { hue: 0, w, s: 1 - w };
+        });
+    }
+});

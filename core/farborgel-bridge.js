@@ -98,10 +98,20 @@ function registerTrianglePoints(cx, cy, colSpacing, rowSpacing) {
 
 /**
  * Colors `trails` from a Farborgel HarmonySelection (version 1), cyclically:
- * trail i gets selection.members[i % M] (A B C A B C ... for M members).
- * Writes through setFaceAssignment() exactly as core/color.js's own rules do
- * via applyPaletteToTrails() - the only difference is where the color comes
- * from (a fixed, already-resolved member list instead of generateHarmonyPalette()).
+ * trail i gets selection.members[rank % M] (A B C A B C ... for M members), where `rank` is
+ * trail i's OWN INHERITED rank if one exists (Phase B-Farbstrategien: an old-system rule - e.g.
+ * core/color.js's max-contrast-gray, applied in Form-mode - already wrote a real `params.slot`
+ * for this exact trail key into `store`, OR an earlier click here already wrote its own
+ * `params.memberIndex`; reusing either means this application lands on trails in the SAME
+ * relative order that prior one established, not a freshly recomputed area-sort - chains
+ * across successive harmony clicks too, not just from a Form-mode rule), falling back to trail
+ * i's plain area-sorted position `i` when neither is there yet (today's unchanged behavior,
+ * opportunistic - never required). The read happens BEFORE this same call's own write below
+ * overwrites that trail's entry, per trail, so it only ever sees what was there coming INTO
+ * this call, never a just-written entry from earlier in the same forEach. Writes through
+ * setFaceAssignment() exactly as core/color.js's own rules do via applyPaletteToTrails() - the
+ * only difference is where the color comes from (a fixed, already-resolved member list instead
+ * of generateHarmonyPalette()).
  *
  * KNOWN GAP (Phase E, not a bug): this does NOT touch the sheet's facePalette
  * (facePaletteFor()) - there is no ruleId/idx to record, since the Farborgel
@@ -118,7 +128,8 @@ function registerTrianglePoints(cx, cy, colSpacing, rowSpacing) {
  *   only `.members[].analyticalCoordinate.{hueIndex,w,s}` is read.
  * @param {Map} store   the sheet's assignment store (faceAssignmentsFor(sheet)).
  * @param {Array} trails  the sheet's current trail list (computeFaceTrails()), in
- *   its existing area-then-key order - trail i's slot is purely positional.
+ *   its existing area-then-key order - trail i's member comes from its own inherited
+ *   `params.slot` if `store` already has one for that trail key, else from `i` itself.
  * @returns {number} trails.length (assignments written).
  */
 function applyHarmonyToPattern(selection, store, trails) {
@@ -127,7 +138,17 @@ function applyHarmonyToPattern(selection, store, trails) {
     }
     const M = selection.members.length;
     trails.forEach((t, i) => {
-        const memberIndex = i % M;
+        // Inherited rank: an old-system rule's own entry (core/color.js, _writeSlot()) carries
+        // params.slot; a PRIOR farborgel entry (this same function, an earlier click) carries
+        // params.memberIndex instead (no separate "slot" field - would only ever duplicate
+        // memberIndex) - read whichever this trail's existing entry actually has, so BOTH a
+        // grayscale-rule-established order and an earlier harmony's own order chain correctly,
+        // not just the former.
+        const existing = store.get(t.key);
+        const inherited = existing && existing.params && (Number.isInteger(existing.params.slot) ? existing.params.slot
+            : Number.isInteger(existing.params.memberIndex) ? existing.params.memberIndex : undefined);
+        const rank = inherited === undefined ? i : inherited;
+        const memberIndex = ((rank % M) + M) % M; // rank is always >= 0 in practice, but a negative-safe modulo costs nothing
         const m = selection.members[memberIndex];
         const c = m.analyticalCoordinate;
         const hue = c.hueIndex === null ? FARBORGEL_GRAY_HUE_SUBSTITUTE : _farborgelHueToCoreHue(c.hueIndex);
