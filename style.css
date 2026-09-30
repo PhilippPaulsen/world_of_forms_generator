@@ -952,13 +952,28 @@ body.dark {
    nav.js) regardless of viewport width - this selector's specificity beats .canvas-row .icon-btn's
    display:flex, so no !important is needed. */
 html:not([data-tab="farbe"]) .rail-farbe-only { display: none; }
-/* Group D Phase B4 follow-up: Kurven (curve toggle) and Mehr (Free Clothing/Free Endpoints/Alternative Net -
-   #more-rail) are not applicable to face-color work (fill already requires straight lines; free-line/
-   alternative-net construction aren't color operations) - genuinely hidden in the Farbe tab specifically,
-   not merely disabled, matching this row's own existing "context-irrelevant control" convention. Present
-   and functional in Form/Netz as before. */
+/* Group D Phase B4 follow-up: Kurven (curve toggle), Mehr (Free Clothing/Free Endpoints/Alternative Net -
+   #more-rail), Random Connection, Undo, Redo and Clear are not applicable to face-color work (fill already
+   requires straight lines; free-line/alternative-net construction, generating/undoing/clearing pattern
+   connections aren't color operations) - genuinely hidden in the Farbe tab specifically, not merely disabled,
+   matching this row's own existing "context-irrelevant control" convention. Present and functional in
+   Form/Netz as before. Undo/Redo's own stack (core/state.js) is per-layer, not tab-scoped, so hiding these
+   buttons here does not lose undo history - it stays reachable by switching to the Form or Netz tab, where
+   the buttons are unaffected (person's own explicit tradeoff call, see the B4 follow-up commit). */
 html[data-tab="farbe"] #btn-toggle-curve,
-html[data-tab="farbe"] #btn-more-rail { display: none; }
+html[data-tab="farbe"] #btn-more-rail,
+html[data-tab="farbe"] #btn-random,
+html[data-tab="farbe"] #btn-undo,
+html[data-tab="farbe"] #btn-redo,
+html[data-tab="farbe"] #btn-clear { display: none; }
+/* With undo/redo/clear/random hidden above, #btn-toggle-nodes (Points) becomes the rail's first visible
+   button in the Farbe tab - it needs #btn-undo's own top-alignment margin (var(--gap), matching
+   #canvas-container's own top margin) instead of its usual group-gap, and its group-divider hairline (drawn
+   by the shared ::before rule below) would otherwise float above nothing at the very top of the rail. */
+@media (min-width: 768px) {
+  html[data-tab="farbe"] #btn-toggle-nodes { margin-top: var(--gap); }
+  html[data-tab="farbe"] #btn-toggle-nodes::before { display: none; }
+}
 #btn-harmony-b { margin-top: var(--rail-group-gap); }
 #btn-harmony-w { margin-top: var(--rail-gap); }
 #btn-harmony-s { margin-top: var(--rail-gap); }
