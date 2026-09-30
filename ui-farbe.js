@@ -106,21 +106,20 @@
 
   // ---- anchor preview (Phase B4 follow-up): a plain color swatch of the anchor itself - independent of
   // any harmony type, pure display, reusing .fc-swatch's existing look from the old rule panel. Resolved
-  // via core/color.js's own resolveColor() (OSTWALD_REFERENCE_SYSTEM) - the SAME system every other color
-  // in this app resolves through, not Farborgel's own display sRGB - so the preview matches what the
-  // pattern will actually look like once a harmony using this exact anchor is applied. w/s come from the
-  // real atlas field (window.farborgelAnchorField(), core/farborgel-selection.mjs); hue is converted with
-  // the same (hueIndex-1) 0-based rule Phase A's _farborgelHueToCoreHue() already established.
+  // via Farborgel's OWN calibrated display pipeline (window.farborgelAnchorDisplayColor(),
+  // core/farborgel-selection.mjs -> color-harmony/ui/DisplayCalibration.mjs's historicalToDisplay()) - the
+  // SAME Oklab-mixed, gamut-mapped color applyHarmonyToPattern() now actually paints with (Phase B4
+  // follow-up #2), not core/color.js's older resolveColor() - a preview using that system would show a
+  // muted color the pattern itself no longer produces once a harmony using this anchor is applied.
   const anchorPreviewEls = [$('#farbe-anchor-preview'), $('#farbe-anchor-preview-kreis'), $('#farbe-anchor-preview-dreieck'), $('#farbe-anchor-preview-register')].filter(Boolean);
   function syncAnchorPreview() {
     if (!anchorPreviewEls.length) return;
     const a = anchorFor(activeLayer);
     let bg = 'transparent';
-    if (a && typeof window.farborgelAnchorField === 'function' && typeof resolveColor === 'function' && typeof OSTWALD_REFERENCE_SYSTEM !== 'undefined') {
+    if (a && typeof window.farborgelAnchorDisplayColor === 'function') {
       try {
-        const field = window.farborgelAnchorField(a);
-        const coreHue = ((a.hueIndex - 1) % 24 + 24) % 24;
-        bg = resolveColor(OSTWALD_REFERENCE_SYSTEM, { hue: coreHue, w: field.w, s: field.s }).hex;
+        const rgb = window.farborgelAnchorDisplayColor(a);
+        bg = 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')';
       } catch (e) { bg = 'transparent'; } // e.g. registerIndex null (Wert's hue-only state, Phase B4+): nothing real to preview yet
     }
     anchorPreviewEls.forEach(function (el) { if (el.style.background !== bg) el.style.background = bg; });

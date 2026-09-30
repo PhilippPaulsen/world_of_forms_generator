@@ -17,6 +17,7 @@
  */
 import { createComposition, reduceComposition } from '../color-harmony/ui/composition.mjs';
 import { createHarmonySelection } from '../color-harmony/ui/HarmonySelection.mjs';
+import { historicalToDisplay } from '../color-harmony/ui/DisplayCalibration.mjs';
 import Engine from './farborgel-engine.mjs';
 
 export const SERIES_RELATIONS = Object.freeze({ W: 'isotint', B: 'isotone', S: 'shadowSeries', V: 'isovalent' });
@@ -31,6 +32,20 @@ export function anchorField(anchor) {
     const field = row[anchor.registerIndex];
     if (!field) throw new RangeError(`farborgel-selection: no atlas field at hueIndex=${anchor.hueIndex} registerIndex=${anchor.registerIndex}`);
     return field;
+}
+
+/** The anchor's own calibrated display color - the SAME Oklab-mixed, gamut-mapped pipeline
+ * HarmonySelection.mjs's createHarmonySelection() runs per member (historicalToDisplay(),
+ * color-harmony/ui/DisplayCalibration.mjs), applied directly to the anchor field with no harmony
+ * type needed. This is what a preview of "the anchor itself" should show, now that
+ * applyHarmonyToPattern() paints with this same calibrated color instead of re-resolving through
+ * core/color.js (Phase B4 follow-up) - a preview using the OTHER (core/color.js) system would show
+ * a color the pattern itself no longer produces.
+ * @param {{hueIndex:number, registerIndex:number}} anchor a real (non-null-register) anchor.
+ * @returns {number[]} a deterministic [r,g,b] byte triple (0-255 integers).
+ */
+export function anchorDisplayColor(anchor) {
+    return historicalToDisplay(anchorField(anchor)).rgb.slice();
 }
 
 /**
@@ -54,11 +69,11 @@ export function buildHarmonySelection(anchor, harmonyType) {
 }
 
 // Browser bridge: ui-farbe.js (a classic script) calls these by name. Guarded so importing this
-// file in Node (tools/color/test-farborgel-selection.js) never touches `window`. anchorField is
-// also exposed (Phase B4 follow-up) so ui-farbe.js can show a plain color preview of the anchor
-// itself - independent of any harmony type - via core/color.js's own resolveColor(), the same
-// system every other color in this app resolves through (not Farborgel's own display sRGB).
+// file in Node (tools/color/test-farborgel-selection.js) never touches `window`. anchorDisplayColor
+// is what ui-farbe.js's anchor preview swatch uses (Phase B4 follow-up) - anchorField stays exposed
+// too, for anything that still needs the raw field (w/s/label), not just its display color.
 if (typeof window !== 'undefined') {
     window.farborgelBuildHarmonySelection = buildHarmonySelection;
     window.farborgelAnchorField = anchorField;
+    window.farborgelAnchorDisplayColor = anchorDisplayColor;
 }
