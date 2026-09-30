@@ -1,18 +1,16 @@
 /*
- * The Farbe nav row (UI rework 4d): the harmony rule choice, the axis steppers, and the "Mehr" overlay. It wires
- * markup that already exists in index.html to the EXISTING face-color logic in sketch.js/core/color.js/
- * core/facecolor.js - nothing is duplicated:
+ * The Farbe nav row: the Farborgel anchor (Kreis/Dreieck/steppers), the 7 harmony triggers, and the "Mehr"
+ * overlay (now just the cross-layer note - Group D Phase B4 follow-up removed the old rule-engine row and
+ * the Register button/overlay entirely, not just hidden them; see index.html's own comments on #nav-farbe/
+ * #more-farbe for what changed and why).
  *
- *   rules      a segmented row of the four harmony rules (core/color.js's registry; a fixed, stable set) driving
- *              the hidden #face-colors-rule <select>, exactly the way the Netz row's strength stepper drives its
- *              hidden #net-strength-input: a click sets the select's value and dispatches 'change', which is the
- *              SAME event initFaceColorsPanel() already listens for. isotone and shadow-series are unverified
- *              (core/color.js): selectable, greyed (.unverified), the reason stays in the tooltip - never disabled
- *              for that alone.
- *   axes       #face-colors-axes, sketch.js's own "<- value ->" rows (built by renderFaceColorsPanel(), unchanged),
- *              relocated into this row and only restyled to its height/spacing.
- *   More       "Spread colors", "Reset colors", the unassigned-trails note and the cross-layer overlay note -
- *              moved into #more-farbe unchanged (ids and handlers untouched).
+ *   anchor     Kreis (hue ring)/Dreieck (register triangle) overlays + the hue/register steppers, all over the
+ *              SAME anchorFor(sheet) state (core/facecolor.js) - never a second source of truth.
+ *   harmony    7 buttons (2/3/4/B/W/S/V) + a hidden fallback dropdown, all calling applyHarmony() (below), the
+ *              one real consumer of the anchor - the REAL Farborgel engine end to end (core/farborgel-selection.mjs).
+ *              The last-applied type is remembered per sheet (lastHarmonyTypeFor(), core/facecolor.js): an
+ *              anchor change reapplies it live (afterAnchorChange(), below), and its button stays marked
+ *              active (syncHarmonyActive(), below) until Reset Color or the old rule system take over.
  *
  * Eligibility: this row applies to the base sheet and eligible layers, exactly as sketch.js already decides
  * (faceFillsUnavailableReason()) - PLUS a row-level condition of its own: face fill itself must be on
@@ -20,9 +18,9 @@
  * visible and aria-disabled with the reason; never hidden. Fill being off additionally puts a small dot on the
  * old toolbar's fill button (#btn-toggle-faces) while the Farbe tab is open, pointing at the fix.
  *
- * updateFaceColorsPanel() (sketch.js) only rebuilds the rule/axis DOM while its panel is VISIBLE (activeShowFaces());
- * it is called again at the top of sync() below so this row always reads this frame's state, not stale DOM from
- * whenever the panel (in the old toolbar) was last shown.
+ * updateFaceColorsPanel() (sketch.js) still rebuilds the STILL-VISIBLE per-trail list (#face-colors-list)
+ * while its panel is VISIBLE (activeShowFaces()); it is called again at the top of sync() below so this row
+ * always reads this frame's state, not stale DOM from whenever the panel was last shown.
  *
  * The German texts below are the reasons for now; the dictionary (data-i18n keys) comes in a later phase.
  */
@@ -31,9 +29,6 @@
   const $ = function (s) { return document.querySelector(s); };
 
   const row = $('#nav-farbe'), panel = $('#more-farbe'), moreBtn = $('#btn-more-farbe');
-  // Group D Phase B4 follow-up: the rule buttons/axes moved from #nav-farbe into #more-farbe (a position
-  // change, see index.html's own comment there) - queried from panel now, not row.
-  const ruleSelect = $('#face-colors-rule'), ruleBtns = Array.prototype.slice.call(panel.querySelectorAll('.fc-rule-btn'));
   const fillBtn = $('#btn-toggle-faces');
 
   // ---- anchor steppers (Group D Phase B4 follow-up): real .stepper widgets (UI.stepper()) - the SAME
@@ -111,7 +106,7 @@
   // SAME Oklab-mixed, gamut-mapped color applyHarmonyToPattern() now actually paints with (Phase B4
   // follow-up #2), not core/color.js's older resolveColor() - a preview using that system would show a
   // muted color the pattern itself no longer produces once a harmony using this anchor is applied.
-  const anchorPreviewEls = [$('#farbe-anchor-preview'), $('#farbe-anchor-preview-kreis'), $('#farbe-anchor-preview-dreieck'), $('#farbe-anchor-preview-register')].filter(Boolean);
+  const anchorPreviewEls = [$('#farbe-anchor-preview'), $('#farbe-anchor-preview-kreis'), $('#farbe-anchor-preview-dreieck')].filter(Boolean);
   function syncAnchorPreview() {
     if (!anchorPreviewEls.length) return;
     const a = anchorFor(activeLayer);
@@ -125,14 +120,11 @@
     anchorPreviewEls.forEach(function (el) { if (el.style.background !== bg) el.style.background = bg; });
   }
 
-  // ---- anchor widgets (Group D Phase B3): a visual/text alternative to the two numeric steppers above,
-  // over the SAME anchor state - never a second source of truth. Kreis: a 24-point hue ring (hueRingPoints(),
-  // core/farborgel-bridge.js - now loaded in the browser for the first time, this widget's real consumer).
-  // Dreieck: the real 28-register triangle (registerTrianglePoints(), same file) FOR THE CURRENT HUE.
-  // Register: the same 28 registers (FARBORGEL_REGISTER_ORDER) as a per-hue text list - a design choice
-  // made this phase (not the full 24x28/672-cell atlas Farborgel's own standalone tool shows, since Kreis
-  // already owns hue selection here - see the Phase B3 report). Switching view mode never touches the
-  // anchor, only which of the three containers is visible (anchorViewMode is UI-only state).
+  // ---- anchor widgets (Group D Phase B3, Register removed in the B4 follow-up): a visual alternative to
+  // the two numeric steppers above, over the SAME anchor state - never a second source of truth. Kreis: a
+  // 24-point hue ring (hueRingPoints(), core/farborgel-bridge.js). Dreieck: the real 28-register triangle
+  // (registerTrianglePoints(), same file) FOR THE CURRENT HUE. (Register - the same 28 registers as a
+  // per-hue linear list - is gone: it duplicated what the register stepper above already provides inline.)
   //
   // Both SVG widgets reuse color-harmony/ui/components/dom.mjs's activateSVG() pattern (role="button"/here
   // "radio", a hit-target circle bigger than the visible face, Enter/Space -> click, an appended <title> for
@@ -166,19 +158,18 @@
     return g;
   }
 
-  // Group D Phase B4: each widget now lives in its OWN overlay (#overlay-kreis/-dreieck/-register, opened
-  // by its own #nav-farbe row-2 button) instead of sharing one view-mode-switched section - see index.html's
-  // own comment on that row. anchorHueContext is now two elements (Dreieck's and Register's own overlays
-  // each show it, since both depend on the current hue) instead of one shared label.
-  const anchorKreisSvg = $('#farbe-anchor-kreis'), anchorDreieckSvg = $('#farbe-anchor-dreieck'), anchorRegisterList = $('#farbe-anchor-register-list');
-  const anchorHueContextDreieck = $('#farbe-anchor-hue-context-dreieck'), anchorHueContextRegister = $('#farbe-anchor-hue-context-register');
-  const kreisTrigger = $('#btn-open-kreis'), dreieckTrigger = $('#btn-open-dreieck'), registerTrigger = $('#btn-open-register');
-  const kreisPanel = $('#overlay-kreis'), dreieckPanel = $('#overlay-dreieck'), registerPanel = $('#overlay-register');
-  let anchorKreisGroup = null, anchorDreieckGroup = null, anchorRegisterGroup = null;
-  let kreisOverlay = null, dreieckOverlay = null, registerOverlay = null;
+  // Group D Phase B4: each widget lives in its OWN overlay (#overlay-kreis/-dreieck, opened by its own
+  // #nav-farbe row-2 button) instead of sharing one view-mode-switched section - see index.html's own
+  // comment on that row.
+  const anchorKreisSvg = $('#farbe-anchor-kreis'), anchorDreieckSvg = $('#farbe-anchor-dreieck');
+  const anchorHueContextDreieck = $('#farbe-anchor-hue-context-dreieck');
+  const kreisTrigger = $('#btn-open-kreis'), dreieckTrigger = $('#btn-open-dreieck');
+  const kreisPanel = $('#overlay-kreis'), dreieckPanel = $('#overlay-dreieck');
+  let anchorKreisGroup = null, anchorDreieckGroup = null;
+  let kreisOverlay = null, dreieckOverlay = null;
 
-  if (anchorKreisSvg && anchorDreieckSvg && anchorRegisterList && kreisTrigger && dreieckTrigger && registerTrigger &&
-      typeof anchorFor === 'function' && typeof hueRingPoints === 'function' && typeof registerTrianglePoints === 'function' && typeof FARBORGEL_REGISTER_ORDER !== 'undefined') {
+  if (anchorKreisSvg && anchorDreieckSvg && kreisTrigger && dreieckTrigger &&
+      typeof anchorFor === 'function' && typeof hueRingPoints === 'function' && typeof registerTrianglePoints === 'function') {
     // Kreis: built once - the ring's geometry never changes, only which point ends up marked active.
     hueRingPoints(120, 120, 95).forEach(function (p) {
       const g = anchorPoint(p.x, p.y, String(p.hueIndex), 15, 11);
@@ -208,55 +199,32 @@
       afterAnchorChange();
     });
 
-    // Register: the SAME 28 registers as Dreieck, as plain <button> rows (native Enter/Space, no bridge needed).
-    FARBORGEL_REGISTER_ORDER.forEach(function (label, registerIndex) {
-      const rowEl = document.createElement('button');
-      rowEl.type = 'button'; rowEl.className = 'anchor-register-row';
-      rowEl.setAttribute('role', 'radio'); rowEl.setAttribute('aria-checked', 'false'); rowEl.tabIndex = -1;
-      rowEl.dataset.registerIndex = String(registerIndex);
-      const num = document.createElement('span'); num.textContent = (registerIndex + 1) + '/28';
-      const lab = document.createElement('span'); lab.textContent = label;
-      rowEl.appendChild(num); rowEl.appendChild(lab);
-      anchorRegisterList.appendChild(rowEl);
-    });
-    anchorRegisterGroup = UI.radiogroup(anchorRegisterList, function (r) {
-      const a = anchorFor(activeLayer);
-      if (!a || a.registerIndex === null) return;
-      a.registerIndex = parseInt(r.dataset.registerIndex, 10);
-      afterAnchorChange();
-    });
-
     // Each trigger opens its own overlay (UI.overlay(), the same pattern #more-form/#more-netz/#more-farbe
     // already use - focus/Escape/click-outside all come free). onOpen: sync() so the widget reflects this
     // frame's anchor even if nothing else has redrawn since the panel was last open.
     kreisOverlay = UI.overlay(kreisTrigger, kreisPanel, { onOpen: sync });
     dreieckOverlay = UI.overlay(dreieckTrigger, dreieckPanel, { onOpen: sync });
-    registerOverlay = UI.overlay(registerTrigger, registerPanel, { onOpen: sync });
   }
 
-  // Refreshes which point/row is marked active in each of the three widgets, plus the hue-context hints -
-  // called from sync() below, same cadence as syncAnchor(). A selection inside a widget does NOT close its
-  // overlay (matching #more-farbe's own rule-selection precedent and #more-form's symmetry-selection
-  // precedent - see index.html's comment on the three overlays); only Escape/outside-click/the trigger
-  // again, or the row becoming disabled (sync() below), closes them.
+  // Refreshes which point is marked active in each of the two widgets, plus the hue-context hint - called
+  // from sync() below, same cadence as syncAnchor(). A selection inside a widget does NOT close its overlay
+  // (matching #more-form's symmetry-selection precedent - see index.html's comment on the two overlays);
+  // only Escape/outside-click/the trigger again, or the row becoming disabled (sync() below), closes them.
   function syncAnchorWidgets() {
     if (!anchorKreisGroup) return;
     const a = anchorFor(activeLayer);
 
     anchorHueContextDreieck.textContent = a ? 'für Farbton ' + a.hueIndex + '/24' : '';
-    anchorHueContextRegister.textContent = anchorHueContextDreieck.textContent;
 
-    if (!a) { anchorKreisGroup.set(null); anchorDreieckGroup.set(null); anchorRegisterGroup.set(null); return; }
+    if (!a) { anchorKreisGroup.set(null); anchorDreieckGroup.set(null); return; }
 
     const kreisPoints = Array.prototype.slice.call(anchorKreisSvg.querySelectorAll('[role="radio"]'));
     anchorKreisGroup.set(kreisPoints.find(function (g) { return parseInt(g.dataset.hueIndex, 10) === a.hueIndex; }) || null);
 
     const dreieckPoints = Array.prototype.slice.call(anchorDreieckSvg.querySelectorAll('[role="radio"]'));
-    const registerRows = Array.prototype.slice.call(anchorRegisterList.querySelectorAll('[role="radio"]'));
-    if (a.registerIndex === null) { anchorDreieckGroup.set(null); anchorRegisterGroup.set(null); }
+    if (a.registerIndex === null) { anchorDreieckGroup.set(null); }
     else {
       anchorDreieckGroup.set(dreieckPoints.find(function (g) { return parseInt(g.dataset.registerIndex, 10) === a.registerIndex; }) || null);
-      anchorRegisterGroup.set(registerRows.find(function (r) { return parseInt(r.dataset.registerIndex, 10) === a.registerIndex; }) || null);
     }
   }
 
@@ -307,7 +275,12 @@
   }
   Object.keys(harmonyBtns).forEach(function (type) {
     const b = harmonyBtns[type];
-    if (b) UI.guard(b, function () { applyHarmony(type); });
+    if (!b) return;
+    UI.guard(b, function () { applyHarmony(type); });
+    // Group D Phase B4 follow-up: a plain one-shot action button has no built-in "pressed" state (unlike a
+    // role="radio" choice) - UI.pressed() keeps aria-pressed in sync with the .active class syncHarmonyActive()
+    // below toggles, the same helper .layer-btn's own active-invert buttons would use for a real toggle.
+    UI.pressed(b);
   });
   if (harmonySelect) {
     harmonySelect.addEventListener('change', function () {
@@ -316,23 +289,33 @@
       harmonySelect.value = ''; // back to the placeholder - this is an action trigger, not a persistent choice
     });
   }
-
-  // ---- rules: a radiogroup driving the hidden <select> ----------------------------------------------------------
-  const ruleGroup = UI.radiogroup($('.nav-rules'), function (btn) {
-    ruleSelect.value = btn.dataset.rule;
-    ruleSelect.dispatchEvent(new Event('change', { bubbles: true }));
-  });
+  // Group D Phase B4 follow-up: marks the sheet's last-applied harmony button (if any) the same black-fill
+  // "active" every other persistent choice in this app uses (.icon-btn.active, index.html) - a NEW state to
+  // show, not a pre-existing bug: these 7 buttons are one-shot actions (UI.guard() above), with nothing to
+  // mark active, until lastHarmonyTypeFor() gave a sheet a real "currently in effect" concept to show.
+  // Reads the SAME state afterAnchorChange()/applyHarmony() already maintain - no new data, just a new,
+  // faithful display of it; clears itself automatically via sync() after Reset Color or the old rule system
+  // clear lastHarmonyTypeFor() (core/facecolor.js), and is independent per sheet since that state already is.
+  function syncHarmonyActive() {
+    const type = lastHarmonyTypeFor(activeLayer);
+    Object.keys(harmonyBtns).forEach(function (t) {
+      const b = harmonyBtns[t];
+      if (!b) return;
+      const on = t === type;
+      if (b.classList.contains('active') !== on) b.classList.toggle('active', on);
+    });
+  }
 
   // ---- sync (on every redraw) ------------------------------------------------------------------------------------
   function sync() {
-    if (typeof updateFaceColorsPanel === 'function') updateFaceColorsPanel(); // this frame's rule/axis DOM, not stale
+    if (typeof updateFaceColorsPanel === 'function') updateFaceColorsPanel(); // this frame's trail-list DOM, not stale
     syncAnchor();
     syncAnchorPreview();
     syncAnchorWidgets();
+    syncHarmonyActive();
     const why = reason();
-    ruleBtns.forEach(function (b) { UI.setDisabled(b, why); });
     UI.setDisabled(moreBtn, why);
-    [kreisTrigger, dreieckTrigger, registerTrigger].forEach(function (b) { if (b) UI.setDisabled(b, why); });
+    [kreisTrigger, dreieckTrigger].forEach(function (b) { if (b) UI.setDisabled(b, why); });
     Object.keys(harmonyBtns).forEach(function (type) { if (harmonyBtns[type]) UI.setDisabled(harmonyBtns[type], why); });
     [hueStepperRoot, registerStepperRoot].forEach(function (root) {
       if (root) root.querySelectorAll('.stepper-btn').forEach(function (b) { UI.setDisabled(b, why); });
@@ -343,14 +326,9 @@
     // which is a harmless no-op on an already-empty/default store. Not gated with UI.guard() like the 7
     // harmony buttons above, to avoid a second listener next to sketch.js's real one.
     if (resetBtn) UI.setDisabled(resetBtn, why);
-    // row-disabled dims #face-colors-axes (style.css) - toggled on panel now, not row, since axes moved
-    // into #more-farbe (the buttons themselves are already individually disabled via ruleBtns above; axes
-    // has no per-control disabling of its own, hence the container-level class).
-    if (panel.classList.contains('row-disabled') !== !!why) panel.classList.toggle('row-disabled', !!why);
     if (why) {
-      [row.__overlay, kreisOverlay, dreieckOverlay, registerOverlay].forEach(function (ov) { if (ov && ov.isOpen) ov.close(false); });
+      [row.__overlay, kreisOverlay, dreieckOverlay].forEach(function (ov) { if (ov && ov.isOpen) ov.close(false); });
     }
-    ruleGroup.set(ruleSelect.value ? ruleBtns.find(function (b) { return b.dataset.rule === ruleSelect.value; }) : null);
 
     const dotOn = why === T['reason.fill.off'] && window.uiNav && uiNav.current() === 'farbe';
     if (fillBtn && fillBtn.classList.contains('needs-attn') !== dotOn) fillBtn.classList.toggle('needs-attn', dotOn);

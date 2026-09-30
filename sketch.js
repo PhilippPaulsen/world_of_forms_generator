@@ -4452,14 +4452,10 @@ function initFaceColorsPanel() {
         applyFaceColorsPalette();
     });
     if (resetBtn) resetBtn.addEventListener('click', () => { resetFaceColors(activeLayer); renderFaceColorsPanel(); redraw(); });
-    const spreadBtn = document.getElementById('btn-face-colors-spread');
-    if (spreadBtn) spreadBtn.addEventListener('click', () => {
-        const { gridNodes, conns, sheet } = faceColorsGrid();
-        const group = sheetGroupElements(gridNodes, sheet), store = faceAssignmentsFor(activeLayer);
-        if (group) spreadPaletteToUnassigned(store, computeFaceTrails(computeCellFaces(conns, gridNodes, store, null, sheet), group), facePaletteFor(activeLayer));
-        renderFaceColorsPanel();
-        redraw();
-    });
+    // Group D Phase B4 follow-up: "Spread colors" (#btn-face-colors-spread) removed - it only ever acted on
+    // a rule-colored sheet (palette.ruleId), and nothing can set a rule anymore now that the rule row's own
+    // UI is gone (see index.html's #more-farbe comment). spreadPaletteToUnassigned() itself (core/facecolor.js)
+    // is untouched - generic, headlessly-tested infrastructure, not deleted, just unreached from here now.
     const listEl = document.getElementById('face-colors-list');
     if (listEl) listEl.addEventListener('mouseleave', () => { if (faceHover) { faceHover = null; redraw(); } });
 }
