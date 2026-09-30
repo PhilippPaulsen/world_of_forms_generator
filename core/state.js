@@ -82,6 +82,13 @@ let baseFaceAnchor = null;
 // lazy/reset-with-the-grid lifecycle as baseFaceAnchor above; a layer's own lives on the layer object
 // (core/facecolor.js's lastHarmonyTypeFor()/setLastHarmonyTypeFor()).
 let baseLastHarmonyType = null;
+// Phase B-Farbstrategien: which distribution strategy (core/farborgel-bridge.js's
+// DISTRIBUTION_STRATEGIES - 'cyclic'/'area'/'symmetry'/'rings') the base sheet's last harmony
+// application used - null (falls back to 'cyclic', today's default) until one has been chosen
+// via ui-farbe.js's strategy stepper. Same lazy/reset-with-the-grid lifecycle as
+// baseLastHarmonyType above; a layer's own lives on the layer object
+// (core/facecolor.js's distributionStrategyFor()/setDistributionStrategyFor()).
+let baseDistributionStrategy = null;
 let faceHover = null;
 let activeLayer = 'base'; // 'base' | integer index into additionalLayers - which sheet mousePressed()/addRandomConnection()/undo/redo/clear target
 
@@ -226,7 +233,7 @@ function rebuildGrid(shape) {
     connections = [];
     additionalLayers = [];
     baseFaceAssignments = new Map(); // keys are geometry of the OLD grid
-    baseFacePalette = null; baseFaceAnchor = null; baseLastHarmonyType = null; faceHover = null;
+    baseFacePalette = null; baseFaceAnchor = null; baseLastHarmonyType = null; baseDistributionStrategy = null; faceHover = null;
     activeLayer = 'base'; // an active additional-layer index would otherwise dangle once the array is cleared
     timeline = null; // Roadmap 1.8 Stage C: its keyframeLayerIds/playbackLayerIndex would dangle the same way activeLayer would
     baseNetAnimation = null; // the captured Start/End nets belong to the old grid setup (Shape Size decides what a Field is)
@@ -268,7 +275,7 @@ function rebuildGridFromConstruction(p, q, n, side) {
     connections = [];
     additionalLayers = [];
     baseFaceAssignments = new Map();
-    baseFacePalette = null; baseFaceAnchor = null; baseLastHarmonyType = null; faceHover = null;
+    baseFacePalette = null; baseFaceAnchor = null; baseLastHarmonyType = null; baseDistributionStrategy = null; faceHover = null;
     activeLayer = 'base';
     timeline = null; // Roadmap 1.8 Stage C: see rebuildGrid()'s own comment
     baseNetAnimation = null;
