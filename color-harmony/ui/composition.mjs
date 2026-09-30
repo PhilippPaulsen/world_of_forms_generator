@@ -1,4 +1,4 @@
-import Engine from './engine.generated.mjs';
+import Engine from '../../core/farborgel-engine.mjs'; // Group D Phase B4: this generator has no build step, so it can't depend on the gitignored ./engine.generated.mjs - see core/farborgel-engine.mjs's own docblock
 
 const EPSILON=1e-10;
 const hues=Engine.hueCircle(), grays=Engine.grayAxis();

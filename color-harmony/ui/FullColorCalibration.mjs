@@ -1,4 +1,4 @@
-import Engine, {ColorSpace} from './engine.generated.mjs';
+import Engine, {ColorSpace} from '../../core/farborgel-engine.mjs'; // Group D Phase B4: see core/farborgel-engine.mjs's own docblock
 export const HUE_MAPPINGS = Object.freeze(['current','fixedHigh','gamutAware']);
 export const DEFAULT_HUE_MAPPING = 'gamutAware';
 export const GAMUT_EPSILON = 1e-9;

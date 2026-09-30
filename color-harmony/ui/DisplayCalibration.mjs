@@ -1,4 +1,4 @@
-import Engine from './engine.generated.mjs';
+import Engine from '../../core/farborgel-engine.mjs'; // Group D Phase B4: see core/farborgel-engine.mjs's own docblock
 import {fullColorAnchors,DEFAULT_HUE_MAPPING,mapToGamut,inGamut,hueIdentity} from './FullColorCalibration.mjs';
 
 export const MAPPINGS = Object.freeze(['current', 'perceptual', 'logarithmic', 'endpoint']);

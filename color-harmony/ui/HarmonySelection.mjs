@@ -1,4 +1,4 @@
-import Engine from './engine.generated.mjs';
+import Engine from '../../core/farborgel-engine.mjs'; // Group D Phase B4: see core/farborgel-engine.mjs's own docblock
 import {validateColor,memberIdentity,memberKind,classifyMembers} from './composition.mjs';
 import {historicalToDisplay,DEFAULT_MAPPING} from './DisplayCalibration.mjs';
 import {DEFAULT_HUE_MAPPING} from './FullColorCalibration.mjs';

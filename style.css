@@ -480,6 +480,10 @@ body.dark {
 .nav-cluster { display: flex; align-items: center; gap: var(--gap); flex: none; }
 .nav-divider { width: 1px; height: var(--target); background: var(--color-hairline); margin: 0 4px; flex: none; }
 .nav-break { display: none; }
+/* Group D Phase B4 follow-up: the old rule row moved into #more-farbe (see that markup's own comment) -
+   #nav-farbe is back to just the anchor row, which fits Form/Netz's own single-line convention again, no
+   special-casing needed (an earlier round's unconditional flex-wrap/height override, needed only while the
+   old row shared this element, has been removed along with that row). */
 
 /* "Other symmetry" set (none / mirror only): the More button shows a dot then. */
 .nav-more { position: relative; }
@@ -796,29 +800,40 @@ body.dark {
 .fc-rule-btn.unverified { color: var(--color-secondary); }
 
 /* #face-colors-axes: sketch.js's own "<- value ->" axis rows (core/color.js's rule axes), relocated here
-   unchanged - only sized/spaced to fit the row. A FIXED width (not min-width) reserves room for the widest real
-   content across all four rules and every axis value, so nothing to its right (More, the reserved Farborgel
-   slot) moves when a rule is chosen, a stepper is clicked, or "Reset colors" clears it. Measured with the
-   longest hue name ("Ultramarine blue 1") and the longest axis-1 label/value (tetrad's "Full-color level"):
-   556px at --target 36 (fine pointer), 600px at --target 48 (coarse) - the button width itself scales with
-   --target, so both were measured; 610px covers either with a small margin. */
+   unchanged - only sized/spaced to fit. Group D Phase B4 follow-up: this used to reserve a FIXED 610px (so
+   nothing in the wide nav row moved when a rule/value changed) - now that it lives inside #more-farbe
+   (.overlay's own max-width: min(92vw, 360px) caps it well under that, on every viewport, not just phone),
+   that rationale no longer applies: a popover resizing slightly is normal, and 610px overflowed its own
+   360px box (verified: axis text rendered past the popover's border). Sized to the overlay's own width
+   instead, with the same label/count-hiding, value-ellipsis truncation the phone-only layout already used -
+   promoted here to apply unconditionally, since every context this now renders in is narrow. */
 #face-colors-axes {
   display: flex;
   align-items: center;
   gap: 16px;
   height: var(--target);
-  width: 610px;
+  width: 100%;
 }
 #face-colors-axes .fc-axis {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   height: var(--target);
   margin: 0;
   font-size: var(--size-secondary);
+  flex: 1 1 0;
+  min-width: 0;
 }
-#face-colors-axes .fc-axis-label { color: var(--color-secondary); white-space: nowrap; }
-#face-colors-axes .fc-axis-value { color: var(--color-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#face-colors-axes .fc-axis-label, #face-colors-axes .pairing-variant-count { display: none; }
+#face-colors-axes .fc-axis-value {
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 #face-colors-axes .pairing-variant { gap: 2px; }
 #face-colors-axes .pairing-move-btn {
   min-width: var(--target);
@@ -835,7 +850,7 @@ body.dark {
 /* The whole row disabled (fill off, or an ineligible sheet): the rule buttons and More already show aria-disabled
    (the shared .nav-row .icon-btn[aria-disabled] rule dims them); the axis rows, which have no aria-disabled of
    their own, are dimmed and inert the same way. */
-#nav-farbe.row-disabled #face-colors-axes { opacity: 0.4; pointer-events: none; }
+#more-farbe.row-disabled #face-colors-axes { opacity: 0.4; pointer-events: none; }
 
 /* "Fläche füllen einschalten": the old toolbar's fill button gets the same small dot More uses for "a state is
    set behind it" (UI rework 4b's .nav-more.has-state), pointing at the fix while the Farbe tab is open. */
@@ -851,31 +866,18 @@ body.dark {
   background: currentColor;
 }
 
-/* Phone: two rows of --bar-h (the 4 rules + More, then the two axis steppers). No divider (as the other rows).
-   #face-colors-axes's 610px fixed width does not fit a phone: it is the only thing on its row there, so it
-   becomes the full row width, and its two axis rows share that space, each truncating its label/value with an
-   ellipsis rather than wrapping (the "-value" text can be up to "Ultramarine blue 1" long) - the chevron buttons
-   themselves stay full width/height, never truncated. */
+/* Phone: #nav-farbe's own anchor row wraps into 2 lines (see the comment below); #face-colors-axes's
+   truncated sizing is unconditional now (promoted above, out of this media query) since it always lives in
+   #more-farbe's narrow overlay, on every viewport, not just phone. */
 @media (max-width: 767px) {
+  /* Group D Phase B4 follow-up: #nav-farbe is back to just the anchor row (Kreis/Dreieck/Register, 2/3/4,
+     the two steppers, the preview swatch) - the old rule row (rules/More/axes) moved into #more-farbe,
+     whose .overlay-section is its own vertical flex column and stacks them without needing order/width
+     tricks. This row still wraps on its own via flex-wrap (.nav-row has none by default; #nav-farbe's own
+     content is narrower than a phone screen at 6+ icon buttons plus two steppers, so it wraps naturally
+     into 2 lines here - matching Form's own established pattern, not a special case). */
   .nav-farbe { flex-wrap: wrap; align-content: flex-start; align-items: center; gap: 0 var(--gap); }
   .nav-farbe > * { margin-top: 12px; margin-bottom: 12px; }
-  .nav-farbe .nav-rules { order: 1; }
-  .nav-farbe .nav-more { order: 2; }
-  .nav-farbe .nav-break { order: 3; display: block; flex: 0 0 100%; height: 0; margin: 0; }
-  #face-colors-axes { order: 4; width: 100%; }
-  #face-colors-axes .fc-axis { flex: 1 1 0; min-width: 0; gap: 4px; }
-  /* Two side-by-side axis rows in 343px, minus two full --target (48px) buttons each, leaves too little room for
-     everything: the label and the "k/c" count are dropped here (their text is still the button's own title, read
-     on long-press/hover, matching the rest of this rework's "reason on tap" pattern) so the value name - what a
-     person actually looks at - gets the space instead. Desktop/tablet keep all three; only this rule differs. */
-  #face-colors-axes .fc-axis-label, #face-colors-axes .pairing-variant-count { display: none; }
-  #face-colors-axes .fc-axis-value {
-    flex: 1 1 0;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
   .nav-farbe .nav-divider { display: none; }
 }
 
@@ -907,7 +909,9 @@ body.dark {
   padding: 0 var(--gutter);
 }
 @media (min-width: 768px) {
-  .canvas-row { padding: 0 24px; }
+  /* position:relative: the desktop-only anchor for #farbe-harmony-select's absolute positioning below the
+     row (Group D Phase B4 follow-up) - see that rule's own comment for why. */
+  .canvas-row { padding: 0 24px; position: relative; }
 }
 .canvas-row #canvas-container { grid-column: 2; grid-row: 1; }
 /* .rail-left is its OWN flex column, grid-row 1 next to the canvas but NOT spanning/sharing its row track: a
@@ -942,6 +946,51 @@ body.dark {
 #btn-info         { margin-top: var(--rail-group-gap); }
 #btn-save         { margin-top: var(--rail-gap); }
 #btn-more-rail    { margin-top: var(--rail-group-gap); }
+
+/* Group D Phase B4: Farbe-only harmony quick-access - same flat-child, margin-top group-spacing
+   convention as the 10 buttons above. Hidden entirely outside the Farbe tab (html[data-tab], set by
+   nav.js) regardless of viewport width - this selector's specificity beats .canvas-row .icon-btn's
+   display:flex, so no !important is needed. */
+html:not([data-tab="farbe"]) .rail-farbe-only { display: none; }
+/* Group D Phase B4 follow-up: Kurven (curve toggle) and Mehr (Free Clothing/Free Endpoints/Alternative Net -
+   #more-rail) are not applicable to face-color work (fill already requires straight lines; free-line/
+   alternative-net construction aren't color operations) - genuinely hidden in the Farbe tab specifically,
+   not merely disabled, matching this row's own existing "context-irrelevant control" convention. Present
+   and functional in Form/Netz as before. */
+html[data-tab="farbe"] #btn-toggle-curve,
+html[data-tab="farbe"] #btn-more-rail { display: none; }
+#btn-harmony-b { margin-top: var(--rail-group-gap); }
+#btn-harmony-w { margin-top: var(--rail-gap); }
+#btn-harmony-s { margin-top: var(--rail-gap); }
+#btn-harmony-v { margin-top: var(--rail-gap); }
+#btn-face-colors-reset { margin-top: var(--rail-group-gap); }
+#farbe-harmony-select { margin-top: var(--rail-group-gap); font: inherit; }
+#btn-harmony-b, #btn-face-colors-reset { position: relative; }
+@media (min-width: 768px) {
+  #btn-harmony-b::before, #btn-face-colors-reset::before {
+    content: "";
+    position: absolute;
+    top: calc(-1 * var(--rail-group-gap) / 2 - 0.5px);
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--color-hairline);
+  }
+  /* Group D Phase B4 follow-up: the dropdown is a below-canvas fallback, not a rail item (the person's own
+     framing) - staying a flex child of .rail-left on desktop made the column as wide as the dropdown's own
+     text (~123px) instead of var(--target) (36px), and .canvas-row's justify-items:center then centered
+     that oversized column symmetrically, pushing the WHOLE rail off-screen to the left (measured: x=-19.5
+     instead of the gutter edge every other tab's rail sits at). Taking it out of flow here fixes both the
+     dropdown's own position AND the rail's - it no longer contributes to .rail-left's width at all.
+     Desktop-only: on mobile (below 768px) .rail-left's own display:contents already promotes this select to
+     a normal in-flow .canvas-row child (order 22, the Phase B4 rail markup's own comment) - untouched here. */
+  #farbe-harmony-select {
+    position: absolute;
+    top: 100%;
+    left: 24px;
+    margin-top: var(--rail-group-gap);
+  }
+}
 
 /* Divider between groups: a hairline centered in the --rail-group-gap above the group's first button (like
    .nav-divider, but horizontal - this rail is vertical). Drawn with ::before so it takes no row space (same
@@ -992,6 +1041,18 @@ body.dark {
   .canvas-row .rail-break-2 { display: block; order: 11; flex: 0 0 100%; height: 0; }
   /* Row 3: more. */
   #btn-more-rail    { order: 12; }
+  .canvas-row .rail-break-3 { display: block; order: 13; flex: 0 0 100%; height: 0; }
+  /* Row 4 (Farbe tab only, via .rail-farbe-only's own html[data-tab] gating above): B/W/S/V (2/3/4 moved
+     into #nav-farbe's own row, alongside Kreis/Dreieck/Register), Reset Color, the harmony dropdown. */
+  #btn-harmony-b, #btn-harmony-w, #btn-harmony-s,
+  #btn-harmony-v, #btn-face-colors-reset, #farbe-harmony-select { margin-top: 0; }
+  #btn-harmony-b::before, #btn-face-colors-reset::before, #farbe-harmony-select::before { display: none; }
+  #btn-harmony-b { order: 17; }
+  #btn-harmony-w { order: 18; }
+  #btn-harmony-s { order: 19; }
+  #btn-harmony-v { order: 20; }
+  #btn-face-colors-reset { order: 21; }
+  #farbe-harmony-select  { order: 22; }
 }
 
 /* Keyboard focus: its own 2px outline with a 2px offset, never the same
