@@ -4445,6 +4445,10 @@ function initFaceColorsPanel() {
         // (gray letter 'a') are nearly white and would make a first application look like "nothing happened"
         palette.idx = harmonyRuleParams(getHarmonyRule(ruleSel.value), OSTWALD_REFERENCE_SYSTEM).map(ax => ax.id === 'hue' ? 0 : ax.count >> 1);
         palette.overrides = new Map(); // another rule = another series: old slot picks would mean something else
+        // Group D Phase B4 follow-up: switching to this (old-system) rule means the sheet is no longer
+        // "driven by a remembered Farborgel type" - forget it, so the next anchor nudge (Kreis/Dreieck/
+        // Register/a stepper) doesn't silently overwrite this rule's coloring with a Farborgel reapply.
+        setLastHarmonyTypeFor(activeLayer, null);
         applyFaceColorsPalette();
     });
     if (resetBtn) resetBtn.addEventListener('click', () => { resetFaceColors(activeLayer); renderFaceColorsPanel(); redraw(); });

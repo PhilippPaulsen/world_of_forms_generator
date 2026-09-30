@@ -307,6 +307,10 @@ function resetFaceColors(sheet) {
     if (store) store.clear();
     if (sheet === 'base') baseFacePalette = null;
     else if (additionalLayers[sheet]) additionalLayers[sheet].facePalette = null;
+    // Group D Phase B4 follow-up: also forget the last-applied harmony type - without this, the very
+    // next anchor nudge (Kreis/Dreieck/Register/a stepper) would silently reapply it, undoing the
+    // reset it just performed.
+    setLastHarmonyTypeFor(sheet, null);
     if (faceHover && faceHover.sheet === sheet) faceHover = null;
 }
 
@@ -688,6 +692,22 @@ function anchorFor(sheet) {
     if (!layer) return null;
     if (!layer.faceAnchor) layer.faceAnchor = newFaceAnchor();
     return layer.faceAnchor;
+}
+
+// Group D Phase B4 follow-up: which of the 7 harmony types (2/3/4/W/B/S/V) was last applied to
+// `sheet` via ui-farbe.js's applyHarmony() - null until one has been. Same per-sheet lifecycle as
+// anchorFor()/facePaletteFor() above: base lives in state.js (baseLastHarmonyType, reset with the
+// grid), a layer's lives directly on the layer object (no lazy-object step needed - a plain scalar,
+// unlike the anchor/palette records). Never created eagerly: a layer with no entry simply reads null.
+function lastHarmonyTypeFor(sheet) {
+    if (sheet === 'base') return baseLastHarmonyType;
+    const layer = additionalLayers[sheet];
+    return layer ? (layer.lastHarmonyType === undefined ? null : layer.lastHarmonyType) : null;
+}
+function setLastHarmonyTypeFor(sheet, type) {
+    if (sheet === 'base') { baseLastHarmonyType = type; return; }
+    const layer = additionalLayers[sheet];
+    if (layer) layer.lastHarmonyType = type;
 }
 
 // The trail key to outline on `sheet`'s faces right now (hover), or null.
