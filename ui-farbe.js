@@ -63,7 +63,7 @@
       if (!a) return;
       const v = parseInt(hueInput.value, 10);
       if (!isNaN(v)) a.hueIndex = v;
-      sync();
+      afterAnchorChange();
     });
 
     registerStepperApi = UI.stepper(registerStepperRoot, {
@@ -80,7 +80,7 @@
       if (!a) return;
       const v = parseInt(registerInput.value, 10);
       if (!isNaN(v)) a.registerIndex = v;
-      sync();
+      afterAnchorChange();
     });
   }
   // Reads the active sheet's own anchor into the two steppers - called from sync() below, same cadence as
@@ -190,7 +190,7 @@
       const a = anchorFor(activeLayer);
       if (!a) return;
       a.hueIndex = parseInt(r.dataset.hueIndex, 10);
-      sync();
+      afterAnchorChange();
     });
 
     // Dreieck: also built once (the triangle's 28 positions are fixed; only the active slot and what hue
@@ -205,7 +205,7 @@
       const a = anchorFor(activeLayer);
       if (!a || a.registerIndex === null) return; // hue-only state (Wert, Phase B4): no register axis to set
       a.registerIndex = parseInt(r.dataset.registerIndex, 10);
-      sync();
+      afterAnchorChange();
     });
 
     // Register: the SAME 28 registers as Dreieck, as plain <button> rows (native Enter/Space, no bridge needed).
@@ -223,7 +223,7 @@
       const a = anchorFor(activeLayer);
       if (!a || a.registerIndex === null) return;
       a.registerIndex = parseInt(r.dataset.registerIndex, 10);
-      sync();
+      afterAnchorChange();
     });
 
     // Each trigger opens its own overlay (UI.overlay(), the same pattern #more-form/#more-netz/#more-farbe
@@ -287,8 +287,23 @@
     try { selection = window.farborgelBuildHarmonySelection(a, type); }
     catch (e) { UI.toast('Farborgel: ' + e.message); return; }
     applyHarmonyToPattern(selection, faceAssignmentsFor(activeLayer), trails);
+    // Group D Phase B4 follow-up: remember this as the sheet's last-applied type (only on a real
+    // success - a thrown selection above never reaches here) - the ONE place this is recorded, so a
+    // direct button/dropdown click and an anchor-triggered reapply (below) are always in exact sync,
+    // never two separately-maintained states.
+    setLastHarmonyTypeFor(activeLayer, type);
     renderFaceColorsPanel();
     redraw();
+  }
+  // Group D Phase B4 follow-up: shared by every anchor-change site (Kreis/Dreieck/Register, the two
+  // steppers) - if this sheet already has a last-applied harmony type, changing the anchor re-paints
+  // the pattern with it immediately (matching the old rule engine's always-live feel,
+  // applyFaceColorsPalette() on every axis step); otherwise (nothing applied yet) it's the same as
+  // before - just refresh the UI (steppers/widgets/preview), no coloring happens on its own.
+  function afterAnchorChange() {
+    const type = lastHarmonyTypeFor(activeLayer);
+    if (type !== null && type !== undefined) applyHarmony(type);
+    sync();
   }
   Object.keys(harmonyBtns).forEach(function (type) {
     const b = harmonyBtns[type];
