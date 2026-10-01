@@ -4447,7 +4447,20 @@ function renderFaceColorsPanel() {
             // A stepper writes ONLY its own trail (assignTrailSlot()): never a re-run of the rule over the
             // others, which would erase the colors edits handed on. An uncolored trail shows a dash and takes
             // the first (or last) slot of the series on its first click.
-            const slot = (a && a.rule === rule.id && a.params && Number.isInteger(a.params.slot) && a.params.slot < seriesSlots) ? a.params.slot : null;
+            // Phase B-Farbstrategien follow-up (gray-as-selection round): a trail's CURRENT position can
+            // come from either provenance shape - the old rule-registry write (_writeSlot(), params.slot,
+            // always present after a full application) or the gray-as-selection one (applyHarmonyToPattern(),
+            // params.memberIndex, no .slot key at all by construction - confirmed live, 'slot' in params is
+            // always false for a max-contrast-gray entry). Without this fallback every gray-filled trail
+            // read as "no position" (showing a dash) even when it already has a real, ranked color - found
+            // live, not assumed: the store was correct, only this read was shape-blind. .slot is preferred
+            // when present (an explicit per-trail override, from EITHER shape, always writes it via
+            // assignTrailSlot() below - see its own call), so an overridden trail's real choice always wins
+            // over a stale memberIndex from before the override.
+            const slotRaw = (a && a.rule === rule.id && a.params)
+                ? (Number.isInteger(a.params.slot) ? a.params.slot : (Number.isInteger(a.params.memberIndex) ? a.params.memberIndex : null))
+                : null;
+            const slot = (slotRaw !== null && slotRaw < seriesSlots) ? slotRaw : null;
             const stepper = faceColorsStepper(slot === null ? 0 : slot, seriesSlots, 'Pick another color of this series for this trail', delta => {
                 const next = slot === null ? (delta > 0 ? 0 : seriesSlots - 1) : (slot + delta + seriesSlots) % seriesSlots;
                 assignTrailSlot(store, palette, t.key, next, seriesSlots);
@@ -4483,7 +4496,20 @@ function initFaceColorsPanel() {
         setLastHarmonyTypeFor(activeLayer, null);
         applyFaceColorsPalette();
     });
-    if (resetBtn) resetBtn.addEventListener('click', () => { resetFaceColors(activeLayer); renderFaceColorsPanel(); redraw(); });
+    if (resetBtn) resetBtn.addEventListener('click', () => {
+        resetFaceColors(activeLayer);
+        // Phase B-Farbstrategien follow-up (Reset-respects-strategy fix): without this, the next
+        // passive render refills the sheet through ensureDefaultGrayFill() alone - always-cyclic by
+        // design (unattended/per-redraw role, unchanged) - silently dropping the sheet's sticky
+        // distributionStrategyFor() preference right when a person expects a fresh start to still
+        // honor it. window.applyGrayDefault (ui-farbe.js) is the strategy-aware counterpart; guarded
+        // since ui-farbe.js may not be loaded in every embedding (e.g. a reduced shell) - the plain
+        // render/redraw below always runs regardless, so a sheet with no faces/trails (where
+        // applyGrayDefault() itself no-ops) still gets its panel refreshed as before.
+        if (typeof window.applyGrayDefault === 'function') window.applyGrayDefault();
+        renderFaceColorsPanel();
+        redraw();
+    });
     // Group D Phase B4 follow-up: "Spread colors" (#btn-face-colors-spread) removed - it only ever acted on
     // a rule-colored sheet (palette.ruleId), and nothing can set a rule anymore now that the rule row's own
     // UI is gone (see index.html's #more-farbe comment). spreadPaletteToUnassigned() itself (core/facecolor.js)
