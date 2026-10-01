@@ -350,6 +350,65 @@
   // person would expect a fresh start to still honor it. Same cross-file convention this file
   // already consumes in the other direction (window.farborgelBuildHarmonySelection).
   window.applyGrayDefault = applyGrayDefault;
+
+  // Phase B-Farbstrategien follow-up (per-trail override for Farborgel harmonies): a sibling of
+  // core/facecolor.js's assignTrailSlot() for a Farborgel-colored trail, not a reuse of it -
+  // assignTrailSlot() calls generateHarmonyPalette(palette.ruleId, ...), which throws for
+  // 'farborgel' (not a core/color.js-registered rule - confirmed, that file registers only
+  // isotint/isotone/shadow-series/tetrad/max-contrast-gray), and never sets displayColor, a field
+  // a Farborgel entry needs (its calibrated Oklab-mixed color - re-resolving hue/w/s through
+  // core/color.js's OWN OSTWALD_REFERENCE_SYSTEM would silently mute it, the exact bug Phase B4's
+  // applyHarmonyToPattern() already fixed once for the initial application; an override must not
+  // reintroduce it).
+  //
+  // No new persistent state: buildHarmonySelection(anchor, type) is a pure function (confirmed by
+  // reading core/farborgel-selection.mjs - anchorField -> createComposition -> reduceComposition
+  // -> createHarmonySelection, no hidden state) and afterAnchorChange() already re-applies on
+  // every anchor/type change, so anchorFor(sheet) + lastHarmonyTypeFor(sheet) at override-click
+  // time always regenerate the exact selection currently reflected in the store - the member list
+  // is recomputed on demand here, not remembered a second time.
+  //
+  // Writes params.memberIndex (NOT params.slot) - confirmed live, not assumed, that .slot cannot
+  // be reused here the way it is for gray. applyHarmonyToPattern()'s "always honored regardless
+  // of strategy" treatment of params.slot is only meaningful when the series has one color per
+  // trail (gray: M === N always, so a slot 0..N-1 IS a real area-rank Area/Symmetry/Rings can
+  // bucket against). A Farborgel harmony's M (2..24) is almost always far smaller than N - caught
+  // live: Dreier (M=3) on a 12-trail pattern has Area's own bucketSize = ceil(12/3) = 4, so EVERY
+  // possible override value (0..2, assignFarborgelSlot()'s own real range) falls in bucket 0
+  // regardless of which member was picked - the override LOOKED like it survived a strategy
+  // switch only by the coincidence of the specific bucket size tested, not because the mechanism
+  // actually honors it; a wider sweep showed every Farborgel override collapses into the lowest
+  // bucket(s) under Area, a real, confirmed defect, not a one-off.
+  // So the override instead gets EXACTLY a fresh entry's own shape (source: 'harmonySelection',
+  // params.memberIndex, params.strategy = the CURRENT strategy at click time) - the already-built,
+  // already-tested "honored only when existing.params.strategy === this call's strategy"
+  // inheritance rule then applies unchanged: the override survives re-applying the SAME strategy
+  // (an anchor/hue/register change, or the same Dreier button clicked again), but resets to that
+  // new strategy's own natural order on a genuine strategy SWITCH - identical to how an
+  // un-overridden Farborgel trail already behaves. This is a WEAKER guarantee than gray's
+  // "survives any later change" - a real, structural difference (M<N vs M=N), not something to
+  // paper over as equivalent.
+  function assignFarborgelSlot(store, sheet, key, next) {
+    const anchor = anchorFor(sheet);
+    const type = lastHarmonyTypeFor(sheet);
+    if (!anchor || type === null || typeof window.farborgelBuildHarmonySelection !== 'function') return null;
+    const selection = window.farborgelBuildHarmonySelection(anchor, type);
+    if (!Number.isInteger(next) || next < 0 || next >= selection.members.length) {
+      throw new Error(`assignFarborgelSlot: slot ${next} outside the series (0..${selection.members.length - 1})`);
+    }
+    const m = selection.members[next];
+    const c = m.analyticalCoordinate;
+    const hue = c.hueIndex === null ? FARBORGEL_GRAY_HUE_SUBSTITUTE : _farborgelHueToCoreHue(c.hueIndex);
+    const strategy = (typeof distributionStrategyFor === 'function' && distributionStrategyFor(sheet)) || 'cyclic';
+    setFaceAssignment(store, key, {
+      hue, w: c.w, s: c.s, rule: 'farborgel',
+      params: { source: 'harmonySelection', memberIndex: next, cardinality: selection.members.length, strategy },
+      displayColor: m.srgb
+    });
+    return m;
+  }
+  window.assignFarborgelSlot = assignFarborgelSlot;
+
   // Group D Phase B4 follow-up: shared by every anchor-change site (Kreis/Dreieck/Register, the two
   // steppers) - if this sheet already has a last-applied harmony type, changing the anchor re-paints
   // the pattern with it immediately (matching the old rule engine's always-live feel,

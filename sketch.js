@@ -4397,6 +4397,21 @@ function renderFaceColorsPanel() {
         : `${trails.length} face trail${trails.length === 1 ? '' : 's'} (all symmetry copies of a face share one color)`;
 
     const rule = palette.ruleId ? getHarmonyRule(palette.ruleId) : null;
+    // Phase B-Farbstrategien follow-up (per-trail override for Farborgel harmonies): a
+    // Farborgel-colored sheet (lastHarmonyTypeFor(sheet) non-null) has no `rule` above - Farborgel
+    // is not a core/color.js-registered rule, by design (it's a real external engine, not a named,
+    // regeneratable series the same way) - but it still needs a per-trail stepper. The two cases
+    // are deliberately split from here on: `rule` alone still gates the axis-stepper row below
+    // (hue/level pickers built from rule.params/.note/.verified - fields with no Farborgel
+    // equivalent, since Farborgel's own "axes" are the anchor's hue/register, a genuinely
+    // different control, already live above this panel). The per-trail stepper row instead checks
+    // `rule || farborgelSelection`. farborgelSelection is regenerated here (once per render, not
+    // once per trail) via window.farborgelBuildHarmonySelection(anchor, type) - a pure function of
+    // (anchor, type), confirmed in ui-farbe.js's own assignFarborgelSlot() comment - so it always
+    // matches what afterAnchorChange() last actually applied to the store.
+    const farborgelSelection = (lastHarmonyTypeFor(sheet) !== null && typeof window.farborgelBuildHarmonySelection === 'function')
+        ? (() => { const a = anchorFor(sheet); try { return a ? window.farborgelBuildHarmonySelection(a, lastHarmonyTypeFor(sheet)) : null; } catch (e) { return null; } })()
+        : null;
     // Uncolored trails while a rule is applied (new regions an edit created, anything reconciliation
     // could not hand a color to): say so, and offer the explicit fill - never an automatic repaint.
     if (rule) {
@@ -4406,9 +4421,10 @@ function renderFaceColorsPanel() {
             unassignedEl.hidden = false;
         }
     }
-    // The series in force (frozen at the last full application - see core/facecolor.js): per-trail steppers
-    // work inside it, so an edit that changes the trail count does not change what a stepper offers.
-    const seriesSlots = palette.slots || trails.length;
+    // The series in force: for a real core/color.js rule, frozen at the last full application (see
+    // core/facecolor.js) so an edit that changes the trail count doesn't change what a stepper
+    // offers; for Farborgel, the regenerated selection's own, real cardinality.
+    const seriesSlots = farborgelSelection ? farborgelSelection.members.length : (palette.slots || trails.length);
     if (rule) {
         harmonyRuleParams(rule, OSTWALD_REFERENCE_SYSTEM).forEach((axis, a) => {
             const row = document.createElement('div');
@@ -4443,27 +4459,38 @@ function renderFaceColorsPanel() {
         row.appendChild(sw);
         row.appendChild(lab);
         if (!a) { const d = document.createElement('span'); d.className = 'fc-default'; d.textContent = 'default'; row.appendChild(d); }
-        if (rule) {
-            // A stepper writes ONLY its own trail (assignTrailSlot()): never a re-run of the rule over the
-            // others, which would erase the colors edits handed on. An uncolored trail shows a dash and takes
-            // the first (or last) slot of the series on its first click.
-            // Phase B-Farbstrategien follow-up (gray-as-selection round): a trail's CURRENT position can
-            // come from either provenance shape - the old rule-registry write (_writeSlot(), params.slot,
-            // always present after a full application) or the gray-as-selection one (applyHarmonyToPattern(),
-            // params.memberIndex, no .slot key at all by construction - confirmed live, 'slot' in params is
-            // always false for a max-contrast-gray entry). Without this fallback every gray-filled trail
-            // read as "no position" (showing a dash) even when it already has a real, ranked color - found
-            // live, not assumed: the store was correct, only this read was shape-blind. .slot is preferred
-            // when present (an explicit per-trail override, from EITHER shape, always writes it via
-            // assignTrailSlot() below - see its own call), so an overridden trail's real choice always wins
-            // over a stale memberIndex from before the override.
-            const slotRaw = (a && a.rule === rule.id && a.params)
+        if (rule || farborgelSelection) {
+            // A stepper writes ONLY its own trail (assignTrailSlot()/assignFarborgelSlot()): never a
+            // re-run of the rule/selection over the others, which would erase the colors edits handed
+            // on. An uncolored trail shows a dash and takes the first (or last) slot of the series on
+            // its first click.
+            // Phase B-Farbstrategien follow-up (gray-as-selection round, then per-trail override for
+            // Farborgel harmonies): a trail's CURRENT position can come from any of three provenance
+            // shapes - the old rule-registry write (_writeSlot(), params.slot, always present after a
+            // full application), the gray-as-selection one (applyHarmonyToPattern(),
+            // params.memberIndex, no .slot key at all by construction), or a Farborgel harmony
+            // application/override (same params.memberIndex shape - assignFarborgelSlot() deliberately
+            // does NOT write params.slot: confirmed live that reusing gray's ".slot always honored"
+            // trick breaks under Area/Symmetry/Rings once M (a Farborgel harmony's cardinality,
+            // 2..24) is smaller than N (the trail count) - gray's own trick only works because its
+            // M always equals N. See assignFarborgelSlot()'s own comment, ui-farbe.js, for the full
+            // reasoning - a Farborgel override therefore survives re-applying the SAME strategy, not
+            // any later one, a real, weaker guarantee than gray's, not an oversight here). .slot is
+            // preferred when present (an old-system or gray override always writes it), so an
+            // overridden trail's real choice always wins over a stale memberIndex from before the
+            // override; a Farborgel override's own memberIndex is read back by the SAME fallback,
+            // just without that extra "survives anything" guarantee. matchRule is 'farborgel'
+            // specifically when there is no real core/color.js rule (a Farborgel-colored sheet) -
+            // otherwise the real rule's own id, exactly as before this round.
+            const matchRule = rule ? rule.id : 'farborgel';
+            const slotRaw = (a && a.rule === matchRule && a.params)
                 ? (Number.isInteger(a.params.slot) ? a.params.slot : (Number.isInteger(a.params.memberIndex) ? a.params.memberIndex : null))
                 : null;
             const slot = (slotRaw !== null && slotRaw < seriesSlots) ? slotRaw : null;
             const stepper = faceColorsStepper(slot === null ? 0 : slot, seriesSlots, 'Pick another color of this series for this trail', delta => {
                 const next = slot === null ? (delta > 0 ? 0 : seriesSlots - 1) : (slot + delta + seriesSlots) % seriesSlots;
-                assignTrailSlot(store, palette, t.key, next, seriesSlots);
+                if (rule) assignTrailSlot(store, palette, t.key, next, seriesSlots);
+                else if (typeof window.assignFarborgelSlot === 'function') window.assignFarborgelSlot(store, sheet, t.key, next);
                 renderFaceColorsPanel();
                 redraw();
             });
