@@ -311,14 +311,50 @@
     renderFaceColorsPanel();
     redraw();
   }
+  // Phase B-Farbstrategien follow-up (gray-as-selection round): the gray-default sibling of
+  // applyHarmony() above - same resolution (faceColorsGrid() -> group -> trails), same
+  // strategy/context construction, the only difference is WHERE the colors come from (the one
+  // real registered max-contrast-gray rule via buildMaxContrastGraySelection(), core/facecolor.js
+  // - the SAME construction ensureDefaultGrayFill() itself uses, not a second formula) and the
+  // provenance tag (ruleId: 'max-contrast-gray', never 'farborgel'). fillOnly is NOT set (defaults
+  // to false) - unlike ensureDefaultGrayFill()'s own fill-only backfill role, this is an EXPLICIT
+  // reapplication (the person just changed the strategy/anchor), so it overwrites every trail's
+  // gray entry with the newly-chosen strategy's own ordering - exactly how applyHarmony() already
+  // overwrites a Farborgel-colored sheet on every anchor change, not a new kind of behavior.
+  // Deliberately never calls setLastHarmonyTypeFor() - this is not a Farborgel harmony, and
+  // afterAnchorChange() below only reaches this branch while lastHarmonyTypeFor(sheet) is null.
+  function applyGrayDefault() {
+    const { gridNodes, conns, sheet } = faceColorsGrid();
+    const group = sheetGroupElements(gridNodes, sheet);
+    if (!group) return;
+    const facesResult = computeCellFaces(conns, gridNodes, null, null, sheet);
+    const trails = computeFaceTrails(facesResult, group);
+    if (!trails.length) return;
+    const selection = buildMaxContrastGraySelection(trails.length);
+    const strategy = (typeof distributionStrategyFor === 'function' && distributionStrategyFor(activeLayer)) || 'cyclic';
+    const context = { groupOpsCount: group.ops.length };
+    if (strategy === 'rings' && typeof computeTrailRingDistances === 'function') {
+      context.ringDistances = computeTrailRingDistances(facesResult, group, trails);
+    }
+    applyHarmonyToPattern(selection, faceAssignmentsFor(activeLayer), trails, strategy, context,
+      { ruleId: 'max-contrast-gray', source: 'maxContrastGray' });
+    renderFaceColorsPanel();
+    redraw();
+  }
   // Group D Phase B4 follow-up: shared by every anchor-change site (Kreis/Dreieck/Register, the two
   // steppers) - if this sheet already has a last-applied harmony type, changing the anchor re-paints
   // the pattern with it immediately (matching the old rule engine's always-live feel,
   // applyFaceColorsPalette() on every axis step); otherwise (nothing applied yet) it's the same as
   // before - just refresh the UI (steppers/widgets/preview), no coloring happens on its own.
+  // Phase B-Farbstrategien follow-up (gray-as-selection round): "nothing applied yet" no longer
+  // means "no coloring happens" - a gray-default sheet now reapplies too (applyGrayDefault()),
+  // so the distribution-strategy stepper (and, incidentally, the hue/register steppers, which a
+  // gray fill ignores - re-running is a harmless no-op redraw for those) has a real, visible
+  // effect on a sheet nobody has explicitly colored, not just on a Farborgel harmony.
   function afterAnchorChange() {
     const type = lastHarmonyTypeFor(activeLayer);
     if (type !== null && type !== undefined) applyHarmony(type);
+    else applyGrayDefault();
     sync();
   }
   Object.keys(harmonyBtns).forEach(function (type) {

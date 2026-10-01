@@ -260,9 +260,26 @@ const _DISTRIBUTION_FNS = Object.freeze({
  * @param {string} [strategy='cyclic']  one of DISTRIBUTION_STRATEGIES.
  * @param {object} [context]  strategy-specific extra data - { groupOpsCount } for 'symmetry',
  *   { ringDistances: Map(key -> number) } for 'rings'. Unused by 'cyclic'/'area'.
- * @returns {number} trails.length (assignments written).
+ * @param {object} [provenance]  what gets recorded on each write and, with fillOnly, whether an
+ *   existing entry is skipped - { ruleId, source, fillOnly }, default { ruleId: 'farborgel',
+ *   source: 'harmonySelection', fillOnly: false } (today's original, unchanged behavior: every
+ *   call site that doesn't pass this gets byte-identical output to before this parameter
+ *   existed). Phase B-Farbstrategien follow-up (gray-as-selection round): a non-Farborgel caller
+ *   (core/facecolor.js's ensureDefaultGrayFill()) passes its own ruleId/source so a gray-sourced
+ *   entry is never mistagged 'farborgel' (nothing elsewhere hardcodes that string - every reader
+ *   compares against rule.id/palette.ruleId generically, confirmed by reading every call site
+ *   before this change), and fillOnly: true so it only ever FILLS a gap (unassignedTrails()'
+ *   own trails) - never overwrites an existing entry, the same invariant
+ *   reconcileFaceAssignments() already documents elsewhere in this file set ("Inheritance only
+ *   FILLS"). inheritedRanks/strategy dispatch below are computed over the FULL `trails` array
+ *   regardless of fillOnly, so a filled-in trail's rank is correct relative to the whole sheet,
+ *   not just the gap being filled - only the final write is skipped for a trail that already
+ *   has an entry.
+ * @returns {number} the number of assignments actually written (trails.length unless fillOnly
+ *   skipped some).
  */
-function applyHarmonyToPattern(selection, store, trails, strategy = 'cyclic', context = undefined) {
+function applyHarmonyToPattern(selection, store, trails, strategy = 'cyclic', context = undefined,
+    provenance = { ruleId: 'farborgel', source: 'harmonySelection', fillOnly: false }) {
     if (!selection || !Array.isArray(selection.members) || !selection.members.length) {
         throw new Error('applyHarmonyToPattern: selection needs at least one member');
     }
@@ -292,15 +309,17 @@ function applyHarmonyToPattern(selection, store, trails, strategy = 'cyclic', co
         return undefined;
     });
     const memberIndexes = fn(trails, inheritedRanks, M, context);
+    let written = 0;
     trails.forEach((t, i) => {
+        if (provenance.fillOnly && store.has(t.key)) return; // fill only - never overwrite an existing entry
         const memberIndex = memberIndexes[i];
         const m = selection.members[memberIndex];
         const c = m.analyticalCoordinate;
         const hue = c.hueIndex === null ? FARBORGEL_GRAY_HUE_SUBSTITUTE : _farborgelHueToCoreHue(c.hueIndex);
         setFaceAssignment(store, t.key, {
             hue, w: c.w, s: c.s,
-            rule: 'farborgel',
-            params: { source: 'harmonySelection', memberIndex, cardinality: M, strategy },
+            rule: provenance.ruleId,
+            params: { source: provenance.source, memberIndex, cardinality: M, strategy },
             // Farborgel follow-up: paint with the engine's OWN calibrated display color
             // (Oklab-mixed, gamut-mapped - color-harmony/ui/CALIBRATION.md) instead of
             // letting the render path re-resolve hue/w/s through this app's OWN, older,
@@ -308,9 +327,13 @@ function applyHarmonyToPattern(selection, store, trails, strategy = 'cyclic', co
             // disagree (this app's is the "Old"/pre-calibration reference Farborgel itself
             // used to use), which is what made real Farborgel harmonies look muted, like
             // the old tetrad/isotint system. m.srgb is a deterministic, already-validated
-            // [r,g,b] byte triple straight from HarmonySelection.mjs - safe to store as-is.
+            // [r,g,b] byte triple straight from HarmonySelection.mjs - safe to store as-is -
+            // undefined (a non-Farborgel caller's synthetic member has no .srgb) becomes
+            // setFaceAssignment()'s own null, so a gray-sourced entry resolves through
+            // OSTWALD_REFERENCE_SYSTEM natively instead of a phantom override.
             displayColor: m.srgb
         });
+        written++;
     });
-    return trails.length;
+    return written;
 }

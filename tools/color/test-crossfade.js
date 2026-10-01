@@ -14,7 +14,9 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
-const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor'];
+// farborgel-bridge: core/facecolor.js's ensureDefaultGrayFill() now calls applyHarmonyToPattern()
+// (gray-as-selection round) - a real runtime dependency, not just load-order convention.
+const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'farborgel-bridge'];
 const SRC = FILES.map(f => fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
 const SKETCH = fs.readFileSync(path.join(ROOT, 'sketch.js'), 'utf8');
 const grab = name => { const m = SKETCH.match(new RegExp(`function ${name}\\([\\s\\S]*?\\n\\}\\n`)); if (!m) throw new Error('cannot extract ' + name); return m[0]; };

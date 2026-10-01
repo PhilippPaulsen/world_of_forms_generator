@@ -20,7 +20,9 @@ const path = require('path');
 const vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
 
-const CORE = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor'];
+// farborgel-bridge: core/facecolor.js's ensureDefaultGrayFill() now calls applyHarmonyToPattern()
+// (gray-as-selection round) - a real runtime dependency, not just load-order convention.
+const CORE = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'farborgel-bridge'];
 const SRC = CORE.map(f => fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
 const CANVAS = 300, SIZE_FACTOR = 1.3; // same fixed rendering parameters as the gallery catalog
 const BUILDERS = { triangle: 'buildTriangleGrid', square: 'buildSquareGrid', hex: 'buildHexGrid' };
@@ -174,14 +176,25 @@ console.log('\n== 2/3. assignment store and render override ==');
     let regressions = 0, nonMatchRegressions = 0, wrongRecolor = 0, touchedOthers = 0, coverageBad = 0, recolored = 0, fixtures = 0;
     for (const { sh, ids, res } of patterns) {
         const { sb, group } = sh;
-        const base = JSON.stringify(res);
-        // regression: empty store, and a store whose keys match nothing, leave the result byte-identical
-        if (JSON.stringify(sb.computeCellFaces(ids.map(i => sh.reps[i]), sh.grid.nodes, new Map())) !== base) regressions++;
+        // Phase B-Farbstrategien follow-up (gray-as-selection round): a trail with NO entry of
+        // its own is no longer left at res's OLD orbitColor(connIndex, totalOrbits) default -
+        // computeCellFaces() now eagerly gives it a REAL, independently-recomputed
+        // max-contrast-gray-by-rank entry (ensureDefaultGrayFill(), core/facecolor.js). The
+        // "byte-identical to res" expectation below these three fixtures used before this round
+        // is gone BY DESIGN (that's the whole point of this round's work) - replaced with "every
+        // trail with no entry of ITS OWN gets exactly its real rank's max-contrast-gray color",
+        // independently recomputed here, not just "didn't crash".
+        const keys = sb.computeFaceTrailKeys(res, group);
+        const trails = sb.computeFaceTrails(res, group);
+        const grayHex = sb.generateHarmonyPalette('max-contrast-gray', [0], trails.length).map(c => c.hex);
+        const rankOf = new Map(trails.map((t, i) => [t.key, i]));
+        const matchesDefault = out => out.faces.every((f, i) => { const r = rankOf.get(keys[i]); return r === undefined || f.color === grayHex[r]; });
+        // regression: empty store, and a store whose keys match nothing, are both all-default
+        if (!matchesDefault(sb.computeCellFaces(ids.map(i => sh.reps[i]), sh.grid.nodes, new Map()))) regressions++;
         const nonMatching = new Map([['0,0;1,1;2,2', { hue: 3, w: 0.1, s: 0.1, rule: null, params: null }]]);
-        if (JSON.stringify(sb.computeCellFaces(ids.map(i => sh.reps[i]), sh.grid.nodes, nonMatching)) !== base) nonMatchRegressions++;
+        if (!matchesDefault(sb.computeCellFaces(ids.map(i => sh.reps[i]), sh.grid.nodes, nonMatching))) nonMatchRegressions++;
 
         // assign every trail a distinct color, one trail at a time: only that trail's faces change
-        const keys = sb.computeFaceTrailKeys(res, group);
         const distinct = [...new Set(keys)];
         distinct.forEach((key, t) => {
             fixtures++;
@@ -193,16 +206,16 @@ console.log('\n== 2/3. assignment store and render override ==');
             let hit = 0;
             out.faces.forEach((f, i) => {
                 if (keys[i] === key) { hit++; if (f.color !== want) wrongRecolor++; }
-                else if (JSON.stringify(f) !== JSON.stringify(res.faces[i])) touchedOthers++;
+                else { const r = rankOf.get(keys[i]); if (r !== undefined && f.color !== grayHex[r]) touchedOthers++; }
             });
             if (hit !== keys.filter(k => k === key).length) coverageBad++;
             recolored += hit;
         });
     }
-    check('empty store: result byte-identical to the unassigned computation (all patterns)', regressions === 0, `${regressions} differing`);
-    check('store with only non-matching keys: byte-identical too', nonMatchRegressions === 0, `${nonMatchRegressions} differing`);
+    check('empty store: every trail gets its real max-contrast-gray-by-rank default (independently recomputed, all patterns)', regressions === 0, `${regressions} differing`);
+    check('store with only non-matching keys: same - every trail still gets its gray default', nonMatchRegressions === 0, `${nonMatchRegressions} differing`);
     check('an assignment recolors every face of its trail with the resolved hex', wrongRecolor === 0 && coverageBad === 0, `${fixtures} single-trail fixtures, ${recolored} faces recolored`);
-    check('an assignment touches no face outside its trail', touchedOthers === 0, `${touchedOthers}`);
+    check('an assignment touches no face outside its trail (every other trail still gets its own real gray default, eager-filled)', touchedOthers === 0, `${touchedOthers}`);
 
     // validation + robustness
     const sh = patterns[0].sh, sb = sh.sb;
@@ -211,9 +224,27 @@ console.log('\n== 2/3. assignment store and render override ==');
     for (const bad of [{ hue: 1, w: 0.7, s: 0.6 }, { hue: 1, w: -0.1, s: 0.1 }, { hue: NaN, w: 0, s: 0 }]) { try { sb.setFaceAssignment(st, 'k', bad); } catch (e) { threw++; } }
     check('setFaceAssignment rejects points outside the Ostwald triangle; store stays empty', threw === 3 && st.size === 0);
     const { ids, res } = patterns[0];
-    const stale = new Map([[sb.computeFaceTrailKeys(res, sh.group)[0], { hue: 1, w: 0.9, s: 0.9 }]]);
+    const staleKey = sb.computeFaceTrailKeys(res, sh.group)[0];
+    const stale = new Map([[staleKey, { hue: 1, w: 0.9, s: 0.9 }]]);
     let noThrow = true, out; try { out = sb.computeCellFaces(ids.map(i => sh.reps[i]), sh.grid.nodes, stale); } catch (e) { noThrow = false; }
-    check('an invalid entry that got into the store anyway never breaks rendering (default color kept)', noThrow && JSON.stringify(out) === JSON.stringify(res));
+    // The invalid entry's OWN trail never breaks rendering (its face keeps res's default color,
+    // untouched - ensureDefaultGrayFill() skips it, since store.has() is true for it regardless
+    // of the value's validity: "fill only" means presence, not validity, see its own comment).
+    // Every OTHER trail is genuinely unassigned, so it now gets eager-filled with its real
+    // max-contrast-gray-by-rank default instead of staying at res's old default (same new
+    // invariant as the fixtures above, not a second bug).
+    const outKeys = noThrow ? sb.computeFaceTrailKeys(out, sh.group) : [];
+    const staleTrailUnaffected = noThrow && out.faces.every((f, i) => outKeys[i] !== staleKey || f.color === res.faces[i].color);
+    const othersTrails = noThrow ? sb.computeFaceTrails(out, sh.group) : [];
+    const othersGrayHex = noThrow ? sb.generateHarmonyPalette('max-contrast-gray', [0], othersTrails.length).map(c => c.hex) : [];
+    const othersRankOf = new Map(othersTrails.map((t, i) => [t.key, i]));
+    const othersCorrect = noThrow && out.faces.every((f, i) => {
+        if (outKeys[i] === staleKey) return true;
+        const r = othersRankOf.get(outKeys[i]);
+        return r === undefined || f.color === othersGrayHex[r];
+    });
+    check('an invalid entry that got into the store anyway never breaks rendering (its own face keeps the default; every other trail gets its real gray default)',
+        noThrow && staleTrailUnaffected && othersCorrect);
 }
 
 // ---------------- per-sheet scoping --------------------------------------
@@ -222,6 +253,7 @@ console.log('\n== per-sheet scoping ==');
     const { sh, ids, res } = patterns[0];
     const sb = sh.sb;
     const key = sb.computeFaceTrailKeys(res, sh.group)[0];
+    const trails = sb.computeFaceTrails(res, sh.group);
     const conns = ids.map(i => sh.reps[i]);
     // two layers over the same grid (as an equal-scale layer is)
     sb.additionalLayers = [{ connections: conns, nodes: sh.grid.nodes }, { connections: conns, nodes: sh.grid.nodes }];
@@ -231,11 +263,24 @@ console.log('\n== per-sheet scoping ==');
     sb.setFaceAssignment(L0, key, { hue: 5, w: 0.1, s: 0.1 });
     const colorOf = store => sb.computeCellFaces(conns, sh.grid.nodes, store).faces[0].color;
     const plain = res.faces[0].color;
+    // NOTE on fragility: A and L1 are empty before this line, so colorOf(A)/colorOf(L1) below
+    // eager-fill them (ensureDefaultGrayFill()) as a side effect of merely reading a color - this
+    // assertion happens to still read true because faces[0]'s OWN rank maps to the same gray
+    // letter ('a', near-white) under both the old connIndex-based default (which produced `plain`,
+    // via res's null-assignment computation) and the new area-rank-based one, for THIS corpus
+    // pattern specifically - not a general equivalence of the two formulas (the checks above
+    // prove they generally differ). A real coincidence of which face each default system happens
+    // to call "first", not a guarantee to rely on elsewhere.
     check('an assignment in layer 0 recolors layer 0 only (base and layer 1 unchanged)', colorOf(L0) !== plain && colorOf(A) === plain && colorOf(L1) === plain);
     sb.setFaceAssignment(A, key, { hue: 17, w: 0.3, s: 0.1 });
     check('base and layer 0 hold independent assignments for the same trail', colorOf(A) !== colorOf(L0) && colorOf(A) !== plain);
     sb.additionalLayers.splice(0, 1); // delete layer 0: old layer 1 becomes index 0
-    check('deleting a layer: its store goes with it, the survivor keeps its own (reindexing safe)', sb.faceAssignmentsFor(0) === L1 && L1.size === 0 && sb.faceAssignmentsFor(0) !== L0);
+    // L1.size is no longer 0 here: colorOf(L1) above already eager-filled it (reading a sheet's
+    // color is enough to trigger ensureDefaultGrayFill() - there is no read-only path once a real
+    // store is passed in). The actual point of this check - identity and reindexing safety - is
+    // unaffected, so it now asserts the real post-fill size instead of "untouched".
+    check('deleting a layer: its store goes with it, the survivor keeps its own (reindexing safe)',
+        sb.faceAssignmentsFor(0) === L1 && L1.size === trails.length && sb.faceAssignmentsFor(0) !== L0);
 }
 
 // ---------------- real render-path wiring in tiling.js -------------------
@@ -316,14 +361,26 @@ console.log('\n== 5. Phase 3 logic (trails, palette, override, reset, highlight)
             }
         }
 
-        // reset -> default coloring, byte-identical to the never-assigned result
+        // reset -> palette genuinely cleared; the store is empty right at that moment, then the
+        // VERY NEXT render (not the reset itself) eagerly re-fills it with the real
+        // max-contrast-gray-by-rank default (Phase B-Farbstrategien follow-up, gray-as-selection
+        // round) - "byte-identical to the never-assigned result" no longer holds (that result's
+        // OWN default, res's old connIndex/totalOrbits orbitColor(), is exactly what this round
+        // replaces) - replaced with "the reset itself leaves the store empty, and the next render
+        // recolors every trail with its real, independently-recomputed gray default".
         sb.additionalLayers = [];
         const st = sb.faceAssignmentsFor('base'); const pal = sb.facePaletteFor('base');
         pal.ruleId = 'isotint'; pal.idx = [3, 2]; pal.overrides.set(trails[0].key, 0);
         sb.applyPaletteToTrails(st, trails, pal);
         sb.resetFaceColors('base');
+        const resetWasEmpty = sb.faceAssignmentsFor('base').size === 0;
         const after = sb.computeCellFaces(conns, sh.grid.nodes, sb.faceAssignmentsFor('base'));
-        if (sb.faceAssignmentsFor('base').size !== 0 || JSON.stringify(after) !== JSON.stringify(res) || sb.facePaletteFor('base').ruleId !== null || sb.facePaletteFor('base').overrides.size !== 0) resetBad++;
+        const afterKeys = sb.computeFaceTrailKeys(after, group);
+        const grayHexAfter = sb.generateHarmonyPalette('max-contrast-gray', [0], trails.length).map(c => c.hex);
+        const rankOfAfter = new Map(trails.map((t, i) => [t.key, i]));
+        const afterMatchesDefault = after.faces.every((f, i) => { const r = rankOfAfter.get(afterKeys[i]); return r === undefined || f.color === grayHexAfter[r]; });
+        if (!resetWasEmpty || sb.faceAssignmentsFor('base').size !== trails.length || !afterMatchesDefault ||
+            sb.facePaletteFor('base').ruleId !== null || sb.facePaletteFor('base').overrides.size !== 0) resetBad++;
 
         // highlight: exactly the trail's faces are flagged; nothing flagged without a key
         const keys = sb.computeFaceTrailKeys(res, group);
@@ -337,11 +394,20 @@ console.log('\n== 5. Phase 3 logic (trails, palette, override, reset, highlight)
     check('trail i gets slot i of the generated series (hue/w/s exact), with rule + {idx, slot, slots} recorded', palMismatch === 0 && slotBad === 0);
     check('the palette really renders: every face drawn in its trail\'s series color', renderBad === 0);
     check('per-trail override moves ONE trail to another slot of the same series; all others unchanged; stale override falls back', ovBad === 0 && ovOutside === 0 && othersChanged === 0, `${ovRuns} override runs`);
-    check('Reset colors: store and palette cleared, drawing byte-identical to never-assigned', resetBad === 0);
+    check('Reset colors: palette cleared, store empty right after reset, next render re-fills it with the real gray default', resetBad === 0);
     check('hover highlight flags exactly the hovered trail\'s faces, and nothing when no key is passed', hlBad === 0 && hlLeak === 0);
 
     // per-sheet palette state
     const { sh, ids, res } = patterns[0]; const sb = sh.sb;
+    // sh.sb (CONFIGS[0]'s sandbox) is SHARED across every patterns[] entry of that config, and the
+    // big per-pattern loop above (section 5's "reset -> ..." block) leaves baseFaceAssignments
+    // eagerly re-filled by ITS OWN last-processed pattern's geometry - a different trail count
+    // than patterns[0]'s own, so those entries are genuine orphans here (ensureDefaultGrayFill()
+    // only fills gaps, never clears unrelated ones - "fill only"). Pre-existing test-harness
+    // sandbox reuse, just newly exposed because resetting no longer reliably leaves a store
+    // empty once anything renders it again. This section tests fresh per-sheet scoping, so it
+    // starts from an explicitly clean slate rather than depending on loop-iteration order.
+    sb.faceAssignmentsFor('base').clear();
     sb.additionalLayers = [{ connections: [], nodes: sh.grid.nodes }, { connections: [], nodes: sh.grid.nodes }];
     const pb = sb.facePaletteFor('base'), p0 = sb.facePaletteFor(0), p1 = sb.facePaletteFor(1);
     pb.ruleId = 'tetrad'; pb.idx = [0, 0]; p0.ruleId = 'isotint'; p0.idx = [0, 0];

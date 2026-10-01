@@ -12,7 +12,12 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
-const CORE = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor'];
+// farborgel-bridge: core/facecolor.js's ensureDefaultGrayFill() now calls applyHarmonyToPattern()
+// (gray-as-selection round) - a real runtime dependency, not just load-order convention. Needed
+// for loadSrc(false) (the working tree); loadSrc(true) (HEAD) already has this file from an
+// earlier, already-committed round, so the before/after comparison in test-inherit-hook.js still
+// works correctly on both sides.
+const CORE = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'farborgel-bridge'];
 const { execSync } = require('child_process');
 // The core sources: the working tree, or (fromHead) the last commit's - for before/after comparisons.
 const loadSrc = fromHead => CORE.map(f => fromHead

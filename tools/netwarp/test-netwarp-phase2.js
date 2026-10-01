@@ -21,7 +21,10 @@ const path = require('path');
 const vm = require('vm');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'export'];
+// farborgel-bridge: core/facecolor.js's ensureDefaultGrayFill() now calls applyHarmonyToPattern()
+// (gray-as-selection round) - needed on both sides here (compares against HEAD, which already
+// has core/farborgel-bridge.js from an earlier, already-committed round).
+const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'export', 'farborgel-bridge'];
 const load = fromHead => FILES.map(f => fromHead
     ? execSync(`git show HEAD:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString()
     : fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
@@ -110,13 +113,22 @@ console.log('\n== 3. export ==');
 {
     let n = 0, bad = 0, colorBad = 0;
     const GRAY_HEX = /^#([0-9a-f]{2})\1\1$/i;
-    const stripColor = faces => (faces || []).map(f => { const { color, ...rest } = f; return rest; });
-    const stripExport = exp => ({
-        ...exp, geometry: {
-            ...exp.geometry, faces: stripColor(exp.geometry.faces),
-            layers: (exp.geometry.layers || []).map(l => ({ ...l, faces: stripColor(l.faces) }))
-        }
-    });
+    // Phase B-Farbstrategien follow-up (gray-as-selection round): a never-assigned sheet now gets
+    // a REAL, eager max-contrast-gray fill (ensureDefaultGrayFill(), core/facecolor.js) - the
+    // previous commit's code never touched the store at all, so the new export carries
+    // face.colorSpec and a populated meta.faceColoring the old one structurally never had.
+    // Stripped here the same way .color already was (a deliberate, understood difference, not an
+    // unexamined one) - everything else still compares exactly.
+    const stripColor = faces => (faces || []).map(f => { const { color, colorSpec, ...rest } = f; return rest; });
+    const stripExport = exp => {
+        const meta = { ...exp.meta }; delete meta.faceColoring;
+        return {
+            ...exp, meta, geometry: {
+                ...exp.geometry, faces: stripColor(exp.geometry.faces),
+                layers: (exp.geometry.layers || []).map(l => ({ ...l, faces: stripColor(l.faces) }))
+            }
+        };
+    };
     const allColors = exp => [...(exp.geometry.faces || []), ...((exp.geometry.layers || []).flatMap(l => l.faces || []))].map(f => f.color);
     for (const [shape, order, mode] of [['square', 4, 'rotation_reflection6'], ['square', 3, 'rotation6'], ['triangle', 3, 'rotation6'], ['hex', 3, 'rotation_reflection6']]) {
         const A = makeSheet(SRC_NEW, shape, order, mode), B = makeSheet(load(true), shape, order, mode);
