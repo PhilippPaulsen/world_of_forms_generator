@@ -341,6 +341,15 @@
     renderFaceColorsPanel();
     redraw();
   }
+  // Phase B-Farbstrategien follow-up (Reset-respects-strategy fix): exposed globally so sketch.js's
+  // OWN, untouched Reset Color click handler (initFaceColorsPanel(), see its own comment on why this
+  // file deliberately never adds a second listener there) can call it after resetFaceColors() -
+  // without this, the very next passive render refills the sheet through ensureDefaultGrayFill()
+  // alone, which is always-cyclic by design (its unattended, per-redraw role is unchanged by this),
+  // silently dropping the sheet's sticky distributionStrategyFor() preference at the exact moment a
+  // person would expect a fresh start to still honor it. Same cross-file convention this file
+  // already consumes in the other direction (window.farborgelBuildHarmonySelection).
+  window.applyGrayDefault = applyGrayDefault;
   // Group D Phase B4 follow-up: shared by every anchor-change site (Kreis/Dreieck/Register, the two
   // steppers) - if this sheet already has a last-applied harmony type, changing the anchor re-paints
   // the pattern with it immediately (matching the old rule engine's always-live feel,
