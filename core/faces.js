@@ -833,32 +833,6 @@ function orbitColor(connIndex, totalOrbits) {
     return _orbitGrayHexTable()[idx];
 }
 
-// Phase B-Farbstrategien: the REAL default for a face with no store assignment, used by
-// computeCellFaces() (via core/facecolor.js's _applyRealOrbitGray()) to REPLACE orbitColor()'s
-// result above for every unassigned face of a normal (non-cross-layer) sheet. Unlike
-// orbitColor() (connIndex/totalOrbits - every POSSIBLE theme-line orbit of the shape, drawn or
-// not), this takes the REAL count of trails actually present and this face's trail's real area
-// rank among them - for a sparse pattern (few trails drawn out of many possible orbits) this
-// spreads the full available contrast across what is actually visible instead of bunching
-// nearby letters together. Reuses the max-contrast-gray RULE (core/color.js) via
-// generateHarmonyPalette() rather than reimplementing its formula here, so the passive default
-// and the explicit hand-applied rule are identical by construction, not just by intention -
-// same reasoning as core/color.js's own comment on that rule. orbitColor()'s own call site
-// (findFaces(), below) and computeCrossLayerFaces() (no single sheet/group applies to a
-// cross-layer neighborhood) are UNTOUCHED - this is additive, only reached from
-// computeCellFaces(). Cached per distinct `total` (a real pattern only has a handful of
-// distinct trail counts across its edits, not one per face) for the same resolveColor()-cost
-// reason _orbitGrayHexTable() above is cached.
-let _maxContrastGrayCache = null;
-function orbitColorByRank(rank, total) {
-    if (rank === null || rank === undefined || !Number.isInteger(total) || total <= 0) return 'hsl(0, 0%, 70%)';
-    if (!_maxContrastGrayCache) _maxContrastGrayCache = new Map();
-    if (!_maxContrastGrayCache.has(total)) {
-        _maxContrastGrayCache.set(total, generateHarmonyPalette('max-contrast-gray', [0], total).map(c => c.hex));
-    }
-    return _maxContrastGrayCache.get(total)[rank % total];
-}
-
 // Roadmap 1.10b-ii-c: color for a genuinely cross-sheet face (boundary
 // spans >=2 distinct sheets - see _faceSheetSet()). Extends orbitColor()'s
 // existing "no clean single-orbit attribution" gray-fallback convention
@@ -1025,22 +999,45 @@ function computeCellFaces(connSet, gridNodes = nodes, assignments = null, highli
     let segments;
     try { segments = collectCellSegments(connSet, gridNodes, sheet); } finally { activeNetWarp = savedWarp; }
     const result = findFaces(segments, gridNodes);
-    // Phase B-Farbstrategien: replaces findFaces()'s connIndex/totalOrbits default (every
-    // POSSIBLE theme-line orbit of the shape) with one based on the REAL trails present - see
-    // _applyRealOrbitGray()'s own comment (core/facecolor.js). Runs BEFORE the store override
-    // below, same "assignment always wins, default underneath" precedence as before; runs
-    // unconditionally (not just when `assignments` is passed) since it replaces the PASSIVE
-    // default itself - the same thing orbitColor() inside findFaces() already did
-    // unconditionally. Needs the group, so it is computed once here and reused by
-    // markHighlightedTrail() below instead of that call recomputing it a second time.
+    // Needs the group, so it is computed once here and reused by markHighlightedTrail() below
+    // instead of that call recomputing it a second time.
     const group = sheetGroupElements(gridNodes, sheet);
-    _applyRealOrbitGray(result, group, gridNodes, connSet);
     // Group D follow-up step 2: applies the store AFTER reconciling it against the
     // sheet's last real face structure (core/facecolor.js applyAssignmentsLazily()) -
     // an edit that split/merged/reshaped a trail hands its color on before this
     // frame is drawn. A side effect on the store, accepted so every edit path is
     // covered without instrumenting each call site.
+    //
+    // MUST run BEFORE ensureDefaultGrayFill() below, not after - found live by this round's own
+    // split/merge/deformed regression tests (tools/color/test-facecolor.js), not assumed safe.
+    // Reconciliation's own inheritance is "fill only" (never overwrites an existing entry), and
+    // so is ensureDefaultGrayFill()'s write - whichever of the two runs FIRST against a freshly
+    // appeared trail key claims it. Gray-fill-first silently stole every reshaped/split/merged
+    // trail's gap with a generic gray before reconciliation ever got a chance to hand it the
+    // INHERITED color, since by the time reconciliation ran, store.has(child) was already true.
     if (assignments) applyAssignmentsLazily(result, assignments, gridNodes, sheet);
+    // Phase B-Farbstrategien follow-up (gray-as-selection round): replaces findFaces()'s
+    // connIndex/totalOrbits default (every POSSIBLE theme-line orbit of the shape, drawn or not)
+    // with a REAL, override-able store entry per trail reconciliation above could not resolve -
+    // see ensureDefaultGrayFill()'s own comment (core/facecolor.js) for why this now writes to
+    // the store instead of only touching face.color (the Phase B-Farbstrategien original of this
+    // comment, superseded). Only possible with a real store to write into - a null `assignments`
+    // (trails-only queries: ui-farbe.js's own trail resolution before applying a Farborgel
+    // harmony, the test/corpus harnesses) gets no gray-rank default at all, falling back to
+    // findFaces()'s own original orbitColor(connIndex, totalOrbits) - invisible in the live app,
+    // since every real render path (core/tiling.js, core/export.js, the crossfade glue) always
+    // passes a real per-sheet store, never null.
+    //
+    // A write here lands AFTER applyAssignmentsLazily() already painted faces from whatever the
+    // store held coming into this call, so a trail that was genuinely unresolved (nothing to
+    // inherit, unlike the point above) would otherwise wait one extra frame to show its new gray
+    // - re-running applyFaceAssignments() when something was actually written keeps it correct
+    // on this same frame too, at no extra cost on the overwhelming majority of calls where
+    // nothing was written.
+    if (assignments) {
+        const trails = cachedTrailsFor(result, group, gridNodes, connSet);
+        if (ensureDefaultGrayFill(assignments, trails) > 0) applyFaceAssignments(result, assignments, group);
+    }
     if (highlightKey) markHighlightedTrail(result, highlightKey, group);
     return result;
 }

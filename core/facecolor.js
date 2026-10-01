@@ -209,54 +209,90 @@ function computeFaceTrails(facesResult, group) {
         (Math.round(b.area * 100) - Math.round(a.area * 100)) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
-// Phase B-Farbstrategien: computeCellFaces()'s own default-gray fix - replaces findFaces()'s
-// naive connIndex/totalOrbits color (every POSSIBLE theme-line orbit of the shape) with one
-// based on computeFaceTrails()'s own real, area-ranked trail order (the SAME order the Face
-// Colors panel already labels "Trail 1", "Trail 2", ...) via core/faces.js's
-// orbitColorByRank(). Mutates face.color in place for every face with NO store assignment;
-// computeCellFaces() runs this BEFORE applyAssignmentsLazily(), so an explicit assignment
-// still overrides it, unchanged. Cross-sheet faces (already CROSS_SHEET_COLOR) and faces with
-// no trail key are left exactly as findFaces() set them.
-//
-// Cached per (gridNodes, connection set) - same two-level WeakMap/Map shape
-// getGroupElementsCached() (core/orbits.js) already uses for an analogous problem (expensive,
-// but stable across most redraws of an unedited pattern). Without this, a real-trail rank
-// computation (O(faces x group size), same cost category applyAssignmentsLazily() already
-// avoids paying for an EMPTY store) would run on every single computeCellFaces() call - found
-// as a real regression by tools/color/test-inherit-hook.js's own timing guard (empty-store
-// cost +1.4ms/call, 4.1x over the 5% budget) before this cache was added, not assumed away.
-// `connFingerprint` is cheap (O(connections), not O(faces x group size)) - connIndex pairs
-// only, not node coordinates, so it is stable across a redraw that doesn't touch connections.
-let _orbitGrayRankCache = null;
-function _connFingerprint(connSet) {
+// Phase B-Farbstrategien follow-up (gray-as-selection round): computeCellFaces()'s call site needs
+// a trail list to hand ensureDefaultGrayFill() below, SEPARATELY from the one applyAssignmentsLazily()
+// already computes internally for reconciliation - computeFaceTrails() is itself built on
+// computeFaceTrailKeys(), the expensive O(faces x group size) operation this file's own earlier
+// caches (_orbitGrayRankCache, retired with _applyRealOrbitGray()) existed specifically to avoid
+// paying twice per redraw. A naive second call here reintroduced exactly that regression - found
+// by tools/color/test-inherit-hook.js's own timing guard (steady-store ratio 1.530, 53% over
+// budget) after the first version of this round's change, the same way Step 1 of the previous
+// round found an analogous one, not assumed away. Same two-level WeakMap/Map shape as that
+// retired cache: a cache HIT (the overwhelming majority of redraws - an unedited pattern) skips
+// computeFaceTrailKeys() entirely; a miss (first call, or a real structural edit) pays the real
+// cost once, same as applyAssignmentsLazily()'s own unavoidable cost for the SAME edit.
+let _trailsCache = null;
+function _trailsConnFingerprint(connSet) {
     return connSet.length + ':' + connSet.map(c => c[0] + ',' + c[1]).join(';');
 }
-function _applyRealOrbitGray(facesResult, group, gridNodes, connSet) {
-    if (!group || !facesResult.faces.length) return;
-    if (!_orbitGrayRankCache) _orbitGrayRankCache = new WeakMap();
-    let byFingerprint = _orbitGrayRankCache.get(gridNodes);
-    if (!byFingerprint) { byFingerprint = new Map(); _orbitGrayRankCache.set(gridNodes, byFingerprint); }
-    const fp = _connFingerprint(connSet);
+function cachedTrailsFor(facesResult, group, gridNodes, connSet) {
+    if (!group || !facesResult.faces.length) return [];
+    if (!_trailsCache) _trailsCache = new WeakMap();
+    let byFingerprint = _trailsCache.get(gridNodes);
+    if (!byFingerprint) { byFingerprint = new Map(); _trailsCache.set(gridNodes, byFingerprint); }
+    const fp = _trailsConnFingerprint(connSet);
     let cached = byFingerprint.get(fp);
-    // On a hit, the EXPENSIVE part (computeFaceTrailKeys(), O(faces x group size)) is skipped
-    // entirely, not just the rank sort - findFaces() is a pure, deterministic function of
-    // (segments, gridNodes), so the SAME (gridNodes, connection set) always reproduces the
-    // SAME faces in the SAME order, and the cached keys array can be reused by plain index. A
-    // face-count mismatch (defensive only - would mean this assumption broke) forces a real
-    // recompute rather than silently coloring from a stale/misaligned keys array.
     if (!cached || cached.faceCount !== facesResult.faces.length) {
-        const keys = computeFaceTrailKeys(facesResult, group);
-        const trails = computeFaceTrails(facesResult, group);
-        if (!trails.length) { byFingerprint.delete(fp); return; }
-        cached = { keys, faceCount: facesResult.faces.length, rankOf: new Map(trails.map((t, i) => [t.key, i])), total: trails.length };
+        cached = { faceCount: facesResult.faces.length, trails: computeFaceTrails(facesResult, group) };
         byFingerprint.set(fp, cached);
     }
-    facesResult.faces.forEach((f, i) => {
-        if (cached.keys[i] === null || (f.sheets && f.sheets.length >= 2)) return;
-        const rank = cached.rankOf.get(cached.keys[i]);
-        if (rank === undefined) return; // defensive only - see the face-count check above
-        f.color = orbitColorByRank(rank, cached.total);
-    });
+    return cached.trails;
+}
+
+// Phase B-Farbstrategien follow-up (gray-as-selection round, Option B3+A1): computeCellFaces()'s
+// own default-gray fix - replaces findFaces()'s naive connIndex/totalOrbits color (every
+// POSSIBLE theme-line orbit of the shape, drawn or not) with one based on
+// computeFaceTrails()'s own real, area-ranked trail order (the SAME order the Face Colors panel
+// already labels "Trail 1", "Trail 2", ...). An earlier version of this (Phase B-Farbstrategien
+// step 1, since removed) only ever touched face.color on fresh, per-redraw face objects, never
+// the store - this version gives every unassigned trail a REAL, override-able store entry via
+// the same already-built, already-tested machinery a
+// Farborgel harmony application uses (applyHarmonyToPattern(), core/farborgel-bridge.js) instead
+// of a second, parallel coloring path - so strategies, inheritance, and the per-trail override
+// stepper all work on a default-filled sheet for free, no new mechanism.
+//
+// Unifies TWO cases the old function's unconditional .color loop used to serve separately, into
+// ONE call: a never-touched sheet (every trail unassigned) and a single post-edit orphan (one
+// trail with no inheritable parent - classifyTrailTransitions()'s "0 lost -> 1 new" case, which
+// reconciliation deliberately leaves unassigned) - unassignedTrails() doesn't distinguish them,
+// and neither does this function; both get a fresh max-contrast-gray entry, correctly ranked.
+//
+// The gray spread is ALWAYS sized to the WHOLE sheet (trails.length), not the unassigned count -
+// an orphan on an otherwise-9-trail sheet gets the gray matching ITS OWN area rank among all 10
+// trails (post-edit), not a size-1 spread's dead-center letter. applyHarmonyToPattern()'s
+// inheritedRanks/strategy dispatch are computed over the FULL trails array for exactly this
+// reason; fillOnly: true then only skips the WRITE for a trail that already has an entry (any
+// rule, not just this one) - "inheritance only fills", same invariant reconcileFaceAssignments()
+// documents elsewhere in this file. Always 'cyclic' (M = trails.length, nothing inherited for a
+// fresh trail resolves to rank i - this reproduces the retired step-1 face.color-only fallback's
+// rank mapping exactly, verified byte-identical in tools/color/test-facecolor.js) - an unattended
+// backfill, not a strategy choice; Area/Symmetry/Rings stay reachable only through an explicit
+// distribution-strategy application (ui-farbe.js's applyHarmony()).
+//
+// `hueIndex: null` per member reuses applyHarmonyToPattern()'s own existing "no hue, v=0" Farborgel
+// convention (FARBORGEL_GRAY_HUE_SUBSTITUTE = 0, the exact hue the max-contrast-gray rule itself
+// hardcodes) rather than inventing a second one. No .srgb per member - setFaceAssignment() then
+// stores displayColor: null, so a gray entry resolves through OSTWALD_REFERENCE_SYSTEM natively
+// (correct: unlike Farborgel, there is no second, differently-calibrated pipeline to bypass here).
+//
+// Cheap on the overwhelming majority of calls (unassignedTrails() early-out, O(trails) - no store
+// write, no resolveColor) - the real cost (N setFaceAssignment()/resolveColor() calls) is paid
+// only the first time a gap is found, not per redraw; see the performance verification step.
+// The trivial, locally-constructed HarmonySelection-shaped object applyHarmonyToPattern() needs
+// for a max-contrast-gray fill of `n` trails - factored out so ensureDefaultGrayFill() below and
+// ui-farbe.js's own strategy-aware reapplication (afterAnchorChange()'s gray-default branch, Phase
+// B-Farbstrategien follow-up) build it identically, from the one real registered rule
+// (core/color.js), never a second, duplicated formula.
+function buildMaxContrastGraySelection(n) {
+    const colors = generateHarmonyPalette('max-contrast-gray', [0], n);
+    return { members: colors.map(c => ({ analyticalCoordinate: { hueIndex: null, w: c.w, s: c.s } })) };
+}
+
+function ensureDefaultGrayFill(store, trails) {
+    if (!store || trails.length === 0) return 0;
+    if (unassignedTrails(store, trails).length === 0) return 0;
+    return applyHarmonyToPattern(buildMaxContrastGraySelection(trails.length), store, trails, 'cyclic', undefined,
+        { ruleId: 'max-contrast-gray', source: 'maxContrastGray', fillOnly: true });
 }
 
 // A sheet's palette state: which harmony rule is applied, the chosen index

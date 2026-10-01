@@ -4345,6 +4345,38 @@ function renderFaceColorsPanel() {
     const group = reason ? null : sheetGroupElements(gridNodes, sheetOv);
     const trails = group ? computeFaceTrails(computeCellFaces(conns, gridNodes, store, null, sheetOv), group) : [];
 
+    // Phase B-Farbstrategien follow-up (gray-as-selection round): self-healing resync, EVERY
+    // render (not a one-time latch) - ensureDefaultGrayFill() (core/facecolor.js, just run inside
+    // the computeCellFaces() call above) gives every unassigned trail a real store entry, but
+    // never touches this sheet's palette (facePaletteFor()) - nothing but this UI layer has sheet
+    // IDENTITY (the engine only sees geometry), so this is the one place that can reconnect them.
+    // Adopting the gray entries as palette.ruleId/idx/slots reaches the EXISTING, already-tested
+    // override mechanism (assignTrailSlot()/spreadPaletteToUnassigned(), both gated on
+    // palette.ruleId) for free - no new override pathway. Re-derived every render, not once: unlike
+    // an explicitly-applied old-system rule (whose series is deliberately frozen at the moment of
+    // application - see core/facecolor.js's own comment), this default has no "Apply" moment to
+    // freeze at - it silently grows/shrinks with the sheet's real trail count as it's edited, so
+    // palette.slots has to keep tracking that, not go stale. Only trails[0] (not an arbitrary store
+    // entry) is sampled - deterministic, and by this point in the function it is guaranteed to
+    // exist and be real (computeCellFaces() above already ran the eager fill). Never claims a sheet
+    // a Farborgel harmony already owns (lastHarmonyTypeFor(sheet) non-null - that store's entries
+    // carry rule: 'farborgel', never this rule) or one an explicit old-system rule already owns
+    // (palette.ruleId already something else) - and un-claims itself the moment a Farborgel harmony
+    // IS applied afterward, so a stale resync can never make the override stepper try to write a
+    // gray entry into a now-Farborgel-colored sheet.
+    if (lastHarmonyTypeFor(sheet) !== null) {
+        if (palette.ruleId === 'max-contrast-gray') { palette.ruleId = null; palette.slots = undefined; }
+    } else if (palette.ruleId === null || palette.ruleId === 'max-contrast-gray') {
+        const sample = trails.length ? store.get(trails[0].key) : null;
+        if (sample && sample.rule === 'max-contrast-gray') {
+            palette.ruleId = 'max-contrast-gray';
+            palette.idx = [0];
+            palette.slots = trails.length;
+        } else if (palette.ruleId === 'max-contrast-gray') {
+            palette.ruleId = null; palette.slots = undefined;
+        }
+    }
+
     resetBtn.disabled = store.size === 0 && !palette.ruleId;
     ruleSel.innerHTML = '';
     const ph = document.createElement('option');
