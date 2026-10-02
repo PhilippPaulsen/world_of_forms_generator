@@ -1292,6 +1292,26 @@
             <rect x="13" y="13" width="8" height="8" rx="1.5" />
           </svg>
         </a>
+        <!-- Farborgel (the standalone color-harmony page), P1 of the Farborgel sub-page work: a plain link to
+             color-harmony/ui/index.html in a NEW tab, exactly like #btn-gallery above - and for the same reason:
+             the generator keeps no state anywhere (no localStorage/autosave), so navigating this tab away would
+             lose the pattern. No URL parameters and no data transfer yet (anchor pre-fill and the return
+             handoff are later phases). Farbe tab only, via the SAME mechanism as the rail's Farbe-only buttons:
+             `.rail-farbe-only` (style.css: html:not([data-tab="farbe"]) .rail-farbe-only { display: none }, with
+             data-tab set by nav.js) - the class name says "rail" but the rule is generic. Like #btn-gallery this
+             lives in the old controls panel until the per-tab organ strip exists (ROADMAP step 5). Icon: a hue
+             ring with a triad of dots - the Farborgel's own motif (a Dreier chord on the hue circle) - distinct
+             from the Formorgel's squares and from the plain Kreis outline in #nav-farbe. -->
+        <a id="btn-farborgel" class="icon-btn rail-farbe-only" href="color-harmony/ui/index.html" target="_blank" rel="noopener" title="Farborgel (öffnet in neuem Tab)" aria-label="Farborgel (öffnet in neuem Tab)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <g fill="currentColor" stroke="none">
+              <circle cx="12" cy="3" r="2.6" />
+              <circle cx="19.8" cy="16.5" r="2.6" />
+              <circle cx="4.2" cy="16.5" r="2.6" />
+            </g>
+          </svg>
+        </a>
       </div>
 
       <!-- Hidden Canvas Size Input (fixed default, no live-resize control) -->
