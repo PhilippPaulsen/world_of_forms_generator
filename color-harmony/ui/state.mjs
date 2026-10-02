@@ -1,5 +1,5 @@
 import {createComposition,reduceComposition,compositionActions,activeColor,colorAtHue,seriesMembers} from './composition.mjs';
-import Engine from './engine.generated.mjs';
+import Engine from '../../core/farborgel-engine.mjs'; // Group D Phase B4 follow-up (P0): the fifth and last importer of the gitignored ./engine.generated.mjs - the B4 round fixed the other four (composition/HarmonySelection/FullColorCalibration/DisplayCalibration) but missed this one, so the standalone page rendered blank from any clean checkout. See core/farborgel-engine.mjs's own docblock.
 import { DEFAULT_LOCALE } from './i18n.mjs';
 // All atlas colors, classifications and composition operations come from the engine.
 export const circle = Engine.hueCircle();

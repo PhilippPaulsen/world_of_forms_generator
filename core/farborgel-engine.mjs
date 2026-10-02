@@ -36,6 +36,12 @@
  */
 
 const ENGINE_BASE = new URL('../color-harmony/', import.meta.url);
+// Cache-busting (P0): this module is itself loaded as `farborgel-engine.mjs?v=<project version>` - via the
+// <script type="importmap"> in index.html / color-harmony/ui/index.html, see CLAUDE.md's cache-busting note -
+// but the four engine files it fetches below are NOT ES-module imports, so no import map reaches them. They
+// get the SAME `?v=` from this module's own URL (one source of truth: the import map). Absent (Node, a bare
+// load without the map) = no suffix, i.e. today's behavior.
+const VERSION = new URL(import.meta.url).searchParams.get('v');
 const MODULE_NAMES = ['ColorSpace.js', 'HarmonyGrammar.js', 'CompoundHarmony.js', 'ColorHarmonyEngine.js'];
 const isNode = typeof process !== 'undefined' && !!process.versions && !!process.versions.node;
 
@@ -45,6 +51,7 @@ async function readModuleText(name) {
         const { readFile } = await import('node:fs/promises');
         return readFile(url, 'utf8');
     }
+    if (VERSION) url.searchParams.set('v', VERSION);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`core/farborgel-engine.mjs: failed to fetch ${name} (${res.status})`);
     return res.text();
