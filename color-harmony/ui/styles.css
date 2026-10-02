@@ -1,40 +1,20 @@
-@font-face{
-  font-family:"Suisse Intl";
-  src:url('./assets/fonts/SuisseIntl-Book.woff2') format('woff2');
-  font-weight:400;
-  font-style:normal;
-  font-display:swap}
-@font-face{
-  font-family:"Suisse Intl";
-  src:url('./assets/fonts/SuisseIntl-Semibold.woff2') format('woff2');
-  font-weight:600;
-  font-style:normal;
-  font-display:swap}
-@font-face{
-  font-family:"Suisse Intl";
-  src:url('./assets/fonts/SuisseIntl-Bold.woff2') format('woff2');
-  font-weight:700;
-  font-style:normal;
-  font-display:swap}
-@font-face{
-  font-family:"Suisse Intl";
-  src:url('./assets/fonts/SuisseIntl-BookIt.woff2') format('woff2');
-  font-weight:400;
-  font-style:italic;
-  font-display:swap}
+/* Tokens, fonts and the .stepper chrome come from tokens.css (loaded first, see index.html): a guarded copy of the
+   generator's design tokens - P4 visual alignment. Everything below uses them instead of its own numbers. */
 :root{
-  font-family:"Suisse Intl",Arial,sans-serif;
+  font-family:var(--font-ui);
   font-synthesis:none;
   font-variant-numeric:tabular-nums;
   font-size:var(--text-ui);
-  --text-primary:22px;
-  --text-ui:13px;
-  --text-meta:11px;
-  color:#000;
-  background:#fff;
-  --line:#d6d6d0;
-  --paper:#fff;
-  --muted:#686864}
+  /* this page's three type sizes ARE the generator's three: title 18, controls/values 16, labels/meta 12 */
+  --text-primary:var(--fs-tab);
+  --text-ui:var(--size-base);
+  --text-meta:var(--size-secondary);
+  --page-pad:24px;
+  color:var(--color-text);
+  background:var(--color-bg);
+  --line:var(--color-hairline);
+  --paper:var(--color-bg);
+  --muted:var(--color-secondary)}
 *{
   box-sizing:border-box}
 body{
@@ -45,11 +25,11 @@ button{
   font:inherit;
   cursor:pointer;
   border:1px solid #000;
-  border-radius:4px;
+  border-radius:var(--radius);
   background:#fff;
   color:inherit;
-  min-width:40px;
-  min-height:40px;
+  min-width:var(--target);
+  min-height:var(--target);
   padding:0 10px;
   touch-action:manipulation}
 button:hover{
@@ -85,7 +65,8 @@ strong{
   display:flex;
   justify-content:space-between;
   align-items:center;
-  padding:24px 40px 22px;
+  min-height:var(--bar-h);
+  padding:0 var(--page-pad);
   gap:20px}
 .brand{
   display:flex;
@@ -98,7 +79,8 @@ strong{
   display:flex;
   gap:24px;
   align-items:center;
-  padding:12px 40px;
+  min-height:var(--bar-h);
+  padding:0 var(--page-pad);
   border-top:1px solid var(--line);
   border-bottom:1px solid var(--line);
   background:var(--paper)}
@@ -117,7 +99,7 @@ strong{
 .layout.inspector-open{
   grid-template-columns:minmax(0,1fr) 290px}
 main{
-  padding:28px 40px 20px;
+  padding:28px var(--page-pad) 20px;
   min-width:0}
 .workspace-heading{
   display:flex;
@@ -162,7 +144,7 @@ main{
   stroke:#111;
   stroke-width:5}
 .hue-number{
-  font-family:"Suisse Intl",Arial,sans-serif;
+  font-family:var(--font-ui);
   font-size:var(--text-meta);
   fill:#767670}
 .hue-number.marked{
@@ -173,7 +155,7 @@ main{
   stroke-width:1.2;
   fill:none}
 .center-label{
-  font-family:"Suisse Intl",Arial,sans-serif;
+  font-family:var(--font-ui);
   font-size:var(--text-primary)}
 .gray-axis{
   display:flex;
@@ -216,7 +198,7 @@ main{
   display:flex;
   align-items:center;
   gap:32px;
-  padding:14px 40px;
+  padding:14px var(--page-pad);
   border-top:1px solid var(--line);
   border-bottom:1px solid var(--line);
   background:#fff;
@@ -248,7 +230,7 @@ footer{
   display:flex;
   justify-content:space-between;
   gap:20px;
-  padding:14px 40px 20px;
+  padding:14px var(--page-pad) 20px;
   font-size:var(--text-meta);
   color:var(--muted)}
 .inspector{
@@ -278,7 +260,7 @@ footer{
 .inspector summary{
   font-size:var(--text-meta);
   cursor:pointer;
-  min-height:44px}
+  min-height:var(--target)}
 .value-table{
   display:grid;
   grid-template-columns:1fr auto;
@@ -311,7 +293,7 @@ footer{
 .relation-controls button,.example-controls button{
   font-size:var(--text-meta);
   border:1px solid #000;
-  min-height:40px}
+  min-height:var(--target)}
 .triangle-chart{
   width:min(100%,720px);
   max-height:65vh;
@@ -330,7 +312,7 @@ footer{
   stroke:var(--line);
   stroke-width:1.5}
 .axis-label{
-  font-family:"Suisse Intl",Arial,sans-serif;
+  font-family:var(--font-ui);
   font-size:var(--text-ui);
   fill:#5c5c58}
 .sample-node{
@@ -424,7 +406,7 @@ footer{
   width:72px;
   height:72px}
 .harmony-name{
-  font-family:"Suisse Intl",Arial,sans-serif;
+  font-family:var(--font-ui);
   font-size:var(--text-primary)}
 .compound-tree{
   max-width:900px;
@@ -499,12 +481,6 @@ footer{
 @media(max-width:1050px){
   .brand span{
     display:none}
-  .site-header,.toolbar,footer,.selection-bar{
-    padding-left:24px;
-    padding-right:24px}
-  main{
-    padding-left:24px;
-    padding-right:24px}
   .toolbar{
     gap:12px}
   .tool-group{
@@ -516,23 +492,27 @@ footer{
   .tree-branches{
     gap:14px}
 }
-@media(max-width:700px){
+@media(max-width:767px){
+  :root{
+    --page-pad:var(--gutter)}
   .site-header{
-    padding:18px 16px}
+    padding-top:12px;
+    padding-bottom:12px}
   .edition{
     font-size:var(--text-meta)}
   h1{
     font-size:var(--text-primary)}
   .toolbar{
-    padding:10px 12px;
-    gap:8px;
+    padding-top:0;
+    padding-bottom:0;
+    gap:0 8px;
     flex-wrap:wrap}
   .tool-group{
     padding-right:8px;
     gap:0}
   .toolbar button{
     padding:8px;
-    min-width:44px}
+    min-width:var(--target)}
   .tool-group:nth-child(3){
     border-right:0;
     margin-left:auto}
@@ -541,7 +521,7 @@ footer{
   .layout.inspector-open{
     grid-template-columns:minmax(0,1fr)}
   main{
-    padding:20px 16px 16px}
+    padding:20px var(--page-pad) 16px}
   h2{
     font-size:var(--text-primary)}
   .workspace-code{
@@ -561,7 +541,7 @@ footer{
     width:36px;
     height:44px}
   .selection-bar{
-    padding:12px 16px;
+    padding:12px var(--page-pad);
     gap:12px;
     flex-wrap:wrap}
   .selection-summary strong{
@@ -569,7 +549,7 @@ footer{
   .selection-brief{
     font-size:var(--text-meta)}
   .selection-bar>button{
-    min-width:44px}
+    min-width:var(--target)}
   .inspector{
     border-left:0;
     border-top:1px solid var(--line);
@@ -584,7 +564,7 @@ footer{
     z-index:10;
     border-top:2px solid #111}
   footer{
-    padding:12px 16px;
+    padding:12px var(--page-pad);
     line-height:1.5}
   footer>span:last-child{
     white-space:nowrap}
@@ -598,7 +578,7 @@ footer{
     max-height:none}
   .relation-controls button,.example-controls button{
     padding:8px 10px;
-    min-height:44px}
+    min-height:var(--target)}
   .tree-branches{
     flex-direction:column}
   .compound-tree{
@@ -633,7 +613,7 @@ footer{
   stroke-width:3}
 .workspace-code{
   font-weight:700}
-@media(max-width:700px){
+@media(max-width:767px){
   .gray-axis{
     overflow-x:auto;
     justify-content:flex-start;
@@ -647,7 +627,7 @@ footer{
     margin-top:4px}
 }
 .hue-stepper { display:none; }
-@media(max-width:700px) {
+@media(max-width:767px) {
   .circle-view { flex-direction:column; }
   .hue-stepper { display:flex; align-items:center; justify-content:center; gap:24px; margin:0 0 20px; font-size:var(--text-meta); }
   .hue-stepper button { border:1px solid #000; font-size:var(--text-primary); }
@@ -656,10 +636,12 @@ footer{
   .register-grid td { min-width:44px; width:44px; }
 }
 
-/* Generator reference: index.html .icon-btn/.layer-btn, 1px black, 4px radius,
-   40px height, 10px word-button padding; 44px minimum for touch below. */
+/* Chrome buttons follow the generator's --target (36px mouse / 48px touch, tokens.css) and --radius. Content - the hue
+   ring's nodes, the register triangle, the 672-cell grid, the color swatches - keeps its own sizes: it carries color and
+   data density the generic button tokens are not made for. (Replaces an older alignment to a past generator state:
+   "1px black, 4px radius, 40px height, 44px for touch".) */
 button { display:inline-flex; align-items:center; justify-content:center; font-weight:600; }
-.toolbar .tool-group:first-child button,.toolbar>button { width:40px; padding:0; }
+.toolbar .tool-group:first-child button,.toolbar>button { width:var(--target); padding:0; }
 .tool-group { gap:6px; }
 .context-controls { display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-top:16px; }
 .context-controls:empty { display:none; }
@@ -684,10 +666,14 @@ button { display:inline-flex; align-items:center; justify-content:center; font-w
 .calibration th { font-weight:600; text-align:left; }
 .calibration td,.calibration th { padding:6px 2px; border-bottom:1px solid var(--line); }
 .calibration-chromatic { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:12px; }
-@media(max-width:700px) {
-  .toolbar { flex-wrap:nowrap; gap:8px; }
+@media(max-width:767px) {
+  /* Seven 48px touch targets do not fit one row of a 375px phone (7 x 48 = 336 + the gaps > 343), so the toolbar wraps
+     into rows of --bar-h with the controls centred in them - the same way the generator's nav rows reflow on a phone -
+     instead of shrinking the targets. (Was `flex-wrap:nowrap`, which only worked while the targets were 40px.) */
+  .toolbar { flex-wrap:wrap; gap:0 8px; }
+  .toolbar>.tool-group,.toolbar>button { margin-top:calc((var(--bar-h) - var(--target) - 2px) / 2); margin-bottom:calc((var(--bar-h) - var(--target) - 2px) / 2); }
   .tool-group { padding-right:8px; gap:4px; }
-  .toolbar button,.toolbar .tool-group:first-child button,.toolbar>button { width:40px; min-width:40px; height:44px; padding:0; }
+  .toolbar button,.toolbar .tool-group:first-child button,.toolbar>button { width:var(--target); min-width:var(--target); height:var(--target); padding:0; }
   .toolbar>button:last-child { margin-left:auto; }
   .selection-bar { flex-wrap:nowrap; gap:8px; padding:10px 12px; }
   .result-heading { min-width:54px; }
@@ -696,11 +682,9 @@ button { display:inline-flex; align-items:center; justify-content:center; font-w
   .calibration-columns { grid-template-columns:1fr; gap:32px; }
   .mode-controls { margin-left:0; }
 }
-@media(pointer:coarse) {
-  button { min-height:44px; }
-}
+/* (the flat `pointer:coarse { button { min-height:44px } }` rule is gone: --target is 48px on touch, tokens.css) */
 
-@media(max-width:700px) {
+@media(max-width:767px) {
   /* SVG scales down with its viewBox; keep ring numbers readable on phones. */
   .hue-number { font-size:var(--text-primary); }
 }
@@ -714,7 +698,7 @@ button { display:inline-flex; align-items:center; justify-content:center; font-w
 .grid-swatch.selected { outline:2px solid #000; outline-offset:-2px; z-index:1; }
 .sequence-nav { display:flex; align-items:center; justify-content:center; gap:16px; margin:16px 0 0; }
 .sequence-nav span { min-width:76px; text-align:center; }
-.sequence-nav button { width:40px; padding:0; }
+.sequence-nav button { width:var(--target); padding:0; }
 button:disabled { opacity:.35; cursor:default; }
 .anchor-comparison { overflow:auto; margin-top:32px; }
 .anchor-comparison table { min-width:980px; }
@@ -722,7 +706,7 @@ button:disabled { opacity:.35; cursor:default; }
 .anchor-data { display:block; margin-top:4px; }
 .calibration-columns { grid-template-columns:repeat(4,minmax(0,1fr)); }
 @media(max-width:1000px) { .calibration-columns { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-@media(max-width:700px) { .calibration-columns { grid-template-columns:1fr; } }
+@media(max-width:767px) { .calibration-columns { grid-template-columns:1fr; } }
 
 .calibration-chromatic { grid-template-columns:repeat(4,minmax(0,1fr)); }
 /* Eliminate the inline-flex baseline and header-height gutters inside atlas rows. */
@@ -730,8 +714,8 @@ button:disabled { opacity:.35; cursor:default; }
 .register-grid .grid-swatch { display:block; height:28px; min-height:28px; }
 .register-grid td.selected-column .grid-swatch { box-shadow:inset 1px 0 #0008,inset -1px 0 #0008; }
 .register-grid tr.selected-row td.selected-column .grid-swatch { box-shadow:inset 1px 0 #0008,inset -1px 0 #0008,inset 0 1px #0008,inset 0 -1px #0008; }
-@media(max-width:700px),(pointer:coarse) { .register-grid .grid-swatch { height:44px; min-height:44px; } }
-@media(max-width:700px) {
+@media(max-width:767px),(pointer:coarse) { .register-grid .grid-swatch { height:44px; min-height:44px; } }
+@media(max-width:767px) {
   .gray-axis { overflow:visible; }
   .gray-step { flex:1; min-width:0; }
   .gray-step .swatch { width:100%; min-width:0; height:44px; }
@@ -745,7 +729,7 @@ button:disabled { opacity:.35; cursor:default; }
 .composition-bar .swatch,.tree-members .swatch { border-radius:0; }
 .composition-bar .result-swatches .swatch { flex:0 0 44px; }
 .composition-actions { display:flex; gap:4px; margin-left:auto; flex-shrink:0; }
-.composition-actions button { width:40px; padding:0; }
+.composition-actions button { width:var(--target); padding:0; }
 .composition-message:empty { display:none; }
 .composition-message { position:absolute; bottom:100%; left:0; width:100%; background:white; border-top:1px solid var(--line); padding:10px 16px; font-size:var(--text-meta); }
 .composition-title { margin-top:24px; }
@@ -758,12 +742,12 @@ button:disabled { opacity:.35; cursor:default; }
 .inspector .compound-tree { margin:16px 0; }
 .inspector .tree-branches { flex-direction:column; gap:12px; }
 .inspector .tree-branch { min-width:0; }
-@media(max-width:700px) {
+@media(max-width:767px) {
   .composition-bar { gap:6px; }
   .composition-bar .result-heading { display:none; }
   .composition-bar .result-swatches { flex:1; }
   .composition-bar .result-swatches .swatch { min-width:44px; width:44px; }
-  .composition-actions button { min-width:44px; width:44px; min-height:44px; }
+  .composition-actions button { min-width:var(--target); width:var(--target); min-height:var(--target); }
   .inspector-open .inspector { bottom:78px; max-height:60vh; }
 }
 .tree-members .shared-member { outline:2px solid #111; outline-offset:2px; }
@@ -771,7 +755,7 @@ button:disabled { opacity:.35; cursor:default; }
 /* Phase 6B.1: names move to semantic labels; browsing sits directly on the codes. */
 .workspace-chrome { display:flex; justify-content:flex-end; position:relative; min-height:44px; margin-bottom:8px; }
 .workspace-chrome .relation-controls { position:absolute; top:0; left:0; display:flex; flex-direction:column; gap:6px; margin:0; z-index:2; }
-.workspace-chrome .relation-controls button { width:40px; padding:0; font-size:var(--text-ui); }
+.workspace-chrome .relation-controls button { width:var(--target); padding:0; font-size:var(--text-ui); }
 .code-navigation { display:flex; gap:16px; align-items:center; font-variant-numeric:tabular-nums; }
 .code-navigator { display:flex; align-items:center; gap:2px; }
 .code-navigator button { min-width:32px; width:32px; min-height:36px; padding:0; border-color:transparent; }
@@ -779,9 +763,9 @@ button:disabled { opacity:.35; cursor:default; }
 .code-value { min-width:32px; text-align:center; font-size:var(--text-ui); }
 .code-value:focus-visible { outline:2px solid #111; outline-offset:3px; }
 .code-hue .code-value { font-weight:700; }
-.workspace-chrome ~ .circle-view,.workspace-chrome ~ .triangle-view,.workspace-chrome ~ .register-scroll { margin-left:52px; }
-.series-preview { display:flex; align-items:center; gap:8px; margin:12px 0 12px 52px; padding:8px 0; border-top:1px solid var(--line); }
-.series-preview>button { flex-shrink:0; width:40px; padding:0; }
+.workspace-chrome ~ .circle-view,.workspace-chrome ~ .triangle-view,.workspace-chrome ~ .register-scroll { margin-left:calc(var(--target) + 12px); }
+.series-preview { display:flex; align-items:center; gap:8px; margin:12px 0 12px calc(var(--target) + 12px); padding:8px 0; border-top:1px solid var(--line); }
+.series-preview>button { flex-shrink:0; width:var(--target); padding:0; }
 .preview-origin { font-size:var(--text-meta); color:var(--muted); }
 .preview-swatches { display:flex; gap:0; overflow-x:auto; min-width:0; padding:4px; }
 .preview-swatches .swatch { flex:0 0 32px; width:32px; min-width:32px; height:36px; border-radius:0; }
@@ -789,13 +773,13 @@ button:disabled { opacity:.35; cursor:default; }
 .integration-preview pre { overflow:auto; max-height:360px; font-size:var(--text-meta); white-space:pre; }
 .inspector .mode-controls { margin:10px 0 16px; }
 .composition-actions button[data-focus=transferHarmony] { margin-left:8px; }
-@media(max-width:700px) {
+@media(max-width:767px) {
   .workspace-chrome { min-height:44px; }
-  .workspace-chrome .relation-controls button { min-width:40px; width:40px; height:44px; }
+  .workspace-chrome .relation-controls button { min-width:var(--target); width:var(--target); height:var(--target); }
   .code-navigation { gap:6px; }
   .code-navigator button { min-width:32px; min-height:44px; }
   .code-value { min-width:28px; }
-  .workspace-chrome ~ .circle-view,.workspace-chrome ~ .triangle-view,.workspace-chrome ~ .register-scroll { margin-left:44px; }
+  .workspace-chrome ~ .circle-view,.workspace-chrome ~ .triangle-view,.workspace-chrome ~ .register-scroll { margin-left:calc(var(--target) + 4px); }
   .series-preview { margin-left:0; }
   .preview-swatches .swatch { flex-basis:44px; width:44px; min-width:44px; height:44px; }
   .composition-actions { gap:2px; }
