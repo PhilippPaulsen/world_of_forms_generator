@@ -276,6 +276,10 @@ test('Register CSS separates square contiguous atlas geometry from rounded contr
   const css=require('node:fs').readFileSync(new URL('./styles.css',import.meta.url),'utf8');
   assert.match(css,/\.register-grid \{ border-collapse:collapse; border-spacing:0;/);
   assert.match(css,/\.register-grid \.grid-swatch \{ border-radius:0; border:0; margin:0;/);
-  assert.match(css,/border-radius:4px/);
+  // Controls are rounded by the generator's --radius token (P4 visual alignment: was a literal 4px, now 6px via
+  // tokens.css) - what this test is about is that they ARE rounded while the atlas cells above are not.
+  assert.match(css,/border-radius:var\(--radius\)/);
+  const tokens=require('node:fs').readFileSync(new URL('./tokens.css',import.meta.url),'utf8');
+  assert.match(tokens,/--radius:\s*[1-9]\d*px/);
 });
 console.log(`\n${passed} UI test groups passed.`);
