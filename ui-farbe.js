@@ -1,16 +1,22 @@
 /*
- * The Farbe nav row: the Farborgel anchor (Kreis/Dreieck/steppers), the 7 harmony triggers, and the "Mehr"
- * overlay (now just the cross-layer note - Group D Phase B4 follow-up removed the old rule-engine row and
- * the Register button/overlay entirely, not just hidden them; see index.html's own comments on #nav-farbe/
- * #more-farbe for what changed and why).
+ * The Farbe nav row: the Farborgel anchor (Kreis/Dreieck/steppers) and the 7 harmony triggers, plus the
+ * distribution-strategy icons that live in the left rail (#farbe-strategy-group). The old "Mehr" overlay is gone
+ * (its only remaining content, the cross-layer note, now sits beside #cross-layer-status - see index.html).
  *
  *   anchor     Kreis (hue ring)/Dreieck (register triangle) overlays + the hue/register steppers, all over the
  *              SAME anchorFor(sheet) state (core/facecolor.js) - never a second source of truth.
+ *   view       Kreis and Dreieck are ALSO a two-state view switch: Kreis shows the 2/3/4 harmonies (hue-circle
+ *              subdivisions), Dreieck shows B/W/S/V (series within the register triangle), in one shared slot.
+ *              Clicking the trigger that is not the current view only switches the view; clicking the current
+ *              one opens its overlay as before. Kreis is the default; the view follows the sheet's last-applied
+ *              harmony on a sheet switch or any applyHarmony(); a dot on the other trigger marks "the active
+ *              harmony is in the hidden family". Switching views never applies a harmony by itself.
  *   harmony    7 buttons (2/3/4/B/W/S/V) + a hidden fallback dropdown, all calling applyHarmony() (below), the
  *              one real consumer of the anchor - the REAL Farborgel engine end to end (core/farborgel-selection.mjs).
  *              The last-applied type is remembered per sheet (lastHarmonyTypeFor(), core/facecolor.js): an
  *              anchor change reapplies it live (afterAnchorChange(), below), and its button stays marked
  *              active (syncHarmonyActive(), below) until Reset Color or the old rule system take over.
+ *   strategy   four icon radios in the rail (Zyklisch/Fläche/Symmetrie/Ringe) over distributionStrategyFor().
  *
  * Eligibility: this row applies to the base sheet and eligible layers, exactly as sketch.js already decides
  * (faceFillsUnavailableReason()) - PLUS a row-level condition of its own: face fill itself must be on
@@ -28,7 +34,7 @@
   const T = { 'reason.fill.off': 'Fläche füllen einschalten' };
   const $ = function (s) { return document.querySelector(s); };
 
-  const row = $('#nav-farbe'), panel = $('#more-farbe'), moreBtn = $('#btn-more-farbe');
+  const row = $('#nav-farbe');
   const fillBtn = $('#btn-toggle-faces');
 
   // ---- anchor steppers (Group D Phase B4 follow-up): real .stepper widgets (UI.stepper()) - the SAME
@@ -79,40 +85,26 @@
     });
   }
 
-  // ---- distribution strategy stepper (Phase B-Farbstrategien step 2): which harmony member
-  // each trail gets - same .stepper-display pattern as the register stepper above (a short
-  // text label, not a number), cycling core/farborgel-bridge.js's own DISTRIBUTION_STRATEGIES
-  // in order. Persisted per sheet (distributionStrategyFor()/setDistributionStrategyFor(),
-  // core/facecolor.js) - lazy, reset with the grid, same lifecycle as lastHarmonyTypeFor().
-  // Changing it goes through afterAnchorChange() - the SAME live-reapply path an anchor change
-  // already uses, not a second trigger - so it only recolors when a harmony is already in
-  // effect (lastHarmonyTypeFor() non-null), exactly matching every other control in this row.
-  const STRATEGY_LABELS = { cyclic: 'Zyklisch', area: 'Fläche', symmetry: 'Symmetrie', rings: 'Ringe' };
-  const strategyStepperRoot = $('#farbe-strategy-stepper'), strategyInput = $('#farbe-strategy-input'), strategyDisplay = $('#farbe-strategy-display');
-  let strategyStepperApi = null;
-  if (strategyStepperRoot && strategyInput && strategyDisplay && typeof DISTRIBUTION_STRATEGIES !== 'undefined' && typeof UI !== 'undefined' && UI.stepper) {
-    strategyStepperApi = UI.stepper(strategyStepperRoot, {
-      input: strategyInput,
-      noTyping: true,
-      keyEl: strategyDisplay,
-      compute: function (dir) {
-        const cur = parseInt(strategyInput.value, 10) || 0;
-        return { to: (cur + dir + DISTRIBUTION_STRATEGIES.length) % DISTRIBUTION_STRATEGIES.length };
-      }
-    });
-    strategyInput.addEventListener('change', function () {
-      const idx = parseInt(strategyInput.value, 10) || 0;
-      setDistributionStrategyFor(activeLayer, DISTRIBUTION_STRATEGIES[idx]);
+  // ---- distribution strategy (Phase B-Farbstrategien step 2; moved from a stepper in this row to four icon
+  // radios in the left rail in the layout round - same state, same persistence): which harmony member each
+  // trail gets, cycling core/farborgel-bridge.js's own DISTRIBUTION_STRATEGIES. Persisted per sheet
+  // (distributionStrategyFor()/setDistributionStrategyFor(), core/facecolor.js) - lazy, reset with the grid,
+  // same lifecycle as lastHarmonyTypeFor(). Choosing one goes through afterAnchorChange() - the SAME live-
+  // reapply path an anchor change already uses, not a second trigger - so it recolors the active harmony, or
+  // (nothing applied yet) the gray default, exactly as the stepper did. UI.radiogroup() supplies the
+  // aria-checked/roving-tabindex/arrow-key behavior and the .active (black fill) marking.
+  const strategyGroupEl = $('#farbe-strategy-group');
+  let strategyGroup = null;
+  if (strategyGroupEl && typeof DISTRIBUTION_STRATEGIES !== 'undefined' && typeof UI !== 'undefined' && UI.radiogroup) {
+    strategyGroup = UI.radiogroup(strategyGroupEl, function (r) {
+      setDistributionStrategyFor(activeLayer, r.dataset.strategy);
       afterAnchorChange();
     });
   }
   function syncStrategy() {
-    if (!strategyInput || typeof distributionStrategyFor !== 'function') return;
+    if (!strategyGroup || typeof distributionStrategyFor !== 'function') return;
     const strategy = distributionStrategyFor(activeLayer) || 'cyclic';
-    const idx = DISTRIBUTION_STRATEGIES.indexOf(strategy);
-    if (idx >= 0 && parseInt(strategyInput.value, 10) !== idx) strategyInput.value = String(idx);
-    strategyDisplay.textContent = STRATEGY_LABELS[strategy] || STRATEGY_LABELS.cyclic;
-    if (strategyStepperApi) strategyStepperApi.refresh();
+    strategyGroup.set(strategyGroup.radios.find(function (r) { return r.dataset.strategy === strategy; }) || null);
   }
   // Reads the active sheet's own anchor into the two steppers - called from sync() below, same cadence as
   // before. Writes hueInput.value/registerInput.value directly (not through UI.stepper()'s own setValue(),
@@ -204,6 +196,46 @@
   let anchorKreisGroup = null, anchorDreieckGroup = null;
   let kreisOverlay = null, dreieckOverlay = null;
 
+  // ---- view switch (layout round): which harmony family the shared slot shows. Registered BEFORE
+  // UI.overlay() below attaches its own click toggle to the same two triggers, so a click on the trigger that
+  // is not the current view can stop right here (stopImmediatePropagation) - it only switches the view; a click
+  // on the current view's trigger falls through and opens/closes that trigger's overlay exactly as before.
+  const HARMONY_FAMILY = { 2: 'circle', 3: 'circle', 4: 'circle', B: 'triangle', W: 'triangle', S: 'triangle', V: 'triangle' };
+  const familyEls = { circle: $('#farbe-family-circle'), triangle: $('#farbe-family-triangle') };
+  const familyTriggers = { circle: kreisTrigger, triangle: dreieckTrigger };
+  let viewFamily = 'circle'; // Kreis is the default view
+  function setViewFamily(f) { viewFamily = f; syncFamily(); }
+  Object.keys(familyTriggers).forEach(function (f) {
+    const btn = familyTriggers[f];
+    if (!btn) return;
+    UI.pressed(btn); // aria-pressed follows the .active class syncFamily() sets
+    btn.addEventListener('click', function (e) {
+      if (viewFamily !== f) { e.stopImmediatePropagation(); setViewFamily(f); }
+    });
+  });
+  // The view FOLLOWS the sheet's applied harmony: whenever (sheet, last-applied type) differs from what the
+  // previous sync saw and a harmony is in effect, show its family. A manual view switch persists otherwise
+  // (neither value changes), and a sheet with no harmony yet leaves the view as it is.
+  let followedSheet, followedType;
+  function followHarmonyFamily() {
+    const type = lastHarmonyTypeFor(activeLayer);
+    if (activeLayer === followedSheet && type === followedType) return;
+    followedSheet = activeLayer; followedType = type;
+    if (type !== null && type !== undefined && HARMONY_FAMILY[type]) viewFamily = HARMONY_FAMILY[type];
+  }
+  function syncFamily() {
+    const type = lastHarmonyTypeFor(activeLayer);
+    const activeFamily = (type !== null && type !== undefined) ? HARMONY_FAMILY[type] : null;
+    Object.keys(familyEls).forEach(function (f) {
+      const el = familyEls[f], btn = familyTriggers[f];
+      if (el && el.hidden !== (f !== viewFamily)) el.hidden = f !== viewFamily;
+      if (btn && btn.classList.contains('active') !== (f === viewFamily)) btn.classList.toggle('active', f === viewFamily);
+      // dot on the trigger of the HIDDEN family when the sheet's active harmony lives there
+      const dot = f !== viewFamily && activeFamily === f;
+      if (btn && btn.classList.contains('has-state') !== dot) btn.classList.toggle('has-state', dot);
+    });
+  }
+
   if (anchorKreisSvg && anchorDreieckSvg && kreisTrigger && dreieckTrigger &&
       typeof anchorFor === 'function' && typeof hueRingPoints === 'function' && typeof registerTrianglePoints === 'function') {
     // Kreis: built once - the ring's geometry never changes, only which point ends up marked active.
@@ -235,7 +267,7 @@
       afterAnchorChange();
     });
 
-    // Each trigger opens its own overlay (UI.overlay(), the same pattern #more-form/#more-netz/#more-farbe
+    // Each trigger opens its own overlay (UI.overlay(), the same pattern #more-form/#more-netz
     // already use - focus/Escape/click-outside all come free). onOpen: sync() so the widget reflects this
     // frame's anchor even if nothing else has redrawn since the panel was last open.
     kreisOverlay = UI.overlay(kreisTrigger, kreisPanel, { onOpen: sync });
@@ -464,31 +496,31 @@
     syncAnchor();
     syncAnchorPreview();
     syncAnchorWidgets();
+    followHarmonyFamily();
+    syncFamily();
     syncHarmonyActive();
     syncStrategy();
     const why = reason();
-    UI.setDisabled(moreBtn, why);
     [kreisTrigger, dreieckTrigger].forEach(function (b) { if (b) UI.setDisabled(b, why); });
     Object.keys(harmonyBtns).forEach(function (type) { if (harmonyBtns[type]) UI.setDisabled(harmonyBtns[type], why); });
-    [hueStepperRoot, registerStepperRoot, strategyStepperRoot].forEach(function (root) {
+    [hueStepperRoot, registerStepperRoot].forEach(function (root) {
       if (root) root.querySelectorAll('.stepper-btn').forEach(function (b) { UI.setDisabled(b, why); });
     });
     if (harmonySelect) harmonySelect.disabled = !!why;
+    if (strategyGroup) strategyGroup.radios.forEach(function (r) { UI.setDisabled(r, why); });
     // Reset Color keeps sketch.js's own, untouched click handler (a DOM relocation, not new logic) - this
     // only dims it to match the row's eligibility; a click while "disabled" still runs resetFaceColors(),
     // which is a harmless no-op on an already-empty/default store. Not gated with UI.guard() like the 7
     // harmony buttons above, to avoid a second listener next to sketch.js's real one.
     if (resetBtn) UI.setDisabled(resetBtn, why);
     if (why) {
-      [row.__overlay, kreisOverlay, dreieckOverlay].forEach(function (ov) { if (ov && ov.isOpen) ov.close(false); });
+      [kreisOverlay, dreieckOverlay].forEach(function (ov) { if (ov && ov.isOpen) ov.close(false); });
     }
 
     const dotOn = why === T['reason.fill.off'] && window.uiNav && uiNav.current() === 'farbe';
     if (fillBtn && fillBtn.classList.contains('needs-attn') !== dotOn) fillBtn.classList.toggle('needs-attn', dotOn);
   }
 
-  const overlay = UI.overlay(moreBtn, panel, { onOpen: sync });
-  row.__overlay = overlay; // so sync() can close it when the row becomes disabled while it is open
   document.addEventListener('tabchange', sync); // the fill-button dot depends on which tab is current
 
   UI.onSync(sync);

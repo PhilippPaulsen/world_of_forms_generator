@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260929ae">
+  <link rel="stylesheet" href="style.css?v=20260929af">
 
   <!-- Material Icons -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -473,35 +473,48 @@
     <!-- Farbe nav row. Group D Phase B4 follow-up: the Farborgel anchor row is the tab's FIRST (and, since a
          later follow-up, ONLY) visible row - matching Form's shape-icon row / Netz's kind row. The old
          rule-engine row (UI rework 4d: isotint/isotone/shadow-series/tetrad + axes) is gone entirely, per
-         explicit decision - not just hidden; #more-farbe now holds only the cross-layer overlay note (see
-         its own comment).
-         Kreis/Dreieck (icon buttons - circle/triangle outlines, matching #btn-more-farbe's own .ico/18px
-         convention) each pop up their own overlay (#overlay-kreis/-dreieck further down) - Register (the
-         linear 28-item list, a third button that used to sit here) is gone too, per explicit decision: it
-         duplicated what the register stepper below already provides inline. 2/3/4 (Gegenfarben/Dreier/
-         Vierer) sit right after Kreis/Dreieck - relocated here from the rail, same ids, same ui-farbe.js
-         wiring, no logic change. The hue/register steppers are real .stepper widgets (UI.stepper()) - the
-         SAME markup/CSS Form's node-count/shape-size steppers use: an icon, then the value ALONE (no text
-         label - the pattern's own fill colors already show the result), then chevrons. Hue mirrors
-         node-count-input exactly (a real, typable-but-inputmode-none number input); register mirrors the
-         net-strength stepper's #net-strength-value pattern exactly (a text .stepper-display backed by a
-         hidden range input), since its value is a letter-pair code, not a plain number. The anchor preview
-         swatch sits last - Farborgel's own calibrated display color (window.farborgelAnchorDisplayColor(),
-         a later follow-up), not core/color.js's resolveColor(). -->
+         explicit decision - not just hidden.
+         Layout round (Kreis/Dreieck as views): Kreis and Dreieck are now a two-state VIEW switch AND the
+         openers of their own overlays (#overlay-kreis/-dreieck further down). A click on the trigger that is
+         NOT the current view only switches the view (which harmony family the slot right after them shows:
+         Kreis = 2/3/4 Gegenfarben/Dreier/Vierer, the hue-circle subdivisions; Dreieck = B/W/S/V Schwarz/Weiß/
+         Schatten/Wert, the series within the register triangle); a click on the ALREADY-current trigger opens
+         its overlay (ui-farbe.js). Kreis is the default view; the view follows the sheet's last-applied
+         harmony on a sheet switch. A small dot on the OTHER trigger marks "the sheet's active harmony is in
+         the family you can't see". Both families live in the same slot, which reserves four buttons' width so
+         the steppers after it never jump when the view changes. Only 2/3/4 exist as cardinalities: the real
+         reducer (color-harmony/ui/composition.mjs) rejects 6 and 8 - see core/farborgel-selection.mjs.
+         The Register button (the linear 28-item list) and the "Mehr" button are gone; the cross-layer
+         overlay note that "Mehr" used to hold now sits next to #cross-layer-status (#cross-layer-compute-group
+         below). The distribution-strategy stepper moved into the left rail as four icon buttons
+         (#farbe-strategy-group, in .rail-left). The hue/register steppers are real .stepper widgets
+         (UI.stepper()) - the SAME markup/CSS Form's node-count/shape-size steppers use: an icon, then the
+         value ALONE (no text label - the pattern's own fill colors already show the result), then chevrons.
+         Hue mirrors node-count-input exactly (a real, typable-but-inputmode-none number input); register
+         mirrors the net-strength stepper's #net-strength-value pattern exactly (a text .stepper-display
+         backed by a hidden range input), since its value is a letter-pair code, not a plain number. The
+         anchor preview swatch sits last - Farborgel's own calibrated display color
+         (window.farborgelAnchorDisplayColor()), not core/color.js's resolveColor(). -->
     <div id="nav-farbe" class="nav-row nav-farbe" role="group" aria-labelledby="tab-farbe" hidden>
       <div class="nav-cluster nav-anchor-views" role="group" aria-label="Anker-Ansicht">
-        <button id="btn-open-kreis" class="icon-btn" type="button" aria-haspopup="dialog" aria-controls="overlay-kreis" title="Kreis: Farbton wählen" aria-label="Kreis: Farbton wählen">
+        <button id="btn-open-kreis" class="icon-btn active" type="button" aria-haspopup="dialog" aria-controls="overlay-kreis" title="Kreis: Gegenfarben, Dreier, Vierer (erneut tippen: Farbton wählen)" aria-label="Kreis: Gegenfarben, Dreier, Vierer (erneut tippen: Farbton wählen)">
           <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9" /></svg>
         </button>
-        <button id="btn-open-dreieck" class="icon-btn" type="button" aria-haspopup="dialog" aria-controls="overlay-dreieck" title="Dreieck: Register wählen" aria-label="Dreieck: Register wählen">
+        <button id="btn-open-dreieck" class="icon-btn" type="button" aria-haspopup="dialog" aria-controls="overlay-dreieck" title="Dreieck: Schwarz, Weiß, Schatten, Wert (erneut tippen: Register wählen)" aria-label="Dreieck: Schwarz, Weiß, Schatten, Wert (erneut tippen: Register wählen)">
           <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 4 L20 20 L4 20 Z" /></svg>
         </button>
       </div>
       <span class="nav-divider nav-divider-a" aria-hidden="true"></span>
-      <div class="nav-cluster nav-harmony-cardinality" role="group" aria-label="Kardinalität">
+      <div class="nav-cluster nav-harmony-family" id="farbe-family-circle" role="group" aria-label="Kreis-Harmonien: Kardinalität">
         <button id="btn-harmony-2" class="icon-btn" type="button" title="Gegenfarben (2 Farben)" aria-label="Gegenfarben (2 Farben)">2</button>
         <button id="btn-harmony-3" class="icon-btn" type="button" title="Dreier (3 Farben)" aria-label="Dreier (3 Farben)">3</button>
         <button id="btn-harmony-4" class="icon-btn" type="button" title="Vierer (4 Farben)" aria-label="Vierer (4 Farben)">4</button>
+      </div>
+      <div class="nav-cluster nav-harmony-family" id="farbe-family-triangle" role="group" aria-label="Dreieck-Harmonien: Reihen" hidden>
+        <button id="btn-harmony-b" class="icon-btn" type="button" title="Schwarz (Schwarzgleiche)" aria-label="Schwarz (Schwarzgleiche)">B</button>
+        <button id="btn-harmony-w" class="icon-btn" type="button" title="Weiß (Weißgleiche)" aria-label="Weiß (Weißgleiche)">W</button>
+        <button id="btn-harmony-s" class="icon-btn" type="button" title="Schatten (Schattenreihe)" aria-label="Schatten (Schattenreihe)">S</button>
+        <button id="btn-harmony-v" class="icon-btn" type="button" title="Wert (Wertgleich)" aria-label="Wert (Wertgleich)">V</button>
       </div>
       <span class="nav-divider nav-divider-b" aria-hidden="true"></span>
       <div class="stepper" id="farbe-anchor-hue-stepper" role="group" aria-label="Anker Farbton">
@@ -521,32 +534,11 @@
           <button class="stepper-btn" type="button" data-dir="-1" title="Register zurück" aria-label="Register zurück"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9 L12 15 L18 9" /></svg></button>
         </div>
       </div>
-      <!-- Phase B-Farbstrategien step 2: which harmony member each trail gets (cyclic/area/
-           symmetry/rings - core/farborgel-bridge.js's DISTRIBUTION_STRATEGIES). A .stepper, not
-           a dropdown, matching this row's own hue/register/register-display convention and last
-           round's decision to hide the harmony dropdown as "disruptive" - the same
-           .stepper-display pattern the register stepper above uses (a short text label, not a
-           number). Changing it re-applies the last-used harmony type through the SAME live-
-           reapply path an anchor change already uses (ui-farbe.js's afterAnchorChange()), not a
-           second trigger. -->
-      <div class="stepper" id="farbe-strategy-stepper" role="group" aria-label="Verteilungsstrategie">
-        <svg class="ico stepper-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="6" r="2.5" /><circle cx="6" cy="18" r="2.5" /><circle cx="18" cy="18" r="2.5" /></svg>
-        <span id="farbe-strategy-display" class="stepper-display" role="spinbutton" tabindex="0" aria-label="Verteilungsstrategie" aria-valuemin="0" aria-valuemax="3">Zyklisch</span>
-        <input type="range" id="farbe-strategy-input" min="0" max="3" step="1" value="0" hidden tabindex="-1" aria-hidden="true">
-        <div class="stepper-chevrons">
-          <button class="stepper-btn" type="button" data-dir="1" title="Nächste Verteilungsstrategie" aria-label="Nächste Verteilungsstrategie"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15 L12 9 L18 15" /></svg></button>
-          <button class="stepper-btn" type="button" data-dir="-1" title="Vorige Verteilungsstrategie" aria-label="Vorige Verteilungsstrategie"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9 L12 15 L18 9" /></svg></button>
-        </div>
-      </div>
       <span id="farbe-anchor-preview" class="fc-swatch" title="Anker-Vorschau"></span>
-      <span class="nav-divider nav-divider-c" aria-hidden="true"></span>
-      <button id="btn-more-farbe" class="icon-btn nav-more" type="button" title="Mehr" aria-label="Mehr" aria-controls="more-farbe" data-i18n="more">
-        <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></g></svg>
-      </button>
       <span class="nav-break" aria-hidden="true"></span>
       <select id="face-colors-rule" hidden tabindex="-1" aria-hidden="true"></select>
       <!-- Group D Phase B4 follow-up: the old rule row's UI (the 4 rule-choice buttons, formerly in
-           #more-farbe) is gone - but renderFaceColorsPanel() (sketch.js), which still owns the STILL-VISIBLE
+           the Farbe "Mehr" overlay, itself since removed) is gone - but renderFaceColorsPanel() (sketch.js), which still owns the STILL-VISIBLE
            per-trail list (#face-colors-list, unaffected by this), hard-requires #face-colors-axes and
            #face-colors-unassigned/-text to exist (an early-return guard covering the WHOLE panel, not just
            the old rule's own parts) - removing them outright would silently stop the trail list from
@@ -664,23 +656,33 @@
       <button id="btn-more-rail" class="icon-btn" type="button" title="Mehr" aria-label="Mehr" aria-controls="more-rail" data-i18n="more">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
       </button>
-      <!-- Group D Phase B4 (+ follow-up): Farbe-only harmony quick-access - flat children of .rail-left,
-           exactly like the 10 buttons above (desktop: stacked by DOM order via margin-top; mobile:
-           .rail-left's own display:contents promotes these to direct .canvas-row flex children too,
-           positioned into a 4th row by the explicit `order` values in the mobile media query below). Hidden
-           entirely outside the Farbe tab via .rail-farbe-only (style.css, gated on html[data-tab] - nav.js
-           sets that attribute, no JS toggle needed here). 2/3/4 (Gegenfarben/Dreier/Vierer) moved to
-           #nav-farbe's own row (alongside Kreis/Dreieck/Register) - only B/W/S/V (Schwarz/Weiß/Schatten/
-           Wert - color-harmony/ui/components/Toolbar.mjs's own relationLetters, verified real) stay here,
-           plus the dropdown (still lists all 7 - a fallback/future-capacity reservation, independent of
-           which buttons exist where) and Reset Color. All of these call the SAME applyHarmony() (ui-farbe.js)
-           - one call site, several trigger kinds. #btn-face-colors-reset is the SAME element sketch.js
-           already wires (a relocation from the old #more-farbe text button, not a new one - its click
-           handler there is untouched, confirmed generic regardless of assignment source). -->
-      <button id="btn-harmony-b" class="icon-btn rail-farbe-only" type="button" title="Schwarz (Schwarzgleiche)" aria-label="Schwarz (Schwarzgleiche)">B</button>
-      <button id="btn-harmony-w" class="icon-btn rail-farbe-only" type="button" title="Weiß (Weißgleiche)" aria-label="Weiß (Weißgleiche)">W</button>
-      <button id="btn-harmony-s" class="icon-btn rail-farbe-only" type="button" title="Schatten (Schattenreihe)" aria-label="Schatten (Schattenreihe)">S</button>
-      <button id="btn-harmony-v" class="icon-btn rail-farbe-only" type="button" title="Wert (Wertgleich)" aria-label="Wert (Wertgleich)">V</button>
+      <!-- Group D Phase B4 (+ follow-ups): Farbe-only controls, flat children of .rail-left exactly like the
+           buttons above (desktop: stacked by DOM order via margin-top; mobile: .rail-left's own display:contents
+           promotes them to direct .canvas-row flex children, positioned into a 4th row by the explicit `order`
+           values in the mobile media query). Hidden entirely outside the Farbe tab via .rail-farbe-only
+           (style.css, gated on html[data-tab] - nav.js sets that attribute, no JS toggle needed here).
+           Layout round: the four distribution strategies (Zyklisch/Fläche/Symmetrie/Ringe - core/farborgel-
+           bridge.js's DISTRIBUTION_STRATEGIES) moved here from a stepper in #nav-farbe, as an icon radiogroup
+           (one is always current, persisted per sheet by distributionStrategyFor() - ui-farbe.js). They take the
+           four slots B/W/S/V used to occupy in this rail (those moved to #nav-farbe's Dreieck view), so the
+           Farbe rail keeps exactly its former button count and height. The radiogroup wrapper is
+           display:contents (style.css) so its buttons still lay out as flat rail children. Reset Color follows.
+           On tablet/desktop Info and Download (the two buttons earlier in the DOM) are moved to the END of
+           the Farbe rail by CSS `order` only (style.css) - Form/Netz keep their rail untouched. -->
+      <div id="farbe-strategy-group" class="rail-farbe-only" role="radiogroup" aria-label="Verteilungsstrategie">
+        <button id="btn-strategy-cyclic" class="icon-btn" type="button" role="radio" aria-checked="false" data-strategy="cyclic" title="Verteilung: Zyklisch (Farben der Reihe nach)" aria-label="Verteilung: Zyklisch (Farben der Reihe nach)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9" /><path d="M20 4v5h-5" /></svg>
+        </button>
+        <button id="btn-strategy-area" class="icon-btn" type="button" role="radio" aria-checked="false" data-strategy="area" title="Verteilung: Fläche (nach Flächengröße)" aria-label="Verteilung: Fläche (nach Flächengröße)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="11" height="11" /><rect x="16" y="16" width="5" height="5" /></svg>
+        </button>
+        <button id="btn-strategy-symmetry" class="icon-btn" type="button" role="radio" aria-checked="false" data-strategy="symmetry" title="Verteilung: Symmetrie (nach Symmetrie-Gruppen)" aria-label="Verteilung: Symmetrie (nach Symmetrie-Gruppen)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2 3" /><path d="M9 7 L4 12 L9 17 Z" /><path d="M15 7 L20 12 L15 17 Z" /></svg>
+        </button>
+        <button id="btn-strategy-rings" class="icon-btn" type="button" role="radio" aria-checked="false" data-strategy="rings" title="Verteilung: Ringe (von außen nach innen)" aria-label="Verteilung: Ringe (von außen nach innen)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></svg>
+        </button>
+      </div>
       <button id="btn-face-colors-reset" class="icon-btn rail-farbe-only" type="button" title="Reset Color: back to the default symmetry-orbit colors" aria-label="Reset Color">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
@@ -1006,7 +1008,8 @@
            the sheet's assignments back to the default orbit coloring. -->
       <!-- UI rework 4d: the rule choice (#face-colors-rule) and the axis steppers (#face-colors-axes) moved into
            the Farbe nav row (#nav-farbe, above the canvas); "Spread colors", "Reset colors", the unassigned-trails
-           note and the cross-layer overlay note moved into its "Mehr" overlay (#more-farbe). What stays here for
+           note and the cross-layer overlay note moved into its "Mehr" overlay (#more-farbe; that overlay is since gone,
+           the cross-layer note now sits beside #cross-layer-status). What stays here for
            now (step 5 moves it into the organ strip): the title, the timeline note, the status line, the rule's
            own descriptive note, and the per-trail list with its hover highlight and override stepper. -->
       <div class="control-group" id="face-colors-group" hidden>
@@ -1252,6 +1255,12 @@
         <button id="btn-compute-cross-layer" class="layer-btn" title="Compute Cross-Layer Faces">Compute Cross-Layer Faces</button>
         <span id="cross-layer-status"></span>
       </div>
+      <!-- Moved here from the removed Farbe "Mehr" overlay (#more-farbe): shown only while a current cross-layer
+           compute result is displayed (sketch.js updateFaceColorsPanel() toggles `hidden` by id - unchanged) and
+           only on the Farbe tab (style.css), because that overlay is drawn on top of every sheet's fills and
+           this explains why the sheet colors the Farbe tab edits are not visible. Sits right below the status
+           line that already reports the same compute result. -->
+      <p id="face-colors-overlay-note" class="overlay-hint" hidden>The cross-layer overlay is on and covers the sheet colors (Compute Cross-Layer Faces to refresh, or edit a sheet to clear it).</p>
 
       <!-- Clear/Undo/Redo/Random/Download moved into the canvas rail, UI rework 5a (see the canvas-row comment
            above the canvas). Gallery ("Formorgel") is NOT part of the rail - it stays here until Step 5b moves
@@ -1412,27 +1421,9 @@
       </div>
   </div>
 
-  <!-- "Mehr" (More) for the Farbe row (Group D Phase B4 follow-up): the old rule row (isotint/isotone/
-       shadow-series/tetrad + axes) and "Spread colors" are gone entirely, per explicit decision - the old
-       rule system's own UI has no place in this tab anymore, and a button with no way to ever act (Spread
-       colors only ever did anything for a rule-colored sheet) would be a new source of confusion, not a
-       harmless leftover. All that's left here is the cross-layer overlay note, which is independent of
-       which coloring system produced a face's color. #face-colors-axes/#face-colors-unassigned (still
-       hard-required by renderFaceColorsPanel()'s own guard, see #nav-farbe's comment) moved there instead of
-       being deleted - see that comment for why. Reset colors stays in the rail (#btn-face-colors-reset,
-       unaffected by any of this). -->
-  <div id="more-farbe" class="overlay" role="dialog" aria-label="Mehr" data-i18n="more.farbe" hidden>
-    <div class="overlay-section">
-      <!-- shown only while a current cross-layer compute result is displayed (sketch.js updateFaceColorsPanel()):
-           that overlay is drawn on top of every sheet's fills -->
-      <p id="face-colors-overlay-note" class="overlay-hint" hidden>The cross-layer overlay is on and covers the sheet colors (Compute Cross-Layer Faces to refresh, or edit a sheet to clear it).</p>
-    </div>
-  </div>
-
   <!-- Group D Phase B4 (+ follow-up): the two remaining Farbe-anchor overlays (Kreis/Dreieck), each triggered
-       by its own #nav-farbe row-2 button (see that row's own comment) - the B3 widgets moved out of
-       #more-farbe into their own dedicated overlays here, since they're no longer alternate "views" of one
-       shared spot (each has its own trigger now). Register (the linear 28-item list) is gone - it duplicated
+       by its own #nav-farbe row-2 button (see that row's own comment) - the B3 widgets live in
+       their own dedicated overlays here (one per trigger, no longer alternate "views" of one shared spot). Register (the linear 28-item list) is gone - it duplicated
        what the register stepper already provides inline; Dreieck (the triangle) stays as the real visual
        picker. Same anchor state as the row-2 steppers (anchorFor(), core/facecolor.js) - never a second
        source of truth; a selection here does NOT close the overlay (matching #more-form's symmetry-selection
@@ -1503,30 +1494,30 @@
   <div id="ui-toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260929ae"></script>
-  <script src="core/state.js?v=20260929ae"></script>
-  <script src="core/symmetry.js?v=20260929ae"></script>
-  <script src="core/curves.js?v=20260929ae"></script>
-  <script src="core/netwarp.js?v=20260929ae"></script>
-  <script src="core/tiling.js?v=20260929ae"></script>
-  <script src="core/faces.js?v=20260929ae"></script>
-  <script src="core/orbits.js?v=20260929ae"></script>
-  <script src="core/color.js?v=20260929ae"></script>
-  <script src="core/facecolor.js?v=20260929ae"></script>
-  <script src="core/farborgel-bridge.js?v=20260929ae"></script>
-  <script src="core/export.js?v=20260929ae"></script>
-  <script src="core/symmetry-toggles.js?v=20260929ae"></script>
-  <script src="sketch.js?v=20260929ae"></script>
-  <script src="nav.js?v=20260929ae"></script>
-  <script src="ui.js?v=20260929ae"></script>
-  <script src="ui-form.js?v=20260929ae"></script>
-  <script src="ui-net.js?v=20260929ae"></script>
-  <script src="ui-farbe.js?v=20260929ae"></script>
-  <script src="ui-rail.js?v=20260929ae"></script>
+  <script src="core/forms.js?v=20260929af"></script>
+  <script src="core/state.js?v=20260929af"></script>
+  <script src="core/symmetry.js?v=20260929af"></script>
+  <script src="core/curves.js?v=20260929af"></script>
+  <script src="core/netwarp.js?v=20260929af"></script>
+  <script src="core/tiling.js?v=20260929af"></script>
+  <script src="core/faces.js?v=20260929af"></script>
+  <script src="core/orbits.js?v=20260929af"></script>
+  <script src="core/color.js?v=20260929af"></script>
+  <script src="core/facecolor.js?v=20260929af"></script>
+  <script src="core/farborgel-bridge.js?v=20260929af"></script>
+  <script src="core/export.js?v=20260929af"></script>
+  <script src="core/symmetry-toggles.js?v=20260929af"></script>
+  <script src="sketch.js?v=20260929af"></script>
+  <script src="nav.js?v=20260929af"></script>
+  <script src="ui.js?v=20260929af"></script>
+  <script src="ui-form.js?v=20260929af"></script>
+  <script src="ui-net.js?v=20260929af"></script>
+  <script src="ui-farbe.js?v=20260929af"></script>
+  <script src="ui-rail.js?v=20260929af"></script>
   <!-- Group D Phase B4: exposes window.farborgelBuildHarmonySelection (core/farborgel-selection.mjs)
        for ui-farbe.js/sketch.js (classic scripts) to call - a module script coexists fine with the
        classic p5-bootstrap scripts above (real-browser verified, no conflicts). -->
-  <script type="module" src="core/farborgel-selection.mjs?v=20260929ae"></script>
+  <script type="module" src="core/farborgel-selection.mjs?v=20260929af"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

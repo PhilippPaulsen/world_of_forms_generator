@@ -803,6 +803,29 @@ body.dark {
   background: currentColor;
 }
 
+/* Layout round: Kreis/Dreieck are a two-state view switch (ui-farbe.js) - the current one is .active (black fill,
+   aria-pressed via UI.pressed()), the other gets the same small corner dot .nav-more.has-state uses when the
+   sheet's active harmony is in the family that is currently hidden. */
+.nav-anchor-views .icon-btn { position: relative; }
+.nav-anchor-views .icon-btn.has-state::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+/* The two harmony families (2/3/4 and B/W/S/V) share ONE slot; it always reserves four buttons' width, so the
+   steppers after it do not jump when the view switches. `[hidden]` must be restated: .nav-cluster's display:flex
+   would otherwise win over the attribute. */
+.nav-harmony-family { min-width: calc(4 * var(--target) + 3 * var(--gap)); }
+.nav-harmony-family[hidden] { display: none; }
+/* The cross-layer overlay note (moved out of the removed Farbe "Mehr" overlay, now beside #cross-layer-status)
+   only matters while editing sheet colors. */
+html:not([data-tab="farbe"]) #face-colors-overlay-note { display: none; }
+
 /* Phone: #nav-farbe's own anchor row wraps into 2 lines if needed (see the comment below). */
 @media (max-width: 767px) {
   /* Group D Phase B4 follow-up: #nav-farbe is just the anchor row (Kreis/Dreieck, 2/3/4, the two steppers,
@@ -907,15 +930,29 @@ html[data-tab="farbe"] #btn-clear { display: none; }
   html[data-tab="farbe"] #btn-toggle-nodes { margin-top: var(--gap); }
   html[data-tab="farbe"] #btn-toggle-nodes::before { display: none; }
 }
-#btn-harmony-b { margin-top: var(--rail-group-gap); }
-#btn-harmony-w { margin-top: var(--rail-gap); }
-#btn-harmony-s { margin-top: var(--rail-gap); }
-#btn-harmony-v { margin-top: var(--rail-gap); }
+/* Layout round: the four distribution-strategy icons (#farbe-strategy-group, a radiogroup) take the four slots
+   B/W/S/V used to occupy here. The wrapper is display:contents so its buttons stay flat rail children (same
+   spacing/order rules as every other rail button, and .rail-left's own display:contents on the phone unwraps
+   them one level further); its role="radiogroup" is kept on the element itself. */
+/* Scoped to the Farbe tab on purpose: an unscoped #id rule would out-specify .rail-farbe-only's own hiding
+   (html:not([data-tab="farbe"]) .rail-farbe-only) and leave the strategy buttons visible on Form/Netz. */
+html[data-tab="farbe"] #farbe-strategy-group { display: contents; }
+#btn-strategy-cyclic   { margin-top: var(--rail-group-gap); }
+#btn-strategy-area     { margin-top: var(--rail-gap); }
+#btn-strategy-symmetry { margin-top: var(--rail-gap); }
+#btn-strategy-rings    { margin-top: var(--rail-gap); }
 #btn-face-colors-reset { margin-top: var(--rail-group-gap); }
 #farbe-harmony-select { margin-top: var(--rail-group-gap); font: inherit; }
-#btn-harmony-b, #btn-face-colors-reset { position: relative; }
+#btn-strategy-cyclic, #btn-face-colors-reset { position: relative; }
+/* Tablet/desktop only: Info and Download move to the END of the Farbe rail (flex `order`, no DOM move - Form/Netz
+   keep their rail exactly as before). The phone keeps them in row 2: there the rail is rows, not a column, and
+   seven buttons in row 4 would wrap into a fifth line. #btn-info keeps its own group gap + hairline (below). */
 @media (min-width: 768px) {
-  #btn-harmony-b::before, #btn-face-colors-reset::before {
+  html[data-tab="farbe"] #btn-info { order: 1; }
+  html[data-tab="farbe"] #btn-save { order: 1; }
+}
+@media (min-width: 768px) {
+  #btn-strategy-cyclic::before, #btn-face-colors-reset::before {
     content: "";
     position: absolute;
     top: calc(-1 * var(--rail-group-gap) / 2 - 0.5px);
@@ -990,15 +1027,16 @@ html[data-tab="farbe"] #btn-clear { display: none; }
   /* Row 3: more. */
   #btn-more-rail    { order: 12; }
   .canvas-row .rail-break-3 { display: block; order: 13; flex: 0 0 100%; height: 0; }
-  /* Row 4 (Farbe tab only, via .rail-farbe-only's own html[data-tab] gating above): B/W/S/V (2/3/4 moved
-     into #nav-farbe's own row, alongside Kreis/Dreieck/Register), Reset Color, the harmony dropdown. */
-  #btn-harmony-b, #btn-harmony-w, #btn-harmony-s,
-  #btn-harmony-v, #btn-face-colors-reset, #farbe-harmony-select { margin-top: 0; }
-  #btn-harmony-b::before, #btn-face-colors-reset::before, #farbe-harmony-select::before { display: none; }
-  #btn-harmony-b { order: 17; }
-  #btn-harmony-w { order: 18; }
-  #btn-harmony-s { order: 19; }
-  #btn-harmony-v { order: 20; }
+  /* Row 4 (Farbe tab only, via .rail-farbe-only's own html[data-tab] gating above): the four distribution-
+     strategy icons (B/W/S/V and 2/3/4 live in #nav-farbe's Kreis/Dreieck family slot), Reset Color, the
+     harmony dropdown. */
+  #btn-strategy-cyclic, #btn-strategy-area, #btn-strategy-symmetry,
+  #btn-strategy-rings, #btn-face-colors-reset, #farbe-harmony-select { margin-top: 0; }
+  #btn-strategy-cyclic::before, #btn-face-colors-reset::before, #farbe-harmony-select::before { display: none; }
+  #btn-strategy-cyclic   { order: 17; }
+  #btn-strategy-area     { order: 18; }
+  #btn-strategy-symmetry { order: 19; }
+  #btn-strategy-rings    { order: 20; }
   #btn-face-colors-reset { order: 21; }
   #farbe-harmony-select  { order: 22; }
 }
