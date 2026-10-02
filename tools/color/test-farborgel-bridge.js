@@ -308,22 +308,27 @@ console.log('\n== 6. inheritance (Phase B-Farbstrategien): a pre-existing params
             trails.some((t, i) => (((i + 3) % trails.length) % M) !== (i % M)));
     }
 
-    // The read happens BEFORE this same call's own write: a second applyHarmonyToPattern()
-    // call (e.g. clicking a different harmony button right after) reads the FIRST call's own
-    // farborgel-tagged params.slot as its new inheritance source. With M=2 then M=4 and every
-    // inherited slot < 2 (hence already < 4), the second call's memberIndex must come out
-    // IDENTICAL to the first's, trail for trail - confirms a farborgel entry inherits from a
-    // previous farborgel entry too, not just from an unrelated rule.
+    // The read happens BEFORE this same call's own write: a second applyHarmonyToPattern() call
+    // (e.g. clicking a different harmony button right after) reads the FIRST call's own entries.
+    // HISTORY (corrected): this check used to assert that A (M=2) then B (M=4) leave memberIndex
+    // IDENTICAL trail for trail ("a farborgel entry inherits from the previous farborgel entry too").
+    // That was the bug, not the feature: B's four members were never all used (member 2 and 3 could not
+    // appear because A's 0..1 was read back as a rank). A prior farborgel memberIndex is a MEMBER number,
+    // not a rank; it is only a valid pin for the same strategy AND the same cardinality (section 8
+    // below). A different size starts that harmony's natural order fresh.
     {
         const store = new Map();
         const selA = { version: 1, source: 'farborgel', members: [member(1, 0.1, 0.1), member(13, 0.2, 0.3)] };
         applyHarmonyToPattern(selA, store, trails);
-        const ranksAfterA = trails.map(t => store.get(t.key).params.memberIndex);
         const selB = { version: 1, source: 'farborgel', members: [member(2, 0.1, 0.1), member(8, 0.1, 0.1), member(14, 0.1, 0.1), member(20, 0.1, 0.1)] };
         applyHarmonyToPattern(selB, store, trails);
         const ranksAfterB = trails.map(t => store.get(t.key).params.memberIndex);
-        check('successive harmony applications keep trails in the SAME relative order (a farborgel entry inherits from the previous farborgel entry too)',
-            JSON.stringify(ranksAfterA) === JSON.stringify(ranksAfterB), `A=${ranksAfterA.join(',')} B=${ranksAfterB.join(',')}`);
+        const freshB = new Map();
+        applyHarmonyToPattern(selB, freshB, trails);
+        const ranksFreshB = trails.map(t => freshB.get(t.key).params.memberIndex);
+        check('A (M=2) then B (M=4): B comes out exactly as if applied to an empty sheet - a different size never inherits the previous size\'s member numbers',
+            JSON.stringify(ranksAfterB) === JSON.stringify(ranksFreshB), `after A=${ranksAfterB.join(',')} fresh=${ranksFreshB.join(',')}`);
+        check('...and all four of B\'s members actually appear (the reported symptom: some never did)', new Set(ranksAfterB).size === Math.min(4, trails.length), `${new Set(ranksAfterB).size} distinct`);
     }
 }
 
@@ -470,17 +475,125 @@ console.log('\n== 7. distribution strategies: area/symmetry/rings against real p
         check('...and is not degenerately all-zero (the concrete symptom the live-browser bug showed)',
             new Set(actual).size > 1, JSON.stringify(actual));
 
-        // Reapplying the SAME strategy (Area -> Area again, different M) should still chain
-        // correctly from the previous Area application's own memberIndex - the legitimate case
-        // this fix must not have broken.
+        // Reapplying the SAME strategy with a DIFFERENT M (Area M=4 -> Area M=2).
+        // HISTORY (corrected): this check used to expect "chaining" from the previous Area memberIndex:
+        // floor(prevMemberIndex / bucketSize2) - with prev in 0..3 and a bucket of 12 that is 0 for EVERY
+        // trail, i.e. the expected value was 23 zeros: the collapse itself, written down as correct. The
+        // right expectation: a different M starts that M's natural Area order fresh (section 8 covers
+        // the same-M case, which is pinned instead).
         const selArea2 = { version: 1, source: 'farborgel', members: Array.from({ length: 2 }, (_, k) => member(5 + k * 3, 0.1, 0.1)) };
         applyHarmonyToPattern(selArea2, store, hexTrails, 'area');
-        const prevMemberIndexes = actual; // Area(M2) output, just recorded above
         const bucketSize2 = Math.ceil(N / 2);
-        const expectedChained = hexTrails.map((t, i) => Math.min(1, Math.floor(prevMemberIndexes[i] / bucketSize2)));
+        const expectedFresh2 = hexTrails.map((t, i) => Math.min(1, Math.floor(i / bucketSize2)));
         const actual2 = hexTrails.map(t => store.get(t.key).params.memberIndex);
-        check('reapplying the SAME strategy (Area -> Area) still chains from its own prior memberIndex, unaffected by the strategy-switch fix',
-            JSON.stringify(actual2) === JSON.stringify(expectedChained), `actual=${actual2.join(',')} expected=${expectedChained.join(',')}`);
+        check('Area (M=4) then Area (M=2): the new size is distributed afresh (both members used), not collapsed into member 0',
+            JSON.stringify(actual2) === JSON.stringify(expectedFresh2) && new Set(actual2).size === 2, `actual=${actual2.join(',')} expected=${expectedFresh2.join(',')}`);
+    }
+
+    // ---------------- 8. memberIndex is a PIN, never a rank (the "colors collapse / reshuffle on reapply" bug) ----------------
+    // Reproduced live (133-trail hex pattern): Dreier then Vierer under Cyclic used 3 of 4 colors, under Area
+    // and Rings 1 of 4; reapplying the SAME harmony under Area/Rings collapsed to member 0, and under Symmetry
+    // reshuffled which trail has which color on every click. Cause: applyHarmonyToPattern() read a previous
+    // farborgel entry's params.memberIndex (a member number 0..M-1) back AS A RANK (0..N-1). The fix pins it
+    // instead - only when the existing entry has the same strategy AND the same cardinality - and distributes
+    // everything else afresh. Every strategy x every size change x every reapply is checked here.
+    console.log('\n== 8. memberIndex is a pin: all M colors, idempotent reapply, size/strategy change starts fresh ==');
+    {
+        const hexRingDistances = computeTrailRingDistances(hexRes, hexSheet.group, hexTrails);
+        const ctxFor = strat => strat === 'symmetry' ? { groupOpsCount: hexSheet.group.ops.length }
+            : strat === 'rings' ? { ringDistances: hexRingDistances } : undefined;
+        const selOf = (M, hueShift) => ({ version: 1, source: 'farborgel', members: Array.from({ length: M }, (_, k) => member(1 + ((k * 3 + (hueShift || 0)) % 24), 0.1, 0.1)) });
+        const apply = (store, M, strat, hueShift) => applyHarmonyToPattern(selOf(M, hueShift), store, hexTrails, strat, ctxFor(strat));
+        const mi = store => hexTrails.map(t => store.get(t.key).params.memberIndex);
+        const fresh = (M, strat) => { const st = new Map(); apply(st, M, strat); return mi(st); };
+        const distinct = a => new Set(a).size;
+
+        for (const strat of ['cyclic', 'area', 'symmetry', 'rings']) {
+            // sanity: the strategy itself uses every member of these sizes on this pattern when applied fresh
+            const allUsedFresh = [2, 3, 4].every(M => distinct(fresh(M, strat)) === M);
+            check(`[${strat}] setup: applied fresh, sizes 2/3/4 each use all of their members on this pattern`, allUsedFresh);
+
+            // (a) size changes: each step equals a fresh application AND uses all members (the reported symptom)
+            const store = new Map();
+            let sizeOk = true, usedOk = true, detail = [];
+            for (const M of [3, 4, 2, 4, 3, 2]) {
+                apply(store, M, strat);
+                const got = mi(store), want = fresh(M, strat);
+                if (JSON.stringify(got) !== JSON.stringify(want)) sizeOk = false;
+                if (distinct(got) !== M) usedOk = false;
+                detail.push(`${M}:${distinct(got)}`);
+            }
+            check(`[${strat}] size changes 3,4,2,4,3,2 in a row: every step equals a fresh application of that size`, sizeOk, detail.join(' '));
+            check(`[${strat}] ...and every step uses ALL of its M members (no collapse, no dropped members)`, usedOk, detail.join(' '));
+
+            // (b) the exact reported sequences: Dreier -> Vierer, and a size-1 series (W) -> Vierer
+            const st2 = new Map(); apply(st2, 3, strat); apply(st2, 4, strat);
+            check(`[${strat}] Dreier then Vierer: all 4 colors`, distinct(mi(st2)) === 4);
+            const st3 = new Map(); apply(st3, 1, strat); apply(st3, 4, strat);
+            check(`[${strat}] a 1-color series then Vierer: all 4 colors (not stuck on member 0)`, distinct(mi(st3)) === 4);
+
+            // (c) idempotency: same size, same strategy -> identical member numbers, including with different colors
+            // (an anchor step changes the hues, never the size of a 2/3/4 harmony)
+            const st4 = new Map(); apply(st4, 4, strat);
+            const first = mi(st4);
+            apply(st4, 4, strat); const second = mi(st4);
+            apply(st4, 4, strat, 5); const third = mi(st4);
+            check(`[${strat}] reapplying the same harmony (also with shifted hues, as an anchor step does) leaves every trail's member unchanged`,
+                JSON.stringify(first) === JSON.stringify(second) && JSON.stringify(second) === JSON.stringify(third),
+                `colors distinct: ${distinct(first)}/${distinct(second)}/${distinct(third)}`);
+
+            // (d) a per-trail override (assignFarborgelSlot() shape) survives a same-size, same-strategy
+            // reapply and is dropped by a size change - exactly as documented
+            const st5 = new Map(); apply(st5, 4, strat);
+            const victim = hexTrails[hexTrails.length >> 1].key;
+            const before = st5.get(victim).params.memberIndex, over = (before + 1) % 4;
+            st5.set(victim, { ...st5.get(victim), params: { ...st5.get(victim).params, memberIndex: over } });
+            const othersBefore = mi(st5);
+            apply(st5, 4, strat, 7);
+            const after = mi(st5);
+            check(`[${strat}] a per-trail override survives reapplying the same harmony size (and nothing else moves)`,
+                st5.get(victim).params.memberIndex === over && JSON.stringify(after) === JSON.stringify(othersBefore));
+            apply(st5, 3, strat);
+            check(`[${strat}] ...and is dropped when the size changes (the new size is distributed afresh)`, JSON.stringify(mi(st5)) === JSON.stringify(fresh(3, strat)));
+        }
+
+        // (e) a strategy switch never reads another strategy's member numbers
+        {
+            const st = new Map(); apply(st, 4, 'cyclic'); apply(st, 4, 'area');
+            check('switching strategy at the SAME size (Cyclic -> Area, M=4) starts Area afresh', JSON.stringify(mi(st)) === JSON.stringify(fresh(4, 'area')));
+            apply(st, 4, 'symmetry');
+            check('...and Area -> Symmetry likewise', JSON.stringify(mi(st)) === JSON.stringify(fresh(4, 'symmetry')));
+        }
+
+        // (f) a partly pinned store (trails added by an edit have no entry yet): pins keep, the rest is computed, all in range
+        {
+            const st = new Map(); apply(st, 4, 'area');
+            const keep = hexTrails.slice(0, 12), dropped = hexTrails.slice(12);
+            dropped.forEach(t => st.delete(t.key));
+            const pinnedBefore = keep.map(t => st.get(t.key).params.memberIndex);
+            apply(st, 4, 'area');
+            check('partly pinned store: existing entries keep their member, the missing ones are computed in range',
+                keep.every((t, i) => st.get(t.key).params.memberIndex === pinnedBefore[i]) && hexTrails.every(t => { const m = st.get(t.key).params.memberIndex; return Number.isInteger(m) && m >= 0 && m < 4; }));
+        }
+
+        // (g) an out-of-range stored memberIndex (cardinality matches, value does not) is ignored, never indexed
+        {
+            const st = new Map(); apply(st, 3, 'cyclic');
+            const k = hexTrails[0].key;
+            st.set(k, { ...st.get(k), params: { ...st.get(k).params, memberIndex: 99 } });
+            let threw = false;
+            try { apply(st, 3, 'cyclic'); } catch (e) { threw = true; }
+            check('a corrupt out-of-range memberIndex with a matching cardinality is ignored (distributed afresh), not read as a member', !threw && st.get(k).params.memberIndex === fresh(3, 'cyclic')[0]);
+        }
+
+        // (h) the .slot path (gray / old-system rules) is untouched: a slot wins over a stale memberIndex and is read as a rank
+        {
+            const M = 3, st = new Map();
+            hexTrails.forEach((t, i) => st.set(t.key, { hue: 0, w: 0.5, s: 0.1, rule: 'max-contrast-gray', params: { idx: [0], slot: (i + 2) % hexTrails.length, slots: hexTrails.length, memberIndex: 0, cardinality: M, strategy: 'cyclic' }, displayColor: null }));
+            apply(st, M, 'cyclic');
+            check('.slot still wins and is still read as a rank (even next to a matching memberIndex/cardinality/strategy)',
+                hexTrails.every((t, i) => st.get(t.key).params.memberIndex === ((i + 2) % hexTrails.length) % M));
+        }
     }
 }
 

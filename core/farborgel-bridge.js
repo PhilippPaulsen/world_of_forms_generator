@@ -99,8 +99,9 @@ function registerTrianglePoints(cx, cy, colSpacing, rowSpacing) {
 // Phase B-Farbstrategien step 2: which harmony member each trail gets is now a pluggable
 // function of (trails, inheritedRanks, M, context) -> memberIndex[] (parallel to `trails`), not
 // a hardcoded `rank % M`. `inheritedRanks[i]` is trail i's OWN inherited rank (an old-system
-// rule's params.slot, or a prior farborgel call's own params.memberIndex - see
-// applyHarmonyToPattern()'s own docblock below) or `undefined` when nothing is there yet -
+// rule's params.slot ONLY - a prior farborgel call's params.memberIndex is a member number, not a
+// rank, and is handled as a pin by applyHarmonyToPattern() itself, see its docblock below) or
+// `undefined` when nothing is there yet -
 // undefined, not pre-resolved to `i`, so a strategy whose OWN natural order differs from the
 // plain area-sort (Rings) can tell "nothing inherited, use MY natural order" apart from "the
 // inherited value happens to equal i" - collapsing that distinction earlier (an initial version
@@ -228,14 +229,15 @@ const _DISTRIBUTION_FNS = Object.freeze({
  * to decide which member each trail gets. Every strategy is fed the SAME inherited-rank array:
  * trail i's OWN INHERITED rank if one exists (Phase B-Farbstrategien: an old-system rule - e.g.
  * core/color.js's max-contrast-gray, applied in Form-mode - already wrote a real `params.slot`
- * for this exact trail key into `store`, OR an earlier click here already wrote its own
- * `params.memberIndex`; reusing either means this application lands on trails in the SAME
- * relative order that prior one established, not a freshly recomputed area-sort - chains
- * across successive harmony clicks too, not just from a Form-mode rule), falling back to trail
- * i's plain area-sorted position `i` when neither is there yet (today's unchanged behavior,
- * opportunistic - never required). The read happens BEFORE this same call's own write below
- * overwrites that trail's entry, per trail, so it only ever sees what was there coming INTO
- * this call, never a just-written entry from earlier in the same forEach. Writes through
+ * for this exact trail key into `store`; reusing it means this application lands on trails in the SAME
+ * relative order that prior one established, not a freshly recomputed area-sort), falling back to trail
+ * i's plain area-sorted position `i` when none is there (today's unchanged behavior, opportunistic -
+ * never required). A prior FARBORGEL entry's `params.memberIndex` is NOT a rank and is not fed to the
+ * strategies as one: when it was written by the same strategy with the same cardinality it is kept as a
+ * pin for that trail (reapplying is idempotent), otherwise the trail is distributed afresh - see the
+ * comment at the inheritance block below. The read happens BEFORE this same call's own write overwrites
+ * that trail's entry, per trail, so it only ever sees what was there coming INTO this call, never a
+ * just-written entry from earlier in the same forEach. Writes through
  * setFaceAssignment() exactly as core/color.js's own rules do via applyPaletteToTrails() - the
  * only difference is where the color comes from (a fixed, already-resolved member list instead
  * of generateHarmonyPalette()).
@@ -286,29 +288,41 @@ function applyHarmonyToPattern(selection, store, trails, strategy = 'cyclic', co
     const fn = _DISTRIBUTION_FNS[strategy];
     if (!fn) throw new Error(`applyHarmonyToPattern: unknown strategy "${strategy}"`);
     const M = selection.members.length;
-    // Inherited rank: an old-system rule's own entry (core/color.js, _writeSlot()) carries
-    // params.slot, a real 0..N-1 rank regardless of which NEW strategy is about to run - always
-    // honored. A PRIOR farborgel entry (this same function, an earlier click) carries
-    // params.memberIndex instead - but that is only ever a small 0..M-1 value, meaningful as a
-    // "rank" ONLY when reapplying the SAME strategy that produced it (successive Cyclic clicks:
-    // memberIndex IS the trail's effective rank; successive Area/Rings clicks: same reasoning).
-    // Switching strategies (e.g. Cyclic, M=4, wrote memberIndex 0..3 -> then Area, bucketSize=6)
-    // would otherwise misread that small range as a full rank and collapse every trail into
-    // bucket 0 - a real bug caught live in the browser, not assumed away. So memberIndex is only
-    // read back when existing.params.strategy === this call's own strategy; a genuine strategy
-    // SWITCH intentionally starts that strategy's own natural order fresh, exactly as it would
-    // for a sheet with nothing applied yet. `undefined` (not a fallback to i) when nothing
-    // inheritable is there - each strategy resolves its OWN fallback (area-sorted i for
-    // Cyclic/Area/Symmetry, distance-rank for Rings), so a real inherited value is never
-    // confused with one that only coincides with a strategy's natural order.
-    const inheritedRanks = trails.map(t => {
+    // Two DIFFERENT kinds of inheritance, deliberately not conflated (an earlier version treated both as
+    // "a rank" - a real, reproduced bug, see below):
+    //  1. params.slot - an old-system rule's own entry (core/color.js, _writeSlot()) carries a real 0..N-1
+    //     RANK, meaningful to every strategy. Always honored, passed to the strategy as an inherited rank.
+    //  2. params.memberIndex - a prior Farborgel entry's MEMBER NUMBER (0..M-1), the outcome of a
+    //     distribution, not a rank. It is only meaningful as exactly what it is: a pin. When the existing
+    //     entry was produced by the SAME strategy AND the SAME cardinality M, the trail keeps that member
+    //     as-is and the strategy arithmetic is skipped - reapplying the same harmony (same type, an anchor
+    //     step, a per-trail override from assignFarborgelSlot()) is then idempotent for every strategy.
+    //     Otherwise (a different strategy: its own natural order starts fresh; a different M: a member
+    //     number from a harmony of another size cannot be mapped onto this one - the old grouping is not
+    //     recoverable from member numbers alone) the trail is computed from the strategy's natural order,
+    //     exactly like a trail with nothing applied yet.
+    // The previous implementation fed memberIndex back into the strategies AS a rank. That is only correct
+    // for Cyclic with an unchanged M (rank % M is a fixed point): Area/Rings divide it by ceil(N/M) and
+    // collapse every trail into member 0 (a small 0..M-1 "rank" / a bucket of 19-45), Cyclic dropped every
+    // member >= the old M after a size change, and Symmetry re-sorted by the old member number and re-cycled,
+    // reshuffling which trail has which color on every reapply. Same category of mistake as the .slot reuse
+    // caught in assignFarborgelSlot() (ui-farbe.js): M is almost always far smaller than N.
+    // `undefined` (not a fallback to i) in inheritedRanks when nothing inheritable is there - each strategy
+    // resolves its OWN fallback (area-sorted i for Cyclic/Area/Symmetry, distance-rank for Rings), so a real
+    // inherited value is never confused with one that only coincides with a strategy's natural order.
+    const pinned = new Array(trails.length).fill(undefined);
+    const inheritedRanks = trails.map((t, i) => {
         const existing = store.get(t.key);
         if (!existing || !existing.params) return undefined;
         if (Number.isInteger(existing.params.slot)) return existing.params.slot;
-        if (Number.isInteger(existing.params.memberIndex) && existing.params.strategy === strategy) return existing.params.memberIndex;
+        const p = existing.params;
+        if (Number.isInteger(p.memberIndex) && p.strategy === strategy && p.cardinality === M && p.memberIndex >= 0 && p.memberIndex < M) {
+            pinned[i] = p.memberIndex;
+        }
         return undefined;
     });
-    const memberIndexes = fn(trails, inheritedRanks, M, context);
+    const computed = fn(trails, inheritedRanks, M, context);
+    const memberIndexes = computed.map((m, i) => pinned[i] !== undefined ? pinned[i] : m);
     let written = 0;
     trails.forEach((t, i) => {
         if (provenance.fillOnly && store.has(t.key)) return; // fill only - never overwrite an existing entry
