@@ -171,6 +171,10 @@ console.log('\n== 6. styles.css really uses the tokens ==');
     check('the old flat touch rule (pointer: coarse -> button min-height 44px) and the stale "Generator reference" alignment note are gone', !/pointer:\s*coarse\s*\)\s*\{\s*button\s*\{\s*min-height:\s*44px/.test(stylesSrc) && !/Generator reference/.test(read('color-harmony/ui/styles.css').replace(/\(replaces[^)]*\)/i, '')));
     const hdr = farStyles.find(r => r.selector === '.site-header' && r.media === null), tb = farStyles.find(r => r.selector === '.toolbar' && r.media === null);
     check('header and toolbar are one --bar-h tall (min-height var(--bar-h))', declMap(hdr.decls).get('min-height') === 'var(--bar-h)' && declMap(tb.decls).get('min-height') === 'var(--bar-h)');
+    const copiedSelectors = far.filter(r => r.selector !== ':root' && r.selector !== '@font-face').map(r => r.selector);
+    const redefined = [...new Set(farStyles.filter(r => copiedSelectors.includes(r.selector)).map(r => r.selector))];
+    check('styles.css never REDEFINES a rule copied from the generator (.ico, .stepper*): the stepper look stays the generator\'s, this page only adds around it', redefined.length === 0, redefined.join(', '));
+    check('the navigator is the stepper (P4 step 2): the old "‹ 01 ›" rules - borderless 32px buttons, a bold hue, its own focus ring - are gone', !/\.code-navigator button/.test(stylesSrc) && !/\.code-hue \.code-value/.test(stylesSrc) && !/\.code-value:focus-visible/.test(stylesSrc));
     check('the phone layout starts where the generator\'s does: no max-width:700px left, the breakpoint is max-width:767px', !/max-width:\s*700px/.test(stylesSrc) && /max-width:\s*767px/.test(stylesSrc));
     check('the two breakpoints that encode real content constraints are untouched (1050px: the 1060px register grid; 1500px: large-screen padding)', /max-width:\s*1050px/.test(stylesSrc) && /min-width:\s*1500px/.test(stylesSrc));
 }
