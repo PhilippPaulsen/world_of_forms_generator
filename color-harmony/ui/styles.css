@@ -753,16 +753,18 @@ button:disabled { opacity:.35; cursor:default; }
 .tree-members .shared-member { outline:2px solid #111; outline-offset:2px; }
 
 /* Phase 6B.1: names move to semantic labels; browsing sits directly on the codes. */
-.workspace-chrome { display:flex; justify-content:flex-end; position:relative; min-height:44px; margin-bottom:8px; }
+.workspace-chrome { display:flex; justify-content:flex-end; position:relative; min-height:var(--target); margin-bottom:8px; }
 .workspace-chrome .relation-controls { position:absolute; top:0; left:0; display:flex; flex-direction:column; gap:6px; margin:0; z-index:2; }
 .workspace-chrome .relation-controls button { width:var(--target); padding:0; font-size:var(--text-ui); }
-.code-navigation { display:flex; gap:16px; align-items:center; font-variant-numeric:tabular-nums; }
-.code-navigator { display:flex; align-items:center; gap:2px; }
-.code-navigator button { min-width:32px; width:32px; min-height:36px; padding:0; border-color:transparent; }
-.code-navigator button:hover,.code-navigator button:focus-visible { border-color:#000; }
-.code-value { min-width:32px; text-align:center; font-size:var(--text-ui); }
-.code-value:focus-visible { outline:2px solid #111; outline-offset:3px; }
-.code-hue .code-value { font-weight:700; }
+/* The hue / register browse controls are the generator's .stepper (tokens.css; markup in components/Navigator.mjs): icon +
+   value + stacked chevrons. Its own rules are NOT redefined here - only what this page adds around it. The old
+   "‹ 01 ›" rules (32px borderless buttons, a bold hue, its own focus ring) are gone; they would out-specify .stepper-btn. */
+.code-navigation { display:flex; gap:var(--gap); align-items:center; font-variant-numeric:tabular-nums; }
+.code-hue .stepper-display { min-width:2.4ch; }        /* the generator's hue field is 2.4ch wide: "01".."24" */
+/* A native `disabled` button (the register's low/high bound, the full-color "•" state) reads like the generator's
+   aria-disabled chevron: greyed, not-allowed, and not additionally faded by the base `button:disabled` opacity. */
+.stepper-btn:disabled { opacity:1; color:var(--color-disabled); cursor:not-allowed; }
+.stepper-btn:disabled:hover { background:transparent; }
 .workspace-chrome ~ .circle-view,.workspace-chrome ~ .triangle-view,.workspace-chrome ~ .register-scroll { margin-left:calc(var(--target) + 12px); }
 .series-preview { display:flex; align-items:center; gap:8px; margin:12px 0 12px calc(var(--target) + 12px); padding:8px 0; border-top:1px solid var(--line); }
 .series-preview>button { flex-shrink:0; width:var(--target); padding:0; }
@@ -774,11 +776,9 @@ button:disabled { opacity:.35; cursor:default; }
 .inspector .mode-controls { margin:10px 0 16px; }
 .composition-actions button[data-focus=transferHarmony] { margin-left:8px; }
 @media(max-width:767px) {
-  .workspace-chrome { min-height:44px; }
+  .workspace-chrome { min-height:var(--target); }
   .workspace-chrome .relation-controls button { min-width:var(--target); width:var(--target); height:var(--target); }
   .code-navigation { gap:6px; }
-  .code-navigator button { min-width:32px; min-height:44px; }
-  .code-value { min-width:28px; }
   .workspace-chrome ~ .circle-view,.workspace-chrome ~ .triangle-view,.workspace-chrome ~ .register-scroll { margin-left:calc(var(--target) + 4px); }
   .series-preview { margin-left:0; }
   .preview-swatches .swatch { flex-basis:44px; width:44px; min-width:44px; height:44px; }
