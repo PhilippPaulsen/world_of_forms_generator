@@ -249,7 +249,11 @@ console.log('\n== 3. mixed: one assigned trail among unassigned faces ==');
                     // had this field at all, so it is stripped from the structural comparison the
                     // same way color already is, and checked separately for its own correctness.
                     const { color: newColor, colorSpec: newSpec, ...restNew } = f;
-                    const { color: oldColor, ...restOld } = old.geometry.faces[i];
+                    // HEAD-drift fix: this comparison was written while HEAD was still the commit BEFORE the
+                    // gray-as-selection round (so the OLD side had no colorSpec on unassigned faces). Once that
+                    // round was committed, HEAD itself already writes the gray colorSpec - strip it from the OLD
+                    // side too, exactly as it is stripped from the new one, so only the rest is compared.
+                    const { color: oldColor, colorSpec: oldSpec, ...restOld } = old.geometry.faces[i];
                     if (!newSpec || newSpec.rule !== 'max-contrast-gray' || JSON.stringify(restNew) !== JSON.stringify(restOld) || !GRAY_HEX.test(newColor)) bad++;
                 }
             });
