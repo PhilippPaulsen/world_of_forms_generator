@@ -72,7 +72,7 @@ strong{
   display:flex;
   gap:28px;
   align-items:baseline}
-.brand span,.edition{
+.brand span{
   font-size:var(--text-meta);
   color:var(--muted)}
 .toolbar{
@@ -471,8 +471,6 @@ footer{
 #tooltip[hidden]{
   display:none}
 @media(min-width:1500px){
-  .site-header{
-    padding-top:32px}
   main{
     padding-top:36px}
   .circle-chart{
@@ -498,8 +496,6 @@ footer{
   .site-header{
     padding-top:12px;
     padding-bottom:12px}
-  .edition{
-    font-size:var(--text-meta)}
   h1{
     font-size:var(--text-primary)}
   .toolbar{

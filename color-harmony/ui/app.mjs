@@ -75,8 +75,7 @@ function sampleStrip() {
 function render() {
   document.documentElement.lang=state.locale;document.title=t('title',state.locale);
   if(new URLSearchParams(location.search).get('calibration')==='1'){root.replaceChildren(CalibrationView(state));return;}
-  const header=el('header',{class:'site-header'},el('div',{class:'brand'},el('h1',{},t('title',state.locale)),el('span',{},t('subtitle',state.locale))),
-    el('span',{class:'edition'},t('research',state.locale)));
+  const header=el('header',{class:'site-header'},el('div',{class:'brand'},el('h1',{},t('title',state.locale)),el('span',{},t('subtitle',state.locale))));
   const main=el('main',{id:'workspace',tabindex:'-1','aria-label':t(state.activeView,state.locale)});
   main.append(el('div',{class:'workspace-chrome'},RelationControls(state,dispatch),Navigator(state,dispatch)));
   main.append(viewComponents[state.activeView](state,dispatch));

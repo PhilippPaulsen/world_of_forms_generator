@@ -81,7 +81,6 @@ const pairs = {
   primary:['Primärquelle · Ostwald 1921','Primary source · Ostwald 1921'],
   contemporary:['Zeitgenössische Oklab-Interpolation','Contemporary Oklab interpolation'],
   displayNote:['Heutige Oklab-Bildschirmfarben · keine historischen Pigmentrekonstruktionen','Contemporary Oklab screen colors · not historical pigment reconstructions'],
-  research:['Forschungsinstrument / 6B.1','Research instrument / 6B.1'],
   sourceNote:['Historische Struktur, zeitgenössische Darstellung.','Historical structure, contemporary rendering.'],
   depthNote:['Stufe bezeichnet hier die Tiefe des Gruppenbaums.','Level here means depth of the group tree.'],
   valueNote:['Wertgleiche: 24 diskrete Atlaswerte. Kein kontinuierlicher Pfad.','Isovalent: 24 discrete atlas values. No continuous path.'],
