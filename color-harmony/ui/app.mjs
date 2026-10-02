@@ -1,6 +1,6 @@
 import {memberIdentity} from './composition.mjs';
 import {createHarmonyTransfer,HARMONY_SELECTION_EVENT} from './HarmonySelection.mjs';
-import {createState,transition,pathSamples,grays,atlas,circle,relationFields,fieldAt} from './state.mjs';
+import {createState,transition,pathSamples,grays,atlas,circle,relationFields,fieldAt,anchorOverridesFromSearch} from './state.mjs';
 import {t} from './i18n.mjs';
 import {el,colorButton,fieldLabel,button} from './components/dom.mjs';
 import {Toolbar,RelationControls} from './components/Toolbar.mjs';
@@ -12,7 +12,14 @@ import {TriangleView} from './views/TriangleView.mjs';
 import {RegisterView} from './views/RegisterView.mjs';
 import {HarmonyView} from './views/HarmonyView.mjs';
 import {CalibrationView} from './views/CalibrationView.mjs';
-let state=createState(),lastSelection=null;
+// P2: the generator's Farbe-tab link opens this page as `?hue=9&reg=pa` (anchor pre-fill); no/unusable parameters
+// = today's default start state. anchorOverridesFromSearch() validates strictly and never throws; the try/catch is
+// belt and braces so that NOTHING in the URL can ever leave the page blank.
+function initialState() {
+  try {return createState(anchorOverridesFromSearch(location.search));}
+  catch(error) {console.warn('Farborgel: could not apply the URL parameters, opening the default start state -',error.message);return createState();}
+}
+let state=initialState(),lastSelection=null;
 const transfer=createHarmonyTransfer(selection=>{
   window.dispatchEvent(new CustomEvent(HARMONY_SELECTION_EVENT,{detail:selection}));
   if(new URLSearchParams(location.search).get('integration')==='1')lastSelection=selection;

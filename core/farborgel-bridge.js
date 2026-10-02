@@ -60,6 +60,24 @@ const FARBORGEL_REGISTER_ORDER = Object.freeze([
     'nl', 'pa', 'pc', 'pe', 'pg', 'pi', 'pl', 'pn'
 ]);
 
+// Farborgel sub-page P2: the URL of the standalone Farborgel page (color-harmony/ui/index.html) pre-filled with a
+// generator anchor - `?hue=9&reg=pa`. Pure (no DOM, no generator state), so it stays headlessly testable
+// (tools/color/test-farborgel-prefill.js round-trips all 672 anchors through the page's own parser). hueIndex is
+// Farborgel's own 1-based hue and goes through unchanged; the register goes as its two-letter atlas code (via
+// FARBORGEL_REGISTER_ORDER) rather than as an index, so the page never depends on this array's order. `reg` is
+// OMITTED when registerIndex is null or invalid (hue-only: the page opens on the reference circle at that hue);
+// no usable hue at all = the bare page URL (the page's default start state). Relative on purpose: the same link
+// works on GitHub Pages and under any local static server rooted at the repository.
+const FARBORGEL_PAGE_PATH = 'color-harmony/ui/index.html';
+function farborgelPageUrl(anchor) {
+    if (!anchor || !Number.isInteger(anchor.hueIndex) || anchor.hueIndex < 1 || anchor.hueIndex > 24) return FARBORGEL_PAGE_PATH;
+    let url = FARBORGEL_PAGE_PATH + '?hue=' + anchor.hueIndex;
+    if (Number.isInteger(anchor.registerIndex) && anchor.registerIndex >= 0 && anchor.registerIndex < FARBORGEL_REGISTER_ORDER.length) {
+        url += '&reg=' + FARBORGEL_REGISTER_ORDER[anchor.registerIndex];
+    }
+    return url;
+}
+
 // Phase B3: pure geometry for the Kreis (hue-ring) and Dreieck (register-triangle) widgets - kept here,
 // not in ui-farbe.js, specifically so it stays headlessly testable (tools/color/test-anchor-widgets.js)
 // with no DOM. Neither function touches the DOM or any generator state; both just turn an index into a
