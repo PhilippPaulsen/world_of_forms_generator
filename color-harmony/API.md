@@ -942,5 +942,6 @@ fixtures, page references, Figure 20/21 and intentionally deferred cases.
 The optional browser interface in [ui/README.md](ui/README.md) exposes Kreis,
 Dreieck, Register and Harmonie through the unchanged public engine API. It uses
 German by default, a bilingual dictionary, local Suisse Intl and separate atlas
-and contemporary continuous samples. Run `node color-harmony/ui/serve.js` from
-the worktree root. This is separate from the generator; no p5 integration is made.
+and contemporary continuous samples. Serve the repository root with any static server
+(for example `python3 -m http.server 8941`) and open `/color-harmony/ui/index.html` (see
+[ui/README.md](ui/README.md)). This is separate from the generator; no p5 integration is made.

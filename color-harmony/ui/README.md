@@ -6,24 +6,30 @@ palette ranking. The active harmony supports member editing and structured compo
 
 ## Run locally
 
-From this worktree's root, with Node 22 or later:
+Use any static HTTP server started at the **repository root** (not inside
+`color-harmony/ui/`), for example:
 
 ```sh
-node color-harmony/ui/serve.js
+python3 -m http.server 8941
 ```
 
-Open **http://127.0.0.1:4173/**. Stop the process with Ctrl+C.
-If that port is occupied, use `PORT=4174 node color-harmony/ui/serve.js`.
-The server binds only to the local loopback address and serves only the UI folder.
-It is a development server, not a deployment service. Opening `index.html` directly
-as a `file:` URL is unsupported because native modules require an HTTP origin.
+Open **http://localhost:8941/color-harmony/ui/index.html**. Stop the process with
+Ctrl+C; use another port if 8941 is taken. Opening `index.html` directly as a `file:`
+URL is unsupported because native modules require an HTTP origin.
 
-At startup, `build.js` wraps the existing CommonJS engine files into an ESM adapter,
-`engine.generated.mjs`. That generated file is ignored by Git; do not edit it.
-The adapter copies current engine sources mechanically, with an explicit private
-module registry and no `eval`, dependency installation or browser-global engine.
-Restart the server after changing engine code. Reload the page after UI edits.
-An existing static HTTP server also works after `node color-harmony/ui/build.js`.
+Why the repository root: the page imports `../../core/farborgel-engine.mjs` (the
+committed wrapper around the engine), so the server must be able to reach `core/` and
+`color-harmony/`, not just this folder. `node color-harmony/ui/serve.js` is **not
+recommended**: it serves only the UI subfolder and cannot resolve those `../../core/…`
+imports (404). The page is deployed the same way, as plain static files on GitHub Pages.
+
+There is no build step. `core/farborgel-engine.mjs` loads the current engine files
+(`color-harmony/*.js`) at runtime, so reload the page after editing engine or UI code.
+Cache-busting of the modules is described in the project's `Claude.md`
+(a `?v=` import map; bump it with the other `?v=` strings). `build.js` and the
+git-ignored `engine.generated.mjs` are no longer used by the page; only
+`tools/color/test-farborgel-engine-wrapper.js` still runs `build.js`, to check that the
+wrapper's exports match it.
 
 ## UI principles
 
@@ -167,7 +173,7 @@ The new composition strip uses adjacent square fields, not rounded palette chips
 
 ## Display calibration diagnostic
 
-Open **http://127.0.0.1:4173/?calibration=1** (substitute your selected port).
+Open **http://localhost:8941/color-harmony/ui/index.html?calibration=1** (substitute your selected port).
 It compares the exact previous mapping, equal Oklab gray spacing, soft-log and the selected
 endpoint-anchored mapping, with L/ΔL/ΔE and chromatic ca/ic/nl/pn registers at six hues.
 A separate full-anchor table compares original, fixed higher chroma and gamut-aware
