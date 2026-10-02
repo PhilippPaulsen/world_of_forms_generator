@@ -69,13 +69,132 @@ const FARBORGEL_REGISTER_ORDER = Object.freeze([
 // no usable hue at all = the bare page URL (the page's default start state). Relative on purpose: the same link
 // works on GitHub Pages and under any local static server rooted at the repository.
 const FARBORGEL_PAGE_PATH = 'color-harmony/ui/index.html';
-function farborgelPageUrl(anchor) {
-    if (!anchor || !Number.isInteger(anchor.hueIndex) || anchor.hueIndex < 1 || anchor.hueIndex > 24) return FARBORGEL_PAGE_PATH;
-    let url = FARBORGEL_PAGE_PATH + '?hue=' + anchor.hueIndex;
-    if (Number.isInteger(anchor.registerIndex) && anchor.registerIndex >= 0 && anchor.registerIndex < FARBORGEL_REGISTER_ORDER.length) {
-        url += '&reg=' + FARBORGEL_REGISTER_ORDER[anchor.registerIndex];
+// P3: the optional second argument is this generator tab's id (farborgelNewTabId() below). It rides along as
+// `from=<id>` so the Farborgel page knows which generator tab to hand a composed selection back to - and it is
+// appended whenever given, even when the anchor is unusable (a bare `?from=...` still lets the page send back).
+function farborgelPageUrl(anchor, tabId) {
+    const params = [];
+    if (anchor && Number.isInteger(anchor.hueIndex) && anchor.hueIndex >= 1 && anchor.hueIndex <= 24) {
+        params.push('hue=' + anchor.hueIndex);
+        if (Number.isInteger(anchor.registerIndex) && anchor.registerIndex >= 0 && anchor.registerIndex < FARBORGEL_REGISTER_ORDER.length) {
+            params.push('reg=' + FARBORGEL_REGISTER_ORDER[anchor.registerIndex]);
+        }
     }
-    return url;
+    if (typeof tabId === 'string' && FARBORGEL_TAB_ID_PATTERN.test(tabId)) params.push('from=' + tabId);
+    return params.length ? FARBORGEL_PAGE_PATH + '?' + params.join('&') : FARBORGEL_PAGE_PATH;
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Farborgel sub-page P3: the RETURN handoff - a HarmonySelection composed on the standalone Farborgel page
+// travels back to the generator tab that opened it. Transport: a localStorage "mailbox" with two keys, one
+// per direction (each has exactly one writer, so there is no read-modify-write race and no filtering by
+// message kind), plus the `storage` event, which fires in the OTHER tabs only. Everything below is PURE (no DOM,
+// no storage, no generator state) so it is headlessly testable (tools/color/test-farborgel-handoff.js); the
+// browser glue (the listener, the apply, the ack write) is in ui-farbe.js, the Farborgel side in
+// color-harmony/ui/handoff.mjs. The constants are duplicated there on purpose (a classic script and an ES
+// module cannot share a file) and the test asserts they are identical.
+//
+//   handoff key  wof:farborgel:handoff   Farborgel -> generator  { v:1, id, to, at, selection }
+//   ack key      wof:farborgel:ack       generator -> Farborgel  { v:1, id, to, ok, sheet? | reason?, at }
+//
+// `id` is unique per emit and MUST be: setItem() with a value identical to the stored one fires no `storage`
+// event at all (measured), so a re-emit of the same selection would otherwise be silently swallowed.
+// The payload is UNTRUSTED cross-page input - any script on the origin can write that key, and it did not come
+// through this project's own in-page code path - so it is validated field by field before it can reach
+// applyHarmonyToPattern(), and a rejection is a warning plus an ack, never a throw into the render pipeline.
+// ---------------------------------------------------------------------------------------------------------
+const FARBORGEL_HANDOFF_KEY = 'wof:farborgel:handoff';
+const FARBORGEL_ACK_KEY = 'wof:farborgel:ack';
+const FARBORGEL_TAB_ID_PATTERN = /^[0-9a-f]{12}$/;
+const FARBORGEL_HANDOFF_MAX_CHARS = 512 * 1024;   // the largest real selection (24-member V series) is ~19 KB
+const FARBORGEL_SELECTION_MAX_MEMBERS = 256;      // V is 24; compounds are smaller; this is a sanity bound
+const FARBORGEL_HANDOFF_DEDUP_WINDOW = 20;        // handled ids remembered, so a re-delivered event cannot apply twice
+// Rejection reasons the generator can put in an ack. The Farborgel page has a German + English message for each
+// (color-harmony/ui/i18n.mjs, keys transferRejected_<reason>); the test asserts the two lists agree.
+const FARBORGEL_ACK_REASONS = Object.freeze(['fill-off', 'sheet-unavailable', 'no-trails', 'invalid-selection', 'invalid-envelope', 'internal-error']);
+
+// 12 lowercase hex chars (48 bits) - collision-resistant enough to tell a handful of open tabs apart, not meant
+// to be cryptographic. crypto.getRandomValues also exists on non-secure origins (randomUUID does not).
+function farborgelNewTabId() {
+    let bytes;
+    if (typeof crypto !== 'undefined' && crypto && typeof crypto.getRandomValues === 'function') bytes = Array.from(crypto.getRandomValues(new Uint8Array(6)));
+    else bytes = Array.from({ length: 6 }, () => Math.floor(Math.random() * 256));
+    return bytes.map(b => (b < 16 ? '0' : '') + b.toString(16)).join('');
+}
+
+function _isPlainObject(x) { return typeof x === 'object' && x !== null && !Array.isArray(x); }
+function _isUnit(x) { return typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 1; }
+
+// -> { ok: true, selection } | { ok: false, detail }. `selection` is the SAME object that was passed in (the
+// validated record itself, not a reduced copy): applyHarmonyToPattern() reads members[].analyticalCoordinate.
+// {hueIndex,w,s} and members[].srgb, and every one of those is checked here. Never throws.
+function validateHarmonySelection(raw) {
+    try {
+        if (!_isPlainObject(raw)) return { ok: false, detail: 'selection is not an object' };
+        if (raw.version !== 1) return { ok: false, detail: 'version must be 1' };
+        if (raw.source !== 'farborgel') return { ok: false, detail: 'source must be "farborgel"' };
+        const members = raw.members;
+        if (!Array.isArray(members) || members.length < 1) return { ok: false, detail: 'members must be a non-empty array' };
+        if (members.length > FARBORGEL_SELECTION_MAX_MEMBERS) return { ok: false, detail: `members has ${members.length} entries (max ${FARBORGEL_SELECTION_MAX_MEMBERS})` };
+        for (let i = 0; i < members.length; i++) {
+            const m = members[i];
+            if (!_isPlainObject(m)) return { ok: false, detail: `member ${i} is not an object` };
+            const c = m.analyticalCoordinate;
+            if (!_isPlainObject(c)) return { ok: false, detail: `member ${i} has no analyticalCoordinate` };
+            if (!(c.hueIndex === null || (Number.isInteger(c.hueIndex) && c.hueIndex >= 1 && c.hueIndex <= 24))) return { ok: false, detail: `member ${i} hueIndex must be null or an integer 1-24` };
+            if (!_isUnit(c.w) || !_isUnit(c.s)) return { ok: false, detail: `member ${i} w and s must be numbers in 0-1` };
+            if (!Array.isArray(m.srgb) || m.srgb.length !== 3 || !m.srgb.every(b => Number.isInteger(b) && b >= 0 && b <= 255)) return { ok: false, detail: `member ${i} srgb must be three integers 0-255` };
+        }
+        if (!_isPlainObject(raw.classification) || raw.classification.cardinality !== members.length) return { ok: false, detail: 'classification.cardinality must equal the member count' };
+        if (!Number.isInteger(raw.activeMemberIndex) || raw.activeMemberIndex < 0 || raw.activeMemberIndex >= members.length) return { ok: false, detail: 'activeMemberIndex out of range' };
+        return { ok: true, selection: raw };
+    } catch (e) {
+        return { ok: false, detail: 'unexpected shape (' + (e && e.message) + ')' };
+    }
+}
+
+// Parses the raw string of a `storage` event on FARBORGEL_HANDOFF_KEY for the tab `myTabId`.
+//   { ok: true, id, selection }
+//   { ok: false, code: 'not-for-me' | 'duplicate' | 'empty', ... }          -> silent: no warning, no ack
+//   { ok: false, code: 'invalid-envelope' | 'invalid-selection', detail, id?, addressed }
+//        -> a warning; `addressed` is true when the envelope proved it was meant for this tab AND carried a usable
+//           id, so a rejection ack can be written (otherwise the sender simply times out)
+// `handledIds` is an array of already-processed ids (the caller keeps the last FARBORGEL_HANDOFF_DEDUP_WINDOW).
+// Never throws.
+function parseFarborgelHandoff(rawString, myTabId, handledIds) {
+    if (rawString === null || rawString === undefined || rawString === '') return { ok: false, code: 'empty' };
+    if (typeof rawString !== 'string') return { ok: false, code: 'invalid-envelope', detail: 'not a string', addressed: false };
+    if (rawString.length > FARBORGEL_HANDOFF_MAX_CHARS) return { ok: false, code: 'invalid-envelope', detail: `larger than ${FARBORGEL_HANDOFF_MAX_CHARS} characters`, addressed: false };
+    let env;
+    try { env = JSON.parse(rawString); } catch (e) { return { ok: false, code: 'invalid-envelope', detail: 'not valid JSON', addressed: false }; }
+    if (!_isPlainObject(env)) return { ok: false, code: 'invalid-envelope', detail: 'not an object', addressed: false };
+    if (env.to !== myTabId) return { ok: false, code: 'not-for-me' };
+    const id = (typeof env.id === 'string' && env.id.length >= 1 && env.id.length <= 64 && /^[0-9A-Za-z_-]+$/.test(env.id)) ? env.id : null;
+    const addressed = id !== null;
+    if (env.v !== 1) return { ok: false, code: 'invalid-envelope', detail: 'envelope version must be 1', id, addressed };
+    if (id === null) return { ok: false, code: 'invalid-envelope', detail: 'envelope id missing or malformed', addressed: false };
+    if (typeof env.at !== 'number' || !Number.isFinite(env.at)) return { ok: false, code: 'invalid-envelope', detail: 'envelope timestamp missing', id, addressed };
+    if (Array.isArray(handledIds) && handledIds.includes(id)) return { ok: false, code: 'duplicate', id };
+    const v = validateHarmonySelection(env.selection);
+    if (!v.ok) return { ok: false, code: 'invalid-selection', detail: v.detail, id, addressed };
+    return { ok: true, id, selection: v.selection };
+}
+
+// Remembers `id` in the dedup window (mutates and returns `handledIds`, oldest dropped past the window).
+function rememberFarborgelHandoffId(handledIds, id) {
+    handledIds.push(id);
+    while (handledIds.length > FARBORGEL_HANDOFF_DEDUP_WINDOW) handledIds.shift();
+    return handledIds;
+}
+
+// The ack the generator writes: { v:1, id, to, ok:true, sheet, at } or { v:1, id, to, ok:false, reason, at }.
+// `sheet` is 'base' or the 0-based layer index; `to` is the Farborgel's tab (informational - there is one
+// ack key and one Farborgel waiting per id).
+function buildFarborgelAck(id, ok, detail, now) {
+    const ack = { v: 1, id, ok: !!ok, at: typeof now === 'number' ? now : Date.now() };
+    if (ok) ack.sheet = detail;
+    else ack.reason = FARBORGEL_ACK_REASONS.includes(detail) ? detail : 'internal-error';
+    return ack;
 }
 
 // Phase B3: pure geometry for the Kreis (hue-ring) and Dreieck (register-triangle) widgets - kept here,

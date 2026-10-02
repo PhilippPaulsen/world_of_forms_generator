@@ -89,7 +89,7 @@
   // radios in the left rail in the layout round - same state, same persistence): which harmony member each
   // trail gets, cycling core/farborgel-bridge.js's own DISTRIBUTION_STRATEGIES. Persisted per sheet
   // (distributionStrategyFor()/setDistributionStrategyFor(), core/facecolor.js) - lazy, reset with the grid,
-  // same lifecycle as lastHarmonyTypeFor(). Choosing one goes through afterAnchorChange() - the SAME live-
+  // same lifecycle as lastHarmonyTypeFor(). Choosing one goes through afterStrategyChange() (reapply('strategy')) - the SAME live-
   // reapply path an anchor change already uses, not a second trigger - so it recolors the active harmony, or
   // (nothing applied yet) the gray default, exactly as the stepper did. UI.radiogroup() supplies the
   // aria-checked/roving-tabindex/arrow-key behavior and the .active (black fill) marking.
@@ -98,7 +98,7 @@
   if (strategyGroupEl && typeof DISTRIBUTION_STRATEGIES !== 'undefined' && typeof UI !== 'undefined' && UI.radiogroup) {
     strategyGroup = UI.radiogroup(strategyGroupEl, function (r) {
       setDistributionStrategyFor(activeLayer, r.dataset.strategy);
-      afterAnchorChange();
+      afterStrategyChange();
     });
   }
   function syncStrategy() {
@@ -310,19 +310,20 @@
   const harmonyBtns = { 2: $('#btn-harmony-2'), 3: $('#btn-harmony-3'), 4: $('#btn-harmony-4'), B: $('#btn-harmony-b'), W: $('#btn-harmony-w'), S: $('#btn-harmony-s'), V: $('#btn-harmony-v') };
   const harmonySelect = $('#farbe-harmony-select');
   const resetBtn = $('#btn-face-colors-reset');
-  function applyHarmony(type) {
-    if (typeof window.farborgelBuildHarmonySelection !== 'function') return; // the module script hasn't finished loading yet (rare)
-    const a = anchorFor(activeLayer);
-    if (!a) return;
+  // P3: THE one place a HarmonySelection is written into the active sheet. applyHarmony(type) (the 7 buttons and
+  // the dropdown - the selection is regenerated from (anchor, type)) and the return handoff from the standalone
+  // Farborgel page (a selection composed there - type CUSTOM_HARMONY_TYPE, kept in lastSelectionFor()) both end
+  // here, so there is exactly one application path: the same store/trails resolution renderFaceColorsPanel()
+  // uses, the same strategy + context, the same applyHarmonyToPattern() - nothing about ingestion differs but
+  // where the selection came from. Returns { ok: true, sheet } or { ok: false, reason } (a reason code from
+  // FARBORGEL_ACK_REASONS: the handoff turns it into an ack, the button path just ignores it as before).
+  function applySelection(selection, type) {
     const { gridNodes, conns, sheet } = faceColorsGrid();
     const group = sheetGroupElements(gridNodes, sheet);
-    if (!group) return;
+    if (!group) return { ok: false, reason: 'sheet-unavailable' };
     const facesResult = computeCellFaces(conns, gridNodes, null, null, sheet);
     const trails = computeFaceTrails(facesResult, group);
-    if (!trails.length) return;
-    let selection;
-    try { selection = window.farborgelBuildHarmonySelection(a, type); }
-    catch (e) { UI.toast('Farborgel: ' + e.message); return; }
+    if (!trails.length) return { ok: false, reason: 'no-trails' };
     // Phase B-Farbstrategien step 2: the sheet's chosen distribution strategy (default
     // 'cyclic', today's original behavior) and its context - groupOpsCount for 'symmetry'
     // (core/farborgel-bridge.js's own bucket-ordering, see its comment); ringDistances for
@@ -336,13 +337,38 @@
     }
     applyHarmonyToPattern(selection, faceAssignmentsFor(activeLayer), trails, strategy, context);
     // Group D Phase B4 follow-up: remember this as the sheet's last-applied type (only on a real
-    // success - a thrown selection above never reaches here) - the ONE place this is recorded, so a
+    // success - a thrown selection never reaches here) - the ONE place this is recorded, so a
     // direct button/dropdown click and an anchor-triggered reapply (below) are always in exact sync,
-    // never two separately-maintained states.
+    // never two separately-maintained states. Type first, THEN the selection: setLastHarmonyTypeFor()
+    // drops the stored selection for every type but 'custom'.
     setLastHarmonyTypeFor(activeLayer, type);
+    if (type === CUSTOM_HARMONY_TYPE) setLastSelectionFor(activeLayer, JSON.parse(JSON.stringify(selection)));
     renderFaceColorsPanel();
     redraw();
+    return { ok: true, sheet: activeLayer };
   }
+  function applyHarmony(type) {
+    if (typeof window.farborgelBuildHarmonySelection !== 'function') return; // the module script hasn't finished loading yet (rare)
+    const a = anchorFor(activeLayer);
+    if (!a) return;
+    let selection;
+    try { selection = window.farborgelBuildHarmonySelection(a, type); }
+    catch (e) { UI.toast('Farborgel: ' + e.message); return; }
+    applySelection(selection, type);
+  }
+  // P3: the selection currently behind a Farborgel-colored sheet - the stored one for a 'custom' sheet (it has no
+  // recipe), else regenerated from (anchor, type) (a pure function of the two, see assignFarborgelSlot()'s
+  // comment); null when the sheet is not Farborgel-colored. sketch.js's per-trail stepper reads it through
+  // window.farborgelSelectionFor(), assignFarborgelSlot() below directly.
+  function farborgelSelectionFor(sheet) {
+    const type = lastHarmonyTypeFor(sheet);
+    if (type === null || type === undefined) return null;
+    if (type === CUSTOM_HARMONY_TYPE) return lastSelectionFor(sheet);
+    const anchor = anchorFor(sheet);
+    if (!anchor || typeof window.farborgelBuildHarmonySelection !== 'function') return null;
+    try { return window.farborgelBuildHarmonySelection(anchor, type); } catch (e) { return null; }
+  }
+  window.farborgelSelectionFor = farborgelSelectionFor;
   // Phase B-Farbstrategien follow-up (gray-as-selection round): the gray-default sibling of
   // applyHarmony() above - same resolution (faceColorsGrid() -> group -> trails), same
   // strategy/context construction, the only difference is WHERE the colors come from (the one
@@ -424,10 +450,8 @@
   // (including the overridden one) into member 0, and Symmetrie reshuffled them; the claim written here
   // before was true of the design, not of what the code did. It now holds for all four strategies.
   function assignFarborgelSlot(store, sheet, key, next) {
-    const anchor = anchorFor(sheet);
-    const type = lastHarmonyTypeFor(sheet);
-    if (!anchor || type === null || typeof window.farborgelBuildHarmonySelection !== 'function') return null;
-    const selection = window.farborgelBuildHarmonySelection(anchor, type);
+    const selection = farborgelSelectionFor(sheet); // P3: also a 'custom' (handed-back) selection, not only a regenerable one
+    if (!selection) return null;
     if (!Number.isInteger(next) || next < 0 || next >= selection.members.length) {
       throw new Error(`assignFarborgelSlot: slot ${next} outside the series (0..${selection.members.length - 1})`);
     }
@@ -454,12 +478,23 @@
   // so the distribution-strategy stepper (and, incidentally, the hue/register steppers, which a
   // gray fill ignores - re-running is a harmless no-op redraw for those) has a real, visible
   // effect on a sheet nobody has explicitly colored, not just on a Farborgel harmony.
-  function afterAnchorChange() {
+  // P3: the reapply takes a REASON. A 'custom' sheet (a selection composed on the Farborgel page and handed back)
+  // has no regeneration recipe, so: an ANCHOR change does nothing to it - silently reverting it to gray, or
+  // regenerating something else, would destroy a composition the person made on purpose; it stays until an explicit
+  // new harmony action replaces it (a harmony button, or another handoff) - while a STRATEGY change reapplies the
+  // stored selection with the new distribution (the strategy decides which trail gets which member, not what the
+  // members are). Every other sheet behaves exactly as before for both reasons.
+  function reapply(reason) {
     const type = lastHarmonyTypeFor(activeLayer);
-    if (type !== null && type !== undefined) applyHarmony(type);
+    if (type === CUSTOM_HARMONY_TYPE) {
+      const stored = lastSelectionFor(activeLayer);
+      if (reason === 'strategy' && stored) applySelection(stored, CUSTOM_HARMONY_TYPE);
+    } else if (type !== null && type !== undefined) applyHarmony(type);
     else applyGrayDefault();
     sync();
   }
+  function afterAnchorChange() { reapply('anchor'); }
+  function afterStrategyChange() { reapply('strategy'); }
   Object.keys(harmonyBtns).forEach(function (type) {
     const b = harmonyBtns[type];
     if (!b) return;
@@ -493,6 +528,52 @@
     });
   }
 
+  // ---- return handoff from the standalone Farborgel page (Farborgel sub-page P3) -----------------------------------
+  // A selection composed on the Farborgel page arrives through a localStorage "mailbox": the page writes
+  // FARBORGEL_HANDOFF_KEY, the browser fires a `storage` event in every OTHER same-origin tab, and the one whose
+  // id the envelope is addressed to (GENERATOR_TAB_ID, below) takes it. The envelope is untrusted cross-page input:
+  // core/farborgel-bridge.js's parseFarborgelHandoff() validates it field by field (and drops replays through a
+  // 20-id window) before anything reaches applyHarmonyToPattern(); a rejection is a console.warn plus a rejection
+  // ack - never a throw into the render pipeline. A valid selection is applied through the SAME applySelection()
+  // the 7 harmony buttons use, as type CUSTOM_HARMONY_TYPE, to the sheet that is ACTIVE when it arrives (what the
+  // person sees on coming back - not the sheet the link was opened from, which may have been deleted or reordered
+  // since). Then the ack is written, and the handoff key removed (each side cleans up the other's key).
+  // A background tab still receives `storage` events; if the browser has frozen or discarded this tab the page
+  // simply times out on its side - degraded, not silent. Tested in Chromium only (see INTEGRATION_INTERFACE.md).
+  const handledHandoffIds = [];
+  function ackHandoff(id, ok, detail) {
+    try { localStorage.setItem(FARBORGEL_ACK_KEY, JSON.stringify(buildFarborgelAck(id, ok, detail))); }
+    catch (e) { console.warn('Farborgel handoff: could not write the acknowledgement -', e && e.message); }
+  }
+  function removeHandoffKey() { try { localStorage.removeItem(FARBORGEL_HANDOFF_KEY); } catch (e) { /* storage gone: nothing to clean */ } }
+  function receiveFarborgelSelection(selection) {
+    // Same eligibility the 7 buttons have: they are disabled (aria-disabled + a reason) when face fill is off or the
+    // sheet cannot show faces. A handoff cannot be "disabled", so it is refused - and the ack says why.
+    if (typeof activeShowFaces !== 'function' || !activeShowFaces()) return { ok: false, reason: 'fill-off' };
+    if (typeof faceFillsUnavailableReason === 'function' && faceFillsUnavailableReason()) return { ok: false, reason: 'sheet-unavailable' };
+    return applySelection(selection, CUSTOM_HARMONY_TYPE);
+  }
+  function onFarborgelHandoffEvent(e) {
+    if (e.key !== FARBORGEL_HANDOFF_KEY || GENERATOR_TAB_ID === null) return;
+    let parsed;
+    try { parsed = parseFarborgelHandoff(e.newValue, GENERATOR_TAB_ID, handledHandoffIds); }
+    catch (err) { console.warn('Farborgel handoff: could not read the message -', err && err.message); return; }
+    if (!parsed.ok) {
+      if (parsed.code === 'not-for-me' || parsed.code === 'empty' || parsed.code === 'duplicate') return; // not an error: not ours / our own removal / a replay
+      console.warn(`Farborgel handoff rejected (${parsed.code}): ${parsed.detail}`);
+      if (parsed.addressed) { ackHandoff(parsed.id, false, parsed.code); removeHandoffKey(); }
+      return;
+    }
+    rememberFarborgelHandoffId(handledHandoffIds, parsed.id);
+    let result;
+    try { result = receiveFarborgelSelection(parsed.selection); }
+    catch (err) { console.warn('Farborgel handoff: applying the selection failed -', err && err.message); result = { ok: false, reason: 'internal-error' }; }
+    if (!result.ok) console.warn(`Farborgel handoff not applied: ${result.reason}`);
+    ackHandoff(parsed.id, result.ok, result.ok ? result.sheet : result.reason);
+    removeHandoffKey();
+  }
+  window.addEventListener('storage', onFarborgelHandoffEvent);
+
   // ---- Farborgel page link (Farborgel sub-page P2): #btn-farborgel (index.html, a plain <a target="_blank">)
   // is kept pointing at the page PRE-FILLED with the active sheet's anchor - `?hue=9&reg=pa`, built by the pure
   // farborgelPageUrl() (core/farborgel-bridge.js). Updated on EVERY sync, not at click time: the anchor changes
@@ -501,10 +582,14 @@
   // it to a plain string compare per frame. Independent of the row's eligibility (`why`): the link works with
   // fill off, on any sheet. Only the active sheet's anchor is read - nothing is written back (the return trip
   // is a later phase).
+  // P3: this generator tab's identity for the return handoff - generated ONCE per page load and added to the link as
+  // `from=<12 hex>`; the Farborgel page addresses its handoff to it, so with several generator tabs open only the
+  // one that opened the page reacts. A reload is a new identity on purpose: the state it held is gone anyway.
+  const GENERATOR_TAB_ID = typeof farborgelNewTabId === 'function' ? farborgelNewTabId() : null;
   const farborgelLink = $('#btn-farborgel');
   function syncFarborgelLink() {
     if (!farborgelLink || typeof farborgelPageUrl !== 'function' || typeof anchorFor !== 'function') return;
-    const url = farborgelPageUrl(anchorFor(activeLayer));
+    const url = farborgelPageUrl(anchorFor(activeLayer), GENERATOR_TAB_ID);
     if (farborgelLink.getAttribute('href') !== url) farborgelLink.setAttribute('href', url);
   }
 

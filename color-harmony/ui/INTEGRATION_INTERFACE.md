@@ -131,7 +131,9 @@ window.addEventListener(HARMONY_SELECTION_EVENT, event => {
 This is a same-window `CustomEvent`, not a network request or cross-window
 `postMessage`. It is not replayed and does not mutate the composition or history.
 Listeners should treat `event.detail` as read-only shared event data and clone it
-if needed. There is no hidden global selection variable exposed as an API.
+if needed. There is no hidden global selection variable exposed as an API. (A page opened from the generator
+additionally hands the same record to that generator tab - see "Return handoff to the generator" below; the
+event itself is unchanged.)
 
 Standalone feedback is **Auswahl bereitgestellt · noch kein Muster verbunden** /
 **Selection emitted · no pattern connected yet**. It never claims that a pattern
@@ -170,6 +172,52 @@ ordering. This is **not** a selection import: it only sets the starting colour, 
 that single member, and no payload crosses the boundary. The host-side builder is
 `farborgelPageUrl(anchor)` in the generator's `core/farborgel-bridge.js`. Parameters for a return trip
 (`from`, `sheet`) are reserved for a later phase and are not read yet.
+
+## Return handoff to the generator (cross-tab)
+
+When the standalone page was opened by a generator tab (the link carries `from=<12 hex>`, the id that tab gave
+itself), **In Muster übernehmen** also sends the same version-1 record back to that tab. Without `from`
+(opened directly, bookmarked) nothing is written and the notice above stays. The Farborgel only moves a record:
+it imports nothing from the generator and knows nothing about trails, faces or the assignment store.
+
+Transport: a `localStorage` mailbox and the `storage` event, which the browser fires in the *other* same-origin
+tabs only. Two keys, one per direction, each with exactly one writer (`handoff.mjs` ↔ `core/farborgel-bridge.js`):
+
+```text
+wof:farborgel:handoff   page -> generator   { "v":1, "id":"<unique per emit>", "to":"<tabId>", "at":<ms>, "selection":{ …the v1 record, unmodified… } }
+wof:farborgel:ack       generator -> page   { "v":1, "id":"<the handoff id>", "ok":true,  "sheet":"base" | <layer index>, "at":<ms> }
+                                            { "v":1, "id":"<the handoff id>", "ok":false, "reason":"<code>", "at":<ms> }
+```
+
+- `id` is unique per emit and has to be: storing a value identical to the stored one fires **no** `storage` event
+  (measured in Chromium), so re-emitting the same selection would otherwise vanish.
+- Only the tab whose id the envelope is addressed to reacts; the generator also remembers the last 20 handled ids so a
+  re-delivered event cannot apply twice. Each side removes the other's key after reading it.
+- The payload is **untrusted cross-page input** (any script on the origin can write that key). The generator checks it
+  field by field before anything is applied: envelope at most 512 K characters and well-formed; `version === 1`,
+  `source === 'farborgel'`; 1–256 members, each with `hueIndex` null or an integer 1–24, `w` and `s` finite numbers in
+  0–1 and `srgb` three integers 0–255; `classification.cardinality` equal to the member count; `activeMemberIndex` in
+  range. A bad record is a `console.warn` and a rejection ack, never an exception.
+- A valid selection is applied through the generator's existing `applyHarmonyToPattern` path, to the sheet that is
+  **active when it arrives**, and remembered as that sheet's `custom` selection (it has no `(anchor, type)` recipe to
+  regenerate from): a later distribution-strategy change reapplies it, an anchor change leaves it alone, and only an
+  explicit new harmony (a harmony button, or another handoff) or Reset Color replaces it.
+- Rejection reasons (`reason`): `fill-off`, `sheet-unavailable`, `no-trails`, `invalid-selection`, `invalid-envelope`,
+  `internal-error` - each has a German and English message on the page.
+- The page shows **pending** → **Ins Muster übernommen · Basis / Ebene N**, or **Kein Generator-Fenster offen** after 3 s
+  without an ack (a late ack still turns that into "übernommen"), **Vom Generator abgelehnt · <reason>**, or
+  **Speicher nicht verfügbar** when `localStorage` is unusable.
+
+Known limits (documented, not bugs to chase):
+
+- **An embedded generator will not receive it.** Browsers partition `localStorage` for third-party frames, so a
+  generator embedded in an `<iframe>` on another site shares no storage with a Farborgel tab opened as a top-level
+  page. The handoff then times out with "Kein Generator-Fenster offen" instead of failing silently. (Reasoned from
+  how storage partitioning works; not tested.)
+- **Verified in Chromium only**, in two tabs of the same profile (the headless tests cover the validation, dedup,
+  sender state machine and wiring with fakes). Firefox and Safari behaviour of `storage` events, and a background
+  tab the browser has frozen or discarded, are untested; the failure mode is the same timeout message.
+- The 20-id dedup window is bounded: an id that has aged out would be accepted again.
 
 ## Proposed future Farbe menu (specification only)
 
@@ -214,7 +262,10 @@ when a full-color vertex is active. The preview's short source label (e.g. `5ic`
 identifies it. Explicit adoption turns those actual nodes into the working set.
 No letter label is assigned to the full-color vertex itself.
 
-## Future pattern application boundary (not implemented)
+## Pattern application boundary (the original sketch; implemented in the generator since Phase A/B4)
+
+> Implemented as `applyHarmonyToPattern(selection, store, trails, strategy, context)` in the generator's
+> `core/farborgel-bridge.js`, with pluggable distribution strategies; the sketch below is the original contract.
 
 ```js
 applyHarmonyToPattern(selection, patternContext)
@@ -228,8 +279,7 @@ The host defines slot order. Assignment initializes editable colors; the user ca
 continue assigning/editing individual pattern colors afterwards. No lock or
 permanent live binding is implied.
 
-Deferred: generator UI and event receiver, slot enumeration, drawing updates,
-undo integration in the host, RGB input semantics, cross-window transport and
-allocation by symmetry, orbit, hierarchy, area or topology. There is no pattern
+Still deferred: undo integration in the host, RGB input semantics and
+allocation by orbit or hierarchy (the generator already distributes by cycle, area, symmetry and rings). There is no pattern
 allocation algorithm inside the Farborgel, no new aesthetic ranking, no clipboard
 or export feature, and no merge into main.

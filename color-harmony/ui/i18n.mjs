@@ -7,6 +7,20 @@ const pairs = {
   relationPreview:['Serienvorschau','Series preview'], adoptedSeries:['Übernommene Serie','Adopted series'],
   transferHarmony:['In Muster übernehmen','Apply to pattern'],
   transferReady:['Auswahl bereitgestellt · noch kein Muster verbunden','Selection emitted · no pattern connected yet'],
+  // P3 return handoff to the generator tab that opened this page (handoff.mjs). transferRejected_<reason> has one
+  // entry per reason the generator can answer with (ACK_REASONS) - tools/color/test-farborgel-handoff.js asserts both.
+  transferPending:['Wird an den Generator übergeben …','Handing over to the generator …'],
+  transferApplied:['Ins Muster übernommen','Applied to the pattern'],
+  transferNoGenerator:['Kein Generator-Fenster offen','No generator window open'],
+  transferNoStorage:['Speicher nicht verfügbar · Übergabe nicht möglich','Storage unavailable · cannot hand over'],
+  transferRejected:['Vom Generator abgelehnt','Rejected by the generator'],
+  'transferRejected_fill-off':['„Fläche füllen“ im Generator einschalten','turn on face fill in the generator'],
+  'transferRejected_sheet-unavailable':['diese Ebene kann keine Flächen zeigen','this sheet cannot show faces'],
+  'transferRejected_no-trails':['das Muster hat noch keine Flächen','the pattern has no faces yet'],
+  'transferRejected_invalid-selection':['ungültige Auswahl','invalid selection'],
+  'transferRejected_invalid-envelope':['ungültige Nachricht','invalid message'],
+  'transferRejected_internal-error':['interner Fehler im Generator','internal error in the generator'],
+  sheetBase:['Basis','Base'], sheetLayer:['Ebene','Layer'],
   integrationPreview:['Integration · letzte Übergabe','Integration · last selection'],
   researchMode:['Forschungsansicht','Research view'],
 

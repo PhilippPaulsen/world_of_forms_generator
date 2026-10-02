@@ -10,6 +10,20 @@ export function compositionTitle(state) {
   return n===1?fieldLabel(a.members[0],state.locale):a.classification.compound?t('compound',state.locale):t(n===2?'pair':n===3?'three':n===4?'four':'harmony',state.locale);
 }
 const nameKey={Gegenfarben:'complementary',Triade:'triad',Tetrade:'tetrad'};
+/** The message line for the return handoff (handoff.mjs status objects). Pure; every branch is translated. */
+export function transferStatusText(status,locale) {
+  switch(status.state) {
+    case 'pending': return t('transferPending',locale);
+    case 'timeout': return t('transferNoGenerator',locale);
+    case 'storage-unavailable': return t('transferNoStorage',locale);
+    case 'rejected': return `${t('transferRejected',locale)} · ${t(`transferRejected_${status.reason}`,locale)}`;
+    case 'ok': {
+      const sheet=status.sheet==='base'?t('sheetBase',locale):Number.isInteger(status.sheet)?`${t('sheetLayer',locale)} ${status.sheet+1}`:'';
+      return sheet?`${t('transferApplied',locale)} · ${sheet}`:t('transferApplied',locale);
+    }
+    default: return '';
+  }
+}
 export function Inspector(state,dispatch) {
   const c=state.composition,a=c.activeHarmony,field=activeColor(c),locale=state.locale,group=a.group;
   const title=compositionTitle(state),label=fieldLabel(field,locale);
@@ -26,7 +40,7 @@ export function Inspector(state,dispatch) {
   actions.append(button(icon('transfer'),'transferHarmony',state,()=>dispatch('transferHarmony')));
   const bar=el('section',{class:'selection-bar composition-bar','aria-label':t('activeHarmony',locale)},
     el('div',{class:'result-heading'},el('strong',{},a.members.length===1&&field.source==='reference'?String(field.hueIndex).padStart(2,'0')+' •':title),el('span',{class:'status'},`${a.activeMemberIndex+1} / ${a.members.length}`)),result,actions,
-    el('span',{class:'composition-message',role:'status','aria-live':'polite'},c.message?t(c.message,locale):state.transferNotice?t('transferReady',locale):''));
+    el('span',{class:'composition-message',role:'status','aria-live':'polite'},c.message?t(c.message,locale):state.transferStatus?transferStatusText(state.transferStatus,locale):state.transferNotice?t('transferReady',locale):''));
   const panel=el('aside',{id:'inspector',class:'inspector','aria-label':t('info',locale)});
   if(!state.inspectorOpen)return {bar,panel:null};
   panel.append(el('div',{class:'inspector-heading'},el('h2',{},t('activeHarmony',locale)),button('×','close',state,()=>dispatch('inspectorOpen',false),false,'close-inspector')));

@@ -790,10 +790,31 @@ function lastHarmonyTypeFor(sheet) {
     const layer = additionalLayers[sheet];
     return layer ? (layer.lastHarmonyType === undefined ? null : layer.lastHarmonyType) : null;
 }
+// Farborgel sub-page P3: the "type" of a sheet colored from a selection composed ON the standalone Farborgel page
+// and handed back to this tab. It is not one of the 7 regenerable types - there is no (anchor, type) recipe for
+// it - so the selection itself is kept in lastSelectionFor(sheet) below. Using a SENTINEL value in
+// lastHarmonyType (rather than a separate flag) is deliberate: every existing "a Farborgel harmony owns this
+// sheet" gate is `lastHarmonyTypeFor(sheet) !== null` (sketch.js's resync gate, the per-trail stepper, ui-farbe.js's
+// reapply) and stays correct unchanged; the view-follow and the harmony-button highlight look the type up in a
+// table of the 7 real ones and simply find nothing for 'custom'.
+const CUSTOM_HARMONY_TYPE = 'custom';
 function setLastHarmonyTypeFor(sheet, type) {
-    if (sheet === 'base') { baseLastHarmonyType = type; return; }
+    if (sheet === 'base') { baseLastHarmonyType = type; if (type !== CUSTOM_HARMONY_TYPE) baseLastSelection = null; return; }
     const layer = additionalLayers[sheet];
-    if (layer) layer.lastHarmonyType = type;
+    if (layer) { layer.lastHarmonyType = type; if (type !== CUSTOM_HARMONY_TYPE) layer.lastSelection = null; }
+}
+// The stored selection of a 'custom' sheet, else null. Any other type (including null, i.e. Reset Color and the
+// switch to the old rule system, which both go through setLastHarmonyTypeFor()) drops it automatically, so a
+// stale selection can never outlive the coloring it belonged to. Callers set the type FIRST, then the selection.
+function lastSelectionFor(sheet) {
+    if (sheet === 'base') return baseLastSelection;
+    const layer = additionalLayers[sheet];
+    return layer && layer.lastSelection ? layer.lastSelection : null;
+}
+function setLastSelectionFor(sheet, selection) {
+    if (sheet === 'base') { baseLastSelection = selection; return; }
+    const layer = additionalLayers[sheet];
+    if (layer) layer.lastSelection = selection;
 }
 
 // Phase B-Farbstrategien: which distribution strategy (core/farborgel-bridge.js's

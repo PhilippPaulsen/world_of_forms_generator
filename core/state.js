@@ -82,6 +82,12 @@ let baseFaceAnchor = null;
 // lazy/reset-with-the-grid lifecycle as baseFaceAnchor above; a layer's own lives on the layer object
 // (core/facecolor.js's lastHarmonyTypeFor()/setLastHarmonyTypeFor()).
 let baseLastHarmonyType = null;
+// Farborgel sub-page P3: the HarmonySelection a Farborgel-COMPOSED harmony was applied from (manual edits,
+// compounds - nothing that buildHarmonySelection(anchor, type) could regenerate), kept so a later strategy
+// change can reapply it. Only meaningful while baseLastHarmonyType === 'custom'
+// (core/facecolor.js's CUSTOM_HARMONY_TYPE); same lazy/reset-with-the-grid lifecycle as baseLastHarmonyType,
+// and a layer's own lives on the layer object (core/facecolor.js's lastSelectionFor()/setLastSelectionFor()).
+let baseLastSelection = null;
 // Phase B-Farbstrategien: which distribution strategy (core/farborgel-bridge.js's
 // DISTRIBUTION_STRATEGIES - 'cyclic'/'area'/'symmetry'/'rings') the base sheet's last harmony
 // application used - null (falls back to 'cyclic', today's default) until one has been chosen
@@ -233,7 +239,7 @@ function rebuildGrid(shape) {
     connections = [];
     additionalLayers = [];
     baseFaceAssignments = new Map(); // keys are geometry of the OLD grid
-    baseFacePalette = null; baseFaceAnchor = null; baseLastHarmonyType = null; baseDistributionStrategy = null; faceHover = null;
+    baseFacePalette = null; baseFaceAnchor = null; baseLastHarmonyType = null; baseLastSelection = null; baseDistributionStrategy = null; faceHover = null;
     activeLayer = 'base'; // an active additional-layer index would otherwise dangle once the array is cleared
     timeline = null; // Roadmap 1.8 Stage C: its keyframeLayerIds/playbackLayerIndex would dangle the same way activeLayer would
     baseNetAnimation = null; // the captured Start/End nets belong to the old grid setup (Shape Size decides what a Field is)
@@ -275,7 +281,7 @@ function rebuildGridFromConstruction(p, q, n, side) {
     connections = [];
     additionalLayers = [];
     baseFaceAssignments = new Map();
-    baseFacePalette = null; baseFaceAnchor = null; baseLastHarmonyType = null; baseDistributionStrategy = null; faceHover = null;
+    baseFacePalette = null; baseFaceAnchor = null; baseLastHarmonyType = null; baseLastSelection = null; baseDistributionStrategy = null; faceHover = null;
     activeLayer = 'base';
     timeline = null; // Roadmap 1.8 Stage C: see rebuildGrid()'s own comment
     baseNetAnimation = null;

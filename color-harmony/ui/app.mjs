@@ -1,5 +1,6 @@
 import {memberIdentity} from './composition.mjs';
 import {createHarmonyTransfer,HARMONY_SELECTION_EVENT} from './HarmonySelection.mjs';
+import {tabIdFromSearch,createHandoffSender} from './handoff.mjs';
 import {createState,transition,pathSamples,grays,atlas,circle,relationFields,fieldAt,anchorOverridesFromSearch} from './state.mjs';
 import {t} from './i18n.mjs';
 import {el,colorButton,fieldLabel,button} from './components/dom.mjs';
@@ -20,9 +21,23 @@ function initialState() {
   catch(error) {console.warn('Farborgel: could not apply the URL parameters, opening the default start state -',error.message);return createState();}
 }
 let state=initialState(),lastSelection=null;
+// P3 return handoff: opened from a generator tab (`?from=<12 hex>`), "In Muster übernehmen" also sends the SAME version-1
+// record through the localStorage mailbox (handoff.mjs) and shows what came back. Opened directly there is no
+// addressee: nothing is written and today's "noch kein Muster verbunden" notice stays. The in-page CustomEvent is
+// untouched - it is the contract; the mailbox is one more listener-free transport for the same record.
+const handoff=(()=>{
+  const tabId=tabIdFromSearch(location.search);
+  if(!tabId)return null;
+  return createHandoffSender({tabId,onStatus:status=>{
+    // a late ack may only refresh a message that is still on screen; once the person has done something else it is gone
+    if(status.state!=='pending'&&status.state!=='storage-unavailable'&&!state.transferStatus)return;
+    state={...state,transferStatus:status,transferNotice:false};render();
+  }});
+})();
 const transfer=createHarmonyTransfer(selection=>{
   window.dispatchEvent(new CustomEvent(HARMONY_SELECTION_EVENT,{detail:selection}));
   if(new URLSearchParams(location.search).get('integration')==='1')lastSelection=selection;
+  if(handoff)handoff.send(selection);
 });
 const root=document.querySelector('#app'),hideTooltip=installTooltip();
 const viewComponents={circle:CircleView,triangle:TriangleView,register:RegisterView};
@@ -30,8 +45,8 @@ function dispatch(type,value) {
   const focused=document.activeElement?.dataset.focus;
   const scroll=root.querySelector('.register-scroll');const scrollPosition=scroll&&[scroll.scrollLeft,scroll.scrollTop];
   const previousView=state.activeView;
-  if(type==='transferHarmony'){transfer(state.composition);state={...state,transferNotice:true};}
-  else state={...transition(state,{type,value}),transferNotice:false};
+  if(type==='transferHarmony'){transfer(state.composition);state={...state,transferNotice:!handoff};}
+  else state={...transition(state,{type,value}),transferNotice:false,transferStatus:null};
   hideTooltip();render();
   let restore=focused;
   if(['selectedHue','chooseColor','nextHue','previousHue'].includes(type)&&focused?.startsWith('hue-'))restore=`hue-${state.selectedHue}`;

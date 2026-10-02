@@ -4409,8 +4409,11 @@ function renderFaceColorsPanel() {
     // once per trail) via window.farborgelBuildHarmonySelection(anchor, type) - a pure function of
     // (anchor, type), confirmed in ui-farbe.js's own assignFarborgelSlot() comment - so it always
     // matches what afterAnchorChange() last actually applied to the store.
-    const farborgelSelection = (lastHarmonyTypeFor(sheet) !== null && typeof window.farborgelBuildHarmonySelection === 'function')
-        ? (() => { const a = anchorFor(sheet); try { return a ? window.farborgelBuildHarmonySelection(a, lastHarmonyTypeFor(sheet)) : null; } catch (e) { return null; } })()
+    // Farborgel sub-page P3: read through ui-farbe.js's farborgelSelectionFor(), which returns the STORED selection
+    // for a 'custom' sheet (one composed on the standalone Farborgel page and handed back - it has no
+    // (anchor, type) recipe to regenerate from) and the regenerated one for the 7 ordinary types, as before.
+    const farborgelSelection = (lastHarmonyTypeFor(sheet) !== null && typeof window.farborgelSelectionFor === 'function')
+        ? window.farborgelSelectionFor(sheet)
         : null;
     // Uncolored trails while a rule is applied (new regions an edit created, anything reconciliation
     // could not hand a color to): say so, and offer the explicit fill - never an automatic repaint.
