@@ -412,14 +412,17 @@
   // actually honors it; a wider sweep showed every Farborgel override collapses into the lowest
   // bucket(s) under Area, a real, confirmed defect, not a one-off.
   // So the override instead gets EXACTLY a fresh entry's own shape (source: 'harmonySelection',
-  // params.memberIndex, params.strategy = the CURRENT strategy at click time) - the already-built,
-  // already-tested "honored only when existing.params.strategy === this call's strategy"
-  // inheritance rule then applies unchanged: the override survives re-applying the SAME strategy
-  // (an anchor/hue/register change, or the same Dreier button clicked again), but resets to that
-  // new strategy's own natural order on a genuine strategy SWITCH - identical to how an
-  // un-overridden Farborgel trail already behaves. This is a WEAKER guarantee than gray's
-  // "survives any later change" - a real, structural difference (M<N vs M=N), not something to
-  // paper over as equivalent.
+  // params.memberIndex, params.cardinality, params.strategy = the CURRENT strategy at click time) -
+  // applyHarmonyToPattern() (core/farborgel-bridge.js) pins a trail's memberIndex when the existing
+  // entry's strategy AND cardinality both match the new call: the override survives re-applying the
+  // SAME harmony size under the SAME strategy (an anchor/hue/register change, the same Dreier button
+  // clicked again), but resets to the new natural order on a strategy SWITCH or a different M - identical
+  // to how an un-overridden Farborgel trail behaves. This is a WEAKER guarantee than gray's "survives any
+  // later change" - a real, structural difference (M<N vs M=N), not something to paper over as equivalent.
+  // CORRECTION (pin fix): until that pin existed, this survival only actually held for Zyklisch - under
+  // Fläche/Ringe a re-application read the 0..M-1 memberIndex back as a rank and collapsed every trail
+  // (including the overridden one) into member 0, and Symmetrie reshuffled them; the claim written here
+  // before was true of the design, not of what the code did. It now holds for all four strategies.
   function assignFarborgelSlot(store, sheet, key, next) {
     const anchor = anchorFor(sheet);
     const type = lastHarmonyTypeFor(sheet);

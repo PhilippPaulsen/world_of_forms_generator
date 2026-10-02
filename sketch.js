@@ -4474,8 +4474,8 @@ function renderFaceColorsPanel() {
             // trick breaks under Area/Symmetry/Rings once M (a Farborgel harmony's cardinality,
             // 2..24) is smaller than N (the trail count) - gray's own trick only works because its
             // M always equals N. See assignFarborgelSlot()'s own comment, ui-farbe.js, for the full
-            // reasoning - a Farborgel override therefore survives re-applying the SAME strategy, not
-            // any later one, a real, weaker guarantee than gray's, not an oversight here). .slot is
+            // reasoning - a Farborgel override therefore survives re-applying the SAME strategy at the
+            // SAME harmony size (pinned by applyHarmonyToPattern()), not any later one, a real, weaker guarantee than gray's, not an oversight here). .slot is
             // preferred when present (an old-system or gray override always writes it), so an
             // overridden trail's real choice always wins over a stale memberIndex from before the
             // override; a Farborgel override's own memberIndex is read back by the SAME fallback,
