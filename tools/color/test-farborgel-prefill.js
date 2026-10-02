@@ -200,7 +200,7 @@ async function main() {
         check('...and the top-level state is initialised by that function, not by a bare createState()', /let state=initialState\(\)/.test(app) && !/let state=createState\(\)/.test(app));
         const uf = fs.readFileSync(path.join(ROOT, 'ui-farbe.js'), 'utf8');
         const syncBody = (uf.match(/function sync\(\)\s*\{([\s\S]*?)\n  \}\n/) || [])[1] || '';
-        check('ui-farbe.js builds the link URL with farborgelPageUrl(anchorFor(activeLayer))', /farborgelPageUrl\(\s*anchorFor\(\s*activeLayer\s*\)\s*\)/.test(uf));
+        check('ui-farbe.js builds the link URL with farborgelPageUrl(anchorFor(activeLayer)[, tab id - P3 adds the optional second argument])', /farborgelPageUrl\(\s*anchorFor\(\s*activeLayer\s*\)\s*(?:,\s*GENERATOR_TAB_ID\s*)?\)/.test(uf));
         check('...and sync() (which runs every frame) calls syncFarborgelLink() - not only a click handler', /syncFarborgelLink\(\);/.test(syncBody));
         check('...it is set with setAttribute("href") only when it changed (a plain string compare per frame)', /getAttribute\('href'\) !== url\)\s*farborgelLink\.setAttribute\('href', url\)/.test(uf));
         const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
