@@ -139,6 +139,38 @@ was changed. No payload is logged in normal mode. With `?integration=1`, a small
 inspection disclosure shows only the last transferred JSON snapshot. It is not
 live composition state or an export feature; there is no download/copy button.
 
+## Inbound: anchor pre-fill (URL)
+
+The selection boundary above is outbound only (Farborgel → host). The one inbound channel is a start
+position, passed in the page URL when a host opens the standalone page (the generator's Farbe-tab link does):
+
+```text
+color-harmony/ui/index.html?hue=9&reg=pa     // atlas field 9pa
+color-harmony/ui/index.html?hue=9            // hue-only: the reference circle at hue 9, no register
+color-harmony/ui/index.html                  // no parameters: the default start state (unchanged)
+```
+
+| Parameter | Value | Meaning |
+| --- | --- | --- |
+| `hue` | integer 1–24 (plain digits: no sign, padding, space or decimal) | the engine's own 1-based hue index |
+| `reg` | one of the 28 two-letter atlas registers (`ca … pn`, lowercase) | register at that hue; omitted = hue-only |
+
+`anchorOverridesFromSearch()` (`state.mjs`) turns this into the overrides object for `createState()` and is
+deliberately strict, because `createState()` itself is not safe on raw URL values (hue 0 / 25 silently wrap, a
+string, decimal or unknown register throws, and a throw at start-up would be a blank page):
+
+- an invalid `hue` ignores **both** parameters and opens the default start state;
+- an invalid `reg` with a valid `hue` falls back to hue-only;
+- `reg` without `hue` is ignored;
+- each unusable parameter logs one `console.warn`; absent parameters are silent; a repeated parameter uses its first value;
+- it never throws, and `integration` / `calibration` are unaffected.
+
+The register travels as its letters, not an index, so the page does not depend on any host's register
+ordering. This is **not** a selection import: it only sets the starting colour, the composition begins as
+that single member, and no payload crosses the boundary. The host-side builder is
+`farborgelPageUrl(anchor)` in the generator's `core/farborgel-bridge.js`. Parameters for a return trip
+(`from`, `sheet`) are reserved for a later phase and are not read yet.
+
 ## Proposed future Farbe menu (specification only)
 
 ```text

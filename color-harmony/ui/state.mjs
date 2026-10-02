@@ -18,6 +18,34 @@ export function fieldAt(hue,register) {
   if(index<0) throw new RangeError('Unknown atlas register');
   return atlas[normalizeHue(hue)-1][index];
 }
+/**
+ * Anchor pre-fill from the page URL (Farborgel sub-page P2): `?hue=9&reg=pa` opens the page on atlas field 9pa,
+ * `?hue=9` on the hue-only reference circle at hue 9. The generator's Farbe-tab link builds these URLs
+ * (core/farborgel-bridge.js farborgelPageUrl()); see INTEGRATION_INTERFACE.md "Inbound: anchor pre-fill".
+ *
+ * Returns an overrides object for createState() - `{}` (today's default start state) when there is nothing
+ * usable. It is STRICT on purpose, and must never throw: createState() itself is not safe to feed raw URL values
+ * (hue 0 / 25 silently wrap to 24 / 1; a string, a decimal or an unknown register throw a RangeError, and a throw
+ * at app.mjs's top level is a blank page - the failure class P0 just fixed). So everything is validated here first:
+ *   - hue must be a plain integer 1-24 (no sign, padding, space, decimal); otherwise BOTH parameters are ignored
+ *   - reg must be one of the 28 lowercase atlas registers; invalid with a valid hue = hue-only; reg without hue is ignored
+ *   - a parameter that is PRESENT but unusable is reported through `warn`; absent parameters are silent
+ *   - repeated parameters: the first one wins (URLSearchParams.get)
+ * Key order of the result is hue first (createState applies overrides in order); other parameters (`integration`,
+ * `calibration`) are none of this function's business.
+ */
+export function anchorOverridesFromSearch(search,warn=(...args)=>console.warn(...args)) {
+  const params=new URLSearchParams(search||'');
+  const hueRaw=params.get('hue'),regRaw=params.get('reg');
+  if(hueRaw===null&&regRaw===null)return {};
+  if(hueRaw===null){warn(`Farborgel: ignoring reg=${JSON.stringify(regRaw)} - it needs a hue parameter`);return {};}
+  if(!/^(?:[1-9]|1[0-9]|2[0-4])$/.test(hueRaw)){warn(`Farborgel: ignoring hue=${JSON.stringify(hueRaw)} (expected an integer 1-24); opening the default start state`);return {};}
+  const overrides={selectedHue:Number(hueRaw)};
+  if(regRaw===null)return overrides;
+  if(!registers.includes(regRaw)){warn(`Farborgel: ignoring reg=${JSON.stringify(regRaw)} (expected one of ${registers.join(' ')}); opening the hue-only reference at hue ${hueRaw}`);return overrides;}
+  overrides.selectedRegister=regRaw;
+  return overrides;
+}
 export function createState(overrides={}) {
   const initial={locale:DEFAULT_LOCALE,activeView:'circle',displayMode:'atlas',selectedHue:1,
     selectedRegister:'ic',circleMode:'reference',selectedField:referenceAt(1),harmonyMode:3,circleRelation:null,seriesRelation:null,relation:'shadowSeries',

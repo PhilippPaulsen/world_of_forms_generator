@@ -493,9 +493,25 @@
     });
   }
 
+  // ---- Farborgel page link (Farborgel sub-page P2): #btn-farborgel (index.html, a plain <a target="_blank">)
+  // is kept pointing at the page PRE-FILLED with the active sheet's anchor - `?hue=9&reg=pa`, built by the pure
+  // farborgelPageUrl() (core/farborgel-bridge.js). Updated on EVERY sync, not at click time: the anchor changes
+  // while this page stays open, and a click-time update would miss middle-click / ctrl-cmd-click / "copy link" /
+  // a touch long-press, none of which fire the click handler the pre-fill would hang off. The comparison keeps
+  // it to a plain string compare per frame. Independent of the row's eligibility (`why`): the link works with
+  // fill off, on any sheet. Only the active sheet's anchor is read - nothing is written back (the return trip
+  // is a later phase).
+  const farborgelLink = $('#btn-farborgel');
+  function syncFarborgelLink() {
+    if (!farborgelLink || typeof farborgelPageUrl !== 'function' || typeof anchorFor !== 'function') return;
+    const url = farborgelPageUrl(anchorFor(activeLayer));
+    if (farborgelLink.getAttribute('href') !== url) farborgelLink.setAttribute('href', url);
+  }
+
   // ---- sync (on every redraw) ------------------------------------------------------------------------------------
   function sync() {
     if (typeof updateFaceColorsPanel === 'function') updateFaceColorsPanel(); // this frame's trail-list DOM, not stale
+    syncFarborgelLink();
     syncAnchor();
     syncAnchorPreview();
     syncAnchorWidgets();
