@@ -218,15 +218,40 @@
   /*
    * p5's element.mousePressed(fn) listens for 'mousedown' only. Enter/Space on a focused button fires only 'click'
    * (event.detail === 0), so such a button did nothing from the keyboard. This bridge turns a keyboard-activated click
-   * on a button in the header, a nav row, an overlay or the canvas rail (UI rework 5a) into a 'mousedown' on it,
-   * which the p5 handler then receives. Buttons with plain click handlers (ui.js's own) have no mousedown listener,
-   * so the extra event is harmless. A mouse/touch click has detail >= 1 and already produced a real mousedown.
+   * on ANY <button> into a 'mousedown' on it, which the p5 handler then receives. It used to cover four containers
+   * (header, nav rows, overlays, canvas rail) and missed the rest: the layers/timeline/cross-layer area, the layer
+   * groups, the Help and Download dialogs (open by keyboard, not operable by it) - so the rule is now the element, not
+   * a list of places. Buttons with plain click handlers (ui.js's own, the layer tabs, the pairing editor) have no
+   * mousedown listener, so the extra event is harmless there.
+   *
+   * No double firing: a mouse/pen/touch activation starts with a real pointerdown/mousedown on the button, so the
+   * click that ends it is NOT bridged. That is decided per button, not by event.detail alone (a browser that reports
+   * detail 0 for a tap would otherwise fire twice): the button is remembered at pointerdown/mousedown and forgotten
+   * at its next click - or at the next key press anywhere, so a press that was dragged off the button (no click)
+   * cannot swallow a later Enter/Space. The bridge's own synthetic mousedown is not remembered.
+   *
+   * The synthetic event has clientX/clientY 0, so p5 sees the pointer outside the canvas and sketch.js's global
+   * mousePressed() (which only acts inside the canvas) ignores it - a button press never lands on a node.
    */
+  const downButtons = new Set();
+  let bridging = false;
+  function noteDown(e) {
+    if (bridging) return;
+    const b = e.target.closest && e.target.closest('button');
+    if (b) downButtons.add(b);
+  }
+  document.addEventListener('pointerdown', noteDown, true);
+  document.addEventListener('mousedown', noteDown, true);
+  document.addEventListener('keydown', function () { downButtons.clear(); }, true);
   document.addEventListener('click', function (e) {
-    if (e.detail !== 0) return;
-    const b = e.target.closest && e.target.closest('.app-header button, .nav-rows button, .overlay button, .canvas-row button');
-    if (!b || b.disabled || b.getAttribute('aria-disabled') === 'true') return;
-    b.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+    const b = e.target.closest && e.target.closest('button');
+    if (!b) return;
+    const hadPointerDown = downButtons.delete(b);
+    if (e.detail !== 0 || hadPointerDown) return;
+    if (b.disabled || b.getAttribute('aria-disabled') === 'true') return;
+    bridging = true;
+    try { b.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window })); }
+    finally { bridging = false; }
   }, true);
 
   // ---- radio group ------------------------------------------------------------
