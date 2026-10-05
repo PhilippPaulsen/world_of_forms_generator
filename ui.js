@@ -10,6 +10,7 @@
  *   UI.stepper(root, opts)          number + stacked up/down chevrons around an existing number input (see below)
  *   UI.radiogroup(container, fn)    an exclusive choice: role="radio" options, aria-checked, arrow keys
  *   UI.overlay(trigger, panel)      a popover / bottom sheet ("More") opened by a button
+ *   UI.dialog(overlay, trigger, closeBtn)  keyboard behaviour (focus in, Escape, Tab trap, focus back) for a dialog sketch.js opens
  *   UI.pressed(el)                  keeps aria-pressed in step with the 'active' class (which the old handlers set)
  *
  * Toasts are dismissed by Escape, by a click on them, by the next tap anywhere, or after a few seconds.
@@ -370,6 +371,51 @@
     return api;
   }
 
+  // ---- modal dialog whose open/close logic lives elsewhere (Help, Download) ---------------------
+  /*
+   * UI.dialog(overlayEl, trigger, closeBtn) - keyboard behaviour for a dialog that sketch.js opens and closes by toggling
+   * the 'hidden' class on `overlayEl` (UI.overlay() cannot be used: it owns the open/close itself). Same contract as
+   * UI.overlay(): focus moves into the dialog when it opens, Escape closes it and focus goes back to `trigger`, Tab
+   * stays inside. A MutationObserver on the class turns "hidden removed / added" into those focus moves, so sketch.js
+   * is untouched; Escape is a click on `closeBtn`, i.e. the dialog closes through its own handler (the keyboard bridge
+   * above turns that click into the mousedown p5 listens for).
+   * The backdrop click that also closes these dialogs has NO keyboard equivalent, on purpose: Escape and the Close
+   * button are the keyboard way out.
+   */
+  function dialog(overlayEl, trigger, closeBtn) {
+    if (!overlayEl || !trigger || !closeBtn) return null;
+    const content = overlayEl.querySelector('.dialog-content') || overlayEl;
+    const heading = content.querySelector('strong');
+    overlayEl.setAttribute('role', 'dialog');
+    overlayEl.setAttribute('aria-modal', 'true');
+    if (heading) overlayEl.setAttribute('aria-label', heading.textContent.replace(/[:\u2026]+$/, '').trim());
+    if (!content.hasAttribute('tabindex')) content.tabIndex = -1;
+    trigger.setAttribute('aria-haspopup', 'dialog');
+    trigger.setAttribute('aria-expanded', 'false');
+    let wasOpen = !overlayEl.classList.contains('hidden');
+    function items() {
+      return Array.prototype.slice.call(overlayEl.querySelectorAll('button:not([disabled]), [tabindex="0"]')).filter(function (n) { return n.offsetParent !== null; });
+    }
+    new MutationObserver(function () {
+      const open = !overlayEl.classList.contains('hidden');
+      if (open === wasOpen) return;
+      wasOpen = open;
+      trigger.setAttribute('aria-expanded', String(open));
+      if (open) { (items()[0] || content).focus(); }
+      else if (overlayEl.contains(document.activeElement) || document.activeElement === document.body) trigger.focus();
+    }).observe(overlayEl, { attributes: true, attributeFilter: ['class'] });
+    overlayEl.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeBtn.click(); return; }
+      if (e.key !== 'Tab') return;
+      const list = items();
+      if (!list.length) { e.preventDefault(); return; }
+      const first = list[0], last = list[list.length - 1];
+      if (e.shiftKey && (document.activeElement === first || !overlayEl.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (document.activeElement === last || !overlayEl.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
+    });
+    return { isOpen: function () { return wasOpen; } };
+  }
+
   // ---- one sync entry point -------------------------------------------------------
   // sketch.js calls window.uiSync() at the start of every draw() and after symmetry changes; each nav row registers
   // its own state-reading function here with UI.onSync(fn).
@@ -377,5 +423,5 @@
   window.uiSync = function () { for (let i = 0; i < syncFns.length; i++) syncFns[i](); };
   function onSync(fn) { syncFns.push(fn); }
 
-  window.UI = { onSync: onSync, toast: toast, hideToast: hideToast, setDisabled: setDisabled, guard: guard, stepper: stepper, pressed: pressed, isDisabled: isDisabled, radiogroup: radiogroup, overlay: overlay, checkedFromActive: checkedFromActive, showReason: showReason };
+  window.UI = { onSync: onSync, toast: toast, hideToast: hideToast, setDisabled: setDisabled, guard: guard, stepper: stepper, pressed: pressed, isDisabled: isDisabled, dialog: dialog, radiogroup: radiogroup, overlay: overlay, checkedFromActive: checkedFromActive, showReason: showReason };
 })();
