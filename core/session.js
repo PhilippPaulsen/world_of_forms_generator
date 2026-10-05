@@ -47,6 +47,10 @@ const SESSION_SHAPES = Object.freeze(['triangle', 'square', 'hex']);
 const SESSION_HARMONY_TYPES = Object.freeze(['2', '3', '4', 'B', 'W', 'S', 'V', 'custom']);
 const SESSION_CURVE_KINDS = Object.freeze(['straight', 'curve', 'compound', 'free']);
 const SESSION_STRATEGIES = Object.freeze(['cyclic', 'area', 'symmetry', 'rings']);
+// the six raw symmetry modes the drawing code recognizes - the same list as normSym() in sketch.js (tools/session/test-session-apply.js pins them equal)
+const SESSION_SYMMETRY_MODES = Object.freeze(['none', 'reflection_only', 'rotation3', 'rotation6', 'rotation_reflection3', 'rotation_reflection6']);
+const SESSION_NET_KINDS = Object.freeze(['uniform', 'trig', 'geometric']);
+const SESSION_NET_DOMAINS = Object.freeze(['field', 'single', 'tiled']);
 
 // ---- small predicates ---------------------------------------------------------------------------------------------
 function _sObj(x) { return typeof x === 'object' && x !== null && !Array.isArray(x); }
@@ -191,6 +195,25 @@ function _vAssignment(a, label) {
     if (!(dc === null || (Array.isArray(dc) && dc.length === 3 && dc.every(b => _sInt(b) && b >= 0 && b <= 255)))) throw label + ' displayColor must be null or three bytes';
     return { hue: a.hue, w: a.w, s: a.s, rule: a.rule, params: a.params === null || a.params === undefined ? null : _sJson(a.params, 4, label + ' params'), displayColor: dc === null ? null : dc.slice() };
 }
+// a net spec as sketch.js's commit() writes it: { x: axis, y: 'same' | axis, repeat?: bool, macro?: int, domain?: 'field' | ... } or { regular: true };
+// axis = { kind: 'uniform' | 'trig' | 'geometric', w: finite, focus?: -1..1, alternate?: bool }. Unknown extra keys are kept (bounded plain JSON). Garbage in
+// a spec never made the draw-path readers THROW (16 malformed specs probed), but it yields NaN geometry on every frame, so it is rejected here.
+function _vNetSpec(spec, label) {
+    const o = _sJson(spec, 6, label);
+    if (!_sObj(o)) throw label + ' must be an object';
+    if (o.regular === true) return o;
+    const axis = (a, w) => {
+        if (!_sObj(a) || !SESSION_NET_KINDS.includes(a.kind) || !_sNum(a.w) || Math.abs(a.w) > 1000) throw `${label}.${w} must be {kind, w}`;
+        if (a.focus !== undefined && !(_sNum(a.focus) && a.focus >= -1 && a.focus <= 1)) throw `${label}.${w}.focus must be a number in -1..1`;
+        if (a.alternate !== undefined && typeof a.alternate !== 'boolean') throw `${label}.${w}.alternate must be a boolean`;
+    };
+    axis(o.x, 'x');
+    if (o.y !== 'same') axis(o.y, 'y');
+    if (o.repeat !== undefined && typeof o.repeat !== 'boolean') throw label + '.repeat must be a boolean';
+    if (o.macro !== undefined && !(_sInt(o.macro) && o.macro >= 1 && o.macro <= 64)) throw label + '.macro must be an integer 1-64';
+    if (o.domain !== undefined && !SESSION_NET_DOMAINS.includes(o.domain)) throw label + '.domain must be field, single or tiled';
+    return o;
+}
 function _vSheet(o, what) {
     if (!_sObj(o)) throw what + ' is not an object';
     const free = o.freeNodes;
@@ -287,7 +310,7 @@ function validateSession(input) {
         if (!_sPos(st.nodeCount) || st.nodeCount > _sMaxNodeCount(st.shape)) throw 'settings.nodeCount must be an integer from 1 to ' + _sMaxNodeCount(st.shape) + ' for ' + st.shape;
         if (!_sNum(st.shapeSizeFactor) || st.shapeSizeFactor <= 0 || st.shapeSizeFactor > 100) throw 'settings.shapeSizeFactor must be a positive number';
         if (!_sObj(st.canvas) || !_sPos(st.canvas.w) || !_sPos(st.canvas.h) || st.canvas.w > 10000 || st.canvas.h > 10000) throw 'settings.canvas must be {w, h}';
-        if (!_sStr(st.symmetryMode, 64) || st.symmetryMode === '') throw 'settings.symmetryMode must be a short string';
+        if (!SESSION_SYMMETRY_MODES.includes(st.symmetryMode)) throw 'settings.symmetryMode must be one of ' + SESSION_SYMMETRY_MODES.join(', ');
         if (!(st.symmetryCategory === null || st.symmetryCategory === undefined || _sStr(st.symmetryCategory, 32))) throw 'settings.symmetryCategory must be null or a short string';
         if (!(st.symmetryFold === null || st.symmetryFold === undefined || st.symmetryFold === 3 || st.symmetryFold === 6)) throw 'settings.symmetryFold must be null, 3 or 6';
         const ct = st.curveType;
@@ -301,8 +324,7 @@ function validateSession(input) {
             if (!_sObj(a) || !_sObj(a.p) || !_sCoord(a.p.x) || !_sCoord(a.p.y) || !_sObj(a.q) || !_sCoord(a.q.x) || !_sCoord(a.q.y) || (a.side !== 1 && a.side !== -1) || ![3, 4, 6].includes(a.n)) throw 'settings.altNetSeed must be {p, q, side, n}';
             altNetSeed = { p: { x: a.p.x, y: a.p.y }, q: { x: a.q.x, y: a.q.y }, side: a.side, n: a.n };
         }
-        const netTransform = st.netTransform === null || st.netTransform === undefined ? null : _sJson(st.netTransform, 6, 'settings.netTransform');
-        if (netTransform !== null && !_sObj(netTransform)) throw 'settings.netTransform must be null or an object';
+        const netTransform = st.netTransform === null || st.netTransform === undefined ? null : _vNetSpec(st.netTransform, 'settings.netTransform');
         const settings = { shape: st.shape, nodeCount: st.nodeCount, shapeSizeFactor: st.shapeSizeFactor, canvas: { w: st.canvas.w, h: st.canvas.h },
             symmetryMode: st.symmetryMode, symmetryCategory: st.symmetryCategory === undefined ? null : st.symmetryCategory, symmetryFold: st.symmetryFold === undefined ? null : st.symmetryFold,
             curveType, lineColor: st.lineColor, showNodes: st.showNodes, showFaces: st.showFaces, freeEndpointsEnabled: st.freeEndpointsEnabled, altNetSeed, netTransform };
@@ -313,7 +335,7 @@ function validateSession(input) {
             const what = 'layers[' + i + ']';
             const sheet = _vSheet(l, what);
             if (!SESSION_SHAPES.includes(l.shape)) throw what + '.shape must be triangle, square or hex';
-            if (!_sStr(l.symmetryMode, 64) || l.symmetryMode === '') throw what + '.symmetryMode must be a short string';
+            if (!SESSION_SYMMETRY_MODES.includes(l.symmetryMode)) throw what + '.symmetryMode must be one of ' + SESSION_SYMMETRY_MODES.join(', ');
             if (!_sPos(l.nodeCount) || l.nodeCount > _sMaxNodeCount(l.shape)) throw what + '.nodeCount must be an integer from 1 to ' + _sMaxNodeCount(l.shape) + ' for ' + l.shape;
             if (!_sNum(l.shapeSizeFactor) || l.shapeSizeFactor <= 0 || l.shapeSizeFactor > 100) throw what + '.shapeSizeFactor must be a positive number';
             if (!_sCoord(l.offsetX) || !_sCoord(l.offsetY) || !_sNum(l.rotation) || Math.abs(l.rotation) > 1e5) throw what + ' offsetX / offsetY / rotation must be finite numbers';
@@ -340,7 +362,7 @@ function validateSession(input) {
             const segmentPairings = arr('segmentPairings', _vPermutation), segmentFlips = arr('segmentFlips', _vFlips), segmentMembers = arr('segmentMembers', _vPermutation);
             const ns = t.netStates;
             if (!Array.isArray(ns) || ns.length !== kf.length) throw 'timeline.netStates must have one entry per keyframe';
-            const netStates = ns.map((n, i) => { if (n === null) return null; const c = _sJson(n, 6, `timeline.netStates[${i}]`); if (!_sObj(c)) throw `timeline.netStates[${i}] must be null or an object`; return c; });
+            const netStates = ns.map((n, i) => (n === null ? null : _vNetSpec(n, `timeline.netStates[${i}]`)));
             timeline = { keyframeLayerIds: kf.slice(), playbackLayerIndex: t.playbackLayerIndex, segmentDurationsMs, segmentPairings, segmentFlips, segmentMembers, netStates };
         }
         return { ok: true, snapshot: { schema: SESSION_SCHEMA_VERSION, trailKeys: SESSION_TRAIL_KEY_VERSION, savedAt: raw.savedAt, settings, base, layers, activeLayer, timeline } };

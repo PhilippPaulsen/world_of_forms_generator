@@ -160,7 +160,7 @@ let layered;   // { st, snap, text }
     st.connections.push([1, sh.grid.nodes.length + 1]); st.redoStack = [[2, 3]];
     st.curveType = { kind: 'free', seed: 123456789, roughness: 1, strength: 25 };
     st.altNetSeed = { p: { x: 10, y: 20 }, q: { x: 80, y: 20 }, side: 1, n: 6 };
-    st.baseNetTransform = { x: { kind: 'sinus', w: 0.5, alternate: false }, y: 'same', domain: 'field' };
+    st.baseNetTransform = { x: { kind: 'trig', w: 0.5, alternate: false }, y: 'same', domain: 'field' };   // kinds are uniform | trig | geometric (sinus / tangens are the sign of w)
     const layerOf = (shape, order, mode, off, rot, extra) => {
         const grid = sb[{ triangle: 'buildTriangleGrid', square: 'buildSquareGrid', hex: 'buildHexGrid' }[shape]](order, 1.3, 300, 300);
         const store = new Map(); const trailsHere = sb.computeFaceTrails(sh.faces(p.ids), sh.group);
@@ -175,7 +175,7 @@ let layered;   // { st, snap, text }
     const playback = layerOf('triangle', 3, 'rotation6', 0, 0, { isTimelinePlayback: true, connections: [], faceAssignments: new Map(), facePalette: null, faceAnchor: null, lastHarmonyType: null, lastSelection: null, distributionStrategy: null, showFaces: false });
     st.additionalLayers.push(playback);
     st.timeline = { keyframeLayerIds: [0, 1, 2], playbackLayerIndex: 3, segmentDurationsMs: [2000, 3500], segmentPairings: [null, [1, 0]], segmentFlips: [[true, false], null], segmentMembers: [null, [0, 2]],
-        netStates: [null, { regular: true }, { x: { kind: 'tangens', w: -0.4 }, y: 'same' }], playing: true, startTime: 12345, elapsedMs: 777, netLive: true, currentFrame: { segment: 1, localT: 0.5 } };
+        netStates: [null, { regular: true }, { x: { kind: 'trig', w: -0.4 }, y: 'same' }], playing: true, startTime: 12345, elapsedMs: 777, netLive: true, currentFrame: { segment: 1, localT: 0.5 } };
     st.activeLayer = 2;
     const snap = S.buildSessionSnapshot(st, 1700000000000), ser = S.serializeSession(snap);
     const parsed = ser.ok ? S.parseSession(ser.text) : { ok: false, code: 'serialize' };
@@ -187,7 +187,7 @@ let layered;   // { st, snap, text }
     const snapObj = parsed.snapshot;
     check('3 real layers + the playback layer, activeLayer and the timeline come back', snapObj.layers.length === 4 && snapObj.activeLayer === 2 && snapObj.timeline.keyframeLayerIds.length === 3 && snapObj.timeline.playbackLayerIndex === 3);
     check('the playback layer keeps its flag; a disabled layer stays disabled; _timelineSavedEnabled survives', snapObj.layers[3].isTimelinePlayback === true && snapObj.layers[2].enabled === false && snapObj.layers[1].timelineSavedEnabled === true && snapObj.layers[0].timelineSavedEnabled === null);
-    check('segment pairings, flips, members and per-keyframe net states survive', same(snapObj.timeline.segmentPairings, [null, [1, 0]]) && same(snapObj.timeline.segmentFlips, [[true, false], null]) && same(snapObj.timeline.segmentMembers, [null, [0, 2]]) && snapObj.timeline.netStates[0] === null && snapObj.timeline.netStates[2].x.kind === 'tangens');
+    check('segment pairings, flips, members and per-keyframe net states survive', same(snapObj.timeline.segmentPairings, [null, [1, 0]]) && same(snapObj.timeline.segmentFlips, [[true, false], null]) && same(snapObj.timeline.segmentMembers, [null, [0, 2]]) && snapObj.timeline.netStates[0] === null && snapObj.timeline.netStates[2].x.kind === 'trig');
     check("'custom' with its Farborgel selection is kept on the base and on a layer", snapObj.base.lastHarmonyType === 'custom' && same(snapObj.base.lastSelection, SEL3) && snapObj.layers[0].lastHarmonyType === 'custom');
     check('palette overrides (a Map) come back as entries, per sheet', same(snapObj.base.facePalette.overrides, [[...st.baseFacePalette.overrides.entries()][0]]) && same(snapObj.layers[0].facePalette.overrides, [['some-key', 2]]));
     check("'farborgel' and 'max-contrast-gray' entries keep rule, params and displayColor", snapObj.base.faceAssignments.some(([, a]) => a.rule === 'farborgel' && a.params.source === 'harmonySelection' && Array.isArray(a.displayColor)) && snapObj.base.faceAssignments.some(([, a]) => a.rule === 'max-contrast-gray' && a.params.source === 'maxContrastGray'), J(snapObj.base.faceAssignments.reduce((m, [, a]) => { const k = a.rule + '/' + (a.params && a.params.source); m[k] = (m[k] || 0) + 1; return m; }, {})));
