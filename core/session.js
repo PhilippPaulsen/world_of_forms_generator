@@ -26,7 +26,12 @@
  * whose lastHarmonyType is 'custom' but whose lastSelection is missing or invalid falls back to lastHarmonyType
  * null (nothing could regenerate it).
  *
- * Depends on (browser: load AFTER core/farborgel-bridge.js): validateHarmonySelection(), DISTRIBUTION_STRATEGIES.
+ * planSessionRestore() is the step after validation: it rebuilds the base grid and every layer grid with the real builders of
+ * core/forms.js and checks them against the saved fingerprints, still without touching any global (the applying is core/session-apply.js).
+ *
+ * Depends on (browser: load AFTER core/forms.js, core/color.js and core/farborgel-bridge.js): validateHarmonySelection(), maxNodeCountFor(),
+ * getHarmonyRule() / harmonyRuleParams() / OSTWALD_REFERENCE_SYSTEM (palette checks), and for planSessionRestore() the grid builders,
+ * layerGrid() and completeEdgeToRegularPolygon() / _subdivide*Interior(). Each dependency is feature-tested, not assumed.
  */
 
 const SESSION_SCHEMA_VERSION = 1;
@@ -179,6 +184,8 @@ function _vAssignment(a, label) {
     if (!_sObj(a)) throw label + ' is not an object';
     if (!_sNum(a.hue)) throw label + ' hue must be a finite number';
     if (!_sNum(a.w) || a.w < 0 || a.w > 1 || !_sNum(a.s) || a.s < 0 || a.s > 1) throw label + ' w and s must be numbers in 0-1';
+    // the Ostwald triangle: resolveColor() (core/color.js) rejects w + s > 1 + 1e-9, so a stored pair outside it would pass here and then throw when applied
+    if (a.w + a.s > 1 + 1e-9) throw label + ' w + s must not exceed 1 (the colour triangle)';
     if (!(a.rule === null || _sStr(a.rule, 64))) throw label + ' rule must be null or a short string';
     const dc = a.displayColor;
     if (!(dc === null || (Array.isArray(dc) && dc.length === 3 && dc.every(b => _sInt(b) && b >= 0 && b <= 255)))) throw label + ' displayColor must be null or three bytes';
@@ -218,6 +225,18 @@ function _vSheet(o, what) {
         if (!_sObj(p) || !(p.ruleId === null || _sStr(p.ruleId, 64)) || !Array.isArray(p.idx) || p.idx.length > 64 || !p.idx.every(i => _sInt(i) && i >= 0)
             || !Array.isArray(p.overrides) || p.overrides.length > SESSION_MAX_ASSIGNMENTS
             || !p.overrides.every(e => Array.isArray(e) && e.length === 2 && _sStr(e[0], 512) && _sInt(e[1]) && e[1] >= 0)) throw what + '.facePalette is malformed';
+        // a rule id the registry does not know, or an idx that does not fit the rule's axes, would throw in generateHarmonyPalette()
+        // on the next stepper click (the Face Colors panel and assignTrailSlot() call it) - reject here, while nothing depends on it.
+        // The lookup is getHarmonyRule(), a Map.get() in core/color.js, so 'constructor', 'toString', '__proto__', 'hasOwnProperty' and
+        // the like are simply not found (an object lookup or an `in` test would find them on Object.prototype). And it fails CLOSED: if
+        // the registry is not loaded, a palette with a rule cannot be checked and is rejected, never waved through.
+        if (p.ruleId !== null) {
+            if (typeof getHarmonyRule !== 'function' || typeof harmonyRuleParams !== 'function' || typeof OSTWALD_REFERENCE_SYSTEM === 'undefined') throw what + '.facePalette.ruleId cannot be checked (core/color.js is not loaded)';
+            const rule = getHarmonyRule(p.ruleId);
+            if (!rule) throw what + '.facePalette.ruleId is not a registered rule';
+            const axes = harmonyRuleParams(rule, OSTWALD_REFERENCE_SYSTEM);
+            if (p.idx.length !== axes.length || !p.idx.every((k, i) => k < axes[i].count)) throw what + '.facePalette.idx does not fit the axes of rule ' + p.ruleId;
+        }
         facePalette = { ruleId: p.ruleId, idx: p.idx.slice(), overrides: p.overrides.map(e => [e[0], e[1]]) };
     }
     let faceAnchor = null;
@@ -338,4 +357,65 @@ function parseSession(rawString) {
     let obj;
     try { obj = JSON.parse(rawString); } catch (e) { return { ok: false, code: 'not-json', detail: 'not valid JSON' }; }
     return validateSession(obj);
+}
+
+// ---- planning a restore: rebuild every grid, compare the fingerprints (pure) -----------------------------------------
+// The step between validateSession() (the snapshot is well-formed) and applying it (touching the globals of core/state.js):
+// rebuild the base grid and every layer grid with the REAL builders of core/forms.js and check them against what was saved.
+// Nothing global is read or written; `live` = { canvasW, canvasH } is the canvas that already exists (createCanvas has run,
+// so a snapshot made at another size cannot be restored).
+//   -> { ok: true, plan: { base: { nodes, centroid, outerCorners }, layers: [{ nodes, centroid, outerCorners }] } }
+//    | { ok: false, code: 'canvas-mismatch' | 'grid-mismatch' | 'plan-error', detail }
+// plan nodes = the rebuilt grid nodes followed by the saved free endpoint nodes ({id, x, y, free: true}); a connection or
+// redo entry that names a node outside them is rejected here. `snapshot` must be the output of validateSession().
+// Never throws. This is exactly the grid construction rebuildGrid() / rebuildGridFromConstruction() / addLayer() /
+// updateActiveLayerGrid() perform, minus their resets.
+function planSessionRestore(snapshot, live) {
+    try {
+        if (typeof buildTriangleGrid !== 'function' || typeof buildSquareGrid !== 'function' || typeof buildHexGrid !== 'function' || typeof layerGrid !== 'function'
+            || typeof completeEdgeToRegularPolygon !== 'function' || typeof _subdivideTriangleInterior !== 'function' || typeof _subdivideSquareInterior !== 'function'
+            || typeof _subdivideHexInterior !== 'function') return { ok: false, code: 'plan-error', detail: 'core/forms.js is not loaded' };
+        const st = snapshot.settings;
+        if (!live || live.canvasW !== st.canvas.w || live.canvasH !== st.canvas.h) return { ok: false, code: 'canvas-mismatch', detail: `saved canvas ${st.canvas.w}x${st.canvas.h}, live ${live && live.canvasW}x${live && live.canvasH}` };
+        const sheetNodes = (gridNodes, saved, what) => {
+            const fp = sessionNodeFingerprint(gridNodes);
+            if (fp.count !== saved.nodeCheck.count || fp.hash !== saved.nodeCheck.hash) {
+                return { error: { ok: false, code: 'grid-mismatch', detail: `${what}: the rebuilt grid has ${fp.count} nodes (hash ${fp.hash}), the snapshot was made with ${saved.nodeCheck.count} (hash ${saved.nodeCheck.hash}) - the grid algorithm or its inputs changed` } };
+            }
+            const nodes = gridNodes.map(n => ({ id: n.id, x: n.x, y: n.y })).concat(saved.freeNodes.map(n => ({ id: n.id, x: n.x, y: n.y, free: true })));
+            const ids = new Set(nodes.map(n => n.id));
+            for (const [list, name] of [[saved.connections, 'connections'], [saved.redoStack, 'redoStack']]) {
+                for (let i = 0; i < list.length; i++) for (const id of list[i]) if (!ids.has(id)) return { error: { ok: false, code: 'grid-mismatch', detail: `${what}.${name}[${i}] names node ${id}, which the rebuilt sheet does not have` } };
+            }
+            return { nodes };
+        };
+        // base grid
+        let grid;
+        if (st.altNetSeed) {
+            const nOf = st.shape === 'triangle' ? 3 : st.shape === 'square' ? 4 : st.shape === 'hex' ? 6 : -1;   // explicit, not an object lookup keyed by a stored string
+            const a = st.altNetSeed;
+            if (a.n !== nOf) return { ok: false, code: 'plan-error', detail: `altNetSeed.n ${a.n} does not belong to shape ${st.shape}` };
+            const { center, vertices } = completeEdgeToRegularPolygon(a.p, a.q, a.n, a.side);
+            const nodes = a.n === 3 ? _subdivideTriangleInterior(vertices[0], vertices[1], vertices[2], st.nodeCount)
+                : a.n === 4 ? _subdivideSquareInterior(vertices, st.nodeCount) : _subdivideHexInterior(vertices, center, st.nodeCount);
+            grid = { nodes, centroid: center, outerCorners: vertices };
+        } else {
+            if (st.shape !== 'triangle' && st.shape !== 'square' && st.shape !== 'hex') return { ok: false, code: 'plan-error', detail: 'unknown shape' };
+            const build = st.shape === 'triangle' ? buildTriangleGrid : st.shape === 'square' ? buildSquareGrid : buildHexGrid;
+            grid = build(st.nodeCount, st.shapeSizeFactor, st.canvas.w, st.canvas.h);
+        }
+        const base = sheetNodes(grid.nodes, snapshot.base, 'base');
+        if (base.error) return base.error;
+        const plan = { base: { nodes: base.nodes, centroid: { x: grid.centroid.x, y: grid.centroid.y }, outerCorners: grid.outerCorners.map(c => ({ x: c.x, y: c.y })) }, layers: [] };
+        for (let i = 0; i < snapshot.layers.length; i++) {
+            const l = snapshot.layers[i];
+            const lg = layerGrid(grid.outerCorners, grid.centroid, st.shape, st.shapeSizeFactor, l.shapeSizeFactor, l.nodeCount, l.shape, st.canvas.w, st.canvas.h);
+            const r = sheetNodes(lg.nodes, l, 'layers[' + i + ']');
+            if (r.error) return r.error;
+            plan.layers.push({ nodes: r.nodes, centroid: { x: lg.centroid.x, y: lg.centroid.y }, outerCorners: lg.outerCorners.map(c => ({ x: c.x, y: c.y })) });
+        }
+        return { ok: true, plan };
+    } catch (e) {
+        return { ok: false, code: 'plan-error', detail: 'unexpected failure (' + (e && e.message) + ')' };
+    }
 }
