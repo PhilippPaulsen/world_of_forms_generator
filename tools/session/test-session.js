@@ -165,7 +165,7 @@ let layered;   // { st, snap, text }
         const grid = sb[{ triangle: 'buildTriangleGrid', square: 'buildSquareGrid', hex: 'buildHexGrid' }[shape]](order, 1.3, 300, 300);
         const store = new Map(); const trailsHere = sb.computeFaceTrails(sh.faces(p.ids), sh.group);
         sb.applyHarmonyToPattern(SEL3, store, trailsHere.slice(0, 5), 'cyclic', undefined);
-        const palette = sb.newFacePalette(); palette.ruleId = 'farborgel'; palette.idx = [1, 2]; palette.overrides.set('some-key', 2);
+        const palette = sb.newFacePalette(); palette.ruleId = 'isotint'; palette.idx = [1, 2]; palette.overrides.set('some-key', 2);   // palette.ruleId is a REGISTRY rule ('farborgel' is an assignment rule, never a palette's)
         return Object.assign({ connections: [[1, 2], [2, 3]], redoStack: [], offsetX: off, offsetY: -off, rotation: rot, shape, symmetryMode: mode, enabled: true, showFaces: true, nodeCount: order,
             shapeSizeFactor: 1.3, nodes: grid.nodes.concat([{ id: grid.nodes.length + 1, x: 5, y: 6, free: true }]), faceAssignments: store, facePalette: palette, faceAnchor: { hueIndex: 9, registerIndex: null },
             lastHarmonyType: 'custom', lastSelection: clone(SEL3), distributionStrategy: 'area', animation: { playing: true, startTime: 999, elapsedMs: 5 },
