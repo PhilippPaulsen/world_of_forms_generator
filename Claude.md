@@ -40,6 +40,24 @@ The generator is split into a portable `core/` engine and a `sketch.js` UI shell
 - **Step-by-step approval.** Prefer proposing a plan and getting confirmation per step over large unreviewed changes.
 - **This repo is upstream of `die-welt-der-formen/p5_prototype/`.** Feature work happens here first; `p5_prototype/` is synced manually once a version is stable (see Related repositories above). Don't develop features directly against `p5_prototype/`.
 
+## Running the tests
+
+There is no test runner or CI in the repo; the suites are plain Node scripts. One command, from the repo root, runs all of them - every `tools/*/test-*.js` (the glob picks up a new test directory by itself) and the four Farborgel suites - and prints each file's last line, flagging any non-zero exit:
+
+```bash
+fail=0; for f in tools/*/test-*.js color-harmony/test.js color-harmony/ui/test.mjs color-harmony/ui/composition.test.mjs color-harmony/ui/integration.test.mjs; do out=$(node "$f" 2>&1); rc=$?; printf '%-58s %s\n' "$f" "$(printf '%s\n' "$out" | tail -1)"; [ $rc -ne 0 ] && { echo "  ^ FAILED, exit $rc"; fail=1; }; done; echo "overall: $([ $fail -eq 0 ] && echo PASS || echo FAIL)"
+```
+
+**This full command is mandatory before every commit.** It takes about ten minutes, almost all of it three slow suites (`test-inherit-hook.js` ~260 s, `test-spread.js` ~120 s, `test-inherit.js` ~50 s). Last full run: 38 files (34 `tools/*` + 4 Farborgel), 1227 checks in `tools/*`, 182 Farborgel groups, `overall: PASS`.
+
+**Fast variant - only while iterating, not before a commit that touches `core/faces.js` or `core/facecolor.js`** (those three suites are what guard face detection, trail keys and colour inheritance). It is the same command with the three slow files skipped, about a minute:
+
+```bash
+fail=0; for f in tools/*/test-*.js color-harmony/test.js color-harmony/ui/test.mjs color-harmony/ui/composition.test.mjs color-harmony/ui/integration.test.mjs; do case "$f" in *test-inherit-hook.js|*test-spread.js|*test-inherit.js) continue;; esac; out=$(node "$f" 2>&1); rc=$?; printf '%-58s %s\n' "$f" "$(printf '%s\n' "$out" | tail -1)"; [ $rc -ne 0 ] && { echo "  ^ FAILED, exit $rc"; fail=1; }; done; echo "overall (fast variant, 3 slow suites skipped): $([ $fail -eq 0 ] && echo PASS || echo FAIL)"
+```
+
+A single suite: `node tools/session/test-session.js`. `tools/ui/measure-layout.js` and `check-pointer-mapping.js` are browser console scripts, not part of this run. A new test directory under `tools/` only needs a file named `test-*.js` that exits non-zero on failure.
+
 ## Terminology
 
 German↔English terminology for Ostwald's vocabulary (mirror pair, rotational form, node, theme line, tip, star, wreath, portfolio/sheet, etc.) is documented in `docs/terminology.md`, along with a proposed systematic (Hinterreiter-style) pattern-naming scheme intended for Roadmap item 1.11. Use the established English terms consistently in code, UI labels, and comments — do not introduce new translations ad hoc.

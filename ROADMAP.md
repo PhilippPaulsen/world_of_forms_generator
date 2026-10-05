@@ -293,6 +293,7 @@ Evidence tags as above.
 - [ ] `die-welt-der-formen/p5_prototype` is not touched by a merge; its sync stays manual.
 
 **Tests - green on `ed922cba`, run on 2026-10-05 [suites].**
+*(How to run them all with one command: `Claude.md`, "Running the tests".)*
 - Farborgel: `color-harmony/test.js` 79, `ui/test.mjs` 38, `composition.test.mjs` 28, `integration.test.mjs` 37 groups.
 - `tools/color`: all suites (including bridge 93, handoff 173, prefill 57, tokens 33, esm-cachebust 23, inherit-hook 29, inherit 20, spread 13).
 - `tools/netwarp`: all 11 suites; `tools/layernodes` 13; `tools/nodecount` 17; `tools/ui` 20.
