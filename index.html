@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260929ap">
+  <link rel="stylesheet" href="style.css?v=20260929aq">
   <!-- Cache-busting for the ES-module graph behind core/farborgel-selection.mjs (below). The <script src> tags in
        this file carry ?v= by hand-bump (CLAUDE.md), but a module's own `import ... from './x.mjs'` cannot: this
        import map is the one place that gives every module in that graph the same ?v= as everything else (bump it
@@ -18,11 +18,11 @@
   <script type="importmap">
     {
     "imports": {
-      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929ap",
-      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929ap",
-      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929ap",
-      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929ap",
-      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929ap"
+      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929aq",
+      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929aq",
+      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929aq",
+      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929aq",
+      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929aq"
     }
     }
   </script>
@@ -1532,30 +1532,30 @@
   <div id="ui-toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260929ap"></script>
-  <script src="core/state.js?v=20260929ap"></script>
-  <script src="core/symmetry.js?v=20260929ap"></script>
-  <script src="core/curves.js?v=20260929ap"></script>
-  <script src="core/netwarp.js?v=20260929ap"></script>
-  <script src="core/tiling.js?v=20260929ap"></script>
-  <script src="core/faces.js?v=20260929ap"></script>
-  <script src="core/orbits.js?v=20260929ap"></script>
-  <script src="core/color.js?v=20260929ap"></script>
-  <script src="core/facecolor.js?v=20260929ap"></script>
-  <script src="core/farborgel-bridge.js?v=20260929ap"></script>
-  <script src="core/export.js?v=20260929ap"></script>
-  <script src="core/symmetry-toggles.js?v=20260929ap"></script>
-  <script src="sketch.js?v=20260929ap"></script>
-  <script src="nav.js?v=20260929ap"></script>
-  <script src="ui.js?v=20260929ap"></script>
-  <script src="ui-form.js?v=20260929ap"></script>
-  <script src="ui-net.js?v=20260929ap"></script>
-  <script src="ui-farbe.js?v=20260929ap"></script>
-  <script src="ui-rail.js?v=20260929ap"></script>
+  <script src="core/forms.js?v=20260929aq"></script>
+  <script src="core/state.js?v=20260929aq"></script>
+  <script src="core/symmetry.js?v=20260929aq"></script>
+  <script src="core/curves.js?v=20260929aq"></script>
+  <script src="core/netwarp.js?v=20260929aq"></script>
+  <script src="core/tiling.js?v=20260929aq"></script>
+  <script src="core/faces.js?v=20260929aq"></script>
+  <script src="core/orbits.js?v=20260929aq"></script>
+  <script src="core/color.js?v=20260929aq"></script>
+  <script src="core/facecolor.js?v=20260929aq"></script>
+  <script src="core/farborgel-bridge.js?v=20260929aq"></script>
+  <script src="core/export.js?v=20260929aq"></script>
+  <script src="core/symmetry-toggles.js?v=20260929aq"></script>
+  <script src="sketch.js?v=20260929aq"></script>
+  <script src="nav.js?v=20260929aq"></script>
+  <script src="ui.js?v=20260929aq"></script>
+  <script src="ui-form.js?v=20260929aq"></script>
+  <script src="ui-net.js?v=20260929aq"></script>
+  <script src="ui-farbe.js?v=20260929aq"></script>
+  <script src="ui-rail.js?v=20260929aq"></script>
   <!-- Group D Phase B4: exposes window.farborgelBuildHarmonySelection (core/farborgel-selection.mjs)
        for ui-farbe.js/sketch.js (classic scripts) to call - a module script coexists fine with the
        classic p5-bootstrap scripts above (real-browser verified, no conflicts). -->
-  <script type="module" src="core/farborgel-selection.mjs?v=20260929ap"></script>
+  <script type="module" src="core/farborgel-selection.mjs?v=20260929aq"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides
