@@ -104,6 +104,32 @@ console.log('== 1. validator: colour triangle and palette rule ==');
     }));
 }
 
+// ---- 1b. validator: symmetry modes and net specs (found by the apply fuzz's consumers) -------------------------------------------------------
+console.log('\n== 1b. validator: symmetry modes and net specs ==');
+{
+    const ctx = world('square', 3, 3);
+    putConnections(ctx, [[1, 2]]);
+    addLayer(ctx, { shape: 'square', order: 3, size: 3 });
+    ctx.run(`timeline = { keyframeLayerIds: [0], playbackLayerIndex: null, segmentDurationsMs: [], segmentPairings: [], segmentFlips: [], segmentMembers: [], netStates: [null], netLive: false, elapsedMs: 0, startTime: null, playing: false };`);
+    const base = snapshotOf(ctx);
+    const v = mut => { const o = clone(base); mut(o); return ctx.sb.validateSession(o); };
+    const MODES = ['none', 'reflection_only', 'rotation3', 'rotation6', 'rotation_reflection3', 'rotation_reflection6'];
+    check('all six symmetry modes are accepted for the base and for a layer', MODES.every(m => v(o => { o.settings.symmetryMode = m; }).ok && v(o => { o.layers[0].symmetryMode = m; }).ok));
+    check('anything else is rejected as a mode (hex, square, 3, "", constructor, __proto__, rotation_reflection, ROTATION6) - base and layer', ['hex', 'square', '3', '', 'constructor', '__proto__', 'toString', 'rotation_reflection', 'ROTATION6', 'none '].every(m => !v(o => { o.settings.symmetryMode = m; }).ok && !v(o => { o.layers[0].symmetryMode = m; }).ok));
+    const sk = F.read('sketch.js').match(/function normSym[\s\S]*?const validModes = \[([^\]]*)\]/);
+    const skModes = sk ? sk[1].split(',').map(x => x.trim().replace(/'/g, '')) : [];
+    check("the mode list is the one normSym() in sketch.js uses (pinned by reading its source)", same(skModes, MODES), skModes.join(','));
+    const GOOD = [{ x: { kind: 'trig', w: -0.4 }, y: 'same', repeat: false }, { x: { kind: 'geometric', w: 1.2, alternate: true }, y: { kind: 'uniform', w: 0 }, repeat: true, macro: 3 },
+        { x: { kind: 'trig', w: 0.3, focus: 0.5, alternate: false }, y: 'same', domain: 'field' }, { regular: true }, { x: { kind: 'uniform', w: 0 }, y: 'same', domain: 'single', extra: 1 }];
+    check('real-shaped net specs (and {regular: true}) are accepted for the base and as a timeline net state', GOOD.every(sp => v(o => { o.settings.netTransform = sp; }).ok && v(o => { o.timeline.netStates = [sp]; }).ok));
+    const BAD = [{ x: 5 }, { x: { kind: 'trig' } }, { x: { kind: 'weird', w: 1 } }, { x: { kind: 'trig', w: 'a' } }, { x: { kind: 'trig', w: null } }, { y: 'same' }, { x: null, y: 'same' }, { x: { kind: 'trig', w: 2000 }, y: 'same' },
+        { x: { kind: 'trig', w: 0.3, focus: 9 }, y: 'same' }, { x: { kind: 'trig', w: 0.3, alternate: 'yes' }, y: 'same' }, { x: { kind: 'trig', w: 0.3 }, y: 7 }, { x: { kind: 'trig', w: 0.3 }, y: 'same', macro: 0 },
+        { x: { kind: 'trig', w: 0.3 }, y: 'same', macro: 65 }, { x: { kind: 'trig', w: 0.3 }, y: 'same', macro: 'a' }, { x: { kind: 'trig', w: 0.3 }, y: 'same', domain: 'weird' }, { x: { kind: 'trig', w: 0.3 }, y: 'same', repeat: 1 },
+        {}, [], 'regular', 5, { regular: 'yes' }];
+    check(`${BAD.length} malformed net specs are rejected for the base and as a timeline net state`, BAD.every(sp => !v(o => { o.settings.netTransform = sp; }).ok && !v(o => { o.timeline.netStates = [sp]; }).ok),
+        BAD.filter(sp => v(o => { o.settings.netTransform = sp; }).ok || v(o => { o.timeline.netStates = [sp]; }).ok).map(J).join(' ; '));
+}
+
 // ---- 2. plan vs the real rebuildGrid() ---------------------------------------------------------------------------------------------
 console.log('\n== 2. plan equals the real rebuildGrid() ==');
 {

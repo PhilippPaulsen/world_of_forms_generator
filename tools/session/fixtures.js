@@ -26,6 +26,7 @@ function sessionSources() {
 function makeContext(opts) {
     opts = opts || {};
     const files = [C.loadSrc(false)];
+    files.push(read('core/symmetry-toggles.js'));   // symmetryModeFor() / symmetryCategoryFoldFor() - the pure half of the Form row's symmetry logic
     if (opts.state) files.push(read('core/state.js'));
     if (opts.export) files.push(read('core/export.js'));
     files.push(sessionSources());
