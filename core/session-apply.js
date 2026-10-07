@@ -67,17 +67,63 @@ function _restoreSessionGlobals(c) {
     baseNetTransform = c.baseNetTransform; baseNetAnimation = c.baseNetAnimation; faceHover = c.faceHover;
 }
 
+// The build size of a layer's nodes. A layer animation overwrites layer.shapeSizeFactor frame by frame WITHOUT rebuilding the nodes
+// (sketch.js applyLayerAnimationFrame), so while an animation is paused or scrubbed mid-way the field says 3.8 and the nodes are still the
+// grid that was built for 5. The snapshot's nodeCheck is the fingerprint of the nodes, planSessionRestore() rebuilds the grid FROM the stored
+// size, so the stored size must be the one the nodes were built with. Derived here, only when the layer does not already match:
+// candidates in this order - the live field, the animation's start, its end, the integers 1-9 (the size input's range); the first whose
+// layerGrid() has the live nodes' fingerprint wins. The arguments are exactly those of sketch.js updateActiveLayerGrid(): the base's live
+// outerCorners, centroid, shape and size, the layer's own nodeCount and shape, the canvas. No match -> null (the caller keeps the live
+// value; the writer's check() then refuses the snapshot and says why). Never throws.
+// SESSION_COLLECT_STATS is for the tests: gridBuilds counts layerGrid() calls, searches counts layers that needed the candidate list.
+const SESSION_COLLECT_STATS = { gridBuilds: 0, searches: 0 };
+function _layerGridFingerprint(layer, f) {
+    SESSION_COLLECT_STATS.gridBuilds++;
+    return sessionNodeFingerprint(layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, f, layer.nodeCount, layer.shape, canvasW, canvasH).nodes);
+}
+function _sameFingerprint(a, b) { return a.count === b.count && a.hash === b.hash; }
+// `layer` did not match its live shapeSizeFactor (the first candidate, tried by the caller): try the rest.
+function sessionLayerBuildSize(layer) {
+    try {
+        SESSION_COLLECT_STATS.searches++;
+        const want = sessionNodeFingerprint(layer.nodes);
+        const tries = [layer.shapeSizeFactor];
+        if (layer.animation) tries.push(layer.animation.fromShapeSizeFactor, layer.animation.toShapeSizeFactor);
+        for (let k = 1; k <= 9; k++) tries.push(k);
+        for (let i = 1; i < tries.length; i++) {
+            const f = tries[i];
+            if (typeof f !== 'number' || !(f > 0) || !isFinite(f) || tries.indexOf(f) !== i) continue;   // each candidate once, the live one is already known not to match
+            if (_sameFingerprint(_layerGridFingerprint(layer, f), want)) return f;
+        }
+        return null;
+    } catch (e) { return null; }
+}
+
 // The state-like object core/session.js's buildSessionSnapshot() takes: the live globals plus the symmetry (category, fold) that
 // live in setup() closures and are reached through window.symmetryUi ({category(), fold()}, may be undefined headlessly).
-// References, not copies - buildSessionSnapshot() copies.
-function collectSessionState(symmetryUi) {
+// References, not copies - buildSessionSnapshot() copies. With opts.buildSizes (the autosave writer) each layer whose nodes do not match
+// its own shapeSizeFactor is replaced by a shallow copy carrying the size its nodes were built with (sessionLayerBuildSize); every other
+// layer is the live object, and the live layers are never modified. Without it (the apply path, the tests of the plain state) the
+// state is the live one.
+function collectSessionState(symmetryUi, opts) {
+    let layers = additionalLayers;
+    if (opts && opts.buildSizes && Array.isArray(additionalLayers)) {
+        layers = additionalLayers.map(l => {
+            if (!l || !Array.isArray(l.nodes)) return l;
+            let ok;
+            try { ok = _sameFingerprint(_layerGridFingerprint(l, l.shapeSizeFactor), sessionNodeFingerprint(l.nodes)); } catch (e) { return l; }
+            if (ok) return l;   // the fast path: nothing to derive
+            const f = sessionLayerBuildSize(l);
+            return f === null ? l : Object.assign({}, l, { shapeSizeFactor: f });
+        });
+    }
     return {
         currentShape, nodeCount, shapeSizeFactor, canvasW, canvasH, symmetryMode,
         symmetryCategory: symmetryUi && typeof symmetryUi.category === 'function' ? symmetryUi.category() : null,
         symmetryFold: symmetryUi && typeof symmetryUi.fold === 'function' ? symmetryUi.fold() : null,
         curveType, lineColor, showNodes, showFaces, freeEndpointsEnabled, altNetSeed, baseNetTransform,
         connections, redoStack, nodes, baseFaceAssignments, baseFacePalette, baseFaceAnchor, baseLastHarmonyType, baseLastSelection, baseDistributionStrategy,
-        additionalLayers, timeline, activeLayer,
+        additionalLayers: layers, timeline, activeLayer,
     };
 }
 

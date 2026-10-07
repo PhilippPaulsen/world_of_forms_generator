@@ -377,5 +377,141 @@ console.log('\n== 5. differential fuzz: validate + plan accepted => apply ok and
     check('the fuzz is not vacuous', accepted > 200 && planned > 100 && applied === planned, `${accepted}/${planned}/${applied} of ${N}`);
 }
 
+// ---- 6. the build size of a layer whose size a layer animation changed --------------------------------------------------------------
+console.log('\n== 6. collectSessionState({ buildSizes: true }): a layer animation changes shapeSizeFactor, not the nodes ==');
+{
+    // The app's own situation: base hex size 3; a layer on a hex grid built for size B; a layer animation (Set Start / Set End) that later overwrote
+    // layer.shapeSizeFactor with an in-between value WITHOUT rebuilding the nodes (sketch.js applyLayerAnimationFrame).
+    const mid = (build, live, anim, extra) => {
+        const ctx = world('hex', 3, 3, 'rotation_reflection6');
+        addLayer(ctx, { shape: 'hex', order: 3, size: build, offsetX: 12, rotation: 30, connections: [[1, 2], [2, 3], [4, 7]], free: [10, 20], showFaces: true });
+        ctx.run(`(function () { const l = additionalLayers[0]; l.shapeSizeFactor = ${live}; ${anim ? `l.animation = { fromOffsetX: 0, fromOffsetY: 0, fromRotation: 0, fromShapeSizeFactor: ${anim[0]}, toOffsetX: 12, toOffsetY: 0, toRotation: 30, toShapeSizeFactor: ${anim[1]}, durationMs: 2000, elapsedMs: 800, startTime: null, playing: false };` : ''} ${extra || ''} })()`);
+        return ctx;
+    };
+    const stats = ctx => ctx.run('JSON.stringify(SESSION_COLLECT_STATS)');
+    const zero = ctx => ctx.run('SESSION_COLLECT_STATS.gridBuilds = 0; SESSION_COLLECT_STATS.searches = 0;');
+    const tried = ctx => { ctx.run(`globalThis.__tried = []; (function () { const real = layerGrid; globalThis.__real = real; layerGrid = function () { globalThis.__tried.push(arguments[4]); return real.apply(this, arguments); }; })()`); return () => ctx.run('JSON.parse(JSON.stringify(globalThis.__tried))'); };
+    const unwrap = ctx => ctx.run('layerGrid = globalThis.__real');
+    const layerOf = (ctx, st) => st.additionalLayers[0];
+
+    // (a) the plain collect is the live state; without the option a mid-animation layer is exactly what it was (the apply path relies on that)
+    {
+        const ctx = mid(5, 3.8, [3, 5]);
+        const st = ctx.sb.collectSessionState(uiOf(ctx, 'spiegeling', 6)._ui && uiOf(ctx, 'spiegeling', 6));
+        check('(a) without the option the collected layers are the live ones (same array, same objects)', st.additionalLayers === ctx.get('additionalLayers') && stats(ctx) === '{"gridBuilds":0,"searches":0}');
+        const pl = planFor(ctx, snapOf(ctx, uiOf(ctx, 'spiegeling', 6)));
+        check('(a) ... and its snapshot cannot be restored: the plan reports grid-mismatch (the situation the derivation exists for)', pl.v.ok && !pl.p.ok && pl.p.code === 'grid-mismatch', pl.p && pl.p.code);
+    }
+    // (b) mid-animation -> derived size 5: snapshot -> validate -> plan OK -> apply -> the same nodes, lines, free node, export
+    {
+        const src = mid(5, 3.8, [3, 5]);
+        const ui = uiOf(src, 'spiegeling', 6);
+        const liveLayer = src.get('additionalLayers')[0];
+        const liveBefore = J(liveLayer);
+        zero(src);
+        const log = tried(src);
+        const state = src.sb.collectSessionState(ui, { buildSizes: true });
+        const calls = log(); unwrap(src);
+        const st = layerOf(src, state);
+        check('(b) the collected layer carries the size its nodes were built with (5), not the animated 3.8', st.shapeSizeFactor === 5 && liveLayer.shapeSizeFactor === 3.8);
+        check('(b) candidates are tried in order: live 3.8 (fast-path test), then the start 3, then the end 5 - and stop at the first match', same(calls, [3.8, 3, 5]), J(calls));
+        check('(b) the live layer object is not touched (a copy was collected; the animation, nodes, offset and rotation stay as they were)', J(liveLayer) === liveBefore && st !== liveLayer && st.nodes === liveLayer.nodes && st.faceAssignments === liveLayer.faceAssignments && st.rotation === 30 && st.offsetX === 12);
+        check('(b) one layer needed the search', stats(src) === '{"gridBuilds":3,"searches":1}', stats(src));
+        const snap = strip(src.sb.buildSessionSnapshot(state, 1));
+        check('(b) the snapshot says size 5 for the layer; the layer\'s own offset and rotation are the animation\'s values', snap.layers[0].shapeSizeFactor === 5 && snap.layers[0].offsetX === 12 && snap.layers[0].rotation === 30);
+        const pl = planFor(src, snap);
+        check('(b) the snapshot validates and the restore plan is OK', pl.v.ok && pl.p.ok, pl.p && pl.p.ok ? '' : pl.p.code + ' ' + pl.p.detail);
+        const dst = world('square', 4, 1, 'none');
+        const r = safe(() => applyInto(dst, snap, fakeHooks(dst, snap, uiOf(dst, 'spiegeling', 6)), {}));
+        check('(b) apply succeeds', r && r.ok === true, r && (r.error || r.code));
+        const dl = dst.get('additionalLayers')[0];
+        const pos = l => J(l.nodes.map(n => [n.id, n.x, n.y, !!n.free]));
+        check('(b) the restored layer\'s nodes (incl. the free one), connections and colours equal the live layer\'s', pos(dl) === pos(liveLayer) && J(dl.connections) === J(liveLayer.connections) && dl.nodes.length === liveLayer.nodes.length);
+        check('(b) the restored layer says 5 (the geometry that was drawn); the live one said 3.8', dl.shapeSizeFactor === 5);
+        // the export of the restored state equals the live export except the one field the derivation deliberately changes
+        const ex = exportOf(src), ey = exportOf(dst);
+        const mask = e => { const c = clone(e); c.geometry.layers.forEach(l => { delete l.shapeSizeFactor; }); return c; };
+        check('(b) buildExportData() of the restored state equals the live one except that layer\'s shapeSizeFactor field (3.8 live, 5 restored)', same(mask(ex), mask(ey)) && ex.geometry.layers[0].shapeSizeFactor === 3.8 && ey.geometry.layers[0].shapeSizeFactor === 5, firstDiff(mask(ex), mask(ey)));
+    }
+    // (c) the other candidates: the start, the integers, and what is NOT found
+    {
+        const a = mid(3, 3.8, [3, 5]);                       // built for the START (3)
+        const ca = tried(a); const sa = a.sb.collectSessionState(null, { buildSizes: true }); const la = ca(); unwrap(a);
+        check('(c) nodes built for the animation\'s start: found at the second candidate', layerOf(a, sa).shapeSizeFactor === 3 && same(la, [3.8, 3]), J(la));
+        const b = mid(7, 5.5, [2, 9]);                       // neither start nor end: an integer
+        const cb = tried(b); const sb2 = b.sb.collectSessionState(null, { buildSizes: true }); const lb = cb(); unwrap(b);
+        check('(c) neither start nor end: the integers 1-9 are tried in order after them, each size once', layerOf(b, sb2).shapeSizeFactor === 7 && same(lb, [5.5, 2, 9, 1, 3, 4, 5, 6, 7]), J(lb));
+        const c = mid(7, 5.5, null);                         // no animation object at all: live, then 1..9
+        const cc = tried(c); const sc = c.sb.collectSessionState(null, { buildSizes: true }); const lc = cc(); unwrap(c);
+        check('(c) a layer without an animation object skips the start/end candidates', layerOf(c, sc).shapeSizeFactor === 7 && same(lc, [5.5, 1, 2, 3, 4, 5, 6, 7]), J(lc));
+        const e9 = mid(9, 3.8, null);                        // the last integer
+        const s9 = e9.sb.collectSessionState(null, { buildSizes: true });
+        check('(c) the last integer, 9, is found', layerOf(e9, s9).shapeSizeFactor === 9);
+        // a layer of ANOTHER shape and its OWN node count (the arguments of updateActiveLayerGrid: layer.shape, layer.nodeCount - not the base\'s)
+        const x = world('hex', 3, 3, 'rotation_reflection6');
+        addLayer(x, { shape: 'square', order: 2, size: 5, connections: [[1, 2]] });
+        addLayer(x, { shape: 'triangle', order: 4, size: 6, connections: [[1, 2]] });
+        x.run('additionalLayers[0].shapeSizeFactor = 3.8; additionalLayers[1].shapeSizeFactor = 2.5;');
+        const sx = x.sb.collectSessionState(null, { buildSizes: true });
+        check('(c) a square layer (2 nodes) and a triangle layer (4 nodes) on a hex base: their own shape and node count are used, 5 and 6 are found', sx.additionalLayers.map(l => l.shapeSizeFactor).join() === '5,6');
+        const px = planFor(x, strip(x.sb.buildSessionSnapshot(sx, 1)));
+        check('(c) ... and that snapshot plans OK', px.v.ok && px.p.ok, px.p && px.p.ok ? '' : px.p.code + ' ' + px.p.detail);
+        const d = mid(5.5, 3.8, [3, 5]);                     // built for a size that is none of the candidates
+        zero(d);
+        const sd = d.sb.collectSessionState(null, { buildSizes: true });
+        check('(c) no consistent size: the layer is left as it is (3.8), the whole candidate list was tried (the live size, 3, 5, then 1-9 without the repeats of 3 and 5 = 10 grid builds in all)', layerOf(d, sd).shapeSizeFactor === 3.8 && layerOf(d, sd) === d.get('additionalLayers')[0] && stats(d) === '{"gridBuilds":10,"searches":1}', stats(d));
+        const pd = planFor(d, strip(d.sb.buildSessionSnapshot(sd, 1)));
+        check('(c) ... and its snapshot still fails the plan with grid-mismatch, which is what the writer\'s check() refuses (one warning, the previous snapshot stays)', pd.v.ok && !pd.p.ok && pd.p.code === 'grid-mismatch', pd.p && pd.p.code);
+    }
+    // (d) the fast path: a normal layer costs one grid build and NO search; the same objects come back
+    {
+        const ctx = world('hex', 3, 3, 'rotation_reflection6');
+        addLayer(ctx, { shape: 'hex', order: 3, size: 5, connections: [[1, 2]] });
+        addLayer(ctx, { shape: 'square', order: 3, size: 3, rotation: 17, offsetX: 5 });
+        addLayer(ctx, { shape: 'triangle', order: 2, size: 4.5, connections: [[1, 2]] });
+        zero(ctx);
+        const st = ctx.sb.collectSessionState(null, { buildSizes: true });
+        check('(d) normal layers (incl. a fractional size and another shape): one grid build each, no search, the live objects', stats(ctx) === '{"gridBuilds":3,"searches":0}' && st.additionalLayers.every((l, i) => l === ctx.get('additionalLayers')[i]), stats(ctx));
+        zero(ctx);
+        const st0 = ctx.sb.collectSessionState(null, { buildSizes: true });
+        check('(d) collecting twice does the same work and gives the same snapshot', same(strip(ctx.sb.buildSessionSnapshot(st, 1)), strip(ctx.sb.buildSessionSnapshot(st0, 1))));
+        const noLayers = world('square', 4, 3);
+        zero(noLayers);
+        noLayers.sb.collectSessionState(null, { buildSizes: true });
+        check('(d) no layers: no grid build at all', stats(noLayers) === '{"gridBuilds":0,"searches":0}');
+    }
+    // (e) several layers: only the mismatching one is derived; the playback layer and the others keep what they had
+    {
+        const ctx = world('hex', 3, 3, 'rotation_reflection6');
+        addLayer(ctx, { shape: 'hex', order: 3, size: 5, connections: [[1, 2]] });
+        addLayer(ctx, { shape: 'hex', order: 3, size: 4, connections: [[2, 3]], playback: true });
+        addLayer(ctx, { shape: 'hex', order: 2, size: 6, connections: [[1, 2]] });
+        ctx.run(`additionalLayers[0].shapeSizeFactor = 3.2; additionalLayers[0].animation = { fromShapeSizeFactor: 3, toShapeSizeFactor: 5 }; additionalLayers[2].shapeSizeFactor = 6.5; additionalLayers[2].animation = { fromShapeSizeFactor: 6.5, toShapeSizeFactor: 6 };`);
+        zero(ctx);
+        const st = ctx.sb.collectSessionState(null, { buildSizes: true });
+        const live = ctx.get('additionalLayers');
+        check('(e) of three layers two are mid-animation: they get 5 and 6, the third (the playback layer) is the live object', st.additionalLayers.map(l => l.shapeSizeFactor).join() === '5,4,6' && st.additionalLayers[1] === live[1] && stats(ctx) === '{"gridBuilds":6,"searches":2}', stats(ctx));
+        const pl = planFor(ctx, strip(ctx.sb.buildSessionSnapshot(st, 1)));
+        check('(e) the whole snapshot plans OK', pl.v.ok && pl.p.ok, pl.p && pl.p.ok ? '' : pl.p.code + ' ' + pl.p.detail);
+    }
+    // (f) the derivation never throws: a layer without nodes, an animation object with garbage
+    {
+        const ctx = mid(5, 3.8, [3, 5], 'additionalLayers[0].animation.fromShapeSizeFactor = "x"; additionalLayers[0].animation.toShapeSizeFactor = null;');
+        const st = safe(() => ctx.sb.collectSessionState(null, { buildSizes: true }));
+        check('(f) garbage candidates (a string, null) are skipped without a grid build; the integers still find 5 (live + 1..5 = 6 builds)', st && layerOf(ctx, st).shapeSizeFactor === 5 && stats(ctx) === '{"gridBuilds":6,"searches":1}', stats(ctx));
+        const t1 = mid(5, 3.8, [3, 5]);
+        t1.run('globalThis.__real = layerGrid; layerGrid = function (a, b, c, d, f) { if (f !== 3.8) throw new Error("boom"); return globalThis.__real.apply(this, arguments); }');
+        const s1 = safe(() => t1.sb.collectSessionState(null, { buildSizes: true }));
+        check('(f) a layerGrid() that throws during the search: no throw out of the collector, the layer stays as it is', s1 && s1.additionalLayers[0] === t1.get('additionalLayers')[0]);
+        const t2 = mid(5, 3.8, [3, 5]);
+        t2.run('layerGrid = function () { throw new Error("boom"); }');
+        const s2 = safe(() => t2.sb.collectSessionState(null, { buildSizes: true }));
+        check('(f) a layerGrid() that throws at the first (live) build: no throw out of the collector, the layer stays as it is', s2 && s2.additionalLayers[0] === t2.get('additionalLayers')[0]);
+        const ctx2 = mid(5, 3.8, [3, 5], 'additionalLayers[0].nodes = null;');
+        const st2 = safe(() => ctx2.sb.collectSessionState(null, { buildSizes: true }));
+        check('(f) a layer whose nodes are gone is passed through untouched, no throw', st2 && layerOf(ctx2, st2) === ctx2.get('additionalLayers')[0]);
+    }
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 process.exit(failures ? 1 : 0);
