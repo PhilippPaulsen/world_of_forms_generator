@@ -5044,9 +5044,10 @@ function mousePressed(e) {
     pressAt(mouseX, mouseY, 'mouse');
 }
 
-// The press itself, in sketch units: select a node, connect, create a free endpoint, or take an Alt-net construction click. pointerType ('mouse' | 'touch' | 'pen')
-// is not used yet (the hit radius by pointer type comes in B4).
-function pressAt(x, y, pointerType) {
+// The press itself, in sketch units: select a node, connect, create a free endpoint, or take an Alt-net construction click. `hit` is given only by tapPress():
+// { id } with the node a touch or pen tap resolved (nearest within the touch radius, see touchPickNodeId), id null for none; without it (the mouse) the loop
+// below finds the node, first in array order within 18 units, exactly as it always did. pointerType is not read here.
+function pressAt(x, y, pointerType, hit) {
     if (x < 0 || x > width || y < 0 || y > height) return;
     if (altNetActive) { handleAltNetClick(x, y); return; }
     // Roadmap 1.12 stage 1 (node-resolution fix): activeNodes() instead
@@ -5063,7 +5064,8 @@ function pressAt(x, y, pointerType) {
     let foundId = null;
     // A layer's node is hit where it is DRAWN (layerNodeDrawnPosition(): offset and rotation), not at its stored canonical position.
     const hitLayer = activeLayer === 'base' ? null : additionalLayers[activeLayer];
-    for (let nd of activeNodeArr) { const q = hitLayer ? layerNodeDrawnPosition(hitLayer, nd) : nd; const p = netWarp ? applyNetWarp(netWarp, q) : q; if (dist(x, y, p.x, p.y) < 18) { foundId = nd.id; break; } }
+    if (hit) foundId = hit.id;
+    else for (let nd of activeNodeArr) { const q = hitLayer ? layerNodeDrawnPosition(hitLayer, nd) : nd; const p = netWarp ? applyNetWarp(netWarp, q) : q; if (dist(x, y, p.x, p.y) < 18) { foundId = nd.id; break; } }
     if (foundId === null && freeEndpointsEnabled && netWarp && netWarpIsClosed(netWarp) && !netWarpInsideNet(netWarp, { x: x, y: y })) {
         // Closed net: there is nothing outside the net to attach a free endpoint to - refuse, visibly.
         const note = document.getElementById('net-free-note');
@@ -5121,7 +5123,24 @@ function clientToSketch(clientX, clientY) {
 function tapPress(tap) {
     const p = clientToSketch(tap.x, tap.y);
     if (altNetActive && altNetPending && altNetPending.q !== undefined) altNetPending.previewSide = sideOfLine(altNetPending.p, altNetPending.q, p.x, p.y);
-    pressAt(p.x, p.y, tap.pointerType);
+    pressAt(p.x, p.y, tap.pointerType, touchHit(p.x, p.y, tap.pointerType));
+}
+
+// Phase 2 (touch), B4b: a touch or pen tap picks the NEAREST node within a radius (core/pick-node.js), not the first in array order within 18 units.
+// drawnHitNodes() is read-only and mirrors the loop in pressAt(): the active nodes where they are DRAWN (a layer's offset and rotation, then a net warp).
+// The radius: touch and pen max(18, 22 css px / scale) - but with free endpoints on, a tap farther than 18 units from every node must still be able to create
+// one, which the 22 px radius would forbid on a grid denser than ~22 px, so then the fine radius 18 decides (nearest within it selects, else a free node).
+function drawnHitNodes() {
+    const arr = activeNodes(), netWarp = netWarpBaseNow(), hitLayer = activeLayer === 'base' ? null : additionalLayers[activeLayer];
+    return arr.map(nd => { const q = hitLayer ? layerNodeDrawnPosition(hitLayer, nd) : nd; const p = netWarp ? applyNetWarp(netWarp, q) : q; return { id: nd.id, x: p.x, y: p.y }; });
+}
+function touchHit(x, y, pointerType) {
+    if (typeof pickNodeAt !== 'function' || typeof hitRadius !== 'function') return undefined;   // core/pick-node.js missing: the old loop runs
+    const cv = document.querySelector('#canvas-container canvas');
+    const scale = cv && width ? cv.scrollWidth / width : NaN;
+    const radius = freeEndpointsEnabled ? hitRadius('mouse', scale) : hitRadius(pointerType, scale);
+    const n = pickNodeAt(drawnHitNodes(), x, y, radius);
+    return { id: n ? n.id : null };
 }
 
 function addRandomConnection() {
