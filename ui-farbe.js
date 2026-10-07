@@ -603,7 +603,7 @@
   // is a later phase).
   // P3: this generator tab's identity for the return handoff - generated ONCE per page load and added to the link as
   // `from=<12 hex>`; the Farborgel page addresses its handoff to it, so with several generator tabs open only the
-  // one that opened the page reacts. A reload is a new identity on purpose: the state it held is gone anyway.
+  // one that opened the page reacts. A reload is a new identity on purpose: the generator's state now survives a reload (session autosave), but the identity does not - a Farborgel tab that was opened before the reload addressed its handoff to the old id and times out; opening it again from the reloaded page fixes it.
   const GENERATOR_TAB_ID = typeof farborgelNewTabId === 'function' ? farborgelNewTabId() : null;
   const farborgelLink = $('#btn-farborgel');
   function syncFarborgelLink() {

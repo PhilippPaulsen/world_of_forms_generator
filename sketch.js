@@ -2345,6 +2345,55 @@ function setup() {
         }
     }
 
+    // ---- Session writer (Phase 3 autosave, P2): WHEN the snapshot is saved is core/session-writer.js; this wires it to the page ----
+    // One writer per page load, only where the storage guard allows (not in a frame, sessionStorage reachable). It is told after every draw (see draw()),
+    // flushed when the page is hidden or goes away, and not asked to write while something plays (isAnythingAnimating()). It only ever writes the main key
+    // (core/session-store.js writeSession), with the URL the page has NOW (the hash is dropped there). check(): a snapshot that could not be restored
+    // (plan: grid-mismatch, ...) is not written, the previous one stays. A layer a layer animation left mid-way (shapeSizeFactor 3.8, nodes still built for 5)
+    // is collected with the size its nodes were built with ({ buildSizes: true }, core/session-apply.js), so it is written and restores; only a layer
+    // for which no size reproduces its nodes is refused. See ROADMAP (Phase 3).
+    function startSessionWriter() {
+        try {
+            const guard = sessionStorageGuard(window);
+            if (!guard.allowed) return null;
+            const writer = createSessionWriter({
+                collect: () => collectSessionState(window.symmetryUi, { buildSizes: true }),
+                serialize: (state, now) => { const r = serializeSession(buildSessionSnapshot(state, now)); return r.ok ? r.text : null; },
+                write: (text, now) => writeSession(guard.storage, text, window.location.href, now, true), // quiet: the writer warns once per kind
+                check: text => {
+                    const parsed = parseSession(text);
+                    if (!parsed.ok) return parsed.code + ': ' + parsed.detail;
+                    const planned = planSessionRestore(parsed.snapshot, { canvasW, canvasH });
+                    return planned.ok ? null : planned.code + ': ' + planned.detail;
+                },
+                isBlocked: () => isAnythingAnimating(),
+                setTimer: (fn, ms) => window.setTimeout(fn, ms),
+                clearTimer: handle => window.clearTimeout(handle),
+                now: () => Date.now(),
+            });
+            window.sessionWriter = writer;
+            // the page is hidden (tab switch, app switch, mobile background) or goes away (close, reload, navigation): write what is pending
+            window.addEventListener('pagehide', () => { writer.flush(); });
+            document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') writer.flush(); });
+            return writer;
+        } catch (e) {
+            console.warn('[session] autosave could not be started: ' + (e && e.message));
+            return null;
+        }
+    }
+
+    // "Neu anfangen" (rail, Mehr): forget this tab's saved session and load the page again without URL parameters. The writer is disabled FIRST - the page
+    // is about to go away and its pagehide handler would write the snapshot straight back - then the main key and the quarantine slot are removed, then a plain
+    // navigation (no search, no hash) starts fresh: the restore rule finds no snapshot. The state is not rebuilt by hand.
+    window.sessionRestart = function () {
+        try { if (window.sessionWriter) window.sessionWriter.disable(); } catch (e) { } // the navigation below still happens
+        try {
+            const guard = sessionStorageGuard(window);
+            if (guard.storage) { guard.storage.removeItem(SESSION_STORAGE_KEY); guard.storage.removeItem(SESSION_QUARANTINE_KEY); }
+        } catch (e) { console.warn('[session] could not remove the saved session: ' + (e && e.message)); }
+        window.location.assign(window.location.pathname);
+    };
+
     rebuildGrid(currentShape);
     // Draw a random connection on start - unless a valid catalog URL
     // pattern is already resolved (see catalogUrlPattern/applyCatalogPattern()
@@ -2383,6 +2432,7 @@ function setup() {
     redraw();
     updateCrossLayerStatus();
     updatePatternNameStatus();
+    startSessionWriter(); // last: the first write follows the first draw (markDirty is called at the end of draw())
 }
 
 // ----------------- DRAW -----------------------------------------
@@ -2593,6 +2643,10 @@ function draw() {
     // gated pattern (rebuilds only when its contents could have changed).
     updateFaceColorsPanel();
     if (netControlsSync) netControlsSync();
+    // Phase 3 autosave (P2): the saved state MAY have changed. Called on every draw, hover redraws included: it costs a function call and two stores, and the
+    // writer (core/session-writer.js) debounces, caps the wait at 5 s, and does not write an unchanged snapshot. Last in draw(), so the first write is after the
+    // first draw (face colours are written lazily into the store while the first draw computes the faces).
+    if (window.sessionWriter) window.sessionWriter.markDirty();
 }
 
 // ----------------- ALTERNATIVE NET CONSTRUCTION (Roadmap 1.2-C) -----
@@ -3123,6 +3177,7 @@ function toggleActiveLayerAnimationPlayback() {
         // the end, rather than silently doing nothing on a second Play
         // click.
         if (anim.elapsedMs >= anim.durationMs) anim.elapsedMs = 0;
+        sessionFlushNow(); // the layer animation overwrites saved layer fields while it plays: save what is pending BEFORE it starts
         anim.startTime = millis() - anim.elapsedMs;
         anim.playing = true;
     }
@@ -3250,6 +3305,10 @@ function applyLayerConnectionsMorphFrame(layer, anim, t) {
 function isAnythingAnimating() {
     return additionalLayers.some(l => l.animation && l.animation.playing) || !!(timeline && timeline.playing) || !!(baseNetAnimation && baseNetAnimation.playing);
 }
+
+// Phase 3 autosave (P2): the session writer (core/session-writer.js, created at the end of setup()) writes nothing while something plays - a layer animation
+// overwrites saved layer fields (offset, rotation, shapeSizeFactor) frame by frame - and is flushed once just before a playback starts.
+function sessionFlushNow() { if (window.sessionWriter) window.sessionWriter.flush(); }
 
 // ----------------- NET ANIMATION (Group E, Stage 1 - the Stage A "capture two states, lerp" pattern) --------------------
 // STATUS: FUNCTIONAL, TESTED, BUT WITHOUT A UI ENTRY POINT (as of this change). This standalone net animation (Case B2: baseNetAnimation, Set Start /
@@ -4019,6 +4078,7 @@ function toggleTimelinePlayback() {
         timeline.playing = false;
     } else {
         if (timeline.elapsedMs >= totalDuration) timeline.elapsedMs = 0;
+        sessionFlushNow(); // no write happens while the timeline plays: save what is pending BEFORE it starts
         timeline.startTime = millis() - timeline.elapsedMs;
         timeline.playing = true;
         timeline.netLive = true;

@@ -12,13 +12,15 @@ const ROOT = path.join(__dirname, '..', '..');
 const C = require(path.join(ROOT, 'tools', 'color', 'corpus.js'));
 
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
-// session modules in load order; SESSION_JS replaces core/session.js, SESSION_APPLY_JS replaces core/session-apply.js
+// session modules in load order; SESSION_JS replaces core/session.js, SESSION_APPLY_JS core/session-apply.js, SESSION_STORE_JS core/session-store.js, SESSION_WRITER_JS core/session-writer.js
 function sessionSources() {
     const out = [fs.readFileSync(process.env.SESSION_JS || path.join(ROOT, 'core', 'session.js'), 'utf8')];
     const apply = process.env.SESSION_APPLY_JS || path.join(ROOT, 'core', 'session-apply.js');
     if (fs.existsSync(apply)) out.push(fs.readFileSync(apply, 'utf8'));
     const store = process.env.SESSION_STORE_JS || path.join(ROOT, 'core', 'session-store.js');
     if (fs.existsSync(store)) out.push(fs.readFileSync(store, 'utf8'));
+    const writer = process.env.SESSION_WRITER_JS || path.join(ROOT, 'core', 'session-writer.js');
+    if (fs.existsSync(writer)) out.push(fs.readFileSync(writer, 'utf8'));
     return out.join('\n');
 }
 
