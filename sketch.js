@@ -234,6 +234,7 @@ function setup() {
     canvasH = canvasW;
     createCanvas(canvasW, canvasH).parent('canvas-container');
     noLoop();
+    installTapInput();
 
     // Shape selection via Icons (Common class .shape-icon-btn)
     const shapeBtns = selectAll('.shape-icon-btn');
@@ -5035,9 +5036,19 @@ function computeCrossLayerFacesFlow() {
     }, 0);
 }
 
-function mousePressed() {
-    if (mouseX < 0 || mouseX > width || mouseY < 0 || mouseY > height) return;
-    if (altNetActive) { handleAltNetClick(mouseX, mouseY); return; }
+// The mouse press. p5 calls it for a real mouse press AND, in 1.9.0, for every touch tap twice more (at touchstart, and for the emulated mousedown): touch and pen
+// taps therefore go through tapPress() below, touchStarted is defined (installTapInput) so p5 stops calling this at touchstart, and the emulated mousedown that
+// follows a tap is recognised here and dropped. The real mouse path is pressAt(mouseX, mouseY) exactly as it was.
+function mousePressed(e) {
+    if (tapDetector && e && tapDetector.consumeEmulatedMouse(e.clientX, e.clientY)) return;
+    pressAt(mouseX, mouseY, 'mouse');
+}
+
+// The press itself, in sketch units: select a node, connect, create a free endpoint, or take an Alt-net construction click. pointerType ('mouse' | 'touch' | 'pen')
+// is not used yet (the hit radius by pointer type comes in B4).
+function pressAt(x, y, pointerType) {
+    if (x < 0 || x > width || y < 0 || y > height) return;
+    if (altNetActive) { handleAltNetClick(x, y); return; }
     // Roadmap 1.12 stage 1 (node-resolution fix): activeNodes() instead
     // of the bare global `nodes` - both the hit-test below and 1.3(a)'s
     // free-endpoint creation previously always read/wrote the base's
@@ -5052,8 +5063,8 @@ function mousePressed() {
     let foundId = null;
     // A layer's node is hit where it is DRAWN (layerNodeDrawnPosition(): offset and rotation), not at its stored canonical position.
     const hitLayer = activeLayer === 'base' ? null : additionalLayers[activeLayer];
-    for (let nd of activeNodeArr) { const q = hitLayer ? layerNodeDrawnPosition(hitLayer, nd) : nd; const p = netWarp ? applyNetWarp(netWarp, q) : q; if (dist(mouseX, mouseY, p.x, p.y) < 18) { foundId = nd.id; break; } }
-    if (foundId === null && freeEndpointsEnabled && netWarp && netWarpIsClosed(netWarp) && !netWarpInsideNet(netWarp, { x: mouseX, y: mouseY })) {
+    for (let nd of activeNodeArr) { const q = hitLayer ? layerNodeDrawnPosition(hitLayer, nd) : nd; const p = netWarp ? applyNetWarp(netWarp, q) : q; if (dist(x, y, p.x, p.y) < 18) { foundId = nd.id; break; } }
+    if (foundId === null && freeEndpointsEnabled && netWarp && netWarpIsClosed(netWarp) && !netWarpInsideNet(netWarp, { x: x, y: y })) {
         // Closed net: there is nothing outside the net to attach a free endpoint to - refuse, visibly.
         const note = document.getElementById('net-free-note');
         if (note) { note.hidden = false; clearTimeout(netFreeNoteTimer); netFreeNoteTimer = setTimeout(() => { note.hidden = true; }, 3000); }
@@ -5063,7 +5074,7 @@ function mousePressed() {
         const newId = Math.max(...activeNodeArr.map(n => n.id), 0) + 1;
         // a field: the click is mapped back into the CENTRAL tile's own coordinates (core/netwarp.js netWarpFieldLocal())
         // a layer: back through F^-1 and then into the layer's own canonical frame (layerFreeNodeFromClick()), so the node lands where it was clicked
-        const at = hitLayer ? layerFreeNodeFromClick(hitLayer, { x: mouseX, y: mouseY }, netWarp) : netWarp && netWarp.field ? netWarpFieldLocal(netWarp, { x: mouseX, y: mouseY }) : (netWarp ? invertNetWarp(netWarp, { x: mouseX, y: mouseY }) : { x: mouseX, y: mouseY });
+        const at = hitLayer ? layerFreeNodeFromClick(hitLayer, { x: x, y: y }, netWarp) : netWarp && netWarp.field ? netWarpFieldLocal(netWarp, { x: x, y: y }) : (netWarp ? invertNetWarp(netWarp, { x: x, y: y }) : { x: x, y: y });
         activeNodeArr.push({ id: newId, x: at.x, y: at.y, free: true });
         foundId = newId;
     }
@@ -5074,6 +5085,43 @@ function mousePressed() {
         clearActiveRedoStack(); // Clear redo stack on manual add
         redraw();
     }
+}
+
+// ---- Touch and pen taps (Phase 2, B2) -----------------------------------------------------------------------------------------------------------------
+// core/pointer-tap.js decides what a tap is (pure, tested in tools/ui/test-pointer-tap.js); this wires it to the page. pointerdown is taken in the capture phase
+// on the canvas container, pointermove / pointerup / pointercancel on window (a touch pointer is captured by its first target and ends there). No touch event is
+// prevented, so scrolling and pinch zoom are the browser's. A defined touchStarted switches off p5's own fallback (_ontouchstart: UA contains "safari", touchStarted
+// undefined -> mousePressed(e)); p5 still updates mouseX / mouseY at touchstart, whether or not touchStarted exists.
+let tapDetector = null;
+function installTapInput() {
+    if (typeof createTapDetector !== 'function') return;   // the script is missing: the old behaviour stays as it was
+    const box = document.getElementById('canvas-container');
+    if (!box) return;
+    tapDetector = createTapDetector({ now: () => performance.now() });
+    box.addEventListener('pointerdown', e => { tapDetector.down(e); }, true);
+    window.addEventListener('pointermove', e => { tapDetector.move(e); });
+    window.addEventListener('pointerup', e => { const tap = tapDetector.up(e); if (tap) tapPress(tap); });
+    window.addEventListener('pointercancel', e => { tapDetector.cancel(e); });
+    window.touchStarted = function () { };   // defined, empty, not returning false
+}
+
+// client pixels -> sketch units, the way p5 does it for mouseX / mouseY (getMousePos in p5 1.9.0: (clientX - rect.left) / (canvas.scrollWidth / width))
+function clientToSketch(clientX, clientY) {
+    const cv = document.querySelector('#canvas-container canvas');
+    if (!cv) return { x: -1, y: -1 };
+    const r = cv.getBoundingClientRect();
+    const sx = cv.scrollWidth / width || 1, sy = cv.scrollHeight / height || 1;
+    return { x: (clientX - r.left) / sx, y: (clientY - r.top) / sy };
+}
+
+// A valid tap, at pointerup. The state pressAt reads that only mouseMoved() writes is stale here (the emulated mousemove comes ~75 ms later): the Alt-net side preview
+// (altNetPending.previewSide, read by the third construction click). The same update mouseMoved() makes, with the tap's coordinates, comes first - the same call,
+// argument for argument: mouseMoved() passes (p, q, mouseX, mouseY) to sideOfLine(p, q, m), whose third parameter is a point, so m.y is undefined and the side is
+// always -1 (a bug that predates this track and is reported, not fixed here; touch and mouse behave alike on purpose).
+function tapPress(tap) {
+    const p = clientToSketch(tap.x, tap.y);
+    if (altNetActive && altNetPending && altNetPending.q !== undefined) altNetPending.previewSide = sideOfLine(altNetPending.p, altNetPending.q, p.x, p.y);
+    pressAt(p.x, p.y, tap.pointerType);
 }
 
 function addRandomConnection() {
