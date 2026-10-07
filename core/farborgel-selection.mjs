@@ -76,4 +76,6 @@ if (typeof window !== 'undefined') {
     window.farborgelBuildHarmonySelection = buildHarmonySelection;
     window.farborgelAnchorField = anchorField;
     window.farborgelAnchorDisplayColor = anchorDisplayColor;
+    // Once: the generator can already be running (setup() does not wait for this module) - ui-farbe.js unlocks what needs it on this event.
+    window.dispatchEvent(new Event('farborgel-selection-ready'));
 }

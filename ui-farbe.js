@@ -31,8 +31,23 @@
  * The German texts below are the reasons for now; the dictionary (data-i18n keys) comes in a later phase.
  */
 (function () {
-  const T = { 'reason.fill.off': 'Fläche füllen einschalten' };
+  const T = { 'reason.fill.off': 'Fläche füllen einschalten', 'reason.farborgel.loading': 'Farborgel lädt noch.' };
   const $ = function (s) { return document.querySelector(s); };
+
+  // The Farborgel module (core/farborgel-selection.mjs) arrives AFTER setup() - it fetches its engine - while a restored session can
+  // already hold a harmony that is regenerated from (anchor, type, strategy). In that window applyHarmony() cannot run, so what would
+  // change the anchor or strategy of such a sheet - or apply a harmony at all - is locked with a reason (aria-disabled) instead of silently
+  // changing the state without repainting. The module announces itself once ('farborgel-selection-ready'); the listener at the end runs
+  // sync(), which unlocks everything. Locked: the 7 harmony buttons and the dropdown (any sheet); the anchor steppers, the Kreis/Dreieck
+  // anchor points and the strategy icons (only a sheet whose last harmony type is regenerable). Never locked: Reset Color, the Kreis/Dreieck
+  // triggers (they only switch the view), and everything on a 'custom', gray or uncolored sheet other than the harmony buttons.
+  const REGENERABLE_HARMONY_TYPES = ['2', '3', '4', 'B', 'W', 'S', 'V'];
+  function farborgelReady() { return typeof window.farborgelBuildHarmonySelection === 'function'; }
+  function moduleWhy(sheetOnly) {
+    if (farborgelReady()) return null;
+    if (!sheetOnly) return T['reason.farborgel.loading'];
+    return REGENERABLE_HARMONY_TYPES.indexOf(lastHarmonyTypeFor(activeLayer)) >= 0 ? T['reason.farborgel.loading'] : null;
+  }
 
   const row = $('#nav-farbe');
   const fillBtn = $('#btn-toggle-faces');
@@ -55,6 +70,8 @@
       input: hueInput,
       noTyping: true,
       compute: function (dir) {
+        const lock = moduleWhy(true); // Farborgel still loading and this sheet's harmony needs it: blocked, with the reason (also for the arrow keys)
+        if (lock) return { to: null, reason: lock };
         const cur = parseInt(hueInput.value, 10) || 1;
         return { to: ((cur - 1 + dir + ANCHOR_HUE_COUNT) % ANCHOR_HUE_COUNT) + 1 }; // a hue RING: always wraps, never blocked
       }
@@ -72,6 +89,8 @@
       noTyping: true,
       keyEl: registerDisplay, // the hidden range input itself is never focused - the visible text is
       compute: function (dir) {
+        const lock = moduleWhy(true);
+        if (lock) return { to: null, reason: lock };
         const cur = parseInt(registerInput.value, 10) || 0;
         return { to: (cur + dir + ANCHOR_REGISTER_COUNT) % ANCHOR_REGISTER_COUNT };
       }
@@ -605,13 +624,17 @@
     syncHarmonyActive();
     syncStrategy();
     const why = reason();
+    const loadingAny = why || moduleWhy(false), loadingSheet = why || moduleWhy(true); // see moduleWhy(): the Farborgel module is still loading
     [kreisTrigger, dreieckTrigger].forEach(function (b) { if (b) UI.setDisabled(b, why); });
-    Object.keys(harmonyBtns).forEach(function (type) { if (harmonyBtns[type]) UI.setDisabled(harmonyBtns[type], why); });
+    Object.keys(harmonyBtns).forEach(function (type) { if (harmonyBtns[type]) UI.setDisabled(harmonyBtns[type], loadingAny); });
     [hueStepperRoot, registerStepperRoot].forEach(function (root) {
-      if (root) root.querySelectorAll('.stepper-btn').forEach(function (b) { UI.setDisabled(b, why); });
+      if (root) root.querySelectorAll('.stepper-btn').forEach(function (b) { UI.setDisabled(b, loadingSheet); });
     });
-    if (harmonySelect) harmonySelect.disabled = !!why;
-    if (strategyGroup) strategyGroup.radios.forEach(function (r) { UI.setDisabled(r, why); });
+    [anchorKreisGroup, anchorDreieckGroup].forEach(function (g) {
+      if (g) g.radios.forEach(function (r) { UI.setDisabled(r, moduleWhy(true)); });
+    });
+    if (harmonySelect) harmonySelect.disabled = !!loadingAny;
+    if (strategyGroup) strategyGroup.radios.forEach(function (r) { UI.setDisabled(r, loadingSheet); });
     // Reset Color keeps sketch.js's own, untouched click handler (a DOM relocation, not new logic) - this
     // only dims it to match the row's eligibility; a click while "disabled" still runs resetFaceColors(),
     // which is a harmless no-op on an already-empty/default store. Not gated with UI.guard() like the 7
@@ -626,6 +649,9 @@
   }
 
   document.addEventListener('tabchange', sync); // the fill-button dot depends on which tab is current
+  // The Farborgel module is ready (core/farborgel-selection.mjs dispatches this once): clear the locks above. Before the first draw there is
+  // nothing to clear - that draw's own sync() sees the module - and sync() would run before setup() has built the state, so wait for it.
+  window.addEventListener('farborgel-selection-ready', function () { if (typeof frameCount !== 'undefined' && frameCount > 0) sync(); });
 
   UI.onSync(sync);
 })();

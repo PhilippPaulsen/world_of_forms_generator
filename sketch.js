@@ -360,11 +360,16 @@ function setup() {
         return symmetryModeFor(shape, category, fold); // core/symmetry-toggles.js (moved there unchanged, plus 'mirror')
     }
 
+    // True only while the session restore's 'symmetry' hook drives the setters below: they then skip uiSync() and redraw(), because between
+    // the two setters (and until the apply code assigns the stored mode) symmetryMode is an intermediate one, and a sync or a draw would
+    // write gray-fill entries for THAT mode's trails into the restored store. The hook's caller syncs once, with the final state.
+    let restoringSymmetry = false;
+
     function updateSymmetryModeControl() {
         symmetryMode = normSym(resolveSymmetryMode(currentShape, symmetryCategory, symmetryFold));
         const foldGroup = select('#mode-fold-group');
         if (foldGroup) foldGroup.elt.hidden = currentShape !== 'hex';
-        if (window.uiSync) window.uiSync(); // the nav row's toggles follow the category
+        if (window.uiSync && !restoringSymmetry) window.uiSync(); // the nav row's toggles follow the category
     }
 
     // One path for every change of the category - the old .mode-btn handlers and the nav row's toggles both go
@@ -376,7 +381,7 @@ function setup() {
         if (match) match.addClass('active');
         symmetryCategory = category;
         updateSymmetryModeControl();
-        redraw();
+        if (!restoringSymmetry) redraw();
     }
     function applySymmetryFold(fold) {
         foldBtns.forEach(b => b.removeClass('active'));
@@ -384,7 +389,7 @@ function setup() {
         if (match) match.addClass('active');
         symmetryFold = fold;
         updateSymmetryModeControl();
-        redraw();
+        if (!restoringSymmetry) redraw();
     }
     // What the nav row reads and drives (ui-form.js).
     window.symmetryUi = {
@@ -594,6 +599,9 @@ function setup() {
     // UI state -> baseNetTransform (core/state.js): sinus/tangens = {kind:'trig', w: -/+strength},
     // geometric = {kind:'geometric', w: +/-strength*ln(NET_R_MAX)} (w = ln R, R = last/first mesh),
     // 'Both' axes = y:'same'. Strength 0 (or Regular) is the identity: no warp, nothing locked.
+    // Session restore: sets the net panel's own state (the `ui` object inside initNetControls) from baseNetTransform - the inverse of
+    // axisSpec() - without going through commit(). Stays null if the panel does not exist.
+    let adoptNetState = null;
     (function initNetControls() {
         const group = select('#net-group');
         if (!group) return;
@@ -779,6 +787,31 @@ function setup() {
                 }
                 wasActive = lockSig;
             }
+        };
+        // The inverse of axisSpec(): every field of a stored axis spec goes back into a panel axis ({mode, strength, reverse, alternate, focus}).
+        // trig: w < 0 is sinus, otherwise tangens (a w of 0 is ambiguous and reads as tangens); geometric: w = +/- strength * ln(NET_R_MAX).
+        // The geometric strength is snapped to the slider's 0.01 grid when that reproduces w exactly, so a later commit() rebuilds the same bits.
+        function axisFromSpec(spec) {
+            const c = fresh();
+            if (!spec || spec.kind === 'uniform') return c;
+            if (spec.kind === 'trig') { c.mode = spec.w < 0 ? 'sinus' : 'tangens'; c.strength = Math.abs(spec.w); }
+            else {
+                const a = Math.abs(spec.w), ln = Math.log(NET_R_MAX), s = a / ln, snapped = Math.round(s * 100) / 100;
+                c.mode = 'geometric'; c.reverse = spec.w < 0; c.strength = snapped * ln === a ? snapped : s;
+            }
+            c.focus = spec.focus || 0; c.alternate = !!spec.alternate;
+            return c;
+        }
+        adoptNetState = function () {
+            const spec = baseNetTransform;
+            if (!spec) { ui.axes = 'both'; ui.domain = 'single'; ui.macro = undefined; ui.x = fresh(); ui.y = fresh(); }
+            else {
+                ui.x = axisFromSpec(spec.x);
+                if (spec.y === 'same') { ui.axes = 'both'; ui.y = Object.assign({}, ui.x); }
+                else { ui.axes = 'x'; ui.y = axisFromSpec(spec.y); }
+                ui.domain = stateDomain(); ui.macro = spec.macro;
+            }
+            render();
         };
         fieldBtn.elt.dataset.title = fieldBtn.elt.title;   // restored when Field becomes available again
         // (The standalone net animation's controls - Set Start / Set End / Play / progress - were removed from the UI: see the comment above
@@ -2081,16 +2114,21 @@ function setup() {
 
     // Show nodes Toggle Button
     const nodeBtn = select('#btn-toggle-nodes');
+    // The button's active class and eye icon follow showNodes (also called by the session restore, which sets showNodes directly).
+    function updateNodeToggleIcon() {
+        if (!nodeBtn) return;
+        if (showNodes) {
+            nodeBtn.addClass('active');
+            nodeBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>');
+        } else {
+            nodeBtn.removeClass('active');
+            nodeBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M1 1l22 22"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/></svg>'); // Eye Off
+        }
+    }
     if (nodeBtn) {
         nodeBtn.mousePressed(() => {
             showNodes = !showNodes;
-            if (showNodes) {
-                nodeBtn.addClass('active');
-                nodeBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>');
-            } else {
-                nodeBtn.removeClass('active');
-                nodeBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M1 1l22 22"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/></svg>'); // Eye Off
-            }
+            updateNodeToggleIcon();
             redraw();
         });
     }
@@ -2200,6 +2238,113 @@ function setup() {
     const computeCrossLayerBtn = select('#btn-compute-cross-layer');
     computeCrossLayerBtn && computeCrossLayerBtn.mousePressed(computeCrossLayerFacesFlow);
 
+    // ---- Session restore (Phase 3 autosave, P1d; the storage side is core/session-store.js, the rest core/session*.js) ----
+    // The seven UI hooks core/session-apply.js runs after it has set the globals (they are final by then, so a hook reads what it shows
+    // from the globals, not from its argument). They are defined here because the things they drive live in setup()'s closure. None of
+    // them dispatches an input event (the node-count and size handlers would rebuildGrid() and wipe the restored sheet).
+    // window.sessionUi IS the hooks object (plus symmetryUi, which collectSessionState() reads).
+    const sessionHooks = {
+        symmetryUi: window.symmetryUi,
+        shapeAndInputs() {
+            shapeBtns.forEach(b => b.removeClass('active'));
+            const match = shapeBtns.find(b => b.attribute('data-shape') === currentShape);
+            if (match) match.addClass('active');
+            if (shapeInput) shapeInput.value(shapeSizeFactor);
+            if (nodeInput) nodeInput.value(nodeCount);
+            clampNodeCountToShape('Restore'); // the input's max for the restored shape; the restored count is within it, so no note
+        },
+        symmetry(category, fold) {
+            // The setters recompute symmetryMode from (shape, category, fold); the stored mode is assigned again afterwards by the apply code
+            // (it can legitimately differ: a catalog link with shape=square&symmetryMode=rotation6 shows (drehling, 6) but keeps rotation6).
+            // So the check is that the UI took the category and fold it was given and landed on one of the six modes - not that the mode is the stored one.
+            // The two setters each recompute symmetryMode, so between them (and after them, until the apply code assigns the stored mode) the
+            // mode is an intermediate one; restoringSymmetry makes them skip uiSync() and redraw() (see its declaration). Measured without it: a
+            // (drehling, 3) session restored 10 stray gray entries computed under rotation6, the default fold, in between.
+            const ui = window.symmetryUi;
+            restoringSymmetry = true;
+            try {
+                if (category !== null && category !== undefined) ui.setCategory(category);
+                if (fold !== null && fold !== undefined) ui.setFold(fold);
+            } finally { restoringSymmetry = false; }
+            if ((category !== null && category !== undefined && ui.category() !== category) || (fold !== null && fold !== undefined && ui.fold() !== fold)) {
+                throw new Error(`the symmetry controls did not take (${category}, ${fold}): they show (${ui.category()}, ${ui.fold()})`);
+            }
+            if (SESSION_SYMMETRY_MODES.indexOf(symmetryMode) < 0) throw new Error(`the symmetry controls resolved to "${symmetryMode}"`);
+        },
+        toggles() {
+            updateNodeToggleIcon();
+            if (curveBtn) { if (curveType.kind === 'curve') curveBtn.addClass('active'); else curveBtn.removeClass('active'); }
+            if (freeBtn) { if (curveType.kind === 'free') freeBtn.addClass('active'); else freeBtn.removeClass('active'); }
+            if (freeEndpointsBtn) { if (freeEndpointsEnabled) freeEndpointsBtn.addClass('active'); else freeEndpointsBtn.removeClass('active'); }
+            updateFaceToggleControl();
+            updateCurveTypeControls();
+            updateFreeVisibleToggleIcon();
+            cancelAltNetConstruction(); // an in-progress alternative-net click pair means nothing against the restored sheet
+        },
+        net() {
+            if (adoptNetState) adoptNetState();
+            if (netControlsSync) netControlsSync();
+        },
+        layers() {
+            renderLayerTabs();
+            updateOffsetControls();
+        },
+        timeline() {
+            updateTimelineControls();
+            applyTimelineFrame(); // sets the playback layer's _morph* caches (nothing is saved of them); a no-op without a timeline
+        },
+        finish() {
+            updateCrossLayerStatus();
+            updatePatternNameStatus();
+            if (window.syncTimelineNetUi) window.syncTimelineNetUi();
+            if (window.uiSync) window.uiSync();
+            redraw(); // a no-op until setup() has finished (p5 1.9.0); the first draw() comes right after setup
+        },
+    };
+    window.sessionUi = sessionHooks;
+
+    // The code a quarantine is filed under (core/session-store.js SESSION_QUARANTINE_REASONS) from the code that rejected the snapshot.
+    // The warning always carries the original code and message, so nothing is lost behind the normalised reason.
+    function sessionQuarantineReason(code) {
+        if (code === 'schema-version' || code === 'trail-key-version') return code;
+        if (code === 'canvas-mismatch' || code === 'grid-mismatch') return 'grid-mismatch';
+        if (code === 'plan-error' || code === 'apply-failed') return 'apply-failed';
+        return 'corrupt'; // empty, too-large, not-json, not-an-object, invalid
+    }
+
+    // Startup: restore this tab's saved session if the navigation rules say so (core/session-store.js loadSessionForStartup()), else
+    // return false and let the catalog / random start line below run. Any failure ends in the quarantine and a fresh start (the apply
+    // rolled everything back); it never throws.
+    function restoreSessionAtStartup() {
+        try {
+            const guard = sessionStorageGuard(window);
+            const loaded = loadSessionForStartup({ storage: guard.storage, perf: window.performance, currentHref: sessionCurrentHref(window.location), allowed: guard.allowed });
+            if (loaded.reason === 'envelope-invalid') console.warn(`[session] saved session not restored (${loaded.detail}); kept in the quarantine slot, starting fresh`); // the store already moved it
+            if (loaded.action !== 'restore') return false;
+            const reject = (code, detail) => {
+                console.warn(`[session] saved session not restored (${code}: ${detail}); kept in the quarantine slot, starting fresh`);
+                quarantineSession(guard.storage, loaded.text, sessionQuarantineReason(code));
+                return false;
+            };
+            const parsed = parseSession(loaded.text);
+            if (!parsed.ok) return reject(parsed.code, parsed.detail);
+            const planned = planSessionRestore(parsed.snapshot, { canvasW, canvasH });
+            if (!planned.ok) return reject(planned.code, planned.detail);
+            const applied = applySessionSnapshot(parsed.snapshot, planned.plan, sessionHooks, {
+                onFailure(error, info) { // before the rollback: the snapshot leaves the main key, so a reload cannot repeat the failure
+                    console.warn(`[session] saved session not restored (apply-failed: ${info.step}: ${info.detail}); kept in the quarantine slot, starting fresh`);
+                    quarantineSession(guard.storage, loaded.text, 'apply-failed');
+                },
+            });
+            if (applied.ok) return true;
+            if (applied.resyncFailed) location.reload(); // the old state is back in the globals but the controls could not be re-synced; the key is already gone
+            return false;
+        } catch (e) {
+            console.warn('[session] restore failed unexpectedly, starting fresh: ' + (e && e.message));
+            return false;
+        }
+    }
+
     rebuildGrid(currentShape);
     // Draw a random connection on start - unless a valid catalog URL
     // pattern is already resolved (see catalogUrlPattern/applyCatalogPattern()
@@ -2213,7 +2358,13 @@ function setup() {
     // applyCatalogPatternToNewLayer() instead, which never touches the
     // base globals/UI at all (see its own comment), so the plain
     // base-only case just below is completely unaffected either way.
-    if (catalogUrlPattern && catalogUrlPattern.layer === 'new') {
+    //
+    // Phase 3 autosave: a saved session for this tab and URL (reload, back/forward, same-URL navigate - see restoreSessionAtStartup()
+    // above) is restored INSTEAD of all of this; it replaces whatever the URL parameters set earlier, and a failed restore rolls back to
+    // exactly that state before this branch runs.
+    if (restoreSessionAtStartup()) {
+        // restored: the sheet, the layers, the timeline and the colours are the saved ones - no catalog pattern, no random start line
+    } else if (catalogUrlPattern && catalogUrlPattern.layer === 'new') {
         if (!applyCatalogPatternToNewLayer(catalogUrlPattern)) addRandomConnection();
     } else if (!catalogUrlPattern || !applyCatalogPattern(catalogUrlPattern)) {
         addRandomConnection();
@@ -4259,7 +4410,8 @@ function faceColorsSig() {
     return JSON.stringify({
         sheet: activeLayer, conns: faceColorsGrid().conns, shape: currentShape, mode: symmetryMode, n: faceColorsGrid().gridNodes.length,
         layer: l && [l.enabled, l.shapeSizeFactor, l.rotation, l.shape, l.symmetryMode], kf: isTimelineKeyframe(activeLayer), size: shapeSizeFactor, curve: curveType.kind, net: (nw0 => nw0 ? (nw0.field ? 'field' : 'warp') : null)(netWarpBaseNow()),
-        store: faceAssignmentsFor(activeLayer).size
+        store: faceAssignmentsFor(activeLayer).size,
+        farborgel: typeof window.farborgelBuildHarmonySelection === 'function' // the per-trail steppers need the module: rebuild when it arrives
     });
 }
 
