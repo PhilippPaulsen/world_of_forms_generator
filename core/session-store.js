@@ -107,16 +107,18 @@ function parseSessionEnvelope(raw) {
 
 // ---- writing, removing, quarantining (none of them throws) ------------------------------------------------------------------
 // The P2 writer's one way to save. -> { ok: true, size } | { ok: false, code: 'no-storage'|'too-large'|'storage-error', detail }
-function writeSession(storage, snapshotText, href, now) {
+// `quiet`: no console.warn of its own - the caller (core/session-writer.js) warns once per kind of failure and backs off, so a full storage is not
+// reported on every attempt.
+function writeSession(storage, snapshotText, href, now, quiet) {
     if (!storage) return { ok: false, code: 'no-storage', detail: 'sessionStorage is not available' };
     let text;
     try {
         if (typeof snapshotText !== 'string' || typeof href !== 'string' || typeof now !== 'number' || !isFinite(now)) return { ok: false, code: 'storage-error', detail: 'bad arguments' };
         text = makeSessionEnvelope(snapshotText, _sessionStripHash(href), now);
     } catch (e) { return { ok: false, code: 'storage-error', detail: _sessionErr(e) }; }
-    if (text.length > SESSION_MAX_CHARS) { _sessionWarn('snapshot not saved, too large', text.length + ' characters'); return { ok: false, code: 'too-large', detail: text.length + ' characters' }; }
+    if (text.length > SESSION_MAX_CHARS) { if (!quiet) _sessionWarn('snapshot not saved, too large', text.length + ' characters'); return { ok: false, code: 'too-large', detail: text.length + ' characters' }; }
     try { storage.setItem(SESSION_STORAGE_KEY, text); return { ok: true, size: text.length }; }
-    catch (e) { _sessionWarn('snapshot not saved', _sessionErr(e)); return { ok: false, code: 'storage-error', detail: _sessionErr(e) }; }
+    catch (e) { if (!quiet) _sessionWarn('snapshot not saved', _sessionErr(e)); return { ok: false, code: 'storage-error', detail: _sessionErr(e) }; }
 }
 // -> boolean (false when the storage threw; a key that was not there counts as removed)
 function removeSession(storage) {

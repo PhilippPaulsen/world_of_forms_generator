@@ -299,6 +299,10 @@ console.log('\n== 6. quarantine order (quota in UTF-16 units) ==');
     // writeSession in a full storage
     st = fakeStorage({ quota: 100 }); const w = safe(() => S.writeSession(st, 'hello', HREF, 1));
     check('writeSession in a full storage -> { ok:false, code: storage-error }, no throw, one warning', w.ok === false && w.code === 'storage-error' && warnings.some(x => /not saved/.test(x)));
+    const nW = warnings.length; const wq = safe(() => S.writeSession(st, 'hello', HREF, 1, true));
+    check('writeSession(..., quiet) fails the same way but adds no warning of its own (the writer warns once per kind)', wq.ok === false && wq.code === 'storage-error' && warnings.length === nW, warnings.length - nW);
+    const bigQuiet = safe(() => S.writeSession(fakeStorage(), 'x'.repeat(CAP), HREF, 1, true));
+    check('...also for a text over the cap', bigQuiet.ok === false && bigQuiet.code === 'too-large' && warnings.length === nW);
 }
 
 // ---- 7. a throwing / lying storage ------------------------------------------------------------------------------------------------------------
