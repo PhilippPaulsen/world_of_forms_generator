@@ -117,14 +117,16 @@ console.log('\n== 3. the pointer: fine override ==');
 
 console.log('\n== 4. copied rules ==');
 {
-    const copied = far.filter(r => r.selector !== ':root' && r.selector !== '@font-face' && r.media === null);
+    // a copied rule is at top level or inside @media (hover: hover) (the generator's :hover rules sit behind it since Phase 2 track A: no sticky hover on touch)
+    const COPY_MEDIA = [null, '(hover: hover)'];
+    const copied = far.filter(r => r.selector !== ':root' && r.selector !== '@font-face' && COPY_MEDIA.includes(r.media));
     const diff = [], missing = [], mediaVariant = [];
     for (const r of copied) {
-        const same = gen.filter(g => g.selector === r.selector && g.media === null);
+        const same = gen.filter(g => g.selector === r.selector && g.media === r.media);
         if (!same.length) { missing.push(r.selector); continue; }
         const merged = same.flatMap(g => g.decls);          // a selector can appear twice in the generator; the cascade merges them
         if (!sameDecls(r.decls, merged)) diff.push(r.selector);
-        if (gen.some(g => g.selector === r.selector && g.media !== null)) mediaVariant.push(r.selector);
+        if (gen.some(g => g.selector === r.selector && g.media !== null && !far.some(f => f.selector === r.selector && f.media === g.media))) mediaVariant.push(r.selector);
     }
     check(`${copied.length} rules copied (.ico, .stepper, .stepper::after, .stepper-icon, .stepper-chevrons, .stepper-btn..., .stepper-display...): each still exists in style.css`, missing.length === 0 && copied.length >= 10, missing.join(', '));
     check('...and has IDENTICAL declarations (every property and value)', diff.length === 0, diff.join(', '));
