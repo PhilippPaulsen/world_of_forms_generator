@@ -1,0 +1,854 @@
+'use strict';
+
+const {srgbToOklab, oklabToRgb} = require('./ColorSpace.js');
+const Grammar = require('./HarmonyGrammar.js');
+const Compound = require('./CompoundHarmony.js');
+
+/**
+ * Ostwald historical structure, realized as a contemporary screen color model.
+ * Oklab is the sole mixing space; historical pigment/disc colors are not reproduced.
+ * All `lab` arrays mean Oklab, never CIELAB. No framework or browser state is used.
+ */
+// Absolute roundoff tolerance for coordinates, Oklab and continuous constraints.
+const EPSILON = 1e-10;
+// Each tabulated letter value is rounded to four decimal places (half a last unit).
+const LETTER_ROUNDING_EPSILON = 0.00005;
+const SCALE = Object.freeze([
+  ['a', 0.8913], ['c', 0.5623], ['e', 0.3548], ['g', 0.2239],
+  ['i', 0.1413], ['l', 0.0891], ['n', 0.0562], ['p', 0.0355]
+].map(([letter, value]) => Object.freeze({ letter, value })));
+const GROUPS = Object.freeze([
+  'Yellow', 'Orange / Kreß', 'Red', 'Violet',
+  'Ultramarine / Blue', 'Ice Blue', 'Sea Green', 'Leaf Green'
+]);
+const WHITE = Object.freeze([1, 0, 0]);
+const BLACK = Object.freeze([0, 0, 0]);
+// Established names retained from Phases 1/2; other divisors remain mathematical.
+const NAMED_SUBDIVISIONS = Object.freeze({ 2: 'complementary', 3: 'triad', 4: 'tetrad' });
+
+// Directly inspected 1921 p.89: two directed distance columns, NOT literal hue dyads.
+// The musical names are an analogy; the final distance 12 is the starred octave.
+const INTERVAL_ANALOGY_1921 = Object.freeze([
+  [[1, 23], 'minor-second', 'kleine Sekunde', false],
+  [[2, 22], 'major-second', 'große Sekunde', false],
+  [[3, 21], 'minor-third', 'kleine Terz', true],
+  [[4, 20], 'major-third', 'große Terz', true],
+  [[5, 19], 'augmented-third', 'übermäßige Terz', false],
+  [[6, 18], 'fourth', 'Quarte', true],
+  [[7, 17], 'augmented-fourth', 'übermäßige Quarte', false],
+  [[8, 16], 'fifth', 'Quinte', true],
+  [[9, 15], 'sixth', 'Sexte', true],
+  [[10, 14], 'minor-seventh', 'kleine Septime', false],
+  [[11, 13], 'major-seventh', 'große Septime', false],
+  [[12, 12], 'octave', 'Oktave', true]
+].map(([colorEntries, interval, german, consonant]) => Object.freeze({
+  distance: colorEntries[0], colorEntries: Object.freeze(colorEntries), interval, german, consonant,
+  sourceStatus: 'primary-1921-p89', primaryVerified: true
+})));
+
+/** Fresh provenance for the scanned revised 1921 edition, printed page 89 (PDF 107). */
+function intervalProvenance1921() {
+  return {
+    sourceStatus: 'primary-1921-p89', sourceConfidence: 'primary', primaryVerified: true,
+    transcriptionBasis: 'direct-scan-inspection', model: 'musical-analogy-of-hue-distance',
+    primaryReference: { author: 'Wilhelm Ostwald', title: 'Die Harmonie der Farben',
+      edition: '2.–3., gänzlich umgearbeitete Auflage', year: 1921, page: 89, pdfPage: 107 },
+    reference: { distance: 12, colorEntry: 12, role: 'opposite-distance-octave-analogy' }
+  };
+}
+
+/** Return an independent copy of the two printed distance entries. */
+function copyInterval(entry) {
+  return { ...entry, colorEntries: entry.colorEntries.slice() };
+}
+
+/** Require a dense three-component array of finite numbers. */
+function vector(value, name) {
+  if (!Array.isArray(value) || value.length !== 3 ||
+      ![0, 1, 2].every(i => Number.isFinite(value[i]))) {
+    throw new TypeError(`${name} must be an array of three finite numbers`);
+  }
+}
+
+/** Validate geometry; normalize only roundoff within EPSILON. */
+function coordinates(w, s) {
+  if (!Number.isFinite(w) || !Number.isFinite(s)) {
+    throw new TypeError('w and s must be finite numbers');
+  }
+  if (w < -EPSILON || s < -EPSILON || w + s > 1 + EPSILON) {
+    throw new RangeError('Require w >= 0, s >= 0 and w + s <= 1');
+  }
+  w = Math.max(0, w);
+  s = Math.max(0, s);
+  const total = w + s;
+  if (total > 1) { w /= total; s /= total; }
+  return { w, s, v: Math.max(0, 1 - w - s) };
+}
+
+/** Validate the one-based, discrete 24-part hue coordinate. */
+function validateHue(hueIndex) {
+  if (!Number.isInteger(hueIndex) || hueIndex < 1 || hueIndex > 24) {
+    throw new RangeError('hueIndex must be an integer in 1..24');
+  }
+}
+
+/** Internal anchor adapter: future calibrated anchors may supply Oklab or sRGB. */
+function anchorLab(anchor) {
+  if (anchor.lab) return anchor.lab.slice();
+  if (anchor.rgb) return srgbToOklab(anchor.rgb);
+  const [L, C, degrees] = anchor.oklch;
+  const radians = degrees * Math.PI / 180;
+  return [L, C * Math.cos(radians), C * Math.sin(radians)];
+}
+
+/** Internal builder is the only source of full-color references. */
+function buildHueReferences(n) {
+  // Contemporary Oklab construction, NOT historical Ostwald pigment/disc colors.
+  // Replace individual anchors here for future calibration without changing the API.
+  return Array.from({ length: n }, (_, i) => {
+    const anchor = { oklch: [0.72, 0.10, 115 - i * 360 / n], calibrated: false };
+    const lab = anchorLab(anchor);
+    return {
+      index: i + 1, rgb: oklabToRgb(lab), lab,
+      group: GROUPS[Math.floor(i * 8 / n)], calibrated: anchor.calibrated, source: 'reference'
+    };
+  });
+}
+
+/** Create one complete discrete field using an explicit reference circle. */
+function makeField(hueIndex, white, black, circle) {
+  return {
+    hueIndex,
+    ...OstwaldColor.mix(circle[hueIndex - 1].lab, white.value, 1 - black.value),
+    label: `${hueIndex}${white.letter}${black.letter}`, source: 'atlas'
+  };
+}
+
+/** White-letter major, black-letter minor ordering; skip impossible pairs. */
+function buildTriangle(hueIndex, circle) {
+  const fields = [];
+  for (const white of SCALE) {
+    for (const black of SCALE) {
+      if (black.value - white.value > EPSILON) {
+        fields.push(makeField(hueIndex, white, black, circle));
+      }
+    }
+  }
+  return fields;
+}
+
+/** Validate an explicit reference circle, including RGB/Oklab agreement. */
+function validateCircle(circle) {
+  if (!Array.isArray(circle) || circle.length !== 24) {
+    throw new TypeError('context.hueCircle must contain 24 ordered hue references');
+  }
+  for (let i = 0; i < 24; i++) {
+    const hue = circle[i];
+    if (!hue || hue.index !== i + 1) throw new Error('context.hueCircle indices must be ordered 1..24');
+    vector(hue.lab, 'Hue lab');
+    validateRgb(hue.rgb, oklabToRgb(hue.lab));
+  }
+}
+
+/** Require exact integer display colors consistent with the declared Oklab. */
+function validateRgb(rgb, expected) {
+  vector(rgb, 'rgb');
+  if (!rgb.every((c, i) => Number.isInteger(c) && c >= 0 && c <= 255 && c === expected[i])) {
+    throw new Error('rgb must contain integer sRGB bytes matching lab');
+  }
+}
+
+/** Validate the label, geometry and colors, returning a fresh canonical field. */
+function validateField(field, circle) {
+  if (!field || typeof field !== 'object') throw new TypeError('field must be a complete field object');
+  validateHue(field.hueIndex);
+  const match = typeof field.label === 'string' && /^([1-9]|1[0-9]|2[0-4])([acegilnp])([acegilnp])$/.exec(field.label);
+  if (!match || Number(match[1]) !== field.hueIndex) throw new Error('Unknown field label or mismatched hueIndex');
+  const white = SCALE.find(item => item.letter === match[2]);
+  const black = SCALE.find(item => item.letter === match[3]);
+  if (white.value >= black.value) throw new Error('Unknown chromatic atlas field: use grayAxis() for neutral values');
+  if (field.source !== undefined && field.source !== 'atlas') throw new Error('Discrete field source must be atlas');
+  coordinates(field.w, field.s);
+  const expected = makeField(field.hueIndex, white, black, circle);
+  for (const key of ['w', 's', 'v']) {
+    if (!Number.isFinite(field[key]) || Math.abs(field[key] - expected[key]) > EPSILON) {
+      throw new Error(`field.${key} does not match its discrete letter coordinates`);
+    }
+  }
+  vector(field.lab, 'Field lab');
+  if (!field.lab.every((c, i) => Math.abs(c - expected.lab[i]) <= EPSILON)) {
+    throw new Error('Field lab does not match the context hue and Oklab mixture');
+  }
+  validateRgb(field.rgb, expected.rgb);
+  return expected;
+}
+
+/** Rounded atlas ratio interval: v/w = blackLetterValue/whiteLetterValue - 1.
+ * Propagate the letter precision instead of using an empirically fitted ratio epsilon.
+ * Only called for validated chromatic atlas nodes, whose w exceeds the rounding unit.
+ */
+function shadowRatioInterval(field) {
+  const b = 1 - field.s;
+  return [
+    (b - LETTER_ROUNDING_EPSILON) / (field.w + LETTER_ROUNDING_EPSILON) - 1,
+    (b + LETTER_ROUNDING_EPSILON) / (field.w - LETTER_ROUNDING_EPSILON) - 1
+  ];
+}
+
+/** Two rounded atlas nodes match when their possible exact ratio intervals overlap. */
+function sameShadowSeries(left, right) {
+  const a = shadowRatioInterval(left);
+  const b = shadowRatioInterval(right);
+  return Math.max(a[0], b[0]) <= Math.min(a[1], b[1]) + EPSILON;
+}
+
+/** Independent result objects, including their mutable color arrays. */
+function copyColor(field) {
+  return { ...field, rgb: field.rgb.slice(), lab: field.lab.slice() };
+}
+
+/** Select all positions of an exact regular subdivision, beginning at source+offset.
+ * Named relationships describe the established model, not verification of a primary page.
+ */
+function selectRegularSubdivision(register, hueIndex, parts, offset = 0) {
+  if (!Number.isInteger(parts) || parts < 1 || parts > 24 || 24 % parts !== 0) {
+    throw new RangeError('parts must be a positive divisor of 24');
+  }
+  if (!Number.isSafeInteger(offset)) throw new RangeError('offset must be a safe integer');
+  const rotation = ((offset % 24) + 24) % 24;
+  const step = 24 / parts;
+  const historicalName = NAMED_SUBDIVISIONS[parts] || null;
+  return {
+    parts, step, offset: rotation,
+    historicalStatus: historicalName ? 'explicit' : 'mathematical',
+    historicalName, implementationStatus: 'implemented',
+    sourceStatus: historicalName ? 'primary-1921' : 'mathematical',
+    sourcePages: ({ 2: [74, 98], 3: [94], 4: [98] })[parts] || [],
+    fields: Array.from({ length: parts }, (_, i) =>
+      copyColor(register[(hueIndex - 1 + rotation + i * step) % 24]))
+  };
+}
+
+/** Validate a complete atlas or interpolated source against the selected circle. */
+function validateSubdivisionSource(field, circle) {
+  if (!field || typeof field !== 'object') throw new TypeError('field must be a complete color object');
+  validateHue(field.hueIndex);
+  if (field.source !== 'interpolated') return validateField(field, circle);
+  if (field.label !== null) throw new Error('Interpolated source requires label=null');
+  const expected = { hueIndex: field.hueIndex,
+    ...OstwaldColor.mix(circle[field.hueIndex - 1].lab, field.w, field.s) };
+  vector(field.lab, 'Field lab');
+  validateRgb(field.rgb, expected.rgb);
+  assertPathData(field, expected, 'field');
+  return expected;
+}
+
+/** Continuous analytical segments; endpoints and constraints are renderer-independent.
+ * Shadow rays use homogeneous v:w coordinates so w=0 needs no division by zero.
+ */
+function buildHarmonyPath(type, sourceField, fullColorLab) {
+  const { w, s, v, hueIndex } = sourceField;
+  let constraint, start, end;
+  switch (type) {
+    case 'isotint':
+      constraint = { kind: 'constant', coordinate: 'w', value: w };
+      start = { w, s: 0, v: 1 - w };
+      end = { w, s: 1 - w, v: 0 };
+      break;
+    case 'isotone':
+      constraint = { kind: 'constant', coordinate: 's', value: s };
+      start = { w: 0, s, v: 1 - s };
+      end = { w: 1 - s, s, v: 0 };
+      break;
+    case 'analyticIsochrome':
+      constraint = { kind: 'constant', coordinate: 'v', value: v };
+      start = { w: 1 - v, s: 0, v };
+      end = { w: 0, s: 1 - v, v };
+      break;
+    case 'shadowSeries': {
+      const nonBlack = w + v;
+      if (nonBlack === 0) throw new RangeError('A pure-black source cannot determine a shadow direction (v:w = 0:0)');
+      constraint = {
+        kind: 'proportion', fullColor: v, white: w,
+        equation: 'v * source.w = w * source.v',
+        ratioStatus: w === 0 ? 'white-free' : 'finite', blackEndpoint: 'limit'
+      };
+      start = { w: w / nonBlack, s: 0, v: v / nonBlack };
+      end = { w: 0, s: 1, v: 0 };
+      break;
+    }
+    default:
+      throw new RangeError('Unknown harmony path type: use isotint, isotone, analyticIsochrome or shadowSeries');
+  }
+  return {
+    type, hueIndex, sourceField: copyColor(sourceField), fullColorLab: fullColorLab.slice(),
+    constraint, domain: { parameter: 't', min: 0, max: 1, start, end }
+  };
+}
+
+/** Check a serialized descriptor against its derived canonical geometry.
+ * This accepts JSON round trips, not arbitrary/adulterated endpoints or constraints.
+ */
+function assertPathData(actual, expected, name = 'path') {
+  if (typeof expected === 'number') {
+    if (!Number.isFinite(actual) || Math.abs(actual - expected) > EPSILON) {
+      throw new Error(`${name} does not match the source and path constraint`);
+    }
+  } else if (expected !== null && typeof expected === 'object') {
+    if (!actual || typeof actual !== 'object' || Array.isArray(actual) !== Array.isArray(expected) ||
+        (Array.isArray(expected) && actual.length !== expected.length) ||
+        Object.keys(actual).length !== Object.keys(expected).length) {
+      throw new TypeError(`${name} has an invalid descriptor structure`);
+    }
+    for (const key of Object.keys(expected)) {
+      if (!Object.hasOwn(actual, key)) throw new TypeError(`${name}.${key} is required`);
+      assertPathData(actual[key], expected[key], `${name}.${key}`);
+    }
+  } else if (actual !== expected) {
+    throw new Error(`${name} has an invalid descriptor value`);
+  }
+}
+
+/** Validate source colors and derive a fresh path using its embedded anchor snapshot. */
+function validatedPath(path) {
+  if (!path || typeof path !== 'object') throw new TypeError('path must be a harmony path descriptor');
+  validateHue(path.hueIndex);
+  vector(path.fullColorLab, 'Path fullColorLab');
+  const field = path.sourceField;
+  if (!field || field.hueIndex !== path.hueIndex) throw new Error('path.sourceField must have the path hueIndex');
+  let source;
+  if (field.source === 'atlas') {
+    // Field validation only needs the selected hue's anchor, not a global circle.
+    const circle = [];
+    circle[path.hueIndex - 1] = { lab: path.fullColorLab };
+    source = validateField(field, circle);
+  } else if (field.source === 'interpolated' && field.label === null) {
+    source = { hueIndex: path.hueIndex, ...OstwaldColor.mix(path.fullColorLab, field.w, field.s) };
+    vector(field.lab, 'Path source lab');
+    validateRgb(field.rgb, source.rgb);
+    assertPathData(field, source, 'path.sourceField');
+  } else {
+    throw new Error('path.sourceField must be atlas or interpolated with label=null');
+  }
+  const expected = buildHarmonyPath(path.type, source, path.fullColorLab);
+  assertPathData(path, expected);
+  return expected;
+}
+
+/** Bind the composition layer to validated atlas colors from an explicit calibration. */
+function compoundAPI(engine, context = {}) {
+  if (!context || typeof context !== 'object' || Array.isArray(context) ||
+      Object.keys(context).some(key => key !== 'hueCircle')) throw new TypeError('Compound context accepts only hueCircle');
+  const circle = context.hueCircle === undefined ? engine.hueCircle() : context.hueCircle;
+  validateCircle(circle);
+  const grays = engine.grayAxis();
+  const resolveMember = member => {
+    if (!member || member.source !== 'atlas') throw new TypeError('Compound members must be complete atlas colors; interpolated samples are not composable');
+    if (Object.hasOwn(member, 'hueIndex')) return validateField(member, circle);
+    const expected = grays.find(gray => gray.letter === member.letter);
+    if (!expected || member.label !== expected.label) throw new Error('Unknown gray-axis member');
+    for (const key of ['w', 's', 'v']) {
+      if (!Number.isFinite(member[key]) || Math.abs(member[key] - expected[key]) > EPSILON) throw new Error(`Gray member ${key} does not match its atlas identity`);
+    }
+    vector(member.lab, 'Gray lab');
+    if (!member.lab.every((n, i) => Math.abs(n - expected.lab[i]) <= EPSILON)) throw new Error('Gray member lab does not match its atlas identity');
+    validateRgb(member.rgb, expected.rgb);
+    return copyColor(expected);
+  };
+  return Compound.createAPI({ resolveMember, sameShadowSeries, epsilon: EPSILON, letters: SCALE.map(s => s.letter) });
+}
+
+/** Framework-independent contemporary realization of Ostwald's relational structure. */
+class OstwaldColor {
+  /**
+   * Build a contemporary Oklab hue circle, not historical Ostwald pigment/disc colors.
+   * Constant L=0.72, C=0.10, angles 115 - i*360/n degrees; fresh arrays each call.
+   * @param {number} [n=24] Positive safe integer; only n=24 is used for field APIs.
+   * @returns {Array<{index:number, rgb:number[], lab:number[], group:string, calibrated:boolean,source:string}>}
+   * @throws {RangeError} If n is not a positive safe integer / valid JS array length.
+   */
+  static hueCircle(n = 24) {
+    if (!Number.isSafeInteger(n) || n < 1 || n > 0xffffffff) {
+      throw new RangeError('n must be a positive integer within the JavaScript array length limit');
+    }
+    return buildHueReferences(n);
+  }
+
+  /**
+   * Return independent copies of the eight non-linear letter levels in a..p order.
+   * The second letter encodes black as 1 - value.
+   * @returns {Array<{letter:string, value:number}>} a,c,e,g,i,l,n,p and their values.
+   */
+  static letterScale() {
+    return SCALE.map(item => ({ ...item }));
+  }
+
+  /**
+   * Generate the 28 chromatic atlas fields; the eight shared grays live in grayAxis().
+   * Order: white letter a,c,e,g,i,l,n,p outer; black letter same order inner.
+   * @param {number} hueIndex One-based integer in 1..24.
+   * @param {number} [steps=8] Exactly 8; other resolutions are not defined.
+   * @returns {Array<{hueIndex:number,w:number,s:number,v:number,label:string,rgb:number[],lab:number[],source:string}>}
+   * @throws {RangeError} For invalid hueIndex or steps other than 8.
+   */
+  static triangle(hueIndex, steps = 8) {
+    validateHue(hueIndex);
+    if (steps !== 8) throw new RangeError('steps must be 8: only the eight discrete letter levels are defined');
+    return buildTriangle(hueIndex, this.hueCircle());
+  }
+
+  /**
+   * Return the eight shared achromatic atlas nodes, in letter-scale order.
+   * These are counted once for the whole atlas and have no hueIndex.
+   * @returns {Array<{letter:string,label:string,w:number,s:number,v:number,rgb:number[],lab:number[],source:string}>}
+   */
+  static grayAxis() {
+    return SCALE.map(({ letter, value }) => ({
+      ...this.mix(BLACK, value, 1 - value),
+      v: 0, letter, label: letter, source: 'atlas'
+    }));
+  }
+
+  /**
+   * Mix v*V + w*[1,0,0] + s*[0,0,0] componentwise exclusively in Oklab.
+   * Clip only linear sRGB output before gamma encoding and integer rounding.
+   * @param {number[]} fullColorLab Finite Oklab [L,a,b]; out-of-gamut values allowed.
+   * @param {number} w White share >=0, with w+s<=1 (roundoff tolerance 1e-10).
+   * @param {number} s Black share >=0, with w+s<=1 (roundoff tolerance 1e-10).
+   * @returns {{w:number,s:number,v:number,lab:number[],rgb:number[],label:null,source:string}} Unclipped Oklab and display RGB.
+   * @throws {TypeError|RangeError} For malformed Lab, nonfinite shares, invalid geometry or overflow.
+   */
+  static mix(fullColorLab, w, s) {
+    vector(fullColorLab, 'fullColorLab (Oklab)');
+    // Validate convertibility even for an endpoint with zero full-color contribution.
+    oklabToRgb(fullColorLab);
+    const shares = coordinates(w, s);
+    const lab = fullColorLab.map((c, i) => shares.v * c + shares.w * WHITE[i] + shares.s * BLACK[i]);
+    return { ...shares, lab, rgb: oklabToRgb(lab), label: null, source: 'interpolated' };
+  }
+
+  /**
+   * Find discrete constant-w/s/v relations, rounded constant-v/w shadow series,
+   * isovalent registers, gray companions and regular 24-part hue chords.
+   * Regular circle relationships are translated into a contemporary programmatic
+   * form; this API is not claimed to be a historical formulation by Ostwald.
+   * @param {object} field Complete field object from the specified data basis.
+   * @param {object} [context={}] Explicit data basis; omitted members use defaults.
+   * @param {object[]} [context.hueCircle] Exactly 24 ordered references with index/rgb/lab.
+   * @param {object[]} [context.triangle] Nonempty subset of same-hue discrete fields,
+   * including field; must agree with hueCircle. Input order determines series order.
+   * @returns {{isotints:object[],isotones:object[],analyticIsochromes:object[],shadowSeries:object[],isovalent:object[],grayHarmonies:object,hueHarmonies:object[],paths:object}}
+   * Constant-w/s/v series exclude the source. Shadow series include it, sorted by s.
+   * Isovalent registers include all 24 hues, sorted by index. Paths exist even
+   * when a relation has no other atlas nodes. Hue objects have type and complete fields,
+   * excluding the selected hue: complementary [+12], triad [+8,+16], tetrad [+6,+12,+18].
+   * @throws {TypeError|RangeError|Error} For invalid data, unknown fields, duplicates,
+   * inconsistent colors/coordinates, wrong-hue triangles or unknown context keys.
+   */
+  static harmonies(field, context = {}) {
+    if (!context || typeof context !== 'object' || Array.isArray(context) ||
+        Object.keys(context).some(key => !['hueCircle', 'triangle'].includes(key))) {
+      throw new TypeError('context must be an object with only hueCircle and/or triangle');
+    }
+    const circle = context.hueCircle === undefined ? this.hueCircle() : context.hueCircle;
+    validateCircle(circle);
+    const selected = validateField(field, circle);
+    const source = context.triangle === undefined ? buildTriangle(selected.hueIndex, circle) : context.triangle;
+    if (!Array.isArray(source) || source.length === 0) throw new TypeError('context.triangle must be a nonempty array');
+    const labels = new Set();
+    const fields = [];
+    for (const candidate of source) {
+      const valid = validateField(candidate, circle);
+      if (valid.hueIndex !== selected.hueIndex) throw new Error('context.triangle must contain only the selected hue');
+      if (labels.has(valid.label)) throw new Error('context.triangle contains duplicate fields');
+      labels.add(valid.label);
+      fields.push(valid);
+    }
+    if (!labels.has(selected.label)) throw new Error('Unknown field: not present in context.triangle');
+    const series = key => fields
+      .filter(item => item.label !== selected.label && Math.abs(item[key] - selected[key]) <= EPSILON)
+      .map(copyColor);
+    const white = SCALE.find(item => item.letter === selected.label.slice(-2, -1));
+    const black = SCALE.find(item => item.letter === selected.label.slice(-1));
+    const isovalent = circle.map(hue => makeField(hue.index, white, black, circle));
+    const grays = this.grayAxis();
+    const chords = [['complementary', 2], ['triad', 3], ['tetrad', 4]];
+    return {
+      isotints: series('w'), isotones: series('s'), analyticIsochromes: series('v'),
+      shadowSeries: fields.filter(item => sameShadowSeries(item, selected))
+        .sort((a, b) => a.s - b.s || a.label.localeCompare(b.label)).map(copyColor),
+      isovalent,
+      grayHarmonies: {
+        sameWhite: copyColor(grays.find(gray => Math.abs(gray.w - selected.w) <= EPSILON)),
+        sameBlack: copyColor(grays.find(gray => Math.abs(gray.s - selected.s) <= EPSILON))
+      },
+      hueHarmonies: chords.map(([type, count]) => ({
+        type, fields: selectRegularSubdivision(isovalent, selected.hueIndex, count).fields.slice(1)
+      })),
+      paths: Object.fromEntries(['isotint', 'isotone', 'analyticIsochrome', 'shadowSeries']
+        .map(type => [type, buildHarmonyPath(type, selected, circle[selected.hueIndex - 1].lab)]))
+    };
+  }
+
+  /**
+   * Select a complete regular subdivision of a 24-hue isovalent circle.
+   * This mathematical operation is separate from the 1921 musical distance analogy.
+   * @param {object} field Complete atlas field (legacy source omission allowed), or
+   * complete interpolated color with hueIndex, label=null and source='interpolated'.
+   * @param {number} parts Positive divisor of 24: 1,2,3,4,6,8,12,24.
+   * @param {number} [offset=0] Safe integer hue steps from source, normalized modulo 24.
+   * @param {object} [context={}] Optional {hueCircle} containing 24 ordered references.
+   * @returns {{parts:number,step:number,offset:number,historicalStatus:string,historicalName:?string,implementationStatus:string,fields:object[]}}
+   * All parts are returned in increasing-index circular order from source+offset.
+   * Atlas labels are preserved by register lookup; interpolated sources stay unlabeled.
+   * Only parts 2/3/4 have historicalStatus='explicit'; all others are 'mathematical'.
+   * @throws {TypeError|RangeError|Error} For invalid divisions, offsets, colors or context.
+   */
+  static regularHueSubdivision(field, parts, offset = 0, context = {}) {
+    if (!context || typeof context !== 'object' || Array.isArray(context) ||
+        Object.keys(context).some(key => key !== 'hueCircle')) {
+      throw new TypeError('Subdivision context must contain only an optional hueCircle');
+    }
+    const circle = context.hueCircle === undefined ? this.hueCircle() : context.hueCircle;
+    validateCircle(circle);
+    const selected = validateSubdivisionSource(field, circle);
+    let register;
+    if (selected.source === 'atlas') {
+      const white = SCALE.find(item => item.letter === selected.label.at(-2));
+      const black = SCALE.find(item => item.letter === selected.label.at(-1));
+      register = circle.map(hue => makeField(hue.index, white, black, circle));
+    } else {
+      register = circle.map(hue => ({ hueIndex: hue.index, ...this.mix(hue.lab, selected.w, selected.s) }));
+    }
+    return selectRegularSubdivision(register, selected.hueIndex, parts, offset);
+  }
+
+  /**
+   * Return twelve musical-analogy rows directly verified on printed p.89 (PDF 107).
+   * colorEntries are directed distances in the two halves of the ring, not hue pairs.
+   * @returns {object} Fresh {entries, reference, primaryReference, sourceStatus,
+   * sourceConfidence, primaryVerified, transcriptionBasis, model}.
+   * Starred consonance flags are historical descriptions, never aesthetic scores.
+   */
+  static intervalTable1921() {
+    return { ...intervalProvenance1921(), entries: INTERVAL_ANALOGY_1921.map(copyInterval) };
+  }
+
+  /**
+   * Apply the p.89 distance analogy to a hue pair. Corrects Phase 3's literal-pair reading.
+   * @param {number} a Hue in 1..24.
+   * @param {number} b Hue in 1..24; identity (distance zero) is unlisted.
+   * @returns {object} Provenance, sorted pair, distance, listed, entry or null, and
+   * applicationStatus='mathematical-distance-lookup' (the pair itself is not a transcription).
+   * @throws {RangeError} For invalid hue indices.
+   */
+  static intervalRelation1921(a, b) {
+    const distance = this.hueDistance(a, b).minimal;
+    const entry = INTERVAL_ANALOGY_1921.find(item => item.distance === distance);
+    return { ...intervalProvenance1921(), pair: [Math.min(a, b), Math.max(a, b)], distance,
+      applicationStatus: 'mathematical-distance-lookup',
+      listed: Boolean(entry), entry: entry ? copyInterval(entry) : null };
+  }
+
+  /**
+   * Return primary terminology, mathematical infrastructure and separate deferred research.
+   * @returns {object} Fresh {rules,researchPending,deferred,researchNotes}; metadata only.
+   */
+  static harmonyRuleRegistry() { return Grammar.registry(); }
+
+  /**
+   * Enumerate the Zweier distance class (1921 pp.72–74), without aesthetic ranking.
+   * @param {number} distance Integer 1..12, minimal circular distance.
+   * @returns {number[][]} Sorted unordered pairs; 24 for 1..11, 12 for distance 12.
+   * @throws {RangeError} For an invalid distance.
+   */
+  static dyadsByDistance(distance) { return Grammar.dyadsByDistance(distance); }
+
+  /**
+   * Canonical positive cyclic gaps; sum=24. Rotation equivalence excludes reflection.
+   * @param {number[]} hues Dense array of 2..24 distinct safe integers, normalized modulo 24.
+   * @returns {number[]} Numerically lexicographically least rotation of the gap sequence.
+   * @throws {TypeError|RangeError} For invalid input or duplicates after normalization.
+   */
+  static cyclicGapSignature(hues) { return Grammar.cyclicGapSignature(hues); }
+
+  /**
+   * Classify a circular hue set structurally, independently of color coordinates.
+   * @param {number[]} hues Dense array of 2..24 distinct safe integers (modulo 24).
+   * @returns {object} HarmonySet with hues, cardinality, gaps, className, symmetry,
+   * symmetries, regular, construction, historicalName, sourceStatus and sourcePages.
+   * Triade/Tetrade are named special cases; classification is never an aesthetic verdict.
+   * @throws {TypeError|RangeError} For invalid input or duplicate normalized hues.
+   */
+  static classifyHueSet(hues) { return Grammar.classifyHueSet(hues); }
+
+  /**
+   * Insert an exact midpoint on a selected directed dyad arc (1921 pp.90–92).
+   * @param {number[]} dyad Two distinct safe integer hues, normalized modulo 24; order matters.
+   * @param {string} [direction='clockwise'] Increasing-index clockwise or counterclockwise.
+   * @returns {object} HarmonySet with construction='division' and original arc provenance.
+   * @throws {TypeError|RangeError} For invalid input or an odd arc (no discrete midpoint).
+   */
+  static divideHueDyad(dyad, direction = 'clockwise') { return Grammar.divideHueDyad(dyad, direction); }
+
+  /**
+   * Retain a dyad and add one distinct hue; equal-step Aufbau is identified separately.
+   * @param {number[]} dyad Two distinct safe integer hues, normalized modulo 24.
+   * @param {number} thirdHue Safe integer, distinct after normalization.
+   * @returns {object} HarmonySet with construction='augmentation', baseDyad and its distance.
+   * Equal-step continuation cites p.92; arbitrary addition is contemporary infrastructure.
+   * @throws {TypeError|RangeError} For invalid or duplicate hue positions.
+   */
+  static augmentHueDyad(dyad, thirdHue) { return Grammar.augmentHueDyad(dyad, thirdHue); }
+
+  /**
+   * Symmetrically replace a hue by two neighbors (p.93; Dreier to Vierer p.99).
+   * @param {number[]} hues Two or three distinct safe integer hues, normalized modulo 24.
+   * @param {number} target Member to replace (safe integer, normalized modulo 24).
+   * @param {number} distance Integer 1..6 to either side, as discussed on p.93.
+   * @returns {object} HarmonySet with construction='split' and replacement provenance.
+   * Construction remains split even if the resulting geometry is a named regular class.
+   * @throws {TypeError|RangeError} For invalid input or collisions with remaining hues.
+   */
+  static splitHueSet(hues, target, distance) { return Grammar.splitHueSet(hues, target, distance); }
+
+  /**
+   * Neutral integer distances on the 24-position circle; assigns no interval name.
+   * @param {number} a Start hue in 1..24.
+   * @param {number} b End hue in 1..24.
+   * @returns {{clockwise:number,counterclockwise:number,minimal:number}}
+   * Clockwise means increasing index; identity has zero in all three fields.
+   * @throws {RangeError} For noninteger or out-of-range indices.
+   */
+  static hueDistance(a, b) {
+    validateHue(a);
+    validateHue(b);
+    const clockwise = (b - a + 24) % 24;
+    const counterclockwise = (a - b + 24) % 24;
+    return { clockwise, counterclockwise, minimal: Math.min(clockwise, counterclockwise) };
+  }
+
+  /**
+   * Detect equal circular gaps after modulo-24 normalization, independent of colors.
+   * @param {number[]} indices Dense array of safe integers; arbitrary order/rotations allowed.
+   * @returns {boolean} Empty=false; singleton=true (one-part subdivision).
+   * @throws {TypeError|RangeError} For nonarrays, invalid integers, or duplicate positions
+   * after normalization (e.g. 1 and 25). Does not mutate or deduplicate input.
+   */
+  static isRegularHueSet(indices) {
+    if (!Array.isArray(indices)) throw new TypeError('indices must be an array of safe integers');
+    const normalized = [];
+    for (let i = 0; i < indices.length; i++) {
+      if (!Object.hasOwn(indices, i) || !Number.isSafeInteger(indices[i])) {
+        throw new RangeError('Every hue-set entry must be a safe integer');
+      }
+      // Reduce before adding/subtracting to avoid overflow at safe-integer limits.
+      normalized.push(((indices[i] % 24 + 23) % 24) + 1);
+    }
+    if (new Set(normalized).size !== normalized.length) throw new RangeError('Duplicate hue positions after modulo-24 normalization');
+    if (normalized.length === 0) return false;
+    normalized.sort((a, b) => a - b);
+    const step = 24 / normalized.length;
+    return normalized.every((hue, i) =>
+      (i + 1 === normalized.length ? normalized[0] + 24 : normalized[i + 1]) - hue === step);
+  }
+
+  /**
+   * Select indices start + k*step from an ordered discrete array; no historical claim.
+   * @param {Array} series Dense array of arbitrary entries (including gray/atlas colors).
+   * @param {object} options Only start, step and count are allowed.
+   * @param {number} [options.start=0] Zero-based safe integer index >=0.
+   * @param {number} [options.step=1] Positive safe integer index stride (no wrapping).
+   * @param {number} options.count Positive safe integer number of entries to return.
+   * @returns {Array} Fresh shallow array; selected element references are preserved.
+   * @throws {TypeError|RangeError} For sparse/nonarray input, invalid options or bounds.
+   */
+  static selectSeriesInterval(series, options) {
+    if (!Array.isArray(series)) throw new TypeError('series must be a dense array');
+    for (let i = 0; i < series.length; i++) {
+      if (!Object.hasOwn(series, i)) throw new TypeError('series must be a dense array');
+    }
+    if (!options || typeof options !== 'object' || Array.isArray(options) ||
+        Object.keys(options).some(key => !['start', 'step', 'count'].includes(key))) {
+      throw new TypeError('options must contain only start, step and count');
+    }
+    const { start = 0, step = 1, count } = options;
+    if (!Number.isSafeInteger(start) || start < 0 ||
+        !Number.isSafeInteger(step) || step < 1 || !Number.isSafeInteger(count) || count < 1) {
+      throw new RangeError('start must be a nonnegative safe integer; step and count must be positive safe integers');
+    }
+    // Division checks the last index without overflowing start + (count-1)*step.
+    if (start >= series.length || count - 1 > Math.floor((series.length - 1 - start) / step)) {
+      throw new RangeError('Series interval selection exceeds array bounds');
+    }
+    return Array.from({ length: count }, (_, i) => series[start + i * step]);
+  }
+
+  /**
+   * Describe a linear discrete selection within one validated chromatic atlas series.
+   * @param {object[]} series At least two complete same-hue atlas fields in monotone order.
+   * @param {string} relationFamily shadow-series | isotint | isotone | analytic-isochrome.
+   * @param {number[]} indices At least two strictly increasing zero-based indices; no wrap.
+   * @param {object} [context={}] Optional {hueCircle} for calibrated/custom reference colors.
+   * @returns {object} Linear series descriptor: relationFamily, indices, gapsOrSteps,
+   * step (null if unequal), cardinality, fields, and separate historical concept evidence.
+   * Index gaps refer to the supplied series, never an inferred historical allowed-step law.
+   * @throws {TypeError|RangeError|Error} For bad colors, family, order, indices or context.
+   */
+  static seriesHarmony(series, relationFamily, indices, context = {}) {
+    const families = { isotint: 'w', isotone: 's', 'analytic-isochrome': 'v', 'shadow-series': null };
+    if (!Object.hasOwn(families, relationFamily)) throw new RangeError('Unknown series relationFamily');
+    if (!context || typeof context !== 'object' || Array.isArray(context) ||
+        Object.keys(context).some(key => key !== 'hueCircle')) throw new TypeError('Series context accepts only hueCircle');
+    const circle = context.hueCircle === undefined ? this.hueCircle() : context.hueCircle;
+    validateCircle(circle);
+    if (!Array.isArray(series) || series.length < 2) throw new TypeError('series requires at least two atlas fields');
+    const fields = Array.from(series, field => validateField(field, circle));
+    const first = fields[0], key = families[relationFamily];
+    const orderKey = relationFamily === 'isotone' || relationFamily === 'analytic-isochrome' ? 'w' : 's';
+    let direction = 0;
+    for (let i = 0; i < fields.length; i++) {
+      const field = fields[i];
+      if (field.hueIndex !== first.hueIndex || (key === null ? !sameShadowSeries(field, first) :
+          Math.abs(field[key] - first[key]) > EPSILON)) throw new Error('Fields do not belong to the declared one-hue series');
+      if (i > 0) {
+        const delta = field[orderKey] - fields[i - 1][orderKey];
+        const sign = Math.sign(delta);
+        if (Math.abs(delta) <= EPSILON || (direction && direction !== sign)) throw new Error('Series must be strictly monotone without duplicates');
+        direction = sign;
+      }
+    }
+    if (!Array.isArray(indices) || indices.length < 2) throw new TypeError('indices requires at least two positions');
+    for (let i = 0; i < indices.length; i++) {
+      if (!Number.isSafeInteger(indices[i]) || indices[i] < 0 || indices[i] >= fields.length ||
+          (i > 0 && indices[i] <= indices[i - 1])) throw new RangeError('indices must be strictly increasing and within series bounds');
+    }
+    const gapsOrSteps = indices.slice(1).map((n, i) => n - indices[i]);
+    const sourcePages = ({ isotint: [48, 49, 50], isotone: [48, 50, 51], 'shadow-series': [48, 51] })[relationFamily] || [];
+    return { topology: 'linear', relationFamily, hueIndex: first.hueIndex, indices: indices.slice(),
+      gapsOrSteps, step: gapsOrSteps.every(g => g === gapsOrSteps[0]) ? gapsOrSteps[0] : null,
+      cardinality: indices.length, fields: indices.map(i => copyColor(fields[i])),
+      sourceStatus: 'contemporary-implementation', classificationStatus: 'structural-no-aesthetic-verdict',
+      relationEvidence: { sourceStatus: sourcePages.length ? 'primary-1921' : 'mathematical', sourcePages } };
+  }
+
+  /**
+   * Wrap an organized atlas selection in the shared elementary-group interface.
+   * Domain validation is structural, not historical approval of arbitrary selections.
+   * @param {string} domain gray | same-hue | isovalent.
+   * @param {object[]} members At least two distinct complete atlas colors, in caller order.
+   * @param {object} [options={}] Only relation and hueCircle; relation is required for
+   * same-hue (isotint, isotone, shadow-series), otherwise defaults to gray-series/isovalent.
+   * @returns {object} Fresh elementary HarmonySet with members, domain, domains and level=1.
+   * @throws {TypeError|RangeError|Error} For invalid members, domains, relations or options.
+   */
+  static elementaryHarmony(domain, members, options = {}) {
+    if (!options || typeof options !== 'object' || Array.isArray(options) ||
+        Object.keys(options).some(k => !['relation', 'hueCircle'].includes(k))) throw new TypeError('Elementary options accept only relation and hueCircle');
+    const context = options.hueCircle === undefined ? {} : { hueCircle: options.hueCircle };
+    return compoundAPI(this, context).elementary(domain, members, options.relation);
+  }
+
+  /**
+   * Connect two elementary/compound groups through exact shared atlas identities (p.105).
+   * @param {object} groupA First structured group, retained independently in groups[0].
+   * @param {object} groupB Second structured group, retained in groups[1].
+   * @param {object} [context={}] Optional {hueCircle}, matching the inputs' calibration.
+   * @returns {object} CompoundHarmony with deduplicated active members and complete provenance.
+   * @throws {TypeError|RangeError|Error} For invalid/cyclic groups or no shared member.
+   */
+  static combineBySharedMember(groupA, groupB, context = {}) {
+    return compoundAPI(this, context).combine(groupA, groupB);
+  }
+
+  /**
+   * Substitute one active member identity with a structured symmetric replacement (p.105).
+   * Distinct from Phase-4 splitHueSet: this preserves both groups and construction history.
+   * @param {object} sourceGroup Elementary or recursive compound harmony.
+   * @param {object} member Complete atlas color whose active identity is to be replaced.
+   * @param {object} replacementGroup Elementary or recursive compound, structurally symmetric
+   * around member in gray-letter, one-hue-letter or isovalent-hue coordinates.
+   * @param {object} [context={}] Optional {hueCircle}, matching all inputs.
+   * @returns {object} CompoundHarmony; original groups remain intact, flattened members reflect
+   * replacement at the target's position. A retained center represents partial replacement.
+   * @throws {TypeError|RangeError|Error} For missing target, invalid structures or unsupported
+   * correspondence. Symmetry is structural and does not assert exact Oklab mixture equality.
+   */
+  static substituteHarmony(sourceGroup, member, replacementGroup, context = {}) {
+    return compoundAPI(this, context).substitute(sourceGroup, member, replacementGroup);
+  }
+
+  /**
+   * Recompute the active recursive member view; substitution excludes replaced occurrences.
+   * @param {object} group Valid elementary or compound harmony (JSON copies accepted).
+   * @param {object} [context={}] Optional {hueCircle}, matching the group's calibration.
+   * @returns {object[]} Independent complete atlas colors, first-active-occurrence order.
+   * @throws {TypeError|RangeError|Error} For malformed/cyclic structure, provenance or colors.
+   */
+  static flattenHarmonyMembers(group, context = {}) { return compoundAPI(this, context).flatten(group); }
+
+  /**
+   * Compute recursive depth: elementary=1, compound=1+max(child levels).
+   * This software depth is not an exact historical mapping of Stufe and Ordnung.
+   * @param {object} group Valid elementary or compound harmony.
+   * @param {object} [context={}] Optional {hueCircle}, matching the group's calibration.
+   * @returns {number} Validated, recomputed recursive depth.
+   * @throws {TypeError|RangeError|Error} For malformed/cyclic structure or forged level.
+   */
+  static compoundLevel(group, context = {}) { return compoundAPI(this, context).level(group); }
+
+  /**
+   * Construct a continuous path from any valid analytical point, without atlas labels.
+   * For atlas sources use harmonies(field).paths, which preserves source provenance.
+   * @param {string} type isotint | isotone | analyticIsochrome | shadowSeries.
+   * @param {number} hueIndex Integer in 1..24, defining the path's full-color anchor.
+   * @param {number} w Finite white share >=0, w+s<=1 (EPSILON roundoff allowed).
+   * @param {number} s Finite black share >=0, w+s<=1 (EPSILON roundoff allowed).
+   * @param {object} [context={}] Optional {hueCircle}, exactly 24 ordered references.
+   * @returns {object} Plain descriptor with type, hueIndex, sourceField, fullColorLab,
+   * constraint and domain {parameter:'t',min:0,max:1,start:{v,w,s},end:{v,w,s}}.
+   * @throws {TypeError|RangeError|Error} For invalid input/context/type. A pure-black
+   * shadow source is ambiguous and throws; w=0,v>0 explicitly yields a white-free ray.
+   */
+  static harmonyPath(type, hueIndex, w, s, context = {}) {
+    validateHue(hueIndex);
+    if (!context || typeof context !== 'object' || Array.isArray(context) ||
+        Object.keys(context).some(key => key !== 'hueCircle')) {
+      throw new TypeError('Path context must contain only an optional hueCircle');
+    }
+    const circle = context.hueCircle === undefined ? this.hueCircle() : context.hueCircle;
+    validateCircle(circle);
+    const lab = circle[hueIndex - 1].lab;
+    const source = { hueIndex, ...this.mix(lab, w, s) };
+    return buildHarmonyPath(type, source, lab);
+  }
+
+  /**
+   * Sample a validated analytical segment with the anchor embedded in the descriptor.
+   * Uses uniform t, including endpoints for count>=2; count=1 returns the midpoint.
+   * Sampling is always Oklab-only, with no nearest-atlas rounding or invented labels.
+   * @param {object} path Descriptor from harmonies().paths or harmonyPath(), or JSON copy.
+   * @param {number} count Positive integer within JavaScript's array length limit.
+   * @returns {Array<{hueIndex:number,w:number,s:number,v:number,lab:number[],rgb:number[],label:null,source:string}>}
+   * Every sample has source='interpolated'. Black is the limit endpoint of a shadow
+   * ray: its 0/0 ratio is undefined, while the homogeneous cross-product remains zero.
+   * @throws {TypeError|RangeError|Error} For invalid counts, source colors or descriptors,
+   * including endpoints/constraints inconsistent with their source field.
+   */
+  static sampleHarmonyPath(path, count) {
+    if (!Number.isSafeInteger(count) || count < 1 || count > 0xffffffff) {
+      throw new RangeError('count must be a positive integer within the JavaScript array length limit');
+    }
+    const canonical = validatedPath(path);
+    const { start, end } = canonical.domain;
+    return Array.from({ length: count }, (_, i) => {
+      const t = count === 1 ? 0.5 : i / (count - 1);
+      const w = (1 - t) * start.w + t * end.w;
+      const s = (1 - t) * start.s + t * end.s;
+      return { hueIndex: canonical.hueIndex, ...this.mix(canonical.fullColorLab, w, s) };
+    });
+  }
+
+}
+
+module.exports = OstwaldColor;

@@ -1,20 +1,109 @@
-/* 
-  Modernized styles for a compact, elegant GUI with an Apple-Glass effect.
+/*
+  Base stylesheet. UI rework, Phase 0 (foundations): this file owns the
+  design tokens, the typeface, the one body font stack and the one
+  .control-group definition. index.html's inline <style> keeps the
+  component rules and page layout and must not redeclare any of these.
 */
 
-/* Reset margins/padding, set background color, 
-   center everything for phone use */
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  margin: 20px;
-  background-color: #fff;
-  color: #333;
+/* --- Typeface: SuisseIntl, weights 400 and 600 only ---------------------
+   Copies of the files in die-welt-der-formen/assets (web use confirmed by
+   the owner). font-display: swap never blocks text; index.html preloads
+   Book. */
+@font-face {
+  font-family: "SuisseIntl";
+  src: url("assets/fonts/SuisseIntl-Book.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  min-height: 100vh;
+@font-face {
+  font-family: "SuisseIntl";
+  src: url("assets/fonts/SuisseIntl-Semibold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Fallback face with SuisseIntl's proportions, so the swap moves as
+   little text as possible. Values measured with fontTools, not guessed:
+   SuisseIntl Book upm 1000, hhea ascent 1174 / descent 556 / lineGap 0,
+   mean lowercase advance 0.5357 em; Arial mean lowercase advance 0.4895
+   em. size-adjust = 0.5357 / 0.4895 = 109.4%; ascent-override =
+   1.174 / 1.094 = 107.3%; descent-override = 0.556 / 1.094 = 50.8%. */
+@font-face {
+  font-family: "SuisseIntl Fallback";
+  src: local("Arial");
+  size-adjust: 109.4%;
+  ascent-override: 107.3%;
+  descent-override: 50.8%;
+  line-gap-override: 0%;
+}
+
+/* --- Design tokens ------------------------------------------------------
+   Colors: black, one secondary grey, one disabled grey, one hairline
+   grey, white. Weights: 400 and 600 only. Sizes: 12 secondary, 16 base,
+   18 tabs. Touch: targets >= 44px, gaps >= 8px.
+   These are the tokens for the new UI; the older --background / --text /
+   --hover-bg variables in index.html stay until Phase 1 migrates the
+   components that use them. */
+:root {
+  --color-text: #000000;
+  --color-secondary: #757575;
+  --color-disabled: #b3b3b3;
+  --color-hairline: #d9d9d9;
+  --color-bg: #ffffff;
+
+  --font-ui: "SuisseIntl", "SuisseIntl Fallback", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --weight-regular: 400;
+  --weight-strong: 600;
+
+  /* the only three font sizes */
+  --size-secondary: 12px;
+  --size-base: 16px;
+  --fs-tab: 18px;
+
+  /* Sizes that change in ONE place.
+     --target  the height of EVERY control (shape buttons, symmetry choice, More, Help, steppers): 36px with a
+               mouse (pointer: fine), 48px on touch (pointer: coarse) - see the media query below.
+     --bar-h   the height of ONE top bar: the header, the nav row (one row on tablet/desktop), and each of the two
+               rows of a nav row on a phone. --target plus 12px above and below.
+     --icon    the size of every icon. */
+  --target: 48px;
+  --icon: 18px;
+  --bar-h: calc(var(--target) + 24px);   /* fine pointer 60px, coarse 72px */
+  --gap: 8px;
+  --radius: 6px;
+  --gutter: 16px;          /* page side margin */
+  --canvas-max: 560px;     /* canvas display size on tablet/desktop */
+  /* Canvas display size: one definite length, used for BOTH the width and
+     the height of #canvas-container (never derived through aspect-ratio
+     or a percentage), so it cannot be resolved differently by an engine. */
+  --canvas-size: min(var(--canvas-max), calc(100vw - 2 * var(--gutter)));
+}
+
+/* Mouse: smaller controls. Touch keeps 48px and the 8px gap. */
+@media (pointer: fine) {
+  :root { --target: 36px; }
+}
+
+/* The one body rule for font and reset. Page layout (flex centering,
+   height, colors via --background/--text) is owned by index.html's inline
+   <style>. tabular-nums is essential here: SuisseIntl's default digits
+   have nine different advance widths (374..675 units in Book), so
+   changing numbers would shift their neighbours without it. */
+body {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-regular);
+  font-size: var(--size-base);
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+
+/* Form controls do not inherit the font by default. */
+button, input, select, textarea {
+  font-family: inherit;
+  font-variant-numeric: inherit;
 }
 
 /* The container for the p5 canvas - flat, no glass/blur/shadow
@@ -24,7 +113,6 @@ body {
 #canvas-container {
   display: flex;
   justify-content: center;
-  margin-bottom: 20px;
   border: none;
 }
 
@@ -34,19 +122,43 @@ body {
    fought with that flex layout. */
 .controls-container {
   padding: 15px;
+  /* Without border-box, width:100% (set in index.html) plus this padding
+     was 30px wider than its container: a 5px horizontal page overflow at
+     375px (found in the Phase 0 measurement). */
+  box-sizing: border-box;
 }
 
+/* The one .control-group definition (this used to exist twice, here and
+   in index.html's inline <style>; the merged values below are exactly
+   what the cascade computed before, so nothing moves). */
 .control-group {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: auto;
 }
 
+/* Same specificity as .control-group{display:flex}, so the native [hidden]
+   rule would lose the tie without this. */
+.control-group[hidden] {
+  display: none;
+}
+
+/* LABEL RULE: every <label> inside a .control-group is hidden with
+   display:none. The interface is icon/numeral based. Consequences for
+   anyone adding a control:
+   - a <label> here is NEVER visible: do not put a control, checkbox or
+     any state the person must see inside one (this hid the "Include net"
+     checkbox once);
+   - do not rely on the label for the accessible name either (browsers
+     treat display:none content inconsistently): every control must carry
+     its own aria-label and a tooltip (title). */
 .control-group label {
-    font-size: 12px;
-    font-weight: 500;
+  display: none;
+  font-size: var(--size-secondary);
+  font-weight: var(--weight-regular);
 }
 
 .control-group input,
@@ -260,3 +372,678 @@ body.dark {
 #timeline-net-state[data-state="constant"], #timeline-net-state[data-state="pending"] { border-left-color: #888; background: #f4f4f4; }
 #timeline-net-warning[hidden], #timeline-net-state[hidden] { display: none; }
 .kf-no-net { color: #c0392b; }
+
+/* === UI rework 4a: header, tabs, nav rows ===============================
+   Header: the three tabs (in-page hash links, nav.js) on the left, Help on
+   the right. Active tab = Semibold + black, the others secondary grey;
+   never a ring (a ring is reserved for keyboard focus, below).
+   Nav rows: one per tab, ALL the same fixed height (see below), so switching
+   tabs moves nothing below them. */
+/* Both top bars have the SAME height, --bar-h (60px fine pointer, 72px coarse), and centre their content vertically:
+   the header, the nav row on tablet/desktop (one row), and on a phone each of the THREE rows of a nav row (so a
+   phone nav row is 3 x --bar-h - Phase B-Farbstrategien step 2's new strategy stepper pushed #nav-farbe's own
+   mobile wrap from 2 lines to 3, measured: 104+160 | 95+112+131 | 18+48 at 375px, none of several DOM/CSS
+   `order` reshuffles tried got it back under 2 without real compromises - so the shared height grows instead,
+   same choice already made once before for this exact class of problem). Every nav row (Form, Farbe, Netz) has
+   this height, so switching tabs moves nothing below - Form/Netz keep an extra, empty --bar-h of space on
+   mobile now too, accepted the same way the earlier bump already accepted it. The tab links fill the bar
+   height as their click area; only the text is small (18px). */
+:root { --nav-h: var(--bar-h); }
+@media (max-width: 767px) {
+  :root { --nav-h: calc(3 * var(--bar-h)); }
+}
+
+.app-header {
+  align-self: stretch;
+  box-sizing: border-box;
+  height: var(--bar-h);              /* the 1px bottom border is inside this height */
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 var(--gutter);
+  border-bottom: 1px solid var(--color-hairline);
+}
+@media (min-width: 768px) {
+  .app-header { gap: 32px; padding: 0 24px; }
+}
+
+.app-tabs { display: flex; align-items: stretch; align-self: stretch; gap: 12px; }
+@media (min-width: 768px) {
+  .app-tabs { gap: 16px; }
+}
+
+.app-tabs a {
+  display: inline-flex;
+  align-items: center;               /* the text is centred in the full-height click area */
+  padding: 0 4px;
+  font-size: var(--fs-tab);
+  font-weight: var(--weight-regular);
+  line-height: 1.1;
+  color: var(--color-secondary);
+  text-decoration: none;
+}
+.app-tabs a[aria-current="page"] {
+  font-weight: var(--weight-strong);
+  color: var(--color-text);
+}
+
+.app-header .icon-btn {
+  margin-left: auto;
+  width: var(--target);
+  height: var(--target);
+  border-radius: var(--radius);
+  font-size: var(--size-base);   /* no browser-default 13.33px */
+}
+
+.nav-rows { align-self: stretch; }
+.nav-row {
+  box-sizing: border-box;
+  height: var(--nav-h);              /* the 1px bottom border is inside this height */
+  padding: 0 var(--gutter);
+  border-bottom: 1px solid var(--color-hairline);
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+@media (min-width: 768px) {
+  .nav-row { padding: 0 24px; }
+}
+.nav-row[hidden] { display: none; }
+
+/* === UI rework 4b: Form row ==============================================
+   Every control has a fixed slot; nothing appears, disappears or moves when
+   the shape, symmetry, net or timeline changes. A control that is not
+   available is aria-disabled (dimmed, still focusable and tappable - a tap
+   shows the reason, ui.js), never hidden. All sizes come from the tokens
+   --target / --icon / --bar-h (top of this file). */
+.ico {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
+  flex: none;
+  width: var(--icon);
+  height: var(--icon);
+}
+
+.nav-row .icon-btn {
+  width: var(--target);
+  height: var(--target);
+  border-radius: var(--radius);
+  flex: none;
+  touch-action: manipulation;   /* no double-tap zoom on the buttons */
+}
+.nav-row .icon-btn[aria-disabled="true"] {
+  color: var(--color-disabled);
+  border-color: var(--color-hairline);
+  cursor: not-allowed;
+}
+.nav-row .icon-btn[aria-disabled="true"]:hover { background: var(--background); }
+
+.nav-cluster { display: flex; align-items: center; gap: var(--gap); flex: none; }
+.nav-divider { width: 1px; height: var(--target); background: var(--color-hairline); margin: 0 4px; flex: none; }
+.nav-break { display: none; }
+/* Group D Phase B4 follow-up: the old rule row moved into #more-farbe (see that markup's own comment) -
+   #nav-farbe is back to just the anchor row, which fits Form/Netz's own single-line convention again, no
+   special-casing needed (an earlier round's unconditional flex-wrap/height override, needed only while the
+   old row shared this element, has been removed along with that row). */
+
+/* "Other symmetry" set (none / mirror only): the More button shows a dot then. */
+.nav-more { position: relative; }
+.nav-more.has-state::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* The DOM (and so the tab order) is shapes | node | size | symmetry | More. Tablet/desktop shows exactly that in ONE
+   row. Phone (< 768px): two rows, each one --bar-h high with its content centred - shapes | symmetry | More, then the
+   two steppers - made with `order` and a full-width, zero-height .nav-break between them. The divider between shapes
+   and symmetry is dropped there: with 48px controls line 1 is shapes 160 + symmetry 104 + More 48 + 2 gaps of 8 =
+   328px and must fit the 343px that a 375px phone leaves.
+   KNOWN LIMIT (open until Phase 2, see ROADMAP.md Group B): this fits 360px and up; at 320px line 1 wraps into three
+   rows and overflows the fixed nav-row height. */
+@media (max-width: 767px) {
+  .nav-form { flex-wrap: wrap; align-content: flex-start; align-items: center; gap: 0 var(--gap); }
+  .nav-form > * { margin-top: 12px; margin-bottom: 12px; }   /* (--bar-h - --target) / 2 */
+  .nav-form .nav-shapes { order: 1; }
+  .nav-form .nav-symmetry { order: 2; }
+  .nav-form .nav-more { order: 3; }
+  .nav-form .nav-break { order: 4; display: block; flex: 0 0 100%; height: 0; margin: 0; }
+  .nav-form .stepper { order: 5; }
+  .nav-form .nav-divider { display: none; }
+}
+
+/* Stepper: [icon  number | up/down chevrons] around an existing number input. It is exactly --target high, like every
+   other control. The number is in the middle; the two stacked chevron halves on the right (like a compact native
+   spinner) are --target / 2 each: 24px on a coarse pointer, 18px on a fine pointer.
+   The 18px halves are a DELIBERATE exception to the 24x24 target size of WCAG 2.5.8 (Target Size, Minimum), which
+   allows an exception where an equivalent control is available: the field is typable, the arrow keys step it, and a
+   held chevron repeats - all of which reach the same result without hitting a small target. On a coarse pointer
+   (touch) the halves are the full 24px and there is no exception.
+   Fixed width: nothing moves when the number gets longer (tabular figures come from the body). The border is drawn
+   by ::after so it takes no room: the halves measure exactly --target / 2. */
+.stepper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  box-sizing: border-box;
+  height: var(--target);
+  padding-left: 8px;
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--color-text);
+}
+.stepper::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border: 1px solid var(--color-text);
+  border-radius: var(--radius);
+  pointer-events: none;
+}
+.stepper-icon { color: var(--color-secondary); }
+.stepper input[type="number"] {
+  width: 2.4ch;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--size-base);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  /* the native spinners are replaced by the chevrons: WebKit/Blink and Firefox */
+  -webkit-appearance: none;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.stepper input[type="number"]::-webkit-outer-spin-button,
+.stepper input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.stepper-chevrons {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  width: 32px;
+  margin-left: 2px;
+  border-left: 1px solid var(--color-hairline);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  overflow: hidden;
+}
+.stepper-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+/* Chevron icon: 12px, and a 1.75px line ON SCREEN: the viewBox is 24 units wide, so it is drawn at half scale and needs
+   3.5 units (the other icons keep the .ico value of 1.75 units, as before). */
+.stepper-btn .ico { width: 12px; height: 12px; stroke-width: 3.5; }
+/* the hairline between the halves is an inset shadow, not a border: it takes no room, so both halves are exactly --target / 2 */
+.stepper-btn + .stepper-btn { box-shadow: inset 0 1px 0 var(--color-hairline); }
+.stepper-btn:hover { background: var(--hover-bg); }
+.stepper-btn[aria-disabled="true"] { color: var(--color-disabled); cursor: not-allowed; }
+.stepper-btn[aria-disabled="true"]:hover { background: transparent; }
+.stepper-btn:focus-visible { outline-offset: -2px; }
+
+/* Overlay ("More"): a popover under its button on wide screens, a bottom sheet on the phone. One at a time. */
+.overlay {
+  position: fixed;
+  z-index: 40;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(92vw, 360px);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-text);
+  border-radius: var(--radius);
+  font-size: var(--size-base);
+  line-height: 1.25;
+}
+.overlay[hidden] { display: none; }
+.overlay.sheet {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  width: auto;
+  max-width: none;
+  max-height: 80vh;
+  overflow: auto;
+  border-width: 1px 0 0 0;
+  border-radius: 12px 12px 0 0;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+.overlay-scrim { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 39; background: rgba(0, 0, 0, 0.25); }
+.overlay-scrim[hidden] { display: none; }
+.overlay-section { display: flex; flex-direction: column; gap: 8px; }
+.overlay-title { margin: 0; font-size: var(--size-secondary); font-weight: var(--weight-strong); color: var(--color-secondary); }
+.overlay-opts { display: flex; flex-wrap: wrap; gap: var(--gap); }
+.overlay-hint { margin: 0; font-size: var(--size-secondary); color: var(--color-secondary); }
+.overlay-hint[hidden] { display: none; }
+.opt {
+  min-width: var(--target);
+  min-height: var(--target);
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--color-text);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.opt:hover { background: var(--hover-bg); }
+.opt.active { background: var(--color-text); color: var(--color-bg); }
+.opt[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
+.opt[aria-disabled="true"]:hover { background: var(--background); }
+
+/* Group D Phase B3: the Kreis/Dreieck/Register anchor widgets (#more-farbe) - a visual/text alternative to
+   the B2 numeric steppers over the same anchor state. Point styling mirrors .opt's active/hover language
+   above (fill swap instead of background swap, since these are SVG circles, not boxed buttons). */
+.anchor-widget-svg { width: 100%; max-width: 240px; height: auto; display: block; margin: 0 auto; }
+.anchor-widget-svg[hidden] { display: none; }
+.anchor-point circle.anchor-point-hit { fill: transparent; }
+.anchor-point circle.anchor-point-face { fill: var(--background); stroke: var(--color-text); stroke-width: 1.5; }
+.anchor-point:hover circle.anchor-point-face { fill: var(--hover-bg); }
+.anchor-point.active circle.anchor-point-face { fill: var(--color-text); }
+.anchor-point text { font-size: 8px; fill: var(--color-text); pointer-events: none; text-anchor: middle; dominant-baseline: central; }
+.anchor-point.active text { fill: var(--color-bg); }
+.anchor-point[aria-disabled="true"] circle.anchor-point-face { fill: var(--background); stroke: var(--color-hairline); cursor: not-allowed; }
+/* Group D Phase B4 follow-up: .anchor-register-list/.anchor-register-row (the Register linear-list widget)
+   removed along with the Register button/overlay - it duplicated the register stepper. .anchor-widget-svg/
+   .anchor-point above stay: both Kreis and Dreieck still use them. */
+
+/* The old three-button symmetry group and the fold group stay in the DOM (sketch.js owns them) but are hidden. */
+.legacy-controls[hidden] { display: none; }
+
+/* Toasts: fixed-position messages that never move the layout - the reason a disabled control gives when tapped
+   (#ui-toast, ui.js) and the sketch's own notes (#node-count-note). Dismissible: Escape, a click on it, or the next tap. */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 60;
+  box-sizing: border-box;
+  max-width: min(92vw, 480px);
+  margin: 0;
+  padding: 12px 16px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-text);
+  border-radius: var(--radius);
+  font-size: var(--size-base);
+  line-height: 1.25;
+  text-align: left;
+  opacity: 1;
+}
+.toast[hidden] { display: none; }
+
+/* === UI rework 4c: Netz row ===============================================
+   Aus | Sin | Tan | Geo, the strength stepper, More. Same rules as the Form row: every control is --target high, a
+   control that does not apply is aria-disabled (never hidden), nothing moves. */
+.nav-kinds .net-kind-btn {
+  width: calc(var(--target) + 12px);   /* four equal slots wide enough for "Aus" / "Sin" / "Tan" / "Geo" */
+  font-size: var(--size-base);
+  font-weight: var(--weight-regular);
+}
+
+/* A stepper whose number is a display (strength, focus): a focusable spinbutton, fixed width so nothing moves when
+   "0.5" becomes "0.86" or "x3.2". The state itself lives in a hidden range input (percent), as with the old slider. */
+.stepper-display {
+  display: inline-block;
+  min-width: 4ch;
+  text-align: center;
+  font-size: var(--size-base);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--color-text);
+}
+.stepper-display:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+
+/* Exact two-decimal value field (under More). */
+.exact-field {
+  box-sizing: border-box;
+  width: 96px;
+  height: var(--target);
+  padding: 0 8px;
+  border: 1px solid var(--color-text);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--size-base);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.exact-field[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
+
+/* The net group (#net-group) now sits inside the Netz overlay: its rows read left-aligned, its buttons follow --target. */
+.overlay-wide { max-width: min(92vw, 420px); }
+.overlay .control-group { align-items: stretch; gap: 8px; width: 100%; }
+.overlay .icon-row { justify-content: flex-start; flex-wrap: wrap; gap: var(--gap); }
+.overlay .layer-btn {
+  height: auto;
+  min-height: var(--target);
+  padding: 0 12px;
+  border-radius: var(--radius);
+  font-size: var(--size-base);
+  font-weight: var(--weight-regular);
+}
+.overlay #net-focus-row, .overlay #net-macro-row { width: 100%; }
+
+/* Phone: two rows of --bar-h (Aus/Sin/Tan/Geo + More, then the strength stepper). 4 x (--target + 12) + 3 x 8 gaps + 8 +
+   More = 320px at --target 48 (fits a 360px phone). */
+@media (max-width: 767px) {
+  .nav-netz { flex-wrap: wrap; align-content: flex-start; align-items: center; gap: 0 var(--gap); }
+  .nav-netz > * { margin-top: 12px; margin-bottom: 12px; }
+  .nav-netz .nav-kinds { order: 1; }
+  .nav-netz .nav-more { order: 2; }
+  .nav-netz .nav-break { order: 3; display: block; flex: 0 0 100%; height: 0; margin: 0; }
+  .nav-netz .stepper { order: 4; }
+  .nav-netz .nav-divider { display: none; }
+}
+
+/* === UI rework 4d: Farbe row ===============================================
+   Group D Phase B4 follow-up: the old rule row (four harmony rules + axis steppers) is gone entirely, per
+   explicit decision - not just hidden. #face-colors-rule/#face-colors-axes/#face-colors-unassigned live on as
+   permanently-hidden, permanently-empty state carriers (index.html's own comment on #nav-farbe explains why
+   they can't just be deleted: renderFaceColorsPanel()'s own guard hard-requires them to exist for the
+   STILL-VISIBLE per-trail list to render at all) - nothing here needs to style them for display any more,
+   they are never shown. */
+
+/* "Fläche füllen einschalten": the old toolbar's fill button gets the same small dot More uses for "a state is
+   set behind it" (UI rework 4b's .nav-more.has-state), pointing at the fix while the Farbe tab is open. */
+#btn-toggle-faces.needs-attn { position: relative; }
+#btn-toggle-faces.needs-attn::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* Layout round: Kreis/Dreieck are a two-state view switch (ui-farbe.js) - the current one is .active (black fill,
+   aria-pressed via UI.pressed()), the other gets the same small corner dot .nav-more.has-state uses when the
+   sheet's active harmony is in the family that is currently hidden. */
+.nav-anchor-views .icon-btn { position: relative; }
+.nav-anchor-views .icon-btn.has-state::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+/* The two harmony families (2/3/4 and B/W/S/V) share ONE slot; it always reserves four buttons' width, so the
+   steppers after it do not jump when the view switches. `[hidden]` must be restated: .nav-cluster's display:flex
+   would otherwise win over the attribute. */
+.nav-harmony-family { min-width: calc(4 * var(--target) + 3 * var(--gap)); }
+.nav-harmony-family[hidden] { display: none; }
+/* The cross-layer overlay note (moved out of the removed Farbe "Mehr" overlay, now beside #cross-layer-status)
+   only matters while editing sheet colors. */
+html:not([data-tab="farbe"]) #face-colors-overlay-note { display: none; }
+
+/* Phone: #nav-farbe's own anchor row wraps into 2 lines if needed (see the comment below). */
+@media (max-width: 767px) {
+  /* Group D Phase B4 follow-up: #nav-farbe is just the anchor row (Kreis/Dreieck, 2/3/4, the two steppers,
+     the preview swatch) - the old rule row is gone entirely (not moved anywhere). This row wraps on its own
+     via flex-wrap if it ever needs to (.nav-row has none by default) - matching Form's own established
+     pattern, not a special case). */
+  .nav-farbe { flex-wrap: wrap; align-content: flex-start; align-items: center; gap: 0 var(--gap); }
+  .nav-farbe > * { margin-top: 12px; margin-bottom: 12px; }
+  .nav-farbe .nav-divider { display: none; }
+}
+
+/* === UI rework 5a: canvas rail ===========================================
+   The action rail - undo/redo/clear | random | points/curves/fill | info/save | more - flanks the canvas on
+   tablet/desktop as ONE single-button-wide column, gutter-aligned like the header/nav rows (CSS Grid: `--target`
+   left column, `1fr` canvas column, a matching `--target` EMPTY right column so the canvas stays centered now
+   that nothing sits on the right - see the phase 5a-fix report for why an `auto` column would not do this: an
+   empty `auto` track collapses to 0, it does not mirror the left column's width on its own). Below 768px it
+   collapses into three fixed rows under the canvas - row 1 undo/redo/clear/random, row 2 points/curves/fill/
+   info/save, row 3 more (flex-wrap + order + .rail-break, the same technique .nav-form's phone reflow uses).
+   Help stays in the header (#btn-help, untouched); Gallery stays in the old panel (moves with the Formorgel
+   link in step 5b) - both were measured to overflow the rail at a coarse pointer if added here, see the report.
+   Every button is the SAME element sketch.js already wires by id (select('#btn-...').mousePressed()) - a DOM
+   move, not a new one; see the canvas-row comment in index.html for what moved from where. */
+:root {
+  --rail-gap: 4px;        /* within a group - tighter than the row's own --gap, see the 5a-fix report */
+  --rail-group-gap: 12px; /* between groups - the same ~3:1 ratio measured on .nav-form's divider spacing */
+}
+.canvas-row {
+  display: grid;
+  grid-template-columns: var(--target) 1fr var(--target);
+  grid-template-rows: auto;
+  column-gap: var(--gap);
+  align-items: start;
+  justify-items: center;
+  align-self: stretch;
+  box-sizing: border-box;
+  padding: 0 var(--gutter);
+}
+@media (min-width: 768px) {
+  /* position:relative: the desktop-only anchor for #farbe-harmony-select's absolute positioning below the
+     row (Group D Phase B4 follow-up) - see that rule's own comment for why. */
+  .canvas-row { padding: 0 24px; position: relative; }
+}
+.canvas-row #canvas-container { grid-column: 2; grid-row: 1; }
+/* .rail-left is its OWN flex column, grid-row 1 next to the canvas but NOT spanning/sharing its row track: a
+   grid item that spans (or shares an auto row track with) a taller sibling gets that track's auto-sizing
+   algorithm applied to it too, which silently stretched every margin-top below to fill the canvas's 560px
+   instead of the --rail-gap/--rail-group-gap values (found while measuring the 5a-fix report - the rail came
+   out ~120px taller than the sum of its own declared spacing). A flex column sizes only to its own content
+   regardless of how tall row 1 is, so it is immune to that. */
+.rail-left { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; }
+.canvas-row .icon-btn {
+  width: var(--target);
+  height: var(--target);
+  border-radius: var(--radius);
+  flex: none;
+  touch-action: manipulation;
+}
+.canvas-row .rail-break { display: none; }
+
+/* Top to bottom: undo, redo, clear | random | points, curves, fill | info, save | more. Spacing is margin-top
+   (a flex column has one `gap` value too; these need two): --rail-gap within a group, --rail-group-gap between
+   groups. #btn-undo's own margin-top is the row's own --gap instead of either of those - not a group boundary,
+   but the "top alignment" fix: #canvas-container carries its own `margin: var(--gap) 0` (index.html), so
+   without this the rail's first button sits var(--gap) above the canvas's actual top edge, flush with the
+   row's own top instead of with the canvas. */
+#btn-undo         { margin-top: var(--gap); }
+#btn-redo         { margin-top: var(--rail-gap); }
+#btn-clear        { margin-top: var(--rail-gap); }
+#btn-random       { margin-top: var(--rail-group-gap); }
+#btn-toggle-nodes { margin-top: var(--rail-group-gap); }
+#btn-toggle-curve { margin-top: var(--rail-gap); }
+#btn-toggle-faces { margin-top: var(--rail-gap); }
+#btn-info         { margin-top: var(--rail-group-gap); }
+#btn-save         { margin-top: var(--rail-gap); }
+#btn-more-rail    { margin-top: var(--rail-group-gap); }
+
+/* Group D Phase B4: Farbe-only harmony quick-access - same flat-child, margin-top group-spacing
+   convention as the 10 buttons above. Hidden entirely outside the Farbe tab (html[data-tab], set by
+   nav.js) regardless of viewport width - this selector's specificity beats .canvas-row .icon-btn's
+   display:flex, so no !important is needed. */
+html:not([data-tab="farbe"]) .rail-farbe-only { display: none; }
+/* Group D Phase B4 follow-up: Kurven (curve toggle), Mehr (Free Clothing/Free Endpoints/Alternative Net -
+   #more-rail), Random Connection, Undo, Redo and Clear are not applicable to face-color work (fill already
+   requires straight lines; free-line/alternative-net construction, generating/undoing/clearing pattern
+   connections aren't color operations) - genuinely hidden in the Farbe tab specifically, not merely disabled,
+   matching this row's own existing "context-irrelevant control" convention. Present and functional in
+   Form/Netz as before. Undo/Redo's own stack (core/state.js) is per-layer, not tab-scoped, so hiding these
+   buttons here does not lose undo history - it stays reachable by switching to the Form or Netz tab, where
+   the buttons are unaffected (person's own explicit tradeoff call, see the B4 follow-up commit). */
+html[data-tab="farbe"] #btn-toggle-curve,
+html[data-tab="farbe"] #btn-more-rail,
+html[data-tab="farbe"] #btn-random,
+html[data-tab="farbe"] #btn-undo,
+html[data-tab="farbe"] #btn-redo,
+html[data-tab="farbe"] #btn-clear { display: none; }
+/* With undo/redo/clear/random hidden above, #btn-toggle-nodes (Points) becomes the rail's first visible
+   button in the Farbe tab - it needs #btn-undo's own top-alignment margin (var(--gap), matching
+   #canvas-container's own top margin) instead of its usual group-gap, and its group-divider hairline (drawn
+   by the shared ::before rule below) would otherwise float above nothing at the very top of the rail. */
+@media (min-width: 768px) {
+  html[data-tab="farbe"] #btn-toggle-nodes { margin-top: var(--gap); }
+  html[data-tab="farbe"] #btn-toggle-nodes::before { display: none; }
+}
+/* Layout round: the four distribution-strategy icons (#farbe-strategy-group, a radiogroup) take the four slots
+   B/W/S/V used to occupy here. The wrapper is display:contents so its buttons stay flat rail children (same
+   spacing/order rules as every other rail button, and .rail-left's own display:contents on the phone unwraps
+   them one level further); its role="radiogroup" is kept on the element itself. */
+/* Scoped to the Farbe tab on purpose: an unscoped #id rule would out-specify .rail-farbe-only's own hiding
+   (html:not([data-tab="farbe"]) .rail-farbe-only) and leave the strategy buttons visible on Form/Netz. */
+html[data-tab="farbe"] #farbe-strategy-group { display: contents; }
+#btn-strategy-cyclic   { margin-top: var(--rail-group-gap); }
+#btn-strategy-area     { margin-top: var(--rail-gap); }
+#btn-strategy-symmetry { margin-top: var(--rail-gap); }
+#btn-strategy-rings    { margin-top: var(--rail-gap); }
+#btn-face-colors-reset { margin-top: var(--rail-group-gap); }
+#farbe-harmony-select { margin-top: var(--rail-group-gap); font: inherit; }
+#btn-strategy-cyclic, #btn-face-colors-reset { position: relative; }
+/* Tablet/desktop only: Info and Download move to the END of the Farbe rail (flex `order`, no DOM move - Form/Netz
+   keep their rail exactly as before). The phone keeps them in row 2: there the rail is rows, not a column, and
+   seven buttons in row 4 would wrap into a fifth line. #btn-info keeps its own group gap + hairline (below). */
+@media (min-width: 768px) {
+  html[data-tab="farbe"] #btn-info { order: 1; }
+  html[data-tab="farbe"] #btn-save { order: 1; }
+}
+@media (min-width: 768px) {
+  #btn-strategy-cyclic::before, #btn-face-colors-reset::before {
+    content: "";
+    position: absolute;
+    top: calc(-1 * var(--rail-group-gap) / 2 - 0.5px);
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--color-hairline);
+  }
+  /* Group D Phase B4 follow-up: the dropdown is a below-canvas fallback, not a rail item (the person's own
+     framing) - staying a flex child of .rail-left on desktop made the column as wide as the dropdown's own
+     text (~123px) instead of var(--target) (36px), and .canvas-row's justify-items:center then centered
+     that oversized column symmetrically, pushing the WHOLE rail off-screen to the left (measured: x=-19.5
+     instead of the gutter edge every other tab's rail sits at). Taking it out of flow here fixes both the
+     dropdown's own position AND the rail's - it no longer contributes to .rail-left's width at all.
+     Desktop-only: on mobile (below 768px) .rail-left's own display:contents already promotes this select to
+     a normal in-flow .canvas-row child (order 22, the Phase B4 rail markup's own comment) - untouched here. */
+  #farbe-harmony-select {
+    position: absolute;
+    top: 100%;
+    left: 24px;
+    margin-top: var(--rail-group-gap);
+  }
+}
+
+/* Divider between groups: a hairline centered in the --rail-group-gap above the group's first button (like
+   .nav-divider, but horizontal - this rail is vertical). Drawn with ::before so it takes no row space (same
+   technique as .nav-more.has-state::after); hidden on the phone, where the rail is three plain rows (no
+   dividers there either, matching .nav-divider's own mobile hiding). */
+#btn-random, #btn-toggle-nodes, #btn-info, #btn-more-rail { position: relative; }
+@media (min-width: 768px) {
+  #btn-random::before, #btn-toggle-nodes::before, #btn-info::before, #btn-more-rail::before {
+    content: "";
+    position: absolute;
+    top: calc(-1 * var(--rail-group-gap) / 2 - 0.5px);
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--color-hairline);
+  }
+}
+
+@media (max-width: 767px) {
+  .canvas-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--gap);
+  }
+  /* Unwraps .rail-left: its 10 buttons become direct flex children of .canvas-row, so the order/.rail-break
+     reflow below can freely interleave them with the (former) canvas-right items across three rows - a grid
+     cell can't do that, but a flex container's own children can once they're all its direct children. */
+  .rail-left { display: contents; }
+  .canvas-row #canvas-container { flex: 0 0 100%; order: 0; }
+  #btn-undo, #btn-redo, #btn-clear, #btn-random,
+  #btn-toggle-nodes, #btn-toggle-curve, #btn-toggle-faces, #btn-info, #btn-save,
+  #btn-more-rail { margin-top: 0; }
+  #btn-random::before, #btn-toggle-nodes::before, #btn-info::before, #btn-more-rail::before { display: none; }
+  /* Row 1: undo, redo, clear, random. */
+  #btn-undo         { order: 1; }
+  #btn-redo         { order: 2; }
+  #btn-clear        { order: 3; }
+  #btn-random       { order: 4; }
+  .canvas-row .rail-break-1 { display: block; order: 5; flex: 0 0 100%; height: 0; }
+  /* Row 2: points, curves, fill, info, save. */
+  #btn-toggle-nodes { order: 6; }
+  #btn-toggle-curve { order: 7; }
+  #btn-toggle-faces { order: 8; }
+  #btn-info         { order: 9; }
+  #btn-save         { order: 10; }
+  .canvas-row .rail-break-2 { display: block; order: 11; flex: 0 0 100%; height: 0; }
+  /* Row 3: more. */
+  #btn-more-rail    { order: 12; }
+  .canvas-row .rail-break-3 { display: block; order: 13; flex: 0 0 100%; height: 0; }
+  /* Row 4 (Farbe tab only, via .rail-farbe-only's own html[data-tab] gating above): the four distribution-
+     strategy icons (B/W/S/V and 2/3/4 live in #nav-farbe's Kreis/Dreieck family slot), Reset Color, the
+     harmony dropdown. */
+  #btn-strategy-cyclic, #btn-strategy-area, #btn-strategy-symmetry,
+  #btn-strategy-rings, #btn-face-colors-reset, #farbe-harmony-select { margin-top: 0; }
+  #btn-strategy-cyclic::before, #btn-face-colors-reset::before, #farbe-harmony-select::before { display: none; }
+  #btn-strategy-cyclic   { order: 17; }
+  #btn-strategy-area     { order: 18; }
+  #btn-strategy-symmetry { order: 19; }
+  #btn-strategy-rings    { order: 20; }
+  #btn-face-colors-reset { order: 21; }
+  #farbe-harmony-select  { order: 22; }
+}
+
+/* Keyboard focus: its own 2px outline with a 2px offset, never the same
+   as the active state (black fill). :focus-visible = keyboard only. */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}

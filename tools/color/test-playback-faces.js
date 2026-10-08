@@ -21,7 +21,11 @@ const path = require('path');
 const vm = require('vm');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor'];
+// farborgel-bridge: core/facecolor.js's ensureDefaultGrayFill() now calls applyHarmonyToPattern()
+// (gray-as-selection round) - a real runtime dependency. Needed on both sides here (unlike
+// test-layer-faces.js's much older pinned commit) - this file compares against HEAD, which
+// already has core/farborgel-bridge.js from an earlier, already-committed round.
+const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'farborgel-bridge'];
 const load = fromHead => FILES.map(f => fromHead
     ? execSync(`git show HEAD:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString()
     : fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
@@ -164,9 +168,20 @@ console.log('\n== 3. no store access ==');
 }
 
 // ============ 4. regression ============
+// Phase B1: orbitColor() (core/faces.js) now returns evenly-spaced Ostwald grays instead of
+// evenly-spaced HSL hues, so an unassigned layer face's OWN .color legitimately differs from the
+// previous commit. Compared with .color stripped (everything else must still match exactly);
+// separately confirms the new colors are genuine gray hexes.
 console.log('\n== 4. ordinary layers vs the previous commit ==');
 {
-    let n = 0, bad = 0;
+    let n = 0, bad = 0, colorBad = 0;
+    const GRAY_HEX = /^#([0-9a-f]{2})\1\1$/i;
+    // Phase B-Farbstrategien follow-up (gray-as-selection round): computeLayerCellFaces() passes
+    // this layer's own (real, empty) store, which the NEW code now eagerly fills - the previous
+    // commit's code never wrote to it at all, so face.colorSpec (and a now-populated store) are a
+    // structural difference the OLD code never had. Exactly this round's own intended change, not
+    // a regression to guard against here - stripped the same spirit .color already was.
+    const stripMap = map => [...map].map(([k, v]) => [k, { ...v, faces: (v.faces || []).map(f => { const { color, colorSpec, ...rest } = f; return rest; }) }]);
     for (const [shape, mode] of [['triangle', 'rotation_reflection6'], ['square', 'rotation6'], ['hex', 'rotation3']]) {
         const A = makeSandbox(load(false), shape, mode, 3), B = makeSandbox(load(true), shape, mode, 3);
         for (const [S, tag] of [[A, 'new'], [B, 'old']]) {
@@ -176,9 +191,11 @@ console.log('\n== 4. ordinary layers vs the previous commit ==');
         }
         n++;
         const ma = A.computeLayerCellFaces(), mb = B.computeLayerCellFaces();
-        if (JSON.stringify([...ma]) !== JSON.stringify([...mb])) bad++;
+        if (JSON.stringify(stripMap(ma)) !== JSON.stringify(stripMap(mb))) bad++;
+        for (const [, v] of ma) (v.faces || []).forEach(f => { if (!GRAY_HEX.test(f.color)) colorBad++; });
     }
-    check('ordinary layers: computeLayerCellFaces() byte-identical to the previous commit', bad === 0, `${n} configs`);
+    check('ordinary layers: computeLayerCellFaces() structurally identical to the previous commit, apart from face.color', bad === 0, `${n} configs`);
+    check('ordinary layers: every unassigned face.color is a valid Ostwald gray hex (Phase B1 default)', colorBad === 0, `${colorBad} not a gray hex`);
 }
 console.log(`\n${checks - failures}/${checks} checks passed`);
 process.exit(failures ? 1 : 0);

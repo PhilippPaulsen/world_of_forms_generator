@@ -12,8 +12,12 @@ const vm = require('vm');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
 const BASE = '89c115fd';   // the last commit before layer faces on a Field
-const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor'];
-const load = old => FILES.map(f => old ? execSync(`git show ${BASE}:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString() : fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
+// farborgel-bridge: core/facecolor.js's ensureDefaultGrayFill() now calls applyHarmonyToPattern()
+// (gray-as-selection round) - a real runtime dependency for the working-tree load below. Excluded
+// from the OLD (pinned BASE) load - it did not exist yet at that commit (confirmed: git show
+// 89c115fd:core/farborgel-bridge.js fails), and the old code never calls it anyway.
+const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'farborgel-bridge'];
+const load = old => FILES.filter(f => !old || f !== 'farborgel-bridge').map(f => old ? execSync(`git show ${BASE}:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString() : fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
 const SRC_NEW = load(false), SRC_OLD = load(true);
 const SKETCH = fs.readFileSync(path.join(ROOT, 'sketch.js'), 'utf8');
 const grab = name => { const m = SKETCH.match(new RegExp(`function ${name}\\([\\s\\S]*?\\n\\}\\n`)); if (!m) throw new Error('cannot extract ' + name); return m[0]; };

@@ -28,6 +28,8 @@ The generator is split into a portable `core/` engine and a `sketch.js` UI shell
 
 **Cache-busting note (⚠️ bump this on every local-script change):** `index.html` and `gallery.html` load their local scripts (`sketch.js`, every `core/*.js`, `gallery.js`, `gallery-render.js`) with a shared `?v=YYYYMMDDx` query string appended to each `<script src="...">`. This project has no build step/bundler, so GitHub Pages serves every local script at the exact same URL on every deploy — without a version bump, a browser that already cached an older script for that URL can keep serving it after a deploy instead of fetching the new one. This isn't hypothetical: commit `6e551654` fixed a real bug where a user's tab, already holding an older cached `sketch.js` from before the catalog-back-link commit (`05867686`), silently ran the stale script and ignored new URL parameters entirely — only a manual reload (forcing cache revalidation) picked up the fix. **Bump the version string in both files, kept in sync, on every commit that touches any of these local scripts** — the query string is the only thing invalidating the cache; forgetting to bump it means the fix does nothing for returning visitors. The p5.js CDN `<script>` tag is excluded/unaffected — its own URL already encodes a version (`p5@1.9.0`), so a version bump there naturally changes the URL instead. One-time transition caveat, not an ongoing concern: anyone with a tab already open from before this convention existed may still need one manual reload to pick up the fix itself.
 
+**ES modules (Farborgel) — the same bump, one more place:** `core/farborgel-selection.mjs` and the standalone Farborgel page (`color-harmony/ui/`) are ES modules, whose own `import ... from './x.mjs'` lines cannot carry `?v=`. They are cache-busted by a `<script type="importmap">` in `index.html` and in `color-harmony/ui/index.html` that maps every module of the graph to its `?v=` URL, and `core/farborgel-engine.mjs` forwards its own `?v=` to the four engine files it fetches. So the **version string now lives in three HTML files — `index.html`, `gallery.html` and `color-harmony/ui/index.html` — and one find-and-replace over all three bumps everything** (for example `sed -i '' 's/20260929ah/20260929ai/g' index.html gallery.html color-harmony/ui/index.html`). A *new* ES module in either graph must also get an import-map entry; `node tools/color/test-esm-cachebust.js` fails if one is missing, if a version is out of step, or if anything references the gitignored `color-harmony/ui/engine.generated.mjs` (it must never be imported — it does not exist on GitHub Pages). A browser without import-map support (Safari < 16.4, Firefox < 108) ignores the maps and loads those modules unversioned: it still works, it just loses the cache-bust.
+
 **Sync to `die-welt-der-formen/p5_prototype`:** not yet automated (deliberately - see the module-split planning session referenced in git history for reasoning). The `core/` subdirectory is the intended future "copy these files verbatim" boundary; revisit an actual copy mechanism once `core/`'s shape has survived 1.3(b) and later Stage 1-2 items without another reshuffle.
 
 ## Workflow conventions
@@ -38,10 +40,28 @@ The generator is split into a portable `core/` engine and a `sketch.js` UI shell
 - **Step-by-step approval.** Prefer proposing a plan and getting confirmation per step over large unreviewed changes.
 - **This repo is upstream of `die-welt-der-formen/p5_prototype/`.** Feature work happens here first; `p5_prototype/` is synced manually once a version is stable (see Related repositories above). Don't develop features directly against `p5_prototype/`.
 
+## Running the tests
+
+There is no test runner or CI in the repo; the suites are plain Node scripts. One command, from the repo root, runs all of them - every `tools/*/test-*.js` (the glob picks up a new test directory by itself) and the four Farborgel suites - and prints each file's last line, flagging any non-zero exit:
+
+```bash
+fail=0; for f in tools/*/test-*.js color-harmony/test.js color-harmony/ui/test.mjs color-harmony/ui/composition.test.mjs color-harmony/ui/integration.test.mjs; do out=$(node "$f" 2>&1); rc=$?; printf '%-58s %s\n' "$f" "$(printf '%s\n' "$out" | tail -1)"; [ $rc -ne 0 ] && { echo "  ^ FAILED, exit $rc"; fail=1; }; done; echo "overall: $([ $fail -eq 0 ] && echo PASS || echo FAIL)"
+```
+
+**This full command is mandatory before every commit.** It takes about ten minutes, almost all of it three slow suites (`test-inherit-hook.js` ~260 s, `test-spread.js` ~120 s, `test-inherit.js` ~50 s). Last full run: 38 files (34 `tools/*` + 4 Farborgel), 1227 checks in `tools/*`, 182 Farborgel groups, `overall: PASS`.
+
+**Fast variant - only while iterating, not before a commit that touches `core/faces.js` or `core/facecolor.js`** (those three suites are what guard face detection, trail keys and colour inheritance). It is the same command with the three slow files skipped, about a minute:
+
+```bash
+fail=0; for f in tools/*/test-*.js color-harmony/test.js color-harmony/ui/test.mjs color-harmony/ui/composition.test.mjs color-harmony/ui/integration.test.mjs; do case "$f" in *test-inherit-hook.js|*test-spread.js|*test-inherit.js) continue;; esac; out=$(node "$f" 2>&1); rc=$?; printf '%-58s %s\n' "$f" "$(printf '%s\n' "$out" | tail -1)"; [ $rc -ne 0 ] && { echo "  ^ FAILED, exit $rc"; fail=1; }; done; echo "overall (fast variant, 3 slow suites skipped): $([ $fail -eq 0 ] && echo PASS || echo FAIL)"
+```
+
+A single suite: `node tools/session/test-session.js`. `tools/ui/measure-layout.js` and `check-pointer-mapping.js` are browser console scripts, not part of this run. A new test directory under `tools/` only needs a file named `test-*.js` that exits non-zero on failure.
+
 ## Terminology
 
 German↔English terminology for Ostwald's vocabulary (mirror pair, rotational form, node, theme line, tip, star, wreath, portfolio/sheet, etc.) is documented in `docs/terminology.md`, along with a proposed systematic (Hinterreiter-style) pattern-naming scheme intended for Roadmap item 1.11. Use the established English terms consistently in code, UI labels, and comments — do not introduce new translations ad hoc.
 
 ## Current priorities
 
-See `ROADMAP.md`. As of this writing, Stage 1 (net-order verification, pattern combination/"Verbindungen" logic) is the active near-term focus; the roadmap includes an implementation-status tag (✅/🟡/⛔) per item based on a code review — check that a task isn't already partially done before starting from scratch.
+See `ROADMAP.md`. **State as of 2026-10-05:** the Farborgel colour integration (Phases A-B4, distribution strategies, gray-as-selection, per-trail override, and the standalone Farborgel sub-page P0-P4) and the UI rework phases 0-5a are done on `feature/farborgel-generator-integration` - pushed to origin, not merged; a merge into `main` is a fast-forward against `origin/main` (the local `main` is stale and not a base). **Next steps, in this order:** (1) run the Safari checklist in ROADMAP's "Merge readiness" and decide the merge (it publishes the whole unfinished UI rework); (2) finish the UI rework - 5b organ strip, 5c layers strip, 5d collapsed section, 5e old toolbar + keyboard gap, then Phases 2-5; (3) the open colour items under "Farborgel colour integration" (hex `findFaces` bug, hierarchy strategy, B5 picker, click-on-pattern colouring, Farborgel toolbar restructure). Pattern combination and enumeration (roadmap 1.9, 1.11, 1.12) are shipped; 1.3 and 1.10 still carry their 🟡 tags - read the per-item status before starting. The roadmap includes an implementation-status tag (✅/🟡/⛔) per item based on a code review - check that a task isn't already partially done before starting from scratch.

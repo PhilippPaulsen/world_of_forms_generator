@@ -20,7 +20,9 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
-const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'export'];
+// farborgel-bridge: core/facecolor.js's ensureDefaultGrayFill() now calls applyHarmonyToPattern()
+// (gray-as-selection round) - a real runtime dependency, not just load-order convention.
+const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'export', 'farborgel-bridge'];
 const SRC = FILES.map(f => fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
 const GUARD = "const savedWarp = activeNetWarp; activeNetWarp = null;\n    let segments;\n    try { segments = collectCellSegments(connSet, gridNodes, sheet); } finally { activeNetWarp = savedWarp; }";
 if (!SRC.includes(GUARD)) throw new Error('the activeNetWarp guard text changed - update the negative control');
@@ -138,10 +140,18 @@ console.log('\n== 4. colour assignments across law / strength / axes / domain / 
     // the panel path: the trail list (keys) is identical under any field warp
     sb.baseNetTransform = FIELD; const tA = sb.computeFaceTrails(sb.computeCellFaces(sb.connections, sb.nodes, store), group).map(t => t.key), tB = (sb.baseNetTransform = { x: { kind: 'geometric', w: 1.5 }, y: 'same', domain: 'field' }, sb.computeFaceTrails(sb.computeCellFaces(sb.connections, sb.nodes, store), group).map(t => t.key));
     check('the trail keys (what the Face Colors panel lists) do not depend on the warp', JSON.stringify(tA) === JSON.stringify(tB) && JSON.stringify(tA) === JSON.stringify(trails.map(t => t.key)));
-    // Shape Size: NOT preserved
+    // Shape Size: NOT preserved. The Shape-Size-3 keys (pixel geometry) never match Shape-Size-5's
+    // own, so none of the 4 PALETTE colors can carry over - checked directly, by resolved hex,
+    // rather than by colorSpec presence: Phase B-Farbstrategien follow-up (gray-as-selection
+    // round) now gives every Shape-Size-5 face its OWN fresh colorSpec too (rule:
+    // 'max-contrast-gray', ensureDefaultGrayFill() eager-filling the stale store's new gaps
+    // against the NEW geometry) - a real, override-able default, not the absence of one, so
+    // "colorSpec !== undefined" can no longer distinguish stale-carried-over from genuinely new.
     const big = makeSb(SRC, 4, 5, 'rotation_reflection6'); big.connections = sb.connections; big.baseFaceAssignments = store; big.baseNetTransform = null;
     const r5 = big.computeCellFaces(big.connections, big.nodes, store);
-    check('a change of Shape Size does NOT keep them: the keys are pixel geometry, so at Shape Size 5 none of the Shape-Size-3 assignments applies (and the real UI rebuilds the grid, which clears connections and assignments)', r5.faces.filter(f => /^#/.test(f.color)).length === 0 && /baseFaceAssignments = new Map\(\)/.test(fs.readFileSync(path.join(ROOT, 'core', 'state.js'), 'utf8').split('function rebuildGrid')[1]));
+    const paletteHex = palette.map(p => sb.resolveColor(vm.runInContext('OSTWALD_REFERENCE_SYSTEM', sb), p).hex);
+    check('a change of Shape Size does NOT keep them: the keys are pixel geometry, so at Shape Size 5 none of the Shape-Size-3 PALETTE colors applies - every face gets its own fresh max-contrast-gray default instead (and the real UI rebuilds the grid, which clears connections and assignments)',
+        r5.faces.every(f => !paletteHex.includes(f.color) && f.colorSpec && f.colorSpec.rule === 'max-contrast-gray') && /baseFaceAssignments = new Map\(\)/.test(fs.readFileSync(path.join(ROOT, 'core', 'state.js'), 'utf8').split('function rebuildGrid')[1]));
 }
 
 // ============ 5. export ============

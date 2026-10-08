@@ -1,0 +1,173 @@
+/*
+ * color-harmony/ui/tokens.css
+ * Farborgel sub-page P4 (visual alignment, "Option A+"): the generator's design tokens, fonts and the .stepper
+ * chrome, so this page reads as the same family as the generator's Farbe tab.
+ *
+ * THIS IS A DELIBERATE COPY, not a link. The Farborgel stays a self-contained module (it imports no generator
+ * file, JS or CSS), and loading the generator's whole style.css was measured and rejected: 45 KB of mostly
+ * irrelevant rules plus body/button resets that collide with this page's own, and it would not even align
+ * anything (the page's own selectors still win). A copy can drift, so tools/color/test-farborgel-tokens.js
+ * guards it: every custom property and every rule below must stay equal to the generator's
+ * (style.css :root and its `pointer: fine` override, index.html's inline :root for --background / --hover-bg,
+ * the .ico and .stepper* rules), and the shared font files must stay byte-identical. When the generator changes
+ * a token, that test fails until this file is brought along - that is the intended workflow.
+ *
+ * What is NOT copied: the generator's layout (header, nav rows, rail, canvas), the stepper's <input> rules (this
+ * page's value is a <span>), and the older --text / dark-mode variables. This page's own aliases for its three
+ * type sizes (--text-primary / --text-ui / --text-meta) live in styles.css, mapped onto the tokens below.
+ *
+ * Fonts: "SuisseIntl" is the generator's family name (this page used to call the same files "Suisse Intl").
+ * Book and Semibold are byte-identical to the generator's; Bold and Book Italic are this page's own extras
+ * (the navigator code, a few headings and source notes use them) and are declared under the same family.
+ */
+@font-face {
+  font-family: "SuisseIntl";
+  src: url("./assets/fonts/SuisseIntl-Book.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SuisseIntl";
+  src: url("./assets/fonts/SuisseIntl-Semibold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SuisseIntl";
+  src: url("./assets/fonts/SuisseIntl-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SuisseIntl";
+  src: url("./assets/fonts/SuisseIntl-BookIt.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SuisseIntl Fallback";
+  src: local("Arial");
+  size-adjust: 109.4%;
+  ascent-override: 107.3%;
+  descent-override: 50.8%;
+  line-gap-override: 0%;
+}
+
+:root {
+  --color-text: #000000;
+  --color-secondary: #757575;
+  --color-disabled: #b3b3b3;
+  --color-hairline: #d9d9d9;
+  --color-bg: #ffffff;
+
+  --font-ui: "SuisseIntl", "SuisseIntl Fallback", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --weight-regular: 400;
+  --weight-strong: 600;
+
+  --size-secondary: 12px;
+  --size-base: 16px;
+  --fs-tab: 18px;
+
+  --target: 48px;
+  --icon: 18px;
+  --bar-h: calc(var(--target) + 24px);
+  --gap: 8px;
+  --radius: 6px;
+  --gutter: 16px;
+
+  /* defined in the generator's index.html inline <style>, not in style.css - the stepper rules need them */
+  --background: #ffffff;
+  --hover-bg: #f0f0f0;
+}
+
+@media (pointer: fine) {
+  :root { --target: 36px; }
+}
+
+.ico {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
+  flex: none;
+  width: var(--icon);
+  height: var(--icon);
+}
+
+.stepper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  box-sizing: border-box;
+  height: var(--target);
+  padding-left: 8px;
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--color-text);
+}
+.stepper::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border: 1px solid var(--color-text);
+  border-radius: var(--radius);
+  pointer-events: none;
+}
+.stepper-icon { color: var(--color-secondary); }
+.stepper-chevrons {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  width: 32px;
+  margin-left: 2px;
+  border-left: 1px solid var(--color-hairline);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  overflow: hidden;
+}
+.stepper-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.stepper-btn .ico { width: 12px; height: 12px; stroke-width: 3.5; }
+.stepper-btn + .stepper-btn { box-shadow: inset 0 1px 0 var(--color-hairline); }
+.stepper-btn:hover { background: var(--hover-bg); }
+.stepper-btn[aria-disabled="true"] { color: var(--color-disabled); cursor: not-allowed; }
+.stepper-btn[aria-disabled="true"]:hover { background: transparent; }
+.stepper-btn:focus-visible { outline-offset: -2px; }
+.stepper-display {
+  display: inline-block;
+  min-width: 4ch;
+  text-align: center;
+  font-size: var(--size-base);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--color-text);
+}
+.stepper-display:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }

@@ -25,11 +25,16 @@ const path = require('path');
 const vm = require('vm');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'export'];
+// farborgel-bridge: core/facecolor.js's ensureDefaultGrayFill() now calls applyHarmonyToPattern()
+// (gray-as-selection round) - a real runtime dependency for the working-tree load below, not just
+// load-order convention. Excluded from the OLD (pre-fix) load the same way netwarp already is -
+// it did not exist yet at that commit (confirmed: git show b992b614:core/farborgel-bridge.js
+// fails), and the old code never calls it anyway.
+const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'export', 'farborgel-bridge'];
 // "The previous behavior" is pinned to the commit BEFORE the per-layer fix (b992b614), not to HEAD - HEAD
 // contains the fix now, so a HEAD comparison could no longer show the defect.
 const PRE_FIX = 'b992b614';
-const load = old => FILES.filter(f => !old || f !== 'netwarp').map(f => old
+const load = old => FILES.filter(f => !old || (f !== 'netwarp' && f !== 'farborgel-bridge')).map(f => old
     ? execSync(`git show ${PRE_FIX}:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString()
     : fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
 const SRC_NEW = load(false);
@@ -126,10 +131,18 @@ check('a layer matching the base in shape AND mode needs no override: same segme
 check('the layer\'s own group builds for every combo (shape mismatch used to throw) and the drawn segments are closed under it', groupNull === 0 && closureBad === 0, `${closureBad} closure violations`);
 
 // ============================ 2. regression: byte-identical when nothing differs ============================
+// Phase B1: orbitColor() (core/faces.js) now returns evenly-spaced Ostwald grays instead of
+// evenly-spaced HSL hues, so an unassigned face's OWN .color legitimately differs from the
+// previous commit. Comparisons below strip .color before the "byte-identical" check (everything
+// else - geometry, trail keys - still must match exactly) and separately confirm the new colors
+// are genuine gray hexes, so this stays a real regression guard for the new baseline.
 console.log('\n== 2. regression ==');
 {
     const OLD = load(true);
-    let n = 0, sameLayers = 0, baseBad = 0, layerSameBad = 0, layerDiffChanged = 0, layerDiffTotal = 0;
+    let n = 0, sameLayers = 0, baseBad = 0, layerSameBad = 0, colorBad = 0;
+    const GRAY_HEX = /^#([0-9a-f]{2})\1\1$/i;
+    const stripColors = res => JSON.stringify({ ...res, faces: (res.faces || []).map(f => { const { color, ...rest } = f; return rest; }) });
+    const checkColors = res => (res.faces || []).forEach(f => { if (!GRAY_HEX.test(f.color)) colorBad++; });
     for (const [shape, order, mode] of [['triangle', 4, 'rotation_reflection6'], ['square', 3, 'rotation6'], ['hex', 3, 'rotation_reflection6']]) {
         const A = makeSandbox(SRC_NEW, shape, mode, order), B = makeSandbox(OLD, shape, mode, order);
         const tbl = A.computeThemeLineOrbits(A.nodes, A.centroid, shape, mode, A.outerCorners);
@@ -137,15 +150,19 @@ console.log('\n== 2. regression ==');
             const ids = [t % tbl.orbits.length, (t * 3 + 1) % tbl.orbits.length, (t * 5 + 2) % tbl.orbits.length].filter((v, i, a) => a.indexOf(v) === i);
             const conns = ids.map(i => tbl.orbits[i].pairs[0]);
             n++;
-            if (JSON.stringify(A.computeCellFaces(conns, A.nodes)) !== JSON.stringify(B.computeCellFaces(conns, B.nodes))) baseBad++;   // base call, no override: byte-identical to the previous commit
+            const resA = A.computeCellFaces(conns, A.nodes), resB = B.computeCellFaces(conns, B.nodes);
+            if (stripColors(resA) !== stripColors(resB)) baseBad++;   // base call, no override: structurally identical to the previous commit
+            checkColors(resA);
             // a layer with the SAME shape and mode as the base (own node count): identical with and without the override, and identical to the previous commit
             const la = addLayer(A, shape, mode, order), lb = addLayer(B, shape, mode, order);
             const lt = tableOf(A, la);
             la.connections = lb.connections = ids.map(i => lt.orbits[i % lt.orbits.length].pairs[0].slice());
-            const withOv = JSON.stringify(A.computeCellFaces(la.connections, la.nodes, null, null, A.faceSheetOverrideOfLayer(la)));
-            const without = JSON.stringify(A.computeCellFaces(la.connections, la.nodes));
-            const old = JSON.stringify(B.computeCellFaces(lb.connections, lb.nodes));
+            const resWithOv = A.computeCellFaces(la.connections, la.nodes, null, null, A.faceSheetOverrideOfLayer(la));
+            const resWithout = A.computeCellFaces(la.connections, la.nodes);
+            const resOld = B.computeCellFaces(lb.connections, lb.nodes);
+            const withOv = stripColors(resWithOv), without = stripColors(resWithout), old = stripColors(resOld);
             sameLayers++; if (withOv !== without || withOv !== old) layerSameBad++;
+            checkColors(resWithOv);
             // and its trail keys (so stored assignments stay valid)
             const ga = A.sheetGroupElements(la.nodes, A.faceSheetOverrideOfLayer(la)), gb = B.sheetGroupElements(lb.nodes);
             const ka = A.computeFaceTrailKeys(A.computeCellFaces(la.connections, la.nodes, null, null, A.faceSheetOverrideOfLayer(la)), ga), kb = B.computeFaceTrailKeys(B.computeCellFaces(lb.connections, lb.nodes), gb);
@@ -153,8 +170,9 @@ console.log('\n== 2. regression ==');
             A.additionalLayers = []; B.additionalLayers = [];
         }
     }
-    check('base-sheet calls: byte-identical to the previous commit', baseBad === 0, `${n} patterns`);
-    check('a layer matching the base in shape and mode: faces AND trail keys identical with/without the override and to the previous commit (stored assignments stay valid)', layerSameBad === 0, `${sameLayers} layers`);
+    check('base-sheet calls: structurally identical to the previous commit, apart from face.color', baseBad === 0, `${n} patterns`);
+    check('a layer matching the base in shape and mode: faces (structure) AND trail keys identical with/without the override and to the previous commit (stored assignments stay valid)', layerSameBad === 0, `${sameLayers} layers`);
+    check('every unassigned face.color is a valid Ostwald gray hex (Phase B1 default)', colorBad === 0, `${colorBad} not a gray hex`);
 }
 
 // ============================ 3. panel predicate vs computeLayerCellFaces() ============================
@@ -177,7 +195,12 @@ console.log('\n== 3. panel "unavailable" predicate vs the render path ==');
         const rendered = !!(map && map.has(0));
         if (reasonNull !== rendered) disagree++;
         if (rendered) { // what is rendered must be the layer's own faces
-            const own = JSON.stringify(sb.computeCellFaces(layer.connections, layer.nodes, null, null, sb.faceSheetOverrideOfLayer(layer)));
+            // Phase B-Farbstrategien follow-up (gray-as-selection round): computeLayerCellFaces()
+            // just eager-filled this layer's own (real) store via the call above - a null-store
+            // comparison here would now diverge on exactly that (colorSpec, the now-populated
+            // store), not on an actual wrong-fill. Re-rendering the SAME real store (already
+            // filled, steady-state) is the correct, equivalent comparison.
+            const own = JSON.stringify(sb.computeCellFaces(layer.connections, layer.nodes, sb.faceAssignmentsFor(0), null, sb.faceSheetOverrideOfLayer(layer)));
             if (JSON.stringify(map.get(0)) !== own) wrongFillsRendered++;
         }
     }
@@ -237,7 +260,17 @@ console.log('\n== 4. four sheets with different shapes/modes/rules: independence
         const snapNew = sb.faceTrailSnapshot(faces(s, null), g), prev = state[s.name].snap;
         if (snapNew.faceCount) {
             const same = prev.keys.size === snapNew.keys.size && [...snapNew.keys].every(x => prev.keys.has(x));
-            if (!same) { const out = sb.reconcileFaceAssignments(state[s.name].ref, prev, snapNew); if (out.inherited) fired[s.name] = (fired[s.name] || 0) + 1; }
+            if (!same) {
+                const out = sb.reconcileFaceAssignments(state[s.name].ref, prev, snapNew);
+                if (out.inherited) fired[s.name] = (fired[s.name] || 0) + 1;
+                // Phase B-Farbstrategien follow-up (gray-as-selection round): the real path
+                // (faces(s, store) below) also eager-fills whatever reconciliation left genuinely
+                // unassigned - the reference oracle has to do the same, independently, or it
+                // drifts from the real store forever after (caught live: this lag is what made
+                // "contaminated" fail too, on a LATER iteration that only re-checks this sheet's
+                // drift without touching it again).
+                sb.ensureDefaultGrayFill(state[s.name].ref, sb.computeFaceTrails(faces(s, null), g));
+            }
             state[s.name].snap = snapNew;
         }
         faces(s, store);                                                     // the real path: hook reconciles this sheet's own store
@@ -256,7 +289,7 @@ console.log('\n== 4. four sheets with different shapes/modes/rules: independence
     const dataOld = JSON.parse(JSON.stringify(old.buildExportData(null)));
     // the layers export in enabled order: [layer 0, layer 2]
     const exported = [0, 2];
-    let expBad = 0, roundBad = 0, faceRows = 0, oldDiffers = 0, oldSameWhereMatching = 0;
+    let expBad = 0, roundBad = 0, faceRows = 0, oldDiffers = 0, oldSameWhereMatching = 0, grayRows = 0;
     exported.forEach((li, k) => {
         const s = SHEETS[li + 1], layer = sb.additionalLayers[li];
         const want = JSON.parse(JSON.stringify(sb.computeCellFaces(layer.connections.filter(c => c.length === 2), layer.nodes, layer.faceAssignments || null, null, sb.faceSheetOverrideOfLayer(layer))));
@@ -269,7 +302,22 @@ console.log('\n== 4. four sheets with different shapes/modes/rules: independence
             faceRows++;
             if (!f.colorSpec) return;
             const cs = f.colorSpec;
-            if (cs.rule !== s.rule || !entry.assignments.some(e => e.trail === cs.trail && e.rule === s.rule)) roundBad++;
+            // Phase B-Farbstrategien follow-up (gray-as-selection round): a face whose
+            // colorSpec.rule is NOT this sheet's own rule is a genuinely-new/orphaned trail
+            // ensureDefaultGrayFill() covered after the 399 edits above (399 edits over 4 sheets
+            // easily produces a parentless region on at least one of them) - params shape is
+            // {memberIndex, cardinality, strategy}, not {idx, slot, slots}, so forcing it through
+            // the old-rule-shaped checks below would be wrong, not just a mismatch to flag. Its
+            // OWN round-trip correctness is checked on its own terms instead.
+            if (cs.rule !== s.rule) {
+                grayRows++;
+                if (cs.rule !== 'max-contrast-gray') { roundBad++; return; }
+                if (sb.resolveColor(fc.system, { hue: cs.hue, w: cs.w, s: cs.s }).hex !== f.color) roundBad++;
+                const g = sb.generateHarmonyPalette('max-contrast-gray', [0], cs.params.cardinality)[cs.params.memberIndex];
+                if (!g || g.hue !== cs.hue || g.w !== cs.w || g.s !== cs.s) roundBad++;
+                return;
+            }
+            if (!entry.assignments.some(e => e.trail === cs.trail && e.rule === s.rule)) roundBad++;
             if (sb.resolveColor(fc.system, { hue: cs.hue, w: cs.w, s: cs.s }).hex !== f.color) roundBad++;
             const g = sb.generateHarmonyPalette(cs.rule, cs.params.idx, cs.params.slots, fc.system)[cs.params.slot];
             if (g.hue !== cs.hue || g.w !== cs.w || g.s !== cs.s) roundBad++;
@@ -277,9 +325,15 @@ console.log('\n== 4. four sheets with different shapes/modes/rules: independence
     });
     check('export: geometry.layers[].faces equal the layer\'s OWN face set (previously expanded under the base\'s mode/shape)', expBad === 0);
     check('control: for these layers the previous commit exported different faces (the defect was real)', oldDiffers > 0, `${oldDiffers} of 2 exported layers differ`);
-    check('export round trip with four different rules: colorSpec -> resolveColor() == face.color, rule/params regenerate, entries listed per sheet', roundBad === 0 && faceRows > 0, `${faceRows} layer faces`);
+    check('export round trip with four different rules: colorSpec -> resolveColor() == face.color, rule/params regenerate, entries listed per sheet', roundBad === 0 && faceRows > 0, `${faceRows} layer faces, ${grayRows} gray-filled`);
+    // Phase B-Farbstrategien follow-up (gray-as-selection round): a layer's own rule is no longer
+    // the ONLY rule its assignments can carry - ensureDefaultGrayFill() may have added
+    // 'max-contrast-gray' entries for genuinely-new/orphaned trails after the 399 edits above
+    // (confirmed: 672 of this export's 1348 layer faces, in the check just above). Excluded here,
+    // the same way it is checked separately there - this check is specifically about each
+    // EXPORTED layer's own, explicitly-applied rule.
     check('layerIndex is the position in the EXPORTED layers (disabled layers are skipped): exported layer 1 is tab 2 (isotone)',
-        eq(data.meta.faceColoring.layers.map(l => [l.layerIndex, [...new Set(l.assignments.map(a => a.rule))].join()]), [[0, 'tetrad'], [1, 'isotone']]) && !JSON.stringify(data.meta.faceColoring).includes('shadow-series'));
+        eq(data.meta.faceColoring.layers.map(l => [l.layerIndex, [...new Set(l.assignments.map(a => a.rule).filter(r => r !== 'max-contrast-gray'))].join()]), [[0, 'tetrad'], [1, 'isotone']]) && !JSON.stringify(data.meta.faceColoring).includes('shadow-series'));
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

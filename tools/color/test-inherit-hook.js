@@ -51,7 +51,16 @@ console.log('\n== 1. all single-orbit edits through computeCellFaces() ==');
             if (!snap0 || snap0.faceCount === 0) { baselineBad++; continue; }
             const refNew = sh.faces(ed.ids);
             const refSnap = sb.faceTrailSnapshot(refNew, sh.group);
-            if (refSnap.faceCount) { sb.reconcileFaceAssignments(ref, snap0, refSnap); }
+            if (refSnap.faceCount) {
+                sb.reconcileFaceAssignments(ref, snap0, refSnap);
+                // Phase B-Farbstrategien follow-up (gray-as-selection round): the real call path
+                // now ALSO eager-fills any trail reconciliation left genuinely unassigned (a
+                // parentless "new" region - classifyTrailTransitions()'s own documented case),
+                // not just inherits. The reference oracle has to do the same, independently, or
+                // it only ever models HALF of what computeCellFaces() now does end to end - this
+                // is what this whole section is meant to verify.
+                sb.ensureDefaultGrayFill(ref, sb.computeFaceTrails(refNew, sh.group));
+            }
             const before = store.size;
             const out = call(sh, ed.ids, store);               // the edit, seen for the first time here
             if (sortedStore(store) !== sortedStore(ref)) storeBad++;
@@ -90,7 +99,16 @@ console.log('\n== 2. edit sequences (random walks, undo, redo) ==');
         for (let k = 0; k < 6; k++) {
             const opts = editsOf({ sh, ids }); const ed = opts[Math.floor(rand() * opts.length)]; steps++;
             const res = sh.faces(ed.ids), snap = sb.faceTrailSnapshot(res, sh.group);
-            if (snap.faceCount) { const same = prevSnap.keys.size === snap.keys.size && [...snap.keys].every(x => prevSnap.keys.has(x)); if (!same) sb.reconcileFaceAssignments(ref, prevSnap, snap); prevSnap = snap; }
+            if (snap.faceCount) {
+                const same = prevSnap.keys.size === snap.keys.size && [...snap.keys].every(x => prevSnap.keys.has(x));
+                if (!same) {
+                    sb.reconcileFaceAssignments(ref, prevSnap, snap);
+                    // same reasoning as section 1 above: the real call path also eager-fills any
+                    // trail reconciliation left genuinely unassigned, every step of the walk.
+                    sb.ensureDefaultGrayFill(ref, sb.computeFaceTrails(res, sh.group));
+                }
+                prevSnap = snap;
+            }
             call(sh, ed.ids, store); ids = ed.ids;
             if (sortedStore(store) !== sortedStore(ref)) walkBad++;
         }
@@ -119,14 +137,33 @@ console.log('\n== 2. edit sequences (random walks, undo, redo) ==');
 // ---------------- 3. laziness, counted ----------------
 console.log('\n== 3. laziness: when does reconciliation run? ==');
 {
-    let emptyCalls = 0, emptySnap = 0, emptyDiff = 0, steadyCalls = 0, steadyIdent = 0, changeOk = 0, repeatCalls = 0, unchangedSetCalls = 0, unchangedSetN = 0, n = 0, m = 0;
+    let emptyCalls = 0, emptyNotFilled = 0, emptyUnsteady = 0, steadyCalls = 0, steadyIdent = 0, changeOk = 0, repeatCalls = 0, unchangedSetCalls = 0, unchangedSetN = 0, n = 0, m = 0;
     for (const pat of patterns.slice(0, 120)) {
         const { sh, ids } = pat, sb = sh.sb; n++;
         const st = spy(sb);
-        const plain = JSON.stringify(call(sh, ids, null));
+        // Phase B-Farbstrategien follow-up (gray-as-selection round): an empty store is no longer
+        // permanently free, and no longer identical to passing no store at all - its FIRST call is
+        // the one-time eager fill (ensureDefaultGrayFill(), core/facecolor.js), a REAL write with a
+        // real, now-measured cost (see the dedicated timing section below), superseding this
+        // check's own pre-this-round premise. What's still true, and what this now checks: filling
+        // a gap is NOT a reconciliation (reconcileFaceAssignments is never called for it - the spy
+        // count below stays 0), and once filled the store behaves exactly like any other steady,
+        // already-colored one - repeating the call reconciles nothing and writes nothing further.
         const empty = new Map();
-        for (let i = 0; i < 5; i++) if (JSON.stringify(call(sh, ids, empty)) !== plain) emptyDiff++;
-        if (sb.faceSnapshotFor(empty) !== null) emptySnap++;
+        call(sh, ids, empty);
+        // The fill lands on call 1 (store.size goes from 0 to real), but applyAssignmentsLazily()'s
+        // OWN empty-store branch (store.size === 0, checked at the START of this same call, before
+        // the fill runs) is what deletes any snapshot - it never WRITES one, that only happens on a
+        // LATER call once the store is no longer empty coming in. So the snapshot only appears on
+        // call 2, one call after the fill itself - same mechanism as the resetFaceColors() check
+        // above, not a second, independent fact about this one.
+        if (empty.size === 0) emptyNotFilled++;
+        const sizeAfterFill = empty.size, callsAfterFill = st.calls;
+        call(sh, ids, empty); // call 2: nothing left to fill, but this is where the snapshot is first recorded
+        if (sb.faceSnapshotFor(empty) === null) emptyNotFilled++;
+        const snapAfterCall2 = sb.faceSnapshotFor(empty), callsAfterCall2 = st.calls;
+        for (let i = 0; i < 3; i++) call(sh, ids, empty);
+        if (st.calls !== callsAfterCall2 || empty.size !== sizeAfterFill || sb.faceSnapshotFor(empty) !== snapAfterCall2) emptyUnsteady++;
         emptyCalls += st.calls;
         const store = colored(sh, ids);
         call(sh, ids, store);
@@ -144,7 +181,7 @@ console.log('\n== 3. laziness: when does reconciliation run? ==');
             repeatCalls += st.calls - c2;
         }
     }
-    check('empty store: 0 reconciliations, no snapshot kept, result identical to passing no store', emptyCalls === 0 && emptySnap === 0 && emptyDiff === 0, `${n} patterns x 5 calls`);
+    check('empty store: the one-time eager fill is never a reconciliation (0 calls), and once filled (and snapshotted, one call later) the store is steady (no further calls or writes)', emptyCalls === 0 && emptyNotFilled === 0 && emptyUnsteady === 0, `${n} patterns x 5 calls`);
     check('non-empty store, unchanged geometry, 10 repeated calls: 0 reconciliations and the snapshot object is not rebuilt', steadyCalls === 0 && steadyIdent === n);
     check('a changed key set reconciles exactly once; repeating the same state adds none', changeOk === m && repeatCalls === 0, `${changeOk}/${m} first calls, ${repeatCalls} on repeats`);
     // edits that do not change the key set (an added orbit that closes no new region): no reconciliation, no snapshot rebuild
@@ -234,8 +271,16 @@ console.log('\n== 5. reset, rebuild, per-sheet independence ==');
     call(sh, ids, sb.baseFaceAssignments);
     const held = sb.baseFaceAssignments;
     sb.resetFaceColors('base');
+    // held.size is no longer 0 after this call - applyAssignmentsLazily() still deletes the
+    // snapshot on its own empty-store branch (unaffected, confirmed below), but
+    // ensureDefaultGrayFill() then eagerly re-fills the just-cleared store within this SAME call
+    // (Phase B-Farbstrategien follow-up, gray-as-selection round) - the snapshot itself is NOT
+    // recreated by that fill (only applyAssignmentsLazily() ever writes one, and it already ran
+    // and returned before the fill), so "the snapshot clears too" still holds exactly as before.
+    const trailsAtReset = sb.computeFaceTrails(sh.faces(ids), sh.group);
     call(sh, ids, held);
-    check('resetFaceColors(\'base\') clears the snapshot too (through the empty-store rule)', held.size === 0 && sb.faceSnapshotFor(held) === null);
+    check('resetFaceColors(\'base\') clears the snapshot (unaffected); the store itself is no longer empty after this same call - ensureDefaultGrayFill() eagerly re-fills it',
+        held.size === trailsAtReset.length && sb.faceSnapshotFor(held) === null);
 
     // two sheets, two stores: independent snapshots and independent reconciliation
     const other = patterns.find(p => p.sh === sh && p.ids.join() !== ids.join()) || patterns[1];
@@ -248,20 +293,47 @@ console.log('\n== 5. reset, rebuild, per-sheet independence ==');
 }
 
 // ---------------- 6. regression + real timing against the previous commit ----------------
+// Phase B1: orbitColor() (core/faces.js) now returns evenly-spaced Ostwald grays instead of
+// evenly-spaced HSL hues - an unassigned face's OWN .color legitimately differs from HEAD now.
+// "byte-identical" below is therefore compared with .color stripped from every face (structure/
+// geometry/orbit assignment must still match exactly); a separate check confirms the new colors
+// are genuine gray hexes, so this stays a real regression guard, not a weakened one.
 console.log('\n== 6. regression and timing vs the previous commit (real measurements) ==');
 {
     const oldPatterns = buildPatterns(loadSrc(true));
-    let diffEmpty = 0, diffNull = 0, diffSteady = 0;
+    let diffEmpty = 0, diffNull = 0, diffSteady = 0, colorBad = 0;
     const perPat = [];
+    const GRAY_HEX = /^#([0-9a-f]{2})\1\1$/i;
+    const stripColors = res => ({ ...res, faces: (res.faces || []).map(f => { const { color, ...rest } = f; return rest; }) });
+    // Phase B-Farbstrategien follow-up (gray-as-selection round): an EMPTY store (unlike null) now
+    // gets a REAL, eager fill - the previous commit's code never wrote to it at all, so the new
+    // code's result carries face.colorSpec (and a now-populated store) that the old one structurally
+    // never had. That's exactly this round's own intended change, not a regression to guard against
+    // here - stripped the same spirit as stripColors() strips .color above (a deliberate, understood
+    // difference, not an unexamined one). Everything else (geometry, connIndex, sheets) still
+    // compares exactly.
+    const stripColorsAndSpec = res => ({ ...res, faces: (res.faces || []).map(f => { const { color, colorSpec, ...rest } = f; return rest; }) });
+    // Farborgel follow-up: face.colorSpec now additionally carries `displayColor` (null for every
+    // face here - colored() only ever uses the old rule-registry system, never Farborgel), a real,
+    // deliberate schema addition the previous commit's colorSpec never had. Stripped the same way
+    // Phase B1 stripped .color above (byte-identity would otherwise fail on the new key alone, not
+    // on an actual behavior change) - hue/w/s/rule/params/trail, the fields that matter here, still
+    // compare exactly.
+    const stripDisplayColorSpec = res => ({ ...res, faces: (res.faces || []).map(f => { if (!f.colorSpec) return f; const { displayColor, ...restSpec } = f.colorSpec; return { ...f, colorSpec: restSpec }; }) });
+    const checkColors = res => (res.faces || []).forEach(f => { if (!GRAY_HEX.test(f.color)) colorBad++; });
     const time = (fn, reps) => { const t = process.hrtime.bigint(); for (let i = 0; i < reps; i++) fn(); return Number(process.hrtime.bigint() - t) / 1e3 / reps; };
     for (let p = 0; p < patterns.length; p++) {
         const n = patterns[p], o = oldPatterns[p];
         if (n.ids.join() !== o.ids.join() || n.sh.label !== o.sh.label) throw new Error('corpus mismatch between HEAD and working tree');
         const cn = conns(n.sh, n.ids), co = conns(o.sh, o.ids);
-        if (JSON.stringify(n.sh.sb.computeCellFaces(cn, n.sh.grid.nodes, new Map())) !== JSON.stringify(o.sh.sb.computeCellFaces(co, o.sh.grid.nodes, new Map()))) diffEmpty++;
-        if (JSON.stringify(n.sh.sb.computeCellFaces(cn, n.sh.grid.nodes)) !== JSON.stringify(o.sh.sb.computeCellFaces(co, o.sh.grid.nodes))) diffNull++;
+        const resEmptyN = n.sh.sb.computeCellFaces(cn, n.sh.grid.nodes, new Map()), resEmptyO = o.sh.sb.computeCellFaces(co, o.sh.grid.nodes, new Map());
+        if (JSON.stringify(stripColorsAndSpec(resEmptyN)) !== JSON.stringify(stripColorsAndSpec(resEmptyO))) diffEmpty++;
+        checkColors(resEmptyN);
+        const resNullN = n.sh.sb.computeCellFaces(cn, n.sh.grid.nodes), resNullO = o.sh.sb.computeCellFaces(co, o.sh.grid.nodes);
+        if (JSON.stringify(stripColors(resNullN)) !== JSON.stringify(stripColors(resNullO))) diffNull++;
+        checkColors(resNullN);
         const sN = colored(n.sh, n.ids), sO = colored(o.sh, o.ids);
-        if (JSON.stringify(n.sh.sb.computeCellFaces(cn, n.sh.grid.nodes, sN)) !== JSON.stringify(o.sh.sb.computeCellFaces(co, o.sh.grid.nodes, sO))) diffSteady++;
+        if (JSON.stringify(stripDisplayColorSpec(n.sh.sb.computeCellFaces(cn, n.sh.grid.nodes, sN))) !== JSON.stringify(stripDisplayColorSpec(o.sh.sb.computeCellFaces(co, o.sh.grid.nodes, sO)))) diffSteady++;
         // timings, interleaved old/new to cancel drift; 12 rounds
         const emptyN = new Map(), emptyO = new Map();
         const r = { eN: [], eO: [], sN: [], sO: [] };
@@ -275,14 +347,24 @@ console.log('\n== 6. regression and timing vs the previous commit (real measurem
         const med = a => a.slice().sort((x, y) => x - y)[a.length >> 1];
         perPat.push({ eO: med(r.eO), eN: med(r.eN), sO: med(r.sO), sN: med(r.sN) });
     }
-    check('no store / empty store: results byte-identical to the previous commit\'s (258 patterns)', diffEmpty === 0 && diffNull === 0);
+    check('no store: structure identical to the previous commit\'s, apart from face.color; empty store: same, apart from face.color AND the now-eager colorSpec/store population (258 patterns)', diffEmpty === 0 && diffNull === 0);
+    check('no store / empty store: every face.color is now a valid Ostwald gray hex (Phase B1 default)', colorBad === 0, `${colorBad} not a gray hex`);
     check('non-empty store, unchanged geometry: results byte-identical to the previous commit\'s', diffSteady === 0);
     const tot = k => perPat.reduce((s, x) => s + x[k], 0);
     const eRatio = tot('eN') / tot('eO'), sRatio = tot('sN') / tot('sO');
     const dEmpty = (tot('eN') - tot('eO')) / perPat.length, dSteady = (tot('sN') - tot('sO')) / perPat.length;
     console.log(`  empty store   : previous ${(tot('eO') / perPat.length).toFixed(1)} us/call, now ${(tot('eN') / perPat.length).toFixed(1)} us/call  (ratio ${eRatio.toFixed(3)}, ${dEmpty >= 0 ? '+' : ''}${dEmpty.toFixed(2)} us)`);
     console.log(`  steady store  : previous ${(tot('sO') / perPat.length).toFixed(1)} us/call, now ${(tot('sN') / perPat.length).toFixed(1)} us/call  (ratio ${sRatio.toFixed(3)}, ${dSteady >= 0 ? '+' : ''}${dSteady.toFixed(2)} us; keys are now computed once and shared)`);
-    check('empty-store cost is unchanged (within 5% of the previous commit\'s, measured; the work is one WeakMap delete)', eRatio < 1.05, `ratio ${eRatio.toFixed(3)}`);
+    // Phase B-Farbstrategien follow-up (gray-as-selection round): "empty store costs the same as
+    // before (basically free)" is RETIRED as a premise, not broken by accident - Option A1's whole
+    // point is that an empty store is no longer free, it gets a real, one-time ensureDefaultGrayFill()
+    // write the previous commit's code never did. The 5%-of-old-baseline regression guard this used
+    // to be doesn't apply to an intentionally-added cost, so this is now a reported measurement, not
+    // a pass/fail gate against a baseline that no longer describes the intended behavior - the
+    // dedicated performance verification step (against the corpus's own densest real pattern, with
+    // absolute numbers) is the authoritative check for whether this one-time cost is reasonable.
+    console.log(`  (informational, not a regression gate: the empty-store baseline this ratio compares `
+        + `against is the RETIRED always-free behavior - see the dedicated performance verification)`);
     check('steady-state cost with assignments is not worse (within 5%; shared keys offset the key-set comparison)', sRatio < 1.05, `ratio ${sRatio.toFixed(3)}`);
 
     // what an edit that fires costs: the hooked call vs the same call with no store at all
