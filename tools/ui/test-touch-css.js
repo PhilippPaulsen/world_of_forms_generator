@@ -3,7 +3,7 @@
 //   STYLE_CSS=/path/to/mutated/style.css INDEX_HTML=/path/to/mutated/index.html node tools/ui/test-touch-css.js     (sabotage runs)
 //
 // What a touch screen needs from the CSS, and what silently breaks it:
-//   - every :hover rule inside @media (hover: hover). On a touch screen a tap leaves :hover set (sticky hover: a button stays grey, the icon tooltip stays on screen)
+//   - every :hover rule inside @media (hover: hover). On a touch screen a tap leaves :hover set (sticky hover: a button stays grey)
 //     until the next tap elsewhere. The rules stay in place (their order against .active rules matters); the focus-visible and .active rules stay OUTSIDE the query,
 //     the pressed state and the keyboard focus are the feedback on touch;
 //   - touch-action: manipulation (never none: none would stop scrolling and pinch zoom) on the canvas container and the canvas and on buttons; the viewport meta keeps
@@ -47,8 +47,8 @@ for (const [name, bl] of Object.entries(sheets)) {
     const mixed = bl.filter(b => isRule(b) && inHoverMedia(b) && /:(focus|focus-visible|focus-within|active)\b/.test(b.header));
     check(`${name}: nothing with :focus / :focus-visible / :active is inside the hover query (a selector list that mixes them must be split)`, mixed.length === 0, mixed.map(b => b.header).join(' | ').slice(0, 160) || 'none');
 }
-const tip = sheets['style.css'].find(b => isRule(b) && /^\.icon-btn\[title\]:hover::after$/.test(b.header));
-check('the icon-button tooltip (.icon-btn[title]:hover::after) exists and is behind the query', !!tip && inHoverMedia(tip));
+const tipRules = Object.entries(sheets).flatMap(([name, bl]) => bl.filter(x => isRule(x) && (/\[\s*title\b/.test(x.header) || /content\s*:\s*attr\(/.test(x.body)) ).map(x => name + ': ' + x.header));
+check('there is no CSS tooltip any more (.icon-btn[title]:hover::after is gone; the native title is the one tooltip - tools/ui/test-tooltip-names.js guards the names)', tipRules.length === 0, tipRules.join(' | ').slice(0, 160) || 'none');
 
 console.log('\n== what must stay outside the query ==');
 const outside = (sel) => sheets['style.css'].some(b => isRule(b) && !inHoverMedia(b) && b.header.split(',').map(norm).includes(sel));

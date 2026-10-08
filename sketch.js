@@ -1267,7 +1267,7 @@ function setup() {
         if (animProgressInput) animProgressInput.value(progress);
         if (animPlayBtn) {
             const playing = !!(anim && anim.playing);
-            animPlayBtn.attribute('title', playing ? 'Pause' : 'Play');
+            UI.name(animPlayBtn.elt, playing ? 'Pause' : 'Play');
             animPlayBtn.html(playing
                 ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="5" width="4" height="14" /><rect x="14" y="5" width="4" height="14" /></svg>'
                 : '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 5 L19 12 L7 19 Z" /></svg>');
@@ -1314,7 +1314,7 @@ function setup() {
             checkbox.type = 'checkbox';
             checkbox.className = 'layer-enable-checkbox';
             checkbox.checked = layer.enabled;
-            checkbox.title = 'Show/Hide Layer ' + (i + 1);
+            UI.name(checkbox, 'Show/Hide Layer ' + (i + 1));
             checkbox.addEventListener('change', () => {
                 layer.enabled = checkbox.checked;
                 redraw();
@@ -1348,7 +1348,7 @@ function setup() {
             const removeBtn = document.createElement('button');
             removeBtn.className = 'layer-remove-btn';
             removeBtn.textContent = '×';
-            removeBtn.title = 'Remove Layer ' + (i + 1);
+            UI.name(removeBtn, 'Remove Layer ' + (i + 1));
             removeBtn.addEventListener('click', () => {
                 removeLayer(i);
                 renderLayerTabs();
@@ -1397,7 +1397,7 @@ function setup() {
         }
         if (timelinePlayBtn) {
             const playing = timeline.playing;
-            timelinePlayBtn.attribute('title', playing ? 'Pause' : 'Play');
+            UI.name(timelinePlayBtn.elt, playing ? 'Pause' : 'Play');
             timelinePlayBtn.html(playing
                 ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="5" width="4" height="14" /><rect x="14" y="5" width="4" height="14" /></svg>'
                 : '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 5 L19 12 L7 19 Z" /></svg>');
@@ -1444,7 +1444,7 @@ function setup() {
             const removeBtn = document.createElement('button');
             removeBtn.className = 'layer-remove-btn';
             removeBtn.textContent = '×';
-            removeBtn.title = `Remove Layer ${layerIndex + 1} from the timeline (keeps the layer itself)`;
+            UI.name(removeBtn, `Remove Layer ${layerIndex + 1} from the timeline (keeps the layer itself)`);
             removeBtn.addEventListener('click', () => {
                 removeKeyframeFromTimeline(layerIndex);
             });
@@ -1509,13 +1509,13 @@ function setup() {
             const up = document.createElement('button');
             up.className = 'layer-btn pairing-move-btn';
             up.textContent = '\u25B2';
-            up.title = 'Swap this End assignment with the row above';
+            UI.name(up, 'Swap this End assignment with the row above');
             up.disabled = row === 0;
             up.addEventListener('click', () => moveTimelinePairing(seg, row, -1));
             const down = document.createElement('button');
             down.className = 'layer-btn pairing-move-btn';
             down.textContent = '\u25BC';
-            down.title = 'Swap this End assignment with the row below';
+            UI.name(down, 'Swap this End assignment with the row below');
             down.disabled = row === info.n - 1;
             down.addEventListener('click', () => moveTimelinePairing(seg, row, 1));
             // Stage D phase (iii): per-row orientation toggle - reverses
@@ -1524,7 +1524,7 @@ function setup() {
             const flip = document.createElement('button');
             flip.className = 'layer-btn pairing-move-btn pairing-flip-btn' + (flipped ? ' active' : '');
             flip.textContent = '\u21C4';
-            flip.title = flipped ? 'This End line is reversed - click to restore its stored direction' : 'Reverse this End line (swap which End endpoint each Start endpoint moves to)';
+            UI.name(flip, flipped ? 'This End line is reversed - click to restore its stored direction' : 'Reverse this End line (swap which End endpoint each Start endpoint moves to)');
             flip.addEventListener('click', () => setTimelineFlip(seg, endIdx));
             // Stage D phase (iv) step 2: per-row variant stepper "k/c" over
             // this row's deduplicated (group element, flip) variants
@@ -1557,7 +1557,7 @@ function setup() {
                 const prevBtn = document.createElement('button');
                 prevBtn.className = 'layer-btn pairing-move-btn pairing-variant-prev';
                 prevBtn.textContent = '\u25C0';
-                prevBtn.title = 'Previous variant of this End line (distinct pictures against this row\'s Start line)';
+                UI.name(prevBtn, 'Previous variant of this End line (distinct pictures against this row\'s Start line)');
                 prevBtn.addEventListener('click', () => {
                     const v = variants[(vIdx - 1 + vCount) % vCount];
                     setTimelineMember(seg, endIdx, v.g, v.f);
@@ -1571,7 +1571,7 @@ function setup() {
                 const nextBtn = document.createElement('button');
                 nextBtn.className = 'layer-btn pairing-move-btn pairing-variant-next';
                 nextBtn.textContent = '\u25B6';
-                nextBtn.title = 'Next variant of this End line (distinct pictures against this row\'s Start line)';
+                UI.name(nextBtn, 'Next variant of this End line (distinct pictures against this row\'s Start line)');
                 nextBtn.addEventListener('click', () => {
                     const v = variants[(vIdx + 1) % vCount];
                     setTimelineMember(seg, endIdx, v.g, v.f);
@@ -4507,7 +4507,7 @@ function faceColorsStepper(k, c, title, onStep) {
         const b = document.createElement('button');
         b.className = 'layer-btn pairing-move-btn';
         b.textContent = txt;
-        b.title = title;
+        UI.name(b, title);
         b.addEventListener('click', () => onStep(delta));
         return b;
     };
