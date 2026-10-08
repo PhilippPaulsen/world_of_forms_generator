@@ -373,23 +373,7 @@ body.dark input[type="range"]::-webkit-slider-thumb {
   background: #eee;
 }
 
-/* --- Tooltip Styles for Icon Buttons --- (hover only: on touch a tap would leave the tooltip stuck on the button) */
-@media (hover: hover) {
-  .icon-btn[title]:hover::after {
-    content: attr(title);
-    position: absolute;
-    bottom: -28px;
-    background: rgba(0, 0, 0, 0.75);
-    color: white;
-    font-size: 11px;
-    padding: 4px 8px;
-    border-radius: 6px;
-    white-space: nowrap;
-    pointer-events: none;
-    transform: translateX(-50%);
-    left: 50%;
-  }
-}
+/* Tooltips: the native title only. There is no CSS bubble (an ::after bubble next to the native one showed twice, and sat under the wrong ancestor for most buttons). */
 
 /* Removed duplicated outer border from canvas */
 /* #canvas-container canvas {
