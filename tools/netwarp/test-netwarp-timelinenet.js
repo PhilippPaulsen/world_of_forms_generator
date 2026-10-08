@@ -53,7 +53,7 @@ const F = ax => ({ x: ax, y: 'same', domain: 'field' });
 function mk(core, sketchSrc) {
     const sb = makeSb(core, ORDER, R, 'none');
     sb.window = sb; sb.canvasW = W; sb.canvasH = W; sb.status = []; sb.now = 0; sb.includeNet = false; sb.locks = 0;
-    sb.millis = () => sb.now; sb.syncAnimationLoopState = () => { }; sb.redraw = () => { }; sb.renderLayerTabs = () => { }; sb.updateOffsetControls = () => { };
+    sb.millis = () => sb.now; sb.syncAnimationLoopState = () => { }; sb.sessionFlushNow = () => { }; sb.redraw = () => { }; sb.renderLayerTabs = () => { }; sb.updateOffsetControls = () => { };
     sb.setTimelineStatus = t => sb.status.push(t); sb.setNetAnimationStatus = t => sb.status.push(t); sb.syncNetAnimationLock = () => { sb.locks++; };
     sb.updateTimelineControls = () => { sb.enforceNetAnimationLockout(); }; sb.timelineIncludeNet = () => sb.includeNet;
     vm.runInContext(EXTRACT(sketchSrc), sb);

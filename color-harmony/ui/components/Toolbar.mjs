@@ -1,0 +1,36 @@
+import {el,svg,button} from './dom.mjs';
+import {t} from '../i18n.mjs';
+import {views,relations} from '../state.mjs';
+// Same 24-unit, unfilled, 2px SVG stroke language as the generator's local shape icons.
+export function icon(type) {
+  // class "ico" is the generator's icon rule (tokens.css: 18px, stroke 1.75, round caps/joins). The width/height/stroke-width
+  // attributes stay as the no-CSS fallback; the class wins over them.
+  const root=svg('svg',{class:'ico',viewBox:'0 0 24 24',width:24,height:24,fill:'none',stroke:'currentColor','stroke-width':2,'aria-hidden':'true'});
+  if(type==='circle')root.append(svg('circle',{cx:12,cy:12,r:8}));
+  if(type==='triangle')root.append(svg('path',{d:'M12 3 22 21H2Z'}));
+  if(type==='register')root.append(svg('path',{d:'M3 3H21V21H3ZM3 9H21M3 15H21M9 3V21M15 3V21'}));
+  if(type==='harmony')root.append(svg('path',{d:'M5 18 12 5 19 18Z'}),...[ [5,18],[12,5],[19,18]].map(([cx,cy])=>svg('circle',{cx,cy,r:2.5,fill:'currentColor'})));
+  if(type==='transfer')root.append(svg('path',{d:'M3 5H11V19H3ZM15 5H21V19H15M8 12H18M15 9 18 12 15 15'}));
+  if(type==='info')root.append(svg('circle',{cx:12,cy:12,r:9}),svg('path',{d:'M12 10V17M12 6V8'}));
+  return root;
+}
+export const relationKeys={isotint:'white',isotone:'black',shadowSeries:'shadow',isovalent:'value'};
+export const relationLetters={isotint:'W',isotone:'B',shadowSeries:'S',isovalent:'V'};
+export function Toolbar(state,dispatch) {
+  const nav=el('nav',{'aria-label':t('views',state.locale),class:'toolbar'});
+  const section=(key,children)=>el('div',{class:'tool-group',role:'group','aria-label':t(key,state.locale)},children);
+  nav.append(section('views',views.map(view=>button(icon(view),view==='circle'?'homeCircle':view,state,()=>dispatch(view==='circle'&&state.activeView==='circle'?'goToDefaultCircle':'activeView',view),state.activeView===view,`view-${view}`))));
+  nav.append(section('cardinality',[2,3,4].map(n=>button(String(n),`select${n}`,state,()=>dispatch('harmonyMode',n),state.circleRelation===n,`chord-${n}`))));
+  nav.append(button(icon('info'),'info',state,()=>dispatch('inspectorOpen',!state.inspectorOpen),state.inspectorOpen,'info'));
+  return nav;
+}
+export function RelationControls(state,dispatch) {
+  const group=el('div',{class:'relation-controls',role:'group','aria-label':t('relation',state.locale)});
+  for(const key of relations)group.append(button(relationLetters[key],`series${relationLetters[key]}`,state,()=>dispatch('relation',key),state.seriesRelation===key,`relation-${key}`));
+  return group;
+}
+
+export function ModeControls(state,dispatch) {
+  return el('div',{class:'mode-controls',role:'group','aria-label':t('mode',state.locale)},
+    ['atlas','continuum'].map(mode=>button(t(mode,state.locale),mode,state,()=>dispatch('displayMode',mode),state.displayMode===mode,`mode-${mode}`)));
+}

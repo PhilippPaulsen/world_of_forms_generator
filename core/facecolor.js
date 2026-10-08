@@ -77,18 +77,39 @@ function computeFaceTrailKeys(facesResult, group) {
     });
 }
 
-// Validates and stores one assignment: {hue, w, s, rule, params}. hue/w/s
-// are checked by actually resolving them (resolveColor() throws outside
-// the Ostwald triangle), so a bad entry can never get in and later break
-// rendering. rule/params are provenance for the Phase 3 UI (which rule +
-// stepper positions produced this color); the render path only reads
-// hue/w/s. The stored record is a copy.
+// Farborgel follow-up (real display color, not core/color.js's re-resolved recipe): a raw,
+// already-calibrated sRGB byte triple an assignment can carry alongside its hue/w/s recipe.
+// Validated the same way HarmonySelection.mjs's own toDisplayColors() validates member.srgb -
+// same contract, so a value straight from that module always passes.
+function _validDisplayColor(c) {
+    return Array.isArray(c) && c.length === 3 && c.every(x => Number.isInteger(x) && x >= 0 && x <= 255);
+}
+function _srgbBytesToHex(rgb) {
+    return '#' + rgb.map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+// Validates and stores one assignment: {hue, w, s, rule, params, displayColor?}. hue/w/s
+// are checked by actually resolving them (resolveColor() throws outside the Ostwald
+// triangle), so a bad entry can never get in and later break rendering - this stays true
+// even for a Farborgel-sourced entry, whose hue/w/s are real analytical coordinates, kept
+// for provenance/export/reconciliation even though rendering no longer resolves through
+// them when displayColor is present (see applyFaceAssignments below). rule/params are
+// provenance for the Phase 3 UI (which rule + stepper positions produced this color).
+// displayColor, when supplied, is an already-calibrated [r,g,b] byte triple (e.g.
+// Farborgel's own HarmonySelection member.srgb) that PAINTS the face directly instead of
+// core/color.js's OSTWALD_REFERENCE_SYSTEM recipe - optional, null by default, so every
+// existing caller (the old rule-registry system) is byte-identical to before this field
+// existed. The stored record is a copy.
 function setFaceAssignment(store, key, assignment) {
     resolveColor(OSTWALD_REFERENCE_SYSTEM, assignment); // throws if invalid
+    if (assignment.displayColor !== undefined && assignment.displayColor !== null && !_validDisplayColor(assignment.displayColor)) {
+        throw new Error('setFaceAssignment: displayColor must be a [r,g,b] byte triple (0-255 integers) or null');
+    }
     store.set(key, {
         hue: assignment.hue, w: assignment.w, s: assignment.s,
         rule: assignment.rule === undefined ? null : assignment.rule,
-        params: assignment.params === undefined ? null : assignment.params
+        params: assignment.params === undefined ? null : assignment.params,
+        displayColor: (assignment.displayColor === undefined || assignment.displayColor === null) ? null : assignment.displayColor.slice()
     });
 }
 
@@ -115,12 +136,24 @@ function applyFaceAssignments(facesResult, store, group, keys = null) {
         const a = keys[i] === null ? undefined : store.get(keys[i]);
         if (!a) return;
         try {
-            face.color = resolveColor(OSTWALD_REFERENCE_SYSTEM, a).hex;
+            // Farborgel follow-up: a displayColor paints the face directly - it is already
+            // calibrated (Oklab-mixed, gamut-mapped), and re-resolving hue/w/s through
+            // OSTWALD_REFERENCE_SYSTEM here would silently replace it with that OTHER
+            // system's (uncalibrated, muted) color, the exact bug this fixes. hue/w/s are
+            // still validated below (resolveColor throws on a stale/invalid entry) even
+            // when displayColor is used, so an assignment that no longer resolves is still
+            // correctly skipped rather than painting a face from bad data.
+            const resolved = resolveColor(OSTWALD_REFERENCE_SYSTEM, a);
+            face.color = a.displayColor ? _srgbBytesToHex(a.displayColor) : resolved.hex;
             // Phase 4: the full Ostwald-space data rides on the face (export:
             // face.colorSpec) so an assignment is reconstructable, not just
             // visually reproducible. Present on ASSIGNED faces only; `trail`
             // is the key that joins the face to meta.faceColoring's entry.
-            face.colorSpec = { system: OSTWALD_REFERENCE_SYSTEM.id, hue: a.hue, w: a.w, s: a.s, rule: a.rule, params: a.params, trail: keys[i] };
+            // displayColor is additive/null by default - a consumer re-deriving color from
+            // system+hue/w/s alone gets the OLD (uncalibrated) result for a Farborgel entry;
+            // displayColor is the authoritative one when present, a deliberate, documented
+            // exception to the "system alone reconstructs every color" Phase 4 invariant.
+            face.colorSpec = { system: OSTWALD_REFERENCE_SYSTEM.id, hue: a.hue, w: a.w, s: a.s, rule: a.rule, params: a.params, displayColor: a.displayColor, trail: keys[i] };
             applied++;
         } catch (err) { /* stale/invalid entry: keep the default color */ }
     });
@@ -130,14 +163,19 @@ function applyFaceAssignments(facesResult, store, group, keys = null) {
 // Phase 4 (export): meta.faceColoring - {system, base?, layers?}. `system`
 // is the WHOLE reference color system as plain data (hue anchors, white/
 // black, gray-letter table, mix rule, and its verified/calibrated tags), so a
-// consumer can re-derive every color without this code. base / layers[] hold
-// every store entry of that sheet, orphans included (an orphan is inert but
-// returns on Undo - see the header): [{trail, hue, w, s, rule, params}].
+// consumer can re-derive every color without this code - EXCEPT an entry with
+// a non-null displayColor (Farborgel follow-up): that color was calibrated by
+// a different pipeline (Oklab-mixed, gamut-mapped - see core/farborgel-bridge.js),
+// not derivable from `system`+hue/w/s at all, so displayColor rides along
+// as the authoritative, already-resolved [r,g,b] a consumer should use
+// directly for those entries. base / layers[] hold every store entry of that
+// sheet, orphans included (an orphan is inert but returns on Undo - see the
+// header): [{trail, hue, w, s, rule, params, displayColor}].
 // `layerStores` = [{layerIndex, store}], layerIndex = position in the
 // EXPORTED geometry.layers array (enabled layers only). Returns null when no
 // sheet has an assignment, so unassigned patterns export byte-identically.
 function faceColoringExportData(baseStore, layerStores) {
-    const entries = store => Array.from(store.entries()).map(([trail, a]) => ({ trail, hue: a.hue, w: a.w, s: a.s, rule: a.rule, params: a.params }));
+    const entries = store => Array.from(store.entries()).map(([trail, a]) => ({ trail, hue: a.hue, w: a.w, s: a.s, rule: a.rule, params: a.params, displayColor: a.displayColor }));
     const out = { system: JSON.parse(JSON.stringify(OSTWALD_REFERENCE_SYSTEM)) };
     let any = false;
     if (baseStore && baseStore.size) { out.base = entries(baseStore); any = true; }
@@ -169,6 +207,92 @@ function computeFaceTrails(facesResult, group) {
     });
     return Array.from(byKey.values()).sort((a, b) =>
         (Math.round(b.area * 100) - Math.round(a.area * 100)) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+}
+
+// Phase B-Farbstrategien follow-up (gray-as-selection round): computeCellFaces()'s call site needs
+// a trail list to hand ensureDefaultGrayFill() below, SEPARATELY from the one applyAssignmentsLazily()
+// already computes internally for reconciliation - computeFaceTrails() is itself built on
+// computeFaceTrailKeys(), the expensive O(faces x group size) operation this file's own earlier
+// caches (_orbitGrayRankCache, retired with _applyRealOrbitGray()) existed specifically to avoid
+// paying twice per redraw. A naive second call here reintroduced exactly that regression - found
+// by tools/color/test-inherit-hook.js's own timing guard (steady-store ratio 1.530, 53% over
+// budget) after the first version of this round's change, the same way Step 1 of the previous
+// round found an analogous one, not assumed away. Same two-level WeakMap/Map shape as that
+// retired cache: a cache HIT (the overwhelming majority of redraws - an unedited pattern) skips
+// computeFaceTrailKeys() entirely; a miss (first call, or a real structural edit) pays the real
+// cost once, same as applyAssignmentsLazily()'s own unavoidable cost for the SAME edit.
+let _trailsCache = null;
+function _trailsConnFingerprint(connSet) {
+    return connSet.length + ':' + connSet.map(c => c[0] + ',' + c[1]).join(';');
+}
+function cachedTrailsFor(facesResult, group, gridNodes, connSet) {
+    if (!group || !facesResult.faces.length) return [];
+    if (!_trailsCache) _trailsCache = new WeakMap();
+    let byFingerprint = _trailsCache.get(gridNodes);
+    if (!byFingerprint) { byFingerprint = new Map(); _trailsCache.set(gridNodes, byFingerprint); }
+    const fp = _trailsConnFingerprint(connSet);
+    let cached = byFingerprint.get(fp);
+    if (!cached || cached.faceCount !== facesResult.faces.length) {
+        cached = { faceCount: facesResult.faces.length, trails: computeFaceTrails(facesResult, group) };
+        byFingerprint.set(fp, cached);
+    }
+    return cached.trails;
+}
+
+// Phase B-Farbstrategien follow-up (gray-as-selection round, Option B3+A1): computeCellFaces()'s
+// own default-gray fix - replaces findFaces()'s naive connIndex/totalOrbits color (every
+// POSSIBLE theme-line orbit of the shape, drawn or not) with one based on
+// computeFaceTrails()'s own real, area-ranked trail order (the SAME order the Face Colors panel
+// already labels "Trail 1", "Trail 2", ...). An earlier version of this (Phase B-Farbstrategien
+// step 1, since removed) only ever touched face.color on fresh, per-redraw face objects, never
+// the store - this version gives every unassigned trail a REAL, override-able store entry via
+// the same already-built, already-tested machinery a
+// Farborgel harmony application uses (applyHarmonyToPattern(), core/farborgel-bridge.js) instead
+// of a second, parallel coloring path - so strategies, inheritance, and the per-trail override
+// stepper all work on a default-filled sheet for free, no new mechanism.
+//
+// Unifies TWO cases the old function's unconditional .color loop used to serve separately, into
+// ONE call: a never-touched sheet (every trail unassigned) and a single post-edit orphan (one
+// trail with no inheritable parent - classifyTrailTransitions()'s "0 lost -> 1 new" case, which
+// reconciliation deliberately leaves unassigned) - unassignedTrails() doesn't distinguish them,
+// and neither does this function; both get a fresh max-contrast-gray entry, correctly ranked.
+//
+// The gray spread is ALWAYS sized to the WHOLE sheet (trails.length), not the unassigned count -
+// an orphan on an otherwise-9-trail sheet gets the gray matching ITS OWN area rank among all 10
+// trails (post-edit), not a size-1 spread's dead-center letter. applyHarmonyToPattern()'s
+// inheritedRanks/strategy dispatch are computed over the FULL trails array for exactly this
+// reason; fillOnly: true then only skips the WRITE for a trail that already has an entry (any
+// rule, not just this one) - "inheritance only fills", same invariant reconcileFaceAssignments()
+// documents elsewhere in this file. Always 'cyclic' (M = trails.length, nothing inherited for a
+// fresh trail resolves to rank i - this reproduces the retired step-1 face.color-only fallback's
+// rank mapping exactly, verified byte-identical in tools/color/test-facecolor.js) - an unattended
+// backfill, not a strategy choice; Area/Symmetry/Rings stay reachable only through an explicit
+// distribution-strategy application (ui-farbe.js's applyHarmony()).
+//
+// `hueIndex: null` per member reuses applyHarmonyToPattern()'s own existing "no hue, v=0" Farborgel
+// convention (FARBORGEL_GRAY_HUE_SUBSTITUTE = 0, the exact hue the max-contrast-gray rule itself
+// hardcodes) rather than inventing a second one. No .srgb per member - setFaceAssignment() then
+// stores displayColor: null, so a gray entry resolves through OSTWALD_REFERENCE_SYSTEM natively
+// (correct: unlike Farborgel, there is no second, differently-calibrated pipeline to bypass here).
+//
+// Cheap on the overwhelming majority of calls (unassignedTrails() early-out, O(trails) - no store
+// write, no resolveColor) - the real cost (N setFaceAssignment()/resolveColor() calls) is paid
+// only the first time a gap is found, not per redraw; see the performance verification step.
+// The trivial, locally-constructed HarmonySelection-shaped object applyHarmonyToPattern() needs
+// for a max-contrast-gray fill of `n` trails - factored out so ensureDefaultGrayFill() below and
+// ui-farbe.js's own strategy-aware reapplication (afterAnchorChange()'s gray-default branch, Phase
+// B-Farbstrategien follow-up) build it identically, from the one real registered rule
+// (core/color.js), never a second, duplicated formula.
+function buildMaxContrastGraySelection(n) {
+    const colors = generateHarmonyPalette('max-contrast-gray', [0], n);
+    return { members: colors.map(c => ({ analyticalCoordinate: { hueIndex: null, w: c.w, s: c.s } })) };
+}
+
+function ensureDefaultGrayFill(store, trails) {
+    if (!store || trails.length === 0) return 0;
+    if (unassignedTrails(store, trails).length === 0) return 0;
+    return applyHarmonyToPattern(buildMaxContrastGraySelection(trails.length), store, trails, 'cyclic', undefined,
+        { ruleId: 'max-contrast-gray', source: 'maxContrastGray', fillOnly: true });
 }
 
 // A sheet's palette state: which harmony rule is applied, the chosen index
@@ -269,6 +393,10 @@ function resetFaceColors(sheet) {
     if (store) store.clear();
     if (sheet === 'base') baseFacePalette = null;
     else if (additionalLayers[sheet]) additionalLayers[sheet].facePalette = null;
+    // Group D Phase B4 follow-up: also forget the last-applied harmony type - without this, the very
+    // next anchor nudge (Kreis/Dreieck/Register/a stepper) would silently reapply it, undoing the
+    // reset it just performed.
+    setLastHarmonyTypeFor(sheet, null);
     if (faceHover && faceHover.sheet === sheet) faceHover = null;
 }
 
@@ -418,7 +546,7 @@ function reconcileFaceAssignments(store, oldSnap, newSnap) {
         comp.written = comp.written || [];
         comp.newKeys.forEach(child => {
             if (store.has(child)) return; // fill only
-            setFaceAssignment(store, child, { hue: a.hue, w: a.w, s: a.s, rule: a.rule, params: a.params == null ? null : JSON.parse(JSON.stringify(a.params)) });
+            setFaceAssignment(store, child, { hue: a.hue, w: a.w, s: a.s, rule: a.rule, params: a.params == null ? null : JSON.parse(JSON.stringify(a.params)), displayColor: a.displayColor == null ? null : a.displayColor.slice() });
             comp.written.push(child);
             inherited++;
         });
@@ -630,6 +758,79 @@ function facePaletteFor(sheet) {
     if (!layer) return null;
     if (!layer.facePalette) layer.facePalette = newFacePalette();
     return layer.facePalette;
+}
+
+// Group D Phase B2: the atlas position Weiß/Schwarz/Schatten/Wert will read from (B4, not wired yet) -
+// Farborgel's OWN 1-based hue convention (core/color.js's hue stays 0-based; that conversion happens once,
+// at the point of consumption - see core/farborgel-bridge.js's _farborgelHueToCoreHue() - never here).
+// registerIndex indexes the real 28-register atlas order per hue (core/farborgel-bridge.js's
+// FARBORGEL_REGISTER_ORDER); null = hue-only (Wert has no register axis, only the 24-hue circle).
+function newFaceAnchor() {
+    return { hueIndex: 1, registerIndex: 0 };
+}
+
+// Same lazy, per-sheet lifecycle as facePaletteFor() above: independent per layer, reset with the grid
+// (core/state.js rebuildGrid()/rebuildGridFromConstruction()), an additional layer's own anchor lives on
+// the layer object and is discarded along with it when additionalLayers is cleared.
+function anchorFor(sheet) {
+    if (sheet === 'base') { if (!baseFaceAnchor) baseFaceAnchor = newFaceAnchor(); return baseFaceAnchor; }
+    const layer = additionalLayers[sheet];
+    if (!layer) return null;
+    if (!layer.faceAnchor) layer.faceAnchor = newFaceAnchor();
+    return layer.faceAnchor;
+}
+
+// Group D Phase B4 follow-up: which of the 7 harmony types (2/3/4/W/B/S/V) was last applied to
+// `sheet` via ui-farbe.js's applyHarmony() - null until one has been. Same per-sheet lifecycle as
+// anchorFor()/facePaletteFor() above: base lives in state.js (baseLastHarmonyType, reset with the
+// grid), a layer's lives directly on the layer object (no lazy-object step needed - a plain scalar,
+// unlike the anchor/palette records). Never created eagerly: a layer with no entry simply reads null.
+function lastHarmonyTypeFor(sheet) {
+    if (sheet === 'base') return baseLastHarmonyType;
+    const layer = additionalLayers[sheet];
+    return layer ? (layer.lastHarmonyType === undefined ? null : layer.lastHarmonyType) : null;
+}
+// Farborgel sub-page P3: the "type" of a sheet colored from a selection composed ON the standalone Farborgel page
+// and handed back to this tab. It is not one of the 7 regenerable types - there is no (anchor, type) recipe for
+// it - so the selection itself is kept in lastSelectionFor(sheet) below. Using a SENTINEL value in
+// lastHarmonyType (rather than a separate flag) is deliberate: every existing "a Farborgel harmony owns this
+// sheet" gate is `lastHarmonyTypeFor(sheet) !== null` (sketch.js's resync gate, the per-trail stepper, ui-farbe.js's
+// reapply) and stays correct unchanged; the view-follow and the harmony-button highlight look the type up in a
+// table of the 7 real ones and simply find nothing for 'custom'.
+const CUSTOM_HARMONY_TYPE = 'custom';
+function setLastHarmonyTypeFor(sheet, type) {
+    if (sheet === 'base') { baseLastHarmonyType = type; if (type !== CUSTOM_HARMONY_TYPE) baseLastSelection = null; return; }
+    const layer = additionalLayers[sheet];
+    if (layer) { layer.lastHarmonyType = type; if (type !== CUSTOM_HARMONY_TYPE) layer.lastSelection = null; }
+}
+// The stored selection of a 'custom' sheet, else null. Any other type (including null, i.e. Reset Color and the
+// switch to the old rule system, which both go through setLastHarmonyTypeFor()) drops it automatically, so a
+// stale selection can never outlive the coloring it belonged to. Callers set the type FIRST, then the selection.
+function lastSelectionFor(sheet) {
+    if (sheet === 'base') return baseLastSelection;
+    const layer = additionalLayers[sheet];
+    return layer && layer.lastSelection ? layer.lastSelection : null;
+}
+function setLastSelectionFor(sheet, selection) {
+    if (sheet === 'base') { baseLastSelection = selection; return; }
+    const layer = additionalLayers[sheet];
+    if (layer) layer.lastSelection = selection;
+}
+
+// Phase B-Farbstrategien: which distribution strategy (core/farborgel-bridge.js's
+// DISTRIBUTION_STRATEGIES) `sheet`'s last harmony application used - null (ui-farbe.js treats
+// this as 'cyclic', today's default) until one has been explicitly chosen. Exact same
+// lifecycle/shape as lastHarmonyTypeFor()/setLastHarmonyTypeFor() just above - see their own
+// comment for why base/layer are stored differently.
+function distributionStrategyFor(sheet) {
+    if (sheet === 'base') return baseDistributionStrategy;
+    const layer = additionalLayers[sheet];
+    return layer ? (layer.distributionStrategy === undefined ? null : layer.distributionStrategy) : null;
+}
+function setDistributionStrategyFor(sheet, strategy) {
+    if (sheet === 'base') { baseDistributionStrategy = strategy; return; }
+    const layer = additionalLayers[sheet];
+    if (layer) layer.distributionStrategy = strategy;
 }
 
 // The trail key to outline on `sheet`'s faces right now (hover), or null.

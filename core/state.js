@@ -67,6 +67,34 @@ let baseFaceAssignments = new Map();
 // store. faceHover = {sheet, key} while a Face Colors swatch row is hovered
 // (drives the on-canvas outline), else null.
 let baseFacePalette = null;
+// Group D Phase B2: the base sheet's Farborgel anchor (core/facecolor.js
+// anchorFor()/newFaceAnchor()) - {hueIndex: 1-24, registerIndex: 0-27 |
+// null}, Farborgel's own 1-based hue convention (converted to core/color.js's
+// 0-based index only at the point of consumption, not here). null = fresh,
+// created lazily by anchorFor(), exactly like baseFacePalette above. Reset
+// with the grid, like the palette and the store.
+let baseFaceAnchor = null;
+// Group D Phase B4 follow-up: which of the 7 harmony types (2/3/4/W/B/S/V) was last applied to the
+// base sheet via ui-farbe.js's applyHarmony() - null until one has been (or after resetFaceColors()/
+// switching to the old rule system - core/facecolor.js). Read by ui-farbe.js's anchor-change handlers
+// (Kreis/Dreieck/Register, the hue/register steppers) to decide whether an anchor change should
+// automatically re-paint with this type, matching the old rule engine's always-live feel. Same
+// lazy/reset-with-the-grid lifecycle as baseFaceAnchor above; a layer's own lives on the layer object
+// (core/facecolor.js's lastHarmonyTypeFor()/setLastHarmonyTypeFor()).
+let baseLastHarmonyType = null;
+// Farborgel sub-page P3: the HarmonySelection a Farborgel-COMPOSED harmony was applied from (manual edits,
+// compounds - nothing that buildHarmonySelection(anchor, type) could regenerate), kept so a later strategy
+// change can reapply it. Only meaningful while baseLastHarmonyType === 'custom'
+// (core/facecolor.js's CUSTOM_HARMONY_TYPE); same lazy/reset-with-the-grid lifecycle as baseLastHarmonyType,
+// and a layer's own lives on the layer object (core/facecolor.js's lastSelectionFor()/setLastSelectionFor()).
+let baseLastSelection = null;
+// Phase B-Farbstrategien: which distribution strategy (core/farborgel-bridge.js's
+// DISTRIBUTION_STRATEGIES - 'cyclic'/'area'/'symmetry'/'rings') the base sheet's last harmony
+// application used - null (falls back to 'cyclic', today's default) until one has been chosen
+// via ui-farbe.js's strategy stepper. Same lazy/reset-with-the-grid lifecycle as
+// baseLastHarmonyType above; a layer's own lives on the layer object
+// (core/facecolor.js's distributionStrategyFor()/setDistributionStrategyFor()).
+let baseDistributionStrategy = null;
 let faceHover = null;
 let activeLayer = 'base'; // 'base' | integer index into additionalLayers - which sheet mousePressed()/addRandomConnection()/undo/redo/clear target
 
@@ -211,7 +239,7 @@ function rebuildGrid(shape) {
     connections = [];
     additionalLayers = [];
     baseFaceAssignments = new Map(); // keys are geometry of the OLD grid
-    baseFacePalette = null; faceHover = null;
+    baseFacePalette = null; baseFaceAnchor = null; baseLastHarmonyType = null; baseLastSelection = null; baseDistributionStrategy = null; faceHover = null;
     activeLayer = 'base'; // an active additional-layer index would otherwise dangle once the array is cleared
     timeline = null; // Roadmap 1.8 Stage C: its keyframeLayerIds/playbackLayerIndex would dangle the same way activeLayer would
     baseNetAnimation = null; // the captured Start/End nets belong to the old grid setup (Shape Size decides what a Field is)
@@ -253,7 +281,7 @@ function rebuildGridFromConstruction(p, q, n, side) {
     connections = [];
     additionalLayers = [];
     baseFaceAssignments = new Map();
-    baseFacePalette = null; faceHover = null;
+    baseFacePalette = null; baseFaceAnchor = null; baseLastHarmonyType = null; baseLastSelection = null; baseDistributionStrategy = null; faceHover = null;
     activeLayer = 'base';
     timeline = null; // Roadmap 1.8 Stage C: see rebuildGrid()'s own comment
     baseNetAnimation = null;

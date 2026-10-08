@@ -145,7 +145,7 @@ console.log('\n== 5. storage untouched / wiring ==');
     const users = FILES.filter(f => f !== 'tiling').filter(f => /layerNodeDrawnPosition|layerNodeFromDrawn|layerFreeNodeFromClick/.test(fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')));
     check('nothing in core/ except tiling.js uses them: export, orbits, faces, timeline morphing and Align to base stay storage-only readers', users.length === 0, users.join(','));
     const skUsers = ui.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n').match(/(layerNodeDrawnPosition|layerNodeFromDrawn|layerFreeNodeFromClick)\(/g).length;
-    check('sketch.js uses them only at the three sites (dot, hit-test, free endpoint)', skUsers === 3, skUsers);
+    check('sketch.js uses them only at the three sites (dot, hit-test = drawnHitNodes() for the click and the hover, free endpoint)', skUsers === 3 && /\n    return arr\.map\(nd => \{ const q = hitLayer \? layerNodeDrawnPosition\(hitLayer, nd\)/.test(ui), skUsers);
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

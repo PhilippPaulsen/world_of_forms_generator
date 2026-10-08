@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Farborgel</title>
+  <link rel="preload" href="./assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
+  <!-- Cache-busting (see index.html's import map and CLAUDE.md): this page is served as static files from GitHub
+       Pages, which caches for minutes, and ES-module imports cannot carry ?v= themselves - so every module
+       reachable from app.mjs is listed here, all with the project's shared version string. Bump it together with
+       index.html/gallery.html. Unsupported browsers (Safari < 16.4, Firefox < 108) ignore the block and load
+       unversioned. tools/color/test-esm-cachebust.js fails on a module missing from this map. -->
+  <script type="importmap">
+    {
+    "imports": {
+      "./composition.mjs": "./composition.mjs?v=20260929aw",
+      "./HarmonySelection.mjs": "./HarmonySelection.mjs?v=20260929aw",
+      "./DisplayCalibration.mjs": "./DisplayCalibration.mjs?v=20260929aw",
+      "./FullColorCalibration.mjs": "./FullColorCalibration.mjs?v=20260929aw",
+      "./state.mjs": "./state.mjs?v=20260929aw",
+      "./i18n.mjs": "./i18n.mjs?v=20260929aw",
+      "./handoff.mjs": "./handoff.mjs?v=20260929aw",
+      "./components/dom.mjs": "./components/dom.mjs?v=20260929aw",
+      "./components/Toolbar.mjs": "./components/Toolbar.mjs?v=20260929aw",
+      "./components/Navigator.mjs": "./components/Navigator.mjs?v=20260929aw",
+      "./components/Inspector.mjs": "./components/Inspector.mjs?v=20260929aw",
+      "./components/Tooltip.mjs": "./components/Tooltip.mjs?v=20260929aw",
+      "./views/CircleView.mjs": "./views/CircleView.mjs?v=20260929aw",
+      "./views/TriangleView.mjs": "./views/TriangleView.mjs?v=20260929aw",
+      "./views/RegisterView.mjs": "./views/RegisterView.mjs?v=20260929aw",
+      "./views/HarmonyView.mjs": "./views/HarmonyView.mjs?v=20260929aw",
+      "./views/CalibrationView.mjs": "./views/CalibrationView.mjs?v=20260929aw",
+      "../../core/farborgel-engine.mjs": "../../core/farborgel-engine.mjs?v=20260929aw"
+    }
+    }
+  </script>
+  <link rel="stylesheet" href="./tokens.css?v=20260929aw">
+  <link rel="stylesheet" href="./styles.css?v=20260929aw">
+  <script type="module" src="./app.mjs?v=20260929aw"></script>
+</head>
+<body><div id="app"></div></body>
+</html>

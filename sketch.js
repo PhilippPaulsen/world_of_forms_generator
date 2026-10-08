@@ -234,6 +234,7 @@ function setup() {
     canvasH = canvasW;
     createCanvas(canvasW, canvasH).parent('canvas-container');
     noLoop();
+    installTapInput();
 
     // Shape selection via Icons (Common class .shape-icon-btn)
     const shapeBtns = selectAll('.shape-icon-btn');
@@ -350,27 +351,54 @@ function setup() {
     // (defensive, matches the function's existing role elsewhere)
     // even though every reachable combination is already one of the
     // six real values by construction.
-    let symmetryCategory = 'spiegeling'; // 'none' | 'spiegeling' | 'drehling' - matches the pre-existing rotation_reflection6 default
-    let symmetryFold = 6; // 3 | 6 - hex only, ignored for triangle/square
+    // UI rework 4b: 'none' | 'drehling' | 'mirror' | 'spiegeling'. 'mirror' (mirror only -> reflection_only)
+    // is new as a UI state; the other three are the old ones. The mapping lives in core/symmetry-toggles.js
+    // (pure, tested); the two toggles in the Form nav row (ui-form.js) derive their state from this category.
+    let symmetryCategory = 'spiegeling'; // matches the pre-existing rotation_reflection6 default
+    let symmetryFold = 6; // 3 | 6 - hex only, ignored for triangle/square and while rotation is off
 
     function resolveSymmetryMode(shape, category, fold) {
-        if (category === 'none') return 'none';
-        if (shape === 'hex') {
-            if (category === 'spiegeling') return fold === 3 ? 'rotation_reflection3' : 'rotation_reflection6';
-            return fold === 3 ? 'rotation3' : 'rotation6';
-        }
-        // Triangle/square: rotation3 ≡ rotation6 and rotation_reflection3 ≡
-        // rotation_reflection6 (confirmed collapse, group-verification
-        // session) - fold is meaningless there, so one representative
-        // raw mode per category is picked arbitrarily but consistently.
-        return category === 'spiegeling' ? 'rotation_reflection6' : 'rotation3';
+        return symmetryModeFor(shape, category, fold); // core/symmetry-toggles.js (moved there unchanged, plus 'mirror')
     }
+
+    // True only while the session restore's 'symmetry' hook drives the setters below: they then skip uiSync() and redraw(), because between
+    // the two setters (and until the apply code assigns the stored mode) symmetryMode is an intermediate one, and a sync or a draw would
+    // write gray-fill entries for THAT mode's trails into the restored store. The hook's caller syncs once, with the final state.
+    let restoringSymmetry = false;
 
     function updateSymmetryModeControl() {
         symmetryMode = normSym(resolveSymmetryMode(currentShape, symmetryCategory, symmetryFold));
         const foldGroup = select('#mode-fold-group');
         if (foldGroup) foldGroup.elt.hidden = currentShape !== 'hex';
+        if (window.uiSync && !restoringSymmetry) window.uiSync(); // the nav row's toggles follow the category
     }
+
+    // One path for every change of the category - the old .mode-btn handlers and the nav row's toggles both go
+    // through it. The old buttons stay in the DOM (hidden, see index.html) and keep their 'active' class in step;
+    // 'mirror' has no old button, so none of them is active then.
+    function applySymmetryCategory(category) {
+        modeBtns.forEach(b => b.removeClass('active'));
+        const match = modeBtns.find(b => b.attribute('data-mode') === category);
+        if (match) match.addClass('active');
+        symmetryCategory = category;
+        updateSymmetryModeControl();
+        if (!restoringSymmetry) redraw();
+    }
+    function applySymmetryFold(fold) {
+        foldBtns.forEach(b => b.removeClass('active'));
+        const match = foldBtns.find(b => parseInt(b.attribute('data-fold')) === fold);
+        if (match) match.addClass('active');
+        symmetryFold = fold;
+        updateSymmetryModeControl();
+        if (!restoringSymmetry) redraw();
+    }
+    // What the nav row reads and drives (ui-form.js).
+    window.symmetryUi = {
+        category: () => symmetryCategory,
+        fold: () => symmetryFold,
+        setCategory: applySymmetryCategory,
+        setFold: applySymmetryFold,
+    };
 
     // Roadmap 1.12 stage 5 (symmetryMode axis) part 3: the best-effort
     // INVERSE of resolveSymmetryMode() directly above - reused by both
@@ -384,37 +412,19 @@ function setup() {
     // design session. currentFold is the caller's own fallback for
     // whichever entries don't have a real fold of their own (none/Z2),
     // so a fold click doesn't lose the user's last real fold choice.
+    // UI rework 4b: now exact for reflection_only too ('mirror'); the table moved to core/symmetry-toggles.js.
     function bestEffortCategoryFold(mode, currentFold) {
-        return {
-            none: { category: 'none', fold: currentFold },
-            reflection_only: { category: 'spiegeling', fold: currentFold },
-            rotation3: { category: 'drehling', fold: 3 },
-            rotation6: { category: 'drehling', fold: 6 },
-            rotation_reflection3: { category: 'spiegeling', fold: 3 },
-            rotation_reflection6: { category: 'spiegeling', fold: 6 },
-        }[mode];
+        return symmetryCategoryFoldFor(mode, currentFold);
     }
 
     const modeBtns = selectAll('.mode-btn');
     modeBtns.forEach(btn => {
-        btn.mousePressed(() => {
-            modeBtns.forEach(b => b.removeClass('active'));
-            btn.addClass('active');
-            symmetryCategory = btn.attribute('data-mode');
-            updateSymmetryModeControl();
-            redraw();
-        });
+        btn.mousePressed(() => applySymmetryCategory(btn.attribute('data-mode')));
     });
 
     const foldBtns = selectAll('.fold-btn');
     foldBtns.forEach(btn => {
-        btn.mousePressed(() => {
-            foldBtns.forEach(b => b.removeClass('active'));
-            btn.addClass('active');
-            symmetryFold = parseInt(btn.attribute('data-fold'));
-            updateSymmetryModeControl();
-            redraw();
-        });
+        btn.mousePressed(() => applySymmetryFold(parseInt(btn.attribute('data-fold'))));
     });
 
     updateSymmetryModeControl(); // initial sync - keeps symmetryMode/fold-row-visibility correct on load without waiting for a click
@@ -451,6 +461,7 @@ function setup() {
             const matchingFoldBtn = foldBtns.find(b => parseInt(b.attribute('data-fold')) === symmetryFold);
             if (matchingFoldBtn) matchingFoldBtn.addClass('active');
         }
+        if (window.uiSync) window.uiSync(); // the nav row's toggles show the loaded pattern's category
     }
 
     // Line Color (Color Picker)
@@ -589,6 +600,9 @@ function setup() {
     // UI state -> baseNetTransform (core/state.js): sinus/tangens = {kind:'trig', w: -/+strength},
     // geometric = {kind:'geometric', w: +/-strength*ln(NET_R_MAX)} (w = ln R, R = last/first mesh),
     // 'Both' axes = y:'same'. Strength 0 (or Regular) is the identity: no warp, nothing locked.
+    // Session restore: sets the net panel's own state (the `ui` object inside initNetControls) from baseNetTransform - the inverse of
+    // axisSpec() - without going through commit(). Stays null if the panel does not exist.
+    let adoptNetState = null;
     (function initNetControls() {
         const group = select('#net-group');
         if (!group) return;
@@ -619,6 +633,27 @@ function setup() {
             : c.mode === 'sinus' ? (c.focus ? { kind: 'trig', w: -c.strength, focus: c.focus, alternate: c.alternate } : { kind: 'trig', w: -c.strength })
             : c.mode === 'tangens' ? (c.focus ? { kind: 'trig', w: c.strength, focus: c.focus, alternate: c.alternate } : { kind: 'trig', w: c.strength })
             : { kind: 'geometric', w: (c.reverse ? -1 : 1) * c.strength * Math.log(NET_R_MAX), alternate: c.alternate };
+        // UI rework 4c: a value on the 0.1 grid shows one decimal (0.8), any other value two (0.86) - the stored value is
+        // never rounded, the display just says what it is.
+        function fmtNetValue(v) { return Math.abs(v * 10 - Math.round(v * 10)) < 1e-9 ? v.toFixed(1) : v.toFixed(2); }
+        // UI rework 4c: what happens when a kind is chosen. A net switched on from "Aus" starts as Both axes + Field (the
+        // defaults are not shown; More has the other choices). Field needs an odd Shape Size 3..9 - with an even one it stays
+        // Single and SAYS so; the Shape Size itself is never changed. Sin and Tan need at least 4 nodes (at 3 the law sits
+        // on its fixed points and shows no effect): a lower Node Count is raised to 4, and that is said too.
+        function applyNetKindChoice(kind, fromRegular) {
+            const notes = [];
+            if (fromRegular) {
+                ui.axes = 'both';
+                const R = shapeSizeFactor;
+                if (netDomainEffective({ domain: 'field' }, R).ignored === null) setDomain('field');
+                else { setDomain('single'); notes.push(`Feld braucht eine ungerade Größe (3, 5, 7, 9); ${R} passt nicht, deshalb Einzelnetz. Die Größe bleibt ${R}.`); }
+            }
+            if ((kind === 'sinus' || kind === 'tangens') && nodeCount < 4) {
+                notes.push(`Sin und Tan brauchen mindestens 4 Knoten; Knoten von ${nodeCount} auf 4 gesetzt.`);
+                if (nodeInput) { nodeInput.value(4); nodeInput.elt.dispatchEvent(new Event('input', { bubbles: true })); }
+            }
+            if (notes.length && window.UI) UI.toast(notes.join(' '), 6000);
+        }
         function commit() {
             if (ui.axes === 'both') ui.y = Object.assign({}, ui.x);
             const allRegular = ui.x.mode === 'regular' && ui.y.mode === 'regular';
@@ -638,11 +673,11 @@ function setup() {
             axesBtns.forEach(b => b.elt.classList.toggle('active', b.elt.dataset.axes === ui.axes));
             strengthRow.elt.hidden = c.mode === 'regular';
             strengthInput.value(Math.round(c.strength * 100));
-            strengthValue.html(c.mode === 'geometric' ? '\u00d7' + Math.pow(NET_R_MAX, c.strength).toFixed(1) : c.strength.toFixed(2));
+            strengthValue.html(c.mode === 'geometric' ? '\u00d7' + Math.pow(NET_R_MAX, c.strength).toFixed(1) : fmtNetValue(c.strength));
             // Focus (trig laws, Single/Tiled): moves the widest (sinus) / narrowest (tangens) mesh off the tile centre; not in a Field
             const trig = c.mode === 'sinus' || c.mode === 'tangens', geo = c.mode === 'geometric';
             focusRow.elt.hidden = !trig;
-            focusInput.value(Math.round((c.focus || 0) * 100)); focusValue.html((c.focus || 0).toFixed(2));
+            focusInput.value(Math.round((c.focus || 0) * 100)); focusValue.html(fmtNetValue(c.focus || 0));
             const anyFocus = [ui.x, ui.axes === 'both' ? ui.x : ui.y].some(a => (a.mode === 'sinus' || a.mode === 'tangens') && a.focus);
             focusHint.elt.hidden = !anyFocus;
             if (!focusHint.elt.hidden) focusHint.html(ui.domain === 'field'
@@ -655,7 +690,12 @@ function setup() {
             reverseBtn.elt.classList.toggle('active', c.reverse);
             alternateBtn.elt.classList.toggle('active', c.alternate);
         }
-        kindBtns.forEach(b => b.mousePressed(() => { target().mode = b.elt.dataset.kind; commit(); }));
+        kindBtns.forEach(b => b.mousePressed(() => {
+            const kind = b.elt.dataset.kind, fromRegular = ui.x.mode === 'regular' && ui.y.mode === 'regular';
+            target().mode = kind;
+            if (kind !== 'regular') applyNetKindChoice(kind, fromRegular);
+            commit();
+        }));
         axesBtns.forEach(b => b.mousePressed(() => {
             const next = b.elt.dataset.axes;
             if (next !== 'both' && ui.axes === 'both') ui.y = Object.assign({}, ui.x); // start X and Y from the shared law
@@ -748,6 +788,31 @@ function setup() {
                 }
                 wasActive = lockSig;
             }
+        };
+        // The inverse of axisSpec(): every field of a stored axis spec goes back into a panel axis ({mode, strength, reverse, alternate, focus}).
+        // trig: w < 0 is sinus, otherwise tangens (a w of 0 is ambiguous and reads as tangens); geometric: w = +/- strength * ln(NET_R_MAX).
+        // The geometric strength is snapped to the slider's 0.01 grid when that reproduces w exactly, so a later commit() rebuilds the same bits.
+        function axisFromSpec(spec) {
+            const c = fresh();
+            if (!spec || spec.kind === 'uniform') return c;
+            if (spec.kind === 'trig') { c.mode = spec.w < 0 ? 'sinus' : 'tangens'; c.strength = Math.abs(spec.w); }
+            else {
+                const a = Math.abs(spec.w), ln = Math.log(NET_R_MAX), s = a / ln, snapped = Math.round(s * 100) / 100;
+                c.mode = 'geometric'; c.reverse = spec.w < 0; c.strength = snapped * ln === a ? snapped : s;
+            }
+            c.focus = spec.focus || 0; c.alternate = !!spec.alternate;
+            return c;
+        }
+        adoptNetState = function () {
+            const spec = baseNetTransform;
+            if (!spec) { ui.axes = 'both'; ui.domain = 'single'; ui.macro = undefined; ui.x = fresh(); ui.y = fresh(); }
+            else {
+                ui.x = axisFromSpec(spec.x);
+                if (spec.y === 'same') { ui.axes = 'both'; ui.y = Object.assign({}, ui.x); }
+                else { ui.axes = 'x'; ui.y = axisFromSpec(spec.y); }
+                ui.domain = stateDomain(); ui.macro = spec.macro;
+            }
+            render();
         };
         fieldBtn.elt.dataset.title = fieldBtn.elt.title;   // restored when Field becomes available again
         // (The standalone net animation's controls - Set Start / Set End / Play / progress - were removed from the UI: see the comment above
@@ -2050,16 +2115,21 @@ function setup() {
 
     // Show nodes Toggle Button
     const nodeBtn = select('#btn-toggle-nodes');
+    // The button's active class and eye icon follow showNodes (also called by the session restore, which sets showNodes directly).
+    function updateNodeToggleIcon() {
+        if (!nodeBtn) return;
+        if (showNodes) {
+            nodeBtn.addClass('active');
+            nodeBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>');
+        } else {
+            nodeBtn.removeClass('active');
+            nodeBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M1 1l22 22"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/></svg>'); // Eye Off
+        }
+    }
     if (nodeBtn) {
         nodeBtn.mousePressed(() => {
             showNodes = !showNodes;
-            if (showNodes) {
-                nodeBtn.addClass('active');
-                nodeBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>');
-            } else {
-                nodeBtn.removeClass('active');
-                nodeBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M1 1l22 22"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/></svg>'); // Eye Off
-            }
+            updateNodeToggleIcon();
             redraw();
         });
     }
@@ -2169,6 +2239,162 @@ function setup() {
     const computeCrossLayerBtn = select('#btn-compute-cross-layer');
     computeCrossLayerBtn && computeCrossLayerBtn.mousePressed(computeCrossLayerFacesFlow);
 
+    // ---- Session restore (Phase 3 autosave, P1d; the storage side is core/session-store.js, the rest core/session*.js) ----
+    // The seven UI hooks core/session-apply.js runs after it has set the globals (they are final by then, so a hook reads what it shows
+    // from the globals, not from its argument). They are defined here because the things they drive live in setup()'s closure. None of
+    // them dispatches an input event (the node-count and size handlers would rebuildGrid() and wipe the restored sheet).
+    // window.sessionUi IS the hooks object (plus symmetryUi, which collectSessionState() reads).
+    const sessionHooks = {
+        symmetryUi: window.symmetryUi,
+        shapeAndInputs() {
+            shapeBtns.forEach(b => b.removeClass('active'));
+            const match = shapeBtns.find(b => b.attribute('data-shape') === currentShape);
+            if (match) match.addClass('active');
+            if (shapeInput) shapeInput.value(shapeSizeFactor);
+            if (nodeInput) nodeInput.value(nodeCount);
+            clampNodeCountToShape('Restore'); // the input's max for the restored shape; the restored count is within it, so no note
+        },
+        symmetry(category, fold) {
+            // The setters recompute symmetryMode from (shape, category, fold); the stored mode is assigned again afterwards by the apply code
+            // (it can legitimately differ: a catalog link with shape=square&symmetryMode=rotation6 shows (drehling, 6) but keeps rotation6).
+            // So the check is that the UI took the category and fold it was given and landed on one of the six modes - not that the mode is the stored one.
+            // The two setters each recompute symmetryMode, so between them (and after them, until the apply code assigns the stored mode) the
+            // mode is an intermediate one; restoringSymmetry makes them skip uiSync() and redraw() (see its declaration). Measured without it: a
+            // (drehling, 3) session restored 10 stray gray entries computed under rotation6, the default fold, in between.
+            const ui = window.symmetryUi;
+            restoringSymmetry = true;
+            try {
+                if (category !== null && category !== undefined) ui.setCategory(category);
+                if (fold !== null && fold !== undefined) ui.setFold(fold);
+            } finally { restoringSymmetry = false; }
+            if ((category !== null && category !== undefined && ui.category() !== category) || (fold !== null && fold !== undefined && ui.fold() !== fold)) {
+                throw new Error(`the symmetry controls did not take (${category}, ${fold}): they show (${ui.category()}, ${ui.fold()})`);
+            }
+            if (SESSION_SYMMETRY_MODES.indexOf(symmetryMode) < 0) throw new Error(`the symmetry controls resolved to "${symmetryMode}"`);
+        },
+        toggles() {
+            updateNodeToggleIcon();
+            if (curveBtn) { if (curveType.kind === 'curve') curveBtn.addClass('active'); else curveBtn.removeClass('active'); }
+            if (freeBtn) { if (curveType.kind === 'free') freeBtn.addClass('active'); else freeBtn.removeClass('active'); }
+            if (freeEndpointsBtn) { if (freeEndpointsEnabled) freeEndpointsBtn.addClass('active'); else freeEndpointsBtn.removeClass('active'); }
+            updateFaceToggleControl();
+            updateCurveTypeControls();
+            updateFreeVisibleToggleIcon();
+            cancelAltNetConstruction(); // an in-progress alternative-net click pair means nothing against the restored sheet
+        },
+        net() {
+            if (adoptNetState) adoptNetState();
+            if (netControlsSync) netControlsSync();
+        },
+        layers() {
+            renderLayerTabs();
+            updateOffsetControls();
+        },
+        timeline() {
+            updateTimelineControls();
+            applyTimelineFrame(); // sets the playback layer's _morph* caches (nothing is saved of them); a no-op without a timeline
+        },
+        finish() {
+            updateCrossLayerStatus();
+            updatePatternNameStatus();
+            if (window.syncTimelineNetUi) window.syncTimelineNetUi();
+            if (window.uiSync) window.uiSync();
+            redraw(); // a no-op until setup() has finished (p5 1.9.0); the first draw() comes right after setup
+        },
+    };
+    window.sessionUi = sessionHooks;
+
+    // The code a quarantine is filed under (core/session-store.js SESSION_QUARANTINE_REASONS) from the code that rejected the snapshot.
+    // The warning always carries the original code and message, so nothing is lost behind the normalised reason.
+    function sessionQuarantineReason(code) {
+        if (code === 'schema-version' || code === 'trail-key-version') return code;
+        if (code === 'canvas-mismatch' || code === 'grid-mismatch') return 'grid-mismatch';
+        if (code === 'plan-error' || code === 'apply-failed') return 'apply-failed';
+        return 'corrupt'; // empty, too-large, not-json, not-an-object, invalid
+    }
+
+    // Startup: restore this tab's saved session if the navigation rules say so (core/session-store.js loadSessionForStartup()), else
+    // return false and let the catalog / random start line below run. Any failure ends in the quarantine and a fresh start (the apply
+    // rolled everything back); it never throws.
+    function restoreSessionAtStartup() {
+        try {
+            const guard = sessionStorageGuard(window);
+            const loaded = loadSessionForStartup({ storage: guard.storage, perf: window.performance, currentHref: sessionCurrentHref(window.location), allowed: guard.allowed });
+            if (loaded.reason === 'envelope-invalid') console.warn(`[session] saved session not restored (${loaded.detail}); kept in the quarantine slot, starting fresh`); // the store already moved it
+            if (loaded.action !== 'restore') return false;
+            const reject = (code, detail) => {
+                console.warn(`[session] saved session not restored (${code}: ${detail}); kept in the quarantine slot, starting fresh`);
+                quarantineSession(guard.storage, loaded.text, sessionQuarantineReason(code));
+                return false;
+            };
+            const parsed = parseSession(loaded.text);
+            if (!parsed.ok) return reject(parsed.code, parsed.detail);
+            const planned = planSessionRestore(parsed.snapshot, { canvasW, canvasH });
+            if (!planned.ok) return reject(planned.code, planned.detail);
+            const applied = applySessionSnapshot(parsed.snapshot, planned.plan, sessionHooks, {
+                onFailure(error, info) { // before the rollback: the snapshot leaves the main key, so a reload cannot repeat the failure
+                    console.warn(`[session] saved session not restored (apply-failed: ${info.step}: ${info.detail}); kept in the quarantine slot, starting fresh`);
+                    quarantineSession(guard.storage, loaded.text, 'apply-failed');
+                },
+            });
+            if (applied.ok) return true;
+            if (applied.resyncFailed) location.reload(); // the old state is back in the globals but the controls could not be re-synced; the key is already gone
+            return false;
+        } catch (e) {
+            console.warn('[session] restore failed unexpectedly, starting fresh: ' + (e && e.message));
+            return false;
+        }
+    }
+
+    // ---- Session writer (Phase 3 autosave, P2): WHEN the snapshot is saved is core/session-writer.js; this wires it to the page ----
+    // One writer per page load, only where the storage guard allows (not in a frame, sessionStorage reachable). It is told after every draw (see draw()),
+    // flushed when the page is hidden or goes away, and not asked to write while something plays (isAnythingAnimating()). It only ever writes the main key
+    // (core/session-store.js writeSession), with the URL the page has NOW (the hash is dropped there). check(): a snapshot that could not be restored
+    // (plan: grid-mismatch, ...) is not written, the previous one stays. A layer a layer animation left mid-way (shapeSizeFactor 3.8, nodes still built for 5)
+    // is collected with the size its nodes were built with ({ buildSizes: true }, core/session-apply.js), so it is written and restores; only a layer
+    // for which no size reproduces its nodes is refused. See ROADMAP (Phase 3).
+    function startSessionWriter() {
+        try {
+            const guard = sessionStorageGuard(window);
+            if (!guard.allowed) return null;
+            const writer = createSessionWriter({
+                collect: () => collectSessionState(window.symmetryUi, { buildSizes: true }),
+                serialize: (state, now) => { const r = serializeSession(buildSessionSnapshot(state, now)); return r.ok ? r.text : null; },
+                write: (text, now) => writeSession(guard.storage, text, window.location.href, now, true), // quiet: the writer warns once per kind
+                check: text => {
+                    const parsed = parseSession(text);
+                    if (!parsed.ok) return parsed.code + ': ' + parsed.detail;
+                    const planned = planSessionRestore(parsed.snapshot, { canvasW, canvasH });
+                    return planned.ok ? null : planned.code + ': ' + planned.detail;
+                },
+                isBlocked: () => isAnythingAnimating(),
+                setTimer: (fn, ms) => window.setTimeout(fn, ms),
+                clearTimer: handle => window.clearTimeout(handle),
+                now: () => Date.now(),
+            });
+            window.sessionWriter = writer;
+            // the page is hidden (tab switch, app switch, mobile background) or goes away (close, reload, navigation): write what is pending
+            window.addEventListener('pagehide', () => { writer.flush(); });
+            document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') writer.flush(); });
+            return writer;
+        } catch (e) {
+            console.warn('[session] autosave could not be started: ' + (e && e.message));
+            return null;
+        }
+    }
+
+    // "Neu anfangen" (rail, Mehr): forget this tab's saved session and load the page again without URL parameters. The writer is disabled FIRST - the page
+    // is about to go away and its pagehide handler would write the snapshot straight back - then the main key and the quarantine slot are removed, then a plain
+    // navigation (no search, no hash) starts fresh: the restore rule finds no snapshot. The state is not rebuilt by hand.
+    window.sessionRestart = function () {
+        try { if (window.sessionWriter) window.sessionWriter.disable(); } catch (e) { } // the navigation below still happens
+        try {
+            const guard = sessionStorageGuard(window);
+            if (guard.storage) { guard.storage.removeItem(SESSION_STORAGE_KEY); guard.storage.removeItem(SESSION_QUARANTINE_KEY); }
+        } catch (e) { console.warn('[session] could not remove the saved session: ' + (e && e.message)); }
+        window.location.assign(window.location.pathname);
+    };
+
     rebuildGrid(currentShape);
     // Draw a random connection on start - unless a valid catalog URL
     // pattern is already resolved (see catalogUrlPattern/applyCatalogPattern()
@@ -2182,7 +2408,13 @@ function setup() {
     // applyCatalogPatternToNewLayer() instead, which never touches the
     // base globals/UI at all (see its own comment), so the plain
     // base-only case just below is completely unaffected either way.
-    if (catalogUrlPattern && catalogUrlPattern.layer === 'new') {
+    //
+    // Phase 3 autosave: a saved session for this tab and URL (reload, back/forward, same-URL navigate - see restoreSessionAtStartup()
+    // above) is restored INSTEAD of all of this; it replaces whatever the URL parameters set earlier, and a failed restore rolls back to
+    // exactly that state before this branch runs.
+    if (restoreSessionAtStartup()) {
+        // restored: the sheet, the layers, the timeline and the colours are the saved ones - no catalog pattern, no random start line
+    } else if (catalogUrlPattern && catalogUrlPattern.layer === 'new') {
         if (!applyCatalogPatternToNewLayer(catalogUrlPattern)) addRandomConnection();
     } else if (!catalogUrlPattern || !applyCatalogPattern(catalogUrlPattern)) {
         addRandomConnection();
@@ -2201,10 +2433,13 @@ function setup() {
     redraw();
     updateCrossLayerStatus();
     updatePatternNameStatus();
+    startSessionWriter(); // last: the first write follows the first draw (markDirty is called at the end of draw())
 }
 
 // ----------------- DRAW -----------------------------------------
 function draw() {
+    // UI rework: the nav rows (steppers, toggles) read the state on every redraw (ui-form.js); cheap, attribute-only.
+    if (window.uiSync) window.uiSync();
     // Force Light Mode / Standard Style
     // Hintergrund exakt wie Bedienfeld (oder weiß)
     const bgColor = getComputedStyle(document.body).getPropertyValue('--panel-bg-color') || '#ffffff';
@@ -2324,12 +2559,15 @@ function draw() {
         // through the net warp when one is in force (position-based, like the warp itself).
         const dotWarp = netWarpBaseNow();
         const dotPos = nd => dotWarp ? applyNetWarp(dotWarp, nd) : nd;
+        // Hover (Phase 2, B4c): ONE dot is red - the nearest within HOVER_RADIUS - chosen by the same pickNodeAt over the same drawn positions
+        // (drawnHitNodes) that a click uses, so the red dot is the node a click on that spot selects. It used to be every dot within 10 units.
+        const hovered = pickNodeAt(drawnHitNodes(), mouseX, mouseY, HOVER_RADIUS);
+        const hoverId = hovered ? hovered.id : null;
         nodes.forEach(nd => {
             const p = dotPos(nd);
             if (activeLayer === 'base') {
-                const d = dist(mouseX, mouseY, p.x, p.y);
                 // Default: Schwarz (Grid) / Blau (frei) oder Rot bei Hover
-                fill(d < 10 ? color(220, 0, 0) : (nd.free ? color(30, 110, 220) : color(0)));
+                fill(nd.id === hoverId ? color(220, 0, 0) : (nd.free ? color(30, 110, 220) : color(0)));
             } else {
                 fill(200);
             }
@@ -2343,8 +2581,7 @@ function draw() {
             const dotLayer = additionalLayers[activeLayer];
             dotLayer.nodes.forEach(nd => {
                 const p = dotPos(layerNodeDrawnPosition(dotLayer, nd));
-                const d = dist(mouseX, mouseY, p.x, p.y);
-                fill(d < 10 ? color(220, 0, 0) : (nd.free ? color(30, 110, 220) : color(0)));
+                fill(nd.id === hoverId ? color(220, 0, 0) : (nd.free ? color(30, 110, 220) : color(0)));
                 ellipse(p.x, p.y, 6, 6);
             });
         }
@@ -2409,6 +2646,10 @@ function draw() {
     // gated pattern (rebuilds only when its contents could have changed).
     updateFaceColorsPanel();
     if (netControlsSync) netControlsSync();
+    // Phase 3 autosave (P2): the saved state MAY have changed. Called on every draw, hover redraws included: it costs a function call and two stores, and the
+    // writer (core/session-writer.js) debounces, caps the wait at 5 s, and does not write an unchanged snapshot. Last in draw(), so the first write is after the
+    // first draw (face colours are written lazily into the store while the first draw computes the faces).
+    if (window.sessionWriter) window.sessionWriter.markDirty();
 }
 
 // ----------------- ALTERNATIVE NET CONSTRUCTION (Roadmap 1.2-C) -----
@@ -2939,6 +3180,7 @@ function toggleActiveLayerAnimationPlayback() {
         // the end, rather than silently doing nothing on a second Play
         // click.
         if (anim.elapsedMs >= anim.durationMs) anim.elapsedMs = 0;
+        sessionFlushNow(); // the layer animation overwrites saved layer fields while it plays: save what is pending BEFORE it starts
         anim.startTime = millis() - anim.elapsedMs;
         anim.playing = true;
     }
@@ -3066,6 +3308,10 @@ function applyLayerConnectionsMorphFrame(layer, anim, t) {
 function isAnythingAnimating() {
     return additionalLayers.some(l => l.animation && l.animation.playing) || !!(timeline && timeline.playing) || !!(baseNetAnimation && baseNetAnimation.playing);
 }
+
+// Phase 3 autosave (P2): the session writer (core/session-writer.js, created at the end of setup()) writes nothing while something plays - a layer animation
+// overwrites saved layer fields (offset, rotation, shapeSizeFactor) frame by frame - and is flushed once just before a playback starts.
+function sessionFlushNow() { if (window.sessionWriter) window.sessionWriter.flush(); }
 
 // ----------------- NET ANIMATION (Group E, Stage 1 - the Stage A "capture two states, lerp" pattern) --------------------
 // STATUS: FUNCTIONAL, TESTED, BUT WITHOUT A UI ENTRY POINT (as of this change). This standalone net animation (Case B2: baseNetAnimation, Set Start /
@@ -3835,6 +4081,7 @@ function toggleTimelinePlayback() {
         timeline.playing = false;
     } else {
         if (timeline.elapsedMs >= totalDuration) timeline.elapsedMs = 0;
+        sessionFlushNow(); // no write happens while the timeline plays: save what is pending BEFORE it starts
         timeline.startTime = millis() - timeline.elapsedMs;
         timeline.playing = true;
         timeline.netLive = true;
@@ -4226,7 +4473,8 @@ function faceColorsSig() {
     return JSON.stringify({
         sheet: activeLayer, conns: faceColorsGrid().conns, shape: currentShape, mode: symmetryMode, n: faceColorsGrid().gridNodes.length,
         layer: l && [l.enabled, l.shapeSizeFactor, l.rotation, l.shape, l.symmetryMode], kf: isTimelineKeyframe(activeLayer), size: shapeSizeFactor, curve: curveType.kind, net: (nw0 => nw0 ? (nw0.field ? 'field' : 'warp') : null)(netWarpBaseNow()),
-        store: faceAssignmentsFor(activeLayer).size
+        store: faceAssignmentsFor(activeLayer).size,
+        farborgel: typeof window.farborgelBuildHarmonySelection === 'function' // the per-trail steppers need the module: rebuild when it arrives
     });
 }
 
@@ -4312,6 +4560,38 @@ function renderFaceColorsPanel() {
     const group = reason ? null : sheetGroupElements(gridNodes, sheetOv);
     const trails = group ? computeFaceTrails(computeCellFaces(conns, gridNodes, store, null, sheetOv), group) : [];
 
+    // Phase B-Farbstrategien follow-up (gray-as-selection round): self-healing resync, EVERY
+    // render (not a one-time latch) - ensureDefaultGrayFill() (core/facecolor.js, just run inside
+    // the computeCellFaces() call above) gives every unassigned trail a real store entry, but
+    // never touches this sheet's palette (facePaletteFor()) - nothing but this UI layer has sheet
+    // IDENTITY (the engine only sees geometry), so this is the one place that can reconnect them.
+    // Adopting the gray entries as palette.ruleId/idx/slots reaches the EXISTING, already-tested
+    // override mechanism (assignTrailSlot()/spreadPaletteToUnassigned(), both gated on
+    // palette.ruleId) for free - no new override pathway. Re-derived every render, not once: unlike
+    // an explicitly-applied old-system rule (whose series is deliberately frozen at the moment of
+    // application - see core/facecolor.js's own comment), this default has no "Apply" moment to
+    // freeze at - it silently grows/shrinks with the sheet's real trail count as it's edited, so
+    // palette.slots has to keep tracking that, not go stale. Only trails[0] (not an arbitrary store
+    // entry) is sampled - deterministic, and by this point in the function it is guaranteed to
+    // exist and be real (computeCellFaces() above already ran the eager fill). Never claims a sheet
+    // a Farborgel harmony already owns (lastHarmonyTypeFor(sheet) non-null - that store's entries
+    // carry rule: 'farborgel', never this rule) or one an explicit old-system rule already owns
+    // (palette.ruleId already something else) - and un-claims itself the moment a Farborgel harmony
+    // IS applied afterward, so a stale resync can never make the override stepper try to write a
+    // gray entry into a now-Farborgel-colored sheet.
+    if (lastHarmonyTypeFor(sheet) !== null) {
+        if (palette.ruleId === 'max-contrast-gray') { palette.ruleId = null; palette.slots = undefined; }
+    } else if (palette.ruleId === null || palette.ruleId === 'max-contrast-gray') {
+        const sample = trails.length ? store.get(trails[0].key) : null;
+        if (sample && sample.rule === 'max-contrast-gray') {
+            palette.ruleId = 'max-contrast-gray';
+            palette.idx = [0];
+            palette.slots = trails.length;
+        } else if (palette.ruleId === 'max-contrast-gray') {
+            palette.ruleId = null; palette.slots = undefined;
+        }
+    }
+
     resetBtn.disabled = store.size === 0 && !palette.ruleId;
     ruleSel.innerHTML = '';
     const ph = document.createElement('option');
@@ -4332,6 +4612,24 @@ function renderFaceColorsPanel() {
         : `${trails.length} face trail${trails.length === 1 ? '' : 's'} (all symmetry copies of a face share one color)`;
 
     const rule = palette.ruleId ? getHarmonyRule(palette.ruleId) : null;
+    // Phase B-Farbstrategien follow-up (per-trail override for Farborgel harmonies): a
+    // Farborgel-colored sheet (lastHarmonyTypeFor(sheet) non-null) has no `rule` above - Farborgel
+    // is not a core/color.js-registered rule, by design (it's a real external engine, not a named,
+    // regeneratable series the same way) - but it still needs a per-trail stepper. The two cases
+    // are deliberately split from here on: `rule` alone still gates the axis-stepper row below
+    // (hue/level pickers built from rule.params/.note/.verified - fields with no Farborgel
+    // equivalent, since Farborgel's own "axes" are the anchor's hue/register, a genuinely
+    // different control, already live above this panel). The per-trail stepper row instead checks
+    // `rule || farborgelSelection`. farborgelSelection is regenerated here (once per render, not
+    // once per trail) via window.farborgelBuildHarmonySelection(anchor, type) - a pure function of
+    // (anchor, type), confirmed in ui-farbe.js's own assignFarborgelSlot() comment - so it always
+    // matches what afterAnchorChange() last actually applied to the store.
+    // Farborgel sub-page P3: read through ui-farbe.js's farborgelSelectionFor(), which returns the STORED selection
+    // for a 'custom' sheet (one composed on the standalone Farborgel page and handed back - it has no
+    // (anchor, type) recipe to regenerate from) and the regenerated one for the 7 ordinary types, as before.
+    const farborgelSelection = (lastHarmonyTypeFor(sheet) !== null && typeof window.farborgelSelectionFor === 'function')
+        ? window.farborgelSelectionFor(sheet)
+        : null;
     // Uncolored trails while a rule is applied (new regions an edit created, anything reconciliation
     // could not hand a color to): say so, and offer the explicit fill - never an automatic repaint.
     if (rule) {
@@ -4341,9 +4639,10 @@ function renderFaceColorsPanel() {
             unassignedEl.hidden = false;
         }
     }
-    // The series in force (frozen at the last full application - see core/facecolor.js): per-trail steppers
-    // work inside it, so an edit that changes the trail count does not change what a stepper offers.
-    const seriesSlots = palette.slots || trails.length;
+    // The series in force: for a real core/color.js rule, frozen at the last full application (see
+    // core/facecolor.js) so an edit that changes the trail count doesn't change what a stepper
+    // offers; for Farborgel, the regenerated selection's own, real cardinality.
+    const seriesSlots = farborgelSelection ? farborgelSelection.members.length : (palette.slots || trails.length);
     if (rule) {
         harmonyRuleParams(rule, OSTWALD_REFERENCE_SYSTEM).forEach((axis, a) => {
             const row = document.createElement('div');
@@ -4378,14 +4677,38 @@ function renderFaceColorsPanel() {
         row.appendChild(sw);
         row.appendChild(lab);
         if (!a) { const d = document.createElement('span'); d.className = 'fc-default'; d.textContent = 'default'; row.appendChild(d); }
-        if (rule) {
-            // A stepper writes ONLY its own trail (assignTrailSlot()): never a re-run of the rule over the
-            // others, which would erase the colors edits handed on. An uncolored trail shows a dash and takes
-            // the first (or last) slot of the series on its first click.
-            const slot = (a && a.rule === rule.id && a.params && Number.isInteger(a.params.slot) && a.params.slot < seriesSlots) ? a.params.slot : null;
+        if (rule || farborgelSelection) {
+            // A stepper writes ONLY its own trail (assignTrailSlot()/assignFarborgelSlot()): never a
+            // re-run of the rule/selection over the others, which would erase the colors edits handed
+            // on. An uncolored trail shows a dash and takes the first (or last) slot of the series on
+            // its first click.
+            // Phase B-Farbstrategien follow-up (gray-as-selection round, then per-trail override for
+            // Farborgel harmonies): a trail's CURRENT position can come from any of three provenance
+            // shapes - the old rule-registry write (_writeSlot(), params.slot, always present after a
+            // full application), the gray-as-selection one (applyHarmonyToPattern(),
+            // params.memberIndex, no .slot key at all by construction), or a Farborgel harmony
+            // application/override (same params.memberIndex shape - assignFarborgelSlot() deliberately
+            // does NOT write params.slot: confirmed live that reusing gray's ".slot always honored"
+            // trick breaks under Area/Symmetry/Rings once M (a Farborgel harmony's cardinality,
+            // 2..24) is smaller than N (the trail count) - gray's own trick only works because its
+            // M always equals N. See assignFarborgelSlot()'s own comment, ui-farbe.js, for the full
+            // reasoning - a Farborgel override therefore survives re-applying the SAME strategy at the
+            // SAME harmony size (pinned by applyHarmonyToPattern()), not any later one, a real, weaker guarantee than gray's, not an oversight here). .slot is
+            // preferred when present (an old-system or gray override always writes it), so an
+            // overridden trail's real choice always wins over a stale memberIndex from before the
+            // override; a Farborgel override's own memberIndex is read back by the SAME fallback,
+            // just without that extra "survives anything" guarantee. matchRule is 'farborgel'
+            // specifically when there is no real core/color.js rule (a Farborgel-colored sheet) -
+            // otherwise the real rule's own id, exactly as before this round.
+            const matchRule = rule ? rule.id : 'farborgel';
+            const slotRaw = (a && a.rule === matchRule && a.params)
+                ? (Number.isInteger(a.params.slot) ? a.params.slot : (Number.isInteger(a.params.memberIndex) ? a.params.memberIndex : null))
+                : null;
+            const slot = (slotRaw !== null && slotRaw < seriesSlots) ? slotRaw : null;
             const stepper = faceColorsStepper(slot === null ? 0 : slot, seriesSlots, 'Pick another color of this series for this trail', delta => {
                 const next = slot === null ? (delta > 0 ? 0 : seriesSlots - 1) : (slot + delta + seriesSlots) % seriesSlots;
-                assignTrailSlot(store, palette, t.key, next, seriesSlots);
+                if (rule) assignTrailSlot(store, palette, t.key, next, seriesSlots);
+                else if (typeof window.assignFarborgelSlot === 'function') window.assignFarborgelSlot(store, sheet, t.key, next);
                 renderFaceColorsPanel();
                 redraw();
             });
@@ -4412,17 +4735,30 @@ function initFaceColorsPanel() {
         // (gray letter 'a') are nearly white and would make a first application look like "nothing happened"
         palette.idx = harmonyRuleParams(getHarmonyRule(ruleSel.value), OSTWALD_REFERENCE_SYSTEM).map(ax => ax.id === 'hue' ? 0 : ax.count >> 1);
         palette.overrides = new Map(); // another rule = another series: old slot picks would mean something else
+        // Group D Phase B4 follow-up: switching to this (old-system) rule means the sheet is no longer
+        // "driven by a remembered Farborgel type" - forget it, so the next anchor nudge (Kreis/Dreieck/
+        // Register/a stepper) doesn't silently overwrite this rule's coloring with a Farborgel reapply.
+        setLastHarmonyTypeFor(activeLayer, null);
         applyFaceColorsPalette();
     });
-    if (resetBtn) resetBtn.addEventListener('click', () => { resetFaceColors(activeLayer); renderFaceColorsPanel(); redraw(); });
-    const spreadBtn = document.getElementById('btn-face-colors-spread');
-    if (spreadBtn) spreadBtn.addEventListener('click', () => {
-        const { gridNodes, conns, sheet } = faceColorsGrid();
-        const group = sheetGroupElements(gridNodes, sheet), store = faceAssignmentsFor(activeLayer);
-        if (group) spreadPaletteToUnassigned(store, computeFaceTrails(computeCellFaces(conns, gridNodes, store, null, sheet), group), facePaletteFor(activeLayer));
+    if (resetBtn) resetBtn.addEventListener('click', () => {
+        resetFaceColors(activeLayer);
+        // Phase B-Farbstrategien follow-up (Reset-respects-strategy fix): without this, the next
+        // passive render refills the sheet through ensureDefaultGrayFill() alone - always-cyclic by
+        // design (unattended/per-redraw role, unchanged) - silently dropping the sheet's sticky
+        // distributionStrategyFor() preference right when a person expects a fresh start to still
+        // honor it. window.applyGrayDefault (ui-farbe.js) is the strategy-aware counterpart; guarded
+        // since ui-farbe.js may not be loaded in every embedding (e.g. a reduced shell) - the plain
+        // render/redraw below always runs regardless, so a sheet with no faces/trails (where
+        // applyGrayDefault() itself no-ops) still gets its panel refreshed as before.
+        if (typeof window.applyGrayDefault === 'function') window.applyGrayDefault();
         renderFaceColorsPanel();
         redraw();
     });
+    // Group D Phase B4 follow-up: "Spread colors" (#btn-face-colors-spread) removed - it only ever acted on
+    // a rule-colored sheet (palette.ruleId), and nothing can set a rule anymore now that the rule row's own
+    // UI is gone (see index.html's #more-farbe comment). spreadPaletteToUnassigned() itself (core/facecolor.js)
+    // is untouched - generic, headlessly-tested infrastructure, not deleted, just unreached from here now.
     const listEl = document.getElementById('face-colors-list');
     if (listEl) listEl.addEventListener('mouseleave', () => { if (faceHover) { faceHover = null; redraw(); } });
 }
@@ -4702,9 +5038,20 @@ function computeCrossLayerFacesFlow() {
     }, 0);
 }
 
-function mousePressed() {
-    if (mouseX < 0 || mouseX > width || mouseY < 0 || mouseY > height) return;
-    if (altNetActive) { handleAltNetClick(mouseX, mouseY); return; }
+// The mouse press. p5 calls it for a real mouse press AND, in 1.9.0, for every touch tap twice more (at touchstart, and for the emulated mousedown): touch and pen
+// taps therefore go through tapPress() below, touchStarted is defined (installTapInput) so p5 stops calling this at touchstart, and the emulated mousedown that
+// follows a tap is recognised here and dropped. Mouse and touch resolve their node the same way, nodeHit() (the nearest node within the pointer's radius).
+function mousePressed(e) {
+    if (tapDetector && e && tapDetector.consumeEmulatedMouse(e.clientX, e.clientY)) return;
+    pressAt(mouseX, mouseY, 'mouse', nodeHit(mouseX, mouseY, 'mouse'));
+}
+
+// The press itself, in sketch units: select a node, connect, create a free endpoint, or take an Alt-net construction click. `hit` is { id } from nodeHit():
+// the node this press resolved (the nearest within the pointer's radius), id null for none. It used to be the FIRST node in array order within 18 units for the
+// mouse; that loop is gone (B4c). pointerType is not read here.
+function pressAt(x, y, pointerType, hit) {
+    if (x < 0 || x > width || y < 0 || y > height) return;
+    if (altNetActive) { handleAltNetClick(x, y); return; }
     // Roadmap 1.12 stage 1 (node-resolution fix): activeNodes() instead
     // of the bare global `nodes` - both the hit-test below and 1.3(a)'s
     // free-endpoint creation previously always read/wrote the base's
@@ -4716,11 +5063,9 @@ function mousePressed() {
     // click must land; a free endpoint is stored in regular space at F^-1(click) so it is drawn where
     // it was clicked (core/netwarp.js docblock, "FREE ENDPOINTS").
     const netWarp = netWarpBaseNow();
-    let foundId = null;
-    // A layer's node is hit where it is DRAWN (layerNodeDrawnPosition(): offset and rotation), not at its stored canonical position.
+    let foundId = hit.id;
     const hitLayer = activeLayer === 'base' ? null : additionalLayers[activeLayer];
-    for (let nd of activeNodeArr) { const q = hitLayer ? layerNodeDrawnPosition(hitLayer, nd) : nd; const p = netWarp ? applyNetWarp(netWarp, q) : q; if (dist(mouseX, mouseY, p.x, p.y) < 18) { foundId = nd.id; break; } }
-    if (foundId === null && freeEndpointsEnabled && netWarp && netWarpIsClosed(netWarp) && !netWarpInsideNet(netWarp, { x: mouseX, y: mouseY })) {
+    if (foundId === null && freeEndpointsEnabled && netWarp && netWarpIsClosed(netWarp) && !netWarpInsideNet(netWarp, { x: x, y: y })) {
         // Closed net: there is nothing outside the net to attach a free endpoint to - refuse, visibly.
         const note = document.getElementById('net-free-note');
         if (note) { note.hidden = false; clearTimeout(netFreeNoteTimer); netFreeNoteTimer = setTimeout(() => { note.hidden = true; }, 3000); }
@@ -4730,7 +5075,7 @@ function mousePressed() {
         const newId = Math.max(...activeNodeArr.map(n => n.id), 0) + 1;
         // a field: the click is mapped back into the CENTRAL tile's own coordinates (core/netwarp.js netWarpFieldLocal())
         // a layer: back through F^-1 and then into the layer's own canonical frame (layerFreeNodeFromClick()), so the node lands where it was clicked
-        const at = hitLayer ? layerFreeNodeFromClick(hitLayer, { x: mouseX, y: mouseY }, netWarp) : netWarp && netWarp.field ? netWarpFieldLocal(netWarp, { x: mouseX, y: mouseY }) : (netWarp ? invertNetWarp(netWarp, { x: mouseX, y: mouseY }) : { x: mouseX, y: mouseY });
+        const at = hitLayer ? layerFreeNodeFromClick(hitLayer, { x: x, y: y }, netWarp) : netWarp && netWarp.field ? netWarpFieldLocal(netWarp, { x: x, y: y }) : (netWarp ? invertNetWarp(netWarp, { x: x, y: y }) : { x: x, y: y });
         activeNodeArr.push({ id: newId, x: at.x, y: at.y, free: true });
         foundId = newId;
     }
@@ -4741,6 +5086,61 @@ function mousePressed() {
         clearActiveRedoStack(); // Clear redo stack on manual add
         redraw();
     }
+}
+
+// ---- Touch and pen taps (Phase 2, B2) -----------------------------------------------------------------------------------------------------------------
+// core/pointer-tap.js decides what a tap is (pure, tested in tools/ui/test-pointer-tap.js); this wires it to the page. pointerdown is taken in the capture phase
+// on the canvas container, pointermove / pointerup / pointercancel on window (a touch pointer is captured by its first target and ends there). No touch event is
+// prevented, so scrolling and pinch zoom are the browser's. A defined touchStarted switches off p5's own fallback (_ontouchstart: UA contains "safari", touchStarted
+// undefined -> mousePressed(e)); p5 still updates mouseX / mouseY at touchstart, whether or not touchStarted exists.
+let tapDetector = null;
+function installTapInput() {
+    if (typeof createTapDetector !== 'function') return;   // the script is missing: the old behaviour stays as it was
+    const box = document.getElementById('canvas-container');
+    if (!box) return;
+    tapDetector = createTapDetector({ now: () => performance.now() });
+    box.addEventListener('pointerdown', e => { tapDetector.down(e); }, true);
+    window.addEventListener('pointermove', e => { tapDetector.move(e); });
+    window.addEventListener('pointerup', e => { const tap = tapDetector.up(e); if (tap) tapPress(tap); });
+    window.addEventListener('pointercancel', e => { tapDetector.cancel(e); });
+    window.touchStarted = function () { };   // defined, empty, not returning false
+}
+
+// client pixels -> sketch units, the way p5 does it for mouseX / mouseY (getMousePos in p5 1.9.0: (clientX - rect.left) / (canvas.scrollWidth / width))
+function clientToSketch(clientX, clientY) {
+    const cv = document.querySelector('#canvas-container canvas');
+    if (!cv) return { x: -1, y: -1 };
+    const r = cv.getBoundingClientRect();
+    const sx = cv.scrollWidth / width || 1, sy = cv.scrollHeight / height || 1;
+    return { x: (clientX - r.left) / sx, y: (clientY - r.top) / sy };
+}
+
+// A valid tap, at pointerup. The state pressAt reads that only mouseMoved() writes is stale here (the emulated mousemove comes ~75 ms later): the Alt-net side preview
+// (altNetPending.previewSide, read by the third construction click). The same update mouseMoved() makes, with the tap's coordinates, comes first - the same call,
+// argument for argument: mouseMoved() passes (p, q, mouseX, mouseY) to sideOfLine(p, q, m), whose third parameter is a point, so m.y is undefined and the side is
+// always -1 (a bug that predates this track and is reported, not fixed here; touch and mouse behave alike on purpose).
+function tapPress(tap) {
+    const p = clientToSketch(tap.x, tap.y);
+    if (altNetActive && altNetPending && altNetPending.q !== undefined) altNetPending.previewSide = sideOfLine(altNetPending.p, altNetPending.q, p.x, p.y);
+    pressAt(p.x, p.y, tap.pointerType, nodeHit(p.x, p.y, tap.pointerType));
+}
+
+// Phase 2 (touch), B4b / B4c: a press picks the NEAREST node within a radius (core/pick-node.js), not the first in array order within 18 units - first for
+// touch and pen (B4b), then for the mouse (B4c). drawnHitNodes() is read-only: the active nodes where they are DRAWN (a layer's offset and rotation, then a net
+// warp), the same positions the dots and the hover use. The radius: mouse 18 units; touch and pen max(18, 22 css px / scale) - but with free endpoints on, a tap
+// farther than 18 units from every node must still be able to create one, which the 22 px radius would forbid on a grid denser than ~22 px, so then the fine
+// radius 18 decides (nearest within it selects, else a free node).
+const HOVER_RADIUS = 10;   // sketch units: the red hover dot (draw()), unchanged since before B4c
+function drawnHitNodes() {
+    const arr = activeNodes(), netWarp = netWarpBaseNow(), hitLayer = activeLayer === 'base' ? null : additionalLayers[activeLayer];
+    return arr.map(nd => { const q = hitLayer ? layerNodeDrawnPosition(hitLayer, nd) : nd; const p = netWarp ? applyNetWarp(netWarp, q) : q; return { id: nd.id, x: p.x, y: p.y }; });
+}
+function nodeHit(x, y, pointerType) {
+    const cv = document.querySelector('#canvas-container canvas');
+    const scale = cv && width ? cv.scrollWidth / width : NaN;
+    const radius = freeEndpointsEnabled ? hitRadius('mouse', scale) : hitRadius(pointerType, scale);
+    const n = pickNodeAt(drawnHitNodes(), x, y, radius);
+    return { id: n ? n.id : null };
 }
 
 function addRandomConnection() {

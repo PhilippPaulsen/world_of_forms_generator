@@ -1,0 +1,1224 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const OstwaldColor = require('./ColorHarmonyEngine.js');
+let passed = 0;
+function test(name, run) {
+  run();
+  passed++;
+  console.log(`ok ${passed} - ${name}`);
+}
+const near = (actual, expected, epsilon = 1e-10) =>
+  assert.ok(Math.abs(actual - expected) <= epsilon, `${actual} != ${expected}`);
+const clone = value => JSON.parse(JSON.stringify(value));
+const circle = OstwaldColor.hueCircle();
+const triangle = OstwaldColor.triangle(5);
+const selected = triangle.find(field => field.label === '5ic');
+
+function complete(field) {
+  assert.ok(Number.isInteger(field.hueIndex) && field.hueIndex >= 1 && field.hueIndex <= 24);
+  assert.ok(field.w >= 0 && field.s >= 0 && field.v >= 0);
+  near(field.w + field.s + field.v, 1);
+  assert.match(field.label, /^[1-9][0-9]?[acegilnp]{2}$/);
+  assert.equal(field.lab.length, 3);
+  assert.equal(field.rgb.length, 3);
+  assert.ok(field.lab.every(Number.isFinite));
+  assert.ok(field.rgb.every(c => Number.isInteger(c) && c >= 0 && c <= 255));
+}
+
+test('letterScale: exact nonlinear values, order, independence', () => {
+  const scale = OstwaldColor.letterScale();
+  assert.equal(scale.length, 8);
+  assert.deepEqual(scale.map(x => x.letter), ['a', 'c', 'e', 'g', 'i', 'l', 'n', 'p']);
+  assert.deepEqual(scale.map(x => x.value), [0.8913, 0.5623, 0.3548, 0.2239, 0.1413, 0.0891, 0.0562, 0.0355]);
+  assert.ok(scale.slice(1).every((x, i) => x.value < scale[i].value));
+  near(scale[4].value, 0.1413);
+  scale[0].value = 0;
+  assert.equal(OstwaldColor.letterScale()[0].value, 0.8913);
+});
+
+test('mix: full color, ideal screen white, ideal screen black', () => {
+  const full = circle[4];
+  assert.deepEqual(OstwaldColor.mix(full.lab, 0, 0).lab, full.lab);
+  assert.deepEqual(OstwaldColor.mix(full.lab, 0, 0).rgb, full.rgb);
+  assert.deepEqual(OstwaldColor.mix(full.lab, 1, 0).lab, [1, 0, 0]);
+  assert.deepEqual(OstwaldColor.mix(full.lab, 1, 0).rgb, [255, 255, 255]);
+  assert.deepEqual(OstwaldColor.mix(full.lab, 0, 1).lab, [0, 0, 0]);
+  assert.deepEqual(OstwaldColor.mix(full.lab, 0, 1).rgb, [0, 0, 0]);
+});
+
+test('mix: exclusively Oklab interpolation and known sRGB conversion', () => {
+  const lab = [0.6, 0.08, -0.04];
+  const input = lab.slice();
+  const result = OstwaldColor.mix(lab, 0.2, 0.3);
+  result.lab.forEach((c, i) => near(c, [0.5, 0.04, -0.02][i]));
+  assert.deepEqual(lab, input);
+  assert.deepEqual(OstwaldColor.mix([1, 0, 0], 0, 0.5).rgb, [99, 99, 99]);
+  // sRGB red reference expressed in Oklab.
+  assert.deepEqual(OstwaldColor.mix([0.6279553606, 0.2248630611, 0.1258462985], 0, 0).rgb, [255, 0, 0]);
+});
+
+test('mix: deterministic gamut clipping preserves original Oklab', () => {
+  const lab = [0.7, 0.4, 0.3];
+  const result = OstwaldColor.mix(lab, 0, 0);
+  assert.deepEqual(result.lab, lab);
+  assert.deepEqual(result.rgb, [255, 0, 0]);
+  assert.deepEqual(OstwaldColor.mix(lab, 0, 0), result);
+});
+
+test('mix: strict malformed Lab and geometry errors', () => {
+  for (const lab of [null, {}, [0.5, 0], [0.5, 0, 0, 0], [NaN, 0, 0], [0.5, Infinity, 0], ['0.5', 0, 0], Array(3)]) {
+    assert.throws(() => OstwaldColor.mix(lab, 0, 0), /three finite/);
+  }
+  for (const [w, s] of [[-0.1, 0], [0, -0.1], [0.6, 0.5], [1.001, 0], [0, 1.001]]) {
+    assert.throws(() => OstwaldColor.mix(circle[0].lab, w, s), /w >= 0/);
+  }
+  for (const bad of [NaN, Infinity, '0', null, undefined]) {
+    assert.throws(() => OstwaldColor.mix(circle[0].lab, bad, 0), /finite/);
+    assert.throws(() => OstwaldColor.mix(circle[0].lab, 0, bad), /finite/);
+  }
+  assert.throws(() => OstwaldColor.mix([1e308, 0, 0], 0, 0), /overflow/);
+});
+
+test('mix: only epsilon-sized coordinate errors are normalized', () => {
+  for (const [w, s] of [[-1e-12, 0.4], [0.4, -1e-12], [0.6, 0.4 + 1e-12], [-1e-12, 1 + 1e-12]]) {
+    const result = OstwaldColor.mix(circle[0].lab, w, s);
+    assert.ok(result.w >= 0 && result.s >= 0 && result.v >= 0);
+    near(result.w + result.s + result.v, 1);
+  }
+  assert.throws(() => OstwaldColor.mix(circle[0].lab, -1e-8, 0), RangeError);
+});
+
+test('hueCircle: 24 ordered references, common L/C and uniform opposite directions', () => {
+  assert.equal(circle.length, 24);
+  const groups = ['Yellow', 'Orange / Kreß', 'Red', 'Violet', 'Ultramarine / Blue', 'Ice Blue', 'Sea Green', 'Leaf Green'];
+  circle.forEach((hue, i) => {
+    assert.equal(hue.index, i + 1);
+    assert.equal(hue.calibrated, false);
+    assert.equal(hue.group, groups[Math.floor(i / 3)]);
+    assert.ok(hue.rgb.every(c => Number.isInteger(c) && c >= 0 && c <= 255));
+    assert.ok(hue.lab.every(Number.isFinite));
+    near(hue.lab[0], 0.72);
+    near(Math.hypot(hue.lab[1], hue.lab[2]), 0.1);
+    const next = circle[(i + 1) % 24];
+    near(Math.hypot(hue.lab[1] - next.lab[1], hue.lab[2] - next.lab[2]), 0.2 * Math.sin(Math.PI / 24));
+    const opposite = circle[(i + 12) % 24];
+    assert.equal(Math.abs(opposite.index - hue.index), 12);
+    near(hue.lab[1] + opposite.lab[1], 0);
+    near(hue.lab[2] + opposite.lab[2], 0);
+  });
+  const other = OstwaldColor.hueCircle();
+  other[0].lab[0] = 0;
+  assert.equal(OstwaldColor.hueCircle()[0].lab[0], 0.72);
+});
+
+test('hueCircle: custom counts and invalid counts', () => {
+  for (const n of [1, 8, 12, 48]) assert.equal(OstwaldColor.hueCircle(n).length, n);
+  for (const n of [0, -1, 2.5, NaN, Infinity, '24', null, 2 ** 32]) {
+    assert.throws(() => OstwaldColor.hueCircle(n), RangeError);
+  }
+});
+
+test('triangle: 28 chromatic atlas fields per hue and deterministic letter ordering', () => {
+  const letters = ['a', 'c', 'e', 'g', 'i', 'l', 'n', 'p'];
+  for (let hue = 1; hue <= 24; hue++) {
+    const fields = OstwaldColor.triangle(hue);
+    assert.equal(fields.length, 28);
+    fields.forEach(complete);
+    assert.ok(fields.every(f => f.v > 0 && f.source === 'atlas'));
+    assert.deepEqual(fields.map(f => f.label), letters.flatMap((white, i) =>
+      letters.slice(0, i).map(black => `${hue}${white}${black}`)));
+  }
+  near(selected.w, 0.1413);
+  near(selected.s, 0.4377);
+  near(selected.v, 0.4210);
+  assert.deepEqual(OstwaldColor.triangle(5), triangle);
+});
+
+test('triangle: invalid hueIndex and undefined resolutions rejected', () => {
+  for (const hue of [0, 25, -1, 1.1, NaN, Infinity, '5', null, undefined]) {
+    assert.throws(() => OstwaldColor.triangle(hue), /hueIndex/);
+  }
+  for (const steps of [0, -1, 1, 4, 7, 9, 8.1, NaN, Infinity, '8', null]) {
+    assert.throws(() => OstwaldColor.triangle(5, steps), /steps/);
+  }
+});
+
+test('harmonies: all fields preserve exact discrete series relationships', () => {
+  for (const field of triangle) {
+    const harmony = OstwaldColor.harmonies(field);
+    for (const [key, share] of [['isotints', 'w'], ['isotones', 's'], ['analyticIsochromes', 'v']]) {
+      const expected = triangle.filter(f => f.label !== field.label && Math.abs(f[share] - field[share]) <= 1e-10);
+      assert.deepEqual(harmony[key], expected);
+      harmony[key].forEach(f => { complete(f); near(f[share], field[share]); });
+    }
+  }
+  const harmony = OstwaldColor.harmonies(selected);
+  assert.equal(harmony.isotints.length, 3);
+  assert.equal(harmony.isotones.length, 5);
+  assert.deepEqual(harmony.analyticIsochromes, []);
+});
+
+test('harmonies: complementary, triad and tetrad offsets, including wraparound', () => {
+  const expectedOffsets = { complementary: [12], triad: [8, 16], tetrad: [6, 12, 18] };
+  for (let hue = 1; hue <= 24; hue++) {
+    const field = OstwaldColor.triangle(hue).find(f => f.label === `${hue}ic`);
+    const chords = OstwaldColor.harmonies(field).hueHarmonies;
+    assert.deepEqual(chords.map(c => c.type), Object.keys(expectedOffsets));
+    for (const chord of chords) {
+      assert.deepEqual(chord.fields.map(f => (f.hueIndex - hue + 24) % 24), expectedOffsets[chord.type]);
+      chord.fields.forEach(f => {
+        complete(f);
+        for (const key of ['w', 's', 'v']) near(f[key], field[key]);
+        assert.deepEqual(f, OstwaldColor.triangle(f.hueIndex).find(x => x.label === f.label));
+      });
+    }
+  }
+});
+
+test('context: default equivalence, subset order, no mutation or shared result arrays', () => {
+  const context = { hueCircle: clone(circle), triangle: clone(triangle) };
+  const before = clone(context);
+  assert.deepEqual(OstwaldColor.harmonies(selected, context), OstwaldColor.harmonies(selected));
+  assert.deepEqual(context, before);
+  const subset = [triangle.find(f => f.label === '5ie'), selected, triangle.find(f => f.label === '5ia')];
+  const harmony = OstwaldColor.harmonies(selected, { triangle: subset });
+  assert.deepEqual(harmony.isotints.map(f => f.label), ['5ie', '5ia']);
+  harmony.isotints[0].rgb[0] = -1;
+  assert.ok(subset[0].rgb[0] >= 0);
+  const chords = OstwaldColor.harmonies(selected).hueHarmonies;
+  chords[0].fields[0].lab[0] = -1;
+  assert.ok(chords[2].fields[1].lab[0] >= 0);
+});
+
+test('context: custom Oklab anchors drive default triangles and hue transfer', () => {
+  const custom = clone(circle);
+  for (const hue of custom) {
+    hue.lab = [0.6, hue.lab[1] * 0.8, hue.lab[2] * 0.8];
+    hue.rgb = OstwaldColor.mix(hue.lab, 0, 0).rgb;
+  }
+  const field = { ...selected, ...OstwaldColor.mix(custom[4].lab, selected.w, selected.s), label: selected.label, source: 'atlas' };
+  const result = OstwaldColor.harmonies(field, { hueCircle: custom });
+  assert.equal(result.isotints.length, 3);
+  const complement = result.hueHarmonies[0].fields[0];
+  assert.deepEqual(complement.lab, OstwaldColor.mix(custom[16].lab, field.w, field.s).lab);
+  assert.throws(() => OstwaldColor.harmonies(selected, { hueCircle: custom }), /lab/);
+});
+
+test('harmonies: unknown, malformed, inconsistent and impossible fields rejected', () => {
+  for (const patch of [
+    { label: '5zz' }, { label: '5ac' }, { label: '05ic' }, { label: '6ic' },
+    { hueIndex: 0 }, { hueIndex: 25 }, { w: -0.1 }, { s: -0.1 },
+    { w: 0.8, s: 0.8 }, { w: 0.2 }, { s: 0.3 }, { v: NaN }, { v: 0.5 },
+    { lab: [0, 0] }, { lab: [0, 0, 0] }, { rgb: [999, 0, 0] }, { rgb: [0, 0, 0] }
+  ]) assert.throws(() => OstwaldColor.harmonies({ ...selected, ...patch }), Error);
+  for (const field of [null, undefined, {}, '5ic']) assert.throws(() => OstwaldColor.harmonies(field), Error);
+  assert.throws(() => OstwaldColor.harmonies(selected, { triangle: [triangle[0]] }), /Unknown field/);
+});
+
+test('context: reject malformed circles, triangles and unknown settings', () => {
+  for (const context of [null, [], 'context', { mode: 'rgb' }, { hueCircle: null },
+    { hueCircle: circle.slice(1) }, { hueCircle: Array(24) }, { triangle: null },
+    { triangle: [] }, { triangle: Array(1) }, { triangle: [selected, selected] },
+    { triangle: [selected, OstwaldColor.triangle(6)[0]] }]) {
+    assert.throws(() => OstwaldColor.harmonies(selected, context), Error);
+  }
+  for (const patch of [{ index: 2 }, { lab: [NaN, 0, 0] }, { rgb: [0, 0, 0] }]) {
+    const invalid = clone(circle);
+    Object.assign(invalid[0], patch);
+    assert.throws(() => OstwaldColor.harmonies(selected, { hueCircle: invalid }), Error);
+  }
+});
+
+test('atlas: 672 chromatic nodes and eight shared grays', () => {
+  const atlas = circle.flatMap(hue => OstwaldColor.triangle(hue.index));
+  assert.equal(atlas.length, 672);
+  assert.equal(new Set(atlas.map(f => f.label)).size, 672);
+  assert.ok(atlas.every(f => f.v > 0));
+  const grays = OstwaldColor.grayAxis();
+  assert.equal(grays.length, 8);
+  assert.deepEqual(grays.map(g => g.letter), ['a', 'c', 'e', 'g', 'i', 'l', 'n', 'p']);
+  grays.forEach((gray, i) => {
+    assert.equal(gray.v, 0);
+    assert.equal(gray.source, 'atlas');
+    assert.equal(gray.label, gray.letter);
+    assert.ok(!Object.hasOwn(gray, 'hueIndex'));
+    near(gray.w, OstwaldColor.letterScale()[i].value);
+    near(gray.w + gray.s, 1);
+    assert.deepEqual(gray.lab, [gray.w, 0, 0]);
+    assert.equal(new Set(gray.rgb).size, 1);
+  });
+});
+
+test('shadow regression: ga–ic–le–ng–pi preserves rounded v/w, not v', () => {
+  const series = OstwaldColor.harmonies(selected).shadowSeries;
+  assert.deepEqual(series.map(f => f.label), ['5ga', '5ic', '5le', '5ng', '5pi']);
+  const expected = [
+    [0.2239, 0.1087, 0.6674], [0.1413, 0.4377, 0.4210],
+    [0.0891, 0.6452, 0.2657], [0.0562, 0.7761, 0.1677], [0.0355, 0.8587, 0.1058]
+  ];
+  series.forEach((f, i) => {
+    complete(f);
+    [f.w, f.s, f.v].forEach((c, j) => near(c, expected[i][j]));
+    if (i) assert.ok(f.s > series[i - 1].s);
+    // First-order plus bounded-denominator propagation of ±0.00005 per letter.
+    const ratioError = item => 0.00005 * ((1 - item.s) + item.w) /
+      (item.w * (item.w - 0.00005));
+    near(f.v / f.w, selected.v / selected.w, ratioError(f) + ratioError(selected));
+  });
+  assert.ok(new Set(series.map(f => f.v)).size > 1);
+  assert.deepEqual(OstwaldColor.harmonies(selected, { triangle: [...triangle].reverse() }).shadowSeries, series);
+});
+
+test('isovalent: all 24 hues at the same register, independent of hue chords', () => {
+  const harmony = OstwaldColor.harmonies(selected);
+  assert.deepEqual(harmony.isovalent.map(f => f.hueIndex), Array.from({ length: 24 }, (_, i) => i + 1));
+  harmony.isovalent.forEach(f => {
+    complete(f);
+    assert.equal(f.label, `${f.hueIndex}ic`);
+    for (const key of ['w', 's', 'v']) near(f[key], selected[key]);
+  });
+  harmony.hueHarmonies.forEach(chord => chord.fields.forEach(f =>
+    assert.deepEqual(f, harmony.isovalent[f.hueIndex - 1])));
+  harmony.hueHarmonies[0].fields[0].rgb[0] = -1;
+  assert.ok(harmony.isovalent[16].rgb[0] >= 0);
+});
+
+test('gray companions: actual shared gray nodes at equal w or s', () => {
+  const grays = OstwaldColor.grayAxis();
+  for (const field of triangle) {
+    const { sameWhite, sameBlack } = OstwaldColor.harmonies(field).grayHarmonies;
+    assert.deepEqual(sameWhite, grays.find(g => g.letter === field.label.at(-2)));
+    assert.deepEqual(sameBlack, grays.find(g => g.letter === field.label.at(-1)));
+    near(sameWhite.w, field.w);
+    near(sameBlack.s, field.s);
+  }
+  grays[0].rgb[0] = -1;
+  assert.ok(OstwaldColor.grayAxis()[0].rgb[0] >= 0);
+});
+
+const PATH_TYPES = ['isotint', 'isotone', 'analyticIsochrome', 'shadowSeries'];
+function validSample(sample) {
+  assert.equal(sample.source, 'interpolated');
+  assert.equal(sample.label, null);
+  assert.ok(sample.w >= 0 && sample.s >= 0 && sample.v >= 0);
+  near(sample.w + sample.s + sample.v, 1);
+  assert.equal(sample.lab.length, 3);
+  assert.ok(sample.lab.every(Number.isFinite));
+  assert.equal(sample.rgb.length, 3);
+  assert.ok(sample.rgb.every(c => Number.isInteger(c) && c >= 0 && c <= 255));
+}
+function invariant(sample, type, source) {
+  if (type === 'isotint') near(sample.w, source.w);
+  else if (type === 'isotone') near(sample.s, source.s);
+  else if (type === 'analyticIsochrome') near(sample.v, source.v);
+  else {
+    near(sample.v * source.w, sample.w * source.v);
+    if (source.w > 0 && sample.w > 0) near(sample.v / sample.w, source.v / source.w);
+  }
+}
+
+test('paths: explicit constraints and maximal endpoints for all four relations', () => {
+  const paths = OstwaldColor.harmonies(selected).paths;
+  assert.deepEqual(Object.keys(paths), PATH_TYPES);
+  assert.deepEqual(paths.isotint.constraint, { kind: 'constant', coordinate: 'w', value: selected.w });
+  assert.deepEqual(paths.isotone.constraint, { kind: 'constant', coordinate: 's', value: selected.s });
+  assert.deepEqual(paths.analyticIsochrome.constraint, { kind: 'constant', coordinate: 'v', value: selected.v });
+  for (const [type, path] of Object.entries(paths)) {
+    assert.equal(path.type, type);
+    assert.equal(path.hueIndex, 5);
+    assert.deepEqual(path.sourceField, selected);
+    assert.deepEqual(path.fullColorLab, circle[4].lab);
+    assert.equal(path.domain.parameter, 't');
+    assert.equal(path.domain.min, 0);
+    assert.equal(path.domain.max, 1);
+    for (const end of [path.domain.start, path.domain.end]) {
+      near(end.w + end.s + end.v, 1);
+      assert.ok([end.w, end.s, end.v].some(x => x === 0));
+      invariant(end, type, selected);
+    }
+  }
+  assert.equal(paths.shadowSeries.constraint.ratioStatus, 'finite');
+  assert.equal(paths.shadowSeries.constraint.blackEndpoint, 'limit');
+  near(paths.shadowSeries.domain.start.w, selected.w / (selected.w + selected.v));
+  assert.deepEqual(paths.shadowSeries.domain.end, { w: 0, s: 1, v: 0 });
+});
+
+test('sampling: all paths through all 672 atlas nodes preserve analytical invariants', () => {
+  for (const hue of circle) {
+    for (const field of OstwaldColor.triangle(hue.index)) {
+      for (const [type, path] of Object.entries(OstwaldColor.harmonies(field).paths)) {
+        const samples = OstwaldColor.sampleHarmonyPath(path, 9);
+        assert.equal(samples.length, 9);
+        samples.forEach(sample => {
+          validSample(sample);
+          invariant(sample, type, field);
+          assert.deepEqual(sample.lab, OstwaldColor.mix(hue.lab, sample.w, sample.s).lab);
+        });
+      }
+    }
+  }
+});
+
+test('sampling: path survives empty discrete matches and restricted atlas contexts', () => {
+  const result = OstwaldColor.harmonies(selected, { triangle: [selected] });
+  assert.deepEqual(result.analyticIsochromes, []);
+  assert.deepEqual(result.isotints, []);
+  assert.deepEqual(result.isotones, []);
+  assert.deepEqual(result.shadowSeries, [selected]);
+  assert.equal(result.isovalent.length, 24);
+  assert.deepEqual(result.paths, OstwaldColor.harmonies(selected).paths);
+  const samples = OstwaldColor.sampleHarmonyPath(result.paths.analyticIsochrome, 5);
+  assert.equal(samples.length, 5);
+  assert.ok(samples[0].w !== samples[4].w);
+  samples.forEach(sample => invariant(sample, 'analyticIsochrome', selected));
+});
+
+test('sampling: JSON serialization, midpoint for count=1 and inclusive endpoints', () => {
+  for (const path of Object.values(OstwaldColor.harmonies(selected).paths)) {
+    const before = clone(path);
+    const one = OstwaldColor.sampleHarmonyPath(path, 1);
+    const three = OstwaldColor.sampleHarmonyPath(clone(path), 3);
+    assert.deepEqual(one, [three[1]]);
+    for (const key of ['w', 's', 'v']) {
+      near(three[0][key], path.domain.start[key]);
+      near(three[2][key], path.domain.end[key]);
+    }
+    assert.deepEqual(path, before);
+    one[0].lab[0] = -1;
+    assert.deepEqual(path, before);
+  }
+});
+
+test('sampling: custom calibration is captured and does not depend on later context changes', () => {
+  const custom = clone(circle);
+  custom[4].lab = [0.6, 0.04, 0.02];
+  custom[4].rgb = OstwaldColor.mix(custom[4].lab, 0, 0).rgb;
+  const path = OstwaldColor.harmonyPath('shadowSeries', 5, selected.w, selected.s, { hueCircle: custom });
+  const expected = OstwaldColor.sampleHarmonyPath(path, 3);
+  custom[4].lab[0] = 0.1;
+  assert.deepEqual(OstwaldColor.sampleHarmonyPath(path, 3), expected);
+  expected.forEach(sample => assert.deepEqual(sample.lab,
+    OstwaldColor.mix([0.6, 0.04, 0.02], sample.w, sample.s).lab));
+  const paths = OstwaldColor.harmonies(selected).paths;
+  paths.isotint.sourceField.lab[0] = -1;
+  assert.equal(paths.isotone.sourceField.lab[0], selected.lab[0]);
+  paths.isotint.fullColorLab[0] = -1;
+  assert.equal(paths.isotone.fullColorLab[0], circle[4].lab[0]);
+});
+
+test('continuous sources: white-free shadow ray and zero-ratio gray ray', () => {
+  const whiteFree = OstwaldColor.harmonyPath('shadowSeries', 5, 0, 0.4);
+  assert.equal(whiteFree.constraint.ratioStatus, 'white-free');
+  assert.deepEqual(whiteFree.domain.start, { w: 0, s: 0, v: 1 });
+  const gray = OstwaldColor.harmonyPath('shadowSeries', 5, 0.5, 0.5);
+  assert.equal(gray.constraint.ratioStatus, 'finite');
+  assert.deepEqual(gray.domain.start, { w: 1, s: 0, v: 0 });
+  for (const path of [whiteFree, gray]) {
+    OstwaldColor.sampleHarmonyPath(path, 5).forEach(sample => {
+      validSample(sample);
+      invariant(sample, 'shadowSeries', path.sourceField);
+    });
+  }
+  assert.throws(() => OstwaldColor.harmonyPath('shadowSeries', 5, 0, 1), /pure-black.*0:0/);
+  // Other relations remain well-defined at black; constant s=1 is a point.
+  const black = OstwaldColor.harmonyPath('isotone', 5, 0, 1);
+  OstwaldColor.sampleHarmonyPath(black, 3).forEach(sample => {
+    assert.deepEqual(sample.rgb, [0, 0, 0]);
+    validSample(sample);
+  });
+});
+
+test('continuous sources: edges, corners and non-atlas inputs retain unlabeled status', () => {
+  for (const [w, s] of [[0, 0], [1, 0], [0, 1], [0.4, 0], [0, 0.8], [0.25, 0.75], [0.123, 0.321]]) {
+    for (const type of PATH_TYPES) {
+      if (type === 'shadowSeries' && w === 0 && s === 1) continue;
+      const path = OstwaldColor.harmonyPath(type, 5, w, s);
+      assert.equal(path.sourceField.label, null);
+      assert.equal(path.sourceField.source, 'interpolated');
+      OstwaldColor.sampleHarmonyPath(path, 11).forEach(sample => {
+        validSample(sample);
+        invariant(sample, type, path.sourceField);
+      });
+    }
+  }
+  // A sample landing exactly on a real gray node still does not claim atlas provenance.
+  const end = OstwaldColor.sampleHarmonyPath(OstwaldColor.harmonies(selected).paths.isotint, 2)[1];
+  near(end.w, OstwaldColor.grayAxis()[4].w);
+  assert.equal(end.label, null);
+  assert.equal(end.source, 'interpolated');
+});
+
+test('harmonyPath: invalid type, hue, geometry and context rejected', () => {
+  for (const type of ['', 'isochrome', null, undefined, 42]) {
+    assert.throws(() => OstwaldColor.harmonyPath(type, 5, 0.2, 0.3), /path type/);
+  }
+  for (const hue of [0, 25, 5.5, '5', NaN]) {
+    assert.throws(() => OstwaldColor.harmonyPath('isotint', hue, 0.2, 0.3), /hueIndex/);
+  }
+  for (const [w, s] of [[-0.1, 0], [0, -0.1], [0.8, 0.8], [NaN, 0], [0, Infinity]]) {
+    assert.throws(() => OstwaldColor.harmonyPath('isotint', 5, w, s), Error);
+  }
+  for (const context of [null, [], { triangle }, { mode: 'rgb' }, { hueCircle: circle.slice(1) }]) {
+    assert.throws(() => OstwaldColor.harmonyPath('isotint', 5, 0.2, 0.3, context), Error);
+  }
+});
+
+test('sampleHarmonyPath: malformed counts and adulterated descriptors rejected', () => {
+  const path = OstwaldColor.harmonies(selected).paths.shadowSeries;
+  for (const count of [0, -1, 1.5, '3', null, undefined, NaN, Infinity, 2 ** 32]) {
+    assert.throws(() => OstwaldColor.sampleHarmonyPath(path, count), /count/);
+  }
+  for (const invalid of [null, undefined, {}, [], 'shadowSeries']) {
+    assert.throws(() => OstwaldColor.sampleHarmonyPath(invalid, 3), Error);
+  }
+  const mutations = [
+    p => { p.type = 'invented'; }, p => { p.hueIndex = 0; },
+    p => { p.fullColorLab = [0, 0]; }, p => { p.fullColorLab[0] = Infinity; },
+    p => { p.fullColorLab[0] = 0.1; }, p => { p.sourceField.v = 0.9; },
+    p => { p.sourceField.w = -0.1; }, p => { p.sourceField.rgb[0] = -1; },
+    p => { p.sourceField.lab[0] = NaN; }, p => { p.sourceField.label = '5zz'; },
+    p => { p.sourceField.source = 'invented'; }, p => { p.sourceField.hueIndex = 6; },
+    p => { p.constraint.white = 0.8; }, p => { p.constraint.ratioStatus = 'white-free'; },
+    p => { p.domain.start.w = -0.1; }, p => { p.domain.end.v = 0.3; },
+    p => { p.domain.max = 2; }, p => { p.domain.parameter = 's'; },
+    p => { delete p.constraint; }, p => { p.domain = []; }
+  ];
+  mutations.forEach(mutate => {
+    const invalid = clone(path);
+    mutate(invalid);
+    assert.throws(() => OstwaldColor.sampleHarmonyPath(invalid, 3), Error);
+  });
+  const continuous = OstwaldColor.harmonyPath('isotint', 5, 0.123, 0.321);
+  for (const key of ['w', 's', 'v']) {
+    const invalid = clone(continuous);
+    invalid.sourceField[key] = -0.01;
+    assert.throws(() => OstwaldColor.sampleHarmonyPath(invalid, 3), Error);
+  }
+});
+
+test('shadow grouping: all letter-index diagonals, all hues, exclude neighboring ratios', () => {
+  const letters = OstwaldColor.letterScale().map(x => x.letter);
+  for (let hue = 1; hue <= 24; hue++) {
+    for (const field of OstwaldColor.triangle(hue)) {
+      const distance = letters.indexOf(field.label.at(-2)) - letters.indexOf(field.label.at(-1));
+      const expected = letters.slice(distance).map((white, blackIndex) => `${hue}${white}${letters[blackIndex]}`);
+      assert.deepEqual(OstwaldColor.harmonies(field).shadowSeries.map(f => f.label), expected);
+    }
+  }
+});
+
+test('provenance: references, arbitrary mixtures and atlas fields stay distinguishable', () => {
+  assert.ok(circle.every(hue => hue.source === 'reference' && hue.calibrated === false));
+  const mixed = OstwaldColor.mix(circle[4].lab, selected.w, selected.s);
+  assert.equal(mixed.source, 'interpolated');
+  assert.equal(mixed.label, null);
+  assert.ok(triangle.every(field => field.source === 'atlas'));
+  // Phase-1 chromatic objects without a source property remain valid.
+  const oldField = clone(selected);
+  delete oldField.source;
+  assert.deepEqual(OstwaldColor.harmonies(oldField), OstwaldColor.harmonies(selected));
+  assert.throws(() => OstwaldColor.harmonies({ ...selected, source: 'interpolated' }), /atlas/);
+  assert.throws(() => OstwaldColor.harmonies({ ...selected, label: '5aa' }), /grayAxis/);
+});
+
+test('regular subdivisions: every divisor, hue and offset preserves atlas registers', () => {
+  const divisors = [1, 2, 3, 4, 6, 8, 12, 24];
+  for (let hue = 1; hue <= 24; hue++) {
+    const field = OstwaldColor.triangle(hue).find(f => f.label === `${hue}ic`);
+    for (const parts of divisors) {
+      for (const offset of [0, 1, -1, 23, 24, 25, -49]) {
+        const result = OstwaldColor.regularHueSubdivision(field, parts, offset);
+        const rotation = ((offset % 24) + 24) % 24;
+        assert.equal(result.parts, parts);
+        assert.equal(result.step, 24 / parts);
+        assert.equal(result.offset, rotation);
+        assert.equal(result.fields.length, parts);
+        assert.equal(new Set(result.fields.map(f => f.hueIndex)).size, parts);
+        result.fields.forEach((f, i) => {
+          complete(f);
+          assert.equal(f.hueIndex, (hue - 1 + rotation + i * 24 / parts) % 24 + 1);
+          assert.equal(f.label, `${f.hueIndex}ic`);
+          assert.equal(f.source, 'atlas');
+          for (const key of ['w', 's', 'v']) near(f[key], field[key]);
+          if (parts > 1) assert.equal((result.fields[(i + 1) % parts].hueIndex - f.hueIndex + 24) % 24, 24 / parts);
+        });
+        if (offset === 0) assert.deepEqual(result.fields[0], field);
+      }
+    }
+  }
+});
+
+test('subdivision metadata: only established 2/3/4 relationships receive historical names', () => {
+  for (const parts of [1, 2, 3, 4, 6, 8, 12, 24]) {
+    const result = OstwaldColor.regularHueSubdivision(selected, parts);
+    const expectedName = { 2: 'complementary', 3: 'triad', 4: 'tetrad' }[parts] || null;
+    assert.equal(result.historicalName, expectedName);
+    assert.equal(result.historicalStatus, expectedName ? 'explicit' : 'mathematical');
+    assert.equal(result.implementationStatus, 'implemented');
+  }
+  assert.equal(OstwaldColor.regularHueSubdivision(selected, 6).step, 4);
+});
+
+test('named harmonies: Phase-2 convention equals general subdivision minus source', () => {
+  const harmony = OstwaldColor.harmonies(selected);
+  for (const [i, parts] of [2, 3, 4].entries()) {
+    const subdivision = OstwaldColor.regularHueSubdivision(selected, parts);
+    assert.equal(subdivision.fields.length, parts);
+    assert.deepEqual(harmony.hueHarmonies[i], {
+      type: subdivision.historicalName, fields: subdivision.fields.slice(1)
+    });
+  }
+});
+
+test('regular subdivisions: interpolated sources stay unlabeled and custom anchors apply', () => {
+  const custom = clone(circle);
+  custom[4].lab = [0.65, 0.03, 0.04];
+  custom[4].rgb = OstwaldColor.mix(custom[4].lab, 0, 0).rgb;
+  const atlasField = { ...selected, ...OstwaldColor.mix(custom[4].lab, selected.w, selected.s),
+    label: '5ic', source: 'atlas' };
+  const result = OstwaldColor.regularHueSubdivision(atlasField, 3, 0, { hueCircle: custom });
+  assert.deepEqual(result.fields[0], atlasField);
+  assert.deepEqual(result.fields.slice(1), OstwaldColor.harmonies(atlasField, { hueCircle: custom }).hueHarmonies[1].fields);
+  const continuous = { hueIndex: 5, ...OstwaldColor.mix(custom[4].lab, 0.123, 0.321) };
+  const samples = OstwaldColor.regularHueSubdivision(continuous, 6, 2, { hueCircle: custom });
+  samples.fields.forEach(f => {
+    validSample(f);
+    for (const key of ['w', 's', 'v']) near(f[key], continuous[key]);
+    assert.deepEqual(f.lab, OstwaldColor.mix(custom[f.hueIndex - 1].lab, f.w, f.s).lab);
+  });
+  const before = clone(custom);
+  result.fields[0].lab[0] = -1;
+  assert.deepEqual(custom, before);
+  assert.deepEqual(atlasField.lab, OstwaldColor.mix(custom[4].lab, selected.w, selected.s).lab);
+});
+
+test('regular subdivisions: invalid divisions, offsets, colors and contexts rejected', () => {
+  for (const parts of [0, -1, 5, 7, 9, 25, 2.5, '3', null, NaN, Infinity]) {
+    assert.throws(() => OstwaldColor.regularHueSubdivision(selected, parts), /divisor/);
+  }
+  for (const offset of [0.5, '1', null, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(() => OstwaldColor.regularHueSubdivision(selected, 3, offset), /offset/);
+  }
+  for (const context of [null, [], { triangle }, { hueCircle: [] }, { mode: 'rgb' }]) {
+    assert.throws(() => OstwaldColor.regularHueSubdivision(selected, 3, 0, context), Error);
+  }
+  for (const field of [null, {}, { ...selected, v: 0 }, { ...selected, source: 'reference' },
+    { ...selected, source: 'interpolated' }, { ...selected, source: 'interpolated', label: null, rgb: [0, 0, 0] }]) {
+    assert.throws(() => OstwaldColor.regularHueSubdivision(field, 3), Error);
+  }
+});
+
+test('1921 p.89: twelve distance-analogy rows, including starred octave', () => {
+  const expected = [
+    { pair: [1,23], interval: 'minor-second', german: 'kleine Sekunde', consonant: false },
+    { pair: [2,22], interval: 'major-second', german: 'große Sekunde', consonant: false },
+    { pair: [3,21], interval: 'minor-third', german: 'kleine Terz', consonant: true },
+    { pair: [4,20], interval: 'major-third', german: 'große Terz', consonant: true },
+    { pair: [5,19], interval: 'augmented-third', german: 'übermäßige Terz', consonant: false },
+    { pair: [6,18], interval: 'fourth', german: 'Quarte', consonant: true },
+    { pair: [7,17], interval: 'augmented-fourth', german: 'übermäßige Quarte', consonant: false },
+    { pair: [8,16], interval: 'fifth', german: 'Quinte', consonant: true },
+    { pair: [9,15], interval: 'sixth', german: 'Sexte', consonant: true },
+    { pair: [10,14], interval: 'minor-seventh', german: 'kleine Septime', consonant: false },
+    { pair: [11,13], interval: 'major-seventh', german: 'große Septime', consonant: false },
+    { pair: [12,12], interval: 'octave', german: 'Oktave', consonant: true }
+  ];
+  const table = OstwaldColor.intervalTable1921();
+  assert.equal(table.entries.length, 12);
+  assert.deepEqual(table.entries, expected.map(({pair,...row}) => ({...row, distance:pair[0], colorEntries:pair, sourceStatus:'primary-1921-p89', primaryVerified:true})));
+  assert.equal(table.sourceStatus, 'primary-1921-p89');
+  assert.equal(table.sourceConfidence, 'primary');
+  assert.equal(table.primaryVerified, true);
+  assert.equal(table.primaryReference.year, 1921);
+  assert.equal(table.primaryReference.page, 89);
+  assert.equal(table.primaryReference.pdfPage, 107);
+  assert.equal(table.transcriptionBasis, 'direct-scan-inspection');
+  assert.deepEqual(table.reference, { distance:12, colorEntry:12, role:'opposite-distance-octave-analogy' });
+});
+
+test('1921 lookup: distance analogy replaces erroneous literal-dyad interpretation', () => {
+  for (let a=1; a<=24; a++) for (let b=1; b<=24; b++) {
+    const result=OstwaldColor.intervalRelation1921(a,b);
+    assert.equal(result.distance, Math.min(Math.abs(a-b),24-Math.abs(a-b)));
+    assert.deepEqual(result,OstwaldColor.intervalRelation1921(b,a));
+    assert.equal(result.listed,a!==b);
+    assert.equal(result.applicationStatus,'mathematical-distance-lookup');
+    if(a===b) assert.equal(result.entry,null);
+    else assert.equal(result.entry.distance,result.distance);
+  }
+  assert.equal(OstwaldColor.intervalRelation1921(1,23).entry.interval,'major-second');
+  assert.equal(OstwaldColor.intervalRelation1921(5,17).entry.interval,'octave');
+  for (const bad of [0,25,-1,1.5,'1',null,NaN,Infinity]) {
+    assert.throws(() => OstwaldColor.intervalRelation1921(bad, 23), RangeError);
+    assert.throws(() => OstwaldColor.intervalRelation1921(1, bad), RangeError);
+  }
+});
+
+test('1921 table and registry: returned metadata cannot mutate later results', () => {
+  const original = OstwaldColor.intervalTable1921();
+  const modified = OstwaldColor.intervalTable1921();
+  modified.entries[0].colorEntries[0] = 7;
+  modified.entries[0].consonant = true;
+  modified.primaryReference.page = 1;
+  modified.reference.distance = 5;
+  assert.deepEqual(OstwaldColor.intervalTable1921(), original);
+  const relation = OstwaldColor.intervalRelation1921(1,23);
+  relation.entry.colorEntries[0] = 5;
+  assert.deepEqual(OstwaldColor.intervalRelation1921(1,23).entry, original.entries[1]);
+  const registry = OstwaldColor.harmonyRuleRegistry();
+  registry.rules[0].parts = 7;
+  registry.researchPending[0].implementationStatus = 'implemented';
+  assert.equal(OstwaldColor.harmonyRuleRegistry().rules[0].parts, 2);
+  assert.equal(OstwaldColor.harmonyRuleRegistry().researchPending[0].implementationStatus, 'research-pending');
+});
+
+test('hueDistance: orientation, symmetry, identity and wraparound', () => {
+  const expected = [
+    [1,24,{clockwise:23,counterclockwise:1,minimal:1}],
+    [1,13,{clockwise:12,counterclockwise:12,minimal:12}],
+    [5,17,{clockwise:12,counterclockwise:12,minimal:12}],
+    [23,1,{clockwise:2,counterclockwise:22,minimal:2}]
+  ];
+  expected.forEach(([a,b,result]) => assert.deepEqual(OstwaldColor.hueDistance(a,b),result));
+  for (let a=1; a<=24; a++) for (let b=1; b<=24; b++) {
+    const forward = OstwaldColor.hueDistance(a,b);
+    const reverse = OstwaldColor.hueDistance(b,a);
+    assert.equal(forward.minimal, reverse.minimal);
+    assert.equal(forward.clockwise, reverse.counterclockwise);
+    assert.equal(forward.clockwise + forward.counterclockwise, a === b ? 0 : 24);
+  }
+  for (const bad of [0,25,-1,1.5,'1',null,NaN,Infinity]) {
+    assert.throws(() => OstwaldColor.hueDistance(bad,1), RangeError);
+    assert.throws(() => OstwaldColor.hueDistance(1,bad), RangeError);
+  }
+});
+
+test('equal spacing: permutations, normalization and no color dependence', () => {
+  for (const hues of [[1,9,17], [1,7,13,19], [24,8,16], [25,-15,17], [0,8,16]]) {
+    const before = hues.slice();
+    for (let i=0; i<hues.length; i++) {
+      const rotated = hues.slice(i).concat(hues.slice(0,i));
+      assert.equal(OstwaldColor.isRegularHueSet(rotated),true);
+      assert.equal(OstwaldColor.isRegularHueSet(rotated.reverse()),true);
+    }
+    assert.deepEqual(hues,before);
+  }
+  assert.equal(OstwaldColor.isRegularHueSet([1,5,12]),false);
+  assert.equal(OstwaldColor.isRegularHueSet([1,7,13]),false); // Closing gap matters.
+  assert.equal(OstwaldColor.isRegularHueSet([]),false);
+  assert.equal(OstwaldColor.isRegularHueSet([7]),true);
+  assert.equal(OstwaldColor.isRegularHueSet(Array.from({length:24},(_,i)=>i+1)),true);
+  for (const extreme of [Number.MAX_SAFE_INTEGER,Number.MIN_SAFE_INTEGER]) {
+    assert.equal(OstwaldColor.isRegularHueSet([extreme]),true);
+    assert.equal(OstwaldColor.regularHueSubdivision(selected,1,extreme).fields.length,1);
+  }
+});
+
+test('equal spacing: duplicates after normalization and malformed inputs rejected', () => {
+  for (const values of [[1,1], [1,25], [0,24], [1,-23]]) {
+    assert.throws(() => OstwaldColor.isRegularHueSet(values), /Duplicate/);
+  }
+  for (const values of [null, {}, '1,9,17', [1,2.5], [NaN], [Infinity], ['1'], Array(3), [Number.MAX_SAFE_INTEGER+1]]) {
+    assert.throws(() => OstwaldColor.isRegularHueSet(values), Error);
+  }
+});
+
+test('rule registry: implemented relations and explicitly pending concepts', () => {
+  const {rules,researchPending} = OstwaldColor.harmonyRuleRegistry();
+  for (const id of ['complementary','triad','tetrad','isotint','isotone','analyticIsochrome','shadowSeries','isovalent']) {
+    const rule = rules.find(r=>r.id===id);
+    assert.ok(rule);
+    assert.equal(rule.implementationStatus,'implemented');
+  }
+  assert.equal(new Set(rules.map(r=>r.id)).size,rules.length);
+  assert.equal(rules.find(r=>r.id==='analyticIsochrome').historicalStatus,'mathematical');
+  assert.equal(rules.find(r=>r.id==='intervalRelation1921').sourceStatus,'primary-1921-p89');
+  assert.ok(researchPending.every(r=>r.implementationStatus==='research-pending'));
+  assert.ok(!rules.some(r=>r.id==='heraden'));
+  assert.deepEqual(researchPending.map(r=>r.id), ['shadow-series-interval-laws','isotint-interval-laws','isotone-interval-laws']);
+  for (const term of ['Zweier','Dreier','Triade','Vierer','Tetrade','Schattenreihe','Weißgleiche','Schwarzgleiche','Wertgleiche']) {
+    const rule=rules.find(r=>r.germanTerm===term);
+    for(const key of ['englishTerm','domain','historicalStatus','sourceStatus','sourcePages','implementationStatus']) assert.ok(Object.hasOwn(rule,key));
+    assert.equal(rule.sourceStatus,'primary-1921');
+    assert.ok(rule.sourcePages.length>0);
+  }
+  const {deferred,researchNotes}=OstwaldColor.harmonyRuleRegistry();
+  assert.equal(deferred.find(r=>r.id==='harmothek').implementationStatus,'future-catalog-layer');
+  assert.equal(researchNotes[0].implementationStatus,'not-required-for-current-primary-grammar');
+});
+
+test('gray axis: stable light-to-dark order supports generic intervals', () => {
+  const axis=OstwaldColor.grayAxis();
+  assert.deepEqual(axis.map(g=>g.letter),['a','c','e','g','i','l','n','p']);
+  axis.slice(1).forEach((gray,i)=> {
+    assert.ok(gray.w<axis[i].w);
+    assert.ok(gray.s>axis[i].s);
+    assert.ok(gray.lab[0]<axis[i].lab[0]);
+    assert.ok(gray.rgb.every((c,j)=>c<=axis[i].rgb[j]));
+  });
+  assert.deepEqual(OstwaldColor.selectSeriesInterval(axis,{start:1,step:2,count:3}).map(g=>g.letter),['c','g','l']);
+});
+
+test('series intervals: gray, white-equal, black-equal and shadow arrays', () => {
+  const harmony=OstwaldColor.harmonies(selected);
+  const cases = [
+    [OstwaldColor.grayAxis(),{start:0,step:3,count:3},['a','g','n']],
+    [harmony.isotints,{start:0,step:2,count:2},['5ia','5ig']],
+    [harmony.isotones,{start:1,step:2,count:2},['5gc','5nc']],
+    [harmony.shadowSeries,{start:0,step:2,count:3},['5ga','5le','5pi']]
+  ];
+  for (const [series,options,labels] of cases) {
+    const before=clone(series);
+    const result=OstwaldColor.selectSeriesInterval(series,options);
+    assert.deepEqual(result.map(f=>f.label),labels);
+    assert.deepEqual(series,before);
+    assert.notEqual(result,series);
+    result.forEach((entry,i)=>assert.equal(entry,series[options.start+i*options.step]));
+  }
+  assert.deepEqual(OstwaldColor.selectSeriesInterval(['a',null,42,undefined],{count:4}),['a',null,42,undefined]);
+  assert.deepEqual(OstwaldColor.selectSeriesInterval([1,2,3],{start:2,step:Number.MAX_SAFE_INTEGER,count:1}),[3]);
+});
+
+test('series intervals: invalid bounds, unsafe arithmetic and unknown options rejected', () => {
+  for (const options of [null,[],{}, {count:0},{count:1.5},{count:'2'},{count:NaN},
+    {start:-1,count:1},{start:3,count:1},{step:0,count:1},{step:-1,count:1},
+    {step:1.5,count:1},{step:Infinity,count:1},{step:2,count:3},{count:4},
+    {count:1,mode:'historical'},{start:Number.MAX_SAFE_INTEGER,count:1},
+    {step:Number.MAX_SAFE_INTEGER,count:Number.MAX_SAFE_INTEGER}]) {
+    assert.throws(()=>OstwaldColor.selectSeriesInterval([1,2,3],options),Error);
+  }
+  for (const series of [null,{},'abc',Array(3),[]]) {
+    assert.throws(()=>OstwaldColor.selectSeriesInterval(series,{count:1}),Error);
+  }
+});
+
+
+
+test('Zweier: 276 unique pairs partition exactly into twelve distance classes', () => {
+  const all=new Set();
+  for(let d=1;d<=12;d++) {
+    const pairs=OstwaldColor.dyadsByDistance(d);
+    assert.equal(pairs.length,d===12?12:24);
+    pairs.forEach(([a,b],i)=> {
+      assert.ok(a<b);
+      assert.equal(OstwaldColor.hueDistance(a,b).minimal,d);
+      assert.ok(!all.has(`${a},${b}`)); all.add(`${a},${b}`);
+      if(i) assert.ok(pairs[i-1][0]<a || (pairs[i-1][0]===a && pairs[i-1][1]<b));
+    });
+  }
+  assert.equal(all.size,276);
+  for(const bad of [0,13,1.5,'2',NaN,null]) assert.throws(()=>OstwaldColor.dyadsByDistance(bad),RangeError);
+});
+
+test('Printed Zweier oracle pp.72–74: historical 100-circle numbers mapped by position', () => {
+  // p.72–74 uses these 24 printed positions, not modern indices or display calibration.
+  const printed=['00','04','08','13','17','21','25','29','33','38','42','46','50','54','58','63','67','71','75','79','83','88','92','96'];
+  const fixtures=[
+    [1,'00','04'],[1,'46','50'],[1,'96','00'],
+    [2,'00','08'],[2,'92','00'],[2,'96','04'],
+    [6,'00','25'],[6,'75','00'],[6,'96','21'],
+    [8,'00','33'],[8,'67','00'],[8,'96','29'],
+    [12,'00','50'],[12,'25','75'],[12,'46','96']
+  ];
+  for(const [distance,a,b] of fixtures) {
+    const pair=[printed.indexOf(a)+1,printed.indexOf(b)+1].sort((x,y)=>x-y);
+    assert.ok(OstwaldColor.dyadsByDistance(distance).some(p=>p[0]===pair[0]&&p[1]===pair[1]));
+  }
+});
+
+test('Cyclic signatures: numeric canonicalization, rotations, normalization and reflection separation', () => {
+  assert.deepEqual(OstwaldColor.cyclicGapSignature([1,9,17]),[8,8,8]);
+  assert.deepEqual(OstwaldColor.cyclicGapSignature([1,7,13,19]),[6,6,6,6]);
+  const signature=OstwaldColor.cyclicGapSignature([1,3,8]);
+  assert.deepEqual(signature,[2,5,17]);
+  for(let offset=-24;offset<48;offset++) assert.deepEqual(OstwaldColor.cyclicGapSignature([8+offset,1+offset,3+offset]),signature);
+  assert.notDeepEqual(OstwaldColor.cyclicGapSignature([1,23,18]),signature);
+  assert.deepEqual(OstwaldColor.cyclicGapSignature([1,11]),[10,14]);
+});
+
+test('All 2024 Dreier: positive gaps, gap sum, only eight unique Triaden', () => {
+  let total=0,named=0;
+  for(let a=1;a<=22;a++) for(let b=a+1;b<=23;b++) for(let c=b+1;c<=24;c++) {
+    const set=OstwaldColor.classifyHueSet([a,b,c]); total++;
+    assert.equal(set.className,'Dreier'); assert.equal(set.cardinality,3);
+    assert.ok(set.gaps.every(g=>g>0)); assert.equal(set.gaps.reduce((x,y)=>x+y),24);
+    if(set.historicalName) {named++; assert.equal(set.historicalName,'Triade'); assert.deepEqual(set.gaps,[8,8,8]);}
+  }
+  assert.equal(total,2024); assert.equal(named,8);
+});
+
+test('All 10626 Vierer: only six unique Tetraden; all rotations recognized', () => {
+  let total=0,named=0;
+  for(let a=1;a<=21;a++) for(let b=a+1;b<=22;b++) for(let c=b+1;c<=23;c++) for(let d=c+1;d<=24;d++) {
+    const set=OstwaldColor.classifyHueSet([a,b,c,d]); total++;
+    assert.equal(set.className,'Vierer'); assert.equal(set.gaps.reduce((x,y)=>x+y),24);
+    if(set.historicalName) {named++; assert.equal(set.historicalName,'Tetrade'); assert.deepEqual(set.gaps,[6,6,6,6]);}
+  }
+  assert.equal(total,10626); assert.equal(named,6);
+  for(let i=1;i<=24;i++) {
+    assert.equal(OstwaldColor.classifyHueSet([i,i+8,i+16]).historicalName,'Triade');
+    assert.equal(OstwaldColor.classifyHueSet([i,i+6,i+12,i+18]).historicalName,'Tetrade');
+  }
+});
+
+test('Symmetry: reflection, rotational and dihedral behavior are separate from construction', () => {
+  const C=OstwaldColor;
+  assert.equal(C.classifyHueSet([1,3,8]).symmetry,'asymmetric');
+  assert.equal(C.classifyHueSet([1,3,5]).symmetry,'reflection');
+  assert.equal(C.classifyHueSet([1,9,17]).symmetry,'dihedral');
+  assert.equal(C.classifyHueSet([1,2,4,13,14,16]).symmetry,'rotational');
+  assert.deepEqual(C.classifyHueSet([1,9,17]).symmetries.rotations,[0,8,16]);
+  assert.equal(C.classifyHueSet([1,13]).historicalName,'Gegenfarben');
+  assert.equal(C.classifyHueSet([1,2]).historicalName,null);
+});
+
+test('Larger sets and invalid circular input', () => {
+  for(let n=5;n<=24;n++) {
+    const set=OstwaldColor.classifyHueSet(Array.from({length:n},(_,i)=>i+1));
+    assert.equal(set.cardinality,n); assert.equal(set.gaps.reduce((a,b)=>a+b),24);
+    assert.equal(set.historicalName,null); assert.equal(set.className,null);
+  }
+  for(const bad of [null,{},[],[1],[1,25],[0,24],[1,NaN],[1,2.5],Array(3),[1,Number.MAX_SAFE_INTEGER+1],Array.from({length:25},(_,i)=>i)]) {
+    assert.throws(()=>OstwaldColor.cyclicGapSignature(bad),Error);
+    assert.throws(()=>OstwaldColor.classifyHueSet(bad),Error);
+  }
+});
+
+test('Primary division pp.90–92: both arc midpoints, original 08–25 example', () => {
+  const small=OstwaldColor.divideHueDyad([3,7]); // 08,17,25
+  const large=OstwaldColor.divideHueDyad([3,7],'counterclockwise'); // 08,25,67
+  assert.deepEqual(small.hues,[3,5,7]); assert.deepEqual(large.hues,[3,7,17]);
+  assert.equal(small.construction,'division'); assert.equal(large.constructionEvidence.arc,20);
+  assert.equal(OstwaldColor.divideHueDyad([1,9],'counterclockwise').historicalName,'Triade');
+  assert.throws(()=>OstwaldColor.divideHueDyad([1,2]),/even arc/);
+  assert.throws(()=>OstwaldColor.divideHueDyad([1,3],'shorter'),Error);
+});
+
+test('Augmentation retains original dyad; equal-step Aufbau is not arbitrary addition', () => {
+  const set=OstwaldColor.augmentHueDyad([3,7],11); // p.90: 08,25,42
+  assert.deepEqual(set.hues,[3,7,11]); assert.deepEqual(set.constructionEvidence.baseDyad,[3,7]);
+  assert.equal(set.constructionEvidence.distance,4); assert.equal(set.construction,'augmentation');
+  assert.equal(set.constructionEvidence.sourceStatus,'primary-1921');
+  const free=OstwaldColor.augmentHueDyad([3,7],12);
+  assert.equal(free.constructionEvidence.sourceStatus,'contemporary-implementation');
+  assert.throws(()=>OstwaldColor.augmentHueDyad([3,7],27),/Duplicate/);
+});
+
+test('Spaltung pp.93,99: replacement, wrap, collisions and separate geometric class', () => {
+  const triade=OstwaldColor.splitHueSet([1,13],13,4);
+  assert.equal(triade.historicalName,'Triade'); assert.equal(triade.construction,'split');
+  assert.deepEqual(triade.constructionEvidence.replacements,[9,17]);
+  const first=OstwaldColor.splitHueSet([1,13],1,3);
+  const tetrade=OstwaldColor.splitHueSet(first.hues,13,3);
+  assert.deepEqual(tetrade.hues,[4,10,16,22]); assert.equal(tetrade.historicalName,'Tetrade');
+  assert.equal(tetrade.construction,'split');
+  assert.throws(()=>OstwaldColor.splitHueSet([1,3],1,2),/Duplicate/);
+  for(const d of [0,7,1.5]) assert.throws(()=>OstwaldColor.splitHueSet([1,13],1,d),Error);
+  assert.throws(()=>OstwaldColor.splitHueSet([1,13],2,1),Error);
+});
+
+test('Series grammar: source examples and linear topology for three one-hue families', () => {
+  const h=OstwaldColor.harmonies(selected);
+  const cases=[['shadow-series',h.shadowSeries,[0,2,4],['5ga','5le','5pi']],
+    ['isotint',triangle.filter(f=>f.w===selected.w),[0,1,2],['5ia','5ic','5ie']],
+    ['isotone',triangle.filter(f=>f.s===selected.s),[0,1,2],['5ec','5gc','5ic']]];
+  for(const [family,series,indices,labels] of cases) {
+    const before=clone(series), result=OstwaldColor.seriesHarmony(series,family,indices);
+    assert.deepEqual(result.fields.map(f=>f.label),labels);
+    assert.deepEqual(series,before); assert.equal(result.topology,'linear');
+    assert.equal(result.gapsOrSteps.length,2); assert.equal(result.cardinality,3);
+    assert.equal(result.sourceStatus,'contemporary-implementation');
+    assert.equal(result.relationEvidence.sourceStatus,'primary-1921');
+    assert.equal(OstwaldColor.seriesHarmony(series,family,[0,1]).cardinality,2);
+    result.fields[0].lab[0]=0; assert.deepEqual(series,before);
+  }
+  assert.equal(OstwaldColor.seriesHarmony(h.shadowSeries,'shadow-series',[0,1,4]).step,null);
+});
+
+test('Series validation: wrong family, order, sparse input and no silent wrapping', () => {
+  const series=OstwaldColor.harmonies(selected).shadowSeries;
+  for(const indices of [[0],[0,0],[1,0],[0,5],[0,-1],[0,1.5],Array(2)]) assert.throws(()=>OstwaldColor.seriesHarmony(series,'shadow-series',indices),Error);
+  assert.throws(()=>OstwaldColor.seriesHarmony(series,'isotint',[0,1]),Error);
+  assert.throws(()=>OstwaldColor.seriesHarmony(series,'unknown',[0,1]),Error);
+  assert.throws(()=>OstwaldColor.seriesHarmony([series[1],series[0],series[2]],'shadow-series',[0,1]),Error);
+  assert.throws(()=>OstwaldColor.seriesHarmony(Array(2),'shadow-series',[0,1]),Error);
+  assert.throws(()=>OstwaldColor.seriesHarmony(series,'shadow-series',[0,1],{mode:'rgb'}),Error);
+  assert.deepEqual(OstwaldColor.seriesHarmony(series.slice().reverse(),'shadow-series',[0,1]).fields.map(f=>f.label),['5pi','5ng']);
+});
+
+test('Series grammar: custom calibration and analytical family preserve validation', () => {
+  const custom = circle.map(h=>({...h,lab:circle[0].lab.slice(),rgb:circle[0].rgb.slice()}));
+  const shadow = OstwaldColor.harmonies(selected).shadowSeries.map(f=>({
+    ...f, ...OstwaldColor.mix(custom[4].lab,f.w,f.s),label:f.label,source:'atlas'
+  }));
+  const result=OstwaldColor.seriesHarmony(shadow,'shadow-series',[0,2,4],{hueCircle:custom});
+  assert.deepEqual(result.fields[0].lab,shadow[0].lab);
+  assert.throws(()=>OstwaldColor.seriesHarmony(shadow,'shadow-series',[0,2,4]),Error);
+  // Positive atlas v values are unique here: no fake constant-v neighbor is invented.
+  assert.throws(()=>OstwaldColor.seriesHarmony(shadow,'analytic-isochrome',[0,1]),Error);
+  const before=clone(OstwaldColor.classifyHueSet([1,9,17]));
+  const changed=OstwaldColor.classifyHueSet([1,9,17]);
+  changed.symmetries.rotations[0]=99; changed.sourcePages.push(1);
+  assert.deepEqual(OstwaldColor.classifyHueSet([1,9,17]),before);
+});
+
+
+
+// Phase 5 fixtures use actual atlas objects; historical cases remain data, not engines.
+const gray = letter => OstwaldColor.grayAxis().find(g=>g.letter===letter);
+const field = label => OstwaldColor.triangle(Number.parseInt(label,10)).find(f=>f.label===label);
+const grayGroup = letters => OstwaldColor.elementaryHarmony('gray',[...letters].map(gray));
+const labels = group => group.members.map(m=>m.label);
+const sameHueGroup = (names, relation='isotint') => OstwaldColor.elementaryHarmony('same-hue',names.map(field),{relation});
+const isovalentGroup = names => OstwaldColor.elementaryHarmony('isovalent',names.map(field));
+
+test('Compound elementary interface: G/F/W domains and existing relations', () => {
+  const groups=[grayGroup('ace'),sameHueGroup(['5ia','5ic','5ie']),
+    isovalentGroup(['5ic','13ic','21ic'])];
+  assert.deepEqual(groups.map(g=>g.domain),['gray','same-hue','isovalent']);
+  for(const group of groups) {
+    assert.equal(group.type,'harmony-set'); assert.equal(group.level,1);
+    assert.equal(OstwaldColor.compoundLevel(group),1);
+    assert.deepEqual(group.domains,[group.domain]);
+    assert.deepEqual(OstwaldColor.flattenHarmonyMembers(group),group.members);
+    assert.equal(group.sourceStatus,'contemporary-implementation');
+  }
+  assert.deepEqual(labels(sameHueGroup(['5ec','5gc','5ic'],'isotone')),['5ec','5gc','5ic']);
+  assert.deepEqual(labels(sameHueGroup(['5ga','5ic','5le'],'shadow-series')),['5ga','5ic','5le']);
+});
+
+test('GGg pp.108–109: common gray joins two groups without losing either occurrence', () => {
+  const a=grayGroup('ace'),b=grayGroup('egi');
+  const compound=OstwaldColor.combineBySharedMember(a,b);
+  assert.equal(compound.type,'compound-harmony'); assert.equal(compound.domain,'compound');
+  assert.equal(compound.relation,'shared-member'); assert.equal(compound.level,2);
+  assert.deepEqual(compound.domains,['gray']); assert.deepEqual(labels(compound),['a','c','e','g','i']);
+  assert.deepEqual(compound.groups,[a,b]); assert.deepEqual(compound.provenance.sharedElements,['gray:e']);
+  assert.equal(compound.groups.flatMap(g=>g.members).filter(m=>m.letter==='e').length,2);
+  assert.equal(compound.members.filter(m=>m.letter==='e').length,1);
+  assert.equal(compound.provenance.sourceCase,null); // exact selected fixture, not a printed triplet claim
+  assert.deepEqual(compound.provenance.sourcePages,[105]);
+});
+
+test('Shared-member identity: cloned objects match; all common members are recorded', () => {
+  const a=grayGroup('ace'),b=grayGroup('ceg');
+  const result=OstwaldColor.combineBySharedMember(clone(a),clone(b));
+  assert.deepEqual(result.provenance.sharedElements,['gray:c','gray:e']);
+  assert.deepEqual(labels(result),['a','c','e','g']);
+  const doubled=OstwaldColor.combineBySharedMember(a,a);
+  assert.deepEqual(doubled.provenance.sharedElements,['gray:a','gray:c','gray:e']);
+  assert.equal(doubled.groups.length,2); assert.deepEqual(doubled.members,a.members);
+});
+
+test('Shared-member rejection: disjoint identities do not join even with identical display RGB', () => {
+  assert.throws(()=>OstwaldColor.combineBySharedMember(grayGroup('ac'),grayGroup('np')),/common member/);
+  const a=isovalentGroup(['1pn','2pn']),b=isovalentGroup(['3pn','4pn']);
+  assert.ok([...a.members,...b.members].every(m=>m.rgb.every(c=>c===0)));
+  assert.throws(()=>OstwaldColor.combineBySharedMember(a,b),/common member/);
+  const joined=OstwaldColor.combineBySharedMember(a,isovalentGroup(['2pn','3pn']));
+  assert.deepEqual(labels(joined),['1pn','2pn','3pn']);
+  assert.deepEqual(joined.provenance.sharedElements,['atlas:2pn']);
+});
+
+test('GFg p.110: shared gray is the actual white/black companion of 5ic', () => {
+  const h=OstwaldColor.harmonies(field('5ic'));
+  for(const [relation,companion,names] of [
+    ['isotint',h.grayHarmonies.sameWhite,['5ia','5ic']],
+    ['isotone',h.grayHarmonies.sameBlack,['5ec','5ic']]
+  ]) {
+    const g=OstwaldColor.elementaryHarmony('gray',[gray('a'),companion]);
+    const f=OstwaldColor.elementaryHarmony('same-hue',[...names.map(field),clone(companion)],{relation});
+    const result=OstwaldColor.combineBySharedMember(g,f);
+    assert.deepEqual(result.domains,['gray','same-hue']);
+    assert.deepEqual(result.provenance.sharedElements,[`gray:${companion.letter}`]);
+    assert.equal(result.level,2); assert.equal(result.members.length,4);
+  }
+});
+
+test('WFg p.116 and GWg pp.111–112: explicit one-hue bridge, no false gray/chromatic identity', () => {
+  const w=isovalentGroup(['5ic','13ic','21ic']);
+  const bridge=OstwaldColor.elementaryHarmony('same-hue',[field('5ia'),field('5ic'),gray('i')],{relation:'isotint'});
+  const wf=OstwaldColor.combineBySharedMember(w,bridge);
+  assert.deepEqual(wf.provenance.sharedElements,['atlas:5ic']);
+  const gw=OstwaldColor.combineBySharedMember(wf,grayGroup('egi'));
+  assert.equal(gw.level,3); assert.deepEqual(gw.domains,['isovalent','same-hue','gray']);
+  assert.deepEqual(gw.provenance.sharedElements,['gray:i']);
+  assert.throws(()=>OstwaldColor.combineBySharedMember(w,grayGroup('egi')),/common member/);
+});
+
+test('GGe p.107: full substitution preserves source, replacement and target provenance', () => {
+  const source=grayGroup('ceg'),replacement=grayGroup('ei');
+  const result=OstwaldColor.substituteHarmony(source,gray('g'),replacement);
+  assert.equal(result.relation,'substitution'); assert.equal(result.level,2);
+  assert.deepEqual(result.groups,[source,replacement]); assert.deepEqual(labels(result),['c','e','i']);
+  assert.equal(result.provenance.replacedElement,'gray:g'); assert.equal(result.provenance.replacementGroup,1);
+  assert.equal(result.provenance.replacementEvidence.basis,'gray-letter-symmetry');
+  assert.deepEqual(result.provenance.replacementEvidence.offsets,[-1,1]);
+  assert.deepEqual(result.provenance.replacementEvidence.sourcePages,[107,108]);
+  assert.deepEqual(result.provenance.inputs,[{group:0,role:'source'},{group:1,role:'replacement'}]);
+  assert.ok(result.groups[0].members.some(m=>m.letter==='g')); // retained history
+  assert.ok(!OstwaldColor.flattenHarmonyMembers(result).some(m=>m.letter==='g')); // active view
+});
+
+test('GGe pp.107–108: partial replacement retains center without duplicate members', () => {
+  const result=OstwaldColor.substituteHarmony(grayGroup('ceg'),gray('g'),grayGroup('egi'));
+  assert.deepEqual(labels(result),['c','e','g','i']); // printed c e(g)i -> cegi
+  assert.deepEqual(result.provenance.sharedElements,['gray:e','gray:g']);
+  const inner=OstwaldColor.substituteHarmony(grayGroup('ceg'),gray('e'),grayGroup('ceg'));
+  assert.deepEqual(labels(inner),['c','e','g']); // same active members, different construction
+  assert.equal(inner.type,'compound-harmony');
+});
+
+test('FWe p.114: substitute a same-hue member by its symmetric isovalent neighbors', () => {
+  const source=sameHueGroup(['5ia','5ic','5ie']);
+  const result=OstwaldColor.substituteHarmony(source,field('5ic'),isovalentGroup(['4ic','6ic']));
+  assert.deepEqual(labels(result),['5ia','4ic','6ic','5ie']);
+  assert.deepEqual(result.domains,['same-hue','isovalent']);
+  assert.equal(result.provenance.replacementEvidence.basis,'isovalent-hue-symmetry');
+  assert.deepEqual(result.provenance.replacementEvidence.offsets,[-1,1]);
+  assert.equal(OstwaldColor.splitHueSet([5,13],5,1).construction,'split');
+  assert.equal(result.provenance.operation,'substitution');
+});
+
+test('WFe pp.114–116: same-hue symmetric replacements preserve one-hue relation', () => {
+  const source=isovalentGroup(['5ic','13ic','21ic']);
+  const alternatives=[['isotint',['5ia','5ie']],['isotone',['5gc','5lc']],['shadow-series',['5ga','5le']]];
+  for(const [relation,names] of alternatives) {
+    const result=OstwaldColor.substituteHarmony(source,field('5ic'),sameHueGroup(names,relation));
+    assert.deepEqual(labels(result),[...names,'13ic','21ic']);
+    assert.equal(result.provenance.replacementEvidence.basis,'same-hue-letter-symmetry');
+    assert.equal(result.provenance.replacementEvidence.relation,relation);
+  }
+});
+
+test('Substitution rejects missing targets, asymmetric replacements and unsupported G/W equivalence', () => {
+  assert.throws(()=>OstwaldColor.substituteHarmony(grayGroup('ceg'),gray('l'),grayGroup('in')),/target not found/);
+  assert.throws(()=>OstwaldColor.substituteHarmony(grayGroup('ceg'),gray('g'),grayGroup('en')),/correspondence/);
+  assert.throws(()=>OstwaldColor.substituteHarmony(isovalentGroup(['5ic','13ic']),field('5ic'),grayGroup('ce')),/correspondence/);
+  assert.throws(()=>OstwaldColor.substituteHarmony(grayGroup('ceg'),gray('g'),isovalentGroup(['4ic','6ic'])),/correspondence/);
+  assert.throws(()=>OstwaldColor.substituteHarmony(isovalentGroup(['5ic','13ic']),field('5ic'),isovalentGroup(['6ic','7ic'])),/correspondence/);
+});
+
+test('Recursive compounds pp.118–119: level three, complete lower provenance and operation sequence', () => {
+  const ab=OstwaldColor.combineBySharedMember(grayGroup('ace'),grayGroup('egi'));
+  const abc=OstwaldColor.combineBySharedMember(ab,grayGroup('iln'));
+  assert.equal(OstwaldColor.compoundLevel(abc),3);
+  assert.deepEqual(abc.groups[0],ab); assert.deepEqual(abc.groups[0].provenance.sharedElements,['gray:e']);
+  assert.deepEqual(abc.provenance.sharedElements,['gray:i']);
+  assert.deepEqual(labels(abc),['a','c','e','g','i','l','n']);
+  assert.deepEqual(abc.provenance.sequence,[{step:1,action:'use-input',group:0},{step:2,action:'use-input',group:1},{step:3,action:'shared-member'}]);
+  const fourth=OstwaldColor.combineBySharedMember(abc,grayGroup('np'));
+  assert.equal(fourth.level,4);
+});
+
+test('Recursive substitution: source/replacement may be compounds; all active target occurrences are replaced', () => {
+  const source=OstwaldColor.combineBySharedMember(grayGroup('ceg'),grayGroup('egi'));
+  const result=OstwaldColor.substituteHarmony(source,gray('g'),grayGroup('ei'));
+  assert.equal(result.level,3); assert.deepEqual(labels(result),['c','e','i']);
+  assert.equal(result.groups[0].groups.flatMap(g=>g.members).filter(m=>m.letter==='g').length,2);
+  const replacement=OstwaldColor.combineBySharedMember(grayGroup('cei'),grayGroup('il'));
+  const nested=OstwaldColor.substituteHarmony(grayGroup('agn'),gray('g'),replacement);
+  assert.equal(nested.level,3); assert.deepEqual(labels(nested),['a','c','e','i','l','n']);
+  assert.deepEqual(nested.groups[1],replacement);
+  assert.throws(()=>OstwaldColor.substituteHarmony(result,gray('g'),grayGroup('ei')),/target not found/);
+});
+
+test('Same flattened colors do not imply the same compound structure', () => {
+  const a=OstwaldColor.combineBySharedMember(grayGroup('ace'),grayGroup('egi'));
+  const b=OstwaldColor.combineBySharedMember(grayGroup('acg'),grayGroup('gei'));
+  const c=OstwaldColor.substituteHarmony(grayGroup('acg'),gray('g'),grayGroup('egi'));
+  const identities=g=>labels(g).slice().sort();
+  assert.deepEqual(identities(a),identities(b)); assert.deepEqual(identities(a),identities(c));
+  assert.notDeepEqual(a,b); assert.notDeepEqual(a,c);
+  assert.notDeepEqual(a.provenance.sharedElements,b.provenance.sharedElements);
+  assert.notEqual(a.relation,c.relation);
+});
+
+test('Pure operations: deterministic, input-immutable, independent output trees and JSON round trips', () => {
+  const a=grayGroup('ceg'),b=grayGroup('egi'),snapshots=[clone(a),clone(b)];
+  for(const operation of [()=>OstwaldColor.combineBySharedMember(a,b),()=>OstwaldColor.substituteHarmony(a,gray('g'),b)]) {
+    const result=operation(),snapshot=clone(result);
+    assert.deepEqual(operation(),result); assert.deepEqual([a,b],snapshots);
+    assert.deepEqual(OstwaldColor.flattenHarmonyMembers(clone(result)),result.members);
+    const flattened=OstwaldColor.flattenHarmonyMembers(result);
+    flattened[0].rgb[0]=99; assert.deepEqual(result,snapshot);
+    result.members[0].lab[0]=99; assert.deepEqual(result.groups,snapshot.groups);
+    result.groups[0].members[0].lab[0]=98; assert.deepEqual([a,b],snapshots);
+    assert.deepEqual(operation(),snapshot);
+  }
+});
+
+test('Elementary validation: missing, sparse, duplicated, counterfeit and interpolated members', () => {
+  for(const members of [null,[],[gray('a')],Array(2),[gray('a'),clone(gray('a'))],
+    [gray('a'),{...gray('c'),letter:'p'}],[gray('a'),{...gray('c'),w:-1}],
+    [gray('a'),{...gray('c'),lab:[0,0,0]}],[gray('a'),{...gray('c'),rgb:[0,0,0]}],
+    [gray('a'),OstwaldColor.mix([.7,.1,0],.2,.1)]]) {
+    assert.throws(()=>OstwaldColor.elementaryHarmony('gray',members),Error);
+  }
+  assert.throws(()=>OstwaldColor.elementaryHarmony('unknown',[gray('a'),gray('c')]),Error);
+  assert.throws(()=>OstwaldColor.elementaryHarmony('same-hue',[field('5ic'),field('5ie')]),/relation/);
+  assert.throws(()=>sameHueGroup(['5ic','6ic']),/same-hue/);
+  assert.throws(()=>isovalentGroup(['5ic','6ie']),/register/);
+  assert.throws(()=>OstwaldColor.elementaryHarmony('same-hue',[field('5ic'),gray('p')],{relation:'isotint'}),/same-hue/);
+  assert.throws(()=>OstwaldColor.elementaryHarmony('gray',[gray('a'),gray('c')],{sourceCase:'GGg'}),/options/);
+});
+
+test('Compound validation: forged levels, member caches, domains and provenance are rejected', () => {
+  const good=OstwaldColor.combineBySharedMember(grayGroup('ace'),grayGroup('egi'));
+  const changes=[g=>{delete g.members;},g=>{g.level=8;},g=>{g.members.pop();},g=>{g.domains=['isovalent'];},
+    g=>{delete g.provenance;},g=>{g.provenance.operation='substitution';},
+    g=>{g.provenance.sharedElements=[];},g=>{g.provenance.replacedElement='gray:e';},
+    g=>{g.provenance.replacementGroup=1;},g=>{g.provenance.sourceCase='GGg';},
+    g=>{g.provenance.sourcePages=[999];},g=>{g.provenance.sequence.reverse();},
+    g=>{g.groups[0].provenance.sequence=[];},g=>{g.groups=[];},g=>{g.members[0].rgb=[2,2,2];}];
+  for(const change of changes) {
+    const bad=clone(good); change(bad);
+    assert.throws(()=>OstwaldColor.flattenHarmonyMembers(bad),Error);
+    assert.throws(()=>OstwaldColor.compoundLevel(bad),Error);
+    assert.throws(()=>OstwaldColor.combineBySharedMember(bad,grayGroup('ace')),Error);
+  }
+  for(const bad of [null,{},[],{members:[]}]) assert.throws(()=>OstwaldColor.compoundLevel(bad),Error);
+});
+
+test('Cycles and malformed provenance: reject graph cycles and executable/non-plain payloads', () => {
+  const good=OstwaldColor.combineBySharedMember(grayGroup('ace'),grayGroup('egi'));
+  const self=clone(good); self.groups[0]=self;
+  assert.throws(()=>OstwaldColor.flattenHarmonyMembers(self),/Cyclic/);
+  const indirect=clone(good); indirect.groups[0].provenance.parent=indirect;
+  assert.throws(()=>OstwaldColor.compoundLevel(indirect),/Cyclic/);
+  for(const value of [undefined,()=>1,NaN,new Date()]) {
+    const bad=clone(good); bad.provenance.extra=value;
+    assert.throws(()=>OstwaldColor.flattenHarmonyMembers(bad),Error);
+  }
+  const accessor=clone(good); Object.defineProperty(accessor.provenance,'getter',{enumerable:true,get(){throw new Error('should not execute');}});
+  assert.throws(()=>OstwaldColor.flattenHarmonyMembers(accessor),/data properties/);
+  const shared=grayGroup('ace');
+  assert.equal(OstwaldColor.combineBySharedMember(shared,shared).level,2); // sharing is not a cycle
+});
+
+test('Compound calibration: one explicit context validates every node and shared identity', () => {
+  const custom=circle.map(h=>({...h,lab:circle[0].lab.slice(),rgb:circle[0].rgb.slice()}));
+  const recolor=label=>{const f=field(label);return {...f,...OstwaldColor.mix(custom[f.hueIndex-1].lab,f.w,f.s),label:f.label,source:'atlas'};};
+  const a=OstwaldColor.elementaryHarmony('isovalent',['5ic','13ic','21ic'].map(recolor),{hueCircle:custom});
+  const b=OstwaldColor.elementaryHarmony('same-hue',['5ia','5ic','5ie'].map(recolor),{relation:'isotint',hueCircle:custom});
+  const context={hueCircle:custom};
+  const result=OstwaldColor.combineBySharedMember(a,b,context);
+  assert.deepEqual(result.provenance.sharedElements,['atlas:5ic']);
+  assert.equal(OstwaldColor.compoundLevel(result,context),2);
+  assert.deepEqual(OstwaldColor.flattenHarmonyMembers(result,context),result.members);
+  assert.throws(()=>OstwaldColor.flattenHarmonyMembers(result),/lab/);
+  assert.throws(()=>OstwaldColor.combineBySharedMember(a,b,{mode:'rgb'}),/context/);
+});
+
+test('Compound registry: implemented primary laws replace the Phase-5 candidate marker', () => {
+  const registry=OstwaldColor.harmonyRuleRegistry();
+  for(const id of ['compound-shared-member','compound-substitution']) {
+    const rule=registry.rules.find(r=>r.id===id);
+    assert.equal(rule.implementationStatus,'implemented'); assert.equal(rule.sourceStatus,'primary-1921');
+    assert.ok(rule.sourcePages.includes(105));
+  }
+  assert.ok(!registry.deferred.some(r=>r.id==='compound-harmonies'));
+});
+
+console.log(`\n${passed} tests passed.`);
