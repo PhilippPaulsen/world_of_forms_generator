@@ -58,6 +58,18 @@ fail=0; for f in tools/*/test-*.js color-harmony/test.js color-harmony/ui/test.m
 
 A single suite: `node tools/session/test-session.js`. `tools/ui/measure-layout.js` and `check-pointer-mapping.js` are browser console scripts, not part of this run. A new test directory under `tools/` only needs a file named `test-*.js` that exits non-zero on failure.
 
+**Clean-export check - run it before a merge, and whenever a page or a script tag changes.** It shows what only works in your checkout (an untracked or ignored file, a missing `<script>` tag, a global another page defines). Export the commit, serve the export, look at three pages:
+
+```bash
+d=$(mktemp -d) && git archive HEAD | tar -x -C "$d" && cd "$d" && python3 -m http.server 8990 --bind 127.0.0.1
+```
+
+1. `index.html`: no console error; a pattern draws; a click on a node selects it.
+2. **`gallery.html`: "N entries loaded", then open one catalog pattern (click a tile) - the dialog shows the tessellation and no "Failed to render full tessellation" text; pick a shape, an order and a group - the orbit tiles draw and none says "render failed"; "Open in generator" opens the generator with that pattern.** The gallery loads only part of `core/` and not `core/state.js`; `gallery-render.js` stands in for it, and a global it lacks breaks the detail view without any error at load time (this happened from 2026-09-24 until 2026-10-08, see the ROADMAP).
+3. `color-harmony/ui/index.html`: the page renders.
+
+The headless counterpart of step 2 runs in the normal suite (`tools/gallery/test-gallery-smoke.js`, `tools/gallery/test-gallery-globals.js`) and takes the export as well: `GALLERY_ROOT="$d" node tools/gallery/test-gallery-smoke.js`.
+
 ## Terminology
 
 German↔English terminology for Ostwald's vocabulary (mirror pair, rotational form, node, theme line, tip, star, wreath, portfolio/sheet, etc.) is documented in `docs/terminology.md`, along with a proposed systematic (Hinterreiter-style) pattern-naming scheme intended for Roadmap item 1.11. Use the established English terms consistently in code, UI labels, and comments — do not introduce new translations ad hoc.
