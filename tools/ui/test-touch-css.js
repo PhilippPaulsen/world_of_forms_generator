@@ -78,6 +78,29 @@ const sheetRule = style.find(b => isRule(b) && b.header === '.overlay.sheet');
 const mh = sheetRule ? [...sheetRule.body.matchAll(/max-height\s*:\s*([^;]+);/g)].map(m => norm(m[1])) : [];
 check('.overlay.sheet: max-height 80vh first (fallback), 80dvh after it', mh.length === 2 && mh[0] === '80vh' && mh[1] === '80dvh', mh.join(' , '));
 
+console.log('\n== the coarse-pointer minimum target (commit B) ==');
+{
+    const isCoarse = b => b.parents.some(p => /^@media\s*\(\s*pointer:\s*coarse\s*\)$/.test(p));
+    const find = (bl, sel, pred) => bl.filter(b => isRule(b) && isCoarse(b) && b.header.split(',').map(norm).includes(sel) && (!pred || pred(b)));
+    const has = (bl, sel, props) => find(bl, sel).some(b => Object.entries(props).every(([k, v]) => decl(b, k, v)));
+    const inl = sheets['index.html inline <style>'];
+    const T = 'var\\(--target\\)';
+    check('.app-tabs a: min-width --target (the "Netz" tab was 47.8px)', has(style, '.app-tabs a', { 'min-width': T, 'justify-content': 'center' }));
+    for (const sel of ['.icon-btn', '.layer-btn', '.layer-remove-btn', '.format-btn', '.dialog-content button'])
+        check(`${sel}: border-box, min-width and min-height --target`, has(style, sel, { 'box-sizing': 'border-box', 'min-width': T, 'min-height': T }));
+    check('.layer-btn and .layer-remove-btn: flex none, no wrapping text (no squeezing to 11px)', ['.layer-btn', '.layer-remove-btn'].every(sel => has(style, sel, { flex: 'none', 'white-space': 'nowrap' })));
+    check('the layer row wraps: .icon-row flex-wrap, #layer-tabs display: contents, .layer-tab flex none', has(style, '.icon-row', { 'flex-wrap': 'wrap' }) && has(style, '#layer-tabs', { display: 'contents' }) && has(style, '.layer-tab', { flex: 'none' }));
+    check('the timeline keyframe list and the pairing rows wrap', has(style, '#timeline-keyframe-list', { 'flex-wrap': 'wrap' }) && has(style, '.pairing-row', { 'flex-wrap': 'wrap' }));
+    check('.layer-btn.pairing-move-btn: min-width --target (out-ranks .pairing-move-btn { min-width: 24px })', has(style, '.layer-btn.pairing-move-btn', { 'min-width': T }));
+    check('number fields and selects: min-height --target', has(style, 'select', { 'min-height': T }) && has(style, '.control-group input[type="number"]', { 'min-height': T }));
+    check('a stepper\'s value (number field and display) is --target wide and high, with "html" and ">" so it out-ranks the base rules', has(style, 'html .stepper > input[type="number"]', { width: T, 'min-width': T, 'align-self': 'stretch' }) && has(style, 'html .stepper > .stepper-display', { width: T, 'min-width': T, 'align-self': 'stretch' }));
+    const cb = 'input[type="checkbox"].layer-enable-checkbox';
+    check('the layer checkbox: --target hit area, custom box (appearance none), selector out-ranks index.html\'s checkbox rule', has(style, cb, { appearance: 'none', width: T, height: T }) && find(style, cb + '::before').length === 1 && find(style, cb + ':checked::before').length === 1 && find(style, cb + ':checked::after').length === 1);
+    check('range inputs (index.html inline): --target high, the track drawn by the pseudo-element (6px), a 28px thumb', has(inl, 'input[type="range"]', { height: T, background: 'transparent' }) && has(inl, 'input[type="range"]::-webkit-slider-runnable-track', { height: '6px' }) && has(inl, 'input[type="range"]::-webkit-slider-thumb', { width: '28px', height: '28px' }) && has(inl, 'input[type="range"]::-moz-range-thumb', { width: '28px', height: '28px' }));
+    const outside = ['.layer-btn', '.layer-remove-btn', '.icon-btn', '.format-btn', '.pairing-row', '.icon-row'].filter(sel => style.concat(inl).some(b => isRule(b) && !isCoarse(b) && !b.parents.some(p => /pointer/.test(p)) && b.header.split(',').map(norm).includes(sel) && (/min-(width|height)\s*:\s*var\(--target\)/.test(b.body) || /flex-wrap\s*:\s*wrap/.test(b.body))));
+    check('fine pointer unchanged: no top-level rule sets min-width / min-height --target or flex-wrap on those selectors (all of it is inside the coarse query)', outside.length === 0, outside.join(', ') || 'none');
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 console.log(failures ? 'FAIL' : 'PASS');
 process.exit(failures ? 1 : 0);

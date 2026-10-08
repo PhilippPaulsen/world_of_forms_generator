@@ -139,6 +139,81 @@ button,
 select,
 label { touch-action: manipulation; }
 
+/* Phase 2 (touch), track A, commit B: the coarse-pointer minimum target (--target, 48px). Only under (pointer: coarse): a mouse keeps every size it has.
+   What was below it at 375px (measured, scratchpad/ta-results/baseline/small-375.json): the header tab "Netz" (47.8px wide: text + 2 x 4px padding; all three tabs are
+   one bar high, 71px inside the header's 1px border), every .layer-btn / .icon-btn of the layer row (40px high), the layer remove button (22px high, squeezed to
+   10.8px wide by flex-shrink), the layer checkbox (24 x 13), the layer number fields (60 x 40), the selects (32px), the layer progress slider (6px), the export format and close buttons
+   (39-45px high), the node count / size / anchor hue number fields inside a stepper (28px high), and the two <a class="icon-btn"> links Gallery and Farborgel (content-box:
+   40px + border = 42px). The layer row is only made to WRAP and reach the minimum - not redesigned (that is 5c / 5d); Gallery and Farborgel are replaced by the organ
+   strip in 5b and only get their size. The one documented exception that stays below 48px: the stepper chevron halves (24px, WCAG 2.5.8, see .stepper). The ::before / ::after of the checkbox below draw its box (its selector carries input[type="checkbox"] to out-rank index.html's `input[type="range"], input[type="checkbox"] { width: 100% }`). */
+@media (pointer: coarse) {
+  .app-tabs a { min-width: var(--target); justify-content: center; }
+  .icon-btn,
+  .layer-btn,
+  .layer-remove-btn,
+  .format-btn,
+  .dialog-content button {
+    box-sizing: border-box;
+    min-width: var(--target);
+    min-height: var(--target);
+  }
+  .layer-btn,
+  .layer-remove-btn { flex: none; white-space: nowrap; }
+  .icon-row { flex-wrap: wrap; }
+  #layer-tabs { display: contents; }
+  .layer-tab { flex: none; }
+  #timeline-keyframe-list { flex-wrap: wrap; }
+  .pairing-row { flex-wrap: wrap; }          /* label + 5 buttons at --target do not fit a 320px row */
+  .pairing-label { min-width: 8em; }
+  .layer-btn.pairing-move-btn { min-width: var(--target); }   /* beats .pairing-move-btn { min-width: 24px } further down */
+  .control-group input[type="number"],
+  select { min-height: var(--target); }
+  /* a stepper's value (a typable number field, or the display span of the Netz / Farbe steppers) is --target wide and high too: the stepper's chevron
+     halves stay 24px (the documented exception) but the value is the one big target in it. "html" and ">" out-rank the base rules further down and index.html's `.control-group input[type="number"] { width: 60px }`. */
+  html .stepper > input[type="number"],
+  html .stepper > .stepper-display { align-self: stretch; width: var(--target); min-width: var(--target); }
+  html .stepper > .stepper-display { display: flex; align-items: center; justify-content: center; }
+  input[type="checkbox"].layer-enable-checkbox {
+    -webkit-appearance: none;
+    appearance: none;
+    position: relative;
+    flex: none;
+    width: var(--target);
+    height: var(--target);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  input[type="checkbox"].layer-enable-checkbox::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 22px;
+    height: 22px;
+    margin: -11px 0 0 -11px;
+    box-sizing: border-box;
+    border: 1px solid var(--color-text);
+    border-radius: 4px;
+    background: var(--color-bg);
+  }
+  input[type="checkbox"].layer-enable-checkbox:checked::before { background: var(--color-text); }
+  input[type="checkbox"].layer-enable-checkbox:checked::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 6px;
+    height: 11px;
+    margin: -8px 0 0 -3px;
+    border: solid var(--color-bg);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+}
+
 /* iOS Safari zooms the page when a field with a font size below 16px takes focus (#face-colors-rule, #timeline-pairing-segment and
    #timeline-pairing-sort were 13.3px). Range inputs do not trigger it. Only on a coarse pointer: the desktop look is unchanged. */
 @media (pointer: coarse) {
