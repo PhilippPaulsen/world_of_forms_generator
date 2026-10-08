@@ -67,6 +67,19 @@ var showFaces = false; // see docblock above - keeps core/faces.js unneeded
 var width = null;
 var height = null;
 
+// The net-warp globals (Group E, since 629e7575 / ef82275d): drawTessellation() asks netTransformNow() / netWarpForBase() what net is in force,
+// and drawCurvedBezier() reads activeNetWarp, all as BARE globals that core/state.js defines in the app. The gallery never loads core/state.js
+// (see toTileLocal() below), so each one needs its inert value here: no timeline, no net animation, no net transform = a regular net, no warp.
+// nodeCount / shapeSizeFactor are only passed on to netWarpForBase() and only read when a net transform is set (never, here); the grid builders get
+// their sizes as arguments. A global added to core/tiling.js, curves.js or netwarp.js without a line here makes tools/gallery/test-gallery-smoke.js
+// and test-gallery-globals.js fail.
+var timeline = null;
+var baseNetAnimation = null;
+var baseNetTransform = null;
+var activeNetWarp = null;
+var nodeCount = null;
+var shapeSizeFactor = null;
+
 // Replicated (not eval'd from core/state.js) for the same scoping
 // reason renderSingleCellSVG.js replicates it: core/state.js declares
 // its own competing top-level centroid/currentShape/etc that would
