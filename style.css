@@ -116,6 +116,37 @@ button, input, select, textarea {
   border: none;
 }
 
+/* Phase 2 (touch), track A. Every :hover rule in this file and in index.html's inline <style> sits inside @media (hover: hover): on a touch screen a tap
+   leaves :hover set until the next tap elsewhere (sticky hover); the pressed (:active) and keyboard (:focus-visible) states are outside the query and stay
+   the feedback on touch. touch-action: manipulation (never none) keeps scrolling and pinch zoom and drops the double-tap zoom delay; the canvas also gets
+   no callout and no text selection (a long press on iOS would otherwise open the image menu), and so do the stepper buttons (holding them repeats a step:
+   a long press). The viewport stays zoomable. tools/ui/test-touch-css.js guards all of it. */
+#canvas-container,
+#canvas-container canvas { touch-action: manipulation; }
+#canvas-container canvas {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.stepper-btn {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+button,
+[role="radio"],
+[role="spinbutton"],
+select,
+label { touch-action: manipulation; }
+
+/* iOS Safari zooms the page when a field with a font size below 16px takes focus (#face-colors-rule, #timeline-pairing-segment and
+   #timeline-pairing-sort were 13.3px). Range inputs do not trigger it. Only on a coarse pointer: the desktop look is unchanged. */
+@media (pointer: coarse) {
+  select,
+  textarea,
+  input:not([type="range"]) { font-size: max(16px, 1em); }
+}
+
 /* Controls container - flat, no glass/blur/shadow. Layout (flex-wrap
    row) is owned by index.html's inline <style>; max-width/grid removed
    here since they constrained the toolbar to wrap into two rows and
@@ -253,8 +284,10 @@ input[type="range"]::-webkit-slider-thumb {
   transition: background 0.3s;
 }
 
-input[type="range"]::-webkit-slider-thumb:hover {
-  background: #555;
+@media (hover: hover) {
+  input[type="range"]::-webkit-slider-thumb:hover {
+    background: #555;
+  }
 }
 
 body.dark input[type="range"] {
@@ -265,20 +298,22 @@ body.dark input[type="range"]::-webkit-slider-thumb {
   background: #eee;
 }
 
-/* --- Tooltip Styles for Icon Buttons --- */
-.icon-btn[title]:hover::after {
-  content: attr(title);
-  position: absolute;
-  bottom: -28px;
-  background: rgba(0, 0, 0, 0.75);
-  color: white;
-  font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  white-space: nowrap;
-  pointer-events: none;
-  transform: translateX(-50%);
-  left: 50%;
+/* --- Tooltip Styles for Icon Buttons --- (hover only: on touch a tap would leave the tooltip stuck on the button) */
+@media (hover: hover) {
+  .icon-btn[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: -28px;
+    background: rgba(0, 0, 0, 0.75);
+    color: white;
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+    pointer-events: none;
+    transform: translateX(-50%);
+    left: 50%;
+  }
 }
 
 /* Removed duplicated outer border from canvas */
@@ -296,8 +331,10 @@ body.dark input[type="range"]::-webkit-slider-thumb {
   stroke-width: 1px;
 }
 
-.node:hover {
-  fill: red;
+@media (hover: hover) {
+  .node:hover {
+    fill: red;
+  }
 }
 /* --- Line Color Variables for Light/Dark Mode --- */
 :root {
@@ -322,7 +359,9 @@ body.dark {
 #timeline-pairing-browser-count { font-size: 12px; margin: 2px 0; }
 #timeline-pairing-browser-list { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; }
 .pairing-browse-row { display: flex; justify-content: space-between; width: 100%; padding: 2px 6px; border: 0; border-bottom: 1px solid #eee; background: #fff; font: 12px monospace; text-align: left; cursor: pointer; }
-.pairing-browse-row:hover { background: #f0f0f0; }
+@media (hover: hover) {
+  .pairing-browse-row:hover { background: #f0f0f0; }
+}
 .pairing-browse-row.current { background: #000; color: #fff; }
 
 /* Roadmap 1.8 Stage D phase (iii): per-row End-line orientation toggle */
@@ -341,7 +380,9 @@ body.dark {
 .fc-axis-value { color: #666; }
 #face-colors-list { margin: 6px 0; max-height: 240px; overflow-y: auto; }
 .fc-row { display: flex; align-items: center; gap: 6px; margin: 2px 0; padding: 1px 2px; font-size: 12px; border-radius: 3px; }
-.fc-row:hover { background: #f0f0f0; }
+@media (hover: hover) {
+  .fc-row:hover { background: #f0f0f0; }
+}
 .fc-swatch { width: 16px; height: 16px; border: 1px solid #888; flex: none; }
 .fc-label { flex: 1; }
 .fc-default { color: #888; font-style: italic; }
@@ -480,7 +521,9 @@ body.dark {
   border-color: var(--color-hairline);
   cursor: not-allowed;
 }
-.nav-row .icon-btn[aria-disabled="true"]:hover { background: var(--background); }
+@media (hover: hover) {
+  .nav-row .icon-btn[aria-disabled="true"]:hover { background: var(--background); }
+}
 
 .nav-cluster { display: flex; align-items: center; gap: var(--gap); flex: none; }
 .nav-divider { width: 1px; height: var(--target); background: var(--color-hairline); margin: 0 4px; flex: none; }
@@ -609,9 +652,13 @@ body.dark {
 .stepper-btn .ico { width: 12px; height: 12px; stroke-width: 3.5; }
 /* the hairline between the halves is an inset shadow, not a border: it takes no room, so both halves are exactly --target / 2 */
 .stepper-btn + .stepper-btn { box-shadow: inset 0 1px 0 var(--color-hairline); }
-.stepper-btn:hover { background: var(--hover-bg); }
+@media (hover: hover) {
+  .stepper-btn:hover { background: var(--hover-bg); }
+}
 .stepper-btn[aria-disabled="true"] { color: var(--color-disabled); cursor: not-allowed; }
-.stepper-btn[aria-disabled="true"]:hover { background: transparent; }
+@media (hover: hover) {
+  .stepper-btn[aria-disabled="true"]:hover { background: transparent; }
+}
 .stepper-btn:focus-visible { outline-offset: -2px; }
 
 /* Overlay ("More"): a popover under its button on wide screens, a bottom sheet on the phone. One at a time. */
@@ -640,7 +687,8 @@ body.dark {
   top: auto;
   width: auto;
   max-width: none;
-  max-height: 80vh;
+  max-height: 80vh;    /* fallback for a browser without dvh */
+  max-height: 80dvh;   /* the visible height: 80vh is the large viewport on iOS, taller than the screen while the address bar shows */
   overflow: auto;
   border-width: 1px 0 0 0;
   border-radius: 12px 12px 0 0;
@@ -669,10 +717,14 @@ body.dark {
   cursor: pointer;
   touch-action: manipulation;
 }
-.opt:hover { background: var(--hover-bg); }
+@media (hover: hover) {
+  .opt:hover { background: var(--hover-bg); }
+}
 .opt.active { background: var(--color-text); color: var(--color-bg); }
 .opt[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
-.opt[aria-disabled="true"]:hover { background: var(--background); }
+@media (hover: hover) {
+  .opt[aria-disabled="true"]:hover { background: var(--background); }
+}
 
 /* Group D Phase B3: the Kreis/Dreieck/Register anchor widgets (#more-farbe) - a visual/text alternative to
    the B2 numeric steppers over the same anchor state. Point styling mirrors .opt's active/hover language
@@ -681,7 +733,9 @@ body.dark {
 .anchor-widget-svg[hidden] { display: none; }
 .anchor-point circle.anchor-point-hit { fill: transparent; }
 .anchor-point circle.anchor-point-face { fill: var(--background); stroke: var(--color-text); stroke-width: 1.5; }
-.anchor-point:hover circle.anchor-point-face { fill: var(--hover-bg); }
+@media (hover: hover) {
+  .anchor-point:hover circle.anchor-point-face { fill: var(--hover-bg); }
+}
 .anchor-point.active circle.anchor-point-face { fill: var(--color-text); }
 .anchor-point text { font-size: 8px; fill: var(--color-text); pointer-events: none; text-anchor: middle; dominant-baseline: central; }
 .anchor-point.active text { fill: var(--color-bg); }
