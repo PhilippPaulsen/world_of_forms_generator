@@ -104,9 +104,42 @@
    *   noTyping  true when `input` is only a state carrier (a hidden range input, value = percent): no typed-value
    *            handling. keyEl  the element that takes ArrowUp/Down (default: the input; a focusable spinbutton
    *            display otherwise)
-   *   Hold a button: it repeats after 600 ms, faster after a while. Arrow keys on the input step too.
+   *   Hold a button: it repeats after 600 ms (every 150 ms, every 70 ms after 1.8 s of repeating - see holdRepeat). Arrow keys on the input step too.
    *   refresh() re-reads compute() for both directions and updates the buttons; call it after any state change.
    */
+  // Hold-to-repeat of a stepper chevron (Phase 2, track A, commit C). A SELF-RESCHEDULING timeout, not a setInterval: a setInterval keeps firing while the step
+  // (the handler: setValue -> input/change events -> sketch.js rebuilds the grid and redraw()s, all synchronous) takes longer than the interval, and the queued
+  // callbacks stack up and keep stepping after the finger is lifted. Here the next step is scheduled only after the previous one has FINISHED: it is due at the
+  // nominal time (the same 600 ms start delay, then every 150 ms, every 70 ms once 1800 ms of repeating have passed - by elapsed time, not by step count), but never
+  // earlier than 16 ms after the previous step ended, i.e. the gap is max(interval, cost of the last step + 16 ms). On a device that keeps up the step times are
+  // those of the old setInterval; on one that does not, steps are skipped (never added). stop() invalidates a generation token, so a timer callback that is
+  // already queued or running when the release arrives (or a step that itself ends the hold) cannot step or reschedule. step() returns false to end the hold.
+  const HOLD_START_MS = 600, HOLD_SLOW_MS = 150, HOLD_FAST_MS = 70, HOLD_FAST_AFTER_MS = 1800, HOLD_PAUSE_MS = 16;
+  function holdRepeat(stepFn) {
+    let timer = null, gen = 0, lastCost = 0;
+    function stop() { gen++; if (timer !== null) { clearTimeout(timer); timer = null; } }
+    function start() {
+      stop();
+      const mine = gen, t0 = performance.now() + HOLD_START_MS;
+      let due = t0;
+      function schedule(at) { due = at; timer = setTimeout(tick, Math.max(0, at - performance.now())); }
+      function tick() {
+        timer = null;
+        if (mine !== gen) return;                        // released: a callback that was already queued does nothing
+        const began = performance.now();
+        const go = stepFn();
+        const end = performance.now();
+        lastCost = end - began;
+        if (mine !== gen) return;                        // released during the step
+        if (!go) { stop(); return; }
+        const interval = (due - t0) >= HOLD_FAST_AFTER_MS ? HOLD_FAST_MS : HOLD_SLOW_MS;
+        schedule(Math.max(due + interval, end + HOLD_PAUSE_MS));
+      }
+      schedule(t0 + HOLD_SLOW_MS);                       // 600 ms after the press, plus the first 150 ms interval: the first repeat is at 750 ms
+    }
+    return { start: start, stop: stop, cost: function () { return lastCost; } };
+  }
+
   function stepper(root, opts) {
     const input = opts.input, buttons = Array.prototype.slice.call(root.querySelectorAll('.stepper-btn'));
     let last = parseInt(input.value, 10); // the last valid value, for restoring an emptied field
@@ -156,27 +189,23 @@
         setDisabled(b, r.to === null || r.to === undefined ? r.reason : null);
       });
     }
+    const holds = [];
     buttons.forEach(function (b) {
       const dir = parseInt(b.dataset.dir, 10);
       attachReason(b);
-      let delay = null, repeat = null, count = 0;
-      function stop() { clearTimeout(delay); clearInterval(repeat); delay = repeat = null; count = 0; }
+      const hold = holdRepeat(function () { return !isDisabled(b) && step(dir); });
+      holds.push(hold);
+      const stop = hold.stop;
       let downDisabled = false; // was the button disabled when the press began? (the step itself may disable it)
       b.addEventListener('pointerdown', function (e) {
         if (e.button !== undefined && e.button !== 0) return;
         downDisabled = isDisabled(b);
         if (downDisabled) return; // the click shows the reason
         step(dir);
-        stop();
-        delay = setTimeout(function () {
-          repeat = setInterval(function () {
-            count++;
-            if (isDisabled(b) || !step(dir)) { stop(); return; }
-            if (count === 12) { clearInterval(repeat); repeat = setInterval(function () { if (isDisabled(b) || !step(dir)) stop(); }, 70); }
-          }, 150);
-        }, 600);
+        hold.start();
       });
-      ['pointerup', 'pointercancel', 'pointerleave', 'blur'].forEach(function (t) { b.addEventListener(t, stop); });
+      // every way a hold can end: finger / button up, the gesture taken over (scroll, a system gesture), the pointer leaving, focus lost, a long-press context menu
+      ['pointerup', 'pointercancel', 'pointerleave', 'blur', 'contextmenu'].forEach(function (t) { b.addEventListener(t, stop); });
       // click: a mouse/touch click (event.detail >= 1) was already handled on pointerdown; a keyboard activation
       // (Enter/Space, or a scripted .click()) has detail 0 and steps here. Either way a disabled button shows its reason.
       b.addEventListener('click', function (e) {
@@ -186,6 +215,8 @@
       });
       b.style.touchAction = 'manipulation';
     });
+    // the page goes to the background (tab switch, app switch, lock screen) while a chevron is held: no pointerup may ever arrive
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') holds.forEach(function (h) { h.stop(); }); });
     (opts.keyEl || input).addEventListener('keydown', function (e) {
       if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); step(1); }
       else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
