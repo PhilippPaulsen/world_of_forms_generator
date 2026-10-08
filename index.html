@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260929ba">
+  <link rel="stylesheet" href="style.css?v=20260929bb">
   <!-- Cache-busting for the ES-module graph behind core/farborgel-selection.mjs (below). The <script src> tags in
        this file carry ?v= by hand-bump (CLAUDE.md), but a module's own `import ... from './x.mjs'` cannot: this
        import map is the one place that gives every module in that graph the same ?v= as everything else (bump it
@@ -18,11 +18,11 @@
   <script type="importmap">
     {
     "imports": {
-      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929ba",
-      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929ba",
-      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929ba",
-      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929ba",
-      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929ba"
+      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929bb",
+      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929bb",
+      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929bb",
+      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929bb",
+      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929bb"
     }
     }
   </script>
@@ -593,7 +593,7 @@
           <button class="stepper-btn" type="button" data-dir="-1" title="Register zurück" aria-label="Register zurück"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9 L12 15 L18 9" /></svg></button>
         </div>
       </div>
-      <span id="farbe-anchor-preview" class="fc-swatch" title="Anker-Vorschau"></span>
+      <span id="farbe-anchor-preview" class="fc-swatch" title="Anker-Vorschau" role="img" aria-label="Anker-Vorschau"></span>
       <span class="nav-break" aria-hidden="true"></span>
       <select id="face-colors-rule" hidden tabindex="-1" aria-hidden="true"></select>
       <!-- Group D Phase B4 follow-up: the old rule row's UI (the 4 rule-choice buttons, formerly in
@@ -662,40 +662,40 @@
   <div class="canvas-row">
       <div id="canvas-container"></div>
       <div class="rail-left">
-      <button id="btn-undo" class="icon-btn" title="Undo">
+      <button id="btn-undo" class="icon-btn" title="Undo" aria-label="Undo">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M9 14 4 9l5-5" />
           <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11" />
         </svg>
       </button>
-      <button id="btn-redo" class="icon-btn" title="Redo">
+      <button id="btn-redo" class="icon-btn" title="Redo" aria-label="Redo">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M15 14 20 9l-5-5" />
           <path d="M20 9h-10.5a5.5 5.5 0 0 0 -5.5 5.5v0a5.5 5.5 0 0 0 5.5 5.5H13" />
         </svg>
       </button>
-      <button id="btn-clear" class="icon-btn" title="Clear">
+      <button id="btn-clear" class="icon-btn" title="Clear" aria-label="Clear">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
         </svg>
       </button>
-      <button id="btn-random" class="icon-btn" title="Random Connection">
+      <button id="btn-random" class="icon-btn" title="Random Connection" aria-label="Random Connection">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l-5 5M4 4l5 5" />
         </svg>
       </button>
-      <button id="btn-toggle-nodes" class="icon-btn active" title="Toggle Nodes">
+      <button id="btn-toggle-nodes" class="icon-btn active" title="Toggle Nodes" aria-label="Toggle Nodes">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
           <circle cx="12" cy="12" r="3" />
         </svg>
       </button>
-      <button id="btn-toggle-curve" class="icon-btn" title="Toggle Curve">
+      <button id="btn-toggle-curve" class="icon-btn" title="Toggle Curve" aria-label="Toggle Curve">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M4 12c2-4 6-4 8 0s6 4 8 0" />
         </svg>
       </button>
-      <button id="btn-toggle-faces" class="icon-btn" title="Toggle Face Fill">
+      <button id="btn-toggle-faces" class="icon-btn" title="Toggle Face Fill" aria-label="Toggle Face Fill">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
           <path d="M12 2 L22 20 L2 20 Z" />
         </svg>
@@ -707,7 +707,7 @@
           <circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none" />
         </svg>
       </button>
-      <button id="btn-save" class="icon-btn" title="Download Image">
+      <button id="btn-save" class="icon-btn" title="Download Image" aria-label="Download Image">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
         </svg>
@@ -812,19 +812,19 @@
       <div class="legacy-controls" hidden>
       <div class="control-group">
         <div class="icon-row">
-          <button id="btn-mode-none" class="icon-btn mode-btn" data-mode="none" title="No symmetry">
+          <button id="btn-mode-none" class="icon-btn mode-btn" data-mode="none" title="No symmetry" aria-label="No symmetry">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none" />
             </svg>
           </button>
-          <button id="btn-mode-spiegeling" class="icon-btn mode-btn active" data-mode="spiegeling" title="Mirror symmetry (Spiegeling)">
+          <button id="btn-mode-spiegeling" class="icon-btn mode-btn active" data-mode="spiegeling" title="Mirror symmetry (Spiegeling)" aria-label="Mirror symmetry (Spiegeling)">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2,2" />
               <path d="M4 12 L9 8 L9 16 Z" fill="currentColor" stroke="none" />
               <path d="M20 12 L15 8 L15 16 Z" fill="currentColor" stroke="none" />
             </svg>
           </button>
-          <button id="btn-mode-drehling" class="icon-btn mode-btn" data-mode="drehling" title="Rotational symmetry (Drehling)">
+          <button id="btn-mode-drehling" class="icon-btn mode-btn" data-mode="drehling" title="Rotational symmetry (Drehling)" aria-label="Rotational symmetry (Drehling)">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M20 12a8 8 0 1 1-2.7-6" />
               <path d="M20 4v6h-6" />
@@ -934,7 +934,7 @@
                swap convention as #btn-toggle-nodes, a separate control
                for a separate thing (this hides the CONSTRUCTION line
                within kind:'free', not the node markers). -->
-          <button id="btn-toggle-free-visible" class="icon-btn" title="Toggle Underlying Line (Hidden Law)">
+          <button id="btn-toggle-free-visible" class="icon-btn" title="Toggle Underlying Line (Hidden Law)" aria-label="Toggle Underlying Line (Hidden Law)">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M1 1l22 22" />
               <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
@@ -948,7 +948,7 @@
                click uses Math.random(), never the render path itself
                (core/curves.js's buildCurvePieces() stays a pure
                function of the stored seed). -->
-          <button id="btn-free-reroll-seed" class="icon-btn" title="Reroll Free Clothing Variation">
+          <button id="btn-free-reroll-seed" class="icon-btn" title="Reroll Free Clothing Variation" aria-label="Reroll Free Clothing Variation">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="3" width="18" height="18" rx="3" />
               <circle cx="8" cy="8" r="1.4" fill="currentColor" stroke="none" />
@@ -1016,13 +1016,13 @@
         <div class="icon-row" id="timeline-keyframe-list" hidden></div>
         <div id="timeline-net-state" hidden></div>
         <div class="icon-row" id="timeline-playback-controls" hidden>
-          <button id="btn-timeline-play" class="icon-btn" title="Play">
+          <button id="btn-timeline-play" class="icon-btn" title="Play" aria-label="Play">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
               <path d="M7 5 L19 12 L7 19 Z" />
             </svg>
           </button>
         </div>
-        <input type="range" id="timeline-progress-input" min="0" max="1" step="0.001" value="0" title="Progress" hidden>
+        <input type="range" id="timeline-progress-input" min="0" max="1" step="0.001" value="0" title="Progress" aria-label="Progress" hidden>
         <!-- Roadmap 1.8 Stage D phase (i): manual line pairing for one
              timeline segment - see sketch.js's renderTimelinePairingEditor().
              Row order = the pairing (Start line i -> the End line shown
@@ -1030,7 +1030,7 @@
              timeline at t=0.5 of that segment as a live preview. Hidden
              until the timeline has at least one segment. -->
         <div id="timeline-pairing" class="timeline-pairing" hidden>
-          <label>Line Pairing</label>
+          <label for="timeline-pairing-segment">Line Pairing</label>
           <select id="timeline-pairing-segment"></select>
           <div id="timeline-pairing-list"></div>
           <div id="timeline-pairing-metric"></div>
@@ -1043,11 +1043,11 @@
           <button id="btn-timeline-pairing-browse" class="layer-btn" hidden>Browse all</button>
           <div id="timeline-pairing-browser" hidden>
             <div class="pairing-browser-controls">
-              <select id="timeline-pairing-sort">
+              <select id="timeline-pairing-sort" aria-label="Sort pairings">
                 <option value="asc">Σd² ascending</option>
                 <option value="desc">Σd² descending</option>
               </select>
-              <input type="number" id="timeline-pairing-filter" min="0" step="any" placeholder="max Σd²" title="Only list pairings with Σd² at most this value">
+              <input type="number" id="timeline-pairing-filter" min="0" step="any" placeholder="max Σd²" title="Only list pairings with Σd² at most this value" aria-label="Only list pairings with Σd² at most this value">
             </div>
             <div id="timeline-pairing-browser-count"></div>
             <div id="timeline-pairing-browser-list"></div>
@@ -1098,17 +1098,17 @@
       <div class="control-group" id="layer-shape-group" hidden>
         <label>Layer Shape</label>
         <div class="icon-row">
-          <button class="layer-shape-icon-btn icon-btn" data-shape="triangle" title="Triangle">
+          <button class="layer-shape-icon-btn icon-btn" data-shape="triangle" title="Triangle" aria-label="Triangle">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 4L4 20h16L12 4z" />
             </svg>
           </button>
-          <button class="layer-shape-icon-btn icon-btn" data-shape="square" title="Square">
+          <button class="layer-shape-icon-btn icon-btn" data-shape="square" title="Square" aria-label="Square">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="4" y="4" width="16" height="16" />
             </svg>
           </button>
-          <button class="layer-shape-icon-btn icon-btn" data-shape="hex" title="Hexagon">
+          <button class="layer-shape-icon-btn icon-btn" data-shape="hex" title="Hexagon" aria-label="Hexagon">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2l8.66 5v10L12 22 3.34 17V7L12 2z" />
             </svg>
@@ -1173,19 +1173,19 @@
       <div class="control-group" id="layer-mode-group" hidden>
         <label>Layer Mode</label>
         <div class="icon-row">
-          <button class="layer-mode-btn icon-btn" data-mode="none" title="No symmetry">
+          <button class="layer-mode-btn icon-btn" data-mode="none" title="No symmetry" aria-label="No symmetry">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none" />
             </svg>
           </button>
-          <button class="layer-mode-btn icon-btn" data-mode="spiegeling" title="Mirror symmetry (Spiegeling)">
+          <button class="layer-mode-btn icon-btn" data-mode="spiegeling" title="Mirror symmetry (Spiegeling)" aria-label="Mirror symmetry (Spiegeling)">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2,2" />
               <path d="M4 12 L9 8 L9 16 Z" fill="currentColor" stroke="none" />
               <path d="M20 12 L15 8 L15 16 Z" fill="currentColor" stroke="none" />
             </svg>
           </button>
-          <button class="layer-mode-btn icon-btn" data-mode="drehling" title="Rotational symmetry (Drehling)">
+          <button class="layer-mode-btn icon-btn" data-mode="drehling" title="Rotational symmetry (Drehling)" aria-label="Rotational symmetry (Drehling)">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M20 12a8 8 0 1 1-2.7-6" />
               <path d="M20 4v6h-6" />
@@ -1289,14 +1289,14 @@
              refused and reported here rather than silently truncated. -->
         <span id="layer-anim-connections-status"></span>
         <div class="icon-row">
-          <input type="number" id="layer-anim-duration-input" min="1" step="1" value="2000" title="Duration (ms)">
-          <button id="btn-layer-anim-play" class="icon-btn" title="Play">
+          <input type="number" id="layer-anim-duration-input" min="1" step="1" value="2000" title="Duration (ms)" aria-label="Duration (ms)">
+          <button id="btn-layer-anim-play" class="icon-btn" title="Play" aria-label="Play">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
               <path d="M7 5 L19 12 L7 19 Z" />
             </svg>
           </button>
         </div>
-        <input type="range" id="layer-anim-progress-input" min="0" max="1" step="0.001" value="0" title="Progress">
+        <input type="range" id="layer-anim-progress-input" min="0" max="1" step="0.001" value="0" title="Progress" aria-label="Progress">
       </div>
 
       <!-- Cross-Layer Face Compute (Roadmap 1.10b-ii-b): applies to the
@@ -1325,7 +1325,7 @@
            above the canvas). Gallery ("Formorgel") is NOT part of the rail - it stays here until Step 5b moves
            it into the per-tab organ strip; a real <a>, not a JS-wired button, since it is just a link elsewhere. -->
       <div class="button-group">
-        <a id="btn-gallery" class="icon-btn" href="gallery.html" target="_blank" rel="noopener" title="Pattern Catalog">
+        <a id="btn-gallery" class="icon-btn" href="gallery.html" target="_blank" rel="noopener" title="Pattern Catalog" aria-label="Pattern Catalog">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
             <rect x="3" y="3" width="8" height="8" rx="1.5" />
             <rect x="13" y="3" width="8" height="8" rx="1.5" />
@@ -1522,11 +1522,11 @@
        precedent: clicking a choice updates state and stays open, only Escape/outside-click/the trigger again
        closes it - see ui-farbe.js). -->
   <div id="overlay-kreis" class="overlay" role="dialog" aria-label="Kreis" hidden>
-    <span id="farbe-anchor-preview-kreis" class="fc-swatch" title="Anker-Vorschau"></span>
+    <span id="farbe-anchor-preview-kreis" class="fc-swatch" title="Anker-Vorschau" role="img" aria-label="Anker-Vorschau"></span>
     <svg id="farbe-anchor-kreis" class="anchor-widget-svg" viewBox="0 0 240 240" role="radiogroup" aria-label="Anker: Farbton (Kreis)"></svg>
   </div>
   <div id="overlay-dreieck" class="overlay" role="dialog" aria-label="Dreieck" hidden>
-    <span id="farbe-anchor-preview-dreieck" class="fc-swatch" title="Anker-Vorschau"></span>
+    <span id="farbe-anchor-preview-dreieck" class="fc-swatch" title="Anker-Vorschau" role="img" aria-label="Anker-Vorschau"></span>
     <p id="farbe-anchor-hue-context-dreieck" class="overlay-hint"></p>
     <svg id="farbe-anchor-dreieck" class="anchor-widget-svg" viewBox="0 0 240 200" role="radiogroup" aria-label="Anker: Register (Dreieck, aktueller Farbton)"></svg>
   </div>
@@ -1539,12 +1539,12 @@
       <!-- Roadmap 1.5-B: kind:'free' toggle, separate from (not a
            redesign of) the curve toggle - three-way mutually
            exclusive with it and with face-fill (see sketch.js). -->
-      <button id="btn-toggle-free" class="icon-btn" title="Toggle Free Clothing">
+      <button id="btn-toggle-free" class="icon-btn" title="Toggle Free Clothing" aria-label="Toggle Free Clothing">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M2 17c1.5-3 2-5 3.5-3s1 5 3 3-.5-6 2-6 1 6 3 4 0-6 2-4 1 4 3 2" />
         </svg>
       </button>
-      <button id="btn-toggle-free-endpoints" class="icon-btn" title="Toggle Free Endpoints">
+      <button id="btn-toggle-free-endpoints" class="icon-btn" title="Toggle Free Endpoints" aria-label="Toggle Free Endpoints">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10" />
           <line x1="22" y1="12" x2="18" y2="12" />
@@ -1558,7 +1558,7 @@
            altNetActive/altNetPending state machine. Icon: a dashed
            polygon outline with one solid edge and its two endpoints
            marked, suggesting "click an edge, complete to a shape". -->
-      <button id="btn-alternative-net" class="icon-btn" title="Alternative Net Construction (click two points, then a third to confirm the side)">
+      <button id="btn-alternative-net" class="icon-btn" title="Alternative Net Construction (click two points, then a third to confirm the side)" aria-label="Alternative Net Construction (click two points, then a third to confirm the side)">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polygon points="12,3 20,9 17,19 7,19 4,9" stroke-dasharray="3,2" />
           <line x1="7" y1="19" x2="17" y2="19" stroke-width="3" />
@@ -1591,36 +1591,36 @@
   <div id="ui-toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260929ba"></script>
-  <script src="core/state.js?v=20260929ba"></script>
-  <script src="core/symmetry.js?v=20260929ba"></script>
-  <script src="core/curves.js?v=20260929ba"></script>
-  <script src="core/netwarp.js?v=20260929ba"></script>
-  <script src="core/tiling.js?v=20260929ba"></script>
-  <script src="core/faces.js?v=20260929ba"></script>
-  <script src="core/orbits.js?v=20260929ba"></script>
-  <script src="core/color.js?v=20260929ba"></script>
-  <script src="core/facecolor.js?v=20260929ba"></script>
-  <script src="core/farborgel-bridge.js?v=20260929ba"></script>
-  <script src="core/export.js?v=20260929ba"></script>
-  <script src="core/symmetry-toggles.js?v=20260929ba"></script>
-  <script src="core/session.js?v=20260929ba"></script>
-  <script src="core/session-apply.js?v=20260929ba"></script>
-  <script src="core/session-store.js?v=20260929ba"></script>
-  <script src="core/session-writer.js?v=20260929ba"></script>
-  <script src="core/pointer-tap.js?v=20260929ba"></script>
-  <script src="core/pick-node.js?v=20260929ba"></script>
-  <script src="sketch.js?v=20260929ba"></script>
-  <script src="nav.js?v=20260929ba"></script>
-  <script src="ui.js?v=20260929ba"></script>
-  <script src="ui-form.js?v=20260929ba"></script>
-  <script src="ui-net.js?v=20260929ba"></script>
-  <script src="ui-farbe.js?v=20260929ba"></script>
-  <script src="ui-rail.js?v=20260929ba"></script>
+  <script src="core/forms.js?v=20260929bb"></script>
+  <script src="core/state.js?v=20260929bb"></script>
+  <script src="core/symmetry.js?v=20260929bb"></script>
+  <script src="core/curves.js?v=20260929bb"></script>
+  <script src="core/netwarp.js?v=20260929bb"></script>
+  <script src="core/tiling.js?v=20260929bb"></script>
+  <script src="core/faces.js?v=20260929bb"></script>
+  <script src="core/orbits.js?v=20260929bb"></script>
+  <script src="core/color.js?v=20260929bb"></script>
+  <script src="core/facecolor.js?v=20260929bb"></script>
+  <script src="core/farborgel-bridge.js?v=20260929bb"></script>
+  <script src="core/export.js?v=20260929bb"></script>
+  <script src="core/symmetry-toggles.js?v=20260929bb"></script>
+  <script src="core/session.js?v=20260929bb"></script>
+  <script src="core/session-apply.js?v=20260929bb"></script>
+  <script src="core/session-store.js?v=20260929bb"></script>
+  <script src="core/session-writer.js?v=20260929bb"></script>
+  <script src="core/pointer-tap.js?v=20260929bb"></script>
+  <script src="core/pick-node.js?v=20260929bb"></script>
+  <script src="sketch.js?v=20260929bb"></script>
+  <script src="nav.js?v=20260929bb"></script>
+  <script src="ui.js?v=20260929bb"></script>
+  <script src="ui-form.js?v=20260929bb"></script>
+  <script src="ui-net.js?v=20260929bb"></script>
+  <script src="ui-farbe.js?v=20260929bb"></script>
+  <script src="ui-rail.js?v=20260929bb"></script>
   <!-- Group D Phase B4: exposes window.farborgelBuildHarmonySelection (core/farborgel-selection.mjs)
        for ui-farbe.js/sketch.js (classic scripts) to call - a module script coexists fine with the
        classic p5-bootstrap scripts above (real-browser verified, no conflicts). -->
-  <script type="module" src="core/farborgel-selection.mjs?v=20260929ba"></script>
+  <script type="module" src="core/farborgel-selection.mjs?v=20260929bb"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

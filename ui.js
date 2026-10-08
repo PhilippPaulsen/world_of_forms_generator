@@ -12,6 +12,9 @@
  *   UI.overlay(trigger, panel)      a popover / bottom sheet ("More") opened by a button
  *   UI.dialog(overlay, trigger, closeBtn)  keyboard behaviour (focus in, Escape, Tab trap, focus back) for a dialog sketch.js opens
  *   UI.pressed(el)                  keeps aria-pressed in step with the 'active' class (which the old handlers set)
+ *   UI.name(el, text)               a control's name: the title (the native tooltip) and the aria-label (the accessible name) with the same text. For
+ *                                   a control with no visible text of its own (an icon, a glyph, an unlabelled field); a control with visible text is
+ *                                   named by that text and keeps its title as a description, with no aria-label (WCAG 2.5.3)
  *
  * Toasts are dismissed by Escape, by a click on them, by the next tap anywhere, or after a few seconds.
  * Text is passed in by the caller (the dictionary comes in a later phase).
@@ -68,6 +71,16 @@
     }
   }
   function isDisabled(el) { return el.getAttribute('aria-disabled') === 'true'; }
+
+  // ---- a control's name ----------------------------------------------------
+  // setDisabled swaps the title for the reason and keeps the name in dataset.baseTitle; a name set while a reason is showing goes there, so the reason stays on
+  // hover and the new name comes back when the control is enabled. The aria-label is never touched by setDisabled: the name outlives every disable / enable.
+  function name(el, text) {
+    if (!el) return;
+    if (el.dataset && el.dataset.baseTitle !== undefined) el.dataset.baseTitle = text;
+    else if (el.getAttribute('title') !== text) el.setAttribute('title', text);
+    if (el.getAttribute('aria-label') !== text) el.setAttribute('aria-label', text);
+  }
   function showReason(el) { toast(el.dataset.reason || '', 5000); }
 
   function attachReason(el) {
@@ -454,5 +467,5 @@
   window.uiSync = function () { for (let i = 0; i < syncFns.length; i++) syncFns[i](); };
   function onSync(fn) { syncFns.push(fn); }
 
-  window.UI = { onSync: onSync, toast: toast, hideToast: hideToast, setDisabled: setDisabled, guard: guard, stepper: stepper, pressed: pressed, isDisabled: isDisabled, dialog: dialog, radiogroup: radiogroup, overlay: overlay, checkedFromActive: checkedFromActive, showReason: showReason };
+  window.UI = { onSync: onSync, toast: toast, hideToast: hideToast, setDisabled: setDisabled, name: name, guard: guard, stepper: stepper, pressed: pressed, isDisabled: isDisabled, dialog: dialog, radiogroup: radiogroup, overlay: overlay, checkedFromActive: checkedFromActive, showReason: showReason };
 })();

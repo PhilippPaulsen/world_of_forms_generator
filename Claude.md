@@ -48,7 +48,7 @@ There is no test runner or CI in the repo; the suites are plain Node scripts. On
 fail=0; for f in tools/*/test-*.js color-harmony/test.js color-harmony/ui/test.mjs color-harmony/ui/composition.test.mjs color-harmony/ui/integration.test.mjs; do out=$(node "$f" 2>&1); rc=$?; printf '%-58s %s\n' "$f" "$(printf '%s\n' "$out" | tail -1)"; [ $rc -ne 0 ] && { echo "  ^ FAILED, exit $rc"; fail=1; }; done; echo "overall: $([ $fail -eq 0 ] && echo PASS || echo FAIL)"
 ```
 
-**This full command is mandatory before every commit.** It takes about ten minutes, almost all of it three slow suites (`test-inherit-hook.js` ~260 s, `test-spread.js` ~120 s, `test-inherit.js` ~50 s). Last full run: 38 files (34 `tools/*` + 4 Farborgel), 1227 checks in `tools/*`, 182 Farborgel groups, `overall: PASS`.
+**This full command is mandatory before every commit.** It takes about ten minutes, almost all of it three slow suites (`test-inherit-hook.js` ~260 s, `test-spread.js` ~120 s, `test-inherit.js` ~50 s). Last full run (2026-10-08, commit `31ca230f`): 51 files (47 under `tools/` + 4 Farborgel), 1925 checks in `tools/*`, 182 Farborgel groups, `overall: PASS`. These numbers change with every new test file or check; refresh them when you run the full command for a commit that adds one.
 
 **Fast variant - only while iterating, not before a commit that touches `core/faces.js` or `core/facecolor.js`** (those three suites are what guard face detection, trail keys and colour inheritance). It is the same command with the three slow files skipped, about a minute:
 
