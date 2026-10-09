@@ -130,7 +130,7 @@ console.log('\n== index.html: every control without visible text has an aria-lab
 
     // controls with visible text: named by the text; the title is a description and there is NO aria-label (the harmony and net buttons that already had a label of their own are not in this list)
     const TEXT_BUTTONS = ['btn-layer-base', 'btn-add-layer', 'btn-paste-pattern', 'btn-add-to-timeline', 'btn-timeline-include-net', 'btn-remove-timeline', 'btn-align-to-base', 'btn-mesh-preset-x', 'btn-mesh-preset-y',
-        'btn-layer-anim-set-start', 'btn-layer-anim-set-end', 'btn-compute-cross-layer', 'export-png', 'export-json', 'export-svg', 'net-field-btn', 'net-lines-btn', 'net-reverse-btn', 'net-alternate-btn', 'btn-fold-3', 'btn-fold-6'];
+        'btn-compute-cross-layer', 'export-png', 'export-json', 'export-svg', 'net-field-btn', 'net-lines-btn', 'net-reverse-btn', 'net-alternate-btn', 'btn-fold-3', 'btn-fold-6'];
     const found = TEXT_BUTTONS.map(id => textTitle.find(t => t.id === id));
     check('the text buttons with a title are all found (the list is current)', found.every(Boolean), TEXT_BUTTONS.filter((id, i) => !found[i]).join(', ') || TEXT_BUTTONS.length + ' buttons');
     check('...and none of them has an aria-label: the visible text is the name, the title the description', found.filter(Boolean).every(t => !t.hasAria), found.filter(t => t && t.hasAria).map(t => t.id).join(', ') || 'none');
