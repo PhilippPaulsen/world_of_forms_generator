@@ -227,6 +227,18 @@ function applyCatalogPatternToNewLayer(pattern) {
 }
 
 // ----------------- SETUP ----------------------------------------
+// select() for an element that may not be on the page (the markup of a removed control whose mechanism is kept: the layer animation, the cross-layer compute
+// button and its status line): null when there is none, and no call to p5's select(), which warns about a selector that matches nothing.
+function optionalSelect(sel) { return document.querySelector(sel) ? select(sel) : null; }
+
+// Layer "Mehr" (5d, step 1): does a HIDDEN layer control hold a non-default? True when the layer's offset or rotation is not zero, or its shape, symmetry mode, node count or
+// size differs from the base's current values (a new layer copies those four from the base). `base` = { shape, symmetryMode, nodeCount, shapeSizeFactor }. Drives the dot on the toggle.
+function layerHasNonDefaultSettings(layer, base) {
+    if (!layer || !base) return false;
+    return !!(layer.offsetX || layer.offsetY || layer.rotation ||
+        layer.shape !== base.shape || layer.symmetryMode !== base.symmetryMode || layer.nodeCount !== base.nodeCount || layer.shapeSizeFactor !== base.shapeSizeFactor);
+}
+
 function setup() {
     // Canvas size (Hidden input, default 600)
     const sizeSlider = select('#canvas-size-slider');
@@ -1140,19 +1152,21 @@ function setup() {
     // draw() also needs to call it every frame during active playback
     // to keep the progress slider/play-icon live, not just on a tab
     // switch or explicit control interaction.
-    const animationGroup = select('#layer-animation-group');
-    const setAnimStartBtn = select('#btn-layer-anim-set-start');
-    const setAnimEndBtn = select('#btn-layer-anim-set-end');
-    const animDurationInput = select('#layer-anim-duration-input');
-    const animPlayBtn = select('#btn-layer-anim-play');
-    const animProgressInput = select('#layer-anim-progress-input');
+    // The layer animation's markup was removed from index.html (its mechanism is kept below, unreachable from the UI): these are null now, every use of them
+    // is behind an `if (x)` (optionalSelect(), top of the file). Put the markup back and the wiring below works again.
+    const animationGroup = optionalSelect('#layer-animation-group');
+    const setAnimStartBtn = optionalSelect('#btn-layer-anim-set-start');
+    const setAnimEndBtn = optionalSelect('#btn-layer-anim-set-end');
+    const animDurationInput = optionalSelect('#layer-anim-duration-input');
+    const animPlayBtn = optionalSelect('#btn-layer-anim-play');
+    const animProgressInput = optionalSelect('#layer-anim-progress-input');
     // Roadmap 1.8 Stage B (connections morph): status line for a
     // refused Set Start/End line-count mismatch - same plain-<span>
     // convention as #align-to-base-status. Exposed on window (mirroring
     // updateOffsetControls/syncLayerAnimationDisplay just below) since
     // setActiveLayerAnimationStart()/End() are top-level functions, not
     // declared inside this setup() closure.
-    const animConnectionsStatus = select('#layer-anim-connections-status');
+    const animConnectionsStatus = optionalSelect('#layer-anim-connections-status');
     // Roadmap 1.8 Stage B: which layer the CURRENTLY shown message
     // belongs to - Set Start/End's own click handlers call
     // updateOffsetControls() right after setActiveLayerAnimationStart()/
@@ -1173,6 +1187,27 @@ function setup() {
         layerAnimConnectionsStatusOwner = msg ? activeLayer : null;
     }
     window.setLayerAnimConnectionsStatus = setLayerAnimConnectionsStatus;
+
+    // Layer "Mehr" (5d, step 1): the toggle row, the wrapper and the dot. The open / closed state is a plain variable: kept across layer switches, not saved by the autosave,
+    // closed after a reload. syncLayerMore() is the ONLY writer of the toggle row's and the wrapper's `hidden`; the groups inside keep their own `hidden`, written by
+    // updateOffsetControls() as before, so a group shows only when both are off. The toggle is a plain click listener, not a p5 mousePressed binding.
+    const layerMoreRow = document.getElementById('layer-more-row');
+    const layerMorePanel = document.getElementById('layer-more-panel');
+    const layerMoreBtn = document.getElementById('btn-more-layer');
+    let layerMoreOpen = false;
+    function syncLayerMore() {
+        if (!layerMoreRow || !layerMorePanel || !layerMoreBtn) return;
+        const layerActive = activeLayer !== 'base' && !!additionalLayers[activeLayer];
+        if (layerMoreRow.hidden === layerActive) layerMoreRow.hidden = !layerActive;
+        const showPanel = layerActive && layerMoreOpen;
+        if (layerMorePanel.hidden === showPanel) layerMorePanel.hidden = !showPanel;
+        const expanded = String(layerMoreOpen);
+        if (layerMoreBtn.getAttribute('aria-expanded') !== expanded) layerMoreBtn.setAttribute('aria-expanded', expanded);
+        const needsDot = layerActive && layerHasNonDefaultSettings(additionalLayers[activeLayer], { shape: currentShape, symmetryMode, nodeCount, shapeSizeFactor });   // (not "dot": p5's friendly-error reader reports a let/const named like a p5 member in setup() / draw())
+        if (layerMoreBtn.classList.contains('has-state') !== needsDot) layerMoreBtn.classList.toggle('has-state', needsDot);
+    }
+    window.syncLayerMore = syncLayerMore;
+    if (layerMoreBtn) layerMoreBtn.addEventListener('click', () => { layerMoreOpen = !layerMoreOpen; syncLayerMore(); });
 
     function updateOffsetControls() {
         const showOffsets = activeLayer !== 'base';
@@ -1246,6 +1281,7 @@ function setup() {
                 setLayerAnimConnectionsStatus('');
             }
         }
+        syncLayerMore();   // the toggle row, the wrapper and the dot follow the active layer (after the groups above have their own `hidden`)
     }
 
     // Roadmap 1.8 Stage A: populates the animation controls (duration/
@@ -2236,7 +2272,7 @@ function setup() {
     // Cross-Layer Face Compute (Roadmap 1.10b-ii-b) - see
     // computeCrossLayerFacesFlow()/updateCrossLayerStatus() (INTERACTION
     // section below) for the actual logic; this just wires the click.
-    const computeCrossLayerBtn = select('#btn-compute-cross-layer');
+    const computeCrossLayerBtn = optionalSelect('#btn-compute-cross-layer');   // null: the button was removed (its flow, computeCrossLayerFacesFlow, is kept)
     computeCrossLayerBtn && computeCrossLayerBtn.mousePressed(computeCrossLayerFacesFlow);
 
     // ---- Session restore (Phase 3 autosave, P1d; the storage side is core/session-store.js, the rest core/session*.js) ----
@@ -2500,6 +2536,7 @@ function draw() {
     if (activeLayer !== 'base' && additionalLayers[activeLayer] && additionalLayers[activeLayer].animation) {
         syncLayerAnimationDisplay(additionalLayers[activeLayer]);
     }
+    if (window.syncLayerMore) window.syncLayerMore();   // the dot of the layer "Mehr" toggle follows edits made through the (closed) controls and the base's values; writes only on a change
     if (timeline) syncTimelineDisplay();
 
     drawTessellation();
@@ -4947,7 +4984,7 @@ function crossLayerTimeHint(estimatedSegments) {
 // than from every individual mutation site, so no interaction point
 // (however it changes connections/layers/offsets) can be missed.
 function updateCrossLayerStatus() {
-    const statusEl = select('#cross-layer-status');
+    const statusEl = optionalSelect('#cross-layer-status');   // null: the status line was removed with the compute button
     if (!statusEl) return;
 
     if (netWarpActive()) {
@@ -4990,9 +5027,8 @@ function updateCrossLayerStatus() {
 // change, making the button appear to do nothing until the result
 // suddenly appears (1.10b-ii-b design session, point 3).
 function computeCrossLayerFacesFlow() {
-    const computeBtn = select('#btn-compute-cross-layer');
-    const statusEl = select('#cross-layer-status');
-    if (!computeBtn) return;
+    const computeBtn = optionalSelect('#btn-compute-cross-layer');   // null since the button was removed: the compute itself still runs (from the console), only the button's states are skipped
+    const statusEl = optionalSelect('#cross-layer-status');
 
     // Roadmap 1.12 stage 1: refuse outright rather than compute wrong
     // faces - see incompatibleEnabledLayersForCrossLayerFaces()'s own
@@ -5008,8 +5044,7 @@ function computeCrossLayerFacesFlow() {
         return;
     }
 
-    computeBtn.elt.disabled = true;
-    computeBtn.html('Computing…');
+    if (computeBtn) { computeBtn.elt.disabled = true; computeBtn.html('Computing…'); }
     if (statusEl) statusEl.html('Computing…');
 
     setTimeout(() => {
@@ -5022,8 +5057,7 @@ function computeCrossLayerFacesFlow() {
         crossLayerResultTimeMs = t1 - t0;
         crossLayerResultSignature = crossLayerConfigSignature();
 
-        computeBtn.elt.disabled = false;
-        computeBtn.html('Compute Cross-Layer Faces');
+        if (computeBtn) { computeBtn.elt.disabled = false; computeBtn.html('Compute Cross-Layer Faces'); }
         updateCrossLayerStatus();
         // Roadmap 1.10b-ii-c: redraw() so the newly computed result
         // actually renders (drawCrossLayerFaceFillsAcrossCanvas(), see
