@@ -1039,12 +1039,10 @@ body.dark {
 html:not([data-tab="farbe"]) .rail-farbe-only { display: none; }
 html:not([data-tab="form"]) .rail-form-only { display: none; }
 /* Farbe: Undo / Redo / Random (group A), Clear (group E) and Mehr are not applicable to face-color work (fill already requires straight lines; generating / undoing /
-   clearing pattern connections aren't color operations) - hidden as whole groups, so a hidden group leaves no gap; Kurven (curve toggle) and the Formorgel link go too (the
-   Farborgel link takes the link's place). Undo / Redo's stack (core/state.js) is per layer, not tab-scoped, so hiding the buttons loses no history. */
+   clearing pattern connections aren't color operations) - hidden as whole groups, so a hidden group leaves no gap; the Formorgel link goes too (the Farborgel link takes its place); Kurven (curve toggle) sits in the More popover, which is hidden with More. Undo / Redo's stack (core/state.js) is per layer, not tab-scoped, so hiding the buttons loses no history. */
 html[data-tab="farbe"] #rail-group-a,
 html[data-tab="farbe"] #rail-group-e,
 html[data-tab="farbe"] #rail-group-more,
-html[data-tab="farbe"] #btn-toggle-curve,
 html[data-tab="farbe"] #btn-gallery { display: none; }
 
 @media (min-width: 768px) {
@@ -1095,6 +1093,39 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
   html[data-tab="farbe"] .rail-top, html[data-tab="farbe"] .rail-bottom { display: contents; }
   #farbe-harmony-select { font: inherit; }
 }
+
+/* The rail "Mehr" popover (#more-rail, a UI.overlay): ONE horizontal row - the four toggles, a separator, "Neu anfangen" - and a fixed name line below it. It hangs under the rail
+   on the tablet / desktop (More is the last item there) and is a bottom sheet on a phone (ui.js). The icons are the rail's size (--target); the row wraps only between the toggles and
+   "Neu anfangen". At a coarse pointer the row is 281px wide (4 x 48 + 1 + 48 + 5 gaps of 8), so it fits the 288px inside the sheet's padding down to 320px; below that it wraps and the
+   separator is hidden. The name line has a reserved height (two lines) and is as wide as the row, never wider (width: 0; min-width: 100%), so filling or emptying it moves nothing. */
+#more-rail .more-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); }
+#more-rail .more-toggles { display: flex; gap: var(--gap); flex: none; }
+#more-rail .icon-btn {
+  box-sizing: border-box;
+  width: var(--target);
+  height: var(--target);
+  border-radius: var(--radius);
+  flex: none;
+  touch-action: manipulation;
+}
+#more-rail .more-sep { width: 1px; height: var(--target); background: var(--color-hairline); flex: none; }
+@media (max-width: 319px) { #more-rail .more-sep { display: none; } }
+#more-rail .more-name {
+  box-sizing: border-box;
+  width: 0;
+  min-width: 100%;
+  height: 2.5em;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--size-secondary);
+  line-height: 1.25;
+  color: var(--color-secondary);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+#more-rail .more-name-state { font-weight: var(--weight-strong); color: var(--color-text); }
+
 
 /* Keyboard focus: its own 2px outline with a 2px offset, never the same
    as the active state (black fill). :focus-visible = keyboard only. */
