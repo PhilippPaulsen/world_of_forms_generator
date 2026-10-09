@@ -252,6 +252,50 @@ label { touch-action: manipulation; }
   display: none;
 }
 
+/* Layer "Mehr" (5d, step 1): the wrapper around the rarely used layer controls. display: contents keeps every group inside it a flex item of #controls-container, exactly
+   where it was before the wrapper existed; [hidden] must be restated because display: contents would win over the attribute. */
+#layer-more-panel { display: contents; }
+#layer-more-panel[hidden] { display: none; }
+/* The toggle row takes its own line in #controls-container (a centred flex-wrap row): were it an ordinary item, opening and closing the block would re-centre the line it shares
+   with the layer row and the timeline and move those sideways (measured: 44-54 px at 1440). */
+#layer-more-row { flex-basis: 100%; justify-content: center; }
+
+/* Layer "Mehr" block, step 1b-1: the shape icons, the node count and size steppers, the fold buttons, Align to base and the mesh presets use the SAME markup and classes as the Form row
+   (.nav-cluster, .ico, .stepper, .stepper-btn, .icon-btn). Three things in the Form row's CSS are scoped to .nav-row or lose to a rule that only applies inside .control-group, so
+   they are restated for the panel, with the same values: the icon button size (.nav-row .icon-btn), the stepper's number field (the inline `.control-group input[type="number"]`,
+   60 x 40 with a border, would otherwise win the tie against `.stepper input[type="number"]`) and the gap of a cluster (an .icon-row's own gap would win otherwise). */
+#layer-more-panel .icon-btn,
+#layer-more-panel .layer-fold-btn {
+  box-sizing: border-box;
+  width: var(--target);
+  height: var(--target);
+  padding: 0;
+  border-radius: var(--radius);
+  flex: none;
+  touch-action: manipulation;
+}
+#layer-more-panel .nav-cluster { gap: var(--gap); }
+/* the numerals of the fold buttons look like the numeral buttons of the Farbe row (2 / 3 / 4): the button default font, not .layer-btn's 13px / 600 */
+#layer-more-panel .layer-fold-btn { font-size: 13.3333px; font-weight: 400; }
+#layer-more-panel .stepper input[type="number"] {
+  width: 2.4ch;
+  height: auto;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--size-base);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  -webkit-appearance: none;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* LABEL RULE: every <label> inside a .control-group is hidden with
    display:none. The interface is icon/numeral based. Consequences for
    anyone adding a control:
@@ -448,8 +492,6 @@ body.dark {
 #face-colors-unassigned { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 4px 0; }
 #face-colors-unassigned[hidden] { display: none; }
 #face-colors-unassigned-text { flex: 1; }
-#face-colors-overlay-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
-#face-colors-overlay-note[hidden] { display: none; }
 #face-colors-timeline-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
 #face-colors-timeline-note[hidden] { display: none; }
 #net-locks-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
@@ -935,9 +977,6 @@ body.dark {
    would otherwise win over the attribute. */
 .nav-harmony-family { min-width: calc(4 * var(--target) + 3 * var(--gap)); }
 .nav-harmony-family[hidden] { display: none; }
-/* The cross-layer overlay note (moved out of the removed Farbe "Mehr" overlay, now beside #cross-layer-status)
-   only matters while editing sheet colors. */
-html:not([data-tab="farbe"]) #face-colors-overlay-note { display: none; }
 
 /* Phone: #nav-farbe's own anchor row wraps into 2 lines if needed (see the comment below). */
 @media (max-width: 767px) {

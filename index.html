@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260929bb">
+  <link rel="stylesheet" href="style.css?v=20260929bg">
   <!-- Cache-busting for the ES-module graph behind core/farborgel-selection.mjs (below). The <script src> tags in
        this file carry ?v= by hand-bump (CLAUDE.md), but a module's own `import ... from './x.mjs'` cannot: this
        import map is the one place that gives every module in that graph the same ?v= as everything else (bump it
@@ -18,11 +18,11 @@
   <script type="importmap">
     {
     "imports": {
-      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929bb",
-      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929bb",
-      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929bb",
-      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929bb",
-      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929bb"
+      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929bg",
+      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929bg",
+      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929bg",
+      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929bg",
+      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929bg"
     }
     }
   </script>
@@ -307,16 +307,10 @@
       cursor: default;
     }
 
-    /* Roadmap 1.10b-ii-b: cross-layer compute status line - live segment/
-       time estimate before a compute, result summary or stale-result
-       notice after one. Muted via opacity rather than a separate color
-       token (none of this project's existing tokens cover "secondary
-       text") so it still flips correctly with the light/dark --text
-       variable. Roadmap 1.11-B: #pattern-name-status (the active
-       sheet's computeThemeLineName() result, or a placeholder when
-       empty) shares this exact style - same "small muted status text"
-       role, just a different status line. */
-    #cross-layer-status, #pattern-name-status {
+    /* Roadmap 1.11-B: #pattern-name-status (the active sheet's computeThemeLineName() result, or a placeholder when empty): a small muted status text. Muted via
+       opacity rather than a separate color token (none of this project's existing tokens cover "secondary text") so it still flips correctly with the light/dark
+       --text variable. (It shared this rule with the cross-layer status line, #cross-layer-status, which is gone.) */
+    #pattern-name-status {
       font-size: 12px;
       color: var(--text);
       opacity: 0.7;
@@ -543,9 +537,8 @@
          the family you can't see". Both families live in the same slot, which reserves four buttons' width so
          the steppers after it never jump when the view changes. Only 2/3/4 exist as cardinalities: the real
          reducer (color-harmony/ui/composition.mjs) rejects 6 and 8 - see core/farborgel-selection.mjs.
-         The Register button (the linear 28-item list) and the "Mehr" button are gone; the cross-layer
-         overlay note that "Mehr" used to hold now sits next to #cross-layer-status (#cross-layer-compute-group
-         below). The distribution-strategy stepper moved into the left rail as four icon buttons
+         The Register button (the linear 28-item list) and the "Mehr" button are gone (the cross-layer
+         overlay note that "Mehr" used to hold is gone with the cross-layer button). The distribution-strategy stepper moved into the left rail as four icon buttons
          (#farbe-strategy-group, in .rail-left). The hue/register steppers are real .stepper widgets
          (UI.stepper()) - the SAME markup/CSS Form's node-count/shape-size steppers use: an icon, then the
          value ALONE (no text label - the pattern's own fill colors already show the result), then chevrons.
@@ -1003,8 +996,8 @@
            delete the layer itself (see sketch.js's own comment on the
            distinction from a layer's own "x" tab button, which DOES
            delete it). Supersedes nothing shipped so far -
-           #layer-animation-group above (Stage A/B's per-layer Set
-           Start/End capture) stays fully intact alongside this. -->
+           the per-layer Set Start/End animation (Stage A/B) has no UI
+           any more, see the note further down. -->
       <div class="control-group" id="timeline-group">
         <label>Timeline</label>
         <div class="icon-row">
@@ -1068,7 +1061,7 @@
       <!-- UI rework 4d: the rule choice (#face-colors-rule) and the axis steppers (#face-colors-axes) moved into
            the Farbe nav row (#nav-farbe, above the canvas); "Spread colors", "Reset colors", the unassigned-trails
            note and the cross-layer overlay note moved into its "Mehr" overlay (#more-farbe; that overlay is since gone,
-           the cross-layer note now sits beside #cross-layer-status). What stays here for
+           the cross-layer note is gone too). What stays here for
            now (step 5 moves it into the organ strip): the title, the timeline note, the status line, the rule's
            own descriptive note, and the per-trail list with its hover highlight and override stepper. -->
       <div class="control-group" id="face-colors-group" hidden>
@@ -1085,6 +1078,19 @@
            updated by sketch.js's updatePatternNameStatus()) moved into #info-card, UI rework 5a - see the
            canvas-row comment above the canvas. -->
 
+      <!-- Layer "Mehr" (5d, step 1): ONE inline toggle for the rarely used controls of the active layer - shape, node count, size, symmetry, fold, align to base, offset,
+           mesh presets and rotation (the block updateOffsetControls() in sketch.js shows for a layer and hides for the base). A new layer copies the base's shape, symmetry,
+           node count and size; the timeline rejects keyframes with another shape, symmetry, size or node count and ignores a keyframe's offset and rotation; Farbe excludes a
+           layer with another size or rotation. Closed by default, kept across layer switches, not saved by the autosave. The toggle row is visible exactly while a layer is
+           active; #layer-more-panel is a wrapper (display: contents, so its groups stay flex items of #controls-container) whose `hidden` is independent of the `hidden`
+           of each group inside it: a group is shown only when BOTH are off. One block per group, flat, in this order: shape, node count, size, symmetry, fold, align,
+           offset X / Y, mesh presets, rotation. The dot (has-state) says that a hidden control holds a non-default (sketch.js layerHasNonDefaultSettings()). -->
+      <div class="control-group" id="layer-more-row" hidden>
+        <button id="btn-more-layer" class="icon-btn nav-more" type="button" title="Mehr Ebenen-Einstellungen" aria-label="Mehr Ebenen-Einstellungen" aria-expanded="false" aria-controls="layer-more-panel" data-i18n="layer.more">
+          <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></g></svg>
+        </button>
+      </div>
+      <div id="layer-more-panel" hidden>
       <!-- Roadmap 1.12 stage 4 (UI): this layer's own shape - contextual
            the same way the other layer-own controls below are (hidden
            while Base is active). Separate, DEDICATED buttons, not the
@@ -1097,21 +1103,15 @@
            cross-shape branch - see sketch.js's updateActiveLayerGrid(). -->
       <div class="control-group" id="layer-shape-group" hidden>
         <label>Layer Shape</label>
-        <div class="icon-row">
-          <button class="layer-shape-icon-btn icon-btn" data-shape="triangle" title="Triangle" aria-label="Triangle">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 4L4 20h16L12 4z" />
-            </svg>
+        <div class="icon-row nav-cluster nav-shapes" role="group" aria-label="Ebene: Form" data-i18n="layer.shape.group">
+          <button class="layer-shape-icon-btn icon-btn" data-shape="triangle" type="button" title="Triangle" aria-label="Triangle" aria-pressed="false" data-i18n="layer.shape.triangle">
+            <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5 L21 19.5 H3 Z"/></svg>
           </button>
-          <button class="layer-shape-icon-btn icon-btn" data-shape="square" title="Square" aria-label="Square">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="4" y="4" width="16" height="16" />
-            </svg>
+          <button class="layer-shape-icon-btn icon-btn" data-shape="square" type="button" title="Square" aria-label="Square" aria-pressed="false" data-i18n="layer.shape.square">
+            <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15"/></svg>
           </button>
-          <button class="layer-shape-icon-btn icon-btn" data-shape="hex" title="Hexagon" aria-label="Hexagon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2l8.66 5v10L12 22 3.34 17V7L12 2z" />
-            </svg>
+          <button class="layer-shape-icon-btn icon-btn" data-shape="hex" type="button" title="Hexagon" aria-label="Hexagon" aria-pressed="false" data-i18n="layer.shape.hex">
+            <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 L20 7.5 V16.5 L12 21 L4 16.5 V7.5 Z"/></svg>
           </button>
         </div>
       </div>
@@ -1125,13 +1125,27 @@
            updateActiveLayerGrid(). -->
       <div class="control-group" id="layer-node-count-group" hidden>
         <label for="layer-node-count-input">Layer Node Count</label>
-        <input type="number" id="layer-node-count-input" min="1" max="7" value="3">
+        <div class="stepper" role="group" aria-label="Ebene: Knoten" data-i18n="layer.node.group">
+          <svg class="ico stepper-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor" stroke="none"><circle cx="6" cy="6" r="1.5"/><circle cx="6" cy="12" r="1.5"/><circle cx="6" cy="18" r="1.5"/><circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="18" r="1.5"/><circle cx="18" cy="6" r="1.5"/><circle cx="18" cy="12" r="1.5"/><circle cx="18" cy="18" r="1.5"/></g></svg>
+          <input type="number" id="layer-node-count-input" min="1" max="7" value="3" inputmode="none" aria-label="Ebene: Knoten" data-i18n="layer.node.input">
+          <div class="stepper-chevrons">
+            <button class="stepper-btn" type="button" data-dir="1" title="Ebene: Knoten mehr" aria-label="Ebene: Knoten mehr" data-i18n="layer.node.more"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15 L12 9 L18 15"/></svg></button>
+            <button class="stepper-btn" type="button" data-dir="-1" title="Ebene: Knoten weniger" aria-label="Ebene: Knoten weniger" data-i18n="layer.node.less"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9 L12 15 L18 9"/></svg></button>
+          </div>
+        </div>
         <div id="layer-node-count-note" class="limit-note" hidden></div>
       </div>
 
       <div class="control-group" id="layer-shape-size-group" hidden>
         <label for="layer-shape-size-input">Layer Shape Size</label>
-        <input type="number" id="layer-shape-size-input" min="1" max="9" value="5">
+        <div class="stepper" role="group" aria-label="Ebene: Größe" data-i18n="layer.size.group">
+          <svg class="ico stepper-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9 V4 H9 M15 4 H20 V9 M20 15 V20 H15 M9 20 H4 V15"/></svg>
+          <input type="number" id="layer-shape-size-input" min="1" max="9" value="5" inputmode="none" aria-label="Ebene: Größe" data-i18n="layer.size.input">
+          <div class="stepper-chevrons">
+            <button class="stepper-btn" type="button" data-dir="1" title="Ebene: Größe mehr" aria-label="Ebene: Größe mehr" data-i18n="layer.size.more"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15 L12 9 L18 15"/></svg></button>
+            <button class="stepper-btn" type="button" data-dir="-1" title="Ebene: Größe weniger" aria-label="Ebene: Größe weniger" data-i18n="layer.size.less"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9 L12 15 L18 9"/></svg></button>
+          </div>
+        </div>
       </div>
 
       <!-- Roadmap 1.12 stage 5 (symmetryMode axis) part 3 (UI): this
@@ -1195,9 +1209,9 @@
       </div>
 
       <div class="control-group" id="layer-fold-group" hidden>
-        <div class="icon-row">
-          <button class="layer-fold-btn layer-btn" data-fold="3" title="3-fold">3-fold</button>
-          <button class="layer-fold-btn layer-btn" data-fold="6" title="6-fold">6-fold</button>
+        <div class="icon-row nav-cluster" role="group" aria-label="Ebene: Zähligkeit" data-i18n="layer.fold.group">
+          <button class="layer-fold-btn layer-btn icon-btn" data-fold="3" type="button" title="3-fold" aria-label="3-fold" aria-pressed="false" data-i18n="layer.fold.3">3</button>
+          <button class="layer-fold-btn layer-btn icon-btn" data-fold="6" type="button" title="6-fold" aria-label="6-fold" aria-pressed="false" data-i18n="layer.fold.6">6</button>
         </div>
       </div>
 
@@ -1213,7 +1227,9 @@
            core/forms.js's alignLayerToBase() never applies an inexact
            approximation. -->
       <div class="control-group" id="layer-align-group" hidden>
-        <button id="btn-align-to-base" class="layer-btn" title="Align to base">Align to base</button>
+        <button id="btn-align-to-base" class="layer-btn icon-btn" type="button" title="Align to base" aria-label="Align to base" data-i18n="layer.align">
+          <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 4 V20"/><path d="M8.5 8 H20"/><path d="M8.5 16 H14.5"/></svg>
+        </button>
         <span id="align-to-base-status"></span>
       </div>
 
@@ -1231,9 +1247,13 @@
       </div>
 
       <div class="control-group" id="layer-mesh-preset-group" hidden>
-        <div class="icon-row">
-          <button id="btn-mesh-preset-x" class="layer-btn" title="Shift X by one mesh-width">1 mesh →</button>
-          <button id="btn-mesh-preset-y" class="layer-btn" title="Shift Y by one mesh-width">1 mesh ↓</button>
+        <div class="icon-row nav-cluster" role="group" aria-label="Ebene: Versatz um eine Masche" data-i18n="layer.mesh.group">
+          <button id="btn-mesh-preset-x" class="layer-btn icon-btn" type="button" title="Shift X by one mesh-width" aria-label="Shift X by one mesh-width" data-i18n="layer.mesh.x">
+            <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12 H20"/><path d="M15 7 L20 12 L15 17"/><path d="M4 8 V16"/></svg>
+          </button>
+          <button id="btn-mesh-preset-y" class="layer-btn icon-btn" type="button" title="Shift Y by one mesh-width" aria-label="Shift Y by one mesh-width" data-i18n="layer.mesh.y">
+            <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 V20"/><path d="M7 15 L12 20 L17 15"/><path d="M8 4 H16"/></svg>
+          </button>
         </div>
       </div>
 
@@ -1252,74 +1272,18 @@
         <label for="layer-rotation-input">Layer Rotation</label>
         <input type="number" id="layer-rotation-input" value="0" step="1">
       </div>
+      </div><!-- /#layer-more-panel -->
 
-      <!-- Roadmap 1.8 Stage A: this layer's own keyframe animation -
-           contextual the same way layer-rotation-group above is (hidden
-           while Base is active - offsetX/offsetY/rotation are already
-           layer-only concepts, and animating the base's own
-           shapeSizeFactor would move the shared coordinate-scale
-           reference every other layer's positioning depends on, a
-           materially different feature - design session). Set Start/
-           Set End capture THIS layer's current live offsetX/offsetY/
-           rotation/shapeSizeFactor - explicit action, never automatic,
-           same convention as "Align to base". Duration in milliseconds.
-           Play/Pause icon swaps at runtime (sketch.js's
-           syncLayerAnimationDisplay(), mirroring #btn-toggle-nodes' own
-           eye/eye-off swap convention). The progress slider is
-           bidirectional: it live-updates during playback AND scrubbing
-           it directly sets/pauses progress (setActiveLayerAnimationProgress()).
-           Shape (1.12 stage 4) and symmetryMode (1.12 stage 5) are
-           deliberately NOT part of this control and stay fixed per
-           animated layer - both are discrete choices, not continuous
-           parameters, so they have no meaningful "interpolated middle"
-           (design session point 5). loop()/noLoop() is scoped strictly
-           to whenever any layer's animation.playing is true
-           (isAnythingAnimating(), sketch.js) - never left running
-           permanently. -->
-      <div class="control-group" id="layer-animation-group" hidden>
-        <label>Layer Animation</label>
-        <div class="icon-row">
-          <button id="btn-layer-anim-set-start" class="layer-btn" title="Set Start">Set Start</button>
-          <button id="btn-layer-anim-set-end" class="layer-btn" title="Set End">Set End</button>
-        </div>
-        <!-- Roadmap 1.8 Stage B (connections morph): Set Start/End also
-             capture this layer's CURRENT connections (see sketch.js's
-             setActiveLayerAnimationStart()/End()); a line-count mismatch
-             against the other side's already-captured connections is
-             refused and reported here rather than silently truncated. -->
-        <span id="layer-anim-connections-status"></span>
-        <div class="icon-row">
-          <input type="number" id="layer-anim-duration-input" min="1" step="1" value="2000" title="Duration (ms)" aria-label="Duration (ms)">
-          <button id="btn-layer-anim-play" class="icon-btn" title="Play" aria-label="Play">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-              <path d="M7 5 L19 12 L7 19 Z" />
-            </svg>
-          </button>
-        </div>
-        <input type="range" id="layer-anim-progress-input" min="0" max="1" step="0.001" value="0" title="Progress" aria-label="Progress">
-      </div>
+      <!-- Layer animation (Roadmap 1.8 Stage A/B: Set Start / Set End, duration, Play, progress for one layer's offset, rotation, size and connections): the UI is
+           removed (the Timeline above morphs connections, net and colours between keyframes). The mechanism stays in sketch.js (ensureLayerAnimation,
+           setActiveLayerAnimation*, toggleActiveLayerAnimationPlayback, applyLayerAnimationFrame, syncLayerAnimationDisplay), unreachable from the UI, like the
+           standalone net animation; tools/ui/test-layer-ui-removed.js pins that. -->
 
-      <!-- Cross-Layer Face Compute (Roadmap 1.10b-ii-b): applies to the
-           base sheet + every ENABLED additional layer at once - not
-           contextual to whichever tab is active, unlike the offset
-           controls above, since it's inherently a cross-sheet operation.
-           Synchronous compute (see the 1.10b-ii-b design session: post
-           spatial-hash-fix real times are sub-second to a few seconds -
-           see sketch.js's computeCrossLayerFacesFlow() for the deferred-
-           via-setTimeout trick that lets the disabled/"Computing…" state
-           actually paint before the synchronous freeze). No rendering
-           yet - coloring + canvas display is 1.10b-ii-c; this step is
-           compute + timing + staleness feedback only. -->
-      <div class="control-group" id="cross-layer-compute-group">
-        <button id="btn-compute-cross-layer" class="layer-btn" title="Compute Cross-Layer Faces">Compute Cross-Layer Faces</button>
-        <span id="cross-layer-status"></span>
-      </div>
-      <!-- Moved here from the removed Farbe "Mehr" overlay (#more-farbe): shown only while a current cross-layer
-           compute result is displayed (sketch.js updateFaceColorsPanel() toggles `hidden` by id - unchanged) and
-           only on the Farbe tab (style.css), because that overlay is drawn on top of every sheet's fills and
-           this explains why the sheet colors the Farbe tab edits are not visible. Sits right below the status
-           line that already reports the same compute result. -->
-      <p id="face-colors-overlay-note" class="overlay-hint" hidden>The cross-layer overlay is on and covers the sheet colors (Compute Cross-Layer Faces to refresh, or edit a sheet to clear it).</p>
+      <!-- Cross-layer faces (Roadmap 1.10b-ii): the compute button (#btn-compute-cross-layer), its status line (#cross-layer-status) and the Farbe note about the
+           overlay (#face-colors-overlay-note) are removed: the overlay was a uniform grey rectangle, the compute takes up to ~9 s and the overlay up to ~15 s on
+           dense patterns, and the staleness signature ignores the symmetry. The mechanism stays in sketch.js (computeCrossLayerFacesFlow, crossLayerResult,
+           crossLayerFillBuffer, crossLayerConfigSignature, updateCrossLayerStatus) and core/faces.js (computeCrossLayerFaces) and the export field
+           geometry.crossLayer (core/export.js), unreachable from the UI; tools/ui/test-layer-ui-removed.js pins that. -->
 
       <!-- Clear/Undo/Redo/Random/Download moved into the canvas rail, UI rework 5a (see the canvas-row comment
            above the canvas). Gallery ("Formorgel") is NOT part of the rail - it stays here until Step 5b moves
@@ -1591,36 +1555,37 @@
   <div id="ui-toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260929bb"></script>
-  <script src="core/state.js?v=20260929bb"></script>
-  <script src="core/symmetry.js?v=20260929bb"></script>
-  <script src="core/curves.js?v=20260929bb"></script>
-  <script src="core/netwarp.js?v=20260929bb"></script>
-  <script src="core/tiling.js?v=20260929bb"></script>
-  <script src="core/faces.js?v=20260929bb"></script>
-  <script src="core/orbits.js?v=20260929bb"></script>
-  <script src="core/color.js?v=20260929bb"></script>
-  <script src="core/facecolor.js?v=20260929bb"></script>
-  <script src="core/farborgel-bridge.js?v=20260929bb"></script>
-  <script src="core/export.js?v=20260929bb"></script>
-  <script src="core/symmetry-toggles.js?v=20260929bb"></script>
-  <script src="core/session.js?v=20260929bb"></script>
-  <script src="core/session-apply.js?v=20260929bb"></script>
-  <script src="core/session-store.js?v=20260929bb"></script>
-  <script src="core/session-writer.js?v=20260929bb"></script>
-  <script src="core/pointer-tap.js?v=20260929bb"></script>
-  <script src="core/pick-node.js?v=20260929bb"></script>
-  <script src="sketch.js?v=20260929bb"></script>
-  <script src="nav.js?v=20260929bb"></script>
-  <script src="ui.js?v=20260929bb"></script>
-  <script src="ui-form.js?v=20260929bb"></script>
-  <script src="ui-net.js?v=20260929bb"></script>
-  <script src="ui-farbe.js?v=20260929bb"></script>
-  <script src="ui-rail.js?v=20260929bb"></script>
+  <script src="core/forms.js?v=20260929bg"></script>
+  <script src="core/state.js?v=20260929bg"></script>
+  <script src="core/symmetry.js?v=20260929bg"></script>
+  <script src="core/curves.js?v=20260929bg"></script>
+  <script src="core/netwarp.js?v=20260929bg"></script>
+  <script src="core/tiling.js?v=20260929bg"></script>
+  <script src="core/faces.js?v=20260929bg"></script>
+  <script src="core/orbits.js?v=20260929bg"></script>
+  <script src="core/color.js?v=20260929bg"></script>
+  <script src="core/facecolor.js?v=20260929bg"></script>
+  <script src="core/farborgel-bridge.js?v=20260929bg"></script>
+  <script src="core/export.js?v=20260929bg"></script>
+  <script src="core/symmetry-toggles.js?v=20260929bg"></script>
+  <script src="core/session.js?v=20260929bg"></script>
+  <script src="core/session-apply.js?v=20260929bg"></script>
+  <script src="core/session-store.js?v=20260929bg"></script>
+  <script src="core/session-writer.js?v=20260929bg"></script>
+  <script src="core/pointer-tap.js?v=20260929bg"></script>
+  <script src="core/pick-node.js?v=20260929bg"></script>
+  <script src="sketch.js?v=20260929bg"></script>
+  <script src="nav.js?v=20260929bg"></script>
+  <script src="ui.js?v=20260929bg"></script>
+  <script src="ui-form.js?v=20260929bg"></script>
+  <script src="ui-layer.js?v=20260929bg"></script>
+  <script src="ui-net.js?v=20260929bg"></script>
+  <script src="ui-farbe.js?v=20260929bg"></script>
+  <script src="ui-rail.js?v=20260929bg"></script>
   <!-- Group D Phase B4: exposes window.farborgelBuildHarmonySelection (core/farborgel-selection.mjs)
        for ui-farbe.js/sketch.js (classic scripts) to call - a module script coexists fine with the
        classic p5-bootstrap scripts above (real-browser verified, no conflicts). -->
-  <script type="module" src="core/farborgel-selection.mjs?v=20260929bb"></script>
+  <script type="module" src="core/farborgel-selection.mjs?v=20260929bg"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides
