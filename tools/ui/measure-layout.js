@@ -17,9 +17,11 @@
  *
  * Scenarios, in this order (the last one leaves a layer and a keyframe in
  * the session, so reload before measuring again):
- *   start               untouched page
+ *   start               untouched page (the tab in the URL hash is the measured one: #form, #netz, #farbe)
  *   shape_switch        square, hexagon, triangle again
- *   square_sin_field    square + Sinus + Field (the tallest net panel)
+ *   square_sin_field    the net chapter: square, the Netz tab (netz_row), Sinus (+ the Field default) and one
+ *                       strength step (square_sin_field), the Netz "Mehr" overlay open (more_netz_open), back to
+ *                       Aus and to the tab the page started in. `found` says which controls the script found.
  *   layer_timeline      "+ Layer" (new layer becomes active), "Add to
  *                       Timeline", and the same again: two keyframes, so
  *                       Play and the progress control are measured too
@@ -42,9 +44,24 @@
     '#btn-add-layer',
     '#btn-save',
     '#btn-help',
+    // the canvas rail (rail rearrangement, commits 1 to 3): one element of each group, the links, the Mehr trigger and its popover
+    '#btn-undo',
+    '#btn-random',
+    '#btn-toggle-faces',
+    '#btn-more-rail',
+    '#btn-gallery',
+    '#btn-farborgel',
+    '#btn-paste-pattern',
+    '#btn-info',
+    '#more-rail',
     // needed to see the layer/timeline scenario
     '#btn-add-to-timeline',
     '#btn-timeline-play',
+    // the net chapter: the Netz row (kind buttons, strength stepper, its Mehr trigger) and its overlay; #net-group is the (hidden) control group inside the overlay
+    '#nav-netz',
+    '#net-strength-value',
+    '#btn-more-netz',
+    '#more-netz',
     '#net-group',
   ];
 
@@ -99,6 +116,9 @@
     const wait = 300;
     const result = { viewportWidth: window.innerWidth, viewportHeight: window.innerHeight };
     const shapes = [...document.querySelectorAll('.shape-icon-btn')];
+    const nav = window.uiNav || null;                       // nav.js: the tab the page was loaded in (#form, #netz, #farbe) is the one measured, the net chapter visits Netz and comes back
+    const startTab = nav ? nav.current() : null;
+    result.tab = startTab;
 
     result.start = snap();
 
@@ -108,15 +128,30 @@
     click(shapes[0]); await sleep(wait); shape_switch.triangle = snap();
     result.shape_switch = shape_switch;
 
+    // The net chapter. The net applies to the SQUARE on the BASE sheet. The Netz row (#nav-netz) holds the kind buttons (.net-kind-btn[data-kind]), the strength stepper (#net-strength-value
+    // and its two chevrons) and the Mehr trigger (#btn-more-netz); everything else (Single / Tiled / Field, Macro, Focus, exact values) is in the overlay #more-netz. Switching a kind on applies
+    // the defaults (both axes, Field), so a Sinus click is enough for the "square + Sinus + Field" state. The chapter visits the Netz tab, measures the row, the strength step and the opened
+    // overlay, switches the net back off and returns to the tab the page started in.
     const net = {};
     click(shapes[1]); await sleep(wait);
-    const group = document.querySelector('#net-group');
-    const sin = buttonByText(group, 'Sinus') || buttonByText(group, 'Sin');
-    if (sin) { click(sin); await sleep(wait); }
-    const field = buttonByText(group, 'Field');
-    if (field) { click(field); await sleep(wait); }
+    if (nav) { nav.show('netz'); await sleep(wait); }
+    net.netz_row = snap();
+    const sinBtn = document.querySelector('#nav-netz .net-kind-btn[data-kind="sinus"]');
+    if (sinBtn) { click(sinBtn); await sleep(wait); }
+    const strUp = document.querySelector('#nav-netz .stepper-btn[data-dir="1"]');
+    if (strUp) { click(strUp); await sleep(wait); }
     net.square_sin_field = snap();
-    net.found = { sin: !!sin, field: !!field };
+    const moreNetz = document.querySelector('#btn-more-netz');
+    if (moreNetz) { click(moreNetz); await sleep(wait); net.more_netz_open = snap(); click(moreNetz); await sleep(wait); }
+    net.found = {
+      sin: !!sinBtn, strengthUp: !!strUp, moreNetz: !!moreNetz,
+      sinusActive: !!(sinBtn && sinBtn.classList.contains('active')),
+      fieldActive: !!document.querySelector('#net-field-btn.active'),
+      strengthText: (document.querySelector('#net-strength-value') || {}).textContent || null,
+    };
+    const offBtn = document.querySelector('#nav-netz .net-kind-btn[data-kind="regular"]');
+    if (offBtn) { click(offBtn); await sleep(wait); }
+    if (nav && startTab) { nav.show(startTab); await sleep(wait); }
     click(shapes[0]); await sleep(wait);
     result.square_sin_field = net;
 
