@@ -252,6 +252,14 @@ label { touch-action: manipulation; }
   display: none;
 }
 
+/* Layer "Mehr" (5d, step 1): the wrapper around the rarely used layer controls. display: contents keeps every group inside it a flex item of #controls-container, exactly
+   where it was before the wrapper existed; [hidden] must be restated because display: contents would win over the attribute. */
+#layer-more-panel { display: contents; }
+#layer-more-panel[hidden] { display: none; }
+/* The toggle row takes its own line in #controls-container (a centred flex-wrap row): were it an ordinary item, opening and closing the block would re-centre the line it shares
+   with the layer row and the timeline and move those sideways (measured: 44-54 px at 1440). */
+#layer-more-row { flex-basis: 100%; justify-content: center; }
+
 /* LABEL RULE: every <label> inside a .control-group is hidden with
    display:none. The interface is icon/numeral based. Consequences for
    anyone adding a control:

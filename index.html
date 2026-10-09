@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260929bd">
+  <link rel="stylesheet" href="style.css?v=20260929be">
   <!-- Cache-busting for the ES-module graph behind core/farborgel-selection.mjs (below). The <script src> tags in
        this file carry ?v= by hand-bump (CLAUDE.md), but a module's own `import ... from './x.mjs'` cannot: this
        import map is the one place that gives every module in that graph the same ?v= as everything else (bump it
@@ -18,11 +18,11 @@
   <script type="importmap">
     {
     "imports": {
-      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929bd",
-      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929bd",
-      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929bd",
-      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929bd",
-      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929bd"
+      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929be",
+      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929be",
+      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929be",
+      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929be",
+      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929be"
     }
     }
   </script>
@@ -1078,6 +1078,19 @@
            updated by sketch.js's updatePatternNameStatus()) moved into #info-card, UI rework 5a - see the
            canvas-row comment above the canvas. -->
 
+      <!-- Layer "Mehr" (5d, step 1): ONE inline toggle for the rarely used controls of the active layer - shape, node count, size, symmetry, fold, align to base, offset,
+           mesh presets and rotation (the block updateOffsetControls() in sketch.js shows for a layer and hides for the base). A new layer copies the base's shape, symmetry,
+           node count and size; the timeline rejects keyframes with another shape, symmetry, size or node count and ignores a keyframe's offset and rotation; Farbe excludes a
+           layer with another size or rotation. Closed by default, kept across layer switches, not saved by the autosave. The toggle row is visible exactly while a layer is
+           active; #layer-more-panel is a wrapper (display: contents, so its groups stay flex items of #controls-container) whose `hidden` is independent of the `hidden`
+           of each group inside it: a group is shown only when BOTH are off. One block per group, flat, in this order: shape, node count, size, symmetry, fold, align,
+           offset X / Y, mesh presets, rotation. The dot (has-state) says that a hidden control holds a non-default (sketch.js layerHasNonDefaultSettings()). -->
+      <div class="control-group" id="layer-more-row" hidden>
+        <button id="btn-more-layer" class="icon-btn nav-more" type="button" title="Mehr Ebenen-Einstellungen" aria-label="Mehr Ebenen-Einstellungen" aria-expanded="false" aria-controls="layer-more-panel" data-i18n="layer.more">
+          <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></g></svg>
+        </button>
+      </div>
+      <div id="layer-more-panel" hidden>
       <!-- Roadmap 1.12 stage 4 (UI): this layer's own shape - contextual
            the same way the other layer-own controls below are (hidden
            while Base is active). Separate, DEDICATED buttons, not the
@@ -1245,6 +1258,7 @@
         <label for="layer-rotation-input">Layer Rotation</label>
         <input type="number" id="layer-rotation-input" value="0" step="1">
       </div>
+      </div><!-- /#layer-more-panel -->
 
       <!-- Layer animation (Roadmap 1.8 Stage A/B: Set Start / Set End, duration, Play, progress for one layer's offset, rotation, size and connections): the UI is
            removed (the Timeline above morphs connections, net and colours between keyframes). The mechanism stays in sketch.js (ensureLayerAnimation,
@@ -1527,36 +1541,36 @@
   <div id="ui-toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260929bd"></script>
-  <script src="core/state.js?v=20260929bd"></script>
-  <script src="core/symmetry.js?v=20260929bd"></script>
-  <script src="core/curves.js?v=20260929bd"></script>
-  <script src="core/netwarp.js?v=20260929bd"></script>
-  <script src="core/tiling.js?v=20260929bd"></script>
-  <script src="core/faces.js?v=20260929bd"></script>
-  <script src="core/orbits.js?v=20260929bd"></script>
-  <script src="core/color.js?v=20260929bd"></script>
-  <script src="core/facecolor.js?v=20260929bd"></script>
-  <script src="core/farborgel-bridge.js?v=20260929bd"></script>
-  <script src="core/export.js?v=20260929bd"></script>
-  <script src="core/symmetry-toggles.js?v=20260929bd"></script>
-  <script src="core/session.js?v=20260929bd"></script>
-  <script src="core/session-apply.js?v=20260929bd"></script>
-  <script src="core/session-store.js?v=20260929bd"></script>
-  <script src="core/session-writer.js?v=20260929bd"></script>
-  <script src="core/pointer-tap.js?v=20260929bd"></script>
-  <script src="core/pick-node.js?v=20260929bd"></script>
-  <script src="sketch.js?v=20260929bd"></script>
-  <script src="nav.js?v=20260929bd"></script>
-  <script src="ui.js?v=20260929bd"></script>
-  <script src="ui-form.js?v=20260929bd"></script>
-  <script src="ui-net.js?v=20260929bd"></script>
-  <script src="ui-farbe.js?v=20260929bd"></script>
-  <script src="ui-rail.js?v=20260929bd"></script>
+  <script src="core/forms.js?v=20260929be"></script>
+  <script src="core/state.js?v=20260929be"></script>
+  <script src="core/symmetry.js?v=20260929be"></script>
+  <script src="core/curves.js?v=20260929be"></script>
+  <script src="core/netwarp.js?v=20260929be"></script>
+  <script src="core/tiling.js?v=20260929be"></script>
+  <script src="core/faces.js?v=20260929be"></script>
+  <script src="core/orbits.js?v=20260929be"></script>
+  <script src="core/color.js?v=20260929be"></script>
+  <script src="core/facecolor.js?v=20260929be"></script>
+  <script src="core/farborgel-bridge.js?v=20260929be"></script>
+  <script src="core/export.js?v=20260929be"></script>
+  <script src="core/symmetry-toggles.js?v=20260929be"></script>
+  <script src="core/session.js?v=20260929be"></script>
+  <script src="core/session-apply.js?v=20260929be"></script>
+  <script src="core/session-store.js?v=20260929be"></script>
+  <script src="core/session-writer.js?v=20260929be"></script>
+  <script src="core/pointer-tap.js?v=20260929be"></script>
+  <script src="core/pick-node.js?v=20260929be"></script>
+  <script src="sketch.js?v=20260929be"></script>
+  <script src="nav.js?v=20260929be"></script>
+  <script src="ui.js?v=20260929be"></script>
+  <script src="ui-form.js?v=20260929be"></script>
+  <script src="ui-net.js?v=20260929be"></script>
+  <script src="ui-farbe.js?v=20260929be"></script>
+  <script src="ui-rail.js?v=20260929be"></script>
   <!-- Group D Phase B4: exposes window.farborgelBuildHarmonySelection (core/farborgel-selection.mjs)
        for ui-farbe.js/sketch.js (classic scripts) to call - a module script coexists fine with the
        classic p5-bootstrap scripts above (real-browser verified, no conflicts). -->
-  <script type="module" src="core/farborgel-selection.mjs?v=20260929bd"></script>
+  <script type="module" src="core/farborgel-selection.mjs?v=20260929be"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides
