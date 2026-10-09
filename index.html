@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260929bg">
+  <link rel="stylesheet" href="style.css?v=20260929bj">
   <!-- Cache-busting for the ES-module graph behind core/farborgel-selection.mjs (below). The <script src> tags in
        this file carry ?v= by hand-bump (CLAUDE.md), but a module's own `import ... from './x.mjs'` cannot: this
        import map is the one place that gives every module in that graph the same ?v= as everything else (bump it
@@ -18,11 +18,11 @@
   <script type="importmap">
     {
     "imports": {
-      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929bg",
-      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929bg",
-      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929bg",
-      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929bg",
-      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929bg"
+      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929bj",
+      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929bj",
+      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929bj",
+      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929bj",
+      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929bj"
     }
     }
   </script>
@@ -230,12 +230,6 @@
         width: 28px;
         height: 28px;
       }
-    }
-
-    .button-group {
-      display: flex;
-      justify-content: center;
-      gap: 5px;
     }
 
     /* Buttons (shapes & actions) - matches die-welt-der-formen.de:
@@ -631,115 +625,121 @@
     </div>
   </div>
 
-  <!-- Canvas row (UI rework 5a, revised 5a-fix): the canvas flanked by ONE action rail on the LEFT - undo/
-       redo/clear | random | points/curves/fill | info/save | more (>=768px, CSS Grid, gutter-aligned like the
-       header/nav rows above - a sibling of .main-container, NOT nested inside it, exactly like .app-header/
-       .nav-rows: .main-container's own 900px max-width would otherwise cap this row's gutter short of the
-       header's actual edge above ~948px viewport width). A matching empty column on the right keeps the canvas
-       centered (style.css). Help stays in the header; Gallery stays in the old panel (both would have pushed
-       the rail past the canvas's height at a coarse pointer - measured in the 5a-fix report, not guessed).
-       Below 768px the rail becomes three fixed rows under the canvas: row 1 undo/redo/clear/random, row 2
-       points/curves/fill/info/save, row 3 more (flex-wrap + order + two .rail-break spans, same technique as
-       .nav-form's phone reflow), left-aligned at the gutter like everything else. Every button below is the
-       SAME element sketch.js already wires by id (select('#btn-...').mousePressed()) - relocated here, not
-       duplicated; no logic changed. Free Clothing/Free Endpoints/Alternative Net were in the same old
-       .control-group as Points/Curves/Fill but are not part of this rail's visible slots - they move into
-       #more-rail instead (below), same DOM-move-only rule. Info opens #info-card, the relocated
-       #pattern-name-group - today's only "status" content; Netzart/Farbwert stay in #nav-netz/#nav-farbe, not
-       duplicated here (see ROADMAP.md). Keyboard: ui.js's bridge (4b-fix) now also covers '.canvas-row button',
-       so Enter/Space activate every button here exactly like the header/nav-row/overlay ones. -->
+  <!-- Canvas row (UI rework 5a, rail rearrangement commits 1 and 2): the canvas flanked by ONE action rail on the LEFT, built from five groups, each a .rail-group
+       (a column with a 4px gap; a row on a phone): A undo, redo, random | B points, fill, more | C the catalog link (Formorgel; Farborgel in the Farbe tab), Paste Pattern |
+       D info, download | E clear. The DOM order is the visual order (and so the tab order) in every tab, with ONE exception on the tablet / desktop: More (#rail-group-more) is
+       the last item through CSS `order`, so its popover hangs under the rail and never covers the canvas; on a phone it stays in group B. Toggle Curve, Free Clothing, Free Endpoints, Alternative Net and
+       "Neu anfangen" are in the More popover (a horizontal row). >= 768px: a single column, gutter-aligned like the header / nav rows (CSS Grid, a matching empty right column keeps the canvas
+       centered). Below 768px: .rail-left is display: contents and its two row wrappers (.rail-top = A + B + More, .rail-bottom = C + D + E) are the two rows, each wrapping
+       between groups only. Every button below is the SAME element sketch.js wires by id (select('#btn-...').mousePressed()) - relocated here, not duplicated; no logic changed.
+       The two catalog links are real <a> elements (a link, not a JS-wired button): Enter follows the href, Space does nothing, and ui.js's keyboard bridge (buttons only) and the
+       canvas tap detector (pointerdown on #canvas-container only) never see them. Paste Pattern is Form-tab only (.rail-form-only, style.css). Help stays in the header. -->
   <!-- Layer tiles (Base + additional layers + "+") stay in the old panel below, NOT in this rail: renderLayerTabs()
-       builds each as a checkbox + text button ("Layer N") + remove button, not a single icon, and even a
-       hypothetical digit-only redesign was measured to overflow the rail past the canvas height at N=2-4
-       (5a-fix report) - they move into their own horizontally-scrolling strip in step 5c instead. -->
+       builds each as a checkbox + text button ("Layer N") + remove button, not a single icon. -->
   <div class="canvas-row">
       <div id="canvas-container"></div>
       <div class="rail-left">
-      <button id="btn-undo" class="icon-btn" title="Undo" aria-label="Undo">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M9 14 4 9l5-5" />
-          <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11" />
-        </svg>
-      </button>
-      <button id="btn-redo" class="icon-btn" title="Redo" aria-label="Redo">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M15 14 20 9l-5-5" />
-          <path d="M20 9h-10.5a5.5 5.5 0 0 0 -5.5 5.5v0a5.5 5.5 0 0 0 5.5 5.5H13" />
-        </svg>
-      </button>
-      <button id="btn-clear" class="icon-btn" title="Clear" aria-label="Clear">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-        </svg>
-      </button>
-      <button id="btn-random" class="icon-btn" title="Random Connection" aria-label="Random Connection">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l-5 5M4 4l5 5" />
-        </svg>
-      </button>
-      <button id="btn-toggle-nodes" class="icon-btn active" title="Toggle Nodes" aria-label="Toggle Nodes">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-          <circle cx="12" cy="12" r="3" />
-        </svg>
-      </button>
-      <button id="btn-toggle-curve" class="icon-btn" title="Toggle Curve" aria-label="Toggle Curve">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M4 12c2-4 6-4 8 0s6 4 8 0" />
-        </svg>
-      </button>
-      <button id="btn-toggle-faces" class="icon-btn" title="Toggle Face Fill" aria-label="Toggle Face Fill">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-          <path d="M12 2 L22 20 L2 20 Z" />
-        </svg>
-      </button>
-      <button id="btn-info" class="icon-btn" type="button" title="Info" aria-label="Info" aria-controls="info-card" data-i18n="info">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10" />
-          <line x1="12" y1="11" x2="12" y2="16" />
-          <circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none" />
-        </svg>
-      </button>
-      <button id="btn-save" class="icon-btn" title="Download Image" aria-label="Download Image">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-        </svg>
-      </button>
-      <button id="btn-more-rail" class="icon-btn" type="button" title="Mehr" aria-label="Mehr" aria-controls="more-rail" data-i18n="more">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
-      </button>
-      <!-- Group D Phase B4 (+ follow-ups): Farbe-only controls, flat children of .rail-left exactly like the
-           buttons above (desktop: stacked by DOM order via margin-top; mobile: .rail-left's own display:contents
-           promotes them to direct .canvas-row flex children, positioned into a 4th row by the explicit `order`
-           values in the mobile media query). Hidden entirely outside the Farbe tab via .rail-farbe-only
-           (style.css, gated on html[data-tab] - nav.js sets that attribute, no JS toggle needed here).
-           Layout round: the four distribution strategies (Zyklisch/Fläche/Symmetrie/Ringe - core/farborgel-
-           bridge.js's DISTRIBUTION_STRATEGIES) moved here from a stepper in #nav-farbe, as an icon radiogroup
-           (one is always current, persisted per sheet by distributionStrategyFor() - ui-farbe.js). They take the
-           four slots B/W/S/V used to occupy in this rail (those moved to #nav-farbe's Dreieck view), so the
-           Farbe rail keeps exactly its former button count and height. The radiogroup wrapper is
-           display:contents (style.css) so its buttons still lay out as flat rail children. Reset Color follows.
-           On tablet/desktop Info and Download (the two buttons earlier in the DOM) are moved to the END of
-           the Farbe rail by CSS `order` only (style.css) - Form/Netz keep their rail untouched. -->
-      <div id="farbe-strategy-group" class="rail-farbe-only" role="radiogroup" aria-label="Verteilungsstrategie">
-        <button id="btn-strategy-cyclic" class="icon-btn" type="button" role="radio" aria-checked="false" data-strategy="cyclic" title="Verteilung: Zyklisch (Farben der Reihe nach)" aria-label="Verteilung: Zyklisch (Farben der Reihe nach)">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9" /><path d="M20 4v5h-5" /></svg>
-        </button>
-        <button id="btn-strategy-area" class="icon-btn" type="button" role="radio" aria-checked="false" data-strategy="area" title="Verteilung: Fläche (nach Flächengröße)" aria-label="Verteilung: Fläche (nach Flächengröße)">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="11" height="11" /><rect x="16" y="16" width="5" height="5" /></svg>
-        </button>
-        <button id="btn-strategy-symmetry" class="icon-btn" type="button" role="radio" aria-checked="false" data-strategy="symmetry" title="Verteilung: Symmetrie (nach Symmetrie-Gruppen)" aria-label="Verteilung: Symmetrie (nach Symmetrie-Gruppen)">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2 3" /><path d="M9 7 L4 12 L9 17 Z" /><path d="M15 7 L20 12 L15 17 Z" /></svg>
-        </button>
-        <button id="btn-strategy-rings" class="icon-btn" type="button" role="radio" aria-checked="false" data-strategy="rings" title="Verteilung: Ringe (von außen nach innen)" aria-label="Verteilung: Ringe (von außen nach innen)">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></svg>
-        </button>
+      <div class="rail-top">
+        <div id="rail-group-a" class="rail-group">
+          <button id="btn-undo" class="icon-btn" title="Undo" aria-label="Undo">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 14 4 9l5-5" />
+              <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11" />
+            </svg>
+          </button>
+          <button id="btn-redo" class="icon-btn" title="Redo" aria-label="Redo">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M15 14 20 9l-5-5" />
+              <path d="M20 9h-10.5a5.5 5.5 0 0 0 -5.5 5.5v0a5.5 5.5 0 0 0 5.5 5.5H13" />
+            </svg>
+          </button>
+          <button id="btn-random" class="icon-btn" title="Random Connection" aria-label="Random Connection">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l-5 5M4 4l5 5" />
+            </svg>
+          </button>
+        </div>
+        <div class="rail-bm">
+          <div id="rail-group-b" class="rail-group">
+            <button id="btn-toggle-nodes" class="icon-btn active" title="Toggle Nodes" aria-label="Toggle Nodes">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
+            <button id="btn-toggle-faces" class="icon-btn" title="Toggle Face Fill" aria-label="Toggle Face Fill">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                <path d="M12 2 L22 20 L2 20 Z" />
+              </svg>
+            </button>
+          </div>
+          <div id="rail-group-more" class="rail-group">
+            <button id="btn-more-rail" class="icon-btn nav-more" type="button" title="Mehr: Kurve, Frei, Freie Endpunkte, Alternatives Netz" aria-label="Mehr: Kurve, Frei, Freie Endpunkte, Alternatives Netz" aria-controls="more-rail" data-i18n="more.rail.button">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+            </button>
+          </div>
+        </div>
       </div>
-      <button id="btn-face-colors-reset" class="icon-btn rail-farbe-only" type="button" title="Reset Color: back to the default symmetry-orbit colors" aria-label="Reset Color">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-        </svg>
-      </button>
+      <div class="rail-bottom">
+        <div id="rail-group-c" class="rail-group">
+          <a id="btn-gallery" class="icon-btn" href="gallery.html" target="_blank" rel="noopener" title="Formorgel (öffnet in neuem Tab)" aria-label="Formorgel (öffnet in neuem Tab)" data-i18n="rail.formorgel">
+            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="3" y="3" width="8" height="8" rx="1.5" /><rect x="13" y="3" width="8" height="8" rx="1.5" /><rect x="3" y="13" width="8" height="8" rx="1.5" /><rect x="13" y="13" width="8" height="8" rx="1.5" /></svg>
+          </a>
+          <a id="btn-farborgel" class="icon-btn rail-farbe-only" href="color-harmony/ui/index.html" target="_blank" rel="noopener" title="Farborgel (öffnet in neuem Tab)" aria-label="Farborgel (öffnet in neuem Tab)" data-i18n="rail.farborgel">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9" /><g fill="currentColor" stroke="none"><circle cx="12" cy="3" r="2.6" /><circle cx="19.8" cy="16.5" r="2.6" /><circle cx="4.2" cy="16.5" r="2.6" /></g></svg>
+          </a>
+          <button id="btn-paste-pattern" class="icon-btn rail-form-only" type="button" title="Paste Pattern (a pattern copied from the catalog, as a new layer)" aria-label="Paste Pattern (a pattern copied from the catalog, as a new layer)" data-i18n="rail.paste">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+              <rect x="8" y="2" width="8" height="4" rx="1" />
+            </svg>
+          </button>
+        </div>
+        <div id="rail-group-d" class="rail-group">
+          <button id="btn-info" class="icon-btn" type="button" title="Info" aria-label="Info" aria-controls="info-card" data-i18n="info">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="11" x2="12" y2="16" />
+              <circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
+          <button id="btn-save" class="icon-btn" title="Download Image" aria-label="Download Image">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+          </button>
+        </div>
+        <div id="rail-group-e" class="rail-group">
+          <button id="btn-clear" class="icon-btn" title="Clear" aria-label="Clear">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+            </svg>
+          </button>
+        </div>
+        <!-- Farbe-only (hidden elsewhere via .rail-farbe-only, style.css; nav.js sets html[data-tab]): the four distribution strategies (core/farborgel-bridge.js's
+             DISTRIBUTION_STRATEGIES, an icon radiogroup, one is always current, persisted per sheet by distributionStrategyFor() - ui-farbe.js) and Reset Color, each its own group. -->
+          <div id="farbe-strategy-group" class="rail-group rail-farbe-only" role="radiogroup" aria-label="Verteilungsstrategie">
+            <button id="btn-strategy-cyclic" class="icon-btn" type="button" role="radio" aria-checked="false" data-strategy="cyclic" title="Verteilung: Zyklisch (Farben der Reihe nach)" aria-label="Verteilung: Zyklisch (Farben der Reihe nach)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9" /><path d="M20 4v5h-5" /></svg>
+            </button>
+            <button id="btn-strategy-area" class="icon-btn" type="button" role="radio" aria-checked="false" data-strategy="area" title="Verteilung: Fläche (nach Flächengröße)" aria-label="Verteilung: Fläche (nach Flächengröße)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="11" height="11" /><rect x="16" y="16" width="5" height="5" /></svg>
+            </button>
+            <button id="btn-strategy-symmetry" class="icon-btn" type="button" role="radio" aria-checked="false" data-strategy="symmetry" title="Verteilung: Symmetrie (nach Symmetrie-Gruppen)" aria-label="Verteilung: Symmetrie (nach Symmetrie-Gruppen)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2 3" /><path d="M9 7 L4 12 L9 17 Z" /><path d="M15 7 L20 12 L15 17 Z" /></svg>
+            </button>
+            <button id="btn-strategy-rings" class="icon-btn" type="button" role="radio" aria-checked="false" data-strategy="rings" title="Verteilung: Ringe (von außen nach innen)" aria-label="Verteilung: Ringe (von außen nach innen)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></svg>
+            </button>
+          </div>
+        <div id="rail-group-reset" class="rail-group rail-farbe-only">
+          <button id="btn-face-colors-reset" class="icon-btn" type="button" title="Reset Color: back to the default symmetry-orbit colors" aria-label="Reset Color">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+            </svg>
+          </button>
+        </div>
+      </div>
       <!-- Group D Phase B4 follow-up: hidden (not removed) per explicit decision - "störend", no current
            function beyond the 7 buttons, but kept as the future-capacity/narrow-layout fallback it was
            designed for. Same hidden/tabindex/aria-hidden pattern as #face-colors-rule above; element and
@@ -755,9 +755,6 @@
         <option value="V">Wert</option>
       </select>
       </div><!-- /.rail-left -->
-      <span class="rail-break rail-break-1" aria-hidden="true"></span>
-      <span class="rail-break rail-break-2" aria-hidden="true"></span>
-      <span class="rail-break rail-break-3" aria-hidden="true"></span>
   </div>
 
   <div class="main-container">
@@ -957,7 +954,7 @@
       <!-- UI rework 4c: the net controls (#net-group) moved into the Netz "Mehr" overlay (#more-netz, below);
            Aus/Sin/Tan/Geo and the strength stepper are in the Netz nav row (#nav-netz). Ids and sketch.js's logic are unchanged. -->
       <!-- visible whenever a warp is in force, also from a layer tab (the warp itself is set on the Base sheet) -->
-      <div id="net-locks-note" hidden>Curve, free-clothing and face-fill modes are off while a net transform is active: faces are only exact on a Field warp, and lines are kept straight. Set the net back to Regular (Base sheet, square) to use them again.</div>
+      <div id="net-locks-note" hidden>Curve, free-clothing (under Mehr) and face-fill modes are off while a net transform is active: faces are only exact on a Field warp, and lines are kept straight. Set the net back to Regular (Base sheet, square) to use them again.</div>
 
       <!-- Layer Tab Strip (Roadmap 1.9): Base (static, always present)
            + one tab per additional layer, rendered dynamically by
@@ -966,13 +963,14 @@
            "Paste Pattern" (Roadmap: catalog -> clipboard extension)
            adds one too, sourced from a gallery.html "Copy pattern"
            click instead of a blank layer - see sketch.js's
-           applyCatalogPatternToNewLayer()/parseClipboardCatalogPattern(). -->
+           applyCatalogPatternToNewLayer()/parseClipboardCatalogPattern().
+           Its button (#btn-paste-pattern) now sits in the canvas rail,
+           group C (Form tab only); its status line stays here. -->
       <div class="control-group">
         <div class="icon-row">
           <button id="btn-layer-base" class="layer-btn active" title="Edit Base Sheet">Base</button>
           <span id="layer-tabs"></span>
           <button id="btn-add-layer" class="layer-btn" title="Add Layer">+ Layer</button>
-          <button id="btn-paste-pattern" class="layer-btn" title="Paste a pattern copied from the catalog as a new layer">Paste Pattern</button>
         </div>
         <span id="paste-pattern-status"></span>
       </div>
@@ -1285,39 +1283,7 @@
            crossLayerFillBuffer, crossLayerConfigSignature, updateCrossLayerStatus) and core/faces.js (computeCrossLayerFaces) and the export field
            geometry.crossLayer (core/export.js), unreachable from the UI; tools/ui/test-layer-ui-removed.js pins that. -->
 
-      <!-- Clear/Undo/Redo/Random/Download moved into the canvas rail, UI rework 5a (see the canvas-row comment
-           above the canvas). Gallery ("Formorgel") is NOT part of the rail - it stays here until Step 5b moves
-           it into the per-tab organ strip; a real <a>, not a JS-wired button, since it is just a link elsewhere. -->
-      <div class="button-group">
-        <a id="btn-gallery" class="icon-btn" href="gallery.html" target="_blank" rel="noopener" title="Pattern Catalog" aria-label="Pattern Catalog">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-            <rect x="3" y="3" width="8" height="8" rx="1.5" />
-            <rect x="13" y="3" width="8" height="8" rx="1.5" />
-            <rect x="3" y="13" width="8" height="8" rx="1.5" />
-            <rect x="13" y="13" width="8" height="8" rx="1.5" />
-          </svg>
-        </a>
-        <!-- Farborgel (the standalone color-harmony page), P1 of the Farborgel sub-page work: a plain link to
-             color-harmony/ui/index.html in a NEW tab, exactly like #btn-gallery above - and for the same reason:
-             the generator keeps no state anywhere (no localStorage/autosave), so navigating this tab away would
-             lose the pattern. No URL parameters and no data transfer yet (anchor pre-fill and the return
-             handoff are later phases). Farbe tab only, via the SAME mechanism as the rail's Farbe-only buttons:
-             `.rail-farbe-only` (style.css: html:not([data-tab="farbe"]) .rail-farbe-only { display: none }, with
-             data-tab set by nav.js) - the class name says "rail" but the rule is generic. Like #btn-gallery this
-             lives in the old controls panel until the per-tab organ strip exists (ROADMAP step 5). Icon: a hue
-             ring with a triad of dots - the Farborgel's own motif (a Dreier chord on the hue circle) - distinct
-             from the Formorgel's squares and from the plain Kreis outline in #nav-farbe. -->
-        <a id="btn-farborgel" class="icon-btn rail-farbe-only" href="color-harmony/ui/index.html" target="_blank" rel="noopener" title="Farborgel (öffnet in neuem Tab)" aria-label="Farborgel (öffnet in neuem Tab)">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" />
-            <g fill="currentColor" stroke="none">
-              <circle cx="12" cy="3" r="2.6" />
-              <circle cx="19.8" cy="16.5" r="2.6" />
-              <circle cx="4.2" cy="16.5" r="2.6" />
-            </g>
-          </svg>
-        </a>
-      </div>
+      <!-- Clear/Undo/Redo/Random/Download, the catalog links (Formorgel, Farborgel) and Paste Pattern live in the canvas rail (see the canvas-row comment above the canvas). -->
 
       <!-- Hidden Canvas Size Input (fixed default, no live-resize control) -->
       <input type="range" id="canvas-size-slider" min="200" max="800" value="600" style="display:none;">
@@ -1495,47 +1461,62 @@
     <svg id="farbe-anchor-dreieck" class="anchor-widget-svg" viewBox="0 0 240 200" role="radiogroup" aria-label="Anker: Register (Dreieck, aktueller Farbton)"></svg>
   </div>
 
-  <!-- "Mehr" (More) for the canvas rail (UI rework 5a): the three toggles that are not among the rail's 4
-       visible slots - Free Clothing, Free Endpoints, Alternative Net Construction - moved here unchanged (ids,
-       classes, icons and handlers untouched; sketch.js still owns them via select('#btn-...').mousePressed()). -->
+  <!-- "Mehr" (More) for the canvas rail: ONE horizontal row of icons - Toggle Curve, Free Clothing, Free Endpoints, Alternative Net (all moved here unchanged: ids, classes, icons
+       and handlers untouched, sketch.js still owns them via select('#btn-...').mousePressed()), a separator, and "Neu anfangen" as an icon - and below it a fixed name line
+       (#more-name, aria-hidden, a reserved height: ui-rail.js writes the name and state of the last icon touched, so no caption sits under an icon). The row wraps only
+       between the toggles and "Neu anfangen" (the separator is hidden then). The whole popover is hidden in the Farbe tab (style.css), so "Neu anfangen" is not available there. -->
   <div id="more-rail" class="overlay" role="dialog" aria-label="Mehr" data-i18n="more.rail" hidden>
-    <div class="overlay-section">
-      <!-- Roadmap 1.5-B: kind:'free' toggle, separate from (not a
-           redesign of) the curve toggle - three-way mutually
-           exclusive with it and with face-fill (see sketch.js). -->
-      <button id="btn-toggle-free" class="icon-btn" title="Toggle Free Clothing" aria-label="Toggle Free Clothing">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M2 17c1.5-3 2-5 3.5-3s1 5 3 3-.5-6 2-6 1 6 3 4 0-6 2-4 1 4 3 2" />
-        </svg>
-      </button>
-      <button id="btn-toggle-free-endpoints" class="icon-btn" title="Toggle Free Endpoints" aria-label="Toggle Free Endpoints">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10" />
-          <line x1="22" y1="12" x2="18" y2="12" />
-          <line x1="6" y1="12" x2="2" y2="12" />
-          <line x1="12" y1="6" x2="12" y2="2" />
-          <line x1="12" y1="22" x2="12" y2="18" />
-        </svg>
-      </button>
-      <!-- Roadmap 1.2-C: alternative net construction - one-shot
-           tool-like toggle (not a persistent mode), see sketch.js's
-           altNetActive/altNetPending state machine. Icon: a dashed
-           polygon outline with one solid edge and its two endpoints
-           marked, suggesting "click an edge, complete to a shape". -->
-      <button id="btn-alternative-net" class="icon-btn" title="Alternative Net Construction (click two points, then a third to confirm the side)" aria-label="Alternative Net Construction (click two points, then a third to confirm the side)">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polygon points="12,3 20,9 17,19 7,19 4,9" stroke-dasharray="3,2" />
-          <line x1="7" y1="19" x2="17" y2="19" stroke-width="3" />
-          <circle cx="7" cy="19" r="1.6" fill="currentColor" stroke="none" />
-          <circle cx="17" cy="19" r="1.6" fill="currentColor" stroke="none" />
+    <div class="more-row">
+      <div class="more-toggles">
+        <button id="btn-toggle-curve" class="icon-btn" title="Toggle Curve" aria-label="Toggle Curve">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 12c2-4 6-4 8 0s6 4 8 0" />
+          </svg>
+        </button>
+        <!-- Roadmap 1.5-B: kind:'free' toggle, separate from (not a
+             redesign of) the curve toggle - three-way mutually
+             exclusive with it and with face-fill (see sketch.js). -->
+        <button id="btn-toggle-free" class="icon-btn" title="Toggle Free Clothing" aria-label="Toggle Free Clothing">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M2 17c1.5-3 2-5 3.5-3s1 5 3 3-.5-6 2-6 1 6 3 4 0-6 2-4 1 4 3 2" />
+          </svg>
+        </button>
+        <button id="btn-toggle-free-endpoints" class="icon-btn" title="Toggle Free Endpoints" aria-label="Toggle Free Endpoints">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="22" y1="12" x2="18" y2="12" />
+            <line x1="6" y1="12" x2="2" y2="12" />
+            <line x1="12" y1="6" x2="12" y2="2" />
+            <line x1="12" y1="22" x2="12" y2="18" />
+          </svg>
+        </button>
+        <!-- Roadmap 1.2-C: alternative net construction - one-shot
+             tool-like toggle (not a persistent mode), see sketch.js's
+             altNetActive/altNetPending state machine. Icon: a dashed
+             polygon outline with one solid edge and its two endpoints
+             marked, suggesting "click an edge, complete to a shape". -->
+        <button id="btn-alternative-net" class="icon-btn" title="Alternative Net Construction (click two points, then a third to confirm the side)" aria-label="Alternative Net Construction (click two points, then a third to confirm the side)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12,3 20,9 17,19 7,19 4,9" stroke-dasharray="3,2" />
+            <line x1="7" y1="19" x2="17" y2="19" stroke-width="3" />
+            <circle cx="7" cy="19" r="1.6" fill="currentColor" stroke="none" />
+            <circle cx="17" cy="19" r="1.6" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
+      </div>
+      <span class="more-sep" aria-hidden="true"></span>
+      <!-- Phase 3 autosave (P2): forget this tab's saved session and start blank - asks first (#restart-overlay, below). Icon only (a file with a plus: a new page); the name is
+           the aria-label. Not on the Farbe tab: the whole rail "Mehr" is hidden there (style.css) - switch to Form or Netz. -->
+      <button id="btn-restart" class="icon-btn" type="button" title="Neu anfangen" aria-label="Neu anfangen" data-i18n="restart.open">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <path d="M14 2v6h6" />
+          <path d="M12 18v-6" />
+          <path d="M9 15h6" />
         </svg>
       </button>
     </div>
-    <!-- Phase 3 autosave (P2): forget this tab's saved session and start blank - asks first (#restart-overlay, below). Not on the Farbe tab: the whole
-         rail "Mehr" is hidden there (style.css, html[data-tab="farbe"] #btn-more-rail) - switch to Form or Netz. -->
-    <div class="overlay-section">
-      <button id="btn-restart" class="layer-btn" type="button" data-i18n="restart.open">Neu anfangen</button>
-    </div>
+    <p id="more-name" class="more-name" aria-hidden="true"><span class="more-name-state"></span><span class="more-name-label"></span></p>
   </div>
 
   <!-- Info card (UI rework 5a): the active sheet's pattern name (#pattern-name-group, moved here unchanged -
@@ -1555,37 +1536,37 @@
   <div id="ui-toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260929bg"></script>
-  <script src="core/state.js?v=20260929bg"></script>
-  <script src="core/symmetry.js?v=20260929bg"></script>
-  <script src="core/curves.js?v=20260929bg"></script>
-  <script src="core/netwarp.js?v=20260929bg"></script>
-  <script src="core/tiling.js?v=20260929bg"></script>
-  <script src="core/faces.js?v=20260929bg"></script>
-  <script src="core/orbits.js?v=20260929bg"></script>
-  <script src="core/color.js?v=20260929bg"></script>
-  <script src="core/facecolor.js?v=20260929bg"></script>
-  <script src="core/farborgel-bridge.js?v=20260929bg"></script>
-  <script src="core/export.js?v=20260929bg"></script>
-  <script src="core/symmetry-toggles.js?v=20260929bg"></script>
-  <script src="core/session.js?v=20260929bg"></script>
-  <script src="core/session-apply.js?v=20260929bg"></script>
-  <script src="core/session-store.js?v=20260929bg"></script>
-  <script src="core/session-writer.js?v=20260929bg"></script>
-  <script src="core/pointer-tap.js?v=20260929bg"></script>
-  <script src="core/pick-node.js?v=20260929bg"></script>
-  <script src="sketch.js?v=20260929bg"></script>
-  <script src="nav.js?v=20260929bg"></script>
-  <script src="ui.js?v=20260929bg"></script>
-  <script src="ui-form.js?v=20260929bg"></script>
-  <script src="ui-layer.js?v=20260929bg"></script>
-  <script src="ui-net.js?v=20260929bg"></script>
-  <script src="ui-farbe.js?v=20260929bg"></script>
-  <script src="ui-rail.js?v=20260929bg"></script>
+  <script src="core/forms.js?v=20260929bj"></script>
+  <script src="core/state.js?v=20260929bj"></script>
+  <script src="core/symmetry.js?v=20260929bj"></script>
+  <script src="core/curves.js?v=20260929bj"></script>
+  <script src="core/netwarp.js?v=20260929bj"></script>
+  <script src="core/tiling.js?v=20260929bj"></script>
+  <script src="core/faces.js?v=20260929bj"></script>
+  <script src="core/orbits.js?v=20260929bj"></script>
+  <script src="core/color.js?v=20260929bj"></script>
+  <script src="core/facecolor.js?v=20260929bj"></script>
+  <script src="core/farborgel-bridge.js?v=20260929bj"></script>
+  <script src="core/export.js?v=20260929bj"></script>
+  <script src="core/symmetry-toggles.js?v=20260929bj"></script>
+  <script src="core/session.js?v=20260929bj"></script>
+  <script src="core/session-apply.js?v=20260929bj"></script>
+  <script src="core/session-store.js?v=20260929bj"></script>
+  <script src="core/session-writer.js?v=20260929bj"></script>
+  <script src="core/pointer-tap.js?v=20260929bj"></script>
+  <script src="core/pick-node.js?v=20260929bj"></script>
+  <script src="sketch.js?v=20260929bj"></script>
+  <script src="nav.js?v=20260929bj"></script>
+  <script src="ui.js?v=20260929bj"></script>
+  <script src="ui-form.js?v=20260929bj"></script>
+  <script src="ui-layer.js?v=20260929bj"></script>
+  <script src="ui-net.js?v=20260929bj"></script>
+  <script src="ui-farbe.js?v=20260929bj"></script>
+  <script src="ui-rail.js?v=20260929bj"></script>
   <!-- Group D Phase B4: exposes window.farborgelBuildHarmonySelection (core/farborgel-selection.mjs)
        for ui-farbe.js/sketch.js (classic scripts) to call - a module script coexists fine with the
        classic p5-bootstrap scripts above (real-browser verified, no conflicts). -->
-  <script type="module" src="core/farborgel-selection.mjs?v=20260929bg"></script>
+  <script type="module" src="core/farborgel-selection.mjs?v=20260929bj"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

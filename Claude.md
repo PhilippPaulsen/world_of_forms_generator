@@ -52,7 +52,7 @@ There is no test runner or CI in the repo; the suites are plain Node scripts. On
 fail=0; for f in tools/*/test-*.js color-harmony/test.js color-harmony/ui/test.mjs color-harmony/ui/composition.test.mjs color-harmony/ui/integration.test.mjs; do out=$(node "$f" 2>&1); rc=$?; printf '%-58s %s\n' "$f" "$(printf '%s\n' "$out" | tail -1)"; [ $rc -ne 0 ] && { echo "  ^ FAILED, exit $rc"; fail=1; }; done; echo "overall: $([ $fail -eq 0 ] && echo PASS || echo FAIL)"
 ```
 
-**This full command is mandatory before every commit.** It takes about ten minutes, almost all of it three slow suites (`test-inherit-hook.js` ~260 s, `test-spread.js` ~120 s, `test-inherit.js` ~50 s). Last full run (2026-10-09, commit `2033cbc6`): 52 files (48 under `tools/` + 4 Farborgel), 1964 checks in `tools/*`, 182 Farborgel groups, `overall: PASS`. These numbers change with every new test file or check; refresh them when you run the full command for a commit that adds one.
+**This full command is mandatory before every commit.** It takes about ten minutes, almost all of it three slow suites (`test-inherit-hook.js` ~260 s, `test-spread.js` ~120 s, `test-inherit.js` ~50 s). Last full run (2026-10-09, the tree of commit `a652e374`): 57 files (53 under `tools/` + 4 Farborgel), 2149 checks in `tools/*`, 182 Farborgel groups, `overall: PASS`. These numbers change with every new test file or check; refresh them when you run the full command for a commit that adds one.
 
 **Fast variant - only while iterating, not before a commit that touches `core/faces.js` or `core/facecolor.js`** (those three suites are what guard face detection, trail keys and colour inheritance). It is the same command with the three slow files skipped, about a minute:
 
@@ -60,7 +60,7 @@ fail=0; for f in tools/*/test-*.js color-harmony/test.js color-harmony/ui/test.m
 fail=0; for f in tools/*/test-*.js color-harmony/test.js color-harmony/ui/test.mjs color-harmony/ui/composition.test.mjs color-harmony/ui/integration.test.mjs; do case "$f" in *test-inherit-hook.js|*test-spread.js|*test-inherit.js) continue;; esac; out=$(node "$f" 2>&1); rc=$?; printf '%-58s %s\n' "$f" "$(printf '%s\n' "$out" | tail -1)"; [ $rc -ne 0 ] && { echo "  ^ FAILED, exit $rc"; fail=1; }; done; echo "overall (fast variant, 3 slow suites skipped): $([ $fail -eq 0 ] && echo PASS || echo FAIL)"
 ```
 
-A single suite: `node tools/session/test-session.js`. `tools/ui/measure-layout.js` and `check-pointer-mapping.js` are browser console scripts, not part of this run. A new test directory under `tools/` only needs a file named `test-*.js` that exits non-zero on failure.
+A single suite: `node tools/session/test-session.js`. `tools/ui/measure-layout.js`, `tools/ui/record-baseline.js` (records `tools/ui/baseline-rail-3.json`, the current layout baseline; `baseline-phase1.json` is the original one and stays as the "before" of the UI rework) and `check-pointer-mapping.js` are browser console scripts, not part of this run. A new test directory under `tools/` only needs a file named `test-*.js` that exits non-zero on failure.
 
 **Clean-export check - run it before a merge, and whenever a page or a script tag changes.** It shows what only works in your checkout (an untracked or ignored file, a missing `<script>` tag, a global another page defines). Export the commit, serve the export, look at three pages:
 
