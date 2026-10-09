@@ -231,6 +231,14 @@ function applyCatalogPatternToNewLayer(pattern) {
 // button and its status line): null when there is none, and no call to p5's select(), which warns about a selector that matches nothing.
 function optionalSelect(sel) { return document.querySelector(sel) ? select(sel) : null; }
 
+// Layer "Mehr" (5d, step 1): does a HIDDEN layer control hold a non-default? True when the layer's offset or rotation is not zero, or its shape, symmetry mode, node count or
+// size differs from the base's current values (a new layer copies those four from the base). `base` = { shape, symmetryMode, nodeCount, shapeSizeFactor }. Drives the dot on the toggle.
+function layerHasNonDefaultSettings(layer, base) {
+    if (!layer || !base) return false;
+    return !!(layer.offsetX || layer.offsetY || layer.rotation ||
+        layer.shape !== base.shape || layer.symmetryMode !== base.symmetryMode || layer.nodeCount !== base.nodeCount || layer.shapeSizeFactor !== base.shapeSizeFactor);
+}
+
 function setup() {
     // Canvas size (Hidden input, default 600)
     const sizeSlider = select('#canvas-size-slider');
@@ -1180,6 +1188,27 @@ function setup() {
     }
     window.setLayerAnimConnectionsStatus = setLayerAnimConnectionsStatus;
 
+    // Layer "Mehr" (5d, step 1): the toggle row, the wrapper and the dot. The open / closed state is a plain variable: kept across layer switches, not saved by the autosave,
+    // closed after a reload. syncLayerMore() is the ONLY writer of the toggle row's and the wrapper's `hidden`; the groups inside keep their own `hidden`, written by
+    // updateOffsetControls() as before, so a group shows only when both are off. The toggle is a plain click listener, not a p5 mousePressed binding.
+    const layerMoreRow = document.getElementById('layer-more-row');
+    const layerMorePanel = document.getElementById('layer-more-panel');
+    const layerMoreBtn = document.getElementById('btn-more-layer');
+    let layerMoreOpen = false;
+    function syncLayerMore() {
+        if (!layerMoreRow || !layerMorePanel || !layerMoreBtn) return;
+        const layerActive = activeLayer !== 'base' && !!additionalLayers[activeLayer];
+        if (layerMoreRow.hidden === layerActive) layerMoreRow.hidden = !layerActive;
+        const showPanel = layerActive && layerMoreOpen;
+        if (layerMorePanel.hidden === showPanel) layerMorePanel.hidden = !showPanel;
+        const expanded = String(layerMoreOpen);
+        if (layerMoreBtn.getAttribute('aria-expanded') !== expanded) layerMoreBtn.setAttribute('aria-expanded', expanded);
+        const needsDot = layerActive && layerHasNonDefaultSettings(additionalLayers[activeLayer], { shape: currentShape, symmetryMode, nodeCount, shapeSizeFactor });   // (not "dot": p5's friendly-error reader reports a let/const named like a p5 member in setup() / draw())
+        if (layerMoreBtn.classList.contains('has-state') !== needsDot) layerMoreBtn.classList.toggle('has-state', needsDot);
+    }
+    window.syncLayerMore = syncLayerMore;
+    if (layerMoreBtn) layerMoreBtn.addEventListener('click', () => { layerMoreOpen = !layerMoreOpen; syncLayerMore(); });
+
     function updateOffsetControls() {
         const showOffsets = activeLayer !== 'base';
         if (offsetXGroup) offsetXGroup.elt.hidden = !showOffsets;
@@ -1252,6 +1281,7 @@ function setup() {
                 setLayerAnimConnectionsStatus('');
             }
         }
+        syncLayerMore();   // the toggle row, the wrapper and the dot follow the active layer (after the groups above have their own `hidden`)
     }
 
     // Roadmap 1.8 Stage A: populates the animation controls (duration/
@@ -2506,6 +2536,7 @@ function draw() {
     if (activeLayer !== 'base' && additionalLayers[activeLayer] && additionalLayers[activeLayer].animation) {
         syncLayerAnimationDisplay(additionalLayers[activeLayer]);
     }
+    if (window.syncLayerMore) window.syncLayerMore();   // the dot of the layer "Mehr" toggle follows edits made through the (closed) controls and the base's values; writes only on a change
     if (timeline) syncTimelineDisplay();
 
     drawTessellation();
