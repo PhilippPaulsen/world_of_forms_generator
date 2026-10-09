@@ -448,8 +448,6 @@ body.dark {
 #face-colors-unassigned { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 4px 0; }
 #face-colors-unassigned[hidden] { display: none; }
 #face-colors-unassigned-text { flex: 1; }
-#face-colors-overlay-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
-#face-colors-overlay-note[hidden] { display: none; }
 #face-colors-timeline-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
 #face-colors-timeline-note[hidden] { display: none; }
 #net-locks-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
@@ -935,9 +933,6 @@ body.dark {
    would otherwise win over the attribute. */
 .nav-harmony-family { min-width: calc(4 * var(--target) + 3 * var(--gap)); }
 .nav-harmony-family[hidden] { display: none; }
-/* The cross-layer overlay note (moved out of the removed Farbe "Mehr" overlay, now beside #cross-layer-status)
-   only matters while editing sheet colors. */
-html:not([data-tab="farbe"]) #face-colors-overlay-note { display: none; }
 
 /* Phone: #nav-farbe's own anchor row wraps into 2 lines if needed (see the comment below). */
 @media (max-width: 767px) {

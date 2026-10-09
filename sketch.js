@@ -227,6 +227,10 @@ function applyCatalogPatternToNewLayer(pattern) {
 }
 
 // ----------------- SETUP ----------------------------------------
+// select() for an element that may not be on the page (the markup of a removed control whose mechanism is kept: the layer animation, the cross-layer compute
+// button and its status line): null when there is none, and no call to p5's select(), which warns about a selector that matches nothing.
+function optionalSelect(sel) { return document.querySelector(sel) ? select(sel) : null; }
+
 function setup() {
     // Canvas size (Hidden input, default 600)
     const sizeSlider = select('#canvas-size-slider');
@@ -1141,9 +1145,7 @@ function setup() {
     // to keep the progress slider/play-icon live, not just on a tab
     // switch or explicit control interaction.
     // The layer animation's markup was removed from index.html (its mechanism is kept below, unreachable from the UI): these are null now, every use of them
-    // is behind an `if (x)`, and select() is not called for a missing id (p5's select() warns about a selector that matches nothing). Put the markup back and
-    // the wiring below works again.
-    const optionalSelect = sel => (document.querySelector(sel) ? select(sel) : null);
+    // is behind an `if (x)` (optionalSelect(), top of the file). Put the markup back and the wiring below works again.
     const animationGroup = optionalSelect('#layer-animation-group');
     const setAnimStartBtn = optionalSelect('#btn-layer-anim-set-start');
     const setAnimEndBtn = optionalSelect('#btn-layer-anim-set-end');
@@ -2240,7 +2242,7 @@ function setup() {
     // Cross-Layer Face Compute (Roadmap 1.10b-ii-b) - see
     // computeCrossLayerFacesFlow()/updateCrossLayerStatus() (INTERACTION
     // section below) for the actual logic; this just wires the click.
-    const computeCrossLayerBtn = select('#btn-compute-cross-layer');
+    const computeCrossLayerBtn = optionalSelect('#btn-compute-cross-layer');   // null: the button was removed (its flow, computeCrossLayerFacesFlow, is kept)
     computeCrossLayerBtn && computeCrossLayerBtn.mousePressed(computeCrossLayerFacesFlow);
 
     // ---- Session restore (Phase 3 autosave, P1d; the storage side is core/session-store.js, the rest core/session*.js) ----
@@ -4951,7 +4953,7 @@ function crossLayerTimeHint(estimatedSegments) {
 // than from every individual mutation site, so no interaction point
 // (however it changes connections/layers/offsets) can be missed.
 function updateCrossLayerStatus() {
-    const statusEl = select('#cross-layer-status');
+    const statusEl = optionalSelect('#cross-layer-status');   // null: the status line was removed with the compute button
     if (!statusEl) return;
 
     if (netWarpActive()) {
@@ -4994,9 +4996,8 @@ function updateCrossLayerStatus() {
 // change, making the button appear to do nothing until the result
 // suddenly appears (1.10b-ii-b design session, point 3).
 function computeCrossLayerFacesFlow() {
-    const computeBtn = select('#btn-compute-cross-layer');
-    const statusEl = select('#cross-layer-status');
-    if (!computeBtn) return;
+    const computeBtn = optionalSelect('#btn-compute-cross-layer');   // null since the button was removed: the compute itself still runs (from the console), only the button's states are skipped
+    const statusEl = optionalSelect('#cross-layer-status');
 
     // Roadmap 1.12 stage 1: refuse outright rather than compute wrong
     // faces - see incompatibleEnabledLayersForCrossLayerFaces()'s own
@@ -5012,8 +5013,7 @@ function computeCrossLayerFacesFlow() {
         return;
     }
 
-    computeBtn.elt.disabled = true;
-    computeBtn.html('Computing…');
+    if (computeBtn) { computeBtn.elt.disabled = true; computeBtn.html('Computing…'); }
     if (statusEl) statusEl.html('Computing…');
 
     setTimeout(() => {
@@ -5026,8 +5026,7 @@ function computeCrossLayerFacesFlow() {
         crossLayerResultTimeMs = t1 - t0;
         crossLayerResultSignature = crossLayerConfigSignature();
 
-        computeBtn.elt.disabled = false;
-        computeBtn.html('Compute Cross-Layer Faces');
+        if (computeBtn) { computeBtn.elt.disabled = false; computeBtn.html('Compute Cross-Layer Faces'); }
         updateCrossLayerStatus();
         // Roadmap 1.10b-ii-c: redraw() so the newly computed result
         // actually renders (drawCrossLayerFaceFillsAcrossCanvas(), see

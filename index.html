@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260929bc">
+  <link rel="stylesheet" href="style.css?v=20260929bd">
   <!-- Cache-busting for the ES-module graph behind core/farborgel-selection.mjs (below). The <script src> tags in
        this file carry ?v= by hand-bump (CLAUDE.md), but a module's own `import ... from './x.mjs'` cannot: this
        import map is the one place that gives every module in that graph the same ?v= as everything else (bump it
@@ -18,11 +18,11 @@
   <script type="importmap">
     {
     "imports": {
-      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929bc",
-      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929bc",
-      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929bc",
-      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929bc",
-      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929bc"
+      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929bd",
+      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929bd",
+      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929bd",
+      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929bd",
+      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929bd"
     }
     }
   </script>
@@ -307,16 +307,10 @@
       cursor: default;
     }
 
-    /* Roadmap 1.10b-ii-b: cross-layer compute status line - live segment/
-       time estimate before a compute, result summary or stale-result
-       notice after one. Muted via opacity rather than a separate color
-       token (none of this project's existing tokens cover "secondary
-       text") so it still flips correctly with the light/dark --text
-       variable. Roadmap 1.11-B: #pattern-name-status (the active
-       sheet's computeThemeLineName() result, or a placeholder when
-       empty) shares this exact style - same "small muted status text"
-       role, just a different status line. */
-    #cross-layer-status, #pattern-name-status {
+    /* Roadmap 1.11-B: #pattern-name-status (the active sheet's computeThemeLineName() result, or a placeholder when empty): a small muted status text. Muted via
+       opacity rather than a separate color token (none of this project's existing tokens cover "secondary text") so it still flips correctly with the light/dark
+       --text variable. (It shared this rule with the cross-layer status line, #cross-layer-status, which is gone.) */
+    #pattern-name-status {
       font-size: 12px;
       color: var(--text);
       opacity: 0.7;
@@ -543,9 +537,8 @@
          the family you can't see". Both families live in the same slot, which reserves four buttons' width so
          the steppers after it never jump when the view changes. Only 2/3/4 exist as cardinalities: the real
          reducer (color-harmony/ui/composition.mjs) rejects 6 and 8 - see core/farborgel-selection.mjs.
-         The Register button (the linear 28-item list) and the "Mehr" button are gone; the cross-layer
-         overlay note that "Mehr" used to hold now sits next to #cross-layer-status (#cross-layer-compute-group
-         below). The distribution-strategy stepper moved into the left rail as four icon buttons
+         The Register button (the linear 28-item list) and the "Mehr" button are gone (the cross-layer
+         overlay note that "Mehr" used to hold is gone with the cross-layer button). The distribution-strategy stepper moved into the left rail as four icon buttons
          (#farbe-strategy-group, in .rail-left). The hue/register steppers are real .stepper widgets
          (UI.stepper()) - the SAME markup/CSS Form's node-count/shape-size steppers use: an icon, then the
          value ALONE (no text label - the pattern's own fill colors already show the result), then chevrons.
@@ -1068,7 +1061,7 @@
       <!-- UI rework 4d: the rule choice (#face-colors-rule) and the axis steppers (#face-colors-axes) moved into
            the Farbe nav row (#nav-farbe, above the canvas); "Spread colors", "Reset colors", the unassigned-trails
            note and the cross-layer overlay note moved into its "Mehr" overlay (#more-farbe; that overlay is since gone,
-           the cross-layer note now sits beside #cross-layer-status). What stays here for
+           the cross-layer note is gone too). What stays here for
            now (step 5 moves it into the organ strip): the title, the timeline note, the status line, the rule's
            own descriptive note, and the per-trail list with its hover highlight and override stepper. -->
       <div class="control-group" id="face-colors-group" hidden>
@@ -1258,27 +1251,11 @@
            setActiveLayerAnimation*, toggleActiveLayerAnimationPlayback, applyLayerAnimationFrame, syncLayerAnimationDisplay), unreachable from the UI, like the
            standalone net animation; tools/ui/test-layer-ui-removed.js pins that. -->
 
-      <!-- Cross-Layer Face Compute (Roadmap 1.10b-ii-b): applies to the
-           base sheet + every ENABLED additional layer at once - not
-           contextual to whichever tab is active, unlike the offset
-           controls above, since it's inherently a cross-sheet operation.
-           Synchronous compute (see the 1.10b-ii-b design session: post
-           spatial-hash-fix real times are sub-second to a few seconds -
-           see sketch.js's computeCrossLayerFacesFlow() for the deferred-
-           via-setTimeout trick that lets the disabled/"Computing…" state
-           actually paint before the synchronous freeze). No rendering
-           yet - coloring + canvas display is 1.10b-ii-c; this step is
-           compute + timing + staleness feedback only. -->
-      <div class="control-group" id="cross-layer-compute-group">
-        <button id="btn-compute-cross-layer" class="layer-btn" title="Compute Cross-Layer Faces">Compute Cross-Layer Faces</button>
-        <span id="cross-layer-status"></span>
-      </div>
-      <!-- Moved here from the removed Farbe "Mehr" overlay (#more-farbe): shown only while a current cross-layer
-           compute result is displayed (sketch.js updateFaceColorsPanel() toggles `hidden` by id - unchanged) and
-           only on the Farbe tab (style.css), because that overlay is drawn on top of every sheet's fills and
-           this explains why the sheet colors the Farbe tab edits are not visible. Sits right below the status
-           line that already reports the same compute result. -->
-      <p id="face-colors-overlay-note" class="overlay-hint" hidden>The cross-layer overlay is on and covers the sheet colors (Compute Cross-Layer Faces to refresh, or edit a sheet to clear it).</p>
+      <!-- Cross-layer faces (Roadmap 1.10b-ii): the compute button (#btn-compute-cross-layer), its status line (#cross-layer-status) and the Farbe note about the
+           overlay (#face-colors-overlay-note) are removed: the overlay was a uniform grey rectangle, the compute takes up to ~9 s and the overlay up to ~15 s on
+           dense patterns, and the staleness signature ignores the symmetry. The mechanism stays in sketch.js (computeCrossLayerFacesFlow, crossLayerResult,
+           crossLayerFillBuffer, crossLayerConfigSignature, updateCrossLayerStatus) and core/faces.js (computeCrossLayerFaces) and the export field
+           geometry.crossLayer (core/export.js), unreachable from the UI; tools/ui/test-layer-ui-removed.js pins that. -->
 
       <!-- Clear/Undo/Redo/Random/Download moved into the canvas rail, UI rework 5a (see the canvas-row comment
            above the canvas). Gallery ("Formorgel") is NOT part of the rail - it stays here until Step 5b moves
@@ -1550,36 +1527,36 @@
   <div id="ui-toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260929bc"></script>
-  <script src="core/state.js?v=20260929bc"></script>
-  <script src="core/symmetry.js?v=20260929bc"></script>
-  <script src="core/curves.js?v=20260929bc"></script>
-  <script src="core/netwarp.js?v=20260929bc"></script>
-  <script src="core/tiling.js?v=20260929bc"></script>
-  <script src="core/faces.js?v=20260929bc"></script>
-  <script src="core/orbits.js?v=20260929bc"></script>
-  <script src="core/color.js?v=20260929bc"></script>
-  <script src="core/facecolor.js?v=20260929bc"></script>
-  <script src="core/farborgel-bridge.js?v=20260929bc"></script>
-  <script src="core/export.js?v=20260929bc"></script>
-  <script src="core/symmetry-toggles.js?v=20260929bc"></script>
-  <script src="core/session.js?v=20260929bc"></script>
-  <script src="core/session-apply.js?v=20260929bc"></script>
-  <script src="core/session-store.js?v=20260929bc"></script>
-  <script src="core/session-writer.js?v=20260929bc"></script>
-  <script src="core/pointer-tap.js?v=20260929bc"></script>
-  <script src="core/pick-node.js?v=20260929bc"></script>
-  <script src="sketch.js?v=20260929bc"></script>
-  <script src="nav.js?v=20260929bc"></script>
-  <script src="ui.js?v=20260929bc"></script>
-  <script src="ui-form.js?v=20260929bc"></script>
-  <script src="ui-net.js?v=20260929bc"></script>
-  <script src="ui-farbe.js?v=20260929bc"></script>
-  <script src="ui-rail.js?v=20260929bc"></script>
+  <script src="core/forms.js?v=20260929bd"></script>
+  <script src="core/state.js?v=20260929bd"></script>
+  <script src="core/symmetry.js?v=20260929bd"></script>
+  <script src="core/curves.js?v=20260929bd"></script>
+  <script src="core/netwarp.js?v=20260929bd"></script>
+  <script src="core/tiling.js?v=20260929bd"></script>
+  <script src="core/faces.js?v=20260929bd"></script>
+  <script src="core/orbits.js?v=20260929bd"></script>
+  <script src="core/color.js?v=20260929bd"></script>
+  <script src="core/facecolor.js?v=20260929bd"></script>
+  <script src="core/farborgel-bridge.js?v=20260929bd"></script>
+  <script src="core/export.js?v=20260929bd"></script>
+  <script src="core/symmetry-toggles.js?v=20260929bd"></script>
+  <script src="core/session.js?v=20260929bd"></script>
+  <script src="core/session-apply.js?v=20260929bd"></script>
+  <script src="core/session-store.js?v=20260929bd"></script>
+  <script src="core/session-writer.js?v=20260929bd"></script>
+  <script src="core/pointer-tap.js?v=20260929bd"></script>
+  <script src="core/pick-node.js?v=20260929bd"></script>
+  <script src="sketch.js?v=20260929bd"></script>
+  <script src="nav.js?v=20260929bd"></script>
+  <script src="ui.js?v=20260929bd"></script>
+  <script src="ui-form.js?v=20260929bd"></script>
+  <script src="ui-net.js?v=20260929bd"></script>
+  <script src="ui-farbe.js?v=20260929bd"></script>
+  <script src="ui-rail.js?v=20260929bd"></script>
   <!-- Group D Phase B4: exposes window.farborgelBuildHarmonySelection (core/farborgel-selection.mjs)
        for ui-farbe.js/sketch.js (classic scripts) to call - a module script coexists fine with the
        classic p5-bootstrap scripts above (real-browser verified, no conflicts). -->
-  <script type="module" src="core/farborgel-selection.mjs?v=20260929bc"></script>
+  <script type="module" src="core/farborgel-selection.mjs?v=20260929bd"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides
