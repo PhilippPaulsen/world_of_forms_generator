@@ -129,7 +129,7 @@ console.log('\n== index.html: every control without visible text has an aria-lab
     check('the three anchor-preview swatches are role="img" with an aria-label', ['farbe-anchor-preview', 'farbe-anchor-preview-kreis', 'farbe-anchor-preview-dreieck'].every(id => new RegExp('<span id="' + id + '"[^>]*\\brole="img"[^>]*\\baria-label="Anker-Vorschau"').test(body)));
 
     // controls with visible text: named by the text; the title is a description and there is NO aria-label (the harmony and net buttons that already had a label of their own are not in this list)
-    const TEXT_BUTTONS = ['btn-layer-base', 'btn-add-layer', 'btn-paste-pattern', 'btn-add-to-timeline', 'btn-timeline-include-net', 'btn-remove-timeline',
+    const TEXT_BUTTONS = ['btn-layer-base', 'btn-add-layer', 'btn-add-to-timeline', 'btn-timeline-include-net', 'btn-remove-timeline',
         'export-png', 'export-json', 'export-svg', 'net-field-btn', 'net-lines-btn', 'net-reverse-btn', 'net-alternate-btn', 'btn-fold-3', 'btn-fold-6'];
     const found = TEXT_BUTTONS.map(id => textTitle.find(t => t.id === id));
     check('the text buttons with a title are all found (the list is current)', found.every(Boolean), TEXT_BUTTONS.filter((id, i) => !found[i]).join(', ') || TEXT_BUTTONS.length + ' buttons');

@@ -316,13 +316,6 @@ label { touch-action: manipulation; }
     width: 100%;
 }
 
-.button-group {
-    grid-column: 1 / -1; /* Span across all columns */
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-}
-
 /* Icon buttons - flat chrome (size/border/radius/active/hover) is owned
    by index.html's inline <style>; layout-only properties here. */
 .icon-btn {
@@ -989,18 +982,16 @@ body.dark {
   .nav-farbe .nav-divider { display: none; }
 }
 
-/* === UI rework 5a: canvas rail ===========================================
-   The action rail - undo/redo/clear | random | points/curves/fill | info/save | more - flanks the canvas on
-   tablet/desktop as ONE single-button-wide column, gutter-aligned like the header/nav rows (CSS Grid: `--target`
-   left column, `1fr` canvas column, a matching `--target` EMPTY right column so the canvas stays centered now
-   that nothing sits on the right - see the phase 5a-fix report for why an `auto` column would not do this: an
-   empty `auto` track collapses to 0, it does not mirror the left column's width on its own). Below 768px it
-   collapses into three fixed rows under the canvas - row 1 undo/redo/clear/random, row 2 points/curves/fill/
-   info/save, row 3 more (flex-wrap + order + .rail-break, the same technique .nav-form's phone reflow uses).
-   Help stays in the header (#btn-help, untouched); Gallery stays in the old panel (moves with the Formorgel
-   link in step 5b) - both were measured to overflow the rail at a coarse pointer if added here, see the report.
-   Every button is the SAME element sketch.js already wires by id (select('#btn-...').mousePressed()) - a DOM
-   move, not a new one; see the canvas-row comment in index.html for what moved from where. */
+/* === UI rework 5a: canvas rail (rearranged into five groups) =============
+   The action rail flanks the canvas on tablet / desktop as ONE single-button-wide column, gutter-aligned like the header / nav rows (CSS Grid: `--target` left
+   column, `1fr` canvas column, a matching `--target` EMPTY right column so the canvas stays centered - an empty `auto` track would collapse to 0).
+   Its five groups, each a .rail-group (a column with a --rail-gap gap, a --rail-group-gap and a hairline between groups; a row on a phone):
+     A undo, redo, random | B points, curves, fill | C the catalog link (Formorgel, Farborgel in the Farbe tab), Paste Pattern | D info, download | E clear
+   plus More (#rail-group-more), a group of its own in the DOM so that it can sit in B on a phone and LAST on the desktop: there it is pulled to the end by `order`
+   (the one `order` on the tablet / desktop rail), 4px under Clear, so its popover hangs under the rail and never covers the canvas. The DOM order is the visual order
+   everywhere else, so the tab order is too; no per-button margin rules are left, and a group that is hidden as a whole takes no space.
+   Below 768px .rail-left is display: contents and the two row wrappers are the rows: .rail-top = A + B + More, .rail-bottom = C + D + E. A row wraps between groups only
+   (a group is one flex item); B and More are kept together by .rail-bm. Every button is the SAME element sketch.js wires by id (select('#btn-...').mousePressed()). */
 :root {
   --rail-gap: 4px;        /* within a group - tighter than the row's own --gap, see the 5a-fix report */
   --rail-group-gap: 12px; /* between groups - the same ~3:1 ratio measured on .nav-form's divider spacing */
@@ -1017,94 +1008,55 @@ body.dark {
   padding: 0 var(--gutter);
 }
 @media (min-width: 768px) {
-  /* position:relative: the desktop-only anchor for #farbe-harmony-select's absolute positioning below the
-     row (Group D Phase B4 follow-up) - see that rule's own comment for why. */
+  /* position:relative: the desktop-only anchor for #farbe-harmony-select's absolute positioning below the row */
   .canvas-row { padding: 0 24px; position: relative; }
 }
 .canvas-row #canvas-container { grid-column: 2; grid-row: 1; }
-/* .rail-left is its OWN flex column, grid-row 1 next to the canvas but NOT spanning/sharing its row track: a
-   grid item that spans (or shares an auto row track with) a taller sibling gets that track's auto-sizing
-   algorithm applied to it too, which silently stretched every margin-top below to fill the canvas's 560px
-   instead of the --rail-gap/--rail-group-gap values (found while measuring the 5a-fix report - the rail came
-   out ~120px taller than the sum of its own declared spacing). A flex column sizes only to its own content
-   regardless of how tall row 1 is, so it is immune to that. */
+/* .rail-left is its OWN flex column, grid-row 1 next to the canvas but NOT spanning/sharing its row track: a grid item that spans (or shares an auto row track with) a
+   taller sibling gets that track's auto-sizing algorithm applied to it too, which silently stretched every margin below to fill the canvas's 560px. A flex column sizes
+   only to its own content regardless of how tall row 1 is. */
 .rail-left { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; }
+/* border-box: the catalog links are <a> elements, and a link is content-box (a button is border-box): 48 + a 1px border on each side made them 50px. */
 .canvas-row .icon-btn {
+  box-sizing: border-box;
   width: var(--target);
   height: var(--target);
   border-radius: var(--radius);
   flex: none;
   touch-action: manipulation;
 }
-.canvas-row .rail-break { display: none; }
 
-/* Top to bottom: undo, redo, clear | random | points, curves, fill | info, save | more. Spacing is margin-top
-   (a flex column has one `gap` value too; these need two): --rail-gap within a group, --rail-group-gap between
-   groups. #btn-undo's own margin-top is the row's own --gap instead of either of those - not a group boundary,
-   but the "top alignment" fix: #canvas-container carries its own `margin: var(--gap) 0` (index.html), so
-   without this the rail's first button sits var(--gap) above the canvas's actual top edge, flush with the
-   row's own top instead of with the canvas. */
-#btn-undo         { margin-top: var(--gap); }
-#btn-redo         { margin-top: var(--rail-gap); }
-#btn-clear        { margin-top: var(--rail-gap); }
-#btn-random       { margin-top: var(--rail-group-gap); }
-#btn-toggle-nodes { margin-top: var(--rail-group-gap); }
-#btn-toggle-curve { margin-top: var(--rail-gap); }
-#btn-toggle-faces { margin-top: var(--rail-gap); }
-#btn-info         { margin-top: var(--rail-group-gap); }
-#btn-save         { margin-top: var(--rail-gap); }
-#btn-more-rail    { margin-top: var(--rail-group-gap); }
-
-/* Group D Phase B4: Farbe-only harmony quick-access - same flat-child, margin-top group-spacing
-   convention as the 10 buttons above. Hidden entirely outside the Farbe tab (html[data-tab], set by
-   nav.js) regardless of viewport width - this selector's specificity beats .canvas-row .icon-btn's
-   display:flex, so no !important is needed. */
+/* The wrappers: transparent on the tablet / desktop (their groups are the column's items), the rows on a phone (below). */
+.rail-top, .rail-bm, .rail-bottom { display: contents; }
+.rail-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rail-gap);
+  margin-top: var(--rail-group-gap);
+  position: relative;
+}
+/* Farbe-only and Form-only controls. Hidden by html[data-tab] (nav.js sets it) regardless of viewport width - these selectors out-specify .icon-btn's display: flex. */
 html:not([data-tab="farbe"]) .rail-farbe-only { display: none; }
-/* Group D Phase B4 follow-up: Kurven (curve toggle), Mehr (Free Clothing/Free Endpoints/Alternative Net -
-   #more-rail), Random Connection, Undo, Redo and Clear are not applicable to face-color work (fill already
-   requires straight lines; free-line/alternative-net construction, generating/undoing/clearing pattern
-   connections aren't color operations) - genuinely hidden in the Farbe tab specifically, not merely disabled,
-   matching this row's own existing "context-irrelevant control" convention. Present and functional in
-   Form/Netz as before. Undo/Redo's own stack (core/state.js) is per-layer, not tab-scoped, so hiding these
-   buttons here does not lose undo history - it stays reachable by switching to the Form or Netz tab, where
-   the buttons are unaffected (person's own explicit tradeoff call, see the B4 follow-up commit). */
+html:not([data-tab="form"]) .rail-form-only { display: none; }
+/* Farbe: Undo / Redo / Random (group A), Clear (group E) and Mehr are not applicable to face-color work (fill already requires straight lines; generating / undoing /
+   clearing pattern connections aren't color operations) - hidden as whole groups, so a hidden group leaves no gap; Kurven (curve toggle) and the Formorgel link go too (the
+   Farborgel link takes the link's place). Undo / Redo's stack (core/state.js) is per layer, not tab-scoped, so hiding the buttons loses no history. */
+html[data-tab="farbe"] #rail-group-a,
+html[data-tab="farbe"] #rail-group-e,
+html[data-tab="farbe"] #rail-group-more,
 html[data-tab="farbe"] #btn-toggle-curve,
-html[data-tab="farbe"] #btn-more-rail,
-html[data-tab="farbe"] #btn-random,
-html[data-tab="farbe"] #btn-undo,
-html[data-tab="farbe"] #btn-redo,
-html[data-tab="farbe"] #btn-clear { display: none; }
-/* With undo/redo/clear/random hidden above, #btn-toggle-nodes (Points) becomes the rail's first visible
-   button in the Farbe tab - it needs #btn-undo's own top-alignment margin (var(--gap), matching
-   #canvas-container's own top margin) instead of its usual group-gap, and its group-divider hairline (drawn
-   by the shared ::before rule below) would otherwise float above nothing at the very top of the rail. */
+html[data-tab="farbe"] #btn-gallery { display: none; }
+
 @media (min-width: 768px) {
-  html[data-tab="farbe"] #btn-toggle-nodes { margin-top: var(--gap); }
-  html[data-tab="farbe"] #btn-toggle-nodes::before { display: none; }
-}
-/* Layout round: the four distribution-strategy icons (#farbe-strategy-group, a radiogroup) take the four slots
-   B/W/S/V used to occupy here. The wrapper is display:contents so its buttons stay flat rail children (same
-   spacing/order rules as every other rail button, and .rail-left's own display:contents on the phone unwraps
-   them one level further); its role="radiogroup" is kept on the element itself. */
-/* Scoped to the Farbe tab on purpose: an unscoped #id rule would out-specify .rail-farbe-only's own hiding
-   (html:not([data-tab="farbe"]) .rail-farbe-only) and leave the strategy buttons visible on Form/Netz. */
-html[data-tab="farbe"] #farbe-strategy-group { display: contents; }
-#btn-strategy-cyclic   { margin-top: var(--rail-group-gap); }
-#btn-strategy-area     { margin-top: var(--rail-gap); }
-#btn-strategy-symmetry { margin-top: var(--rail-gap); }
-#btn-strategy-rings    { margin-top: var(--rail-gap); }
-#btn-face-colors-reset { margin-top: var(--rail-group-gap); }
-#farbe-harmony-select { margin-top: var(--rail-group-gap); font: inherit; }
-#btn-strategy-cyclic, #btn-face-colors-reset { position: relative; }
-/* Tablet/desktop only: Info and Download move to the END of the Farbe rail (flex `order`, no DOM move - Form/Netz
-   keep their rail exactly as before). The phone keeps them in row 2: there the rail is rows, not a column, and
-   seven buttons in row 4 would wrap into a fifth line. #btn-info keeps its own group gap + hairline (below). */
-@media (min-width: 768px) {
-  html[data-tab="farbe"] #btn-info { order: 1; }
-  html[data-tab="farbe"] #btn-save { order: 1; }
-}
-@media (min-width: 768px) {
-  #btn-strategy-cyclic::before, #btn-face-colors-reset::before {
+  /* the first visible group sits var(--gap) below the row's top (#canvas-container carries its own `margin: var(--gap) 0`), with no hairline above it: group A, and
+     group B in the Farbe tab (A is hidden there) */
+  #rail-group-a, html[data-tab="farbe"] #rail-group-b { margin-top: var(--gap); }
+  #rail-group-a::before, html[data-tab="farbe"] #rail-group-b::before { display: none; }
+  /* More: last, close under Clear (a --rail-gap, not a group gap, and no hairline) */
+  #rail-group-more { order: 1; margin-top: var(--rail-gap); }
+  #rail-group-more::before { display: none; }
+  /* a hairline centered in the --rail-group-gap above each group (like .nav-divider, but horizontal); drawn with ::before so it takes no row space */
+  .rail-group::before {
     content: "";
     position: absolute;
     top: calc(-1 * var(--rail-group-gap) / 2 - 0.5px);
@@ -1113,36 +1065,14 @@ html[data-tab="farbe"] #farbe-strategy-group { display: contents; }
     height: 1px;
     background: var(--color-hairline);
   }
-  /* Group D Phase B4 follow-up: the dropdown is a below-canvas fallback, not a rail item (the person's own
-     framing) - staying a flex child of .rail-left on desktop made the column as wide as the dropdown's own
-     text (~123px) instead of var(--target) (36px), and .canvas-row's justify-items:center then centered
-     that oversized column symmetrically, pushing the WHOLE rail off-screen to the left (measured: x=-19.5
-     instead of the gutter edge every other tab's rail sits at). Taking it out of flow here fixes both the
-     dropdown's own position AND the rail's - it no longer contributes to .rail-left's width at all.
-     Desktop-only: on mobile (below 768px) .rail-left's own display:contents already promotes this select to
-     a normal in-flow .canvas-row child (order 22, the Phase B4 rail markup's own comment) - untouched here. */
+  /* The harmony dropdown is a below-canvas fallback, not a rail item (hidden today): out of flow, so it never widens the rail column (it once pushed the whole rail
+     off-screen to the left). On a phone .rail-left's display: contents makes it a normal in-flow .canvas-row child. */
   #farbe-harmony-select {
     position: absolute;
     top: 100%;
     left: 24px;
     margin-top: var(--rail-group-gap);
-  }
-}
-
-/* Divider between groups: a hairline centered in the --rail-group-gap above the group's first button (like
-   .nav-divider, but horizontal - this rail is vertical). Drawn with ::before so it takes no row space (same
-   technique as .nav-more.has-state::after); hidden on the phone, where the rail is three plain rows (no
-   dividers there either, matching .nav-divider's own mobile hiding). */
-#btn-random, #btn-toggle-nodes, #btn-info, #btn-more-rail { position: relative; }
-@media (min-width: 768px) {
-  #btn-random::before, #btn-toggle-nodes::before, #btn-info::before, #btn-more-rail::before {
-    content: "";
-    position: absolute;
-    top: calc(-1 * var(--rail-group-gap) / 2 - 0.5px);
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: var(--color-hairline);
+    font: inherit;
   }
 }
 
@@ -1154,43 +1084,16 @@ html[data-tab="farbe"] #farbe-strategy-group { display: contents; }
     justify-content: flex-start;
     gap: var(--gap);
   }
-  /* Unwraps .rail-left: its 10 buttons become direct flex children of .canvas-row, so the order/.rail-break
-     reflow below can freely interleave them with the (former) canvas-right items across three rows - a grid
-     cell can't do that, but a flex container's own children can once they're all its direct children. */
   .rail-left { display: contents; }
   .canvas-row #canvas-container { flex: 0 0 100%; order: 0; }
-  #btn-undo, #btn-redo, #btn-clear, #btn-random,
-  #btn-toggle-nodes, #btn-toggle-curve, #btn-toggle-faces, #btn-info, #btn-save,
-  #btn-more-rail { margin-top: 0; }
-  #btn-random::before, #btn-toggle-nodes::before, #btn-info::before, #btn-more-rail::before { display: none; }
-  /* Row 1: undo, redo, clear, random. */
-  #btn-undo         { order: 1; }
-  #btn-redo         { order: 2; }
-  #btn-clear        { order: 3; }
-  #btn-random       { order: 4; }
-  .canvas-row .rail-break-1 { display: block; order: 5; flex: 0 0 100%; height: 0; }
-  /* Row 2: points, curves, fill, info, save. */
-  #btn-toggle-nodes { order: 6; }
-  #btn-toggle-curve { order: 7; }
-  #btn-toggle-faces { order: 8; }
-  #btn-info         { order: 9; }
-  #btn-save         { order: 10; }
-  .canvas-row .rail-break-2 { display: block; order: 11; flex: 0 0 100%; height: 0; }
-  /* Row 3: more. */
-  #btn-more-rail    { order: 12; }
-  .canvas-row .rail-break-3 { display: block; order: 13; flex: 0 0 100%; height: 0; }
-  /* Row 4 (Farbe tab only, via .rail-farbe-only's own html[data-tab] gating above): the four distribution-
-     strategy icons (B/W/S/V and 2/3/4 live in #nav-farbe's Kreis/Dreieck family slot), Reset Color, the
-     harmony dropdown. */
-  #btn-strategy-cyclic, #btn-strategy-area, #btn-strategy-symmetry,
-  #btn-strategy-rings, #btn-face-colors-reset, #farbe-harmony-select { margin-top: 0; }
-  #btn-strategy-cyclic::before, #btn-face-colors-reset::before, #farbe-harmony-select::before { display: none; }
-  #btn-strategy-cyclic   { order: 17; }
-  #btn-strategy-area     { order: 18; }
-  #btn-strategy-symmetry { order: 19; }
-  #btn-strategy-rings    { order: 20; }
-  #btn-face-colors-reset { order: 21; }
-  #farbe-harmony-select  { order: 22; }
+  /* Two rows, each wrapping between groups only: a group is one flex item. At 320px the 6 icons of A + B + More (328px) do not fit the 288px row, so A (3) and B + More (3)
+     wrap separately; C + D + E (5 icons, 272px) fits. B and More stay together (.rail-bm). */
+  .rail-top, .rail-bottom { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); flex: 0 0 100%; }
+  .rail-bm { display: flex; gap: var(--gap); flex: none; }
+  .rail-group { flex-direction: row; gap: var(--gap); margin-top: 0; }
+  /* Farbe: the rows are not forced (A, E and More are hidden there): B, the Farborgel link and D share a line, the strategies and Reset Color the next */
+  html[data-tab="farbe"] .rail-top, html[data-tab="farbe"] .rail-bottom { display: contents; }
+  #farbe-harmony-select { font: inherit; }
 }
 
 /* Keyboard focus: its own 2px outline with a 2px offset, never the same
