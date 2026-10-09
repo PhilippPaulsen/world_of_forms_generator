@@ -1140,19 +1140,23 @@ function setup() {
     // draw() also needs to call it every frame during active playback
     // to keep the progress slider/play-icon live, not just on a tab
     // switch or explicit control interaction.
-    const animationGroup = select('#layer-animation-group');
-    const setAnimStartBtn = select('#btn-layer-anim-set-start');
-    const setAnimEndBtn = select('#btn-layer-anim-set-end');
-    const animDurationInput = select('#layer-anim-duration-input');
-    const animPlayBtn = select('#btn-layer-anim-play');
-    const animProgressInput = select('#layer-anim-progress-input');
+    // The layer animation's markup was removed from index.html (its mechanism is kept below, unreachable from the UI): these are null now, every use of them
+    // is behind an `if (x)`, and select() is not called for a missing id (p5's select() warns about a selector that matches nothing). Put the markup back and
+    // the wiring below works again.
+    const optionalSelect = sel => (document.querySelector(sel) ? select(sel) : null);
+    const animationGroup = optionalSelect('#layer-animation-group');
+    const setAnimStartBtn = optionalSelect('#btn-layer-anim-set-start');
+    const setAnimEndBtn = optionalSelect('#btn-layer-anim-set-end');
+    const animDurationInput = optionalSelect('#layer-anim-duration-input');
+    const animPlayBtn = optionalSelect('#btn-layer-anim-play');
+    const animProgressInput = optionalSelect('#layer-anim-progress-input');
     // Roadmap 1.8 Stage B (connections morph): status line for a
     // refused Set Start/End line-count mismatch - same plain-<span>
     // convention as #align-to-base-status. Exposed on window (mirroring
     // updateOffsetControls/syncLayerAnimationDisplay just below) since
     // setActiveLayerAnimationStart()/End() are top-level functions, not
     // declared inside this setup() closure.
-    const animConnectionsStatus = select('#layer-anim-connections-status');
+    const animConnectionsStatus = optionalSelect('#layer-anim-connections-status');
     // Roadmap 1.8 Stage B: which layer the CURRENTLY shown message
     // belongs to - Set Start/End's own click handlers call
     // updateOffsetControls() right after setActiveLayerAnimationStart()/

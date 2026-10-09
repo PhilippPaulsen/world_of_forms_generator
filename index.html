@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260929bb">
+  <link rel="stylesheet" href="style.css?v=20260929bc">
   <!-- Cache-busting for the ES-module graph behind core/farborgel-selection.mjs (below). The <script src> tags in
        this file carry ?v= by hand-bump (CLAUDE.md), but a module's own `import ... from './x.mjs'` cannot: this
        import map is the one place that gives every module in that graph the same ?v= as everything else (bump it
@@ -18,11 +18,11 @@
   <script type="importmap">
     {
     "imports": {
-      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929bb",
-      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929bb",
-      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929bb",
-      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929bb",
-      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929bb"
+      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929bc",
+      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929bc",
+      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929bc",
+      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929bc",
+      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929bc"
     }
     }
   </script>
@@ -1003,8 +1003,8 @@
            delete the layer itself (see sketch.js's own comment on the
            distinction from a layer's own "x" tab button, which DOES
            delete it). Supersedes nothing shipped so far -
-           #layer-animation-group above (Stage A/B's per-layer Set
-           Start/End capture) stays fully intact alongside this. -->
+           the per-layer Set Start/End animation (Stage A/B) has no UI
+           any more, see the note further down. -->
       <div class="control-group" id="timeline-group">
         <label>Timeline</label>
         <div class="icon-row">
@@ -1253,51 +1253,10 @@
         <input type="number" id="layer-rotation-input" value="0" step="1">
       </div>
 
-      <!-- Roadmap 1.8 Stage A: this layer's own keyframe animation -
-           contextual the same way layer-rotation-group above is (hidden
-           while Base is active - offsetX/offsetY/rotation are already
-           layer-only concepts, and animating the base's own
-           shapeSizeFactor would move the shared coordinate-scale
-           reference every other layer's positioning depends on, a
-           materially different feature - design session). Set Start/
-           Set End capture THIS layer's current live offsetX/offsetY/
-           rotation/shapeSizeFactor - explicit action, never automatic,
-           same convention as "Align to base". Duration in milliseconds.
-           Play/Pause icon swaps at runtime (sketch.js's
-           syncLayerAnimationDisplay(), mirroring #btn-toggle-nodes' own
-           eye/eye-off swap convention). The progress slider is
-           bidirectional: it live-updates during playback AND scrubbing
-           it directly sets/pauses progress (setActiveLayerAnimationProgress()).
-           Shape (1.12 stage 4) and symmetryMode (1.12 stage 5) are
-           deliberately NOT part of this control and stay fixed per
-           animated layer - both are discrete choices, not continuous
-           parameters, so they have no meaningful "interpolated middle"
-           (design session point 5). loop()/noLoop() is scoped strictly
-           to whenever any layer's animation.playing is true
-           (isAnythingAnimating(), sketch.js) - never left running
-           permanently. -->
-      <div class="control-group" id="layer-animation-group" hidden>
-        <label>Layer Animation</label>
-        <div class="icon-row">
-          <button id="btn-layer-anim-set-start" class="layer-btn" title="Set Start">Set Start</button>
-          <button id="btn-layer-anim-set-end" class="layer-btn" title="Set End">Set End</button>
-        </div>
-        <!-- Roadmap 1.8 Stage B (connections morph): Set Start/End also
-             capture this layer's CURRENT connections (see sketch.js's
-             setActiveLayerAnimationStart()/End()); a line-count mismatch
-             against the other side's already-captured connections is
-             refused and reported here rather than silently truncated. -->
-        <span id="layer-anim-connections-status"></span>
-        <div class="icon-row">
-          <input type="number" id="layer-anim-duration-input" min="1" step="1" value="2000" title="Duration (ms)" aria-label="Duration (ms)">
-          <button id="btn-layer-anim-play" class="icon-btn" title="Play" aria-label="Play">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-              <path d="M7 5 L19 12 L7 19 Z" />
-            </svg>
-          </button>
-        </div>
-        <input type="range" id="layer-anim-progress-input" min="0" max="1" step="0.001" value="0" title="Progress" aria-label="Progress">
-      </div>
+      <!-- Layer animation (Roadmap 1.8 Stage A/B: Set Start / Set End, duration, Play, progress for one layer's offset, rotation, size and connections): the UI is
+           removed (the Timeline above morphs connections, net and colours between keyframes). The mechanism stays in sketch.js (ensureLayerAnimation,
+           setActiveLayerAnimation*, toggleActiveLayerAnimationPlayback, applyLayerAnimationFrame, syncLayerAnimationDisplay), unreachable from the UI, like the
+           standalone net animation; tools/ui/test-layer-ui-removed.js pins that. -->
 
       <!-- Cross-Layer Face Compute (Roadmap 1.10b-ii-b): applies to the
            base sheet + every ENABLED additional layer at once - not
@@ -1591,36 +1550,36 @@
   <div id="ui-toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260929bb"></script>
-  <script src="core/state.js?v=20260929bb"></script>
-  <script src="core/symmetry.js?v=20260929bb"></script>
-  <script src="core/curves.js?v=20260929bb"></script>
-  <script src="core/netwarp.js?v=20260929bb"></script>
-  <script src="core/tiling.js?v=20260929bb"></script>
-  <script src="core/faces.js?v=20260929bb"></script>
-  <script src="core/orbits.js?v=20260929bb"></script>
-  <script src="core/color.js?v=20260929bb"></script>
-  <script src="core/facecolor.js?v=20260929bb"></script>
-  <script src="core/farborgel-bridge.js?v=20260929bb"></script>
-  <script src="core/export.js?v=20260929bb"></script>
-  <script src="core/symmetry-toggles.js?v=20260929bb"></script>
-  <script src="core/session.js?v=20260929bb"></script>
-  <script src="core/session-apply.js?v=20260929bb"></script>
-  <script src="core/session-store.js?v=20260929bb"></script>
-  <script src="core/session-writer.js?v=20260929bb"></script>
-  <script src="core/pointer-tap.js?v=20260929bb"></script>
-  <script src="core/pick-node.js?v=20260929bb"></script>
-  <script src="sketch.js?v=20260929bb"></script>
-  <script src="nav.js?v=20260929bb"></script>
-  <script src="ui.js?v=20260929bb"></script>
-  <script src="ui-form.js?v=20260929bb"></script>
-  <script src="ui-net.js?v=20260929bb"></script>
-  <script src="ui-farbe.js?v=20260929bb"></script>
-  <script src="ui-rail.js?v=20260929bb"></script>
+  <script src="core/forms.js?v=20260929bc"></script>
+  <script src="core/state.js?v=20260929bc"></script>
+  <script src="core/symmetry.js?v=20260929bc"></script>
+  <script src="core/curves.js?v=20260929bc"></script>
+  <script src="core/netwarp.js?v=20260929bc"></script>
+  <script src="core/tiling.js?v=20260929bc"></script>
+  <script src="core/faces.js?v=20260929bc"></script>
+  <script src="core/orbits.js?v=20260929bc"></script>
+  <script src="core/color.js?v=20260929bc"></script>
+  <script src="core/facecolor.js?v=20260929bc"></script>
+  <script src="core/farborgel-bridge.js?v=20260929bc"></script>
+  <script src="core/export.js?v=20260929bc"></script>
+  <script src="core/symmetry-toggles.js?v=20260929bc"></script>
+  <script src="core/session.js?v=20260929bc"></script>
+  <script src="core/session-apply.js?v=20260929bc"></script>
+  <script src="core/session-store.js?v=20260929bc"></script>
+  <script src="core/session-writer.js?v=20260929bc"></script>
+  <script src="core/pointer-tap.js?v=20260929bc"></script>
+  <script src="core/pick-node.js?v=20260929bc"></script>
+  <script src="sketch.js?v=20260929bc"></script>
+  <script src="nav.js?v=20260929bc"></script>
+  <script src="ui.js?v=20260929bc"></script>
+  <script src="ui-form.js?v=20260929bc"></script>
+  <script src="ui-net.js?v=20260929bc"></script>
+  <script src="ui-farbe.js?v=20260929bc"></script>
+  <script src="ui-rail.js?v=20260929bc"></script>
   <!-- Group D Phase B4: exposes window.farborgelBuildHarmonySelection (core/farborgel-selection.mjs)
        for ui-farbe.js/sketch.js (classic scripts) to call - a module script coexists fine with the
        classic p5-bootstrap scripts above (real-browser verified, no conflicts). -->
-  <script type="module" src="core/farborgel-selection.mjs?v=20260929bb"></script>
+  <script type="module" src="core/farborgel-selection.mjs?v=20260929bc"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides
