@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260929bh">
+  <link rel="stylesheet" href="style.css?v=20260929bi">
   <!-- Cache-busting for the ES-module graph behind core/farborgel-selection.mjs (below). The <script src> tags in
        this file carry ?v= by hand-bump (CLAUDE.md), but a module's own `import ... from './x.mjs'` cannot: this
        import map is the one place that gives every module in that graph the same ?v= as everything else (bump it
@@ -18,11 +18,11 @@
   <script type="importmap">
     {
     "imports": {
-      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929bh",
-      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929bh",
-      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929bh",
-      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929bh",
-      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929bh"
+      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929bi",
+      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929bi",
+      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929bi",
+      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929bi",
+      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929bi"
     }
     }
   </script>
@@ -625,11 +625,11 @@
     </div>
   </div>
 
-  <!-- Canvas row (UI rework 5a, rail rearrangement commit 1): the canvas flanked by ONE action rail on the LEFT, built from five groups, each a .rail-group
-       (a column with a 4px gap; a row on a phone): A undo, redo, random | B points, curves, fill, more | C the catalog link (Formorgel; Farborgel in the Farbe tab), Paste Pattern |
+  <!-- Canvas row (UI rework 5a, rail rearrangement commits 1 and 2): the canvas flanked by ONE action rail on the LEFT, built from five groups, each a .rail-group
+       (a column with a 4px gap; a row on a phone): A undo, redo, random | B points, fill, more | C the catalog link (Formorgel; Farborgel in the Farbe tab), Paste Pattern |
        D info, download | E clear. The DOM order is the visual order (and so the tab order) in every tab, with ONE exception on the tablet / desktop: More (#rail-group-more) is
-       the last item through CSS `order`, so its popover hangs under the rail and never covers the canvas; on a phone it stays in group B. Toggle Curve stays in group B until it
-       moves into More (the next commit). >= 768px: a single column, gutter-aligned like the header / nav rows (CSS Grid, a matching empty right column keeps the canvas
+       the last item through CSS `order`, so its popover hangs under the rail and never covers the canvas; on a phone it stays in group B. Toggle Curve, Free Clothing, Free Endpoints, Alternative Net and
+       "Neu anfangen" are in the More popover (a horizontal row). >= 768px: a single column, gutter-aligned like the header / nav rows (CSS Grid, a matching empty right column keeps the canvas
        centered). Below 768px: .rail-left is display: contents and its two row wrappers (.rail-top = A + B + More, .rail-bottom = C + D + E) are the two rows, each wrapping
        between groups only. Every button below is the SAME element sketch.js wires by id (select('#btn-...').mousePressed()) - relocated here, not duplicated; no logic changed.
        The two catalog links are real <a> elements (a link, not a JS-wired button): Enter follows the href, Space does nothing, and ui.js's keyboard bridge (buttons only) and the
@@ -667,11 +667,6 @@
                 <circle cx="12" cy="12" r="3" />
               </svg>
             </button>
-            <button id="btn-toggle-curve" class="icon-btn" title="Toggle Curve" aria-label="Toggle Curve">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M4 12c2-4 6-4 8 0s6 4 8 0" />
-              </svg>
-            </button>
             <button id="btn-toggle-faces" class="icon-btn" title="Toggle Face Fill" aria-label="Toggle Face Fill">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
                 <path d="M12 2 L22 20 L2 20 Z" />
@@ -679,7 +674,7 @@
             </button>
           </div>
           <div id="rail-group-more" class="rail-group">
-            <button id="btn-more-rail" class="icon-btn" type="button" title="Mehr" aria-label="Mehr" aria-controls="more-rail" data-i18n="more">
+            <button id="btn-more-rail" class="icon-btn nav-more" type="button" title="Mehr: Kurve, Frei, Freie Endpunkte, Alternatives Netz" aria-label="Mehr: Kurve, Frei, Freie Endpunkte, Alternatives Netz" aria-controls="more-rail" data-i18n="more.rail.button">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
             </button>
           </div>
@@ -1466,47 +1461,62 @@
     <svg id="farbe-anchor-dreieck" class="anchor-widget-svg" viewBox="0 0 240 200" role="radiogroup" aria-label="Anker: Register (Dreieck, aktueller Farbton)"></svg>
   </div>
 
-  <!-- "Mehr" (More) for the canvas rail (UI rework 5a): the three toggles that are not among the rail's 4
-       visible slots - Free Clothing, Free Endpoints, Alternative Net Construction - moved here unchanged (ids,
-       classes, icons and handlers untouched; sketch.js still owns them via select('#btn-...').mousePressed()). -->
+  <!-- "Mehr" (More) for the canvas rail: ONE horizontal row of icons - Toggle Curve, Free Clothing, Free Endpoints, Alternative Net (all moved here unchanged: ids, classes, icons
+       and handlers untouched, sketch.js still owns them via select('#btn-...').mousePressed()), a separator, and "Neu anfangen" as an icon - and below it a fixed name line
+       (#more-name, aria-hidden, a reserved height: ui-rail.js writes the name and state of the last icon touched, so no caption sits under an icon). The row wraps only
+       between the toggles and "Neu anfangen" (the separator is hidden then). The whole popover is hidden in the Farbe tab (style.css), so "Neu anfangen" is not available there. -->
   <div id="more-rail" class="overlay" role="dialog" aria-label="Mehr" data-i18n="more.rail" hidden>
-    <div class="overlay-section">
-      <!-- Roadmap 1.5-B: kind:'free' toggle, separate from (not a
-           redesign of) the curve toggle - three-way mutually
-           exclusive with it and with face-fill (see sketch.js). -->
-      <button id="btn-toggle-free" class="icon-btn" title="Toggle Free Clothing" aria-label="Toggle Free Clothing">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M2 17c1.5-3 2-5 3.5-3s1 5 3 3-.5-6 2-6 1 6 3 4 0-6 2-4 1 4 3 2" />
-        </svg>
-      </button>
-      <button id="btn-toggle-free-endpoints" class="icon-btn" title="Toggle Free Endpoints" aria-label="Toggle Free Endpoints">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10" />
-          <line x1="22" y1="12" x2="18" y2="12" />
-          <line x1="6" y1="12" x2="2" y2="12" />
-          <line x1="12" y1="6" x2="12" y2="2" />
-          <line x1="12" y1="22" x2="12" y2="18" />
-        </svg>
-      </button>
-      <!-- Roadmap 1.2-C: alternative net construction - one-shot
-           tool-like toggle (not a persistent mode), see sketch.js's
-           altNetActive/altNetPending state machine. Icon: a dashed
-           polygon outline with one solid edge and its two endpoints
-           marked, suggesting "click an edge, complete to a shape". -->
-      <button id="btn-alternative-net" class="icon-btn" title="Alternative Net Construction (click two points, then a third to confirm the side)" aria-label="Alternative Net Construction (click two points, then a third to confirm the side)">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polygon points="12,3 20,9 17,19 7,19 4,9" stroke-dasharray="3,2" />
-          <line x1="7" y1="19" x2="17" y2="19" stroke-width="3" />
-          <circle cx="7" cy="19" r="1.6" fill="currentColor" stroke="none" />
-          <circle cx="17" cy="19" r="1.6" fill="currentColor" stroke="none" />
+    <div class="more-row">
+      <div class="more-toggles">
+        <button id="btn-toggle-curve" class="icon-btn" title="Toggle Curve" aria-label="Toggle Curve">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 12c2-4 6-4 8 0s6 4 8 0" />
+          </svg>
+        </button>
+        <!-- Roadmap 1.5-B: kind:'free' toggle, separate from (not a
+             redesign of) the curve toggle - three-way mutually
+             exclusive with it and with face-fill (see sketch.js). -->
+        <button id="btn-toggle-free" class="icon-btn" title="Toggle Free Clothing" aria-label="Toggle Free Clothing">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M2 17c1.5-3 2-5 3.5-3s1 5 3 3-.5-6 2-6 1 6 3 4 0-6 2-4 1 4 3 2" />
+          </svg>
+        </button>
+        <button id="btn-toggle-free-endpoints" class="icon-btn" title="Toggle Free Endpoints" aria-label="Toggle Free Endpoints">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="22" y1="12" x2="18" y2="12" />
+            <line x1="6" y1="12" x2="2" y2="12" />
+            <line x1="12" y1="6" x2="12" y2="2" />
+            <line x1="12" y1="22" x2="12" y2="18" />
+          </svg>
+        </button>
+        <!-- Roadmap 1.2-C: alternative net construction - one-shot
+             tool-like toggle (not a persistent mode), see sketch.js's
+             altNetActive/altNetPending state machine. Icon: a dashed
+             polygon outline with one solid edge and its two endpoints
+             marked, suggesting "click an edge, complete to a shape". -->
+        <button id="btn-alternative-net" class="icon-btn" title="Alternative Net Construction (click two points, then a third to confirm the side)" aria-label="Alternative Net Construction (click two points, then a third to confirm the side)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12,3 20,9 17,19 7,19 4,9" stroke-dasharray="3,2" />
+            <line x1="7" y1="19" x2="17" y2="19" stroke-width="3" />
+            <circle cx="7" cy="19" r="1.6" fill="currentColor" stroke="none" />
+            <circle cx="17" cy="19" r="1.6" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
+      </div>
+      <span class="more-sep" aria-hidden="true"></span>
+      <!-- Phase 3 autosave (P2): forget this tab's saved session and start blank - asks first (#restart-overlay, below). Icon only (a file with a plus: a new page); the name is
+           the aria-label. Not on the Farbe tab: the whole rail "Mehr" is hidden there (style.css) - switch to Form or Netz. -->
+      <button id="btn-restart" class="icon-btn" type="button" title="Neu anfangen" aria-label="Neu anfangen" data-i18n="restart.open">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <path d="M14 2v6h6" />
+          <path d="M12 18v-6" />
+          <path d="M9 15h6" />
         </svg>
       </button>
     </div>
-    <!-- Phase 3 autosave (P2): forget this tab's saved session and start blank - asks first (#restart-overlay, below). Not on the Farbe tab: the whole
-         rail "Mehr" is hidden there (style.css, html[data-tab="farbe"] #btn-more-rail) - switch to Form or Netz. -->
-    <div class="overlay-section">
-      <button id="btn-restart" class="layer-btn" type="button" data-i18n="restart.open">Neu anfangen</button>
-    </div>
+    <p id="more-name" class="more-name" aria-hidden="true"><span class="more-name-state"></span><span class="more-name-label"></span></p>
   </div>
 
   <!-- Info card (UI rework 5a): the active sheet's pattern name (#pattern-name-group, moved here unchanged -
@@ -1526,37 +1536,37 @@
   <div id="ui-toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260929bh"></script>
-  <script src="core/state.js?v=20260929bh"></script>
-  <script src="core/symmetry.js?v=20260929bh"></script>
-  <script src="core/curves.js?v=20260929bh"></script>
-  <script src="core/netwarp.js?v=20260929bh"></script>
-  <script src="core/tiling.js?v=20260929bh"></script>
-  <script src="core/faces.js?v=20260929bh"></script>
-  <script src="core/orbits.js?v=20260929bh"></script>
-  <script src="core/color.js?v=20260929bh"></script>
-  <script src="core/facecolor.js?v=20260929bh"></script>
-  <script src="core/farborgel-bridge.js?v=20260929bh"></script>
-  <script src="core/export.js?v=20260929bh"></script>
-  <script src="core/symmetry-toggles.js?v=20260929bh"></script>
-  <script src="core/session.js?v=20260929bh"></script>
-  <script src="core/session-apply.js?v=20260929bh"></script>
-  <script src="core/session-store.js?v=20260929bh"></script>
-  <script src="core/session-writer.js?v=20260929bh"></script>
-  <script src="core/pointer-tap.js?v=20260929bh"></script>
-  <script src="core/pick-node.js?v=20260929bh"></script>
-  <script src="sketch.js?v=20260929bh"></script>
-  <script src="nav.js?v=20260929bh"></script>
-  <script src="ui.js?v=20260929bh"></script>
-  <script src="ui-form.js?v=20260929bh"></script>
-  <script src="ui-layer.js?v=20260929bh"></script>
-  <script src="ui-net.js?v=20260929bh"></script>
-  <script src="ui-farbe.js?v=20260929bh"></script>
-  <script src="ui-rail.js?v=20260929bh"></script>
+  <script src="core/forms.js?v=20260929bi"></script>
+  <script src="core/state.js?v=20260929bi"></script>
+  <script src="core/symmetry.js?v=20260929bi"></script>
+  <script src="core/curves.js?v=20260929bi"></script>
+  <script src="core/netwarp.js?v=20260929bi"></script>
+  <script src="core/tiling.js?v=20260929bi"></script>
+  <script src="core/faces.js?v=20260929bi"></script>
+  <script src="core/orbits.js?v=20260929bi"></script>
+  <script src="core/color.js?v=20260929bi"></script>
+  <script src="core/facecolor.js?v=20260929bi"></script>
+  <script src="core/farborgel-bridge.js?v=20260929bi"></script>
+  <script src="core/export.js?v=20260929bi"></script>
+  <script src="core/symmetry-toggles.js?v=20260929bi"></script>
+  <script src="core/session.js?v=20260929bi"></script>
+  <script src="core/session-apply.js?v=20260929bi"></script>
+  <script src="core/session-store.js?v=20260929bi"></script>
+  <script src="core/session-writer.js?v=20260929bi"></script>
+  <script src="core/pointer-tap.js?v=20260929bi"></script>
+  <script src="core/pick-node.js?v=20260929bi"></script>
+  <script src="sketch.js?v=20260929bi"></script>
+  <script src="nav.js?v=20260929bi"></script>
+  <script src="ui.js?v=20260929bi"></script>
+  <script src="ui-form.js?v=20260929bi"></script>
+  <script src="ui-layer.js?v=20260929bi"></script>
+  <script src="ui-net.js?v=20260929bi"></script>
+  <script src="ui-farbe.js?v=20260929bi"></script>
+  <script src="ui-rail.js?v=20260929bi"></script>
   <!-- Group D Phase B4: exposes window.farborgelBuildHarmonySelection (core/farborgel-selection.mjs)
        for ui-farbe.js/sketch.js (classic scripts) to call - a module script coexists fine with the
        classic p5-bootstrap scripts above (real-browser verified, no conflicts). -->
-  <script type="module" src="core/farborgel-selection.mjs?v=20260929bh"></script>
+  <script type="module" src="core/farborgel-selection.mjs?v=20260929bi"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

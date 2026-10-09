@@ -2,7 +2,7 @@
 //   node tools/ui/test-rail-groups.js
 //   INDEX_HTML=... STYLE_CSS=... SKETCH_JS=... UI_RAIL_JS=... node tools/ui/test-rail-groups.js        (sabotage runs)
 //
-// What it pins. The rail is A undo, redo, random | B points, curves, fill | More | C the catalog link (Formorgel; Farborgel in the Farbe tab), Paste Pattern | D info, download | E clear, each a
+// What it pins. The rail is A undo, redo, random | B points, fill | More | C the catalog link (Formorgel; Farborgel in the Farbe tab), Paste Pattern | D info, download | E clear, each a
 // .rail-group. The DOM order is the visual order (so the tab order is too): the ONLY `order` on the tablet / desktop rail is More's (it is the last item there, so its popover hangs under the
 // rail). Which controls show in which tab is decided by CSS (html[data-tab]; nav.js sets it) and is computed here from the rules, not copied. The links are <a> elements that need border-box (a link
 // is content-box: 48 + the border made them 50px). Paste Pattern is an icon in the rail (Form tab only). Nothing here may add a p5 mousePressed binding: the buttons are the same elements
@@ -47,7 +47,7 @@ T('markup', () => {
     check('the groups are, in DOM order: A, B, More, C, D, E, the strategies, Reset Color', JSON.stringify(G.map(g => g.id)) === JSON.stringify(['rail-group-a', 'rail-group-b', 'rail-group-more', 'rail-group-c', 'rail-group-d', 'rail-group-e', 'farbe-strategy-group', 'rail-group-reset']), G.map(g => g.id).join(' '));
     const want = {
         'rail-group-a': ['btn-undo', 'btn-redo', 'btn-random'],
-        'rail-group-b': ['btn-toggle-nodes', 'btn-toggle-curve', 'btn-toggle-faces'],   // Toggle Curve stays here until it moves into More (next commit)
+        'rail-group-b': ['btn-toggle-nodes', 'btn-toggle-faces'],   // Toggle Curve is in the More popover since commit 2
         'rail-group-more': ['btn-more-rail'],
         'rail-group-c': ['btn-gallery', 'btn-farborgel', 'btn-paste-pattern'],
         'rail-group-d': ['btn-info', 'btn-save'],
@@ -81,7 +81,8 @@ T('links', () => {
 
 console.log('\n== the CSS: per-tab visibility, computed from the rules ==');
 const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
-const railCss = css.slice(css.indexOf(':root {\n  --rail-gap'), css.indexOf('a:focus-visible, button:focus-visible'));
+const railCss = css.slice(css.indexOf(':root {\n  --rail-gap'), css.indexOf('#more-rail .more-row'));
+const popCss = css.slice(css.indexOf('#more-rail .more-row'), css.indexOf('a:focus-visible, button:focus-visible'));
 // balanced-brace blocks of a given @media header inside the rail CSS
 function media(text, header) {
     const out = [];
@@ -130,11 +131,11 @@ T('visibility', () => {
         return out;
     };
     const flat = tab => visible(tab).map(g => g.join(' ')).join(' | ');
-    check('Form: A | B | C (Formorgel, Paste Pattern) | D | E | More (More is the last item on the desktop through CSS order)', flat('form') === 'btn-undo btn-redo btn-random | btn-toggle-nodes btn-toggle-curve btn-toggle-faces | btn-more-rail | btn-gallery btn-paste-pattern | btn-info btn-save | btn-clear', flat('form'));
-    check('Netz: as Form, without Paste Pattern', flat('netz') === 'btn-undo btn-redo btn-random | btn-toggle-nodes btn-toggle-curve btn-toggle-faces | btn-more-rail | btn-gallery | btn-info btn-save | btn-clear', flat('netz'));
-    check('Farbe: points, fill | Farborgel (in the link\'s place) | info, download | the strategies | Reset Color; A, E, More, Curve and the Formorgel link are hidden', flat('farbe') === 'btn-toggle-nodes btn-toggle-faces | btn-farborgel | btn-info btn-save | btn-strategy-cyclic btn-strategy-area btn-strategy-symmetry btn-strategy-rings | btn-face-colors-reset', flat('farbe'));
+    check('Form: A | B | C (Formorgel, Paste Pattern) | D | E | More (More is the last item on the desktop through CSS order)', flat('form') === 'btn-undo btn-redo btn-random | btn-toggle-nodes btn-toggle-faces | btn-more-rail | btn-gallery btn-paste-pattern | btn-info btn-save | btn-clear', flat('form'));
+    check('Netz: as Form, without Paste Pattern', flat('netz') === 'btn-undo btn-redo btn-random | btn-toggle-nodes btn-toggle-faces | btn-more-rail | btn-gallery | btn-info btn-save | btn-clear', flat('netz'));
+    check('Farbe: points, fill | Farborgel (in the link\'s place) | info, download | the strategies | Reset Color; A, E, More (with the popover: Curve, Free, Neu anfangen) and the Formorgel link are hidden', flat('farbe') === 'btn-toggle-nodes btn-toggle-faces | btn-farborgel | btn-info btn-save | btn-strategy-cyclic btn-strategy-area btn-strategy-symmetry btn-strategy-rings | btn-face-colors-reset', flat('farbe'));
     check('the Formorgel link is shown in Form and Netz, the Farborgel link only in Farbe; Paste Pattern only in Form', ['form', 'netz'].every(t => flat(t).includes('btn-gallery') && !flat(t).includes('btn-farborgel')) && flat('farbe').includes('btn-farborgel') && !flat('farbe').includes('btn-gallery') && flat('form').includes('btn-paste-pattern') && !flat('netz').includes('btn-paste-pattern') && !flat('farbe').includes('btn-paste-pattern'));
-    check('Farbe still hides Undo, Redo, Random, Clear and More (as a whole group each: a hidden group leaves no gap)', ['rail-group-a', 'rail-group-e', 'rail-group-more'].every(id => hiddenInFarbe.has(id)) && hiddenInFarbe.has('btn-toggle-curve'));
+    check('Farbe still hides Undo, Redo, Random, Clear and More (as a whole group each: a hidden group leaves no gap)', ['rail-group-a', 'rail-group-e', 'rail-group-more'].every(id => hiddenInFarbe.has(id)) && !hiddenInFarbe.has('btn-toggle-curve'));
 });
 
 console.log('\n== the CSS: order, spacing, links, phone ==');
@@ -158,12 +159,41 @@ T('layout', () => {
     check('the rail CSS has no `flex-wrap` outside the phone block (the desktop rail, Farbe included, is one column with no wrap)', !TOP.concat(DRULES).some(r => /flex-wrap/.test(r.body)));
 });
 
+console.log('\n== the More popover (commit 2) ==');
+T('popover', () => {
+    const pa = HTML.indexOf('<div id="more-rail"'), pb = HTML.indexOf('<!-- Info card (UI rework 5a)');
+    const pop = pa >= 0 && pb > pa ? HTML.slice(pa, pb) : '';
+    check('the popover was found and Toggle Curve is INSIDE #more-rail (not in the rail any more)', pop.includes('id="btn-toggle-curve"') && !rail.includes('id="btn-toggle-curve"'));
+    const order = ['btn-toggle-curve', 'btn-toggle-free', 'btn-toggle-free-endpoints', 'btn-alternative-net', 'more-sep', 'btn-restart', 'id="more-name"'].map(k => pop.indexOf(k.includes('=') ? k : (k === 'more-sep' ? 'class="more-sep"' : 'id="' + k + '"')));
+    check('ONE row, in this order: Curve, Free, Free Endpoints, Alternative Net, a separator, "Neu anfangen", and the name line after it', order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1])) && /<div class="more-row">/.test(pop), order.join(','));
+    check('the four toggles are inside .more-toggles (the part that never wraps), the separator and the restart icon are siblings of it', /<div class="more-toggles">[\s\S]*btn-alternative-net[\s\S]*?<\/div>\s*<span class="more-sep" aria-hidden="true"><\/span>[\s\S]*id="btn-restart"/.test(pop));
+    const rs = (pop.match(/<button id="btn-restart"[^>]*>[\s\S]*?<\/button>/) || [''])[0];
+    check('#btn-restart: an icon-only button (no visible text), title = aria-label "Neu anfangen", data-i18n="restart.open", type=button, the Feather file-plus paths, 24 viewBox, stroke 2, 20px', /^<button id="btn-restart" class="icon-btn" type="button" title="Neu anfangen" aria-label="Neu anfangen" data-i18n="restart\.open">/.test(rs) && rs.replace(/<svg[\s\S]*?<\/svg>/, '').replace(/<[^>]+>/g, '').trim() === '' && /viewBox="0 0 24 24"/.test(rs) && /stroke-width="2"/.test(rs) && /width="20" height="20"/.test(rs) && ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', 'M14 2v6h6', 'M12 18v-6', 'M9 15h6'].every(d => rs.includes('d="' + d + '"')), rs.slice(0, 90));
+    check('...and it is not the trash can of Clear and Reset Color', !rs.includes('M3 6h18M19 6v14'));
+    const nm = (pop.match(/<p id="more-name"[^>]*>/) || [''])[0];
+    check('the name line is a <p aria-hidden="true"> (no repeat to screen readers) with a state span and a label span', /aria-hidden="true"/.test(nm) && /class="more-name"/.test(nm) && /more-name-state[\s\S]*more-name-label/.test(pop.slice(pop.indexOf('id="more-name"'))));
+    const nameCss = (popCss.match(/#more-rail \.more-name\s*\{([^}]*)\}/) || [, ''])[1];
+    check('...with a RESERVED height (em), overflow hidden, clamped to its lines, and as wide as the row but never wider (width: 0; min-width: 100%): filling or emptying it moves nothing', /(^|;|\s)height:\s*[\d.]+em/.test(nameCss) && /overflow:\s*hidden/.test(nameCss) && /width:\s*0/.test(nameCss) && /min-width:\s*100%/.test(nameCss) && /line-clamp/.test(nameCss), nameCss.replace(/\s+/g, ' ').slice(0, 120));
+    check('the row: flex, wraps (only the toggles and "Neu anfangen" are its children), the toggles never wrap, the icons are the rail\'s --target size, the separator is hidden below 320px', /#more-rail \.more-row\s*\{[^}]*flex-wrap:\s*wrap/.test(popCss) && /#more-rail \.more-toggles\s*\{[^}]*display:\s*flex[^}]*flex:\s*none/.test(popCss) && /#more-rail \.icon-btn\s*\{[^}]*width:\s*var\(--target\)[^}]*height:\s*var\(--target\)/.test(popCss) && /max-width:\s*319px\)\s*\{\s*#more-rail \.more-sep\s*\{\s*display:\s*none/.test(popCss));
+    const mb = (rail.match(/<button id="btn-more-rail"[^>]*>/) || [''])[0];
+    check('the Mehr button is named by its content ("Mehr: Kurve, Frei, Freie Endpunkte, Alternatives Netz": title = aria-label), has data-i18n, keeps aria-controls="more-rail", and is a .nav-more (the state dot of .nav-more.has-state::after)', /class="icon-btn nav-more"/.test(mb) && /title="Mehr: Kurve, Frei, Freie Endpunkte, Alternatives Netz"/.test(mb) && /aria-label="Mehr: Kurve, Frei, Freie Endpunkte, Alternatives Netz"/.test(mb) && /data-i18n="more\.rail\.button"/.test(mb) && /aria-controls="more-rail"/.test(mb));
+    check('the restart dialog and its confirm flow are unchanged: Cancel before Confirm, #restart-overlay outside the popover', HTML.indexOf('id="cancel-restart"') > 0 && HTML.indexOf('id="confirm-restart"') > HTML.indexOf('id="cancel-restart"') && HTML.includes('id="restart-overlay"') && !pop.includes('id="restart-overlay"'));
+    // ui-rail.js
+    check('ui-rail.js: the aria-pressed mirror covers the six toggles, reads the class, and runs inside UI.onSync (every draw)', ['btn-toggle-nodes', 'btn-toggle-curve', 'btn-toggle-faces', 'btn-toggle-free', 'btn-toggle-free-endpoints', 'btn-alternative-net'].every(id => RAILJS.includes("'" + id + "'")) && /classList\.contains\('active'\)[\s\S]{0,80}'aria-pressed'|'aria-pressed'[\s\S]{0,200}classList\.contains\('active'\)/.test(RAILJS) && /UI\.onSync\(function \(\) \{ syncPressed\(\); syncDot\(\); refreshName\(\); \}\)/.test(RAILJS));
+    check('ui-rail.js: the dot is the has-state class of #btn-more-rail, from the FOUR toggles inside the popover only (Fill and Nodes are not in the list)', /IN_MORE = \['btn-toggle-curve', 'btn-toggle-free', 'btn-toggle-free-endpoints', 'btn-alternative-net'\]/.test(RAILJS) && /toggle\('has-state'/.test(RAILJS));
+    check('ui-rail.js: the name line listens to pointerdown (capture), focusin and a MOUSE-only pointerover (the touch path is pointerdown: iOS does not focus a button on a tap), and the words are keyed', /addEventListener\('pointerdown', touched, true\)/.test(RAILJS) && /addEventListener\('focusin', touched\)/.test(RAILJS) && /pointerType === 'mouse'/.test(RAILJS) && ['more.state.on', 'more.state.off', 'more.hint'].every(k => RAILJS.includes("'" + k + "'")));
+    // sessionRestart untouched
+    const sr = (SKETCH.match(/window\.sessionRestart = function \(\) \{[\s\S]*?\n    \};/) || [''])[0];
+    const sha = require('crypto').createHash('sha1').update(sr).digest('hex');
+    check('sessionRestart in sketch.js is byte-identical to its commit-1 text (writer.disable(), the key removals, the navigation: its order is guarded by tools/session/test-session-wiring.js)', sha === '7a5e39e0979a20f614e08c473a5967efa5ceb048', sha);
+});
+
 console.log('\n== wiring: no new binding, nothing moved out of reach ==');
 T('wiring', () => {
     check('ui-rail.js has no p5 mousePressed binding and no select()', !/mousePressed|\bselect\(/.test(RAILJS));
     check('the rail markup has no inline handler (onclick and the like)', !/\son[a-z]+\s*=/.test(rail));
     check('no CSS rule restyles the rail by an id of a button that moved (#btn-clear, #btn-save, #btn-info, #btn-random)', !/#btn-(clear|save|info|random|undo|redo)\b/.test(railCss));
-    check('every id the rail had before is still in the document exactly once', ['btn-undo', 'btn-redo', 'btn-clear', 'btn-random', 'btn-toggle-nodes', 'btn-toggle-curve', 'btn-toggle-faces', 'btn-info', 'btn-save', 'btn-more-rail', 'btn-gallery', 'btn-farborgel', 'btn-paste-pattern', 'btn-face-colors-reset', 'btn-strategy-cyclic', 'btn-strategy-area', 'btn-strategy-symmetry', 'btn-strategy-rings', 'farbe-strategy-group', 'farbe-harmony-select', 'paste-pattern-status'].every(id => (HTML.match(new RegExp('\\bid="' + id + '"', 'g')) || []).length === 1));
+    check('every id the rail had before is still in the document exactly once', ['btn-undo', 'btn-redo', 'btn-clear', 'btn-random', 'btn-toggle-nodes', 'btn-toggle-curve', 'btn-toggle-free', 'btn-toggle-free-endpoints', 'btn-alternative-net', 'btn-restart', 'btn-toggle-faces', 'btn-info', 'btn-save', 'btn-more-rail', 'btn-gallery', 'btn-farborgel', 'btn-paste-pattern', 'btn-face-colors-reset', 'btn-strategy-cyclic', 'btn-strategy-area', 'btn-strategy-symmetry', 'btn-strategy-rings', 'farbe-strategy-group', 'farbe-harmony-select', 'paste-pattern-status'].every(id => (HTML.match(new RegExp('\\bid="' + id + '"', 'g')) || []).length === 1));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
