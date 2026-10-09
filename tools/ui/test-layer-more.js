@@ -120,6 +120,48 @@ check('the wrapper is display: contents (its groups stay flex items of #controls
 
 check('the toggle row takes its own line (flex-basis: 100%, centred): opening or closing the block does not re-centre the line of the layer row and the timeline', /#layer-more-row\s*\{\s*flex-basis:\s*100%;\s*justify-content:\s*center;\s*\}/.test(css));
 
+console.log('\n== 1b-1: the layer controls reuse the Form row\'s patterns ==');
+{
+    const LAYER_JS = read('UI_LAYER_JS', 'ui-layer.js');
+    const group = id => { const i = panel.indexOf('id="' + id + '"'); let d = 0, start = panel.lastIndexOf('<div', i); for (const m of panel.slice(start).matchAll(/<(\/?)div\b/g)) { d += m[1] ? -1 : 1; if (d === 0) return panel.slice(start, start + m.index + 6); } return ''; };
+    // the two steppers: the Form row's wrapper around the EXISTING inputs
+    for (const [gid, inputId, kind] of [['layer-node-count-group', 'layer-node-count-input', 'node'], ['layer-shape-size-group', 'layer-shape-size-input', 'size']]) {
+        const g = group(gid);
+        check(`${kind}: the existing input #${inputId} sits inside the Form row's .stepper wrapper (.stepper-icon, the input with inputmode="none", .stepper-chevrons with two .stepper-btn)`,
+            /<div class="stepper"[^>]*role="group"/.test(g) && /class="ico stepper-icon"/.test(g) && new RegExp('<input type="number" id="' + inputId + '"[^>]*inputmode="none"').test(g) && /<div class="stepper-chevrons">/.test(g) && (g.match(/<button class="stepper-btn"/g) || []).length === 2 && /data-dir="1"/.test(g) && /data-dir="-1"/.test(g));
+        check(`${kind}: the group, the input and both chevrons have an aria-label, a title and a data-i18n key`, /<div class="stepper"[^>]*aria-label="[^"]+"[^>]*data-i18n="[^"]+"/.test(g) && new RegExp('id="' + inputId + '"[^>]*aria-label="[^"]+"[^>]*data-i18n="[^"]+"').test(g) && [...g.matchAll(/<button class="stepper-btn"[^>]*>/g)].every(m => /title="[^"]+"/.test(m[0]) && /aria-label="[^"]+"/.test(m[0]) && /data-i18n="[^"]+"/.test(m[0])));
+        check(`${kind}: the old <label for="${inputId}"> and the id are still there (nothing renamed or removed)`, new RegExp('<label for="' + inputId + '">').test(g) && g.includes('id="' + inputId + '"'));
+    }
+    check('the node-count note (#layer-node-count-note) is still in its group', group('layer-node-count-group').includes('id="layer-node-count-note"'));
+    // the shape icon row
+    const sg = group('layer-shape-group');
+    const shapeBtns = [...sg.matchAll(/<button class="layer-shape-icon-btn icon-btn"[^>]*>[\s\S]*?<\/button>/g)].map(m => m[0]);
+    check('shape: three .layer-shape-icon-btn.icon-btn (triangle, square, hex) in a .nav-cluster, each with the Form row\'s 18 px .ico icon, aria-pressed, aria-label, title and a data-i18n key',
+        /class="icon-row nav-cluster nav-shapes"/.test(sg) && shapeBtns.length === 3 && ['triangle', 'square', 'hex'].every((sh, i) => shapeBtns[i].includes('data-shape="' + sh + '"')) && shapeBtns.every(b => /class="ico" width="18" height="18"/.test(b) && /aria-pressed="false"/.test(b) && /aria-label="[^"]+"/.test(b) && /title="[^"]+"/.test(b) && /data-i18n="[^"]+"/.test(b)));
+    // fold, align, mesh: icon buttons
+    const fg = group('layer-fold-group');
+    const foldBtns = [...fg.matchAll(/<button class="layer-fold-btn layer-btn icon-btn"[^>]*>[^<]*<\/button>/g)].map(m => m[0]);
+    check('fold: two .layer-fold-btn buttons (now also .icon-btn, the numeral buttons of the Farbe row) with data-fold 3 / 6, aria-pressed, an aria-label that contains the visible numeral, title and data-i18n',
+        foldBtns.length === 2 && ['3', '6'].every((n, i) => foldBtns[i].includes('data-fold="' + n + '"') && new RegExp('aria-label="[^"]*' + n + '[^"]*"').test(foldBtns[i]) && new RegExp('>\\s*' + n + '\\s*<').test(foldBtns[i]) && /aria-pressed="false"/.test(foldBtns[i]) && /data-i18n="[^"]+"/.test(foldBtns[i])));
+    const iconOnly = id => { const m = new RegExp('<button id="' + id + '"[^>]*>[\\s\\S]*?</button>').exec(panel); return m ? m[0] : ''; };
+    for (const id of ['btn-align-to-base', 'btn-mesh-preset-x', 'btn-mesh-preset-y']) {
+        const b = iconOnly(id);
+        check(`#${id} is an icon-only .icon-btn (the Form row's .ico icon, no text) with aria-label, title and a data-i18n key; the id and the .layer-btn class are kept`,
+            /class="layer-btn icon-btn"/.test(b) && /class="ico" width="18" height="18"/.test(b) && b.replace(/<svg[\s\S]*?<\/svg>/, '').replace(/<[^>]+>/g, '').trim() === '' && /aria-label="[^"]+"/.test(b) && /title="[^"]+"/.test(b) && /data-i18n="[^"]+"/.test(b));
+    }
+    // the ids and classes the handlers use, unchanged
+    check('every id and class sketch.js binds is unchanged: #layer-node-count-input, #layer-shape-size-input, #btn-align-to-base, #btn-mesh-preset-x / -y, .layer-shape-icon-btn[data-shape], .layer-fold-btn[data-fold], #layer-node-count-note, #align-to-base-status',
+        ['layer-node-count-input', 'layer-shape-size-input', 'btn-align-to-base', 'btn-mesh-preset-x', 'btn-mesh-preset-y', 'layer-node-count-note', 'align-to-base-status'].every(id => panel.includes('id="' + id + '"')) &&
+        /select\('#layer-node-count-input'\)/.test(SKETCH) && /select\('#layer-shape-size-input'\)/.test(SKETCH) && /selectAll\('\.layer-shape-icon-btn'\)/.test(SKETCH) && /selectAll\('\.layer-fold-btn'\)/.test(SKETCH) && /select\('#btn-align-to-base'\)/.test(SKETCH));
+    // no new p5 binding; the new file is plain
+    const code = LAYER_JS.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    check('ui-layer.js has no p5 binding of its own (no mousePressed, no select()) and wires the EXISTING inputs through UI.stepper and UI.pressed', !/mousePressed|\bselect\(/.test(code) && /UI\.stepper\(/.test(code) && /UI\.pressed\(/.test(code) && /UI\.onSync\(/.test(code));
+    check('sketch.js binds exactly the 47 p5 mousePressed handlers it bound before this commit (a new binding must be a decision: change this number on purpose)', (SKETCH.match(/\.mousePressed\(/g) || []).length === 47, String((SKETCH.match(/\.mousePressed\(/g) || []).length));
+    check('index.html loads ui-layer.js after ui-form.js (its input listener must come before sketch.js\'s own, which p5 adds in setup()) and before ui-net.js', (() => { const a = HTML.indexOf('src="ui-form.js'), b = HTML.indexOf('src="ui-layer.js'), c = HTML.indexOf('src="ui-net.js'); return a > 0 && b > a && c > b; })());
+    // the CSS the panel needs from the Form row's rules
+    check('the panel restates the three Form-row rules that are scoped to .nav-row or lose inside .control-group: the icon button size, the stepper\'s number field, the cluster gap; the fold numerals use the button default font like the Farbe numerals', /#layer-more-panel \.icon-btn,\s*#layer-more-panel \.layer-fold-btn \{[^}]*width: var\(--target\)[^}]*height: var\(--target\)/.test(css) && /#layer-more-panel \.stepper input\[type="number"\] \{[^}]*width: 2\.4ch[^}]*border: 0/.test(css) && /#layer-more-panel \.nav-cluster \{ gap: var\(--gap\); \}/.test(css) && /#layer-more-panel \.layer-fold-btn \{ font-size: 13\.3333px; font-weight: 400; \}/.test(css));
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 console.log(failures ? 'FAIL' : 'PASS');
 process.exit(failures ? 1 : 0);

@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260929be">
+  <link rel="stylesheet" href="style.css?v=20260929bg">
   <!-- Cache-busting for the ES-module graph behind core/farborgel-selection.mjs (below). The <script src> tags in
        this file carry ?v= by hand-bump (CLAUDE.md), but a module's own `import ... from './x.mjs'` cannot: this
        import map is the one place that gives every module in that graph the same ?v= as everything else (bump it
@@ -18,11 +18,11 @@
   <script type="importmap">
     {
     "imports": {
-      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929be",
-      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929be",
-      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929be",
-      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929be",
-      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929be"
+      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929bg",
+      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929bg",
+      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929bg",
+      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929bg",
+      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929bg"
     }
     }
   </script>
@@ -1103,21 +1103,15 @@
            cross-shape branch - see sketch.js's updateActiveLayerGrid(). -->
       <div class="control-group" id="layer-shape-group" hidden>
         <label>Layer Shape</label>
-        <div class="icon-row">
-          <button class="layer-shape-icon-btn icon-btn" data-shape="triangle" title="Triangle" aria-label="Triangle">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 4L4 20h16L12 4z" />
-            </svg>
+        <div class="icon-row nav-cluster nav-shapes" role="group" aria-label="Ebene: Form" data-i18n="layer.shape.group">
+          <button class="layer-shape-icon-btn icon-btn" data-shape="triangle" type="button" title="Triangle" aria-label="Triangle" aria-pressed="false" data-i18n="layer.shape.triangle">
+            <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5 L21 19.5 H3 Z"/></svg>
           </button>
-          <button class="layer-shape-icon-btn icon-btn" data-shape="square" title="Square" aria-label="Square">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="4" y="4" width="16" height="16" />
-            </svg>
+          <button class="layer-shape-icon-btn icon-btn" data-shape="square" type="button" title="Square" aria-label="Square" aria-pressed="false" data-i18n="layer.shape.square">
+            <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15"/></svg>
           </button>
-          <button class="layer-shape-icon-btn icon-btn" data-shape="hex" title="Hexagon" aria-label="Hexagon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2l8.66 5v10L12 22 3.34 17V7L12 2z" />
-            </svg>
+          <button class="layer-shape-icon-btn icon-btn" data-shape="hex" type="button" title="Hexagon" aria-label="Hexagon" aria-pressed="false" data-i18n="layer.shape.hex">
+            <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 L20 7.5 V16.5 L12 21 L4 16.5 V7.5 Z"/></svg>
           </button>
         </div>
       </div>
@@ -1131,13 +1125,27 @@
            updateActiveLayerGrid(). -->
       <div class="control-group" id="layer-node-count-group" hidden>
         <label for="layer-node-count-input">Layer Node Count</label>
-        <input type="number" id="layer-node-count-input" min="1" max="7" value="3">
+        <div class="stepper" role="group" aria-label="Ebene: Knoten" data-i18n="layer.node.group">
+          <svg class="ico stepper-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor" stroke="none"><circle cx="6" cy="6" r="1.5"/><circle cx="6" cy="12" r="1.5"/><circle cx="6" cy="18" r="1.5"/><circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="18" r="1.5"/><circle cx="18" cy="6" r="1.5"/><circle cx="18" cy="12" r="1.5"/><circle cx="18" cy="18" r="1.5"/></g></svg>
+          <input type="number" id="layer-node-count-input" min="1" max="7" value="3" inputmode="none" aria-label="Ebene: Knoten" data-i18n="layer.node.input">
+          <div class="stepper-chevrons">
+            <button class="stepper-btn" type="button" data-dir="1" title="Ebene: Knoten mehr" aria-label="Ebene: Knoten mehr" data-i18n="layer.node.more"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15 L12 9 L18 15"/></svg></button>
+            <button class="stepper-btn" type="button" data-dir="-1" title="Ebene: Knoten weniger" aria-label="Ebene: Knoten weniger" data-i18n="layer.node.less"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9 L12 15 L18 9"/></svg></button>
+          </div>
+        </div>
         <div id="layer-node-count-note" class="limit-note" hidden></div>
       </div>
 
       <div class="control-group" id="layer-shape-size-group" hidden>
         <label for="layer-shape-size-input">Layer Shape Size</label>
-        <input type="number" id="layer-shape-size-input" min="1" max="9" value="5">
+        <div class="stepper" role="group" aria-label="Ebene: Größe" data-i18n="layer.size.group">
+          <svg class="ico stepper-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9 V4 H9 M15 4 H20 V9 M20 15 V20 H15 M9 20 H4 V15"/></svg>
+          <input type="number" id="layer-shape-size-input" min="1" max="9" value="5" inputmode="none" aria-label="Ebene: Größe" data-i18n="layer.size.input">
+          <div class="stepper-chevrons">
+            <button class="stepper-btn" type="button" data-dir="1" title="Ebene: Größe mehr" aria-label="Ebene: Größe mehr" data-i18n="layer.size.more"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15 L12 9 L18 15"/></svg></button>
+            <button class="stepper-btn" type="button" data-dir="-1" title="Ebene: Größe weniger" aria-label="Ebene: Größe weniger" data-i18n="layer.size.less"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9 L12 15 L18 9"/></svg></button>
+          </div>
+        </div>
       </div>
 
       <!-- Roadmap 1.12 stage 5 (symmetryMode axis) part 3 (UI): this
@@ -1201,9 +1209,9 @@
       </div>
 
       <div class="control-group" id="layer-fold-group" hidden>
-        <div class="icon-row">
-          <button class="layer-fold-btn layer-btn" data-fold="3" title="3-fold">3-fold</button>
-          <button class="layer-fold-btn layer-btn" data-fold="6" title="6-fold">6-fold</button>
+        <div class="icon-row nav-cluster" role="group" aria-label="Ebene: Zähligkeit" data-i18n="layer.fold.group">
+          <button class="layer-fold-btn layer-btn icon-btn" data-fold="3" type="button" title="3-fold" aria-label="3-fold" aria-pressed="false" data-i18n="layer.fold.3">3</button>
+          <button class="layer-fold-btn layer-btn icon-btn" data-fold="6" type="button" title="6-fold" aria-label="6-fold" aria-pressed="false" data-i18n="layer.fold.6">6</button>
         </div>
       </div>
 
@@ -1219,7 +1227,9 @@
            core/forms.js's alignLayerToBase() never applies an inexact
            approximation. -->
       <div class="control-group" id="layer-align-group" hidden>
-        <button id="btn-align-to-base" class="layer-btn" title="Align to base">Align to base</button>
+        <button id="btn-align-to-base" class="layer-btn icon-btn" type="button" title="Align to base" aria-label="Align to base" data-i18n="layer.align">
+          <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 4 V20"/><path d="M8.5 8 H20"/><path d="M8.5 16 H14.5"/></svg>
+        </button>
         <span id="align-to-base-status"></span>
       </div>
 
@@ -1237,9 +1247,13 @@
       </div>
 
       <div class="control-group" id="layer-mesh-preset-group" hidden>
-        <div class="icon-row">
-          <button id="btn-mesh-preset-x" class="layer-btn" title="Shift X by one mesh-width">1 mesh →</button>
-          <button id="btn-mesh-preset-y" class="layer-btn" title="Shift Y by one mesh-width">1 mesh ↓</button>
+        <div class="icon-row nav-cluster" role="group" aria-label="Ebene: Versatz um eine Masche" data-i18n="layer.mesh.group">
+          <button id="btn-mesh-preset-x" class="layer-btn icon-btn" type="button" title="Shift X by one mesh-width" aria-label="Shift X by one mesh-width" data-i18n="layer.mesh.x">
+            <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12 H20"/><path d="M15 7 L20 12 L15 17"/><path d="M4 8 V16"/></svg>
+          </button>
+          <button id="btn-mesh-preset-y" class="layer-btn icon-btn" type="button" title="Shift Y by one mesh-width" aria-label="Shift Y by one mesh-width" data-i18n="layer.mesh.y">
+            <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 V20"/><path d="M7 15 L12 20 L17 15"/><path d="M8 4 H16"/></svg>
+          </button>
         </div>
       </div>
 
@@ -1541,36 +1555,37 @@
   <div id="ui-toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260929be"></script>
-  <script src="core/state.js?v=20260929be"></script>
-  <script src="core/symmetry.js?v=20260929be"></script>
-  <script src="core/curves.js?v=20260929be"></script>
-  <script src="core/netwarp.js?v=20260929be"></script>
-  <script src="core/tiling.js?v=20260929be"></script>
-  <script src="core/faces.js?v=20260929be"></script>
-  <script src="core/orbits.js?v=20260929be"></script>
-  <script src="core/color.js?v=20260929be"></script>
-  <script src="core/facecolor.js?v=20260929be"></script>
-  <script src="core/farborgel-bridge.js?v=20260929be"></script>
-  <script src="core/export.js?v=20260929be"></script>
-  <script src="core/symmetry-toggles.js?v=20260929be"></script>
-  <script src="core/session.js?v=20260929be"></script>
-  <script src="core/session-apply.js?v=20260929be"></script>
-  <script src="core/session-store.js?v=20260929be"></script>
-  <script src="core/session-writer.js?v=20260929be"></script>
-  <script src="core/pointer-tap.js?v=20260929be"></script>
-  <script src="core/pick-node.js?v=20260929be"></script>
-  <script src="sketch.js?v=20260929be"></script>
-  <script src="nav.js?v=20260929be"></script>
-  <script src="ui.js?v=20260929be"></script>
-  <script src="ui-form.js?v=20260929be"></script>
-  <script src="ui-net.js?v=20260929be"></script>
-  <script src="ui-farbe.js?v=20260929be"></script>
-  <script src="ui-rail.js?v=20260929be"></script>
+  <script src="core/forms.js?v=20260929bg"></script>
+  <script src="core/state.js?v=20260929bg"></script>
+  <script src="core/symmetry.js?v=20260929bg"></script>
+  <script src="core/curves.js?v=20260929bg"></script>
+  <script src="core/netwarp.js?v=20260929bg"></script>
+  <script src="core/tiling.js?v=20260929bg"></script>
+  <script src="core/faces.js?v=20260929bg"></script>
+  <script src="core/orbits.js?v=20260929bg"></script>
+  <script src="core/color.js?v=20260929bg"></script>
+  <script src="core/facecolor.js?v=20260929bg"></script>
+  <script src="core/farborgel-bridge.js?v=20260929bg"></script>
+  <script src="core/export.js?v=20260929bg"></script>
+  <script src="core/symmetry-toggles.js?v=20260929bg"></script>
+  <script src="core/session.js?v=20260929bg"></script>
+  <script src="core/session-apply.js?v=20260929bg"></script>
+  <script src="core/session-store.js?v=20260929bg"></script>
+  <script src="core/session-writer.js?v=20260929bg"></script>
+  <script src="core/pointer-tap.js?v=20260929bg"></script>
+  <script src="core/pick-node.js?v=20260929bg"></script>
+  <script src="sketch.js?v=20260929bg"></script>
+  <script src="nav.js?v=20260929bg"></script>
+  <script src="ui.js?v=20260929bg"></script>
+  <script src="ui-form.js?v=20260929bg"></script>
+  <script src="ui-layer.js?v=20260929bg"></script>
+  <script src="ui-net.js?v=20260929bg"></script>
+  <script src="ui-farbe.js?v=20260929bg"></script>
+  <script src="ui-rail.js?v=20260929bg"></script>
   <!-- Group D Phase B4: exposes window.farborgelBuildHarmonySelection (core/farborgel-selection.mjs)
        for ui-farbe.js/sketch.js (classic scripts) to call - a module script coexists fine with the
        classic p5-bootstrap scripts above (real-browser verified, no conflicts). -->
-  <script type="module" src="core/farborgel-selection.mjs?v=20260929be"></script>
+  <script type="module" src="core/farborgel-selection.mjs?v=20260929bg"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

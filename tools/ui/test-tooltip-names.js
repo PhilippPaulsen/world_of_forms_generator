@@ -129,7 +129,7 @@ console.log('\n== index.html: every control without visible text has an aria-lab
     check('the three anchor-preview swatches are role="img" with an aria-label', ['farbe-anchor-preview', 'farbe-anchor-preview-kreis', 'farbe-anchor-preview-dreieck'].every(id => new RegExp('<span id="' + id + '"[^>]*\\brole="img"[^>]*\\baria-label="Anker-Vorschau"').test(body)));
 
     // controls with visible text: named by the text; the title is a description and there is NO aria-label (the harmony and net buttons that already had a label of their own are not in this list)
-    const TEXT_BUTTONS = ['btn-layer-base', 'btn-add-layer', 'btn-paste-pattern', 'btn-add-to-timeline', 'btn-timeline-include-net', 'btn-remove-timeline', 'btn-align-to-base', 'btn-mesh-preset-x', 'btn-mesh-preset-y',
+    const TEXT_BUTTONS = ['btn-layer-base', 'btn-add-layer', 'btn-paste-pattern', 'btn-add-to-timeline', 'btn-timeline-include-net', 'btn-remove-timeline',
         'export-png', 'export-json', 'export-svg', 'net-field-btn', 'net-lines-btn', 'net-reverse-btn', 'net-alternate-btn', 'btn-fold-3', 'btn-fold-6'];
     const found = TEXT_BUTTONS.map(id => textTitle.find(t => t.id === id));
     check('the text buttons with a title are all found (the list is current)', found.every(Boolean), TEXT_BUTTONS.filter((id, i) => !found[i]).join(', ') || TEXT_BUTTONS.length + ' buttons');
@@ -150,7 +150,7 @@ console.log('\n== sketch.js: the dynamic title sites ==');
         [/^faceBtn\.elt\.title = /, 'Face fill: the reason; the name is the static aria-label'],
         [/^fieldBtn\.elt\.dataset\.title = fieldBtn\.elt\.title;/, 'restores the Field title'],
         [/^includeNetBtn\.attribute\('title'/, 'Include net: visible text'],
-        [/^alignBtn\.attribute\('title'/, 'Align to base: visible text'],
+        [/^alignBtn\.attribute\('title'/, 'Align to base: an icon button since layers 1b-1; the title is the reason while it is disabled, the name is the static aria-label'],
         [/^btn\.title = 'Edit Layer '/, 'layer tab: visible text "Layer 2"'],
         [/^netBtn\.title = /, 'timeline keyframe "Net": visible text'],
         [/^countEl\.title = /, 'the "2/5" counter: a span that is not a control, its text is its content'],

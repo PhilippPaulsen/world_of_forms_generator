@@ -260,6 +260,42 @@ label { touch-action: manipulation; }
    with the layer row and the timeline and move those sideways (measured: 44-54 px at 1440). */
 #layer-more-row { flex-basis: 100%; justify-content: center; }
 
+/* Layer "Mehr" block, step 1b-1: the shape icons, the node count and size steppers, the fold buttons, Align to base and the mesh presets use the SAME markup and classes as the Form row
+   (.nav-cluster, .ico, .stepper, .stepper-btn, .icon-btn). Three things in the Form row's CSS are scoped to .nav-row or lose to a rule that only applies inside .control-group, so
+   they are restated for the panel, with the same values: the icon button size (.nav-row .icon-btn), the stepper's number field (the inline `.control-group input[type="number"]`,
+   60 x 40 with a border, would otherwise win the tie against `.stepper input[type="number"]`) and the gap of a cluster (an .icon-row's own gap would win otherwise). */
+#layer-more-panel .icon-btn,
+#layer-more-panel .layer-fold-btn {
+  box-sizing: border-box;
+  width: var(--target);
+  height: var(--target);
+  padding: 0;
+  border-radius: var(--radius);
+  flex: none;
+  touch-action: manipulation;
+}
+#layer-more-panel .nav-cluster { gap: var(--gap); }
+/* the numerals of the fold buttons look like the numeral buttons of the Farbe row (2 / 3 / 4): the button default font, not .layer-btn's 13px / 600 */
+#layer-more-panel .layer-fold-btn { font-size: 13.3333px; font-weight: 400; }
+#layer-more-panel .stepper input[type="number"] {
+  width: 2.4ch;
+  height: auto;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--size-base);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  -webkit-appearance: none;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* LABEL RULE: every <label> inside a .control-group is hidden with
    display:none. The interface is icon/numeral based. Consequences for
    anyone adding a control:
