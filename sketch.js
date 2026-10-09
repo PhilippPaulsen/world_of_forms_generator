@@ -728,7 +728,7 @@ function setup() {
         const locked = [curveBtn, freeBtn, faceBtn].filter(Boolean);
         locked.forEach(b => { b.elt.dataset.title = b.elt.title; });
         let wasActive = null;
-        if (note) { note.elt.dataset.text = note.elt.textContent; note.elt.dataset.fieldText = 'Curve and free-clothing modes are off while a net transform is active (lines are kept straight). Face fills are exact on a Field and work for the base sheet and for layers on the base grid (same shape and size, no offset, no rotation - every timeline playback layer); other layers are not filled. Set the net back to Regular (Base sheet, square) to use curves again.'; }
+        if (note) { note.elt.dataset.text = note.elt.textContent; note.elt.dataset.fieldText = 'Curve and free-clothing (under Mehr) are off while a net transform is active (lines are kept straight). Face fills are exact on a Field and work for the base sheet and for layers on the base grid (same shape and size, no offset, no rotation - every timeline playback layer); other layers are not filled. Set the net back to Regular (Base sheet, square) to use curves again.'; }
         netControlsSync = function () {
             group.elt.hidden = !(currentShape === 'square' && activeLayer === 'base');
             const active = netWarpActive();
@@ -4483,7 +4483,7 @@ function faceFillsUnavailableReason() {
     const nw = netWarpBaseNow();
     if (nw && !nw.field) return 'Face fills are off on a Single or Tiled net transform (the warp is not affine inside a tile, so faces would not fit the lines). Use Field (odd Shape Size 3-9), or set the net to Regular on the Base sheet.';
     if (nw && nw.field && activeLayer !== 'base' && !layerGridMatchesBase(additionalLayers[activeLayer])) return 'Face fills on a Field are drawn for the Base sheet and for layers on the base grid (same shape and size, no offset, no rotation) - this layer is offset, rotated or of another size, so its lines cross tile boundaries.';
-    if (curveType.kind !== 'straight') return 'Face fills need straight lines (curve/free mode is on).';
+    if (curveType.kind !== 'straight') return 'Face fills need straight lines (curve/free mode is on; both are under Mehr).';
     if (activeLayer === 'base') return null;
     const l = additionalLayers[activeLayer];
     if (!l.enabled) return isTimelineKeyframe(activeLayer)
