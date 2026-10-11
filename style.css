@@ -1127,6 +1127,66 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
 #more-rail .more-name-state { font-weight: var(--weight-strong); color: var(--color-text); }
 
 
+/* === The layer table (layer-table commit 1; ui-layers.js builds it) ==================================================================================================
+   The Base and one row per layer: a number chip (the Base: a stack), the eye, the remove x; below them "+" and "..." and a fixed name line. The table is 4 columns wide in its
+   final form (chip, eye, diamond, x: 4 x --target + 3 gaps of 4px = 156px at a fine pointer, 204px at a coarse one); commit 1 draws three of them (chip in column 1, eye in 2, x in 4)
+   and reserves the third, so the width, and with it the thresholds, stay valid when the diamond column comes. It sits at the right gutter, absolutely positioned (the canvas stays
+   centred: the free width right of the canvas is (W - 560) / 2 - 24, the table needs its width + an 8px gap): a fine pointer from 936px, a coarse pointer from 1032px. Below
+   that the old layer row is the only one (display: none here, never removed: its handlers are what layerApi (sketch.js) runs). The old Mehr toggle row is hidden with it; "..." toggles
+   the same block. */
+.layer-table { display: none; }
+@media (pointer: fine) and (min-width: 936px), (pointer: coarse) and (min-width: 1032px) {
+  .layer-table {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    top: var(--gap);
+    right: 24px;
+    box-sizing: border-box;
+    width: calc(4 * var(--target) + 3 * var(--rail-gap));
+    max-height: var(--canvas-size);
+  }
+  /* the old row: the Base button, the tabs and "+ Layer" (#layer-row), the Mehr toggle row; the group goes with its row unless the Paste status line inside it has text */
+  #layer-row, #layer-more-row { display: none; }
+  #layer-row-group:has(> #paste-pattern-status:empty) { display: none; }
+}
+.layer-table .lt-rows { display: flex; flex-direction: column; gap: var(--rail-gap); overflow-y: auto; min-height: 0; flex: 0 1 auto; }
+.layer-table .lt-row, .layer-table .lt-foot { display: grid; grid-template-columns: repeat(4, var(--target)); gap: var(--rail-gap); }
+.layer-table .lt-chip { grid-column: 1; font: inherit; font-size: var(--size-base); font-variant-numeric: tabular-nums; }
+.layer-table .lt-eye { grid-column: 2; }
+.layer-table .lt-x { grid-column: 4; }
+.layer-table .lt-add { grid-column: 1; }
+.layer-table .lt-more { grid-column: 2; position: relative; }
+.layer-table .icon-btn[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-disabled); cursor: not-allowed; }
+.layer-table .lt-chip.is-hidden:not(.active) { color: var(--color-secondary); border-color: var(--color-secondary); }
+.layer-table .lt-foot { position: relative; margin-top: var(--rail-group-gap); flex: none; }
+.layer-table .lt-foot::before {
+  content: "";
+  position: absolute;
+  top: calc(-1 * var(--rail-group-gap) / 2 - 0.5px);
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--color-hairline);
+}
+/* the name line: a reserved height (two lines), as wide as the table and never wider, so filling or emptying it moves nothing */
+.layer-table .lt-name {
+  box-sizing: border-box;
+  width: 0;
+  min-width: 100%;
+  height: 2.5em;
+  margin: var(--rail-gap) 0 0;
+  overflow: hidden;
+  font-size: var(--size-secondary);
+  line-height: 1.25;
+  color: var(--color-secondary);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  flex: none;
+}
+.layer-table .lt-name-state { font-weight: var(--weight-strong); color: var(--color-text); }
+
 /* Keyboard focus: its own 2px outline with a 2px offset, never the same
    as the active state (black fill). :focus-visible = keyboard only. */
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
