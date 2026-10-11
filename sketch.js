@@ -950,10 +950,10 @@ function setup() {
         if (!freeVisibleBtn) return;
         if (curveType.visible) {
             freeVisibleBtn.addClass('active');
-            freeVisibleBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>');
+            freeVisibleBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 17 L12 8 L18 15"/></svg>');
         } else {
             freeVisibleBtn.removeClass('active');
-            freeVisibleBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M1 1l22 22"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/></svg>');
+            freeVisibleBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 17 L12 8 L18 15"/><path d="M3 3 L21 21"/></svg>');
         }
     }
     if (freeVisibleBtn) {
@@ -1762,6 +1762,15 @@ function setup() {
         if (window.syncTimelineNetUi) window.syncTimelineNetUi();
     }
     window.updateTimelineControls = updateTimelineControls;
+    // layerApi: begin - the layer table (ui-layers.js) calls these; each is the sequence the old tab / "+ Layer" / remove handlers run (assignments only, no new logic)
+    window.layerApi = {
+        select(sheet) { activeLayer = sheet; renderLayerTabs(); updateOffsetControls(); updateFaceToggleControl(); updateTimelineControls(); redraw(); },
+        add() { addLayer(); renderLayerTabs(); updateOffsetControls(); updateFaceToggleControl(); updateTimelineControls(); redraw(); },
+        remove(index) { removeLayer(index); renderLayerTabs(); updateOffsetControls(); updateFaceToggleControl(); redraw(); },
+        setEnabled(index, on) { additionalLayers[index].enabled = !!on; renderLayerTabs(); redraw(); },
+        toggleMore() { layerMoreOpen = !layerMoreOpen; syncLayerMore(); },
+    };
+    // layerApi: end
 
     if (addToTimelineBtn) {
         addToTimelineBtn.mousePressed(() => {
@@ -2156,10 +2165,10 @@ function setup() {
         if (!nodeBtn) return;
         if (showNodes) {
             nodeBtn.addClass('active');
-            nodeBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>');
+            nodeBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="6" cy="17" r="2.2"/><circle cx="12" cy="8" r="2.2"/><circle cx="18" cy="15" r="2.2"/></svg>');
         } else {
             nodeBtn.removeClass('active');
-            nodeBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M1 1l22 22"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/></svg>'); // Eye Off
+            nodeBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="6" cy="17" r="2.2"/><circle cx="12" cy="8" r="2.2"/><circle cx="18" cy="15" r="2.2"/><path d="M3 3 L21 21" fill="none" stroke="currentColor" stroke-width="2"/></svg>'); // dots with a slash
         }
     }
     if (nodeBtn) {
