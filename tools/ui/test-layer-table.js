@@ -1,4 +1,4 @@
-// Guard for the layer table (layer-table commit 1): the pure model, the DOM it builds (the REAL ui.js and the REAL ui-layers.js in a vm with a fake DOM), and the source text of
+// Guard for the layer table (layer-table commit 1) and the layer rail (commit 2): the pure model, the DOM it builds (the REAL ui.js and the REAL ui-layers.js in a vm with a fake DOM), and the source text of
 // index.html, style.css and sketch.js. No browser.
 //   node tools/ui/test-layer-table.js
 //   INDEX_HTML=... STYLE_CSS=... SKETCH_JS=... UI_LAYERS_JS=... UI_JS=... node tools/ui/test-layer-table.js        (sabotage runs)
@@ -7,6 +7,8 @@
 // layer WITHOUT the timeline's playback layer; a RUNNING number on the chip (not array index + 1: the playback layer takes an array slot); an eye (layer.enabled, switchable for every
 // layer, a timeline keyframe included); a remove x (a confirmation only for a layer with lines or a timeline keyframe); "+" and "..."; a fixed name line. Every action goes through
 // window.layerApi (sketch.js). It shows only where it fits (a fine pointer >= 936px, a coarse pointer >= 1032px) and then replaces the old layer row, which stays in the DOM.
+// The RAIL (commit 2) is the narrow view of the same model: one column at the right gutter from 768px up to the table's threshold (fine 768 to 935, coarse 768 to 1031): the chips and "+", a
+// hairline, then the eye, "..." and the remove x of the ACTIVE sheet (disabled with a reason on the Base); no name line. Exactly one of table and rail shows at any width >= 768px, none below.
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -26,7 +28,7 @@ modelCtx.window = modelCtx;
 T('model', () => {
     vm.runInContext(LAYERS, modelCtx, { filename: 'ui-layers.js' });
     const M = modelCtx.layerTable;
-    check('the model is exported without a DOM (layerDisplayNumber, layerRemoveNeedsConfirm, layerTableModel, tableSignature)', !!M && ['layerDisplayNumber', 'layerRemoveNeedsConfirm', 'layerTableModel', 'tableSignature'].every(k => typeof M[k] === 'function'));
+    check('the model is exported without a DOM (layerDisplayNumber, layerRemoveNeedsConfirm, layerTableModel, tableSignature, revealDelta)', !!M && ['layerDisplayNumber', 'layerRemoveNeedsConfirm', 'layerTableModel', 'tableSignature', 'revealDelta'].every(k => typeof M[k] === 'function'));
     const L = (extra) => Object.assign({ connections: [], enabled: true }, extra || {});
     const PB = () => L({ isTimelinePlayback: true });
     const layers = [L(), L(), PB(), L()];
@@ -59,6 +61,14 @@ T('model', () => {
     const s0 = M.tableSignature(base);
     check('the signature changes with: the active sheet, a layer\'s visibility, the keyframe set, the layer list, the more state - and not with a line added to a layer',
         s0 !== M.tableSignature(Object.assign({}, base, { active: 1 })) && s0 !== M.tableSignature(Object.assign({}, base, { layers: [L({ enabled: false }), layers[1], layers[2], layers[3]] })) && s0 !== M.tableSignature(Object.assign({}, base, { timeline: { keyframeLayerIds: [0] } })) && s0 !== M.tableSignature(Object.assign({}, base, { layers: layers.slice(0, 2) })) && s0 !== M.tableSignature(Object.assign({}, base, { moreOpen: true })) && s0 === M.tableSignature(Object.assign({}, base, { layers: [L({ connections: [[1, 2]] }), layers[1], layers[2], layers[3]] })));
+    // the rail's actions: those of the ACTIVE sheet
+    check('rail actions on the Base: index null; the eye and the x are present and DISABLED with the reason "Keine Ebene aktiv."; "..." shares the table\'s state (disabled, same reason)', empty.actions.index === null && empty.actions.eye.disabled === true && empty.actions.eye.reason === 'Keine Ebene aktiv.' && empty.actions.x.disabled === true && empty.actions.x.reason === 'Keine Ebene aktiv.' && empty.actions.more.disabled === true && empty.actions.more.reason === 'Keine Ebene aktiv.' && empty.actions.eye.label === 'Ebene sichtbar' && empty.actions.x.label === 'Ebene entfernen');
+    check('rail actions for the third layer (array index 3, number 3, a plain layer): index 3, enabled, labelled "Ebene 3 sichtbar" / "Ebene 3 entfernen" - the RUNNING number, not the array index + 1', m.actions.index === 3 && m.actions.eye.disabled === false && m.actions.eye.reason === null && m.actions.eye.label === 'Ebene 3 sichtbar' && m.actions.x.label === 'Ebene 3 entfernen' && m.actions.eye.visible === true && m.actions.more.disabled === false);
+    const hidA = M.layerTableModel({ layers: [L({ enabled: false }), L()], active: 0, timeline: null });
+    check('...the eye of a hidden active layer says visible: false (the rail shows the crossed eye); a visible one says true', hidA.actions.eye.visible === false && M.layerTableModel({ layers: [L(), L()], active: 1, timeline: null }).actions.eye.visible === true && M.layerTableModel({ layers: [L(), L()], active: 1, timeline: null }).actions.index === 1);
+    check('the playback layer is never "the active layer" of the rail (a stale activeLayer pointing at it): actions disabled like the Base', M.layerTableModel({ layers: [L(), PB()], active: 1, timeline: null }).actions.index === null && M.layerTableModel({ layers: [L(), PB()], active: 1, timeline: null }).actions.eye.disabled === true);
+    // revealDelta: how far the rail's chip column scrolls to keep the active chip inside
+    check('revealDelta: 0 while the chip is inside; negative above the top; positive below the bottom; a chip taller than the view shows its top', M.revealDelta(10, 58, 0, 100) === 0 && M.revealDelta(-30, 18, 0, 100) === -30 && M.revealDelta(80, 128, 0, 100) === 28 && M.revealDelta(20, 220, 0, 100) === 20 && M.revealDelta(0, 100, 0, 100) === 0);
 });
 
 // ================= 2. the DOM, with the real ui.js =================
@@ -66,7 +76,7 @@ console.log('\n== the DOM (the real ui.js and ui-layers.js, a fake DOM) ==');
 class El {
     constructor(tag) { this.tagName = tag.toUpperCase(); this.children = []; this.parent = null; this._a = {}; this.dataset = {}; this.handlers = {}; this._c = new Set(); this.style = {}; this.hidden = false; this.id = ''; this._text = ''; this._html = ''; this.type = ''; this.tabIndex = 0; this.offsetParent = {}; }
     set className(v) { this._c = new Set(String(v).split(/\s+/).filter(Boolean)); } get className() { return [...this._c].join(' '); }
-    get classList() { const s = this._c; return { add: c => { s.add(c); }, remove: c => { s.delete(c); }, contains: c => s.has(c), toggle: (c, on) => { const w = on === undefined ? !s.has(c) : !!on; if (w) s.add(c); else s.delete(c); return w; } }; }
+    get classList() { const s = this._c, self = this; return { add: c => { s.add(c); if (self.onClass) self.onClass(); }, remove: c => { s.delete(c); if (self.onClass) self.onClass(); }, contains: c => s.has(c), toggle: (c, on) => { const w = on === undefined ? !s.has(c) : !!on; if (w) s.add(c); else s.delete(c); return w; } }; }
     setAttribute(k, v) { this._a[k] = String(v); } getAttribute(k) { return k in this._a ? this._a[k] : null; } removeAttribute(k) { delete this._a[k]; } hasAttribute(k) { return k in this._a; }
     addEventListener(t, fn) { (this.handlers[t] = this.handlers[t] || []).push(fn); }
     appendChild(c) { c.parent = this; this.children.push(c); return c; }
@@ -86,12 +96,13 @@ function build(o) {
     const doc = { activeElement: null, visibilityState: 'visible', documentElement: {}, addEventListener() { }, createElement: tag => { const e = new El(tag); e.ownerDoc = doc; return e; }, getElementById: id => byId[id] || null, querySelector: () => null, querySelectorAll: () => [] };
     const mkEl = (id, tag, cls) => { const e = doc.createElement(tag || 'div'); e.id = id; if (cls) e.className = cls; byId[id] = e; return e; };
     const table = mkEl('layer-table', 'div', 'layer-table');
+    const rail = o.noRail ? null : mkEl('layer-rail', 'div', 'layer-rail');
     const overlay = mkEl('layer-remove-overlay', 'div', 'dialog-overlay hidden'), content = new El('div'); content.className = 'dialog-content'; content.ownerDoc = doc; overlay.appendChild(content);
     const title = mkEl('layer-remove-title', 'strong'); content.appendChild(title); mkEl('layer-remove-text', 'p'); const cancel = mkEl('cancel-layer-remove', 'button'), confirm = mkEl('confirm-layer-remove', 'button'); content.appendChild(cancel); content.appendChild(confirm);
     const oldMore = mkEl('btn-more-layer', 'button'); oldMore.setAttribute('aria-expanded', 'false');
-    const clock = { t: 0 }, calls = [];
+    const clock = { t: 0 }, calls = [], moq = [];   // moq: the MutationObserver callbacks, run AFTER the click handler like a browser's microtask (UI.dialog moves the focus there)
     const layers = o.layers || [], st = { layers, active: o.active === undefined ? 'base' : o.active, timeline: o.timeline === undefined ? null : o.timeline };
-    const ctx = vm.createContext({ document: doc, console, MutationObserver: class { observe() { } }, setTimeout: (f) => 0, clearTimeout() { }, performance: { now: () => clock.t } });
+    const ctx = vm.createContext({ document: doc, console, MutationObserver: class { constructor(cb) { this.cb = cb; } observe(el) { el.onClass = () => { moq.push(this.cb); }; } }, setTimeout: (f) => 0, clearTimeout() { }, performance: { now: () => clock.t } });
     ctx.window = ctx; ctx.matchMedia = () => ({ matches: false }); ctx.innerWidth = 1200; ctx.addEventListener = () => { };
     ctx.additionalLayers = layers; ctx.activeLayer = st.active; ctx.timeline = st.timeline;
     ctx.layerApi = {
@@ -106,7 +117,11 @@ function build(o) {
     const sync = () => ctx.window.uiSync();
     const cell = key => { for (const r of table.children[0].children) for (const b of r.children) if (b.dataset.key === key) return b; return key === 'add' || key === 'more' ? table.children[1].children.find(b => b.dataset.key === key) : null; };
     const keys = () => table.children[0].children.flatMap(r => r.children.map(b => b.dataset.key)).concat(table.children[1].children.map(b => b.dataset.key));
-    return { ctx, doc, table, calls, layers, sync, cell, keys, overlay, cancel, confirm, oldMore, byId, clk: b => b.dispatch('click', { detail: 1 }) };
+    // the rail: [0] group 1 = [the chips column, "+"], [1] group 2 = [eye, "...", x]
+    const railChips = () => rail.children[0].children[0], railActions = () => rail.children[1].children;
+    const rcell = key => { for (const b of railChips().children.concat(rail.children[0].children.slice(1), railActions())) if (b.dataset.key === key) return b; return null; };
+    const rkeys = () => railChips().children.map(b => b.dataset.key).concat(rail.children[0].children.slice(1).map(b => b.dataset.key), railActions().map(b => b.dataset.key));
+    return { ctx, doc, table, rail, railChips, rcell, rkeys, calls, layers, sync, cell, keys, overlay, cancel, confirm, oldMore, byId, clk: b => { b.dispatch('click', { detail: 1 }); while (moq.length) moq.shift()([]); } };
 }
 T('dom', () => {
     const L = (extra) => Object.assign({ connections: [], enabled: true }, extra || {});
@@ -140,7 +155,7 @@ T('dom', () => {
     e.clk(e.cell('x:0'));
     check('x on a layer WITH lines: no remove yet; the dialog opens ("Ebene 1 entfernen?", the lines named), layerApi.remove not called', e.calls.length === 0 && !e.overlay.classList.contains('hidden') && e.byId['layer-remove-title'].textContent === 'Ebene 1 entfernen?' && /3 Linien/.test(e.byId['layer-remove-text'].textContent));
     e.clk(e.cancel);
-    check('Cancel closes the dialog without removing; the focus goes back to that x', e.calls.length === 0 && e.overlay.classList.contains('hidden'));
+    check('Cancel closes the dialog without removing; the focus goes back to that x', e.calls.length === 0 && e.overlay.classList.contains('hidden') && e.doc.activeElement === e.cell('x:0'));
     e.clk(e.cell('x:0')); e.clk(e.confirm);
     check('Confirm removes the layer once (layerApi.remove(0)) and closes the dialog', J(e.calls) === J([['remove', 0]]) && e.overlay.classList.contains('hidden') && J(e.keys()) === J(['chip:base', 'chip:0', 'eye:0', 'x:0', 'add', 'more']));
     e = build({ layers: [L(), L({ connections: [[1, 2]] })], active: 'base' });
@@ -157,6 +172,61 @@ T('dom', () => {
     check('a pointerdown on the eye of a hidden keyframe: "Ebene 1 · Keyframe, ausgeblendet"; switched on it says "Keyframe, zusätzlich sichtbar" on the next tick', nameEl.textContent === 'Ebene 1 · Keyframe, ausgeblendet' && (e.clk(e.cell('eye:0')), e.sync(), nameEl.textContent === 'Ebene 1 · Keyframe, zusätzlich sichtbar'));
     e.cell('chip:base').dispatch('pointerover', { pointerType: 'touch' });
     check('a pointerover from touch is ignored (nothing depends on hover); a mouse pointerover and a focusin show the icon', nameEl.textContent.startsWith('Ebene 1') && (e.cell('chip:base').dispatch('pointerover', { pointerType: 'mouse' }), nameEl.textContent.startsWith('Basis')) && (e.cell('x:0').focus(), nameEl.textContent === 'Ebene 1 entfernen'));
+    // ---- the rail (commit 2) ----
+    e = build({});
+    check('rail, empty state: the Base chip, "+", then the three actions in the order eye, "...", x (the Tab order: chips, "+", eye, "...", x); no layer chips', J(e.rkeys()) === J(['chip:base', 'add', 'eye', 'more', 'x']));
+    check('rail, on the Base: the eye, "..." and x are PRESENT and aria-disabled with the reason "Keine Ebene aktiv." (title = the reason), nothing jumps; "+" and the Base chip are enabled', ['eye', 'more', 'x'].every(k => e.rcell(k).getAttribute('aria-disabled') === 'true' && e.rcell(k).dataset.reason === 'Keine Ebene aktiv.' && e.rcell(k).getAttribute('title') === 'Keine Ebene aktiv.') && ['chip:base', 'add'].every(k => e.rcell(k).getAttribute('aria-disabled') === null));
+    e.calls.length = 0; ['eye', 'more', 'x'].forEach(k => e.clk(e.rcell(k)));
+    check('...a click on a disabled action does nothing (no layerApi call, no dialog): the reason is shown instead', e.calls.length === 0 && e.overlay.classList.contains('hidden'));
+    check('rail, every button: a real <button type="button"> with an aria-label (UI.name), a .lt-cell class and no mousedown (p5) listener; the rail has no name line (no aria-hidden element, no pointerdown / focusin listener on it)', e.rkeys().every(k => { const b = e.rcell(k); return b.tagName === 'BUTTON' && b.type === 'button' && !!b.getAttribute('aria-label') && b.classList.contains('lt-cell') && !b.handlers.mousedown; }) && !e.rail.handlers.pointerdown && !e.rail.handlers.focusin && !e.rail.handlers.pointerover && !/aria-hidden/.test(J(e.rail.children.map(function w(c) { return [c._a, c.children.map(w)]; }))));
+    check('rail, names: "Ebene hinzufügen", "Ebenen-Einstellungen" (the reason as the title while disabled), "Ebene sichtbar" and "Ebene entfernen" on the Base; the Base chip "Basis"', e.rcell('add').getAttribute('aria-label') === 'Ebene hinzufügen' && e.rcell('more').getAttribute('aria-label') === 'Ebenen-Einstellungen' && e.rcell('eye').getAttribute('aria-label') === 'Ebene sichtbar' && e.rcell('x').getAttribute('aria-label') === 'Ebene entfernen' && e.rcell('chip:base').getAttribute('aria-label') === 'Basis');
+    e.calls.length = 0; e.clk(e.rcell('add'));
+    check('rail "+": layerApi.add() once; both views show the new row on the same tick (the table row and the rail chip), the new chip is active, the actions are enabled and named for it', J(e.calls) === J([['add']]) && J(e.keys()) === J(['chip:base', 'chip:0', 'eye:0', 'x:0', 'add', 'more']) && J(e.rkeys()) === J(['chip:base', 'chip:0', 'add', 'eye', 'more', 'x']) && e.rcell('chip:0').classList.contains('active') && e.rcell('chip:0').textContent === '1' && e.rcell('eye').getAttribute('aria-disabled') === null && e.rcell('x').getAttribute('aria-disabled') === null && e.rcell('more').getAttribute('aria-disabled') === null && e.rcell('eye').getAttribute('aria-label') === 'Ebene 1 sichtbar' && e.rcell('x').getAttribute('aria-label') === 'Ebene 1 entfernen');
+    check('rail, the eye shows the active layer: aria-pressed true and the open eye icon', e.rcell('eye').getAttribute('aria-pressed') === 'true' && /<circle cx="12" cy="12" r="3"/.test(e.rcell('eye').innerHTML));
+    // the eye of the ACTIVE layer, with two layers and the SECOND active
+    e = build({ layers: [L(), L()], active: 1 });
+    e.clk(e.rcell('eye'));
+    check('rail eye with two layers and the SECOND active: layerApi.setEnabled(1, false) once (the ACTIVE layer, not layer 0); the button stays, aria-pressed false, the crossed eye, the chip dimmed in both views', J(e.calls) === J([['setEnabled', 1, false]]) && e.layers[1].enabled === false && e.layers[0].enabled === true && e.rcell('eye').getAttribute('aria-pressed') === 'false' && /M1 1l22 22/.test(e.rcell('eye').innerHTML) && e.rcell('chip:1').classList.contains('is-hidden') && e.cell('chip:1').classList.contains('is-hidden'));
+    e.calls.length = 0; e.clk(e.rcell('eye'));
+    check('...and a second click on the same eye switches the layer back ON (setEnabled(1, true): the value is the opposite of the current one, not a constant), the open eye again', J(e.calls) === J([['setEnabled', 1, true]]) && e.layers[1].enabled === true && e.rcell('eye').getAttribute('aria-pressed') === 'true' && /<circle cx="12" cy="12" r="3"/.test(e.rcell('eye').innerHTML) && !e.rcell('chip:1').classList.contains('is-hidden'));
+    e.clk(e.rcell('eye'));
+    e.calls.length = 0; e.clk(e.rcell('chip:0'));
+    check('rail chips: layerApi.select(<index>) once; the actions follow the new active sheet (labelled "Ebene 1 ..."); the Base chip selects \'base\' and disables the actions again', J(e.calls) === J([['select', 0]]) && e.rcell('x').getAttribute('aria-label') === 'Ebene 1 entfernen' && (e.clk(e.rcell('chip:base')), J(e.calls[1]) === J(['select', 'base']) && e.rcell('x').getAttribute('aria-disabled') === 'true' && e.rcell('x').getAttribute('aria-label') === 'Ebene entfernen'));
+    // the x of the active layer: no confirmation for an empty plain layer, a dialog for one with lines
+    e = build({ layers: [L(), L()], active: 1 });
+    e.clk(e.rcell('x'));
+    check('rail x on an EMPTY plain active layer: layerApi.remove(<the active index>) at once, no dialog; the focus lands on the active sheet\'s chip in the rail', J(e.calls) === J([['remove', 1]]) && e.overlay.classList.contains('hidden') && e.doc.activeElement === e.rcell('chip:base'));
+    e = build({ layers: [L(), L({ connections: [[1, 2], [3, 4]] })], active: 1 });
+    e.clk(e.rcell('x'));
+    check('rail x on a layer WITH lines: no remove yet; the same dialog opens ("Ebene 2 entfernen?", the lines named: "2 Linien" - the running number), layerApi.remove not called', e.calls.length === 0 && !e.overlay.classList.contains('hidden') && e.byId['layer-remove-title'].textContent === 'Ebene 2 entfernen?' && /2 Linien/.test(e.byId['layer-remove-text'].textContent));
+    e.clk(e.cancel);
+    check('...Cancel closes it without removing and the focus goes back to the RAIL\'s x (not a table cell)', e.calls.length === 0 && e.overlay.classList.contains('hidden') && e.doc.activeElement === e.rcell('x'));
+    e.clk(e.rcell('x')); e.clk(e.confirm);
+    check('...Confirm removes THAT layer once (remove(1)) and the focus goes to the active sheet\'s chip in the rail', J(e.calls) === J([['remove', 1]]) && e.layers.length === 1 && e.overlay.classList.contains('hidden') && e.doc.activeElement === e.rcell('chip:base'));
+    e = build({ layers: [L(), L()], active: 1, timeline: { keyframeLayerIds: [1], playbackLayerIndex: null } });
+    e.clk(e.rcell('x'));
+    check('rail x on a timeline keyframe without lines still asks, and the text names the keyframe and the line pairings', e.calls.length === 0 && /Keyframe der Timeline/.test(e.byId['layer-remove-text'].textContent) && /Linienzuordnungen/.test(e.byId['layer-remove-text'].textContent));
+    // "...": the same state as the table's
+    e = build({ layers: [L()], active: 0 });
+    e.clk(e.rcell('more'));
+    check('rail "...": layerApi.toggleMore() once; aria-expanded mirrors the old toggle in the rail AND the table on the same tick', J(e.calls) === J([['toggleMore']]) && e.rcell('more').getAttribute('aria-expanded') === 'true' && e.cell('more').getAttribute('aria-expanded') === 'true');
+    // the playback layer has no chip in the rail either
+    e = build({ layers: [L(), L(), L({ isTimelinePlayback: true }), L()], active: 3, timeline: { keyframeLayerIds: [0, 1], playbackLayerIndex: 2 } });
+    check('rail, the playback layer has no chip: chip:0, chip:1, chip:3 (numbers 1, 2, 3), the actions are the third layer\'s', J(e.rkeys()) === J(['chip:base', 'chip:0', 'chip:1', 'chip:3', 'add', 'eye', 'more', 'x']) && e.rcell('chip:3').textContent === '3' && e.rcell('x').getAttribute('aria-label') === 'Ebene 3 entfernen');
+    // many layers: the rail keeps the active chip inside its scrolling column
+    e = build({ layers: Array.from({ length: 10 }, () => L()), active: 'base' });
+    const col = e.railChips(); col.scrollTop = 0;
+    col.getBoundingClientRect = () => ({ top: 100, bottom: 400, left: 0, right: 36 });
+    e.rcell('chip:9').getBoundingClientRect = () => ({ top: 520 - col.scrollTop, bottom: 568 - col.scrollTop, left: 0, right: 36 });
+    e.clk(e.rcell('chip:9'));
+    check('10 layers: selecting the last chip scrolls the chips column so that the chip is inside (scrollTop = the overhang, 168), and the rail has 11 chips (the Base + 10)', col.scrollTop === 168 && col.children.length === 11, 'scrollTop ' + col.scrollTop);
+    // one rebuild keeps the rail's focus
+    e = build({ layers: [L(), L()], active: 0 });
+    e.rcell('chip:1').focus(); e.layers.push(L()); e.sync();
+    check('the focused rail chip survives a rebuild (a layer added elsewhere): the focus is on the chip with the same key', e.doc.activeElement && e.doc.activeElement.dataset.key === 'chip:1' && e.doc.activeElement === e.rcell('chip:1'));
+    // a page without the rail still works
+    e = build({ layers: [L()], active: 0, noRail: true });
+    check('a page without #layer-rail still builds the table (the rail is optional in the script)', J(e.keys()) === J(['chip:base', 'chip:0', 'eye:0', 'x:0', 'add', 'more']));
     // the cost of a tick
     e = build({ layers: [L({ connections: [[1, 2]] }), L()], active: 0 });
     let t0 = process.hrtime.bigint(); for (let i = 0; i < 20000; i++) e.sync(); const per = Number(process.hrtime.bigint() - t0) / 20000 / 1e6;
@@ -170,7 +240,8 @@ T('source', () => {
     const rowStart = HTML.indexOf('<div class="canvas-row">'), rowEnd = HTML.indexOf('<div class="main-container">');
     const canvasRow = rowStart >= 0 && rowEnd > rowStart ? HTML.slice(rowStart, rowEnd) : '';
     const tag = (canvasRow.match(/<div id="layer-table"[^>]*>/) || [''])[0];
-    check('#layer-table is the LAST child of the canvas row, role="group", aria-label "Ebenen", data-i18n, and empty in the markup (ui-layers.js builds it)', /class="layer-table"/.test(tag) && /role="group"/.test(tag) && /aria-label="Ebenen"/.test(tag) && /data-i18n="layers\.table"/.test(tag) && /<div id="layer-table"[^>]*><\/div>\s*<\/div>\s*$/.test(canvasRow));
+    const railTag = (canvasRow.match(/<div id="layer-rail"[^>]*>/) || [''])[0];
+    check('#layer-table and #layer-rail are the LAST TWO children of the canvas row (the table, then the rail), each role="group", aria-label "Ebenen", data-i18n, empty in the markup (ui-layers.js builds them)', /class="layer-table"/.test(tag) && /role="group"/.test(tag) && /aria-label="Ebenen"/.test(tag) && /data-i18n="layers\.table"/.test(tag) && /class="layer-rail"/.test(railTag) && /role="group"/.test(railTag) && /aria-label="Ebenen"/.test(railTag) && /data-i18n="layers\.rail"/.test(railTag) && /<div id="layer-table"[^>]*><\/div>[\s\S]*?<div id="layer-rail"[^>]*><\/div>\s*<\/div>\s*$/.test(canvasRow) && (canvasRow.match(/id="layer-table"/g) || []).length === 1 && (canvasRow.match(/id="layer-rail"/g) || []).length === 1);
     check('the old layer row is still in the DOM: #layer-row-group > #layer-row with #btn-layer-base, #layer-tabs, #btn-add-layer, and #layer-more-row stays', /id="layer-row-group"[\s\S]*?id="layer-row"[\s\S]*?id="btn-layer-base"[\s\S]*?id="layer-tabs"[\s\S]*?id="btn-add-layer"/.test(HTML) && HTML.includes('id="layer-more-row"') && HTML.includes('id="btn-more-layer"') && HTML.includes('id="layer-more-panel"'));
     const ov = (HTML.match(/<div id="layer-remove-overlay"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/) || [''])[0];
     check('the remove dialog: a dialog-overlay (hidden), Cancel BEFORE Confirm (Cancel has the initial focus), data-i18n on the texts', /class="dialog-overlay hidden"/.test(ov) && ov.indexOf('id="cancel-layer-remove"') > 0 && ov.indexOf('id="confirm-layer-remove"') > ov.indexOf('id="cancel-layer-remove"') && /data-i18n="layers\.remove\.cancel"/.test(ov) && /data-i18n="layers\.remove\.confirm"/.test(ov));
@@ -184,11 +255,39 @@ T('source', () => {
     let depth = 0, end = qi + MQ.length; for (; end < css.length; end++) { if (css[end] === '{') depth++; else if (css[end] === '}') { if (!depth) break; depth--; } }
     const inside = qi > 0 ? css.slice(qi + MQ.length, end) : '', outside = qi > 0 ? css.slice(0, qi) + css.slice(end + 1) : css;
     check('the default is hidden (.layer-table { display: none }) outside the query; inside it the table is a flex column, positioned ABSOLUTELY at the right gutter (right: 24px, top: var(--gap)), 4 columns wide: 4 x --target + 3 gaps (156px fine / 204px coarse)', /\.layer-table\s*\{\s*display:\s*none;\s*\}/.test(outside) && /\.layer-table\s*\{[^}]*display:\s*flex[^}]*position:\s*absolute[^}]*top:\s*var\(--gap\)[^}]*right:\s*24px[^}]*width:\s*calc\(4 \* var\(--target\) \+ 3 \* var\(--rail-gap\)\)/.test(inside));
-    check('the old row is hidden ONLY inside that query (#layer-row, #layer-more-row display: none; the group goes with its row unless the Paste status line has text) - never outside it', /#layer-row, #layer-more-row\s*\{\s*display:\s*none;\s*\}/.test(inside) && /#layer-row-group:has\(> #paste-pattern-status:empty\)\s*\{\s*display:\s*none;\s*\}/.test(inside) && !/#layer-row\b/.test(outside.replace(/#layer-row-group/g, '')));
+    const RQ = '@media (min-width: 768px) and (max-width: 935px) and (pointer: fine), (min-width: 768px) and (max-width: 1031px) and (pointer: coarse) {';
+    const ri = css.indexOf(RQ);
+    let rdepth = 0, rend = ri + RQ.length; for (; rend < css.length; rend++) { if (css[rend] === '{') rdepth++; else if (css[rend] === '}') { if (!rdepth) break; rdepth--; } }
+    const railInside = ri > 0 ? css.slice(ri + RQ.length, rend) : '', outsideBoth = ri > 0 && qi > 0 ? (css.slice(0, Math.min(qi, ri)) + css.slice(Math.min(qi, ri) === qi ? end + 1 : rend + 1, Math.max(qi, ri)) + css.slice((Math.max(qi, ri) === qi ? end : rend) + 1)) : css;
+    const OLDROW = /#layer-row, #layer-more-row\s*\{\s*display:\s*none;\s*\}/, OLDGROUP = /#layer-row-group:has\(> #paste-pattern-status:empty\)\s*\{\s*display:\s*none;\s*\}/;
+    check('the old row is hidden inside the TABLE query AND inside the RAIL query (#layer-row, #layer-more-row display: none; the group goes with its row unless the Paste status line has text) - never outside them (below 768px it stays untouched)', OLDROW.test(inside) && OLDGROUP.test(inside) && OLDROW.test(railInside) && OLDGROUP.test(railInside) && !/#layer-row\b/.test(outsideBoth.replace(/#layer-row-group/g, '')) && !/#layer-more-row\s*\{[^}]*display:\s*none/.test(outsideBoth));
     check('the grid reserves the diamond column: the chip in column 1, the eye in 2, the x in 4 (commit 2 fills 3), "+" in 1, "..." in 2', ['lt-chip\\s*\\{[^}]*grid-column:\\s*1', 'lt-eye\\s*\\{[^}]*grid-column:\\s*2', 'lt-x\\s*\\{[^}]*grid-column:\\s*4', 'lt-add\\s*\\{[^}]*grid-column:\\s*1', 'lt-more\\s*\\{[^}]*grid-column:\\s*2'].every(r => new RegExp(r).test(css)) && /\.lt-row, \.layer-table \.lt-foot\s*\{[^}]*grid-template-columns:\s*repeat\(4, var\(--target\)\)/.test(css));
+    // ---- the rail's CSS (commit 2) ----
+    check('the rail shows only in ONE media query: from 768px (where the left tool rail turns vertical) to the table\'s threshold - a fine pointer 768 to 935px, a coarse pointer 768 to 1031px (the exact query)', ri > 0 && css.split(RQ).length === 2);
+    check('the rail is hidden by default (.layer-rail { display: none }) outside the query; inside it is a flex column, positioned ABSOLUTELY at the right gutter (right: 24px, top: var(--gap): level with the canvas top like the left rail), exactly one button wide (width: var(--target)) and never taller than the canvas (max-height: var(--canvas-size))', /\.layer-rail\s*\{\s*display:\s*none;\s*\}/.test(outsideBoth) && /\.layer-rail\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*column[^}]*position:\s*absolute[^}]*top:\s*var\(--gap\)[^}]*right:\s*24px[^}]*width:\s*var\(--target\)[^}]*max-height:\s*var\(--canvas-size\)/.test(railInside));
+    check('group 1 scrolls: .lr-chips has overflow-y: auto, min-height: 0 and room for the focus ring (4px padding, -4px margin); its scrollbar is hidden (the column is exactly one button wide)', /\.layer-rail \.lr-chips\s*\{[^}]*overflow-y:\s*auto[^}]*min-height:\s*0/.test(css) && /\.layer-rail \.lr-chips\s*\{[^}]*padding:\s*4px[^}]*margin:\s*-4px/.test(css) && /\.layer-rail \.lr-chips\s*\{[^}]*scrollbar-width:\s*none/.test(css) && /\.layer-rail \.lr-g1\s*\{[^}]*min-height:\s*0[^}]*flex:\s*0 1 auto/.test(css) && /\.layer-rail \.lr-g2\s*\{[^}]*flex:\s*none/.test(css));
+    check('the rail has a hairline between the groups (.lr-g2::before, like the left rail\'s) and the disabled / dimmed styles of the table apply to it too', /\.layer-rail \.lr-g2::before\s*\{[^}]*height:\s*1px[^}]*background:\s*var\(--color-hairline\)/.test(css) && /\.layer-rail \.icon-btn\[aria-disabled="true"\]/.test(css) && /\.layer-rail \.lt-chip\.is-hidden:not\(\.active\)/.test(css));
+    check('the rail is NOT restyled below 768px (the phone strip is commit 4): the rail query starts at min-width: 768px and the old row\'s own rules are not touched', !/@media[^{]*max-width:\s*767px[^{]*\{[^}]*layer-rail/.test(css) && RQ.startsWith('@media (min-width: 768px)') && /,\s*\(min-width: 768px\)/.test(RQ));
+    // which view shows at which width: the media queries evaluated, the pointer types and every width
+    const evalMQ = (q, w, ptr) => q.replace(/^@media\s*/, '').replace(/\s*\{$/, '').split(',').some(list => list.split(' and ').every(c => { const m = c.trim().match(/^\((min-width|max-width|pointer):\s*(\w+?)(px)?\)$/); if (!m) throw new Error('unknown condition ' + c); return m[1] === 'min-width' ? w >= +m[2] : m[1] === 'max-width' ? w <= +m[2] : ptr === m[2]; }));
+    let overlap = 0, gaps = 0, below = 0, fits = true; const widths = []; for (let w = 300; w <= 1600; w++) widths.push(w);
+    for (const ptr of ['fine', 'coarse']) for (const w of widths) {
+        const t = evalMQ(MQ, w, ptr), r = evalMQ(RQ, w, ptr);
+        if (t && r) overlap++;
+        if (w >= 768 && !t && !r) gaps++;
+        if (w < 768 && (t || r)) below++;
+        const target = ptr === 'fine' ? 36 : 48, free = (w - 560) / 2 - 24;   // the free width right of the canvas, the 24px gutter taken off
+        if (r && free < target + 8) fits = false;
+        if (t && free < 4 * target + 3 * 4 + 8) fits = false;
+    }
+    check('which view shows (the queries evaluated for both pointer types at every width 300..1600): never both (' + overlap + ' overlaps), always exactly one from 768px (' + gaps + ' gaps), none below 768px (' + below + ')', overlap === 0 && gaps === 0 && below === 0);
+    check('the arithmetic: wherever the rail shows, (W - 560) / 2 - 24 holds the button plus 8px (36 + 8 fine, 48 + 8 coarse); wherever the table shows, its 4 columns plus 8px (the canvas never moves, nothing overlaps it)', fits === true);
+    check('the handover is exact: a fine pointer 935px = rail, 936px = table; a coarse pointer 1031px = rail, 1032px = table; 767px = neither (the old row)', evalMQ(RQ, 935, 'fine') && !evalMQ(MQ, 935, 'fine') && evalMQ(MQ, 936, 'fine') && !evalMQ(RQ, 936, 'fine') && evalMQ(RQ, 1031, 'coarse') && !evalMQ(MQ, 1031, 'coarse') && evalMQ(MQ, 1032, 'coarse') && !evalMQ(RQ, 1032, 'coarse') && !evalMQ(RQ, 767, 'fine') && !evalMQ(RQ, 767, 'coarse') && evalMQ(RQ, 768, 'fine') && evalMQ(RQ, 768, 'coarse'));
     // ui-layers.js
     check('ui-layers.js has no p5 binding (no mousePressed, no select()) and uses the shared helpers (UI.guard, UI.name, UI.setDisabled, UI.dialog, UI.onSync)', !/mousePressed|[^.\w]select\(/.test(LAYERS) && ['UI.guard(', 'UI.name(', 'UI.setDisabled(', 'UI.dialog(', 'UI.onSync('].every(s => LAYERS.includes(s)));
     check('ui-layers.js calls ONLY window.layerApi for actions (select, add, remove, setEnabled, toggleMore) and writes no sketch state itself (no assignment to activeLayer / additionalLayers / timeline, no .enabled write)', ['select', 'add', 'remove', 'setEnabled', 'toggleMore'].every(m => new RegExp('api\\(\\)\\.' + m + '\\(').test(LAYERS)) && !/(^|[;{}\n])\s*(activeLayer|additionalLayers|timeline)\s*=[^=]|\.enabled\s*=[^=]/.test(LAYERS));
+    check('ui-layers.js (rail): the eye, "..." and x of the rail go through UI.guard (a click on a disabled one shows the reason, never acts); the rail has no name line listener (the name line is bound to the table only)', /UI\.guard\(railEye,/.test(LAYERS) && /UI\.guard\(railMore,/.test(LAYERS) && /UI\.guard\(railX,/.test(LAYERS) && /table\.addEventListener\('pointerdown', touched, true\)/.test(LAYERS) && !/rail\.addEventListener\('(pointerdown|focusin|pointerover)'/.test(LAYERS));
+    check('ui-layers.js (rail): the actions are those of the ACTIVE sheet (model.actions.index) and a fourth button is left for the diamond (commented, not drawn)', /lastModel \? lastModel\.actions\.index : null/.test(LAYERS) && /a fourth button, the diamond, comes with the timeline commit/.test(LAYERS) && !/diamond/i.test(LAYERS.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '')));
     // the block in sketch.js
     const bi = SKETCH.indexOf('    // layerApi: begin'), ei = SKETCH.indexOf('    // layerApi: end\n');
     const block = bi >= 0 && ei > bi ? SKETCH.slice(bi, ei) : '';
