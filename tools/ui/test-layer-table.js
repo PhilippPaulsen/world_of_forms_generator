@@ -30,7 +30,7 @@ modelCtx.window = modelCtx;
 T('model', () => {
     vm.runInContext(LAYERS, modelCtx, { filename: 'ui-layers.js' });
     const M = modelCtx.layerTable;
-    check('the model is exported without a DOM (layerDisplayNumber, layerRemoveNeedsConfirm, layerTableModel, tableSignature, revealDelta)', !!M && ['layerDisplayNumber', 'layerRemoveNeedsConfirm', 'layerTableModel', 'tableSignature', 'revealDelta'].every(k => typeof M[k] === 'function'));
+    check('the model is exported without a DOM (layerDisplayNumber, layerRemoveNeedsConfirm, layerTableModel, tableSignature, revealDelta)', !!M && ['layerDisplayNumber', 'layerRemoveNeedsConfirm', 'layerTableModel', 'tableSignature', 'revealDelta', 'panelRevealDelta'].every(k => typeof M[k] === 'function'));
     const L = (extra) => Object.assign({ connections: [], enabled: true }, extra || {});
     const PB = () => L({ isTimelinePlayback: true });
     const layers = [L(), L(), PB(), L()];
@@ -63,6 +63,7 @@ T('model', () => {
     const s0 = M.tableSignature(base);
     check('the signature changes with: the active sheet, a layer\'s visibility, the keyframe set, the layer list, the more state - and not with a line added to a layer',
         s0 !== M.tableSignature(Object.assign({}, base, { active: 1 })) && s0 !== M.tableSignature(Object.assign({}, base, { layers: [L({ enabled: false }), layers[1], layers[2], layers[3]] })) && s0 !== M.tableSignature(Object.assign({}, base, { timeline: { keyframeLayerIds: [0] } })) && s0 !== M.tableSignature(Object.assign({}, base, { layers: layers.slice(0, 2) })) && s0 !== M.tableSignature(Object.assign({}, base, { moreOpen: true })) && s0 === M.tableSignature(Object.assign({}, base, { layers: [L({ connections: [[1, 2]] }), layers[1], layers[2], layers[3]] })));
+    check('panelRevealDelta(unionRect, viewportHeight): 0 while the WHOLE block is inside the viewport (also exactly filling it: 0..812); the overhang when it ends below the bottom (900..1008 in 812: 196) or is cut by it (700..820: 8); negative when it starts above the top (-30..78: -30); a block TALLER than the viewport goes to the top with an 8px margin (100..1000: 92; top at 8: 0; top at -50: -58)', M.panelRevealDelta({ top: 100, bottom: 148 }, 812) === 0 && M.panelRevealDelta({ top: 0, bottom: 812 }, 812) === 0 && M.panelRevealDelta({ top: 764, bottom: 812 }, 812) === 0 && M.panelRevealDelta({ top: 900, bottom: 1008 }, 812) === 196 && M.panelRevealDelta({ top: 700, bottom: 820 }, 812) === 8 && M.panelRevealDelta({ top: -30, bottom: 78 }, 812) === -30 && M.panelRevealDelta({ top: 100, bottom: 1000 }, 812) === 92 && M.panelRevealDelta({ top: 8, bottom: 900 }, 812) === 0 && M.panelRevealDelta({ top: -50, bottom: 900 }, 812) === -58);
     // the rail's actions: those of the ACTIVE sheet
     check('rail actions on the Base: index null; the eye and the x are present and DISABLED with the reason "Keine Ebene aktiv."; "..." shares the table\'s state (disabled, same reason)', empty.actions.index === null && empty.actions.eye.disabled === true && empty.actions.eye.reason === 'Keine Ebene aktiv.' && empty.actions.x.disabled === true && empty.actions.x.reason === 'Keine Ebene aktiv.' && empty.actions.more.disabled === true && empty.actions.more.reason === 'Keine Ebene aktiv.' && empty.actions.eye.label === 'Ebene sichtbar' && empty.actions.x.label === 'Ebene entfernen');
     check('rail actions for the third layer (array index 3, number 3, a plain layer): index 3, enabled, labelled "Ebene 3 sichtbar" / "Ebene 3 entfernen" - the RUNNING number, not the array index + 1', m.actions.index === 3 && m.actions.eye.disabled === false && m.actions.eye.reason === null && m.actions.eye.label === 'Ebene 3 sichtbar' && m.actions.x.label === 'Ebene 3 entfernen' && m.actions.eye.visible === true && m.actions.more.disabled === false);
@@ -103,10 +104,23 @@ function build(o) {
     const overlay = mkEl('layer-remove-overlay', 'div', 'dialog-overlay hidden'), content = new El('div'); content.className = 'dialog-content'; content.ownerDoc = doc; overlay.appendChild(content);
     const title = mkEl('layer-remove-title', 'strong'); content.appendChild(title); mkEl('layer-remove-text', 'p'); const cancel = mkEl('cancel-layer-remove', 'button'), confirm = mkEl('confirm-layer-remove', 'button'); content.appendChild(cancel); content.appendChild(confirm);
     const oldMore = mkEl('btn-more-layer', 'button'); oldMore.setAttribute('aria-expanded', 'false');
+    // the rare-settings block: a wrapper with a HIDDEN group (a group hidden for this layer: it has a rect far away that must NOT count) and two visible groups; window.scrollBy is recorded
+    const scrolls = [];
+    const panel = o.noPanel ? null : mkEl('layer-more-panel', 'div');
+    const pgHidden = new El('div'), pgNoRects = new El('div'), pgFirst = new El('div'), pgSecond = new El('div');
+    const rects = o.blockRects || [[900, 948], [960, 1008]];
+    if (panel) {
+        [pgHidden, pgNoRects, pgFirst, pgSecond].forEach(g => { g.ownerDoc = doc; g.scrollIntoView = () => { scrolls.push({ wrong: 'scrollIntoView' }); }; });
+        pgNoRects.getClientRects = () => []; pgNoRects.getBoundingClientRect = () => ({ top: 7000, bottom: 8000, left: 0, right: 100 });   // not [hidden], but display: none by CSS: no client rects
+        pgHidden.hidden = true; pgHidden.getClientRects = () => []; pgHidden.getBoundingClientRect = () => ({ top: 5000, bottom: 6000, left: 0, right: 100 });
+        [pgFirst, pgSecond].forEach((g, k) => { g.getClientRects = () => [{}]; g.getBoundingClientRect = () => ({ top: rects[k][0], bottom: rects[k][1], left: 0, right: 100 }); });
+        panel.appendChild(pgHidden); panel.appendChild(pgNoRects); panel.appendChild(pgFirst); panel.appendChild(pgSecond);
+        if (o.allHidden) { pgFirst.hidden = true; pgSecond.hidden = true; }
+    }
     const clock = { t: 0 }, calls = [], moq = [];   // moq: the MutationObserver callbacks, run AFTER the click handler like a browser's microtask (UI.dialog moves the focus there)
     const layers = o.layers || [], st = { layers, active: o.active === undefined ? 'base' : o.active, timeline: o.timeline === undefined ? null : o.timeline };
     const ctx = vm.createContext({ document: doc, console, MutationObserver: class { constructor(cb) { this.cb = cb; } observe(el) { el.onClass = () => { moq.push(this.cb); }; } }, setTimeout: (f) => 0, clearTimeout() { }, performance: { now: () => clock.t } });
-    ctx.window = ctx; ctx.matchMedia = () => ({ matches: false }); ctx.innerWidth = 1200; ctx.addEventListener = () => { };
+    ctx.window = ctx; ctx.matchMedia = q => ({ matches: !!o.reduced && /prefers-reduced-motion:\s*reduce\b/.test(q) }); ctx.innerWidth = 1200; ctx.innerHeight = 812; ctx.scrollBy = opts => { scrolls.push(opts); }; ctx.addEventListener = () => { };
     ctx.additionalLayers = layers; ctx.activeLayer = st.active; ctx.timeline = st.timeline;
     ctx.layerApi = {
         select(sheet) { calls.push(['select', sheet]); ctx.activeLayer = sheet; },
@@ -128,7 +142,7 @@ function build(o) {
     const sv = strip ? { base: () => strip.children[0].children[0], chips: () => strip.children[0].children[1], add: () => strip.children[0].children[2], actions: () => strip.children[1].children } : null;
     const scell = key => { for (const b of [sv.base()].concat(sv.chips().children, [sv.add()], sv.actions())) if (b.dataset.key === key) return b; return null; };
     const skeys = () => [sv.base().dataset.key].concat(sv.chips().children.map(b => b.dataset.key), [sv.add().dataset.key], sv.actions().map(b => b.dataset.key));
-    return { ctx, doc, table, rail, strip, sv, scell, skeys, railBase, railChips, railAdd, rcell, rkeys, calls, layers, sync, cell, keys, overlay, cancel, confirm, oldMore, byId, clk: b => { b.dispatch('click', { detail: 1 }); while (moq.length) moq.shift()([]); } };
+    return { ctx, doc, table, rail, strip, sv, scell, skeys, scrolls, panel, pgFirst, pgSecond, railBase, railChips, railAdd, rcell, rkeys, calls, layers, sync, cell, keys, overlay, cancel, confirm, oldMore, byId, clk: b => { b.dispatch('click', { detail: 1 }); while (moq.length) moq.shift()([]); } };
 }
 T('dom', () => {
     const L = (extra) => Object.assign({ connections: [], enabled: true }, extra || {});
@@ -278,6 +292,43 @@ T('dom', () => {
     check('the focused strip chip survives a rebuild (a layer added elsewhere)', e.doc.activeElement === e.scell('chip:1'));
     e = build({ layers: [L()], active: 0, noStrip: true });
     check('a page without #layer-strip still builds the table and the rail (the strip is optional in the script)', J(e.keys()) === J(['chip:base', 'chip:0', 'eye:0', 'x:0', 'add', 'more']) && J(e.rkeys()) === J(['chip:base', 'chip:0', 'add', 'eye', 'more', 'x']));
+    // ---- the rare-settings block is revealed when it opens (commit 5) ----
+    e = build({ layers: [L()], active: 0 });
+    e.cell('more').focus();
+    e.clk(e.cell('more'));
+    check('opening the block from the TABLE\'s "..." with the block below the fold (the union of its two visible groups 900..1008 in a 812px viewport; a [hidden] group\'s rect 5000..6000 and a group without client rects 7000..8000 do not count): window.scrollBy is called ONCE with { top: 196, behavior: \'smooth\' } (the whole block ends at the bottom edge); the focus stays on the "..." button', e.scrolls.length === 1 && J(e.scrolls[0]) === J({ top: 196, behavior: 'smooth' }) && e.doc.activeElement === e.cell('more'));
+    e.clk(e.cell('more'));
+    check('...closing it scrolls nothing', e.scrolls.length === 1 && e.cell('more').getAttribute('aria-expanded') === 'false');
+    e = build({ layers: [L()], active: 0, blockRects: [[200, 248], [260, 308]] });
+    e.clk(e.cell('more'));
+    check('...no scroll when the WHOLE block is already inside the viewport (200..308)', e.scrolls.length === 0 && e.cell('more').getAttribute('aria-expanded') === 'true');
+    e = build({ layers: [L()], active: 0, blockRects: [[700, 748], [760, 820]] });
+    e.clk(e.cell('more'));
+    check('...a block whose FIRST group is visible but whose last group is cut (700..820) scrolls by the overhang, 8px (the old first-group rule would not have)', e.scrolls.length === 1 && J(e.scrolls[0]) === J({ top: 8, behavior: 'smooth' }));
+    e = build({ layers: [L()], active: 0, blockRects: [[-30, 18], [30, 78]] });
+    e.clk(e.cell('more'));
+    check('...a block starting above the top (-30..78) scrolls up by 30 (a negative delta)', e.scrolls.length === 1 && J(e.scrolls[0]) === J({ top: -30, behavior: 'smooth' }));
+    e = build({ layers: [L()], active: 0, blockRects: [[100, 500], [510, 1000]] });
+    e.clk(e.cell('more'));
+    check('...a block TALLER than the viewport (100..1000 in 812) aligns its top edge to the viewport top with an 8px margin: scrollBy top 92', e.scrolls.length === 1 && J(e.scrolls[0]) === J({ top: 92, behavior: 'smooth' }));
+    e = build({ layers: [L()], active: 0, reduced: true });
+    e.clk(e.cell('more'));
+    check('...with prefers-reduced-motion the behaviour is \'auto\' (no smooth scrolling); the fake matches only `prefers-reduced-motion: reduce`', e.scrolls.length === 1 && J(e.scrolls[0]) === J({ top: 196, behavior: 'auto' }));
+    e = build({ layers: [L()], active: 0, allHidden: true });
+    e.clk(e.cell('more'));
+    check('...a block with no visible group (every group hidden for this layer) scrolls nothing and does not throw', e.scrolls.length === 0 && e.cell('more').getAttribute('aria-expanded') === 'true');
+    e = build({ layers: [L()], active: 0 });
+    e.rcell('more').focus(); e.clk(e.rcell('more'));
+    check('the same from the RAIL\'s "...": one scroll, the focus stays on that button', e.scrolls.length === 1 && e.doc.activeElement === e.rcell('more'));
+    e = build({ layers: [L()], active: 0 });
+    e.scell('more').focus(); e.clk(e.scell('more'));
+    check('the same from the STRIP\'s "...": one scroll, the focus stays on that button; a second open after a close scrolls again', e.scrolls.length === 1 && e.doc.activeElement === e.scell('more') && (e.clk(e.scell('more')), e.clk(e.scell('more')), e.scrolls.length === 2));
+    e = build({});
+    e.clk(e.cell('more')); e.clk(e.rcell('more')); e.clk(e.scell('more'));
+    check('on the Base "..." is disabled: a click shows the reason and neither opens nor scrolls', e.scrolls.length === 0 && e.calls.length === 0);
+    e = build({ layers: [L()], active: 0, noPanel: true });
+    e.clk(e.cell('more'));
+    check('a page without the block does not throw and scrolls nothing', e.scrolls.length === 0 && J(e.calls) === J([['toggleMore']]));
     // the cost of a tick
     e = build({ layers: [L({ connections: [[1, 2]] }), L()], active: 0 });
     let t0 = process.hrtime.bigint(); for (let i = 0; i < 20000; i++) e.sync(); const per = Number(process.hrtime.bigint() - t0) / 20000 / 1e6;
@@ -379,6 +430,7 @@ T('source', () => {
     check('ui-layers.js calls ONLY window.layerApi for actions (select, add, remove, setEnabled, toggleMore) and writes no sketch state itself (no assignment to activeLayer / additionalLayers / timeline, no .enabled write)', ['select', 'add', 'remove', 'setEnabled', 'toggleMore'].every(m => new RegExp('api\\(\\)\\.' + m + '\\(').test(LAYERS)) && !/(^|[;{}\n])\s*(activeLayer|additionalLayers|timeline)\s*=[^=]|\.enabled\s*=[^=]/.test(LAYERS));
     check('ui-layers.js (rail and strip, built by ONE function): the eye, "..." and x go through UI.guard (a click on a disabled one shows the reason, never acts); neither view has a name line listener (the name line is bound to the table only)', /UI\.guard\(v\.eye,/.test(LAYERS) && /UI\.guard\(v\.more,/.test(LAYERS) && /UI\.guard\(v\.x,/.test(LAYERS) && /table\.addEventListener\('pointerdown', touched, true\)/.test(LAYERS) && !/(rail|strip|container|v\.container)\.addEventListener\('(pointerdown|focusin|pointerover)'/.test(LAYERS) && /if \(rail\) buildNarrow\('rail', rail\);/.test(LAYERS) && /if \(strip\) buildNarrow\('strip', strip\);/.test(LAYERS));
     check('ui-layers.js (rail): the actions are those of the ACTIVE sheet (model.actions.index) and a fourth button is left for the diamond (commented, not drawn)', /lastModel \? lastModel\.actions\.index : null/.test(LAYERS) && /a fourth button, the diamond, comes with the timeline commit/.test(LAYERS) && !/diamond/i.test(LAYERS.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '')));
+    check('ui-layers.js: the reveal is in ONE place - moreNow(), the single handler of every "..." (table, rail, strip) - runs only when the model says the block is open, scrolls the PAGE with window.scrollBy({ top: delta, behavior }) (smooth unless prefers-reduced-motion), measures the UNION of the visible groups (not [hidden], with client rects), has NO scrollIntoView left and never focuses anything', /function moreNow\(\) \{ if \(api\(\)\) api\(\)\.toggleMore\(\); sync\(\); if \(lastModel && lastModel\.more\.open\) revealMore\(\); \}/.test(LAYERS) && /window\.scrollBy\(\{ top: delta, behavior: reduced \? 'auto' : 'smooth' \}\)/.test(LAYERS) && /\(prefers-reduced-motion: reduce\)/.test(LAYERS) && (LAYERS.match(/revealMore\(\)/g) || []).length === 2 && !/scrollIntoView/.test(LAYERS.replace(/\/\/[^\n]*/g, '')) && /if \(c\.hidden \|\| !c\.getClientRects \|\| !c\.getClientRects\(\)\.length\) continue;/.test(LAYERS) && /if \(r\.top < top\) top = r\.top;/.test(LAYERS) && /if \(r\.bottom > bottom\) bottom = r\.bottom;/.test(LAYERS) && /const PANEL_MARGIN = 8;/.test(LAYERS) && !/\.focus\(\)[^\n]*scrollBy|scrollBy[^\n]*\.focus\(\)/.test(LAYERS));
     // the block in sketch.js
     const bi = SKETCH.indexOf('    // layerApi: begin'), ei = SKETCH.indexOf('    // layerApi: end\n');
     const block = bi >= 0 && ei > bi ? SKETCH.slice(bi, ei) : '';
