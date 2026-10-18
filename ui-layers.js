@@ -15,13 +15,22 @@
  *   name line a reserved-height, aria-hidden line with the name and state of the last touched icon (pointerdown, focusin, mouse pointerover), refreshed on every tick; "Symbol antippen" while
  *             nothing was touched. The same pattern as the rail's Mehr row (ui-rail.js); mirrored here, not shared (ui-rail.js is not touched by this commit).
  *
- * The model (layerDisplayNumber, layerRemoveNeedsConfirm, layerTableModel, tableSignature) is pure and loadable without a DOM (tools/ui/test-layer-table.js). The German texts are keyed
+ * The RAIL (layer-table commit 2) is a second view of the SAME model, for the widths where the table does not fit (a single column at the right gutter, 768px up to the table's
+ * threshold, style.css): group 1 = the chips (the Base, the running numbers; "+" under them, outside the scrolling part so it stays reachable), a hairline, group 2 = the actions
+ * of the ACTIVE sheet (eye, "...", x; a fourth button, the diamond, is a later commit). On the Base the actions stay and are disabled with the reason "Keine Ebene aktiv." so
+ * nothing jumps. The rail has no name line (the black chip shows the active sheet; the names are the aria-label and title of every button). Table and rail are both built on every
+ * tick; style.css shows ONE of them (display: none on the other: never both in the tab order or the accessibility tree).
+ *
+ * The model (layerDisplayNumber, layerRemoveNeedsConfirm, layerTableModel, tableSignature, revealDelta) is pure and loadable without a DOM (tools/ui/test-layer-table.js). The German texts are keyed
  * (layers.*); the dictionary comes in a later phase.
  */
 (function (root) {
   'use strict';
   const T = {
     'layers.table': 'Ebenen',
+    'layers.rail': 'Ebenen',
+    'layers.eye.none': 'Ebene sichtbar',
+    'layers.x.none': 'Ebene entfernen',
     'layers.base': 'Basis',
     'layers.layer': function (n) { return 'Ebene ' + n; },
     'layers.chip.active': 'aktiv',
@@ -76,7 +85,22 @@
     cells.add = { name: T['layers.add'], state: '', label: T['layers.add'] };
     const noLayer = !(typeof active === 'number' && layers[active] && !layers[active].isTimelinePlayback);
     cells.more = { name: T['layers.more'], state: noLayer ? T['layers.more.none'] : (st.moreOpen ? T['layers.more.open'] : T['layers.more.closed']), label: T['layers.more'] };
-    return { rows: rows, cells: cells, more: { disabled: noLayer, reason: noLayer ? T['layers.more.none'] : null, open: !!st.moreOpen && !noLayer, dot: !!st.moreDot && !noLayer } };
+    const more = { disabled: noLayer, reason: noLayer ? T['layers.more.none'] : null, open: !!st.moreOpen && !noLayer, dot: !!st.moreDot && !noLayer };
+    // the actions of the ACTIVE sheet, for the rail (index null on the Base: present and disabled with the reason, so nothing jumps)
+    const n = noLayer ? null : layerDisplayNumber(layers, active), visible = noLayer ? false : !!layers[active].enabled;
+    const actions = {
+      index: noLayer ? null : active,
+      eye: { disabled: noLayer, reason: noLayer ? T['layers.more.none'] : null, label: noLayer ? T['layers.eye.none'] : T['layers.eye.name'](n), visible: visible },
+      more: more,
+      x: { disabled: noLayer, reason: noLayer ? T['layers.more.none'] : null, label: noLayer ? T['layers.x.none'] : T['layers.x.name'](n) },
+    };
+    return { rows: rows, cells: cells, more: more, actions: actions };
+  }
+  // How far to scroll a scrolling column so that a child stays inside it (0 when it already is): the child's top / bottom and the column's top / bottom, all in the same coordinates.
+  function revealDelta(childTop, childBottom, viewTop, viewBottom) {
+    if (childTop < viewTop) return childTop - viewTop;
+    if (childBottom > viewBottom) return Math.min(childBottom - viewBottom, childTop - viewTop);
+    return 0;
   }
   // A string that changes exactly when the model would: compared on every tick before anything is built.
   function tableSignature(st) {
@@ -85,12 +109,13 @@
     for (let i = 0; i < layers.length; i++) s += (layers[i].isTimelinePlayback ? 'p' : (layers[i].enabled ? 'v' : 'h') + (isKeyframe(st.timeline, i) ? 'k' : '')) + ',';
     return s;
   }
-  root.layerTable = { layerDisplayNumber: layerDisplayNumber, layerRemoveNeedsConfirm: layerRemoveNeedsConfirm, layerTableModel: layerTableModel, tableSignature: tableSignature, T: T };
+  root.layerTable = { layerDisplayNumber: layerDisplayNumber, layerRemoveNeedsConfirm: layerRemoveNeedsConfirm, layerTableModel: layerTableModel, tableSignature: tableSignature, revealDelta: revealDelta, T: T };
 
   // ---- the DOM ----------------------------------------------------------------------------------------------------------------------------------
   if (typeof document === 'undefined' || !document.getElementById || typeof UI === 'undefined') return;
   const table = document.getElementById('layer-table');
   if (!table) return;
+  const rail = document.getElementById('layer-rail');   // the narrow view (commit 2); a page without it just has the table
 
   const ICON = {
     stack: '<svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 L21 8 L12 13 L3 8 Z"/><path d="M3 12 L12 17 L21 12"/><path d="M3 16 L12 21 L21 16"/></svg>',
@@ -117,24 +142,57 @@
 
   function api() { return root.layerApi; }
   function indexOf(b) { const k = b.dataset.key || ''; const v = k.slice(k.indexOf(':') + 1); return v === 'base' ? 'base' : parseInt(v, 10); }
+  function layersNow() { return (typeof additionalLayers !== 'undefined') ? additionalLayers : []; }
+  function addLayerNow() { if (api()) api().add(); sync(); }
+  function moreNow() { if (api()) api().toggleMore(); sync(); }
 
   // the add and more cells (the foot) are static: built once
-  const addBtn = cell('lt-add', 'add', function () { if (api()) api().add(); sync(); });
+  const addBtn = cell('lt-add', 'add', addLayerNow);
   addBtn.innerHTML = ICON.plus;
   const moreBtn = cell('lt-more', 'more', null);
   moreBtn.innerHTML = ICON.more;
   moreBtn.classList.add('nav-more');
   moreBtn.setAttribute('aria-controls', 'layer-more-panel');
-  UI.guard(moreBtn, function () { if (api()) api().toggleMore(); sync(); });   // the one click listener of "...": while it is disabled (the Base is active) a click shows the reason instead
+  UI.guard(moreBtn, moreNow);   // the one click listener of "...": while it is disabled (the Base is active) a click shows the reason instead
   footEl.appendChild(addBtn); footEl.appendChild(moreBtn);
   table.appendChild(rowsEl); table.appendChild(footEl); table.appendChild(nameEl);
   UI.name(addBtn, T['layers.add']);
   UI.name(moreBtn, T['layers.more']);
 
+  // the rail: group 1 = the chips (scrolling) with "+" under them, group 2 = the actions of the active sheet. Static cells are built once; the chips with the rows.
+  let railChips = null, railAdd = null, railEye = null, railMore = null, railX = null;
+  if (rail) {
+    railChips = el('div', 'lr-chips');
+    railAdd = cell('lt-add lr-add', 'add', addLayerNow);
+    railAdd.innerHTML = ICON.plus;
+    const group1 = el('div', 'lr-group lr-g1'), group2 = el('div', 'lr-group lr-g2');
+    railEye = cell('lr-eye', 'eye', null);
+    railMore = cell('lt-more lr-more', 'more', null);
+    railMore.innerHTML = ICON.more;
+    railMore.classList.add('nav-more');
+    railMore.setAttribute('aria-controls', 'layer-more-panel');
+    railX = cell('lr-x', 'x', null);
+    railX.innerHTML = ICON.x;
+    UI.guard(railEye, function () {
+      const i = lastModel ? lastModel.actions.index : null, layers = layersNow();
+      if (api() && i !== null && layers[i]) api().setEnabled(i, !layers[i].enabled);
+      sync();
+    });
+    UI.guard(railMore, moreNow);
+    UI.guard(railX, function () { const i = lastModel ? lastModel.actions.index : null; if (i !== null) askRemove(i, 'rail'); });
+    group1.appendChild(railChips); group1.appendChild(railAdd);
+    group2.appendChild(railEye); group2.appendChild(railMore); group2.appendChild(railX);   // a fourth button, the diamond, comes with the timeline commit
+    rail.appendChild(group1); rail.appendChild(group2);
+    UI.name(railAdd, T['layers.add']);
+    UI.name(railMore, T['layers.more']);
+    UI.name(railEye, T['layers.eye.none']);
+    UI.name(railX, T['layers.x.none']);
+  }
+
   // ---- the remove dialog (like "Neu anfangen") --------------------------------------------------------------------------------------------------
   const overlay = document.getElementById('layer-remove-overlay'), cancelBtn = document.getElementById('cancel-layer-remove'), confirmBtn = document.getElementById('confirm-layer-remove');
   const titleEl = document.getElementById('layer-remove-title'), textEl = document.getElementById('layer-remove-text');
-  let pendingIndex = null, wasCancelled = true, lastModel = null;
+  let pendingIndex = null, pendingView = 'table', wasCancelled = true, lastModel = null;
   const focusProxy = { setAttribute: function () { }, focus: function () { focusAfterDialog(); } };
   if (overlay && cancelBtn && confirmBtn) {
     UI.dialog(overlay, focusProxy, cancelBtn);
@@ -148,26 +206,35 @@
     });
   }
   function activeChipKey() { return lastModel ? 'chip:' + (lastModel.rows.filter(function (r) { return r.active; })[0] || { index: 'base' }).index : 'chip:base'; }
-  function focusActiveChip() { const b = findCell(activeChipKey()) || findCell('chip:base'); if (b && b.focus) b.focus(); }
+  function focusActiveChip(view) { const b = findCell(activeChipKey(), view) || findCell('chip:base', view); if (b && b.focus) b.focus(); }
   function focusAfterDialog() {
-    // cancelled: back to the x that opened it; removed: the active sheet's chip (the removed row is gone)
-    const want = wasCancelled && pendingIndex !== null ? 'x:' + pendingIndex : activeChipKey();
-    const b = findCell(want) || findCell('chip:base');
+    // cancelled: back to the x that opened it (the table's x of that row, the rail's x); removed: the active sheet's chip in the same view (the removed row is gone)
+    const view = pendingView;
+    const want = wasCancelled && pendingIndex !== null ? (view === 'rail' ? 'x' : 'x:' + pendingIndex) : activeChipKey();
+    const b = findCell(want, view) || findCell('chip:base', view);
     pendingIndex = null;
     if (b && b.focus) b.focus();
   }
-  function findCell(key) {
+  function findCell(key, view) {
+    if (view === 'rail') {
+      if (!rail) return null;
+      const fixed = [railAdd, railEye, railMore, railX];
+      for (let f = 0; f < fixed.length; f++) if (fixed[f].dataset.key === key) return fixed[f];
+      const cs = railChips.children;
+      for (let c = 0; c < cs.length; c++) if (cs[c].dataset.key === key) return cs[c];
+      return null;
+    }
     const all = rowsEl.children;
     for (let r = 0; r < all.length; r++) { const kids = all[r].children; for (let c = 0; c < kids.length; c++) if (kids[c].dataset.key === key) return kids[c]; }
     return null;
   }
-  function askRemove(index) {
-    const layers = (typeof additionalLayers !== 'undefined') ? additionalLayers : [];
+  function askRemove(index, view) {
+    const layers = layersNow();
     const layer = layers[index];
     if (!layer || !api()) return;
     const need = layerRemoveNeedsConfirm(layer, typeof timeline !== 'undefined' ? timeline : null, index);
-    if (!need.confirm || !overlay) { api().remove(index); sync(); focusActiveChip(); return; }   // the removed row is gone: the focus goes to the active sheet's chip
-    pendingIndex = index; wasCancelled = true;
+    if (!need.confirm || !overlay) { api().remove(index); sync(); focusActiveChip(view); return; }   // the removed row is gone: the focus goes to the active sheet's chip
+    pendingIndex = index; pendingView = view || 'table'; wasCancelled = true;
     const n = layerDisplayNumber(layers, index);
     titleEl.textContent = T['layers.remove.title'](n);
     overlay.setAttribute('aria-label', T['layers.remove.title'](n).replace(/\?$/, ''));
@@ -176,34 +243,46 @@
   }
 
   // ---- rows: built when the structure changes, patched in place otherwise (a keyboard user keeps the focus) -------------------------------------------
-  let structKey = null, sigNow = null;
+  let structKey = null, sigNow = null, lastActiveKey = null;
+  function chipHandler(chip) { return function () { if (api()) api().select(indexOf(chip)); sync(); }; }
   function buildRow(row) {
     const r = el('div', 'lt-row');
     r.dataset.row = row.key;
-    const chip = cell('lt-chip', 'chip:' + row.index, function () { if (api()) api().select(indexOf(chip)); sync(); });
+    const chip = cell('lt-chip', 'chip:' + row.index, null);
+    chip.addEventListener('click', chipHandler(chip));
     r.appendChild(chip);
     if (row.kind === 'layer') {
       const eye = cell('lt-eye', 'eye:' + row.index, function () {
-        const i = indexOf(eye), layers = (typeof additionalLayers !== 'undefined') ? additionalLayers : [];
+        const i = indexOf(eye), layers = layersNow();
         if (api() && layers[i]) api().setEnabled(i, !layers[i].enabled);
         sync();
       });
-      const x = cell('lt-x', 'x:' + row.index, function () { askRemove(indexOf(x)); });
+      const x = cell('lt-x', 'x:' + row.index, function () { askRemove(indexOf(x), 'table'); });
       r.appendChild(eye); r.appendChild(x);
     }
     return r;
   }
+  function buildRailChip(row) {
+    const chip = cell('lt-chip lr-chip', 'chip:' + row.index, null);
+    chip.addEventListener('click', chipHandler(chip));
+    return chip;
+  }
   function setIf(e, attr, v) { if (e.getAttribute(attr) !== v) e.setAttribute(attr, v); }
+  function patchChip(b, row, info) {
+    if (b.classList.contains('active') !== row.active) b.classList.toggle('active', row.active);
+    if (b.classList.contains('is-hidden') !== !!row.hidden) b.classList.toggle('is-hidden', !!row.hidden);
+    if (row.active) setIf(b, 'aria-current', 'true'); else if (b.getAttribute('aria-current') !== null) b.removeAttribute('aria-current');
+    const body = row.kind === 'base' ? 'stack' : String(row.number);
+    if (b.dataset.body !== body) { b.dataset.body = body; if (row.kind === 'base') b.innerHTML = ICON.stack; else b.textContent = body; }
+    if (info && b.dataset.label !== info.label) { b.dataset.label = info.label; UI.name(b, info.label); }
+  }
   function patchRow(r, row, model) {
     const kids = r.children;
     for (let c = 0; c < kids.length; c++) {
       const b = kids[c], key = b.dataset.key, kind = key.slice(0, key.indexOf(':')), info = model.cells[key];
       if (kind === 'chip') {
-        if (b.classList.contains('active') !== row.active) b.classList.toggle('active', row.active);
-        if (b.classList.contains('is-hidden') !== !!row.hidden) b.classList.toggle('is-hidden', !!row.hidden);
-        if (row.active) setIf(b, 'aria-current', 'true'); else if (b.getAttribute('aria-current') !== null) b.removeAttribute('aria-current');
-        const body = row.kind === 'base' ? 'stack' : String(row.number);
-        if (b.dataset.body !== body) { b.dataset.body = body; if (row.kind === 'base') b.innerHTML = ICON.stack; else b.textContent = body; }
+        patchChip(b, row, info);
+        continue;
       } else if (kind === 'eye') {
         const want = row.visible ? 'on' : 'off';
         if (b.dataset.body !== want) { b.dataset.body = want; b.innerHTML = row.visible ? ICON.eyeOn : ICON.eyeOff; }
@@ -214,14 +293,56 @@
       if (info && b.dataset.label !== info.label) { b.dataset.label = info.label; UI.name(b, info.label); }
     }
   }
+  function focusedKey(container) {
+    const a = typeof document.activeElement !== 'undefined' ? document.activeElement : null;
+    return a && container.contains && container.contains(a) && a.dataset ? a.dataset.key : null;
+  }
+  // keep the active chip inside the rail's scrolling group (a click on iOS does not focus a button, so the browser's own scroll-into-view does not run)
+  function revealActive() {
+    if (!railChips || !railChips.getBoundingClientRect) return;
+    let active = null;
+    const cs = railChips.children;
+    for (let c = 0; c < cs.length; c++) if (cs[c].classList.contains('active')) active = cs[c];
+    if (!active) return;
+    const cr = active.getBoundingClientRect(), vr = railChips.getBoundingClientRect();
+    const pad = (typeof getComputedStyle === 'function' ? parseFloat(getComputedStyle(railChips).paddingTop) : 0) || 0;
+    const d = revealDelta(cr.top, cr.bottom, vr.top + pad, vr.bottom - pad);
+    if (d) railChips.scrollTop += d;
+  }
+  function renderRail(model, rebuilt, railFocus) {
+    const rs = model.rows;
+    if (rebuilt) {
+      railChips.textContent = '';
+      rs.forEach(function (row) { railChips.appendChild(buildRailChip(row)); });
+    }
+    const cs = railChips.children;
+    for (let i = 0; i < cs.length; i++) patchChip(cs[i], rs[i], model.cells[cs[i].dataset.key]);
+    const a = model.actions;
+    const want = a.index === null || a.eye.visible ? 'on' : 'off';
+    if (railEye.dataset.body !== want) { railEye.dataset.body = want; railEye.innerHTML = want === 'on' ? ICON.eyeOn : ICON.eyeOff; }
+    setIf(railEye, 'aria-pressed', a.eye.visible ? 'true' : 'false');
+    if (railEye.dataset.label !== a.eye.label) { railEye.dataset.label = a.eye.label; UI.name(railEye, a.eye.label); }
+    UI.setDisabled(railEye, a.eye.reason);
+    if (railX.dataset.label !== a.x.label) { railX.dataset.label = a.x.label; UI.name(railX, a.x.label); }
+    UI.setDisabled(railX, a.x.reason);
+    setIf(railMore, 'aria-expanded', model.more.open ? 'true' : 'false');
+    if (railMore.classList.contains('has-state') !== model.more.dot) railMore.classList.toggle('has-state', model.more.dot);
+    UI.setDisabled(railMore, model.more.reason);
+    if (rebuilt && railFocus) { const b = findCell(railFocus, 'rail'); if (b && b.focus) b.focus(); }
+    const key = activeChipKey();
+    if (rebuilt || key !== lastActiveKey) { lastActiveKey = key; revealActive(); }
+  }
   function render(model) {
     const key = model.rows.map(function (r) { return r.key; }).join(',');
-    if (key !== structKey) {
-      const focused = typeof document.activeElement !== 'undefined' && document.activeElement && table.contains && table.contains(document.activeElement) ? document.activeElement.dataset.key : null;
+    const rebuilt = key !== structKey;
+    let railFocus = null;
+    if (rebuilt) {
+      const focused = focusedKey(table);
+      railFocus = rail ? focusedKey(rail) : null;
       structKey = key;
       rowsEl.textContent = '';
       model.rows.forEach(function (row) { rowsEl.appendChild(buildRow(row)); });
-      if (focused) { const b = findCell(focused); if (b && b.focus) b.focus(); }
+      if (focused) { const b = findCell(focused, 'table'); if (b && b.focus) b.focus(); }
     }
     const rs = rowsEl.children;
     for (let i = 0; i < rs.length; i++) patchRow(rs[i], model.rows[i], model);
@@ -229,9 +350,10 @@
     setIf(moreBtn, 'aria-expanded', model.more.open ? 'true' : 'false');
     if (moreBtn.classList.contains('has-state') !== model.more.dot) moreBtn.classList.toggle('has-state', model.more.dot);
     UI.setDisabled(moreBtn, model.more.reason);
+    if (rail) renderRail(model, rebuilt, railFocus);
   }
 
-  // ---- the name line ----------------------------------------------------------------------------------------------------------------------------
+  // ---- the name line (the table only: the rail has none) -------------------------------------------------------------------------------------------
   let last = null;
   function refreshName() {
     const info = last && lastModel ? lastModel.cells[last] : null;
@@ -266,5 +388,6 @@
     refreshName();
   }
   UI.onSync(sync);
+  if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('resize', revealActive);   // the rail may have been hidden when the active chip changed
   sync();
 })(typeof window !== 'undefined' ? window : globalThis);
