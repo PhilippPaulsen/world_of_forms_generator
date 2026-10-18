@@ -1159,7 +1159,7 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
   #layer-row, #layer-more-row { display: none; }
   #layer-row-group:has(> #paste-pattern-status:empty) { display: none; }
 }
-.layer-table .lt-rows { display: flex; flex-direction: column; gap: var(--rail-gap); overflow-y: auto; min-height: 0; flex: 0 1 auto; }
+.layer-table .lt-rows { display: flex; flex-direction: column; gap: var(--rail-gap); padding: 4px; margin: -4px; overflow-y: auto; min-height: 0; flex: 0 1 auto; }
 .layer-table .lt-row, .layer-table .lt-foot { display: grid; grid-template-columns: repeat(4, var(--target)); gap: var(--rail-gap); }
 .layer-table .lt-chip { grid-column: 1; }
 .layer-table .lt-chip, .layer-rail .lt-chip { font: inherit; font-size: var(--size-base); font-variant-numeric: tabular-nums; }
@@ -1244,6 +1244,24 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
   background: var(--color-hairline);
 }
 .layer-rail .lt-more { position: relative; }
+
+/* === The confirmation dialogs ("Neu anfangen", "Ebene entfernen") ===================================================================================================
+   index.html's inline `.dialog-content button { background: var(--accent); color: white; border: none }` (specificity 0,1,1) is meant for the Help and Export "Close" buttons and hits EVERY
+   button inside any .dialog-content, so both buttons of both confirmations were filled red. These two rules (0,2,1 and 0,3,0) out-rank it for the buttons in .restart-actions only: "Abbrechen" is
+   the normal outlined button (the focus ring is the global one, untouched), the destructive confirm button (.dialog-danger) differs only in a red text and border (var(--danger), a token of its own: --accent is 3.55:1 on white, --danger 5.38:1), nothing filled. */
+.dialog-content .restart-actions button {
+  box-sizing: border-box;
+  margin-top: 12px;
+  padding: 8px 16px;
+  border: 1px solid var(--text);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--text);
+}
+.dialog-content .restart-actions .dialog-danger { color: var(--danger); border-color: var(--danger); }
+@media (hover: hover) {
+  .dialog-content .restart-actions button:hover { background: var(--hover-bg); }
+}
 
 /* Keyboard focus: its own 2px outline with a 2px offset, never the same
    as the active state (black fill). :focus-visible = keyboard only. */

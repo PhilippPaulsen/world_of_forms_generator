@@ -160,8 +160,10 @@
   UI.name(moreBtn, T['layers.more']);
 
   // the rail: group 1 = the chips (scrolling) with "+" under them, group 2 = the actions of the active sheet. Static cells are built once; the chips with the rows.
-  let railChips = null, railAdd = null, railEye = null, railMore = null, railX = null;
+  let railBase = null, railChips = null, railAdd = null, railEye = null, railMore = null, railX = null;
   if (rail) {
+    railBase = cell('lt-chip lr-chip lr-base', 'chip:base', null);   // outside the scrolling column, like "+": it never scrolls out of view
+    railBase.addEventListener('click', chipHandler(railBase));
     railChips = el('div', 'lr-chips');
     railAdd = cell('lt-add lr-add', 'add', addLayerNow);
     railAdd.innerHTML = ICON.plus;
@@ -180,7 +182,7 @@
     });
     UI.guard(railMore, moreNow);
     UI.guard(railX, function () { const i = lastModel ? lastModel.actions.index : null; if (i !== null) askRemove(i, 'rail'); });
-    group1.appendChild(railChips); group1.appendChild(railAdd);
+    group1.appendChild(railBase); group1.appendChild(railChips); group1.appendChild(railAdd);
     group2.appendChild(railEye); group2.appendChild(railMore); group2.appendChild(railX);   // a fourth button, the diamond, comes with the timeline commit
     rail.appendChild(group1); rail.appendChild(group2);
     UI.name(railAdd, T['layers.add']);
@@ -218,7 +220,7 @@
   function findCell(key, view) {
     if (view === 'rail') {
       if (!rail) return null;
-      const fixed = [railAdd, railEye, railMore, railX];
+      const fixed = [railBase, railAdd, railEye, railMore, railX];
       for (let f = 0; f < fixed.length; f++) if (fixed[f].dataset.key === key) return fixed[f];
       const cs = railChips.children;
       for (let c = 0; c < cs.length; c++) if (cs[c].dataset.key === key) return cs[c];
@@ -310,13 +312,14 @@
     if (d) railChips.scrollTop += d;
   }
   function renderRail(model, rebuilt, railFocus) {
-    const rs = model.rows;
+    const rs = model.rows;   // rs[0] is the Base (the fixed chip); the scrolling column holds the layers only
     if (rebuilt) {
       railChips.textContent = '';
-      rs.forEach(function (row) { railChips.appendChild(buildRailChip(row)); });
+      rs.slice(1).forEach(function (row) { railChips.appendChild(buildRailChip(row)); });
     }
+    patchChip(railBase, rs[0], model.cells['chip:base']);
     const cs = railChips.children;
-    for (let i = 0; i < cs.length; i++) patchChip(cs[i], rs[i], model.cells[cs[i].dataset.key]);
+    for (let i = 0; i < cs.length; i++) patchChip(cs[i], rs[i + 1], model.cells[cs[i].dataset.key]);
     const a = model.actions;
     const want = a.index === null || a.eye.visible ? 'on' : 'off';
     if (railEye.dataset.body !== want) { railEye.dataset.body = want; railEye.innerHTML = want === 'on' ? ICON.eyeOn : ICON.eyeOff; }
