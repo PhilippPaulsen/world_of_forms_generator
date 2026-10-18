@@ -1769,6 +1769,13 @@ function setup() {
         remove(index) { removeLayer(index); renderLayerTabs(); updateOffsetControls(); updateFaceToggleControl(); redraw(); },
         setEnabled(index, on) { additionalLayers[index].enabled = !!on; renderLayerTabs(); redraw(); },
         toggleMore() { layerMoreOpen = !layerMoreOpen; syncLayerMore(); },
+        addToTimeline() { addLayerToTimeline(); },
+        removeKeyframe(index) { removeKeyframeFromTimeline(index); },
+        play() { toggleTimelinePlayback(); syncTimelineDisplay(); redraw(); },
+        setProgress(t) { setTimelineProgress(t); syncTimelineDisplay(); redraw(); },
+        clearTimeline() { removeTimelineAction(); },
+        includeNet() { return includeNetOverride; },
+        toggleIncludeNet() { includeNetBtn.elt.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); },
     };
     // layerApi: end
 

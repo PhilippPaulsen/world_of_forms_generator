@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260929bp">
+  <link rel="stylesheet" href="style.css?v=20260929bq">
   <!-- Cache-busting for the ES-module graph behind core/farborgel-selection.mjs (below). The <script src> tags in
        this file carry ?v= by hand-bump (CLAUDE.md), but a module's own `import ... from './x.mjs'` cannot: this
        import map is the one place that gives every module in that graph the same ?v= as everything else (bump it
@@ -18,11 +18,11 @@
   <script type="importmap">
     {
     "imports": {
-      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929bp",
-      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929bp",
-      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929bp",
-      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929bp",
-      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929bp"
+      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929bq",
+      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929bq",
+      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929bq",
+      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929bq",
+      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929bq"
     }
     }
   </script>
@@ -640,6 +640,10 @@
        builds each as a checkbox + text button ("Layer N") + remove button, not a single icon. -->
   <div class="canvas-row">
       <div id="canvas-container"></div>
+      <!-- The timeline strip (layer-table commit 6): Play, the scrub bar (one decorative diamond mark per keyframe), the ONE Include net switch and "Mehr" (which shows the old #timeline-group below:
+           the keyframe list with its "Net" and remove buttons, the net status, the line pairing editor, the status line, and "Zeitleiste entfernen"). Built by ui-timeline.js; a flex item of the phone's
+           wrapping row (order: the canvas, this strip, the layer strip, the tool rail's rows) and, from 768px, the second grid row under the canvas (style.css). -->
+      <div id="timeline-strip" class="timeline-strip" role="group" aria-label="Zeitleiste" data-i18n="timeline.strip"></div>
       <!-- The layer strip (layer-table commit 4): the phone view of the same layer model (the table and the rail are the others, below) - two rows under the canvas, shown below 768px only
            (style.css): row 1 = the Base chip, the layer chips (they scroll sideways) and "+", row 2 = the eye, "..." and the remove x of the ACTIVE sheet (disabled with a reason on the
            Base). Built by ui-layers.js on the same tick as the table and the rail. It sits directly after the canvas and before the tool rail's rows (the next commit puts the timeline
@@ -1018,6 +1022,7 @@
           <button id="btn-add-to-timeline" class="layer-btn" title="Add to Timeline">Add to Timeline</button>
 <button id="btn-timeline-include-net" class="layer-btn" title="Also capture the current net when a keyframe is added">Include net: off</button>
           <button id="btn-remove-timeline" class="layer-btn" title="Remove Timeline" hidden>Remove Timeline</button>
+          <button id="btn-clear-timeline" class="layer-btn" type="button" title="Zeitleiste entfernen" data-i18n="timeline.clear" hidden>Zeitleiste entfernen</button>
         </div>
         <div id="timeline-net-warning" hidden></div>
         <div class="icon-row" id="timeline-keyframe-list" hidden></div>
@@ -1358,6 +1363,19 @@
     </div>
   </div>
 
+  <!-- Timeline confirmation (layer-table commit 6): "Zeitleiste entfernen" always asks; removing a keyframe by its diamond asks only when it would discard a user-set line pairing (ui-timeline.js
+       timelineConfirm, ui-layers.js). Cancel comes first, so it has the initial focus (UI.dialog); Escape cancels. Title, text and the confirm label are set per use. -->
+  <div id="timeline-confirm-overlay" class="dialog-overlay hidden">
+    <div class="dialog-content">
+      <p><strong id="timeline-confirm-title" data-i18n="timeline.confirm.title">Zeitleiste entfernen?</strong></p>
+      <p id="timeline-confirm-text"></p>
+      <div class="restart-actions">
+        <button id="cancel-timeline-confirm" type="button" data-i18n="timeline.confirm.cancel">Abbrechen</button>
+        <button id="confirm-timeline-confirm" class="dialog-danger" type="button" data-i18n="timeline.confirm.remove">Entfernen</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <!-- Cache-busting: this site has no build step (CLAUDE.md - plain
        <script> tags, no bundler), so GitHub Pages/Fastly serves every
@@ -1565,38 +1583,39 @@
   <div id="ui-toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260929bp"></script>
-  <script src="core/state.js?v=20260929bp"></script>
-  <script src="core/symmetry.js?v=20260929bp"></script>
-  <script src="core/curves.js?v=20260929bp"></script>
-  <script src="core/netwarp.js?v=20260929bp"></script>
-  <script src="core/tiling.js?v=20260929bp"></script>
-  <script src="core/faces.js?v=20260929bp"></script>
-  <script src="core/orbits.js?v=20260929bp"></script>
-  <script src="core/color.js?v=20260929bp"></script>
-  <script src="core/facecolor.js?v=20260929bp"></script>
-  <script src="core/farborgel-bridge.js?v=20260929bp"></script>
-  <script src="core/export.js?v=20260929bp"></script>
-  <script src="core/symmetry-toggles.js?v=20260929bp"></script>
-  <script src="core/session.js?v=20260929bp"></script>
-  <script src="core/session-apply.js?v=20260929bp"></script>
-  <script src="core/session-store.js?v=20260929bp"></script>
-  <script src="core/session-writer.js?v=20260929bp"></script>
-  <script src="core/pointer-tap.js?v=20260929bp"></script>
-  <script src="core/pick-node.js?v=20260929bp"></script>
-  <script src="sketch.js?v=20260929bp"></script>
-  <script src="nav.js?v=20260929bp"></script>
-  <script src="ui.js?v=20260929bp"></script>
-  <script src="ui-form.js?v=20260929bp"></script>
-  <script src="ui-layer.js?v=20260929bp"></script>
-  <script src="ui-layers.js?v=20260929bp"></script>
-  <script src="ui-net.js?v=20260929bp"></script>
-  <script src="ui-farbe.js?v=20260929bp"></script>
-  <script src="ui-rail.js?v=20260929bp"></script>
+  <script src="core/forms.js?v=20260929bq"></script>
+  <script src="core/state.js?v=20260929bq"></script>
+  <script src="core/symmetry.js?v=20260929bq"></script>
+  <script src="core/curves.js?v=20260929bq"></script>
+  <script src="core/netwarp.js?v=20260929bq"></script>
+  <script src="core/tiling.js?v=20260929bq"></script>
+  <script src="core/faces.js?v=20260929bq"></script>
+  <script src="core/orbits.js?v=20260929bq"></script>
+  <script src="core/color.js?v=20260929bq"></script>
+  <script src="core/facecolor.js?v=20260929bq"></script>
+  <script src="core/farborgel-bridge.js?v=20260929bq"></script>
+  <script src="core/export.js?v=20260929bq"></script>
+  <script src="core/symmetry-toggles.js?v=20260929bq"></script>
+  <script src="core/session.js?v=20260929bq"></script>
+  <script src="core/session-apply.js?v=20260929bq"></script>
+  <script src="core/session-store.js?v=20260929bq"></script>
+  <script src="core/session-writer.js?v=20260929bq"></script>
+  <script src="core/pointer-tap.js?v=20260929bq"></script>
+  <script src="core/pick-node.js?v=20260929bq"></script>
+  <script src="sketch.js?v=20260929bq"></script>
+  <script src="nav.js?v=20260929bq"></script>
+  <script src="ui.js?v=20260929bq"></script>
+  <script src="ui-form.js?v=20260929bq"></script>
+  <script src="ui-layer.js?v=20260929bq"></script>
+  <script src="ui-timeline.js?v=20260929bq"></script>
+  <script src="ui-layers.js?v=20260929bq"></script>
+  <script src="ui-net.js?v=20260929bq"></script>
+  <script src="ui-farbe.js?v=20260929bq"></script>
+  <script src="ui-rail.js?v=20260929bq"></script>
   <!-- Group D Phase B4: exposes window.farborgelBuildHarmonySelection (core/farborgel-selection.mjs)
        for ui-farbe.js/sketch.js (classic scripts) to call - a module script coexists fine with the
        classic p5-bootstrap scripts above (real-browser verified, no conflicts). -->
-  <script type="module" src="core/farborgel-selection.mjs?v=20260929bp"></script>
+  <script type="module" src="core/farborgel-selection.mjs?v=20260929bq"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

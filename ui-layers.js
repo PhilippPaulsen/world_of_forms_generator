@@ -34,6 +34,11 @@
     'layers.rail': 'Ebenen',
     'layers.strip': 'Ebenen',
     'layers.eye.none': 'Ebene sichtbar',
+    'layers.dia.add': function (n) { return 'Ebene ' + n + ' zur Zeitleiste hinzufügen'; },
+    'layers.dia.remove': function (n) { return 'Ebene ' + n + ' aus der Zeitleiste entfernen'; },
+    'layers.dia.none': 'Ebene zur Zeitleiste hinzufügen',
+    'layers.dia.in': 'in der Zeitleiste',
+    'layers.dia.out': 'nicht in der Zeitleiste',
     'layers.x.none': 'Ebene entfernen',
     'layers.base': 'Basis',
     'layers.layer': function (n) { return 'Ebene ' + n; },
@@ -84,6 +89,7 @@
       const nm = T['layers.layer'](n);
       cells['chip:' + i] = { name: nm, state: active === i ? T['layers.chip.active'] : T['layers.chip.inactive'], label: nm };
       cells['eye:' + i] = { name: nm, state: kf ? (visible ? T['layers.eye.kf.on'] : T['layers.eye.kf.off']) : (visible ? T['layers.eye.on'] : T['layers.eye.off']), label: T['layers.eye.name'](n) };
+      cells['dia:' + i] = { name: nm, state: kf ? T['layers.dia.in'] : T['layers.dia.out'], label: kf ? T['layers.dia.remove'](n) : T['layers.dia.add'](n) };
       cells['x:' + i] = { name: T['layers.x.name'](n), state: '', label: T['layers.x.name'](n) };
     });
     cells.add = { name: T['layers.add'], state: '', label: T['layers.add'] };
@@ -95,6 +101,7 @@
     const actions = {
       index: noLayer ? null : active,
       eye: { disabled: noLayer, reason: noLayer ? T['layers.more.none'] : null, label: noLayer ? T['layers.eye.none'] : T['layers.eye.name'](n), visible: visible },
+      dia: { disabled: noLayer, reason: noLayer ? T['layers.more.none'] : null, filled: noLayer ? false : isKeyframe(timeline, active), label: noLayer ? T['layers.dia.none'] : (isKeyframe(timeline, active) ? T['layers.dia.remove'](n) : T['layers.dia.add'](n)) },
       more: more,
       x: { disabled: noLayer, reason: noLayer ? T['layers.more.none'] : null, label: noLayer ? T['layers.x.none'] : T['layers.x.name'](n) },
     };
@@ -134,6 +141,8 @@
     eyeOn: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
     eyeOff: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M1 1l22 22"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/></svg>',
     x: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6 L18 18 M18 6 L6 18"/></svg>',
+    diaOn: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 L21 12 L12 21 L3 12 Z"/></svg>',
+    diaOff: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 L21 12 L12 21 L3 12 Z"/></svg>',
     plus: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5 V19 M5 12 H19"/></svg>',
     more: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>',
   };
@@ -208,6 +217,7 @@
     v.more.innerHTML = ICON.more;
     v.more.classList.add('nav-more');
     v.more.setAttribute('aria-controls', 'layer-more-panel');
+    v.dia = cell('lr-dia', 'dia', null);
     v.x = cell('lr-x', 'x', null);
     v.x.innerHTML = ICON.x;
     UI.guard(v.eye, function () {
@@ -215,14 +225,16 @@
       if (api() && i !== null && layers[i]) api().setEnabled(i, !layers[i].enabled);
       sync();
     });
+    UI.guard(v.dia, function () { const i = lastModel ? lastModel.actions.index : null; if (i !== null) diamondClick(i, name); });
     UI.guard(v.more, moreNow);
     UI.guard(v.x, function () { const i = lastModel ? lastModel.actions.index : null; if (i !== null) askRemove(i, name); });
     group1.appendChild(v.base); group1.appendChild(v.chips); group1.appendChild(v.add);
-    group2.appendChild(v.eye); group2.appendChild(v.more); group2.appendChild(v.x);   // a fourth button, the diamond, comes with the timeline commit
+    group2.appendChild(v.eye); group2.appendChild(v.dia); group2.appendChild(v.more); group2.appendChild(v.x);   // eye, diamond, "...", x
     container.appendChild(group1); container.appendChild(group2);
     UI.name(v.add, T['layers.add']);
     UI.name(v.more, T['layers.more']);
     UI.name(v.eye, T['layers.eye.none']);
+    UI.name(v.dia, T['layers.dia.none']);
     UI.name(v.x, T['layers.x.none']);
     views[name] = v;
   }
@@ -258,7 +270,7 @@
   function findCell(key, view) {
     const v = views[view];
     if (v) {
-      const fixed = [v.base, v.add, v.eye, v.more, v.x];
+      const fixed = [v.base, v.add, v.eye, v.dia, v.more, v.x];
       for (let f = 0; f < fixed.length; f++) if (fixed[f].dataset.key === key) return fixed[f];
       const cs = v.chips.children;
       for (let c = 0; c < cs.length; c++) if (cs[c].dataset.key === key) return cs[c];
@@ -267,6 +279,31 @@
     const all = rowsEl.children;
     for (let r = 0; r < all.length; r++) { const kids = all[r].children; for (let c = 0; c < kids.length; c++) if (kids[c].dataset.key === key) return kids[c]; }
     return null;
+  }
+  // The diamond of the layer at `index` (in a narrow view: the active layer). An outline diamond selects that layer and adds it to the timeline with the CURRENT Base net (layerApi.addToTimeline =
+  // addLayerToTimeline, which returns nothing: a refusal is told by the state - the layer is not a keyframe afterwards - and its message is in #timeline-status, shown as a toast and nothing changes).
+  // A filled one takes the keyframe out of the timeline; it asks first only when that discards a user-set line pairing (diamondPlan).
+  function diamondClick(index, view) {
+    const plan = root.timelineModel && root.timelineModel.diamondPlan(layersNow(), typeof timeline !== 'undefined' ? timeline : null, index);
+    if (!plan || !api()) return;
+    if (plan.action === 'add') {
+      api().select(index);
+      api().addToTimeline();
+      const tl = typeof timeline !== 'undefined' ? timeline : null;
+      if (!(tl && tl.keyframeLayerIds.indexOf(index) >= 0)) {
+        const st = document.getElementById('timeline-status');
+        UI.toast((st && st.textContent) || T['layers.dia.none'], 6000);
+      }
+      sync();
+      return;
+    }
+    const remove = function () { api().removeKeyframe(index); sync(); };
+    if (!plan.needsConfirm || !root.timelineConfirm) { remove(); return; }
+    const n = layerDisplayNumber(layersNow(), index), tm = root.timelineModel.T;
+    root.timelineConfirm({
+      title: tm['timeline.dia.title'](n), text: tm['timeline.dia.text'](plan.segments.length), confirmLabel: tm['timeline.confirm.remove'], onConfirm: remove,
+      returnFocus: function () { const b = findCell(view === 'table' ? 'dia:' + index : 'dia', view); if (b && b.focus) b.focus(); },
+    });
   }
   function askRemove(index, view) {
     const layers = layersNow();
@@ -297,8 +334,9 @@
         if (api() && layers[i]) api().setEnabled(i, !layers[i].enabled);
         sync();
       });
+      const dia = cell('lt-dia', 'dia:' + row.index, function () { diamondClick(indexOf(dia), 'table'); });
       const x = cell('lt-x', 'x:' + row.index, function () { askRemove(indexOf(x), 'table'); });
-      r.appendChild(eye); r.appendChild(x);
+      r.appendChild(eye); r.appendChild(dia); r.appendChild(x);
     }
     return r;
   }
@@ -327,6 +365,9 @@
         const want = row.visible ? 'on' : 'off';
         if (b.dataset.body !== want) { b.dataset.body = want; b.innerHTML = row.visible ? ICON.eyeOn : ICON.eyeOff; }
         setIf(b, 'aria-pressed', row.visible ? 'true' : 'false');
+      } else if (kind === 'dia') {
+        const dwant = row.keyframe ? 'on' : 'off';
+        if (b.dataset.body !== dwant) { b.dataset.body = dwant; b.innerHTML = row.keyframe ? ICON.diaOn : ICON.diaOff; }
       } else if (kind === 'x') {
         if (b.dataset.body !== 'x') { b.dataset.body = 'x'; b.innerHTML = ICON.x; }
       }
@@ -372,6 +413,10 @@
     setIf(v.eye, 'aria-pressed', a.eye.visible ? 'true' : 'false');
     if (v.eye.dataset.label !== a.eye.label) { v.eye.dataset.label = a.eye.label; UI.name(v.eye, a.eye.label); }
     UI.setDisabled(v.eye, a.eye.reason);
+    const dwant = a.dia.filled ? 'on' : 'off';
+    if (v.dia.dataset.body !== dwant) { v.dia.dataset.body = dwant; v.dia.innerHTML = a.dia.filled ? ICON.diaOn : ICON.diaOff; }
+    if (v.dia.dataset.label !== a.dia.label) { v.dia.dataset.label = a.dia.label; UI.name(v.dia, a.dia.label); }
+    UI.setDisabled(v.dia, a.dia.reason);
     if (v.x.dataset.label !== a.x.label) { v.x.dataset.label = a.x.label; UI.name(v.x, a.x.label); }
     UI.setDisabled(v.x, a.x.reason);
     setIf(v.more, 'aria-expanded', model.more.open ? 'true' : 'false');
