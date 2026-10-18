@@ -8,7 +8,9 @@
 // layer, a timeline keyframe included); a remove x (a confirmation only for a layer with lines or a timeline keyframe); "+" and "..."; a fixed name line. Every action goes through
 // window.layerApi (sketch.js). It shows only where it fits (a fine pointer >= 936px, a coarse pointer >= 1032px) and then replaces the old layer row, which stays in the DOM.
 // The RAIL (commit 2) is the narrow view of the same model: one column at the right gutter from 768px up to the table's threshold (fine 768 to 935, coarse 768 to 1031): the chips and "+", a
-// hairline, then the eye, "..." and the remove x of the ACTIVE sheet (disabled with a reason on the Base); no name line. Exactly one of table and rail shows at any width >= 768px, none below.
+// hairline, then the eye, "..." and the remove x of the ACTIVE sheet (disabled with a reason on the Base); no name line. The STRIP (commit 4) is the phone view of the same model: two rows
+// under the canvas below 768px (row 1 = the Base chip, the layer chips that scroll sideways, "+"; row 2 = the actions of the active sheet). Exactly one of table, rail and strip shows at every
+// width, for both pointer types; the old layer row is hidden at every width.
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -97,6 +99,7 @@ function build(o) {
     const mkEl = (id, tag, cls) => { const e = doc.createElement(tag || 'div'); e.id = id; if (cls) e.className = cls; byId[id] = e; return e; };
     const table = mkEl('layer-table', 'div', 'layer-table');
     const rail = o.noRail ? null : mkEl('layer-rail', 'div', 'layer-rail');
+    const strip = o.noStrip ? null : mkEl('layer-strip', 'div', 'layer-strip');
     const overlay = mkEl('layer-remove-overlay', 'div', 'dialog-overlay hidden'), content = new El('div'); content.className = 'dialog-content'; content.ownerDoc = doc; overlay.appendChild(content);
     const title = mkEl('layer-remove-title', 'strong'); content.appendChild(title); mkEl('layer-remove-text', 'p'); const cancel = mkEl('cancel-layer-remove', 'button'), confirm = mkEl('confirm-layer-remove', 'button'); content.appendChild(cancel); content.appendChild(confirm);
     const oldMore = mkEl('btn-more-layer', 'button'); oldMore.setAttribute('aria-expanded', 'false');
@@ -121,7 +124,11 @@ function build(o) {
     const railBase = () => rail.children[0].children[0], railChips = () => rail.children[0].children[1], railAdd = () => rail.children[0].children[2], railActions = () => rail.children[1].children;
     const rcell = key => { for (const b of [railBase()].concat(railChips().children, [railAdd()], railActions())) if (b.dataset.key === key) return b; return null; };
     const rkeys = () => [railBase().dataset.key].concat(railChips().children.map(b => b.dataset.key), [railAdd().dataset.key], railActions().map(b => b.dataset.key));
-    return { ctx, doc, table, rail, railBase, railChips, railAdd, rcell, rkeys, calls, layers, sync, cell, keys, overlay, cancel, confirm, oldMore, byId, clk: b => { b.dispatch('click', { detail: 1 }); while (moq.length) moq.shift()([]); } };
+    // the strip: the same structure as the rail ([0] group 1 = [Base chip, the scrolling chips, "+"], [1] group 2 = [eye, "...", x])
+    const sv = strip ? { base: () => strip.children[0].children[0], chips: () => strip.children[0].children[1], add: () => strip.children[0].children[2], actions: () => strip.children[1].children } : null;
+    const scell = key => { for (const b of [sv.base()].concat(sv.chips().children, [sv.add()], sv.actions())) if (b.dataset.key === key) return b; return null; };
+    const skeys = () => [sv.base().dataset.key].concat(sv.chips().children.map(b => b.dataset.key), [sv.add().dataset.key], sv.actions().map(b => b.dataset.key));
+    return { ctx, doc, table, rail, strip, sv, scell, skeys, railBase, railChips, railAdd, rcell, rkeys, calls, layers, sync, cell, keys, overlay, cancel, confirm, oldMore, byId, clk: b => { b.dispatch('click', { detail: 1 }); while (moq.length) moq.shift()([]); } };
 }
 T('dom', () => {
     const L = (extra) => Object.assign({ connections: [], enabled: true }, extra || {});
@@ -232,6 +239,45 @@ T('dom', () => {
     // a page without the rail still works
     e = build({ layers: [L()], active: 0, noRail: true });
     check('a page without #layer-rail still builds the table (the rail is optional in the script)', J(e.keys()) === J(['chip:base', 'chip:0', 'eye:0', 'x:0', 'add', 'more']));
+    // ---- the strip (commit 4): the same model, the same handlers, the same layerApi, built by the same function as the rail ----
+    e = build({});
+    const sg1 = e.strip.children[0] ? e.strip.children[0].children : [];
+    check('strip, structure (read without the helpers): group 1 = [the Base chip, the scrolling column (empty without layers), "+"]; group 2 = [eye, "...", x]; the Base chip is a fixed child, not in the column', sg1.length === 3 && sg1[0].dataset.key === 'chip:base' && sg1[1].className === 'lr-chips' && sg1[1].children.length === 0 && sg1[2].dataset.key === 'add' && e.strip.children[1] && J(e.strip.children[1].children.map(b => b.dataset.key)) === J(['eye', 'more', 'x']));
+    check('strip, the Tab order on the Base: Base, "+", eye, "...", x; the actions are PRESENT and aria-disabled with the reason "Keine Ebene aktiv." (title = the reason) so nothing jumps; every cell is a real <button type="button"> with an aria-label, a .lt-cell class and no p5 mousedown listener; no name line (no listener on the strip)', J(e.skeys()) === J(['chip:base', 'add', 'eye', 'more', 'x']) && ['eye', 'more', 'x'].every(k => e.scell(k).getAttribute('aria-disabled') === 'true' && e.scell(k).dataset.reason === 'Keine Ebene aktiv.' && e.scell(k).getAttribute('title') === 'Keine Ebene aktiv.') && e.skeys().every(k => { const b = e.scell(k); return b.tagName === 'BUTTON' && b.type === 'button' && !!b.getAttribute('aria-label') && b.classList.contains('lt-cell') && !b.handlers.mousedown; }) && !e.strip.handlers.pointerdown && !e.strip.handlers.focusin && !e.strip.handlers.pointerover);
+    e.calls.length = 0; ['eye', 'more', 'x'].forEach(k => e.clk(e.scell(k)));
+    check('strip, a click on a disabled action calls nothing and opens no dialog (the reason is shown instead)', e.calls.length === 0 && e.overlay.classList.contains('hidden'));
+    e.clk(e.scell('add'));
+    check('strip "+": layerApi.add() once; the table, the rail and the strip all show the new layer on the same tick; its chip is active, the actions are enabled and named for it ("Ebene 1 sichtbar" / "Ebene 1 entfernen")', J(e.calls) === J([['add']]) && J(e.keys()) === J(['chip:base', 'chip:0', 'eye:0', 'x:0', 'add', 'more']) && J(e.rkeys()) === J(['chip:base', 'chip:0', 'add', 'eye', 'more', 'x']) && J(e.skeys()) === J(['chip:base', 'chip:0', 'add', 'eye', 'more', 'x']) && e.scell('chip:0').classList.contains('active') && e.scell('chip:0').textContent === '1' && e.scell('eye').getAttribute('aria-disabled') === null && e.scell('eye').getAttribute('aria-label') === 'Ebene 1 sichtbar' && e.scell('x').getAttribute('aria-label') === 'Ebene 1 entfernen');
+    e = build({ layers: [L(), L()], active: 1 });
+    e.clk(e.scell('eye'));
+    check('strip eye with two layers and the SECOND active: setEnabled(1, false) once (the ACTIVE layer), the same button stays, aria-pressed false, the crossed eye; a second click switches it back ON (the opposite value, not a constant)', J(e.calls) === J([['setEnabled', 1, false]]) && e.layers[1].enabled === false && e.layers[0].enabled === true && e.scell('eye').getAttribute('aria-pressed') === 'false' && /M1 1l22 22/.test(e.scell('eye').innerHTML) && e.scell('chip:1').classList.contains('is-hidden') && e.rcell('chip:1').classList.contains('is-hidden') && (e.calls.length = 0, e.clk(e.scell('eye')), J(e.calls) === J([['setEnabled', 1, true]]) && e.layers[1].enabled === true));
+    e.calls.length = 0; e.clk(e.scell('chip:0'));
+    check('strip chips: layerApi.select(<index>) once; the actions follow (labelled "Ebene 1 ..."); the fixed Base chip selects \'base\' and disables the actions again', J(e.calls) === J([['select', 0]]) && e.scell('x').getAttribute('aria-label') === 'Ebene 1 entfernen' && (e.clk(e.sv.base()), J(e.calls[1]) === J(['select', 'base']) && e.sv.base().getAttribute('aria-current') === 'true' && e.scell('x').getAttribute('aria-disabled') === 'true'));
+    e = build({ layers: [L(), L()], active: 1 });
+    e.clk(e.scell('x'));
+    check('strip x on an EMPTY plain active layer: remove(<the active index>) at once, no dialog, the focus lands on the active chip IN THE STRIP', J(e.calls) === J([['remove', 1]]) && e.overlay.classList.contains('hidden') && e.doc.activeElement === e.scell('chip:base'));
+    e = build({ layers: [L(), L({ connections: [[1, 2], [3, 4]] })], active: 1 });
+    e.clk(e.scell('x'));
+    check('strip x on a layer WITH lines: the same dialog ("Ebene 2 entfernen?", "2 Linien"), remove not called yet', e.calls.length === 0 && !e.overlay.classList.contains('hidden') && e.byId['layer-remove-title'].textContent === 'Ebene 2 entfernen?' && /2 Linien/.test(e.byId['layer-remove-text'].textContent));
+    e.clk(e.cancel);
+    check('...Cancel closes it without removing and the focus goes back to the STRIP\'s x (not the rail\'s, not a table cell); Confirm removes that layer once and the focus goes to the active chip of the strip', e.calls.length === 0 && e.doc.activeElement === e.scell('x') && (e.clk(e.scell('x')), e.clk(e.confirm), J(e.calls) === J([['remove', 1]]) && e.layers.length === 1 && e.doc.activeElement === e.scell('chip:base')));
+    e = build({ layers: [L()], active: 0 });
+    e.clk(e.scell('more'));
+    check('strip "...": layerApi.toggleMore() once; aria-expanded mirrors in the strip, the rail and the table on the same tick', J(e.calls) === J([['toggleMore']]) && e.scell('more').getAttribute('aria-expanded') === 'true' && e.rcell('more').getAttribute('aria-expanded') === 'true' && e.cell('more').getAttribute('aria-expanded') === 'true');
+    e = build({ layers: [L(), L(), L({ isTimelinePlayback: true }), L()], active: 3, timeline: { keyframeLayerIds: [0, 1], playbackLayerIndex: 2 } });
+    check('strip, the keyframe layers are chips 1 and 2, the playback layer has no chip, the plain layer is 3 (the running numbers), the actions are the third layer\'s', J(e.skeys()) === J(['chip:base', 'chip:0', 'chip:1', 'chip:3', 'add', 'eye', 'more', 'x']) && e.scell('chip:0').textContent === '1' && e.scell('chip:1').textContent === '2' && e.scell('chip:3').textContent === '3' && e.scell('x').getAttribute('aria-label') === 'Ebene 3 entfernen');
+    // many layers: the strip scrolls SIDEWAYS and keeps the active chip inside
+    e = build({ layers: Array.from({ length: 10 }, () => L()), active: 'base' });
+    const scol = e.sv.chips(); scol.scrollLeft = 0; scol.scrollTop = 0;
+    scol.getBoundingClientRect = () => ({ left: 60, right: 260, top: 0, bottom: 48 });
+    e.scell('chip:9').getBoundingClientRect = () => ({ left: 560 - scol.scrollLeft, right: 608 - scol.scrollLeft, top: 0, bottom: 48 });
+    e.clk(e.scell('chip:9'));
+    check('10 layers: selecting the last chip scrolls the strip\'s column SIDEWAYS so that the chip is inside (scrollLeft = the overhang 348, scrollTop untouched), the column holds the 10 layer chips only, the Base chip and "+" are fixed outside it', scol.scrollLeft === 348 && scol.scrollTop === 0 && scol.children.length === 10 && !scol.children.some(b => b.dataset.key === 'chip:base') && e.strip.children[0].children.length === 3 && J(e.skeys()) === J(['chip:base'].concat(Array.from({ length: 10 }, (_, i) => 'chip:' + i), ['add', 'eye', 'more', 'x'])), 'scrollLeft ' + scol.scrollLeft);
+    e = build({ layers: [L(), L()], active: 0 });
+    e.scell('chip:1').focus(); e.layers.push(L()); e.sync();
+    check('the focused strip chip survives a rebuild (a layer added elsewhere)', e.doc.activeElement === e.scell('chip:1'));
+    e = build({ layers: [L()], active: 0, noStrip: true });
+    check('a page without #layer-strip still builds the table and the rail (the strip is optional in the script)', J(e.keys()) === J(['chip:base', 'chip:0', 'eye:0', 'x:0', 'add', 'more']) && J(e.rkeys()) === J(['chip:base', 'chip:0', 'add', 'eye', 'more', 'x']));
     // the cost of a tick
     e = build({ layers: [L({ connections: [[1, 2]] }), L()], active: 0 });
     let t0 = process.hrtime.bigint(); for (let i = 0; i < 20000; i++) e.sync(); const per = Number(process.hrtime.bigint() - t0) / 20000 / 1e6;
@@ -265,7 +311,9 @@ T('source', () => {
     let rdepth = 0, rend = ri + RQ.length; for (; rend < css.length; rend++) { if (css[rend] === '{') rdepth++; else if (css[rend] === '}') { if (!rdepth) break; rdepth--; } }
     const railInside = ri > 0 ? css.slice(ri + RQ.length, rend) : '', outsideBoth = ri > 0 && qi > 0 ? (css.slice(0, Math.min(qi, ri)) + css.slice(Math.min(qi, ri) === qi ? end + 1 : rend + 1, Math.max(qi, ri)) + css.slice((Math.max(qi, ri) === qi ? end : rend) + 1)) : css;
     const OLDROW = /#layer-row, #layer-more-row\s*\{\s*display:\s*none;\s*\}/, OLDGROUP = /#layer-row-group:has\(> #paste-pattern-status:empty\)\s*\{\s*display:\s*none;\s*\}/;
-    check('the old row is hidden inside the TABLE query AND inside the RAIL query (#layer-row, #layer-more-row display: none; the group goes with its row unless the Paste status line has text) - never outside them (below 768px it stays untouched)', OLDROW.test(inside) && OLDGROUP.test(inside) && OLDROW.test(railInside) && OLDGROUP.test(railInside) && !/#layer-row\b/.test(outsideBoth.replace(/#layer-row-group/g, '')) && !/#layer-more-row\s*\{[^}]*display:\s*none/.test(outsideBoth));
+    // the stylesheet with every @media block removed: what applies at EVERY width
+    const noMedia = (() => { let t = css; for (;;) { const i = t.indexOf('@media'); if (i < 0) return t; let d = 0, j = t.indexOf('{', i), k = j; for (; k < t.length; k++) { if (t[k] === '{') d++; else if (t[k] === '}') { d--; if (!d) break; } } t = t.slice(0, i) + t.slice(k + 1); } })();
+    check('the old row is hidden at EVERY width now: `#layer-row, #layer-more-row { display: none }` and the group rule (unless the Paste status line has text) are TOP-LEVEL rules, not inside any media query (the strip, the rail and the table each replace it)', OLDROW.test(noMedia) && OLDGROUP.test(noMedia) && !OLDROW.test(inside) && !OLDROW.test(railInside) && !OLDGROUP.test(inside) && !OLDGROUP.test(railInside));
     check('the grid reserves the diamond column: the chip in column 1, the eye in 2, the x in 4 (commit 2 fills 3), "+" in 1, "..." in 2', ['lt-chip\\s*\\{[^}]*grid-column:\\s*1', 'lt-eye\\s*\\{[^}]*grid-column:\\s*2', 'lt-x\\s*\\{[^}]*grid-column:\\s*4', 'lt-add\\s*\\{[^}]*grid-column:\\s*1', 'lt-more\\s*\\{[^}]*grid-column:\\s*2'].every(r => new RegExp(r).test(css)) && /\.lt-row, \.layer-table \.lt-foot\s*\{[^}]*grid-template-columns:\s*repeat\(4, var\(--target\)\)/.test(css));
     // ---- the rail's CSS (commit 2) ----
     check('the rail shows only in ONE media query: from 768px (where the left tool rail turns vertical) to the table\'s threshold - a fine pointer 768 to 935px, a coarse pointer 768 to 1031px (the exact query)', ri > 0 && css.split(RQ).length === 2);
@@ -275,19 +323,31 @@ T('source', () => {
     check('the rail is NOT restyled below 768px (the phone strip is commit 4): the rail query starts at min-width: 768px and the old row\'s own rules are not touched', !/@media[^{]*max-width:\s*767px[^{]*\{[^}]*layer-rail/.test(css) && RQ.startsWith('@media (min-width: 768px)') && /,\s*\(min-width: 768px\)/.test(RQ));
     // which view shows at which width: the media queries evaluated, the pointer types and every width
     const evalMQ = (q, w, ptr) => q.replace(/^@media\s*/, '').replace(/\s*\{$/, '').split(',').some(list => list.split(' and ').every(c => { const m = c.trim().match(/^\((min-width|max-width|pointer):\s*(\w+?)(px)?\)$/); if (!m) throw new Error('unknown condition ' + c); return m[1] === 'min-width' ? w >= +m[2] : m[1] === 'max-width' ? w <= +m[2] : ptr === m[2]; }));
-    let overlap = 0, gaps = 0, below = 0, fits = true; const widths = []; for (let w = 300; w <= 1600; w++) widths.push(w);
+    const SQ = '@media (max-width: 767px) {', sqi = css.indexOf(SQ);
+    let sdepth = 0, send = sqi + SQ.length; for (; send < css.length; send++) { if (css[send] === '{') sdepth++; else if (css[send] === '}') { if (!sdepth) break; sdepth--; } }
+    // the strip's rule is the one inside `@media (max-width: 767px)` that starts with `.layer-strip {` (other rules use that query too: the phone rail rows)
+    const stripBlocks = []; { let at = 0; for (;;) { const k = css.indexOf(SQ, at); if (k < 0) break; let d = 0, e = k + SQ.length; for (; e < css.length; e++) { if (css[e] === '{') d++; else if (css[e] === '}') { if (!d) break; d--; } } stripBlocks.push(css.slice(k + SQ.length, e)); at = e; } }
+    const stripInside = stripBlocks.filter(b => /\.layer-strip\s*\{/.test(b)).join('\n');
+    const stripShows = (w, ptr) => stripInside !== '' && evalMQ(SQ, w, ptr);
+    let overlap = 0, gaps = 0, fits = true; const widths = []; for (let w = 300; w <= 1600; w++) widths.push(w);
+    const shown = (w, ptr) => [stripShows(w, ptr), evalMQ(RQ, w, ptr), evalMQ(MQ, w, ptr)].filter(Boolean).length;
     for (const ptr of ['fine', 'coarse']) for (const w of widths) {
-        const t = evalMQ(MQ, w, ptr), r = evalMQ(RQ, w, ptr);
-        if (t && r) overlap++;
-        if (w >= 768 && !t && !r) gaps++;
-        if (w < 768 && (t || r)) below++;
+        const t = evalMQ(MQ, w, ptr), r = evalMQ(RQ, w, ptr), n = shown(w, ptr);
+        if (n > 1) overlap++;
+        if (n === 0) gaps++;
         const target = ptr === 'fine' ? 36 : 48, free = (w - 560) / 2 - 24;   // the free width right of the canvas, the 24px gutter taken off
         if (r && free < target + 8) fits = false;
         if (t && free < 4 * target + 3 * 4 + 8) fits = false;
     }
-    check('which view shows (the queries evaluated for both pointer types at every width 300..1600): never both (' + overlap + ' overlaps), always exactly one from 768px (' + gaps + ' gaps), none below 768px (' + below + ')', overlap === 0 && gaps === 0 && below === 0);
+    check('which view shows (the three queries evaluated for both pointer types at every width 300..1600): never two at once (' + overlap + ' overlaps) and always exactly one (' + gaps + ' widths with none)', overlap === 0 && gaps === 0);
     check('the arithmetic: wherever the rail shows, (W - 560) / 2 - 24 holds the button plus 8px (36 + 8 fine, 48 + 8 coarse); wherever the table shows, its 4 columns plus 8px (the canvas never moves, nothing overlaps it)', fits === true);
-    check('the handover is exact: a fine pointer 935px = rail, 936px = table; a coarse pointer 1031px = rail, 1032px = table; 767px = neither (the old row)', evalMQ(RQ, 935, 'fine') && !evalMQ(MQ, 935, 'fine') && evalMQ(MQ, 936, 'fine') && !evalMQ(RQ, 936, 'fine') && evalMQ(RQ, 1031, 'coarse') && !evalMQ(MQ, 1031, 'coarse') && evalMQ(MQ, 1032, 'coarse') && !evalMQ(RQ, 1032, 'coarse') && !evalMQ(RQ, 767, 'fine') && !evalMQ(RQ, 767, 'coarse') && evalMQ(RQ, 768, 'fine') && evalMQ(RQ, 768, 'coarse'));
+    check('the handovers are exact: a fine pointer 935px = rail, 936px = table; a coarse pointer 1031px = rail, 1032px = table; 767px = the strip, 768px = the rail, for BOTH pointer types', evalMQ(RQ, 935, 'fine') && !evalMQ(MQ, 935, 'fine') && evalMQ(MQ, 936, 'fine') && !evalMQ(RQ, 936, 'fine') && evalMQ(RQ, 1031, 'coarse') && !evalMQ(MQ, 1031, 'coarse') && evalMQ(MQ, 1032, 'coarse') && !evalMQ(RQ, 1032, 'coarse') && ['fine', 'coarse'].every(p => stripShows(767, p) && !evalMQ(RQ, 767, p) && !stripShows(768, p) && evalMQ(RQ, 768, p) && stripShows(320, p) && !stripShows(1600, p)));
+    // ---- the strip's CSS and markup (commit 4) ----
+    check('the strip is hidden by default (.layer-strip { display: none }) outside the query; inside `@media (max-width: 767px)` it is a flex column with an 8px gap (var(--gap)) taking a FULL LINE of the phone\'s wrapping row (flex: 0 0 100%), min-width: 0 and border-box - for both pointer types (the query has no pointer condition)', /\.layer-strip\s*\{\s*display:\s*none;\s*\}/.test(css.replace(stripInside, '')) && /\.layer-strip\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*column[^}]*gap:\s*var\(--gap\)[^}]*flex:\s*0 0 100%[^}]*min-width:\s*0[^}]*box-sizing:\s*border-box/.test(stripInside) && !/pointer/.test(SQ));
+    check('the strip\'s rows: each group is a flex ROW with an 8px gap; the chips column scrolls SIDEWAYS (overflow-x: auto, min-width: 0, no scrollbar) with 4px padding and an equal negative margin for the focus ring; "+" and the Base chip are not in it', /\.layer-strip \.lr-group\s*\{[^}]*flex-direction:\s*row[^}]*gap:\s*var\(--gap\)/.test(css) && /\.layer-strip \.lr-chips\s*\{[^}]*flex-direction:\s*row[^}]*gap:\s*var\(--gap\)[^}]*padding:\s*4px[^}]*margin:\s*-4px[^}]*overflow-x:\s*auto[^}]*min-width:\s*0[^}]*scrollbar-width:\s*none/.test(css) && !/\.layer-strip \.lr-chips\s*\{[^}]*overflow-y/.test(css));
+    check('the strip shares the table\'s and the rail\'s disabled and dimmed styles and the chip font', /\.layer-strip \.icon-btn\[aria-disabled="true"\]/.test(css) && /\.layer-strip \.lt-chip\.is-hidden:not\(\.active\)/.test(css) && /\.layer-strip \.lt-chip \{ font: inherit/.test(css));
+    const sTag = (canvasRow.match(/<div id="layer-strip"[^>]*>/) || [''])[0];
+    check('#layer-strip is a child of the canvas row placed DIRECTLY AFTER #canvas-container and BEFORE .rail-left (the DOM order, and the tab order, is the visual order: canvas, strip, the tool rail\'s rows), role="group", aria-label "Ebenen", data-i18n, empty in the markup; the table and the rail stay the last two children', /class="layer-strip"/.test(sTag) && /role="group"/.test(sTag) && /aria-label="Ebenen"/.test(sTag) && /data-i18n="layers\.strip"/.test(sTag) && /<div id="canvas-container"><\/div>[\s\S]{0,1400}<div id="layer-strip"[^>]*><\/div>\s*<div class="rail-left">/.test(canvasRow) && (canvasRow.match(/id="layer-strip"/g) || []).length === 1 && canvasRow.indexOf('id="layer-strip"') < canvasRow.indexOf('id="layer-table"') && canvasRow.indexOf('id="layer-strip"') < canvasRow.indexOf('class="rail-left"'));
     // ---- the table's chip column: room for the focus ring (commit 3) ----
     check('the table\'s chip column (.lt-rows) has the rail\'s room for the keyboard focus ring: 4px padding and an equal negative margin (the outer width and position of the table stay: its width rule is unchanged above), still the scrolling column', /\.layer-table \.lt-rows\s*\{[^}]*padding:\s*4px[^}]*margin:\s*-4px[^}]*overflow-y:\s*auto[^}]*min-height:\s*0/.test(css));
     // ---- the confirmation dialogs (commit 3) ----
@@ -317,7 +377,7 @@ T('source', () => {
     // ui-layers.js
     check('ui-layers.js has no p5 binding (no mousePressed, no select()) and uses the shared helpers (UI.guard, UI.name, UI.setDisabled, UI.dialog, UI.onSync)', !/mousePressed|[^.\w]select\(/.test(LAYERS) && ['UI.guard(', 'UI.name(', 'UI.setDisabled(', 'UI.dialog(', 'UI.onSync('].every(s => LAYERS.includes(s)));
     check('ui-layers.js calls ONLY window.layerApi for actions (select, add, remove, setEnabled, toggleMore) and writes no sketch state itself (no assignment to activeLayer / additionalLayers / timeline, no .enabled write)', ['select', 'add', 'remove', 'setEnabled', 'toggleMore'].every(m => new RegExp('api\\(\\)\\.' + m + '\\(').test(LAYERS)) && !/(^|[;{}\n])\s*(activeLayer|additionalLayers|timeline)\s*=[^=]|\.enabled\s*=[^=]/.test(LAYERS));
-    check('ui-layers.js (rail): the eye, "..." and x of the rail go through UI.guard (a click on a disabled one shows the reason, never acts); the rail has no name line listener (the name line is bound to the table only)', /UI\.guard\(railEye,/.test(LAYERS) && /UI\.guard\(railMore,/.test(LAYERS) && /UI\.guard\(railX,/.test(LAYERS) && /table\.addEventListener\('pointerdown', touched, true\)/.test(LAYERS) && !/rail\.addEventListener\('(pointerdown|focusin|pointerover)'/.test(LAYERS));
+    check('ui-layers.js (rail and strip, built by ONE function): the eye, "..." and x go through UI.guard (a click on a disabled one shows the reason, never acts); neither view has a name line listener (the name line is bound to the table only)', /UI\.guard\(v\.eye,/.test(LAYERS) && /UI\.guard\(v\.more,/.test(LAYERS) && /UI\.guard\(v\.x,/.test(LAYERS) && /table\.addEventListener\('pointerdown', touched, true\)/.test(LAYERS) && !/(rail|strip|container|v\.container)\.addEventListener\('(pointerdown|focusin|pointerover)'/.test(LAYERS) && /if \(rail\) buildNarrow\('rail', rail\);/.test(LAYERS) && /if \(strip\) buildNarrow\('strip', strip\);/.test(LAYERS));
     check('ui-layers.js (rail): the actions are those of the ACTIVE sheet (model.actions.index) and a fourth button is left for the diamond (commented, not drawn)', /lastModel \? lastModel\.actions\.index : null/.test(LAYERS) && /a fourth button, the diamond, comes with the timeline commit/.test(LAYERS) && !/diamond/i.test(LAYERS.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '')));
     // the block in sketch.js
     const bi = SKETCH.indexOf('    // layerApi: begin'), ei = SKETCH.indexOf('    // layerApi: end\n');
