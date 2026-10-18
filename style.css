@@ -1083,7 +1083,16 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
     gap: var(--gap);
   }
   .rail-left { display: contents; }
-  .canvas-row #canvas-container { flex: 0 0 100%; order: 0; }
+  /* The canvas is a square of --canvas-size (560px, or the row when that is narrower), centred in the row: flex-basis 100% used to beat the container's own width, so from 593px (the
+     row, 100vw - 32px, wider than 560px) the container filled the row and the 1200 x 1200 bitmap was stretched to row x 560. The side margins are what is left of the row, so the container's
+     outer size stays 100%: nothing else joins its line (the rail rows, and in the Farbe tab the groups that are display: contents, still wrap below it). Up to 592px the row is not wider than
+     --canvas-size and every term is 0 or 100%: identical to the old rule. */
+  .canvas-row #canvas-container {
+    flex: 0 0 min(var(--canvas-size), 100%);
+    margin-left: calc((100% - min(var(--canvas-size), 100%)) / 2);
+    margin-right: calc((100% - min(var(--canvas-size), 100%)) / 2);
+    order: 0;
+  }
   /* Two rows, each wrapping between groups only: a group is one flex item. At 320px the 6 icons of A + B + More (328px) do not fit the 288px row, so A (3) and B + More (3)
      wrap separately; C + D + E (5 icons, 272px) fits. B and More stay together (.rail-bm). */
   .rail-top, .rail-bottom { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); flex: 0 0 100%; }
