@@ -1161,6 +1161,7 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
 .layer-table .lt-chip { grid-column: 1; }
 .layer-table .lt-chip, .layer-rail .lt-chip, .layer-strip .lt-chip { font: inherit; font-size: var(--size-base); font-variant-numeric: tabular-nums; }
 .layer-table .lt-eye { grid-column: 2; }
+.layer-table .lt-dia { grid-column: 3; }
 .layer-table .lt-x { grid-column: 4; }
 .layer-table .lt-add { grid-column: 1; }
 .layer-table .lt-more { grid-column: 2; position: relative; }
@@ -1290,6 +1291,69 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
 }
 .layer-strip .lr-chips::-webkit-scrollbar { display: none; }
 .layer-strip .lt-more { position: relative; }
+
+/* === The timeline strip (layer-table commit 6; ui-timeline.js builds it) ==================================================================================================
+   Play, the scrub bar, the Include net switch and "Mehr", in one row under the canvas. Below 768px it is a flex item of .canvas-row's wrapping row (a full line, between the canvas and the layer
+   strip: the DOM order); from 768px it is the SECOND grid row, in the canvas column, as wide as the canvas (--canvas-size) and centred: the canvas row stays where it was (row 1), so the canvas
+   does not move. The buttons are --target high (36px fine, 48px coarse: .canvas-row .icon-btn); the bar takes the rest. The scrub bar is a real <input type="range"> as high as a button
+   (a touch target) with the slider look of the other sliders (6px track, 14px thumb); the diamond marks sit on top of it at their time positions (decorative: aria-hidden, no pointer events),
+   computed from --f (0..1) over the track's length, which is the bar minus the thumb. The old timeline controls are hidden for good here (their DOM stays until a later commit; their handlers
+   are what layerApi runs): Add to Timeline (the layers' diamonds replace it), the old Include net, the old Play row, the old progress input and Remove Timeline. #timeline-group (the keyframe
+   list, the net status, the pairing editor, the status line, "Zeitleiste entfernen") is shown only while "Mehr" is open. */
+#btn-add-to-timeline, #btn-timeline-include-net, #timeline-playback-controls, #timeline-progress-input, #btn-remove-timeline { display: none; }
+#timeline-group:not(.ts-open) { display: none; }
+.timeline-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  box-sizing: border-box;
+  min-width: 0;
+  flex: 0 0 100%;
+}
+.timeline-strip .ts-bar { position: relative; flex: 1 1 auto; min-width: 0; height: var(--target); --ts-thumb: 14px; }
+.timeline-strip .ts-range {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  position: relative;
+  width: 100%;
+  height: var(--target);
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  touch-action: manipulation;
+}
+.timeline-strip .ts-range::-webkit-slider-runnable-track { height: 6px; background: var(--slider-track-bg); border-radius: 3px; }
+.timeline-strip .ts-range::-moz-range-track { height: 6px; background: var(--slider-track-bg); border-radius: 3px; }
+.timeline-strip .ts-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: var(--ts-thumb); height: var(--ts-thumb); margin-top: -4px; border-radius: 50%; background: var(--slider-thumb-bg); }
+.timeline-strip .ts-range::-moz-range-thumb { width: var(--ts-thumb); height: var(--ts-thumb); border: none; border-radius: 50%; background: var(--slider-thumb-bg); }
+.timeline-strip .ts-range[aria-disabled="true"] { opacity: 0.4; cursor: not-allowed; }
+.timeline-strip .ts-marks { position: absolute; left: 0; right: 0; top: 0; height: 100%; pointer-events: none; }
+.timeline-strip .ts-mark {
+  position: absolute;
+  top: 3px;
+  left: calc(var(--ts-thumb) / 2 + var(--f, 0) * (100% - var(--ts-thumb)));
+  transform: translateX(-50%);
+  line-height: 0;
+  color: var(--text);
+}
+.timeline-strip .icon-btn[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-disabled); cursor: not-allowed; }
+.timeline-strip .ts-net, .timeline-strip .ts-more { position: relative; }
+.timeline-strip .ts-net.has-state::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+@media (min-width: 768px) {
+  .timeline-strip { flex: none; grid-column: 2; grid-row: 2; width: var(--canvas-size); justify-self: center; }
+}
 
 /* Keyboard focus: its own 2px outline with a 2px offset, never the same
    as the active state (black fill). :focus-visible = keyboard only. */
