@@ -1,7 +1,7 @@
 /*
  * The layer table (layer-table commit 1). UI only. A PURE VIEW of the sheets: it is rebuilt from additionalLayers, activeLayer and timeline (core/state.js globals) on every UI.onSync tick -
  * after a signature comparison, so nothing is built while nothing changed - and writes no state of its own. Every action goes through window.layerApi (sketch.js: the same call sequences the
- * old tab / "+ Layer" / remove handlers run), so the old layer row (still in the DOM, hidden by style.css where the table shows) and the table can never disagree.
+ * old tab / "+ Layer" / remove handlers run), so the old layer row (still in the DOM, hidden by style.css at every width) and the views can never disagree.
  *
  *   rows      the Base first (only its chip: a stack icon), then one row per layer in additionalLayers order WITHOUT the timeline's playback layer. The chip shows a RUNNING number
  *             (layerDisplayNumber), not the array index + 1: the playback layer takes an array slot, and with the index the numbers jumped when it appeared or went away.
@@ -21,6 +21,9 @@
  * nothing jumps. The rail has no name line (the black chip shows the active sheet; the names are the aria-label and title of every button). Table and rail are both built on every
  * tick; style.css shows ONE of them (display: none on the other: never both in the tab order or the accessibility tree).
  *
+ * The STRIP (layer-table commit 4) is the third view, for the phone (below 768px): two rows under the canvas, built by the SAME function as the rail (buildNarrow): row 1 = the Base chip (fixed),
+ * the layer chips (they scroll sideways) and "+" (fixed); row 2 = the actions of the active sheet, disabled with a reason on the Base. Exactly one of table, rail and strip shows at every width.
+ *
  * The model (layerDisplayNumber, layerRemoveNeedsConfirm, layerTableModel, tableSignature, revealDelta) is pure and loadable without a DOM (tools/ui/test-layer-table.js). The German texts are keyed
  * (layers.*); the dictionary comes in a later phase.
  */
@@ -29,6 +32,7 @@
   const T = {
     'layers.table': 'Ebenen',
     'layers.rail': 'Ebenen',
+    'layers.strip': 'Ebenen',
     'layers.eye.none': 'Ebene sichtbar',
     'layers.x.none': 'Ebene entfernen',
     'layers.base': 'Basis',
@@ -116,6 +120,7 @@
   const table = document.getElementById('layer-table');
   if (!table) return;
   const rail = document.getElementById('layer-rail');   // the narrow view (commit 2); a page without it just has the table
+  const strip = document.getElementById('layer-strip');   // the phone view (commit 4)
 
   const ICON = {
     stack: '<svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 L21 8 L12 13 L3 8 Z"/><path d="M3 12 L12 17 L21 12"/><path d="M3 16 L12 21 L21 16"/></svg>',
@@ -159,37 +164,42 @@
   UI.name(addBtn, T['layers.add']);
   UI.name(moreBtn, T['layers.more']);
 
-  // the rail: group 1 = the chips (scrolling) with "+" under them, group 2 = the actions of the active sheet. Static cells are built once; the chips with the rows.
-  let railBase = null, railChips = null, railAdd = null, railEye = null, railMore = null, railX = null;
-  if (rail) {
-    railBase = cell('lt-chip lr-chip lr-base', 'chip:base', null);   // outside the scrolling column, like "+": it never scrolls out of view
-    railBase.addEventListener('click', chipHandler(railBase));
-    railChips = el('div', 'lr-chips');
-    railAdd = cell('lt-add lr-add', 'add', addLayerNow);
-    railAdd.innerHTML = ICON.plus;
+  // The narrow views: the rail (commit 2, a column at the right gutter) and the strip (commit 4, two rows under the canvas below 768px). The SAME structure and class names; style.css lays them out.
+  // Group 1 = the Base chip (fixed), the scrolling column with the layer chips, "+" (fixed); group 2 = the actions of the active sheet. Static cells are built once; the chips with the rows.
+  const views = {};
+  function buildNarrow(name, container) {
+    const v = { name: name, container: container, horizontal: name === 'strip', lastActive: null };
+    v.base = cell('lt-chip lr-chip lr-base', 'chip:base', null);   // outside the scrolling column, like "+": it never scrolls out of view
+    v.base.addEventListener('click', chipHandler(v.base));
+    v.chips = el('div', 'lr-chips');
+    v.add = cell('lt-add lr-add', 'add', addLayerNow);
+    v.add.innerHTML = ICON.plus;
     const group1 = el('div', 'lr-group lr-g1'), group2 = el('div', 'lr-group lr-g2');
-    railEye = cell('lr-eye', 'eye', null);
-    railMore = cell('lt-more lr-more', 'more', null);
-    railMore.innerHTML = ICON.more;
-    railMore.classList.add('nav-more');
-    railMore.setAttribute('aria-controls', 'layer-more-panel');
-    railX = cell('lr-x', 'x', null);
-    railX.innerHTML = ICON.x;
-    UI.guard(railEye, function () {
+    v.eye = cell('lr-eye', 'eye', null);
+    v.more = cell('lt-more lr-more', 'more', null);
+    v.more.innerHTML = ICON.more;
+    v.more.classList.add('nav-more');
+    v.more.setAttribute('aria-controls', 'layer-more-panel');
+    v.x = cell('lr-x', 'x', null);
+    v.x.innerHTML = ICON.x;
+    UI.guard(v.eye, function () {
       const i = lastModel ? lastModel.actions.index : null, layers = layersNow();
       if (api() && i !== null && layers[i]) api().setEnabled(i, !layers[i].enabled);
       sync();
     });
-    UI.guard(railMore, moreNow);
-    UI.guard(railX, function () { const i = lastModel ? lastModel.actions.index : null; if (i !== null) askRemove(i, 'rail'); });
-    group1.appendChild(railBase); group1.appendChild(railChips); group1.appendChild(railAdd);
-    group2.appendChild(railEye); group2.appendChild(railMore); group2.appendChild(railX);   // a fourth button, the diamond, comes with the timeline commit
-    rail.appendChild(group1); rail.appendChild(group2);
-    UI.name(railAdd, T['layers.add']);
-    UI.name(railMore, T['layers.more']);
-    UI.name(railEye, T['layers.eye.none']);
-    UI.name(railX, T['layers.x.none']);
+    UI.guard(v.more, moreNow);
+    UI.guard(v.x, function () { const i = lastModel ? lastModel.actions.index : null; if (i !== null) askRemove(i, name); });
+    group1.appendChild(v.base); group1.appendChild(v.chips); group1.appendChild(v.add);
+    group2.appendChild(v.eye); group2.appendChild(v.more); group2.appendChild(v.x);   // a fourth button, the diamond, comes with the timeline commit
+    container.appendChild(group1); container.appendChild(group2);
+    UI.name(v.add, T['layers.add']);
+    UI.name(v.more, T['layers.more']);
+    UI.name(v.eye, T['layers.eye.none']);
+    UI.name(v.x, T['layers.x.none']);
+    views[name] = v;
   }
+  if (rail) buildNarrow('rail', rail);
+  if (strip) buildNarrow('strip', strip);
 
   // ---- the remove dialog (like "Neu anfangen") --------------------------------------------------------------------------------------------------
   const overlay = document.getElementById('layer-remove-overlay'), cancelBtn = document.getElementById('cancel-layer-remove'), confirmBtn = document.getElementById('confirm-layer-remove');
@@ -210,19 +220,19 @@
   function activeChipKey() { return lastModel ? 'chip:' + (lastModel.rows.filter(function (r) { return r.active; })[0] || { index: 'base' }).index : 'chip:base'; }
   function focusActiveChip(view) { const b = findCell(activeChipKey(), view) || findCell('chip:base', view); if (b && b.focus) b.focus(); }
   function focusAfterDialog() {
-    // cancelled: back to the x that opened it (the table's x of that row, the rail's x); removed: the active sheet's chip in the same view (the removed row is gone)
+    // cancelled: back to the x that opened it (the table's x of that row, the rail's or the strip's x); removed: the active sheet's chip in the same view (the removed row is gone)
     const view = pendingView;
-    const want = wasCancelled && pendingIndex !== null ? (view === 'rail' ? 'x' : 'x:' + pendingIndex) : activeChipKey();
+    const want = wasCancelled && pendingIndex !== null ? (view === 'table' ? 'x:' + pendingIndex : 'x') : activeChipKey();
     const b = findCell(want, view) || findCell('chip:base', view);
     pendingIndex = null;
     if (b && b.focus) b.focus();
   }
   function findCell(key, view) {
-    if (view === 'rail') {
-      if (!rail) return null;
-      const fixed = [railBase, railAdd, railEye, railMore, railX];
+    const v = views[view];
+    if (v) {
+      const fixed = [v.base, v.add, v.eye, v.more, v.x];
       for (let f = 0; f < fixed.length; f++) if (fixed[f].dataset.key === key) return fixed[f];
-      const cs = railChips.children;
+      const cs = v.chips.children;
       for (let c = 0; c < cs.length; c++) if (cs[c].dataset.key === key) return cs[c];
       return null;
     }
@@ -299,49 +309,57 @@
     const a = typeof document.activeElement !== 'undefined' ? document.activeElement : null;
     return a && container.contains && container.contains(a) && a.dataset ? a.dataset.key : null;
   }
-  // keep the active chip inside the rail's scrolling group (a click on iOS does not focus a button, so the browser's own scroll-into-view does not run)
-  function revealActive() {
-    if (!railChips || !railChips.getBoundingClientRect) return;
+  // keep the active chip inside a narrow view's scrolling column (a click on iOS does not focus a button, so the browser's own scroll-into-view does not run); the strip scrolls sideways
+  function revealActive(v) {
+    const col = v && v.chips;
+    if (!col || !col.getBoundingClientRect) return;
     let active = null;
-    const cs = railChips.children;
+    const cs = col.children;
     for (let c = 0; c < cs.length; c++) if (cs[c].classList.contains('active')) active = cs[c];
     if (!active) return;
-    const cr = active.getBoundingClientRect(), vr = railChips.getBoundingClientRect();
-    const pad = (typeof getComputedStyle === 'function' ? parseFloat(getComputedStyle(railChips).paddingTop) : 0) || 0;
-    const d = revealDelta(cr.top, cr.bottom, vr.top + pad, vr.bottom - pad);
-    if (d) railChips.scrollTop += d;
+    const cr = active.getBoundingClientRect(), vr = col.getBoundingClientRect();
+    const cstyle = typeof getComputedStyle === 'function' ? getComputedStyle(col) : null;
+    if (v.horizontal) {
+      const pad = (cstyle ? parseFloat(cstyle.paddingLeft) : 0) || 0;
+      const d = revealDelta(cr.left, cr.right, vr.left + pad, vr.right - pad);
+      if (d) col.scrollLeft += d;
+    } else {
+      const pad = (cstyle ? parseFloat(cstyle.paddingTop) : 0) || 0;
+      const d = revealDelta(cr.top, cr.bottom, vr.top + pad, vr.bottom - pad);
+      if (d) col.scrollTop += d;
+    }
   }
-  function renderRail(model, rebuilt, railFocus) {
+  function renderNarrow(v, model, rebuilt, focusKey) {
     const rs = model.rows;   // rs[0] is the Base (the fixed chip); the scrolling column holds the layers only
     if (rebuilt) {
-      railChips.textContent = '';
-      rs.slice(1).forEach(function (row) { railChips.appendChild(buildRailChip(row)); });
+      v.chips.textContent = '';
+      rs.slice(1).forEach(function (row) { v.chips.appendChild(buildRailChip(row)); });
     }
-    patchChip(railBase, rs[0], model.cells['chip:base']);
-    const cs = railChips.children;
+    patchChip(v.base, rs[0], model.cells['chip:base']);
+    const cs = v.chips.children;
     for (let i = 0; i < cs.length; i++) patchChip(cs[i], rs[i + 1], model.cells[cs[i].dataset.key]);
     const a = model.actions;
     const want = a.index === null || a.eye.visible ? 'on' : 'off';
-    if (railEye.dataset.body !== want) { railEye.dataset.body = want; railEye.innerHTML = want === 'on' ? ICON.eyeOn : ICON.eyeOff; }
-    setIf(railEye, 'aria-pressed', a.eye.visible ? 'true' : 'false');
-    if (railEye.dataset.label !== a.eye.label) { railEye.dataset.label = a.eye.label; UI.name(railEye, a.eye.label); }
-    UI.setDisabled(railEye, a.eye.reason);
-    if (railX.dataset.label !== a.x.label) { railX.dataset.label = a.x.label; UI.name(railX, a.x.label); }
-    UI.setDisabled(railX, a.x.reason);
-    setIf(railMore, 'aria-expanded', model.more.open ? 'true' : 'false');
-    if (railMore.classList.contains('has-state') !== model.more.dot) railMore.classList.toggle('has-state', model.more.dot);
-    UI.setDisabled(railMore, model.more.reason);
-    if (rebuilt && railFocus) { const b = findCell(railFocus, 'rail'); if (b && b.focus) b.focus(); }
+    if (v.eye.dataset.body !== want) { v.eye.dataset.body = want; v.eye.innerHTML = want === 'on' ? ICON.eyeOn : ICON.eyeOff; }
+    setIf(v.eye, 'aria-pressed', a.eye.visible ? 'true' : 'false');
+    if (v.eye.dataset.label !== a.eye.label) { v.eye.dataset.label = a.eye.label; UI.name(v.eye, a.eye.label); }
+    UI.setDisabled(v.eye, a.eye.reason);
+    if (v.x.dataset.label !== a.x.label) { v.x.dataset.label = a.x.label; UI.name(v.x, a.x.label); }
+    UI.setDisabled(v.x, a.x.reason);
+    setIf(v.more, 'aria-expanded', model.more.open ? 'true' : 'false');
+    if (v.more.classList.contains('has-state') !== model.more.dot) v.more.classList.toggle('has-state', model.more.dot);
+    UI.setDisabled(v.more, model.more.reason);
+    if (rebuilt && focusKey) { const b = findCell(focusKey, v.name); if (b && b.focus) b.focus(); }
     const key = activeChipKey();
-    if (rebuilt || key !== lastActiveKey) { lastActiveKey = key; revealActive(); }
+    if (rebuilt || key !== v.lastActive) { v.lastActive = key; revealActive(v); }
   }
   function render(model) {
     const key = model.rows.map(function (r) { return r.key; }).join(',');
     const rebuilt = key !== structKey;
-    let railFocus = null;
+    const focusKeys = {};
     if (rebuilt) {
       const focused = focusedKey(table);
-      railFocus = rail ? focusedKey(rail) : null;
+      Object.keys(views).forEach(function (n) { focusKeys[n] = focusedKey(views[n].container); });
       structKey = key;
       rowsEl.textContent = '';
       model.rows.forEach(function (row) { rowsEl.appendChild(buildRow(row)); });
@@ -353,7 +371,7 @@
     setIf(moreBtn, 'aria-expanded', model.more.open ? 'true' : 'false');
     if (moreBtn.classList.contains('has-state') !== model.more.dot) moreBtn.classList.toggle('has-state', model.more.dot);
     UI.setDisabled(moreBtn, model.more.reason);
-    if (rail) renderRail(model, rebuilt, railFocus);
+    Object.keys(views).forEach(function (n) { renderNarrow(views[n], model, rebuilt, focusKeys[n]); });
   }
 
   // ---- the name line (the table only: the rail has none) -------------------------------------------------------------------------------------------
@@ -391,6 +409,6 @@
     refreshName();
   }
   UI.onSync(sync);
-  if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('resize', revealActive);   // the rail may have been hidden when the active chip changed
+  if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('resize', function () { Object.keys(views).forEach(function (n) { revealActive(views[n]); }); });   // a narrow view may have been hidden when the active chip changed
   sync();
 })(typeof window !== 'undefined' ? window : globalThis);

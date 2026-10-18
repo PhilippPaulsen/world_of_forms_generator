@@ -1141,7 +1141,7 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
    final form (chip, eye, diamond, x: 4 x --target + 3 gaps of 4px = 156px at a fine pointer, 204px at a coarse one); commit 1 draws three of them (chip in column 1, eye in 2, x in 4)
    and reserves the third, so the width, and with it the thresholds, stay valid when the diamond column comes. It sits at the right gutter, absolutely positioned (the canvas stays
    centred: the free width right of the canvas is (W - 560) / 2 - 24, the table needs its width + an 8px gap): a fine pointer from 936px, a coarse pointer from 1032px. Below
-   that the old layer row is the only one (display: none here, never removed: its handlers are what layerApi (sketch.js) runs). The old Mehr toggle row is hidden with it; "..." toggles
+   that the rail (768px up) or the strip (below 768px) shows. The old layer row is display: none at every width (a rule of its own, see the strip block; never removed: its handlers are what layerApi (sketch.js) runs); "..." toggles
    the same block. */
 .layer-table { display: none; }
 @media (pointer: fine) and (min-width: 936px), (pointer: coarse) and (min-width: 1032px) {
@@ -1155,20 +1155,17 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
     width: calc(4 * var(--target) + 3 * var(--rail-gap));
     max-height: var(--canvas-size);
   }
-  /* the old row: the Base button, the tabs and "+ Layer" (#layer-row), the Mehr toggle row; the group goes with its row unless the Paste status line inside it has text */
-  #layer-row, #layer-more-row { display: none; }
-  #layer-row-group:has(> #paste-pattern-status:empty) { display: none; }
 }
 .layer-table .lt-rows { display: flex; flex-direction: column; gap: var(--rail-gap); padding: 4px; margin: -4px; overflow-y: auto; min-height: 0; flex: 0 1 auto; }
 .layer-table .lt-row, .layer-table .lt-foot { display: grid; grid-template-columns: repeat(4, var(--target)); gap: var(--rail-gap); }
 .layer-table .lt-chip { grid-column: 1; }
-.layer-table .lt-chip, .layer-rail .lt-chip { font: inherit; font-size: var(--size-base); font-variant-numeric: tabular-nums; }
+.layer-table .lt-chip, .layer-rail .lt-chip, .layer-strip .lt-chip { font: inherit; font-size: var(--size-base); font-variant-numeric: tabular-nums; }
 .layer-table .lt-eye { grid-column: 2; }
 .layer-table .lt-x { grid-column: 4; }
 .layer-table .lt-add { grid-column: 1; }
 .layer-table .lt-more { grid-column: 2; position: relative; }
-.layer-table .icon-btn[aria-disabled="true"], .layer-rail .icon-btn[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-disabled); cursor: not-allowed; }
-.layer-table .lt-chip.is-hidden:not(.active), .layer-rail .lt-chip.is-hidden:not(.active) { color: var(--color-secondary); border-color: var(--color-secondary); }
+.layer-table .icon-btn[aria-disabled="true"], .layer-rail .icon-btn[aria-disabled="true"], .layer-strip .icon-btn[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-disabled); cursor: not-allowed; }
+.layer-table .lt-chip.is-hidden:not(.active), .layer-rail .lt-chip.is-hidden:not(.active), .layer-strip .lt-chip.is-hidden:not(.active) { color: var(--color-secondary); border-color: var(--color-secondary); }
 .layer-table .lt-foot { position: relative; margin-top: var(--rail-group-gap); flex: none; }
 .layer-table .lt-foot::before {
   content: "";
@@ -1200,8 +1197,7 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
 /* === The layer rail (layer-table commit 2; ui-layers.js builds it) ==================================================================================================
    The narrow view of the same model: ONE column, as wide as a button (--target: 36px fine, 48px coarse), at the right gutter (right: 24px, like the left tool rail) and level with the
    canvas top (top: var(--gap)); absolutely positioned, so the canvas stays centred. From 768px (the width where the left tool rail turns vertical, so both rails appear together) up to the
-   table's threshold: a fine pointer 768 to 935px, a coarse pointer 768 to 1031px; there the table shows instead (above) and below 768px the old layer row stays as it is (the phone layout:
-   the strip of a later commit). 768px leaves 104px right of the canvas (24px gutter included): the rail needs --target + 8px. Wherever the rail shows, the old row is hidden like under the table.
+   table's threshold: a fine pointer 768 to 935px, a coarse pointer 768 to 1031px; there the table shows instead (above) and below 768px the strip (commit 4, below) shows. 768px leaves 104px right of the canvas (24px gutter included): the rail needs --target + 8px. The old row is hidden at every width (the strip block).
    Group 1 = the chips (.lr-chips, scrolls inside the rail's max-height; "+" sits under it, outside the scrolling part), a hairline, group 2 = the actions of the active sheet. The scrolling
    part has 4px of padding (and an equal negative margin) so the keyboard focus ring of an edge chip is not clipped by its overflow. */
 .layer-rail { display: none; }
@@ -1216,8 +1212,6 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
     width: var(--target);
     max-height: var(--canvas-size);
   }
-  #layer-row, #layer-more-row { display: none; }
-  #layer-row-group:has(> #paste-pattern-status:empty) { display: none; }
 }
 .layer-rail .lr-group { display: flex; flex-direction: column; gap: var(--rail-gap); }
 .layer-rail .lr-g1 { min-height: 0; flex: 0 1 auto; }
@@ -1262,6 +1256,40 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
 @media (hover: hover) {
   .dialog-content .restart-actions button:hover { background: var(--hover-bg); }
 }
+
+/* === The layer strip (layer-table commit 4; ui-layers.js builds it) ==================================================================================================
+   The phone view of the same model: two rows of --target buttons with 8px gaps, left-aligned at the gutter (.canvas-row's 16px padding), directly under the canvas. Shown below 768px for
+   BOTH pointer types (from 768px the rail or the table shows). Row 1 (.lr-g1) = the Base chip and "+" (fixed) around the layer chips, which scroll SIDEWAYS (.lr-chips: overflow-x: auto, no
+   scrollbar, 4px of padding and an equal negative margin so the focus ring of an edge chip is not clipped); row 2 (.lr-g2) = the eye, "..." and the remove x of the active sheet (a
+   fourth slot is for the diamond, a later commit). It is a flex item of .canvas-row (the phone's wrapping flex row) and takes a full line; the tool rail's rows follow it. The old layer row
+   (#layer-row, #layer-more-row) is hidden at EVERY width now (below); its DOM stays until a later commit, its handlers are what layerApi runs. */
+#layer-row, #layer-more-row { display: none; }
+#layer-row-group:has(> #paste-pattern-status:empty) { display: none; }
+.layer-strip { display: none; }
+@media (max-width: 767px) {
+  .layer-strip {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap);
+    flex: 0 0 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+}
+.layer-strip .lr-group { display: flex; flex-direction: row; align-items: center; gap: var(--gap); min-width: 0; }
+.layer-strip .lr-chips {
+  display: flex;
+  flex-direction: row;
+  gap: var(--gap);
+  padding: 4px;
+  margin: -4px;
+  overflow-x: auto;
+  min-width: 0;
+  flex: 0 1 auto;
+  scrollbar-width: none;
+}
+.layer-strip .lr-chips::-webkit-scrollbar { display: none; }
+.layer-strip .lt-more { position: relative; }
 
 /* Keyboard focus: its own 2px outline with a 2px offset, never the same
    as the active state (black fill). :focus-visible = keyboard only. */
