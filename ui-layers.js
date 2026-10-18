@@ -113,7 +113,14 @@
     for (let i = 0; i < layers.length; i++) s += (layers[i].isTimelinePlayback ? 'p' : (layers[i].enabled ? 'v' : 'h') + (isKeyframe(st.timeline, i) ? 'k' : '')) + ',';
     return s;
   }
-  root.layerTable = { layerDisplayNumber: layerDisplayNumber, layerRemoveNeedsConfirm: layerRemoveNeedsConfirm, layerTableModel: layerTableModel, tableSignature: tableSignature, revealDelta: revealDelta, T: T };
+  // How far the page must scroll so that the WHOLE rare-settings block (the union rectangle of its visible groups, and the viewport height in; the scroll in px out) is inside the viewport: 0 when it
+  // is, negative when it starts above the top, positive when it ends below the bottom. A block taller than the viewport cannot fit: its top edge goes to the viewport top with an 8px margin.
+  const PANEL_MARGIN = 8;
+  function panelRevealDelta(rect, viewportHeight) {
+    if (rect.bottom - rect.top > viewportHeight) return rect.top - PANEL_MARGIN;
+    return revealDelta(rect.top, rect.bottom, 0, viewportHeight);
+  }
+  root.layerTable = { layerDisplayNumber: layerDisplayNumber, layerRemoveNeedsConfirm: layerRemoveNeedsConfirm, layerTableModel: layerTableModel, tableSignature: tableSignature, revealDelta: revealDelta, panelRevealDelta: panelRevealDelta, T: T };
 
   // ---- the DOM ----------------------------------------------------------------------------------------------------------------------------------
   if (typeof document === 'undefined' || !document.getElementById || typeof UI === 'undefined') return;
@@ -149,7 +156,28 @@
   function indexOf(b) { const k = b.dataset.key || ''; const v = k.slice(k.indexOf(':') + 1); return v === 'base' ? 'base' : parseInt(v, 10); }
   function layersNow() { return (typeof additionalLayers !== 'undefined') ? additionalLayers : []; }
   function addLayerNow() { if (api()) api().add(); sync(); }
-  function moreNow() { if (api()) api().toggleMore(); sync(); }
+  function moreNow() { if (api()) api().toggleMore(); sync(); if (lastModel && lastModel.more.open) revealMore(); }
+  // The block opens in the controls container, below the layer view and the tool rail's rows: on a phone it can start at or below the fold. When it opens, scroll the page just enough to bring the WHOLE
+  // block into view (the union of its visible groups; one that is taller than the viewport is aligned to the top with a margin); smooth unless the user prefers reduced motion; nothing when it is
+  // already inside. The focus stays on the "..." button (window.scrollBy moves no focus); nothing happens on close.
+  function revealMore() {
+    const panel = document.getElementById('layer-more-panel');
+    if (!panel || !panel.children || typeof window === 'undefined' || !window.scrollBy) return;
+    let top = Infinity, bottom = -Infinity;
+    for (let i = 0; i < panel.children.length; i++) {
+      const c = panel.children[i];
+      if (c.hidden || !c.getClientRects || !c.getClientRects().length) continue;
+      const r = c.getBoundingClientRect();
+      if (r.top < top) top = r.top;
+      if (r.bottom > bottom) bottom = r.bottom;
+    }
+    const vh = window.innerHeight || 0;
+    if (!vh || top === Infinity) return;
+    const delta = panelRevealDelta({ top: top, bottom: bottom }, vh);
+    if (!delta) return;
+    const reduced = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollBy({ top: delta, behavior: reduced ? 'auto' : 'smooth' });
+  }
 
   // the add and more cells (the foot) are static: built once
   const addBtn = cell('lt-add', 'add', addLayerNow);
