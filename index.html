@@ -7,7 +7,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260929bm">
+  <link rel="stylesheet" href="style.css?v=20260929bn">
   <!-- Cache-busting for the ES-module graph behind core/farborgel-selection.mjs (below). The <script src> tags in
        this file carry ?v= by hand-bump (CLAUDE.md), but a module's own `import ... from './x.mjs'` cannot: this
        import map is the one place that gives every module in that graph the same ?v= as everything else (bump it
@@ -18,11 +18,11 @@
   <script type="importmap">
     {
     "imports": {
-      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929bm",
-      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929bm",
-      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929bm",
-      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929bm",
-      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929bm"
+      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929bn",
+      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929bn",
+      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929bn",
+      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929bn",
+      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929bn"
     }
     }
   </script>
@@ -57,6 +57,7 @@
       --glass-bg: rgba(255, 255, 255, 0.25);
       --glass-border: rgba(255, 255, 255, 0.18);
       --accent: #ff3b30;
+      --danger: #d70015;   /* the destructive confirm button (text and border): 5.38:1 on --background, 4.72:1 on --hover-bg; --accent (3.55:1 on white) stays for the red Close buttons */
       --hover-bg: #f0f0f0;
 
       /* Slider colors */
@@ -71,6 +72,7 @@
       --glass-bg: rgba(40, 40, 40, 0.35);
       --glass-border: rgba(255, 255, 255, 0.15);
       --accent: #ff453a;
+      --danger: #ff453a;   /* 5.50:1 on --background (#121212), 4.21:1 on --hover-bg */
       --hover-bg: #2a2a2a;
 
       --slider-track-bg: #ddd;
@@ -1333,7 +1335,7 @@
       <p data-i18n="restart.text">Das aktuelle Muster mit allen Ebenen, Farben und der Zeitleiste wird verworfen. Das lässt sich nicht rückgängig machen.</p>
       <div class="restart-actions">
         <button id="cancel-restart" type="button" data-i18n="restart.cancel">Abbrechen</button>
-        <button id="confirm-restart" type="button" data-i18n="restart.confirm">Neu anfangen</button>
+        <button id="confirm-restart" class="dialog-danger" type="button" data-i18n="restart.confirm">Neu anfangen</button>
       </div>
     </div>
   </div>
@@ -1346,7 +1348,7 @@
       <p id="layer-remove-text"></p>
       <div class="restart-actions">
         <button id="cancel-layer-remove" type="button" data-i18n="layers.remove.cancel">Abbrechen</button>
-        <button id="confirm-layer-remove" type="button" data-i18n="layers.remove.confirm">Entfernen</button>
+        <button id="confirm-layer-remove" class="dialog-danger" type="button" data-i18n="layers.remove.confirm">Entfernen</button>
       </div>
     </div>
   </div>
@@ -1558,38 +1560,38 @@
   <div id="ui-toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260929bm"></script>
-  <script src="core/state.js?v=20260929bm"></script>
-  <script src="core/symmetry.js?v=20260929bm"></script>
-  <script src="core/curves.js?v=20260929bm"></script>
-  <script src="core/netwarp.js?v=20260929bm"></script>
-  <script src="core/tiling.js?v=20260929bm"></script>
-  <script src="core/faces.js?v=20260929bm"></script>
-  <script src="core/orbits.js?v=20260929bm"></script>
-  <script src="core/color.js?v=20260929bm"></script>
-  <script src="core/facecolor.js?v=20260929bm"></script>
-  <script src="core/farborgel-bridge.js?v=20260929bm"></script>
-  <script src="core/export.js?v=20260929bm"></script>
-  <script src="core/symmetry-toggles.js?v=20260929bm"></script>
-  <script src="core/session.js?v=20260929bm"></script>
-  <script src="core/session-apply.js?v=20260929bm"></script>
-  <script src="core/session-store.js?v=20260929bm"></script>
-  <script src="core/session-writer.js?v=20260929bm"></script>
-  <script src="core/pointer-tap.js?v=20260929bm"></script>
-  <script src="core/pick-node.js?v=20260929bm"></script>
-  <script src="sketch.js?v=20260929bm"></script>
-  <script src="nav.js?v=20260929bm"></script>
-  <script src="ui.js?v=20260929bm"></script>
-  <script src="ui-form.js?v=20260929bm"></script>
-  <script src="ui-layer.js?v=20260929bm"></script>
-  <script src="ui-layers.js?v=20260929bm"></script>
-  <script src="ui-net.js?v=20260929bm"></script>
-  <script src="ui-farbe.js?v=20260929bm"></script>
-  <script src="ui-rail.js?v=20260929bm"></script>
+  <script src="core/forms.js?v=20260929bn"></script>
+  <script src="core/state.js?v=20260929bn"></script>
+  <script src="core/symmetry.js?v=20260929bn"></script>
+  <script src="core/curves.js?v=20260929bn"></script>
+  <script src="core/netwarp.js?v=20260929bn"></script>
+  <script src="core/tiling.js?v=20260929bn"></script>
+  <script src="core/faces.js?v=20260929bn"></script>
+  <script src="core/orbits.js?v=20260929bn"></script>
+  <script src="core/color.js?v=20260929bn"></script>
+  <script src="core/facecolor.js?v=20260929bn"></script>
+  <script src="core/farborgel-bridge.js?v=20260929bn"></script>
+  <script src="core/export.js?v=20260929bn"></script>
+  <script src="core/symmetry-toggles.js?v=20260929bn"></script>
+  <script src="core/session.js?v=20260929bn"></script>
+  <script src="core/session-apply.js?v=20260929bn"></script>
+  <script src="core/session-store.js?v=20260929bn"></script>
+  <script src="core/session-writer.js?v=20260929bn"></script>
+  <script src="core/pointer-tap.js?v=20260929bn"></script>
+  <script src="core/pick-node.js?v=20260929bn"></script>
+  <script src="sketch.js?v=20260929bn"></script>
+  <script src="nav.js?v=20260929bn"></script>
+  <script src="ui.js?v=20260929bn"></script>
+  <script src="ui-form.js?v=20260929bn"></script>
+  <script src="ui-layer.js?v=20260929bn"></script>
+  <script src="ui-layers.js?v=20260929bn"></script>
+  <script src="ui-net.js?v=20260929bn"></script>
+  <script src="ui-farbe.js?v=20260929bn"></script>
+  <script src="ui-rail.js?v=20260929bn"></script>
   <!-- Group D Phase B4: exposes window.farborgelBuildHarmonySelection (core/farborgel-selection.mjs)
        for ui-farbe.js/sketch.js (classic scripts) to call - a module script coexists fine with the
        classic p5-bootstrap scripts above (real-browser verified, no conflicts). -->
-  <script type="module" src="core/farborgel-selection.mjs?v=20260929bm"></script>
+  <script type="module" src="core/farborgel-selection.mjs?v=20260929bn"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides
