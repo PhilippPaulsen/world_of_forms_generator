@@ -184,8 +184,12 @@
     if (!vh || top === Infinity) return;
     const delta = panelRevealDelta({ top: top, bottom: bottom }, vh);
     if (!delta) return;
-    const reduced = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    window.scrollBy({ top: delta, behavior: reduced ? 'auto' : 'smooth' });
+    window.scrollBy({ top: delta, behavior: scrollBehavior() });
+  }
+  // 'smooth' unless the user prefers reduced motion: the ONE place that decides it (the page reveal above and the table's row reveal below use it)
+  function scrollBehavior() {
+    const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    return reduced ? 'auto' : 'smooth';
   }
   root.layerTable.revealPanel = revealPanel;
 
@@ -205,6 +209,7 @@
   // The narrow views: the rail (commit 2, a column at the right gutter) and the strip (commit 4, two rows under the canvas below 768px). The SAME structure and class names; style.css lays them out.
   // Group 1 = the Base chip (fixed), the scrolling column with the layer chips, "+" (fixed); group 2 = the actions of the active sheet. Static cells are built once; the chips with the rows.
   const views = {};
+  const tableView = { name: 'table', chips: rowsEl, horizontal: false, lastActive: null, smooth: true };   // the table's scrolling layer rows, revealed like the narrow views' chips (not in `views`: it has no group structure of its own)
   function buildNarrow(name, container) {
     const v = { name: name, container: container, horizontal: name === 'strip', lastActive: null };
     v.base = cell('lt-chip lr-chip lr-base', 'chip:base', null);   // outside the scrolling column, like "+": it never scrolls out of view
@@ -379,13 +384,17 @@
     const a = typeof document.activeElement !== 'undefined' ? document.activeElement : null;
     return a && container.contains && container.contains(a) && a.dataset ? a.dataset.key : null;
   }
-  // keep the active chip inside a narrow view's scrolling column (a click on iOS does not focus a button, so the browser's own scroll-into-view does not run); the strip scrolls sideways
+  // keep the active chip inside a view's scrolling column (a click on iOS does not focus a button, so the browser's own scroll-into-view does not run); the strip scrolls sideways. ONE function for the
+  // rail, the strip and the table: in the table the chip is the first child of a row, and the column (v.smooth) scrolls with scrollBy and the shared behaviour - never the window, never the focus.
   function revealActive(v) {
     const col = v && v.chips;
     if (!col || !col.getBoundingClientRect) return;
     let active = null;
     const cs = col.children;
-    for (let c = 0; c < cs.length; c++) if (cs[c].classList.contains('active')) active = cs[c];
+    for (let c = 0; c < cs.length; c++) {
+      const k = cs[c].classList.contains('active') ? cs[c] : (cs[c].children && cs[c].children[0]);
+      if (k && k.classList && k.classList.contains('active')) active = k;
+    }
     if (!active) return;
     const cr = active.getBoundingClientRect(), vr = col.getBoundingClientRect();
     const cstyle = typeof getComputedStyle === 'function' ? getComputedStyle(col) : null;
@@ -396,7 +405,8 @@
     } else {
       const pad = (cstyle ? parseFloat(cstyle.paddingTop) : 0) || 0;
       const d = revealDelta(cr.top, cr.bottom, vr.top + pad, vr.bottom - pad);
-      if (d) col.scrollTop += d;
+      if (!d) return;
+      if (v.smooth && col.scrollBy) col.scrollBy({ top: d, behavior: scrollBehavior() }); else col.scrollTop += d;
     }
   }
   function renderNarrow(v, model, rebuilt, focusKey) {
@@ -443,6 +453,8 @@
     patchRow(baseEl, model.rows[0], model);
     const rs = rowsEl.children;
     for (let i = 0; i < rs.length; i++) patchRow(rs[i], model.rows[i + 1], model);
+    const rowKey = activeChipKey();   // the active row stays inside the scroller (after "+", a chip click, the keyboard, a remove, a restore)
+    if (rebuilt || rowKey !== tableView.lastActive) { tableView.lastActive = rowKey; revealActive(tableView); }
     // the foot
     setIf(moreBtn, 'aria-expanded', model.more.open ? 'true' : 'false');
     if (moreBtn.classList.contains('has-state') !== model.more.dot) moreBtn.classList.toggle('has-state', model.more.dot);
@@ -485,6 +497,6 @@
     refreshName();
   }
   UI.onSync(sync);
-  if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('resize', function () { Object.keys(views).forEach(function (n) { revealActive(views[n]); }); });   // a narrow view may have been hidden when the active chip changed
+  if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('resize', function () { Object.keys(views).forEach(function (n) { revealActive(views[n]); }); revealActive(tableView); });   // a view may have been hidden when the active chip changed
   sync();
 })(typeof window !== 'undefined' ? window : globalThis);
