@@ -28,6 +28,7 @@
     'timeline.net.auto.off': 'Netz aufnehmen: automatisch (aus)',
     'timeline.net.always': 'Netz aufnehmen: immer',
     'timeline.net.never': 'Netz aufnehmen: nie',
+    'timeline.net.still': 'das Netz bewegt sich nicht mit der Zeitleiste',
     'timeline.more': 'Zeitleiste: Mehr',
     'timeline.clear': 'Zeitleiste entfernen',
     'timeline.confirm.cancel': 'Abbrechen',
@@ -85,9 +86,11 @@
     const on = auto ? !!authorActive : !!override;
     const mode = auto ? 'auto' : (override ? 'always' : 'never');
     const title = auto ? (on ? T['timeline.net.auto.on'] : T['timeline.net.auto.off']) : (override ? T['timeline.net.always'] : T['timeline.net.never']);
-    return { on: on, mode: mode, title: title };
+    const warn = !!authorActive && !on;   // a net warp is active but Include net is off: the net will NOT move with the timeline (the dot, and the words in the title)
+    return { on: on, mode: mode, title: warn ? title + ' \u2013 ' + T['timeline.net.still'] : title, warn: warn };
   }
-  // The state dot of the Include net switch: the Timeline's net is not (fully) animated because a keyframe has none or two do not match.
+  // The state dot of the Include net switch: the Timeline's net is not (fully) animated because a keyframe has none or two do not match (here), or a net warp is active while Include net is off
+  // (includeNetState().warn: the title says so in words).
   function netStateDot(summary) { return !!summary && (summary.state === 'partial' || summary.state === 'incompatible'); }
   root.timelineModel = { timelineMarks: timelineMarks, timelineProgress: timelineProgress, diamondPlan: diamondPlan, includeNetState: includeNetState, netStateDot: netStateDot, T: T };
 
@@ -223,7 +226,7 @@
     const ov = api() && api().includeNet ? api().includeNet() : null;
     const active = typeof netAuthorWarpActive === 'function' ? netAuthorWarpActive() : false;
     const st = includeNetState(ov, active);
-    const dot = netStateDot(typeof timelineNetSummary === 'function' ? timelineNetSummary() : null);
+    const dot = st.warn || netStateDot(typeof timelineNetSummary === 'function' ? timelineNetSummary() : null);
     const key = st.mode + '|' + st.on + '|' + dot;
     if (key !== lastNet) {
       lastNet = key;

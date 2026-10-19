@@ -490,8 +490,16 @@ function setup() {
     const curveBtn = select('#btn-toggle-curve');
     const freeBtn = select('#btn-toggle-free');
     const faceBtn = select('#btn-toggle-faces');
+    // A locked toggle (a net transform is active) is aria-disabled, not natively disabled: it stays focusable and says why. Native disabled used to stop the mousedown that p5's
+    // mousePressed listens for; now the handlers below return first when their button is locked.
+    function btnLocked(b) { return !!b && (b.elt.disabled || b.elt.getAttribute('aria-disabled') === 'true'); }
+    function lockBtn(b, reason) {
+        if (window.UI && UI.setDisabled) UI.setDisabled(b.elt, reason);
+        else b.elt.disabled = !!reason;   // no UI layer (a page without ui.js): the native disabled, as before
+    }
     if (curveBtn) {
         curveBtn.mousePressed(() => {
+            if (btnLocked(curveBtn)) return;
             if (curveType.kind === 'curve') {
                 curveType = { kind: 'straight' }; // Disable curve
                 curveBtn.removeClass('active');
@@ -538,6 +546,7 @@ function setup() {
     // never calls random() itself - see the 1.5-A design).
     if (freeBtn) {
         freeBtn.mousePressed(() => {
+            if (btnLocked(freeBtn)) return;
             if (curveType.kind === 'free') {
                 curveType = { kind: 'straight' }; // Disable free clothing
                 freeBtn.removeClass('active');
@@ -587,6 +596,7 @@ function setup() {
     }
     if (faceBtn) {
         faceBtn.mousePressed(() => {
+            if (btnLocked(faceBtn)) return;
             const next = !activeShowFaces();
             setActiveShowFaces(next);
             if (next) {
@@ -617,7 +627,6 @@ function setup() {
         const strengthInput = select('#net-strength-input'), strengthValue = select('#net-strength-value'), strengthRow = select('#net-strength-row');
         const focusRow = select('#net-focus-row'), focusInput = select('#net-focus-input'), focusValue = select('#net-focus-value'), focusHint = select('#net-focus-hint');
         const geoRow = select('#net-geo-row'), reverseBtn = select('#net-reverse-btn'), alternateBtn = select('#net-alternate-btn');
-        const note = select('#net-locks-note');
         const fresh = () => ({ mode: 'regular', strength: 0.5, reverse: false, alternate: false, focus: 0 });
         const ui = { axes: 'both', domain: 'single', macro: undefined, x: fresh(), y: fresh() };
         const sizeHint = select('#net-size-hint');
@@ -721,7 +730,6 @@ function setup() {
         const locked = [curveBtn, freeBtn, faceBtn].filter(Boolean);
         locked.forEach(b => { b.elt.dataset.title = b.elt.title; });
         let wasActive = null;
-        if (note) { note.elt.dataset.text = note.elt.textContent; note.elt.dataset.fieldText = 'Curve and free-clothing (under Mehr) are off while a net transform is active (lines are kept straight). Face fills are exact on a Field and work for the base sheet and for layers on the base grid (same shape and size, no offset, no rotation - every timeline playback layer); other layers are not filled. Set the net back to Regular (Base sheet, square) to use curves again.'; }
         netControlsSync = function () {
             group.elt.hidden = !(currentShape === 'square' && activeLayer === 'base');
             const active = netWarpActive();
@@ -737,7 +745,7 @@ function setup() {
             fieldHint.elt.hidden = fieldOk;
             const isField = ui.domain === 'field', E0 = nodeCount - 1;
             fieldInfo.elt.hidden = !(active && isField);
-            if (active && isField) fieldInfo.html(`Field: macro = R = ${R} tiles, micro = E = ${E0} per tile.`);
+            if (active && isField) fieldInfo.html(`Field: macro = R = ${R} tiles, micro = E = ${E0} per tile. Face fills are exact on a Field and work for the base sheet and for layers on the base grid (same shape and size, no offset, no rotation - every timeline playback layer); other layers are not filled.`);
             // The Shape Size hint says what Shape Size does in the CURRENT mode
             const hintText = !active ? null
                 : ui.domain === 'single' ? (R > 1 ? 'Single: one closed net. Shape Size 1 fills the canvas, larger sizes give a smaller net; Field (odd Shape Size 3-9) spreads the law over all the tiles instead.' : null)
@@ -782,15 +790,8 @@ function setup() {
             const faceOk = isField && active && (activeLayer === 'base' || layerGridMatchesBase(additionalLayers[activeLayer]));
             const lockSig = `${active}|${faceOk}|${isField && active}`;
             if (lockSig !== wasActive) {
-                [curveBtn, freeBtn].filter(Boolean).forEach(b => { b.elt.disabled = active; b.elt.title = active ? 'Off while a net transform is active' : b.elt.dataset.title; });
-                if (faceBtn) {
-                    faceBtn.elt.disabled = active && !faceOk;
-                    faceBtn.elt.title = !active ? faceBtn.elt.dataset.title : faceOk ? faceBtn.elt.dataset.title : (isField ? 'Face fills on a Field: the base sheet and layers on the base grid (same shape and size, no offset, no rotation) only' : 'Off while a net transform is active (faces are exact only on a Field)');
-                }
-                if (note) {
-                    note.elt.hidden = !active;
-                    note.elt.textContent = isField && active ? note.elt.dataset.fieldText : note.elt.dataset.text;
-                }
+                [curveBtn, freeBtn].filter(Boolean).forEach(b => lockBtn(b, active ? 'Off while a net transform is active. Set the net back to Regular (Base sheet, square) to use curves again.' : null));
+                if (faceBtn) lockBtn(faceBtn, !active || faceOk ? null : (isField ? 'Face fills on a Field: the base sheet and layers on the base grid (same shape and size, no offset, no rotation) only' : 'Off while a net transform is active (faces are exact only on a Field)'));
                 wasActive = lockSig;
             }
         };
@@ -1030,7 +1031,7 @@ function setup() {
     const addToTimelineBtn = select('#btn-add-to-timeline');
     // Case B1: "Include net" - a toggle button (the labels of a control group are hidden by style.css, a checkbox inside one would be
     // invisible). null = automatic (ON exactly when a net warp is active), true/false = chosen; the shown value is timelineIncludeNetValue().
-    const includeNetBtn = select('#btn-timeline-include-net'), includeNetWarn = select('#timeline-net-warning'), netStateEl = select('#timeline-net-state');
+    const includeNetBtn = select('#btn-timeline-include-net'), netStateEl = select('#timeline-net-state');
     let includeNetOverride = null;
     window.timelineIncludeNet = () => timelineIncludeNetValue(includeNetOverride);
     let netUiSig = '';
@@ -1044,11 +1045,6 @@ function setup() {
             includeNetBtn.elt.classList.toggle('active', on);
             includeNetBtn.elt.textContent = on ? 'Include net: on' : 'Include net: off';
             includeNetBtn.attribute('title', `Also capture the current net when a keyframe is added, so the net moves with the timeline. ${includeNetOverride === null ? 'Automatic: on while a net warp is active.' : 'Set by you (click to change).'}`);
-        }
-        if (includeNetWarn) {
-            const warn = active && !on;
-            includeNetWarn.elt.hidden = !warn;
-            if (warn) includeNetWarn.html('A net warp is active but "Include net" is off: it will NOT move with the timeline.');
         }
         if (netStateEl) {
             netStateEl.elt.hidden = !sum;
