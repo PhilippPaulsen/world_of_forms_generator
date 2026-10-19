@@ -22,9 +22,21 @@
  *   square_sin_field    the net chapter: square, the Netz tab (netz_row), Sinus (+ the Field default) and one
  *                       strength step (square_sin_field), the Netz "Mehr" overlay open (more_netz_open), back to
  *                       Aus and to the tab the page started in. `found` says which controls the script found.
- *   layer_timeline      "+ Layer" (new layer becomes active), "Add to
- *                       Timeline", and the same again: two keyframes, so
- *                       Play and the progress control are measured too
+ *   layer_timeline      a new layer (it becomes active), "Add to Timeline", and the same again:
+ *                       two keyframes, so Play and the scrub bar are measured too. Since the
+ *                       cleanup (step B) these two actions go through window.layerApi (add(),
+ *                       addToTimeline()), the functions the table, the rail, the strip and the
+ *                       diamonds call - the old hidden #btn-add-layer / #btn-add-to-timeline are
+ *                       only the FALLBACK of a tree that has no layerApi. The same state results.
+ *   timeline_more       the timeline strip's "Mehr" opened (real clicks) and closed again
+ *   layer_more          the layer "Mehr" opened (layerApi.toggleMore) and closed again
+ *   plus_probe          ONE REAL click on the visible "+" of the current view (the table, the rail
+ *                       or the strip: whichever has a rect); `probe` says which element it was
+ *   notice              a notice showing (UI.notify, key "baseline"), so #ui-notices has a rect
+ *   dom_present         which old and kept selectors exist in the DOM (a hidden element has no
+ *                       rect, so the rects cannot show that it is gone; this does)
+ *   pointer             what the page's pointer media features say (coarse / fine / hover) and the
+ *                       value of --target: the file proves how it was recorded
  *
  * Per snapshot: the tracked elements, scrollWidth vs clientWidth, the
  * document height, and the elements extending beyond the viewport's left or
@@ -54,9 +66,16 @@
     '#btn-paste-pattern',
     '#btn-info',
     '#more-rail',
-    // needed to see the layer/timeline scenario
+    // needed to see the layer/timeline scenario (the OLD hidden controls: null at every width while they are hidden)
     '#btn-add-to-timeline',
     '#btn-timeline-play',
+    // the layer table, rail and strip (ui-layers.js; ONE shows per width, the others are display: none = null), their key children, the timeline strip (ui-timeline.js) and the notices (ui.js)
+    '#layer-table', '#layer-rail', '#layer-strip', '#timeline-strip', '#ui-notices', '#ui-notices .notice',
+    '#layer-table [data-key="chip:base"]', '#layer-table [data-key="add"]', '#layer-table [data-key="more"]', '#layer-table [data-key^="dia:"]',
+    '#layer-rail [data-key="chip:base"]', '#layer-rail [data-key="add"]', '#layer-rail [data-key="more"]', '#layer-rail [data-key^="dia:"]',
+    '#layer-strip [data-key="chip:base"]', '#layer-strip [data-key="add"]', '#layer-strip [data-key="more"]', '#layer-strip [data-key^="dia:"]',
+    '#timeline-strip .ts-play', '#timeline-strip .ts-range', '#timeline-strip .ts-net', '#timeline-strip .ts-more',
+    '#timeline-group', '#layer-more-panel',
     // the net chapter: the Netz row (kind buttons, strength stepper, its Mehr trigger) and its overlay; #net-group is the (hidden) control group inside the overlay
     '#nav-netz',
     '#net-strength-value',
@@ -79,6 +98,26 @@
       el.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window }));
     }
   }
+
+  // a real click: what a mouse does (detail 1), unlike click() above (detail 0, which the keyboard bridge reads as Enter / Space)
+  function realClick(el) {
+    for (const t of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+      const C = /^pointer/.test(t) && typeof PointerEvent === 'function' ? PointerEvent : MouseEvent;
+      el.dispatchEvent(new C(t, { bubbles: true, cancelable: true, view: window, detail: 1, button: 0, pointerType: 'mouse' }));
+    }
+  }
+
+  // the selectors whose PRESENCE in the DOM is recorded (dom_present): the old layer row and timeline controls, the old toggles and the message spans (all hidden, so their rects are null)
+  // and the kept ones next to them. A later deletion shows up here as true -> false.
+  const PRESENT = [
+    '#layer-row-group', '#layer-row', '#btn-layer-base', '#layer-tabs', '#btn-add-layer', '#paste-pattern-status',
+    '#layer-more-row', '#btn-more-layer', '#layer-more-panel', '#layer-node-count-note', '#align-to-base-status',
+    '#timeline-group', '#btn-add-to-timeline', '#btn-timeline-include-net', '#btn-remove-timeline', '#btn-clear-timeline',
+    '#timeline-playback-controls', '#btn-timeline-play', '#timeline-progress-input', '#timeline-net-warning', '#timeline-net-state',
+    '#timeline-keyframe-list', '#timeline-pairing', '#timeline-status',
+    '#net-free-note', '#net-field-note', '#net-macro-note', '#net-field-info',
+    '#layer-table', '#layer-rail', '#layer-strip', '#timeline-strip', '#ui-notices',
+  ];
 
   function buttonByText(root, text) {
     if (!root) return null;
@@ -162,8 +201,13 @@
     // each new layer first gets the same line: two real clicks on fixed
     // nodes (deterministic, unlike the random-connection button).
     const lt = {};
-    const addLayer = document.querySelector('#btn-add-layer');
-    const addToTimeline = document.querySelector('#btn-add-to-timeline');
+    // the actions go through window.layerApi (the table, the rail, the strip and the diamonds call it); a tree without layerApi falls back to the old hidden buttons
+    const api = window.layerApi && window.layerApi.add && window.layerApi.addToTimeline ? window.layerApi : null;
+    const oldAddLayer = document.querySelector('#btn-add-layer');
+    const oldAddToTimeline = document.querySelector('#btn-add-to-timeline');
+    const addLayer = api ? { api: true } : oldAddLayer, addToTimeline = api ? { api: true } : oldAddToTimeline;
+    const doAddLayer = () => { if (api) api.add(); else click(oldAddLayer); };
+    const doAddToTimeline = () => { if (api) api.addToTimeline(); else click(oldAddToTimeline); };
     const canvas = document.querySelector('#canvas-container canvas');
     async function clickNode(n) {
       const r = canvas.getBoundingClientRect();
@@ -180,19 +224,47 @@
       if (typeof nodes === 'undefined' || typeof width === 'undefined' || !canvas || nodes.length < 4) return;
       await clickNode(nodes[0]); await clickNode(nodes[3]);
     }
-    if (addLayer) { click(addLayer); await sleep(wait); }
+    if (addLayer) { doAddLayer(); await sleep(wait); }
     await drawLine();
     lt.layer_1_added = snap();
-    if (addToTimeline) { click(addToTimeline); await sleep(wait); }
+    if (addToTimeline) { doAddToTimeline(); await sleep(wait); }
     lt.timeline_1_keyframe = snap();
-    if (addLayer) { click(addLayer); await sleep(wait); }
+    if (addLayer) { doAddLayer(); await sleep(wait); }
     await drawLine();
     lt.layer_2_added = snap();
-    if (addToTimeline) { click(addToTimeline); await sleep(wait); }
+    if (addToTimeline) { doAddToTimeline(); await sleep(wait); }
     lt.timeline_2_keyframes = snap();
     const st = document.querySelector('#timeline-status');
     lt.timelineStatus = st ? st.textContent : null; // non-empty = the second keyframe was refused
     result.layer_timeline = lt;
+    result.actions_via = api ? 'layerApi' : 'old hidden buttons';
+
+    // the timeline strip's "Mehr" (real clicks): opens the old #timeline-group (the keyframe list, the net status, the pairing editor, the status line, "Zeitleiste entfernen"); closed again after
+    const tsMore = document.querySelector('#timeline-strip .ts-more');
+    if (tsMore) { realClick(tsMore); await sleep(wait); result.timeline_more = snap(); realClick(tsMore); await sleep(wait); }
+    // the layer "Mehr" of the active layer (a layer is active now): opened and closed again
+    if (api && api.toggleMore) { api.toggleMore(); await sleep(wait); result.layer_more = snap(); api.toggleMore(); await sleep(wait); }
+    // ONE real click on the visible "+" of the current view (a third layer): which element it was is in `probe`
+    {
+      let probeBtn = null, probeView = null;
+      for (const v of ['#layer-table', '#layer-rail', '#layer-strip']) { const b = document.querySelector(v + ' [data-key="add"]'); if (b && rect(b)) { probeBtn = b; probeView = v; break; } }
+      const n0 = typeof additionalLayers !== 'undefined' ? additionalLayers.length : null;
+      if (probeBtn) { realClick(probeBtn); await sleep(wait); }
+      const n1 = typeof additionalLayers !== 'undefined' ? additionalLayers.length : null;
+      result.probe = { view: probeView, selector: probeView ? probeView + ' [data-key="add"]' : null, ariaLabel: probeBtn ? probeBtn.getAttribute('aria-label') : null, layersBefore: n0, layersAfter: n1, added: n0 !== null && n1 === n0 + 1 };
+      result.plus_probe = snap();
+    }
+    // a notice showing, so #ui-notices has a rect (a refusal-length text: the notice has its close button)
+    if (window.UI && UI.notify) {
+      UI.notify('Off while a net transform is active. Set the net back to Regular (Base sheet, square) to use curves again.', { key: 'baseline', kind: 'warn' });
+      await sleep(150); result.notice = snap();
+      UI.notifyClear('baseline'); await sleep(wait);
+    }
+    result.dom_present = {}; PRESENT.forEach((sel) => { result.dom_present[sel] = !!document.querySelector(sel); });
+    result.pointer = {
+      coarse: matchMedia('(pointer: coarse)').matches, fine: matchMedia('(pointer: fine)').matches, hover: matchMedia('(hover: hover)').matches, anyCoarse: matchMedia('(any-pointer: coarse)').matches,
+      target: getComputedStyle(document.documentElement).getPropertyValue('--target').trim(), innerWidth: window.innerWidth,
+    };
 
     const text = JSON.stringify(result);
     if (!(opts && opts.raw)) console.log(text);
