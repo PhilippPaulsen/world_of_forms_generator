@@ -1156,7 +1156,9 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
     max-height: var(--canvas-size);
   }
 }
-.layer-table .lt-rows { display: flex; flex-direction: column; gap: var(--rail-gap); padding: 4px; margin: -4px; overflow-y: auto; min-height: 0; flex: 0 1 auto; }
+.layer-table .lt-base { flex: none; }   /* the Base row: fixed, outside the scrolling layer rows (like "+" and "..." in the foot) */
+.layer-table .lt-rows { display: flex; flex-direction: column; gap: var(--rail-gap); padding: 4px; margin: 0 -4px -4px; overflow-y: auto; min-height: 0; flex: 0 1 auto; }   /* only the layer rows scroll; the 4px of padding on top is the gap under the Base row (and the focus ring's room), so a scrolled row is clipped at the Base row's bottom edge */
+.layer-table .lt-rows:empty { display: none; }   /* no layers: the table is the Base row and the foot, as before */
 .layer-table .lt-row, .layer-table .lt-foot { display: grid; grid-template-columns: repeat(4, var(--target)); gap: var(--rail-gap); }
 .layer-table .lt-chip { grid-column: 1; }
 .layer-table .lt-chip, .layer-rail .lt-chip, .layer-strip .lt-chip { font: inherit; font-size: var(--size-base); font-variant-numeric: tabular-nums; }

@@ -83,10 +83,19 @@ function build(o) {
     const lrd = mkDialog('layer-remove-overlay', 'layer-remove-title', 'layer-remove-text', 'cancel-layer-remove', 'confirm-layer-remove');
     const tcd = o.noConfirm ? null : mkDialog('timeline-confirm-overlay', 'timeline-confirm-title', 'timeline-confirm-text', 'cancel-timeline-confirm', 'confirm-timeline-confirm');
     const oldMore = mk('btn-more-layer', 'button'); oldMore.setAttribute('aria-expanded', 'false');
+    // the old group behind "Mehr": a HIDDEN child (a rect far away that must NOT count), a not-hidden child without client rects (display: none by CSS) and two visible children at o.groupRects; window.scrollBy is recorded
+    const scrolls = [], gRects = o.groupRects || [[900, 960], [970, 1010]];
+    const gHidden = new El('div'), gNoRects = new El('div'), gA = new El('div'), gB = new El('div');
+    [gHidden, gNoRects, gA, gB].forEach(g => { g.ownerDoc = doc; g.scrollIntoView = () => { scrolls.push({ wrong: 'scrollIntoView' }); }; });
+    gHidden.hidden = true; gHidden.getClientRects = () => []; gHidden.getBoundingClientRect = () => ({ top: 5000, bottom: 6000, left: 0, right: 100 });
+    gNoRects.getClientRects = () => []; gNoRects.getBoundingClientRect = () => ({ top: 7000, bottom: 8000, left: 0, right: 100 });
+    [gA, gB].forEach((g, k) => { g.getClientRects = () => group.classList.contains('ts-open') ? [{}] : [];   // laid out only while the group is open (display: none otherwise): a reveal run BEFORE it opens sees nothing
+         g.getBoundingClientRect = () => ({ top: gRects[k][0], bottom: gRects[k][1], left: 0, right: 100 }); });
+    [gHidden, gNoRects, gA, gB].forEach(g => group.appendChild(g));
     const clock = { t: 0 }, calls = [], moq = [];
     const layers = o.layers || [];
     const ctx = vm.createContext({ document: doc, console, MutationObserver: class { constructor(cb) { this.cb = cb; } observe(el) { el.onClass = () => { moq.push(this.cb); }; } }, setTimeout: () => 0, clearTimeout() { }, performance: { now: () => clock.t } });
-    ctx.window = ctx; ctx.matchMedia = () => ({ matches: false }); ctx.innerWidth = 800; ctx.innerHeight = 900; ctx.addEventListener = (t, fn) => { (ctx.__wl = ctx.__wl || {})[t] = (ctx.__wl[t] || []).concat(fn); };
+    ctx.window = ctx; ctx.matchMedia = q => ({ matches: !!o.reduced && /prefers-reduced-motion:\s*reduce\b/.test(q) }); ctx.scrollBy = opts => { scrolls.push(opts); }; ctx.innerWidth = 800; ctx.innerHeight = 900; ctx.addEventListener = (t, fn) => { (ctx.__wl = ctx.__wl || {})[t] = (ctx.__wl[t] || []).concat(fn); };
     ctx.additionalLayers = layers; ctx.activeLayer = o.active === undefined ? 'base' : o.active; ctx.timeline = o.timeline === undefined ? null : o.timeline;
     ctx.millis = () => clock.t;
     ctx.netAuthorWarpActive = () => !!ctx.__netActive;
@@ -116,13 +125,13 @@ function build(o) {
     };
     vm.runInContext(UI_SRC, ctx, { filename: 'ui.js' });
     vm.runInContext(TLJS, ctx, { filename: 'ui-timeline.js' });
-    vm.runInContext(LAYERS, ctx, { filename: 'ui-layers.js' });
+    if (!o.noLayersScript) vm.runInContext(LAYERS, ctx, { filename: 'ui-layers.js' });
     const clk = b => { b.dispatch('click', { detail: 1 }); while (moq.length) moq.shift()([]); };
     const sync = () => ctx.window.uiSync();
     const s = tstrip ? { play: tstrip.children[0], bar: tstrip.children[1], net: tstrip.children[2], more: tstrip.children[3], marks: () => tstrip.children[1].children[0].children, input: tstrip.children[1].children[1] } : null;
     const rcell = key => { const g1 = rail.children[0].children, g2 = rail.children[1].children; for (const b of [g1[0]].concat(g1[1].children, [g1[2]], g2)) if (b.dataset.key === key) return b; return null; };
-    const tcell = key => { for (const r of table.children[0].children) for (const b of r.children) if (b.dataset.key === key) return b; return null; };
-    return { ctx, doc, byId, calls, layers, clk, sync, s, rail, table, rcell, tcell, status, toastEl, group, clearBtn, lrd, tcd, clock, moq };
+    const tcell = key => { for (const r of [table.children[0]].concat(table.children[1].children)) for (const b of r.children) if (b.dataset.key === key) return b; return null; };
+    return { ctx, doc, byId, calls, layers, clk, sync, s, rail, table, rcell, tcell, status, toastEl, group, clearBtn, lrd, tcd, clock, moq, scrolls };
 }
 const L = x => Object.assign({ connections: [], enabled: true }, x || {});
 const tlOf = (ids, extra) => Object.assign({ keyframeLayerIds: ids.slice(), playbackLayerIndex: ids.length > 1 ? 99 : null, segmentDurationsMs: ids.slice(1).map(() => 2000), segmentPairings: ids.slice(1).map(() => null), segmentFlips: ids.slice(1).map(() => null), segmentMembers: ids.slice(1).map(() => null), netStates: ids.map(() => null), elapsedMs: 0, playing: false, startTime: null }, extra || {});
@@ -189,7 +198,7 @@ T('diamonds', () => {
     // table: column 3, the Base row has none
     let e = build({ layers: [L(), L(), L({ isTimelinePlayback: true }), L()], timeline: tlOf([0, 1]), active: 'base' });
     e.sync();
-    check('the TABLE: every layer row has a diamond (key dia:N) between the eye and the x; the Base row has none (an empty cell); the playback layer has no row and so no diamond', e.table.children[0].children[0].children.length === 1 && J(e.table.children[0].children[1].children.map(b => b.dataset.key)) === J(['chip:0', 'eye:0', 'dia:0', 'x:0']) && !e.tcell('dia:2') && !!e.tcell('dia:3'));
+    check('the TABLE: every layer row has a diamond (key dia:N) between the eye and the x; the Base row has none (an empty cell); the playback layer has no row and so no diamond', e.table.children[0].children.length === 1 && J(e.table.children[1].children[0].children.map(b => b.dataset.key)) === J(['chip:0', 'eye:0', 'dia:0', 'x:0']) && !e.tcell('dia:2') && !!e.tcell('dia:3'));
     check('...filled = a keyframe (data-body "on"), outline = not; named "Ebene N aus der Zeitleiste entfernen" / "Ebene N zur Zeitleiste hinzufügen" (the RUNNING number: the plain layer at array index 3 is "Ebene 3")', e.tcell('dia:0').dataset.body === 'on' && e.tcell('dia:1').dataset.body === 'on' && e.tcell('dia:3').dataset.body === 'off' && e.tcell('dia:0').getAttribute('aria-label') === 'Ebene 1 aus der Zeitleiste entfernen' && e.tcell('dia:3').getAttribute('aria-label') === 'Ebene 3 zur Zeitleiste hinzufügen' && e.tcell('dia:3').getAttribute('title') === e.tcell('dia:3').getAttribute('aria-label'));
     // outline click: select first, then add
     e = build({ layers: [L({ connections: [[1, 2]] }), L({ connections: [[1, 2]] })], active: 'base' });
@@ -243,6 +252,33 @@ T('diamonds', () => {
     e.ctx.layerApi.removeKeyframe = i => { e.calls.push(['removeKeyframe', i]); e.layers.splice(2, 1); e.ctx.timeline = null; };   // the real function takes the playback layer out of additionalLayers when the timeline drops to one keyframe
     e.clk(e.tcell('dia:1')); e.sync();
     check('the chip numbers do not jump when the playback layer goes away with a keyframe (1, 2, 3 before and after; the plain layer moves from array index 3 to 2)', before === '1,2,3' && [0, 1, 2].map(i => e.tcell('chip:' + i).textContent).join() === '1,2,3');
+    // ---- "Mehr" brings the WHOLE old group into view with the layer block's reveal (commit 7) ----
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 });
+    e.sync(); e.s.more.focus(); e.clk(e.s.more);
+    check('opening "Mehr" with the group below the fold (the union of its two visible children 900..1010 in a 900px viewport; a [hidden] child at 5000..6000 and a child without client rects at 7000..8000 do not count): window.scrollBy is called ONCE with { top: 110, behavior: \'smooth\' } (the whole group ends at the bottom edge); the focus stays on the toggle', e.scrolls.length === 1 && J(e.scrolls[0]) === J({ top: 110, behavior: 'smooth' }) && e.doc.activeElement === e.s.more && e.s.more.getAttribute('aria-expanded') === 'true');
+    e.clk(e.s.more);
+    check('...closing it scrolls nothing; a second open scrolls again', e.scrolls.length === 1 && e.s.more.getAttribute('aria-expanded') === 'false' && (e.clk(e.s.more), e.scrolls.length === 2));
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0, groupRects: [[200, 260], [270, 320]] });
+    e.sync(); e.clk(e.s.more);
+    check('...no scroll when the WHOLE group is already inside the viewport (200..320)', e.scrolls.length === 0 && e.s.more.getAttribute('aria-expanded') === 'true');
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0, groupRects: [[800, 860], [870, 920]] });
+    e.sync(); e.clk(e.s.more);
+    check('...a group whose FIRST child is visible but whose last child is cut (800..920 in 900) scrolls by the overhang, 20px', e.scrolls.length === 1 && J(e.scrolls[0]) === J({ top: 20, behavior: 'smooth' }));
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0, groupRects: [[-40, 10], [20, 60]] });
+    e.sync(); e.clk(e.s.more);
+    check('...a group starting above the top (-40..60) scrolls up by 40 (a negative delta)', e.scrolls.length === 1 && J(e.scrolls[0]) === J({ top: -40, behavior: 'smooth' }));
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0, groupRects: [[100, 600], [610, 1100]] });
+    e.sync(); e.clk(e.s.more);
+    check('...a group TALLER than the viewport (100..1100 in 900) aligns its top edge to the viewport top with an 8px margin: scrollBy top 92', e.scrolls.length === 1 && J(e.scrolls[0]) === J({ top: 92, behavior: 'smooth' }));
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0, reduced: true });
+    e.sync(); e.clk(e.s.more);
+    check('...with prefers-reduced-motion the behaviour is \'auto\' (the fake matches only `prefers-reduced-motion: reduce`)', e.scrolls.length === 1 && J(e.scrolls[0]) === J({ top: 110, behavior: 'auto' }));
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 });
+    e.sync(); e.group.classList.add('ts-open'); e.s.more.focus(); e.ctx.layerTable.revealPanel(e.group);
+    check('...it is the layer block\'s function, not a copy: calling layerTable.revealPanel(group) by hand gives the same single scroll (top 110, smooth)', e.scrolls.length === 1 && J(e.scrolls[0]) === J({ top: 110, behavior: 'smooth' }) && typeof e.ctx.layerTable.revealPanel === 'function');
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0, noLayersScript: true });
+    e.sync(); e.clk(e.s.more);
+    check('a page without ui-layers.js (no layerTable): "Mehr" still opens and does not throw (no reveal, nothing else breaks)', e.s.more.getAttribute('aria-expanded') === 'true' && e.group.classList.contains('ts-open') && e.scrolls.length === 0);
 });
 
 // ================= 3. the source =================
@@ -252,6 +288,13 @@ T('source', () => {
     const row = rowStart >= 0 && rowEnd > rowStart ? HTML.slice(rowStart, rowEnd) : '';
     const tag = (row.match(/<div id="timeline-strip"[^>]*>/) || [''])[0];
     check('#timeline-strip is a child of the canvas row DIRECTLY after #canvas-container and BEFORE #layer-strip and .rail-left (canvas, timeline strip, layer strip, the tool rail\'s rows: the DOM order is the visual order on a phone), role="group", aria-label, data-i18n, empty in the markup', /class="timeline-strip"/.test(tag) && /role="group"/.test(tag) && /aria-label="Zeitleiste"/.test(tag) && /data-i18n="timeline\.strip"/.test(tag) && (row.match(/id="timeline-strip"/g) || []).length === 1 && /<div id="canvas-container"><\/div>\s*<!--[\s\S]*?-->\s*<div id="timeline-strip"[^>]*><\/div>\s*<!--[\s\S]*?-->\s*<div id="layer-strip"/.test(row) && row.indexOf('id="timeline-strip"') < row.indexOf('id="layer-strip"') && row.indexOf('id="layer-strip"') < row.indexOf('class="rail-left"'));
+    // the reveal exists ONCE: ui-layers.js has it; ui-timeline.js only calls it; no other script scrolls the page
+    const stripCode = s => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    const scripts = { 'ui-layers.js': LAYERS, 'ui-timeline.js': TLJS, 'sketch.js': SKETCH };
+    fs.readdirSync(ROOT).filter(f => /^(ui|gallery).*\.js$/.test(f) && !(f in scripts)).forEach(f => { scripts[f] = fs.readFileSync(path.join(ROOT, f), 'utf8'); });
+    const withScroll = Object.keys(scripts).filter(f => /\bscrollBy\s*\(/.test(stripCode(scripts[f]))).sort();
+    const tlCode = stripCode(TLJS);
+    check('ONE reveal implementation: window.scrollBy( appears in ui-layers.js (once, in revealPanel) and in no other script (gallery.js and sketch.js scroll for their own reasons with scrollTo / scrollIntoView); ui-timeline.js has no scrollBy / scrollTo / scrollIntoView, no panelRevealDelta, no rect measuring and no innerHeight - it only calls layerTable.revealPanel(group), once, and only when "Mehr" has just opened', J(withScroll) === J(['ui-layers.js']) && (stripCode(LAYERS).match(/window\.scrollBy\(/g) || []).length === 1 && !/\bscroll(By|To|IntoView)\s*\(/.test(tlCode) && !/panelRevealDelta|getBoundingClientRect|getClientRects|innerHeight|visualViewport/.test(tlCode) && (tlCode.match(/revealPanel\(/g) || []).length === 1 && /if \(moreOpen && group && root\.layerTable && root\.layerTable\.revealPanel\) root\.layerTable\.revealPanel\(group\);/.test(tlCode) && /moreBtn\.addEventListener\('click', function \(\) \{ setMore\(!moreOpen\); sync\(\); if \(moreOpen/.test(tlCode));
     const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
     const noMedia = (() => { let t = css; for (;;) { const i = t.indexOf('@media'); if (i < 0) return t; let d = 0, j = t.indexOf('{', i), k = j; for (; k < t.length; k++) { if (t[k] === '{') d++; else if (t[k] === '}') { d--; if (!d) break; } } t = t.slice(0, i) + t.slice(k + 1); } })();
     check('the old controls are hidden at EVERY width (a top-level rule): Add to Timeline, the old Include net, the old Play row, the old progress input and Remove Timeline - the DOM stays', /#btn-add-to-timeline, #btn-timeline-include-net, #timeline-playback-controls, #timeline-progress-input, #btn-remove-timeline\s*\{\s*display:\s*none;\s*\}/.test(noMedia) && ['btn-add-to-timeline', 'btn-timeline-include-net', 'timeline-playback-controls', 'timeline-progress-input', 'btn-remove-timeline', 'btn-timeline-play'].every(id => HTML.includes('id="' + id + '"')));

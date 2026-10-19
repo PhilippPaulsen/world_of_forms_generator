@@ -132,8 +132,9 @@ function build(o) {
     if (UI_SRC) vm.runInContext(UI_SRC, ctx, { filename: 'ui.js' });
     vm.runInContext(LAYERS, ctx, { filename: 'ui-layers.js' });
     const sync = () => ctx.window.uiSync();
-    const cell = key => { for (const r of table.children[0].children) for (const b of r.children) if (b.dataset.key === key) return b; return key === 'add' || key === 'more' ? table.children[1].children.find(b => b.dataset.key === key) : null; };
-    const keys = () => table.children[0].children.flatMap(r => r.children.map(b => b.dataset.key)).concat(table.children[1].children.map(b => b.dataset.key));
+    const tRows = () => [table.children[0]].concat(table.children[1].children);   // the Base row (children[0]), then the scrolling layer rows (children[1]); the foot is children[2], the name line children[3]
+    const cell = key => { for (const r of tRows()) for (const b of r.children) if (b.dataset.key === key) return b; return key === 'add' || key === 'more' ? table.children[2].children.find(b => b.dataset.key === key) : null; };
+    const keys = () => tRows().flatMap(r => r.children.map(b => b.dataset.key)).concat(table.children[2].children.map(b => b.dataset.key));
     // the rail: [0] group 1 = [the Base chip, the scrolling layer-chips column, "+"], [1] group 2 = [eye, diamond, "...", x]
     const railBase = () => rail.children[0].children[0], railChips = () => rail.children[0].children[1], railAdd = () => rail.children[0].children[2], railActions = () => rail.children[1].children;
     const rcell = key => { for (const b of [railBase()].concat(railChips().children, [railAdd()], railActions())) if (b.dataset.key === key) return b; return null; };
@@ -187,7 +188,7 @@ T('dom', () => {
     check('x on a timeline keyframe without lines still asks, and the text names the keyframe and the line pairings', e.calls.length === 0 && /Keyframe der Timeline/.test(e.byId['layer-remove-text'].textContent) && /Linienzuordnungen/.test(e.byId['layer-remove-text'].textContent));
     // name line
     e = build({ layers: [L({ enabled: false })], active: 0, timeline: { keyframeLayerIds: [0], playbackLayerIndex: null } });
-    const nameEl = e.table.children[2];
+    const nameEl = e.table.children[3];
     check('the name line is aria-hidden and shows the hint "Symbol antippen" until something is touched', !!nameEl && nameEl.getAttribute('aria-hidden') === 'true' && nameEl.textContent === 'Symbol antippen');
     e.cell('eye:0').dispatch('pointerdown', { pointerType: 'touch' });
     check('a pointerdown on the eye of a hidden keyframe: "Ebene 1 · Keyframe, ausgeblendet"; switched on it says "Keyframe, zusätzlich sichtbar" on the next tick', nameEl.textContent === 'Ebene 1 · Keyframe, ausgeblendet' && (e.clk(e.cell('eye:0')), e.sync(), nameEl.textContent === 'Ebene 1 · Keyframe, zusätzlich sichtbar'));
@@ -323,6 +324,11 @@ T('dom', () => {
     e = build({ layers: [L()], active: 0 });
     e.scell('more').focus(); e.clk(e.scell('more'));
     check('the same from the STRIP\'s "...": one scroll, the focus stays on that button; a second open after a close scrolls again', e.scrolls.length === 1 && e.doc.activeElement === e.scell('more') && (e.clk(e.scell('more')), e.clk(e.scell('more')), e.scrolls.length === 2));
+    // the reveal is one function that any collapsible block can use (commit 7: the timeline's "Mehr" group calls it, ui-timeline.js)
+    e = build({ layers: [L()], active: 0 });
+    const other = new El('div'); other.ownerDoc = e.doc; const kidA = new El('div'), kidB = new El('div'); [kidA, kidB].forEach(k => { k.ownerDoc = e.doc; k.getClientRects = () => [{}]; other.appendChild(k); });
+    kidA.getBoundingClientRect = () => ({ top: 1000, bottom: 1040, left: 0, right: 10 }); kidB.getBoundingClientRect = () => ({ top: 1060, bottom: 1100, left: 0, right: 10 });
+    check('layerTable.revealPanel(panel) is exported and reveals ANY element\'s visible children as one union (1000..1100 in 812: scrollBy top 288, smooth), the focus is untouched; a null panel does not throw', typeof e.ctx.layerTable.revealPanel === 'function' && (e.ctx.layerTable.revealPanel(other), e.scrolls.length === 1 && J(e.scrolls[0]) === J({ top: 288, behavior: 'smooth' })) && (() => { try { e.ctx.layerTable.revealPanel(null); return e.scrolls.length === 1; } catch (x) { return false; } })());
     e = build({});
     e.clk(e.cell('more')); e.clk(e.rcell('more')); e.clk(e.scell('more'));
     check('on the Base "..." is disabled: a click shows the reason and neither opens nor scrolls', e.scrolls.length === 0 && e.calls.length === 0);
@@ -334,6 +340,22 @@ T('dom', () => {
     let t0 = process.hrtime.bigint(); for (let i = 0; i < 20000; i++) e.sync(); const per = Number(process.hrtime.bigint() - t0) / 20000 / 1e6;
     check('a tick with nothing changed (2 layers) builds nothing and costs far below 0.1 ms (signature compare + the name line)', per < 0.1, per.toFixed(4) + ' ms');
     console.log('      (measured: ' + per.toFixed(4) + ' ms per unchanged tick)');
+});
+
+// the Base row of the table is outside the scrolling rows (commit 7): a block of its own, so that it runs even when an older check of the DOM block above has thrown
+T('table base row', () => {
+    const L = (extra) => Object.assign({ connections: [], enabled: true }, extra || {});
+    let e;
+    e = build({ layers: Array.from({ length: 12 }, () => L()), active: 'base' });
+    const tk = e.table.children;
+    check('table, structure (read without the helpers): the table is [the Base row, the scrolling layer rows, the foot, the name line]; the Base row holds ONLY chip:base and is a sibling of the scroller (.lt-rows), not inside it; the scroller holds the 12 layer rows and no chip:base', tk.length === 4 && /(^| )lt-base( |$)/.test(tk[0].className) && tk[0].children.length === 1 && tk[0].children[0].dataset.key === 'chip:base' && tk[1].className === 'lt-rows' && tk[1].children.length === 12 && !tk[1].children.some(r => r.children.some(b => b.dataset.key === 'chip:base')) && tk[2].className === 'lt-foot' && tk[3].className === 'lt-name');
+    check('12 layers: the Tab order (the DOM order) is unchanged: the Base chip, then every layer row (chip, eye, diamond, x), then "+" and "..."', J(e.keys()) === J(['chip:base'].concat(...Array.from({ length: 12 }, (_, i) => ['chip:' + i, 'eye:' + i, 'dia:' + i, 'x:' + i]), ['add', 'more'])));
+    const baseBtn = e.cell('chip:base'); baseBtn.focus(); e.layers.push(L()); e.sync();
+    check('...the Base button is not rebuilt with the rows (the same element after a layer is added, and its focus stays); the scroller then holds 13 rows', e.cell('chip:base') === baseBtn && e.doc.activeElement === baseBtn && e.table.children[1].children.length === 13 && e.table.children[0].children.length === 1);
+    e.clk(e.cell('chip:3'));
+    check('...the Base chip is still patched in place: active while the Base is the active sheet, not active after a layer chip is selected (and active again after a click on it)', baseBtn.classList.contains('active') === false && e.cell('chip:3').classList.contains('active') && (e.clk(baseBtn), baseBtn.classList.contains('active') && !e.cell('chip:3').classList.contains('active')));
+    e = build({});
+    check('without layers the scroller is there but empty (the Base row and the foot only; the CSS takes the empty scroller out of the layout)', e.table.children.length === 4 && e.table.children[1].children.length === 0 && J(e.keys()) === J(['chip:base', 'add', 'more']));
 });
 
 // ================= 3. the source =================
@@ -400,7 +422,7 @@ T('source', () => {
     const sTag = (canvasRow.match(/<div id="layer-strip"[^>]*>/) || [''])[0];
     check('#layer-strip is a child of the canvas row placed DIRECTLY AFTER #canvas-container and BEFORE .rail-left (the DOM order, and the tab order, is the visual order: canvas, strip, the tool rail\'s rows), role="group", aria-label "Ebenen", data-i18n, empty in the markup; the table and the rail stay the last two children', /class="layer-strip"/.test(sTag) && /role="group"/.test(sTag) && /aria-label="Ebenen"/.test(sTag) && /data-i18n="layers\.strip"/.test(sTag) && /<div id="canvas-container"><\/div>[\s\S]{0,4200}<div id="layer-strip"[^>]*><\/div>\s*<div class="rail-left">/.test(canvasRow) && (canvasRow.match(/id="layer-strip"/g) || []).length === 1 && canvasRow.indexOf('id="layer-strip"') < canvasRow.indexOf('id="layer-table"') && canvasRow.indexOf('id="layer-strip"') < canvasRow.indexOf('class="rail-left"'));
     // ---- the table's chip column: room for the focus ring (commit 3) ----
-    check('the table\'s chip column (.lt-rows) has the rail\'s room for the keyboard focus ring: 4px padding and an equal negative margin (the outer width and position of the table stay: its width rule is unchanged above), still the scrolling column', /\.layer-table \.lt-rows\s*\{[^}]*padding:\s*4px[^}]*margin:\s*-4px[^}]*overflow-y:\s*auto[^}]*min-height:\s*0/.test(css));
+    check('the table\'s layer rows (.lt-rows) are the ONLY scrolling part: 4px padding (the gap under the Base row, and the keyboard focus ring\'s room) and a -4px side and bottom margin (margin: 0 -4px -4px: the outer width and the height of the table stay), overflow-y: auto, min-height: 0; the Base row (.lt-base) is fixed (flex: none); with no layers the empty scroller takes no room (.lt-rows:empty { display: none })', /\.layer-table \.lt-rows\s*\{[^}]*padding:\s*4px[^}]*margin:\s*0 -4px -4px[^}]*overflow-y:\s*auto[^}]*min-height:\s*0/.test(css) && /\.layer-table \.lt-base\s*\{[^}]*flex:\s*none/.test(css) && /\.layer-table \.lt-rows:empty\s*\{[^}]*display:\s*none/.test(css));
     // ---- the confirmation dialogs (commit 3) ----
     const inlineCss = HTML.replace(/\/\*[\s\S]*?\*\//g, '');
     const genericBtn = (inlineCss.match(/\.dialog-content button\s*\{[^}]*\}/) || [''])[0];
@@ -430,7 +452,7 @@ T('source', () => {
     check('ui-layers.js calls ONLY window.layerApi for actions (select, add, remove, setEnabled, toggleMore) and writes no sketch state itself (no assignment to activeLayer / additionalLayers / timeline, no .enabled write)', ['select', 'add', 'remove', 'setEnabled', 'toggleMore'].every(m => new RegExp('api\\(\\)\\.' + m + '\\(').test(LAYERS)) && !/(^|[;{}\n])\s*(activeLayer|additionalLayers|timeline)\s*=[^=]|\.enabled\s*=[^=]/.test(LAYERS));
     check('ui-layers.js (rail and strip, built by ONE function): the eye, "..." and x go through UI.guard (a click on a disabled one shows the reason, never acts); neither view has a name line listener (the name line is bound to the table only)', /UI\.guard\(v\.eye,/.test(LAYERS) && /UI\.guard\(v\.more,/.test(LAYERS) && /UI\.guard\(v\.x,/.test(LAYERS) && /table\.addEventListener\('pointerdown', touched, true\)/.test(LAYERS) && !/(rail|strip|container|v\.container)\.addEventListener\('(pointerdown|focusin|pointerover)'/.test(LAYERS) && /if \(rail\) buildNarrow\('rail', rail\);/.test(LAYERS) && /if \(strip\) buildNarrow\('strip', strip\);/.test(LAYERS));
     check('ui-layers.js (rail and strip): the actions are those of the ACTIVE sheet (model.actions.index) and the order is eye, DIAMOND, "...", x (the diamond is the 4th button now)', /lastModel \? lastModel\.actions\.index : null/.test(LAYERS) && /group2\.appendChild\(v\.eye\); group2\.appendChild\(v\.dia\); group2\.appendChild\(v\.more\); group2\.appendChild\(v\.x\);/.test(LAYERS) && /UI\.guard\(v\.dia,/.test(LAYERS));
-    check('ui-layers.js: the reveal is in ONE place - moreNow(), the single handler of every "..." (table, rail, strip) - runs only when the model says the block is open, scrolls the PAGE with window.scrollBy({ top: delta, behavior }) (smooth unless prefers-reduced-motion), measures the UNION of the visible groups (not [hidden], with client rects), has NO scrollIntoView left and never focuses anything', /function moreNow\(\) \{ if \(api\(\)\) api\(\)\.toggleMore\(\); sync\(\); if \(lastModel && lastModel\.more\.open\) revealMore\(\); \}/.test(LAYERS) && /window\.scrollBy\(\{ top: delta, behavior: reduced \? 'auto' : 'smooth' \}\)/.test(LAYERS) && /\(prefers-reduced-motion: reduce\)/.test(LAYERS) && (LAYERS.match(/revealMore\(\)/g) || []).length === 2 && !/scrollIntoView/.test(LAYERS.replace(/\/\/[^\n]*/g, '')) && /if \(c\.hidden \|\| !c\.getClientRects \|\| !c\.getClientRects\(\)\.length\) continue;/.test(LAYERS) && /if \(r\.top < top\) top = r\.top;/.test(LAYERS) && /if \(r\.bottom > bottom\) bottom = r\.bottom;/.test(LAYERS) && /const PANEL_MARGIN = 8;/.test(LAYERS) && !/\.focus\(\)[^\n]*scrollBy|scrollBy[^\n]*\.focus\(\)/.test(LAYERS));
+    check('ui-layers.js: the reveal is ONE function, revealPanel(panel), called by moreNow() - the single handler of every "..." (table, rail, strip) - only when the model says the block is open (and exported as layerTable.revealPanel for the timeline\'s "Mehr"), scrolls the PAGE with window.scrollBy({ top: delta, behavior }) (smooth unless prefers-reduced-motion), measures the UNION of the visible groups (not [hidden], with client rects), has NO scrollIntoView left and never focuses anything', /function moreNow\(\) \{ if \(api\(\)\) api\(\)\.toggleMore\(\); sync\(\); if \(lastModel && lastModel\.more\.open\) revealPanel\(document\.getElementById\('layer-more-panel'\)\); \}/.test(LAYERS) && /root\.layerTable\.revealPanel = revealPanel;/.test(LAYERS) && /window\.scrollBy\(\{ top: delta, behavior: reduced \? 'auto' : 'smooth' \}\)/.test(LAYERS) && /\(prefers-reduced-motion: reduce\)/.test(LAYERS) && (LAYERS.match(/revealPanel\(/g) || []).length === 2 && (LAYERS.match(/window\.scrollBy\(/g) || []).length === 1 && (LAYERS.match(/panelRevealDelta\(/g) || []).length === 2 && !/scrollIntoView/.test(LAYERS.replace(/\/\/[^\n]*/g, '')) && /if \(c\.hidden \|\| !c\.getClientRects \|\| !c\.getClientRects\(\)\.length\) continue;/.test(LAYERS) && /if \(r\.top < top\) top = r\.top;/.test(LAYERS) && /if \(r\.bottom > bottom\) bottom = r\.bottom;/.test(LAYERS) && /const PANEL_MARGIN = 8;/.test(LAYERS) && !/\.focus\(\)[^\n]*scrollBy|scrollBy[^\n]*\.focus\(\)/.test(LAYERS));
     // the block in sketch.js
     const bi = SKETCH.indexOf('    // layerApi: begin'), ei = SKETCH.indexOf('    // layerApi: end\n');
     const block = bi >= 0 && ei > bi ? SKETCH.slice(bi, ei) : '';

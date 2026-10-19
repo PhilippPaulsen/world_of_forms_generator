@@ -155,7 +155,7 @@
     return b;
   }
 
-  const rowsEl = el('div', 'lt-rows'), footEl = el('div', 'lt-foot'), nameEl = el('p', 'lt-name');
+  const baseEl = el('div', 'lt-row lt-base'), rowsEl = el('div', 'lt-rows'), footEl = el('div', 'lt-foot'), nameEl = el('p', 'lt-name');   // the Base row and the foot are fixed; only rowsEl (the layer rows) scrolls
   nameEl.id = 'layer-table-name';
   nameEl.setAttribute('aria-hidden', 'true');
   const nameLabel = el('span', 'lt-name-label'), nameState = el('span', 'lt-name-state');
@@ -165,12 +165,12 @@
   function indexOf(b) { const k = b.dataset.key || ''; const v = k.slice(k.indexOf(':') + 1); return v === 'base' ? 'base' : parseInt(v, 10); }
   function layersNow() { return (typeof additionalLayers !== 'undefined') ? additionalLayers : []; }
   function addLayerNow() { if (api()) api().add(); sync(); }
-  function moreNow() { if (api()) api().toggleMore(); sync(); if (lastModel && lastModel.more.open) revealMore(); }
-  // The block opens in the controls container, below the layer view and the tool rail's rows: on a phone it can start at or below the fold. When it opens, scroll the page just enough to bring the WHOLE
-  // block into view (the union of its visible groups; one that is taller than the viewport is aligned to the top with a margin); smooth unless the user prefers reduced motion; nothing when it is
-  // already inside. The focus stays on the "..." button (window.scrollBy moves no focus); nothing happens on close.
-  function revealMore() {
-    const panel = document.getElementById('layer-more-panel');
+  function moreNow() { if (api()) api().toggleMore(); sync(); if (lastModel && lastModel.more.open) revealPanel(document.getElementById('layer-more-panel')); }
+  // A collapsible block opens in the controls container, below the layer view and the tool rail's rows: on a phone it can start at or below the fold. When it opens, scroll the page just enough to
+  // bring the WHOLE block into view (the union of the visible children of `panel`; one that is taller than the viewport is aligned to the top with a margin); smooth unless the user prefers reduced
+  // motion; nothing when it is already inside. The focus stays on the toggle (window.scrollBy moves no focus); nothing happens on close. The ONE implementation: the layer block ("...", here) and the
+  // timeline's "Mehr" group (ui-timeline.js, through layerTable.revealPanel) both call it.
+  function revealPanel(panel) {
     if (!panel || !panel.children || typeof window === 'undefined' || !window.scrollBy) return;
     let top = Infinity, bottom = -Infinity;
     for (let i = 0; i < panel.children.length; i++) {
@@ -187,6 +187,7 @@
     const reduced = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     window.scrollBy({ top: delta, behavior: reduced ? 'auto' : 'smooth' });
   }
+  root.layerTable.revealPanel = revealPanel;
 
   // the add and more cells (the foot) are static: built once
   const addBtn = cell('lt-add', 'add', addLayerNow);
@@ -197,7 +198,7 @@
   moreBtn.setAttribute('aria-controls', 'layer-more-panel');
   UI.guard(moreBtn, moreNow);   // the one click listener of "...": while it is disabled (the Base is active) a click shows the reason instead
   footEl.appendChild(addBtn); footEl.appendChild(moreBtn);
-  table.appendChild(rowsEl); table.appendChild(footEl); table.appendChild(nameEl);
+  table.appendChild(baseEl); table.appendChild(rowsEl); table.appendChild(footEl); table.appendChild(nameEl);
   UI.name(addBtn, T['layers.add']);
   UI.name(moreBtn, T['layers.more']);
 
@@ -276,7 +277,7 @@
       for (let c = 0; c < cs.length; c++) if (cs[c].dataset.key === key) return cs[c];
       return null;
     }
-    const all = rowsEl.children;
+    const all = [baseEl].concat(Array.prototype.slice.call(rowsEl.children));   // the Base row, then the scrolling layer rows
     for (let r = 0; r < all.length; r++) { const kids = all[r].children; for (let c = 0; c < kids.length; c++) if (kids[c].dataset.key === key) return kids[c]; }
     return null;
   }
@@ -322,8 +323,8 @@
   // ---- rows: built when the structure changes, patched in place otherwise (a keyboard user keeps the focus) -------------------------------------------
   let structKey = null, sigNow = null, lastActiveKey = null;
   function chipHandler(chip) { return function () { if (api()) api().select(indexOf(chip)); sync(); }; }
-  function buildRow(row) {
-    const r = el('div', 'lt-row');
+  function buildRow(row, host) {   // host: an existing row element to fill (the Base row, built once); otherwise a new one
+    const r = host || el('div', 'lt-row');
     r.dataset.row = row.key;
     const chip = cell('lt-chip', 'chip:' + row.index, null);
     chip.addEventListener('click', chipHandler(chip));
@@ -435,11 +436,13 @@
       Object.keys(views).forEach(function (n) { focusKeys[n] = focusedKey(views[n].container); });
       structKey = key;
       rowsEl.textContent = '';
-      model.rows.forEach(function (row) { rowsEl.appendChild(buildRow(row)); });
+      model.rows.slice(1).forEach(function (row) { rowsEl.appendChild(buildRow(row)); });   // model.rows[0] is the Base: its row stays (built once, below)
+      if (!baseEl.children.length) buildRow(model.rows[0], baseEl);
       if (focused) { const b = findCell(focused, 'table'); if (b && b.focus) b.focus(); }
     }
+    patchRow(baseEl, model.rows[0], model);
     const rs = rowsEl.children;
-    for (let i = 0; i < rs.length; i++) patchRow(rs[i], model.rows[i], model);
+    for (let i = 0; i < rs.length; i++) patchRow(rs[i], model.rows[i + 1], model);
     // the foot
     setIf(moreBtn, 'aria-expanded', model.more.open ? 'true' : 'false');
     if (moreBtn.classList.contains('has-state') !== model.more.dot) moreBtn.classList.toggle('has-state', model.more.dot);
