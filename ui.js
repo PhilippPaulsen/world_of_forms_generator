@@ -25,7 +25,6 @@
  *                                   a control with no visible text of its own (an icon, a glyph, an unlabelled field); a control with visible text is
  *                                   named by that text and keeps its title as a description, with no aria-label (WCAG 2.5.3)
  *
- * The sketch's own #node-count-note is still a legacy `.toast` (an element sketch.js writes into): Escape, a click on it and the next tap dismiss it as before.
  * Text is passed in by the caller (the dictionary comes in a later phase).
  */
 
@@ -168,18 +167,11 @@
   // a press outside every notice closes the non-sticky ones (capture phase: it runs before a control's own handler, which may show a new one); a press INSIDE one does not
   document.addEventListener('pointerdown', function (e) {
     if (notices.length && !(e.target && e.target.closest && e.target.closest('.notice'))) hideToast();
-    // the sketch's own notes (#node-count-note, a legacy `.toast`) are dismissed the same way
-    document.querySelectorAll('.toast:not([hidden])').forEach(function (n) { if (!n.contains(e.target)) n.hidden = true; });
   }, true);
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
       if (notices.length) removeNotice(notices[notices.length - 1], true);   // the newest
-      document.querySelectorAll('.toast:not([hidden])').forEach(function (n) { n.hidden = true; });
     }
-  });
-  document.addEventListener('click', function (e) {
-    const n = e.target.closest && e.target.closest('.toast');
-    if (n) n.hidden = true;
   });
 
   // ---- disabled with a reason --------------------------------------------

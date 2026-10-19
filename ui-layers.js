@@ -287,19 +287,14 @@
     return null;
   }
   // The diamond of the layer at `index` (in a narrow view: the active layer). An outline diamond selects that layer and adds it to the timeline with the CURRENT Base net (layerApi.addToTimeline =
-  // addLayerToTimeline, which returns nothing: a refusal is told by the state - the layer is not a keyframe afterwards - and its message is in #timeline-status, shown as a toast and nothing changes).
+  // addLayerToTimeline, which returns nothing: a refusal leaves the layer out of the timeline, so the diamond stays outline, and its message is a notice from sketch.js's setTimelineStatus).
   // A filled one takes the keyframe out of the timeline; it asks first only when that discards a user-set line pairing (diamondPlan).
   function diamondClick(index, view) {
     const plan = root.timelineModel && root.timelineModel.diamondPlan(layersNow(), typeof timeline !== 'undefined' ? timeline : null, index);
     if (!plan || !api()) return;
     if (plan.action === 'add') {
       api().select(index);
-      api().addToTimeline();
-      const tl = typeof timeline !== 'undefined' ? timeline : null;
-      if (!(tl && tl.keyframeLayerIds.indexOf(index) >= 0)) {
-        const st = document.getElementById('timeline-status');
-        UI.toast((st && st.textContent) || T['layers.dia.none'], 6000);
-      }
+      api().addToTimeline();   // a refusal is told by sketch.js (setTimelineStatus: a notice); the diamond just reflects the state below - it fills only when the layer became a keyframe
       sync();
       return;
     }
