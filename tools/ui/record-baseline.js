@@ -29,12 +29,14 @@
  * The files. baseline-phase1.json is the ORIGINAL phase-1 baseline (commit 7ae041c0, before any rework, Form tab only, the old toolbar); it stays as it is, as the "before" of the whole UI
  * rework. baseline-rail-3.json is the baseline after rail rearrangement commit 3 (all three tabs, the five-group rail, the Netz row and its overlay, the OLD layer row and timeline controls,
  * `--target` forced). baseline-cleanup-1.json is the control recorded before the cleanup deleted the old layer, timeline and message DOM: the table, the rail, the strip, the timeline strip and
- * the notices are tracked, and `dom_present` lists the old elements that still exist. Compare a later state with the file of the same method.
+ * the notices are tracked, and `dom_present` lists the old elements that still exist. baseline-cleanup-1b.json is the same control recorded again on the tree after step 3 with the
+ * DETERMINISTIC script (every snapshot but `notice` is taken with no notice on screen and #ui-notices is measured in viewport coordinates: two recordings of one tree give 0 differences,
+ * whatever the speed or the visibility of the pane): compare the later states with 1b, not with the first control. Compare a later state with the file of the same method.
  *
  * Comparing a later run with a file. Record the same widths, tabs and pointer modes of the later tree (the same steps, the same script), save them as a second file with the same shape
  * ({ phase, commit, note, modes, widths }), then
  *
- *   node tools/ui/compare-baseline.js tools/ui/baseline-cleanup-1.json <the new file>            (every difference: rect, presence, scalar)
+ *   node tools/ui/compare-baseline.js tools/ui/baseline-cleanup-1b.json <the new file>            (every difference: rect, presence, scalar)
  *   node tools/ui/compare-baseline.js <a> <b> --shared                                            (only elements both files track; for a file of an older method)
  *
  * It prints each element that differs, per width, tab and scenario, with both rects, and a count per kind. For the cleanup the difference must be exactly the removed elements: their
