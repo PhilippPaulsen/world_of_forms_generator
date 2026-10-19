@@ -89,6 +89,8 @@ class El {
     closest(sel) { for (let e = this; e; e = e.parent) { if (sel.startsWith('.') ? e._c.has(sel.slice(1)) : e.tagName.toLowerCase() === sel) return e; } return null; }
     focus() { this.ownerDoc.activeElement = this; this.dispatch('focusin'); }
     getBoundingClientRect() { return { left: 0, right: 40, top: 0, bottom: 40 }; }
+    scrollIntoView() { if (this.ownerDoc) this.ownerDoc.__scrollIntoView = (this.ownerDoc.__scrollIntoView || 0) + 1; }   // a trap: it can scroll the WINDOW, which the table's reveal must never do
+    scrollBy(o) { (this.scrolls = this.scrolls || []).push(o); this.scrollTop = (this.scrollTop || 0) + (o.top || 0); }   // an element's own scrollBy (the table's scroller): recorded and applied
     querySelector(sel) { const all = this.querySelectorAll(sel); return all[0] || null; }
     querySelectorAll(sel) { const out = []; const want = sel.startsWith('.') ? e => e._c.has(sel.slice(1)) : (/^[a-z]+$/.test(sel) ? e => e.tagName.toLowerCase() === sel : () => false); const walk = n => n.children.forEach(c => { if (want(c)) out.push(c); walk(c); }); walk(this); return out; }
     dispatch(type, ev) { const e = Object.assign({ type, target: this, stopPropagation() { }, preventDefault() { }, detail: 1 }, ev || {}); for (let n = this; n; n = n.parent) (n.handlers[type] || []).forEach(h => { e.currentTarget = n; h(e); }); return e; }
@@ -120,7 +122,7 @@ function build(o) {
     const clock = { t: 0 }, calls = [], moq = [];   // moq: the MutationObserver callbacks, run AFTER the click handler like a browser's microtask (UI.dialog moves the focus there)
     const layers = o.layers || [], st = { layers, active: o.active === undefined ? 'base' : o.active, timeline: o.timeline === undefined ? null : o.timeline };
     const ctx = vm.createContext({ document: doc, console, MutationObserver: class { constructor(cb) { this.cb = cb; } observe(el) { el.onClass = () => { moq.push(this.cb); }; } }, setTimeout: (f) => 0, clearTimeout() { }, performance: { now: () => clock.t } });
-    ctx.window = ctx; ctx.matchMedia = q => ({ matches: !!o.reduced && /prefers-reduced-motion:\s*reduce\b/.test(q) }); ctx.innerWidth = 1200; ctx.innerHeight = 812; ctx.scrollBy = opts => { scrolls.push(opts); }; ctx.addEventListener = () => { };
+    ctx.window = ctx; ctx.matchMedia = q => ({ matches: !!o.reduced && /prefers-reduced-motion:\s*reduce\b/.test(q) }); ctx.innerWidth = 1200; ctx.innerHeight = 812; ctx.scrollBy = opts => { scrolls.push(opts); }; ctx.addEventListener = (type, fn) => { (ctx.__wl = ctx.__wl || {})[type] = (ctx.__wl[type] || []).concat(fn); };
     ctx.additionalLayers = layers; ctx.activeLayer = st.active; ctx.timeline = st.timeline;
     ctx.layerApi = {
         select(sheet) { calls.push(['select', sheet]); ctx.activeLayer = sheet; },
@@ -358,6 +360,59 @@ T('table base row', () => {
     check('without layers the scroller is there but empty (the Base row and the foot only; the CSS takes the empty scroller out of the layout)', e.table.children.length === 4 && e.table.children[1].children.length === 0 && J(e.keys()) === J(['chip:base', 'add', 'more']));
 });
 
+// the table reveals the ACTIVE row inside its scroller (commit 8): with the shared helper revealActive (the rail's and the strip's), by scrolling the scroller only
+T('table reveal', () => {
+    const L = (extra) => Object.assign({ connections: [], enabled: true }, extra || {});
+    // geometry: the scroller 100..500 (ten 36px rows, 4px apart), row i at 104 + 40 i - scrollTop
+    let GEO = null;
+    const origRect = El.prototype.getBoundingClientRect;
+    El.prototype.getBoundingClientRect = function () {
+        if (GEO && this === GEO.scroller) return { top: 100, bottom: 500, left: 0, right: 156 };
+        if (GEO && this.dataset && /^chip:\d/.test(this.dataset.key || '') && this.parent && this.parent.parent === GEO.scroller) { const i = GEO.scroller.children.indexOf(this.parent), top = 104 + 40 * i - (GEO.scroller.scrollTop || 0); return { top, bottom: top + 36, left: 0, right: 36 }; }
+        return origRect.call(this);
+    };
+    const geo = e => { GEO = { scroller: e.table.children[1] }; GEO.scroller.scrollTop = 0; return GEO.scroller; };
+    const hook = (e, sc) => { e.ctx.layerApi.remove = i => { e.calls.push(['remove', i]); e.layers.splice(i, 1); if (e.ctx.activeLayer === i) e.ctx.activeLayer = 'base'; else if (typeof e.ctx.activeLayer === 'number' && e.ctx.activeLayer > i) e.ctx.activeLayer--; }; };
+    try {
+        let e = build({ layers: Array.from({ length: 14 }, () => L()), active: 'base' });
+        let sc = geo(e); e.sync();
+        check('14 layers, the Base active: nothing scrolls (the Base row is fixed outside the scroller, there is no row to reveal); no window scroll', !sc.scrolls && e.scrolls.length === 0);
+        e.cell('add').focus(); e.clk(e.cell('add'));
+        check('"+" with the list at the top: the new row (the 15th: 664..700 in a scroller ending at 500) is revealed: the SCROLLER scrolls once, { top: 200, behavior: \'smooth\' } (the overhang), the window does not, and the focus stays on "+"', sc.scrolls && sc.scrolls.length === 1 && J(sc.scrolls[0]) === J({ top: 200, behavior: 'smooth' }) && sc.scrollTop === 200 && e.scrolls.length === 0 && !e.doc.__scrollIntoView && e.doc.activeElement === e.cell('add') && e.cell('chip:14').classList.contains('active'));
+        e.clk(e.cell('chip:2'));
+        check('a chip click on a row scrolled above the top (row 3: -16..20, the scroller starts at 100) scrolls the scroller up by 116 ({ top: -116, smooth }), the window is untouched', sc.scrolls.length === 2 && J(sc.scrolls[1]) === J({ top: -116, behavior: 'smooth' }) && sc.scrollTop === 84 && e.scrolls.length === 0);
+        e.cell('chip:5').focus(); e.cell('chip:5').dispatch('click', { detail: 0 }); e.sync();
+        check('a KEYBOARD selection (a click with detail 0 on the focused chip) takes the same path; row 6 (204..240) is already inside: NO scroll', sc.scrolls.length === 2 && e.cell('chip:5').classList.contains('active') && e.doc.activeElement === e.cell('chip:5') && e.scrolls.length === 0);
+        e.clk(e.cell('chip:5'));
+        check('selecting the active row again scrolls nothing (the active key did not change)', sc.scrolls.length === 2);
+        sc.scrollTop = 0; sc.scrolls.length = 0; e.clk(e.cell('chip:9'));
+        check('a row ending exactly at the bottom edge (row 10: 464..500) is inside: no scroll; the next one (row 11: 504..540, cut by the edge) scrolls by the overhang { top: 40, smooth }', sc.scrolls.length === 0 && (e.clk(e.cell('chip:10')), sc.scrolls.length === 1 && J(sc.scrolls[0]) === J({ top: 40, behavior: 'smooth' })));
+        // base first, then a layer in view: nothing; the Base row and the foot never scroll
+        check('the Base row, the foot and the table itself are never scrolled: only the scroller has a scrollBy record', !e.table.scrolls && !e.table.children[0].scrolls && !e.table.children[2].scrolls && !e.table.children[0].scrollTop && !e.table.scrollTop);
+        // remove: a layer above the active one goes; the active one shifts to a number the list has to bring into view
+        e = build({ layers: Array.from({ length: 15 }, () => L()), active: 'base' }); sc = geo(e); hook(e, sc); e.sync();
+        e.clk(e.cell('chip:13')); sc.scrollTop = 0; sc.scrolls.length = 0;
+        e.clk(e.cell('x:0'));
+        check('a REMOVE that shifts the active row (row 14 becomes row 13, 584..620 with the list at the top) reveals it: one scroll { top: 120, smooth }; a removed active row (the Base becomes active) would scroll nothing', sc.scrolls.length === 1 && J(sc.scrolls[0]) === J({ top: 120, behavior: 'smooth' }) && e.cell('chip:12').classList.contains('active') && e.scrolls.length === 0);
+        // restore: the page is built with an active layer far down
+        e = build({ layers: Array.from({ length: 14 }, () => L()), active: 'base' }); sc = geo(e); e.ctx.activeLayer = 11; e.sync();
+        check('a RESTORE ends as a state change (the page built with the Base active, then layer 12 is the active sheet) with the list at the top: row 12 at 544..580 is revealed: { top: 80, smooth }', sc.scrolls && sc.scrolls.length === 1 && J(sc.scrolls[0]) === J({ top: 80, behavior: 'smooth' }) && e.scrolls.length === 0);
+        // a table that was hidden when the active sheet changed is revealed when the window is resized (the table comes back from the rail's width)
+        e = build({ layers: Array.from({ length: 14 }, () => L()), active: 'base' }); sc = geo(e); GEO = null;
+        e.ctx.activeLayer = 13; e.sync();
+        check('hidden table (no geometry): the active sheet changes to row 14 and nothing scrolls (all rects are zero-size); the geometry comes back (the table is shown) and a window resize reveals the row: { top: 160, smooth }', !sc.scrolls && (GEO = { scroller: sc }, (e.ctx.__wl.resize || []).forEach(f => f()), sc.scrolls && sc.scrolls.length === 1 && J(sc.scrolls[0]) === J({ top: 160, behavior: 'smooth' })));
+        // reduced motion
+        e = build({ layers: Array.from({ length: 14 }, () => L()), active: 'base', reduced: true }); sc = geo(e); e.cell('add').focus(); e.clk(e.cell('add'));
+        check('with prefers-reduced-motion the table\'s reveal uses behavior \'auto\' (the one shared scrollBehavior())', sc.scrolls && sc.scrolls.length === 1 && J(sc.scrolls[0]) === J({ top: 200, behavior: 'auto' }));
+        // the rail and the strip are unchanged: instant (scrollTop), not smooth
+        e = build({ layers: Array.from({ length: 10 }, () => L()), active: 'base' });
+        const col = e.railChips(); col.scrollTop = 0; col.getBoundingClientRect = () => ({ top: 100, bottom: 400, left: 0, right: 36 });
+        e.rcell('chip:9').getBoundingClientRect = () => ({ top: 520 - col.scrollTop, bottom: 568 - col.scrollTop, left: 0, right: 36 });
+        e.clk(e.rcell('chip:9'));
+        check('the rail still scrolls instantly (scrollTop, no scrollBy: the smooth behaviour is the table\'s only)', col.scrollTop === 168 && !col.scrolls);
+    } finally { GEO = null; El.prototype.getBoundingClientRect = origRect; }
+});
+
 // ================= 3. the source =================
 console.log('\n== the markup, the CSS and the one block in sketch.js ==');
 T('source', () => {
@@ -452,7 +507,9 @@ T('source', () => {
     check('ui-layers.js calls ONLY window.layerApi for actions (select, add, remove, setEnabled, toggleMore) and writes no sketch state itself (no assignment to activeLayer / additionalLayers / timeline, no .enabled write)', ['select', 'add', 'remove', 'setEnabled', 'toggleMore'].every(m => new RegExp('api\\(\\)\\.' + m + '\\(').test(LAYERS)) && !/(^|[;{}\n])\s*(activeLayer|additionalLayers|timeline)\s*=[^=]|\.enabled\s*=[^=]/.test(LAYERS));
     check('ui-layers.js (rail and strip, built by ONE function): the eye, "..." and x go through UI.guard (a click on a disabled one shows the reason, never acts); neither view has a name line listener (the name line is bound to the table only)', /UI\.guard\(v\.eye,/.test(LAYERS) && /UI\.guard\(v\.more,/.test(LAYERS) && /UI\.guard\(v\.x,/.test(LAYERS) && /table\.addEventListener\('pointerdown', touched, true\)/.test(LAYERS) && !/(rail|strip|container|v\.container)\.addEventListener\('(pointerdown|focusin|pointerover)'/.test(LAYERS) && /if \(rail\) buildNarrow\('rail', rail\);/.test(LAYERS) && /if \(strip\) buildNarrow\('strip', strip\);/.test(LAYERS));
     check('ui-layers.js (rail and strip): the actions are those of the ACTIVE sheet (model.actions.index) and the order is eye, DIAMOND, "...", x (the diamond is the 4th button now)', /lastModel \? lastModel\.actions\.index : null/.test(LAYERS) && /group2\.appendChild\(v\.eye\); group2\.appendChild\(v\.dia\); group2\.appendChild\(v\.more\); group2\.appendChild\(v\.x\);/.test(LAYERS) && /UI\.guard\(v\.dia,/.test(LAYERS));
-    check('ui-layers.js: the reveal is ONE function, revealPanel(panel), called by moreNow() - the single handler of every "..." (table, rail, strip) - only when the model says the block is open (and exported as layerTable.revealPanel for the timeline\'s "Mehr"), scrolls the PAGE with window.scrollBy({ top: delta, behavior }) (smooth unless prefers-reduced-motion), measures the UNION of the visible groups (not [hidden], with client rects), has NO scrollIntoView left and never focuses anything', /function moreNow\(\) \{ if \(api\(\)\) api\(\)\.toggleMore\(\); sync\(\); if \(lastModel && lastModel\.more\.open\) revealPanel\(document\.getElementById\('layer-more-panel'\)\); \}/.test(LAYERS) && /root\.layerTable\.revealPanel = revealPanel;/.test(LAYERS) && /window\.scrollBy\(\{ top: delta, behavior: reduced \? 'auto' : 'smooth' \}\)/.test(LAYERS) && /\(prefers-reduced-motion: reduce\)/.test(LAYERS) && (LAYERS.match(/revealPanel\(/g) || []).length === 2 && (LAYERS.match(/window\.scrollBy\(/g) || []).length === 1 && (LAYERS.match(/panelRevealDelta\(/g) || []).length === 2 && !/scrollIntoView/.test(LAYERS.replace(/\/\/[^\n]*/g, '')) && /if \(c\.hidden \|\| !c\.getClientRects \|\| !c\.getClientRects\(\)\.length\) continue;/.test(LAYERS) && /if \(r\.top < top\) top = r\.top;/.test(LAYERS) && /if \(r\.bottom > bottom\) bottom = r\.bottom;/.test(LAYERS) && /const PANEL_MARGIN = 8;/.test(LAYERS) && !/\.focus\(\)[^\n]*scrollBy|scrollBy[^\n]*\.focus\(\)/.test(LAYERS));
+    check('ui-layers.js: the reveal is ONE function, revealPanel(panel), called by moreNow() - the single handler of every "..." (table, rail, strip) - only when the model says the block is open (and exported as layerTable.revealPanel for the timeline\'s "Mehr"), scrolls the PAGE with window.scrollBy({ top: delta, behavior }) (smooth unless prefers-reduced-motion), measures the UNION of the visible groups (not [hidden], with client rects), has NO scrollIntoView left and never focuses anything', /function moreNow\(\) \{ if \(api\(\)\) api\(\)\.toggleMore\(\); sync\(\); if \(lastModel && lastModel\.more\.open\) revealPanel\(document\.getElementById\('layer-more-panel'\)\); \}/.test(LAYERS) && /root\.layerTable\.revealPanel = revealPanel;/.test(LAYERS) && /window\.scrollBy\(\{ top: delta, behavior: scrollBehavior\(\) \}\)/.test(LAYERS) && /return reduced \? 'auto' : 'smooth';/.test(LAYERS) && /\(prefers-reduced-motion: reduce\)/.test(LAYERS) && (LAYERS.match(/revealPanel\(/g) || []).length === 2 && (LAYERS.match(/window\.scrollBy\(/g) || []).length === 1 && (LAYERS.match(/panelRevealDelta\(/g) || []).length === 2 && !/scrollIntoView/.test(LAYERS.replace(/\/\/[^\n]*/g, '')) && /if \(c\.hidden \|\| !c\.getClientRects \|\| !c\.getClientRects\(\)\.length\) continue;/.test(LAYERS) && /if \(r\.top < top\) top = r\.top;/.test(LAYERS) && /if \(r\.bottom > bottom\) bottom = r\.bottom;/.test(LAYERS) && /const PANEL_MARGIN = 8;/.test(LAYERS) && !/\.focus\(\)[^\n]*scrollBy|scrollBy[^\n]*\.focus\(\)/.test(LAYERS));
+    const layersCode = LAYERS.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    check('ui-layers.js: the table reuses the shared row reveal, no second copy: ONE function revealActive (the rail and the strip call it from renderNarrow, the table with its own view record { smooth: true } from render() and the resize handler), ONE revealDelta, ONE scrollBehavior (the only matchMedia call: the page reveal and the table share it), one scrollTop += and one scrollLeft += (inside revealActive), scrollBy only in revealPanel (the window) and in revealActive (the scroller), no scrollIntoView', (layersCode.match(/function revealActive\(/g) || []).length === 1 && (layersCode.match(/function revealDelta\(/g) || []).length === 1 && (layersCode.match(/function scrollBehavior\(/g) || []).length === 1 && (layersCode.match(/matchMedia\(/g) || []).length === 1 && /const tableView = \{ name: 'table', chips: rowsEl, horizontal: false, lastActive: null, smooth: true \};/.test(layersCode) && (layersCode.match(/revealActive\(tableView\)/g) || []).length === 2 && (layersCode.match(/revealActive\(v\)/g) || []).length === 2 /* the definition and the call in renderNarrow */ && (layersCode.match(/\.scrollTop\s*\+?=/g) || []).length === 1 && (layersCode.match(/\.scrollLeft\s*\+?=/g) || []).length === 1 && (layersCode.match(/\bscrollBy\(/g) || []).length === 2 && /col\.scrollBy\(\{ top: d, behavior: scrollBehavior\(\) \}\)/.test(layersCode) && !/scrollIntoView/.test(layersCode) && /if \(rebuilt \|\| rowKey !== tableView\.lastActive\) \{ tableView\.lastActive = rowKey; revealActive\(tableView\); \}/.test(layersCode));
     // the block in sketch.js
     const bi = SKETCH.indexOf('    // layerApi: begin'), ei = SKETCH.indexOf('    // layerApi: end\n');
     const block = bi >= 0 && ei > bi ? SKETCH.slice(bi, ei) : '';
