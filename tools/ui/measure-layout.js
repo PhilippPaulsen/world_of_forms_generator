@@ -32,7 +32,9 @@
  *   layer_more          the layer "Mehr" opened (layerApi.toggleMore) and closed again
  *   plus_probe          ONE REAL click on the visible "+" of the current view (the table, the rail
  *                       or the strip: whichever has a rect); `probe` says which element it was
- *   notice              a notice showing (UI.notify, key "baseline"), so #ui-notices has a rect
+ *   notice              a notice showing (UI.notify, key "baseline"), so #ui-notices has a rect. It is the ONLY snapshot taken with a notice on screen: every other one is preceded
+ *                       by UI.hideToast() and one frame, and #ui-notices and its children are measured in VIEWPORT coordinates (they are position: fixed: a document rect would
+ *                       follow the scroll offset of the moment). Two recordings of the same tree give the same result (tools/ui/compare-baseline.js: 0 differences).
  *   dom_present         which old and kept selectors exist in the DOM (a hidden element has no
  *                       rect, so the rects cannot show that it is gone; this does)
  *   pointer             what the page's pointer media features say (coarse / fine / hover) and the
@@ -93,6 +95,14 @@
     return [Math.round(b.x), Math.round(b.y + window.scrollY), Math.round(b.width), Math.round(b.height)];
   }
 
+  // A rect in VIEWPORT coordinates (no scroll offset): for the position: fixed notices, whose document rect follows the scroll position of the moment.
+  function rectViewport(el) {
+    if (!el) return null;
+    const b = el.getBoundingClientRect();
+    if (b.width === 0 && b.height === 0) return null;
+    return [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)];
+  }
+
   function click(el) {
     for (const t of ['mousedown', 'mouseup', 'click']) {
       el.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window }));
@@ -132,7 +142,7 @@
 
   function snap() {
     const out = {};
-    TRACKED.forEach((sel) => { out[sel] = rect(document.querySelector(sel)); });
+    TRACKED.forEach((sel) => { const el = document.querySelector(sel); out[sel] = sel.indexOf('#ui-notices') === 0 ? rectViewport(el) : rect(el); });
     const root = document.documentElement;
     out.scrollWidth = root.scrollWidth;
     out.clientWidth = root.clientWidth;
@@ -151,6 +161,16 @@
     return out;
   }
 
+  // Every snapshot but the notice one is taken with NO notice showing: a notice that an earlier step raised (the net chapter's "Sin und Tan brauchen mindestens 4 Knoten" one) would still be
+  // on screen in a fast recording and gone in a slow one. UI.hideToast() closes the non-sticky notices; one frame (or 80 ms where the page is hidden and no frame comes) lets the layout settle.
+  async function snapQ(keepNotices) {
+    if (!keepNotices && window.UI && UI.hideToast) {
+      UI.hideToast();
+      await new Promise((r) => { let done = false; const fin = () => { if (!done) { done = true; r(); } }; if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fin); setTimeout(fin, 80); });
+    }
+    return snap();
+  }
+
   async function measureLayout(opts) {
     const wait = 300;
     const result = { viewportWidth: window.innerWidth, viewportHeight: window.innerHeight };
@@ -159,12 +179,12 @@
     const startTab = nav ? nav.current() : null;
     result.tab = startTab;
 
-    result.start = snap();
+    result.start = await snapQ();
 
     const shape_switch = {};
-    click(shapes[1]); await sleep(wait); shape_switch.square = snap();
-    click(shapes[2]); await sleep(wait); shape_switch.hex = snap();
-    click(shapes[0]); await sleep(wait); shape_switch.triangle = snap();
+    click(shapes[1]); await sleep(wait); shape_switch.square = await snapQ();
+    click(shapes[2]); await sleep(wait); shape_switch.hex = await snapQ();
+    click(shapes[0]); await sleep(wait); shape_switch.triangle = await snapQ();
     result.shape_switch = shape_switch;
 
     // The net chapter. The net applies to the SQUARE on the BASE sheet. The Netz row (#nav-netz) holds the kind buttons (.net-kind-btn[data-kind]), the strength stepper (#net-strength-value
@@ -174,14 +194,14 @@
     const net = {};
     click(shapes[1]); await sleep(wait);
     if (nav) { nav.show('netz'); await sleep(wait); }
-    net.netz_row = snap();
+    net.netz_row = await snapQ();
     const sinBtn = document.querySelector('#nav-netz .net-kind-btn[data-kind="sinus"]');
     if (sinBtn) { click(sinBtn); await sleep(wait); }
     const strUp = document.querySelector('#nav-netz .stepper-btn[data-dir="1"]');
     if (strUp) { click(strUp); await sleep(wait); }
-    net.square_sin_field = snap();
+    net.square_sin_field = await snapQ();
     const moreNetz = document.querySelector('#btn-more-netz');
-    if (moreNetz) { click(moreNetz); await sleep(wait); net.more_netz_open = snap(); click(moreNetz); await sleep(wait); }
+    if (moreNetz) { click(moreNetz); await sleep(wait); net.more_netz_open = await snapQ(); click(moreNetz); await sleep(wait); }
     net.found = {
       sin: !!sinBtn, strengthUp: !!strUp, moreNetz: !!moreNetz,
       sinusActive: !!(sinBtn && sinBtn.classList.contains('active')),
@@ -226,14 +246,14 @@
     }
     if (addLayer) { doAddLayer(); await sleep(wait); }
     await drawLine();
-    lt.layer_1_added = snap();
+    lt.layer_1_added = await snapQ();
     if (addToTimeline) { doAddToTimeline(); await sleep(wait); }
-    lt.timeline_1_keyframe = snap();
+    lt.timeline_1_keyframe = await snapQ();
     if (addLayer) { doAddLayer(); await sleep(wait); }
     await drawLine();
-    lt.layer_2_added = snap();
+    lt.layer_2_added = await snapQ();
     if (addToTimeline) { doAddToTimeline(); await sleep(wait); }
-    lt.timeline_2_keyframes = snap();
+    lt.timeline_2_keyframes = await snapQ();
     const st = document.querySelector('#timeline-status');
     lt.timelineStatus = st ? st.textContent : null; // non-empty = the second keyframe was refused
     result.layer_timeline = lt;
@@ -241,9 +261,9 @@
 
     // the timeline strip's "Mehr" (real clicks): opens the old #timeline-group (the keyframe list, the net status, the pairing editor, the status line, "Zeitleiste entfernen"); closed again after
     const tsMore = document.querySelector('#timeline-strip .ts-more');
-    if (tsMore) { realClick(tsMore); await sleep(wait); result.timeline_more = snap(); realClick(tsMore); await sleep(wait); }
+    if (tsMore) { realClick(tsMore); await sleep(wait); result.timeline_more = await snapQ(); realClick(tsMore); await sleep(wait); }
     // the layer "Mehr" of the active layer (a layer is active now): opened and closed again
-    if (api && api.toggleMore) { api.toggleMore(); await sleep(wait); result.layer_more = snap(); api.toggleMore(); await sleep(wait); }
+    if (api && api.toggleMore) { api.toggleMore(); await sleep(wait); result.layer_more = await snapQ(); api.toggleMore(); await sleep(wait); }
     // ONE real click on the visible "+" of the current view (a third layer): which element it was is in `probe`
     {
       let probeBtn = null, probeView = null;
@@ -252,12 +272,12 @@
       if (probeBtn) { realClick(probeBtn); await sleep(wait); }
       const n1 = typeof additionalLayers !== 'undefined' ? additionalLayers.length : null;
       result.probe = { view: probeView, selector: probeView ? probeView + ' [data-key="add"]' : null, ariaLabel: probeBtn ? probeBtn.getAttribute('aria-label') : null, layersBefore: n0, layersAfter: n1, added: n0 !== null && n1 === n0 + 1 };
-      result.plus_probe = snap();
+      result.plus_probe = await snapQ();
     }
     // a notice showing, so #ui-notices has a rect (a refusal-length text: the notice has its close button)
     if (window.UI && UI.notify) {
       UI.notify('Off while a net transform is active. Set the net back to Regular (Base sheet, square) to use curves again.', { key: 'baseline', kind: 'warn' });
-      await sleep(150); result.notice = snap();
+      await sleep(150); result.notice = await snapQ(true);
       UI.notifyClear('baseline'); await sleep(wait);
     }
     result.dom_present = {}; PRESENT.forEach((sel) => { result.dom_present[sel] = !!document.querySelector(sel); });
