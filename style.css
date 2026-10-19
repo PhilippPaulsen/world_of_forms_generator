@@ -841,8 +841,8 @@ body.dark {
 /* The old three-button symmetry group and the fold group stay in the DOM (sketch.js owns them) but are hidden. */
 .legacy-controls[hidden] { display: none; }
 
-/* Toasts: fixed-position messages that never move the layout - the reason a disabled control gives when tapped
-   (#ui-toast, ui.js) and the sketch's own notes (#node-count-note). Dismissible: Escape, a click on it, or the next tap. */
+/* The legacy toast: the sketch's own note #node-count-note (sketch.js writes into it; it moves into the notices with the routing commit). Fixed-position, never moves the layout.
+   Dismissible: Escape, a click on it, or the next tap. The look below is also the notices' look. */
 .toast {
   position: fixed;
   left: 50%;
@@ -863,6 +863,55 @@ body.dark {
   opacity: 1;
 }
 .toast[hidden] { display: none; }
+
+/* === The notices (ui.js: UI.notify, UI.toast) ===================================================================================================
+   #ui-notices is always rendered (a live region, never toggled with `hidden`) and empty most of the time. Fixed, centred, `min(92vw, 480px)` wide, 16px above the bottom edge plus the
+   bottom safe-area inset, a column with an 8px gap, newest at the bottom, at most two. The container does not catch the pointer; a notice does. The look is the toast's (background, text,
+   radius) plus a 3px left border per kind: info = the text colour, warn = a neutral grey, error = --danger. Nothing is filled. The text is clamped to three lines (the title has all of it).
+   A notice of 60 or more characters, or a sticky one, has a close button (--target square: 36 fine, 48 coarse). No animation, so nothing to reduce under prefers-reduced-motion. */
+.notices {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 60;
+  box-sizing: border-box;
+  width: min(92vw, 480px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  pointer-events: none;
+}
+.notice {
+  pointer-events: auto;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: 12px 16px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-text);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  font-size: var(--size-base);
+  line-height: 1.25;
+  text-align: left;
+}
+.notice-info { border-left-color: var(--color-text); }
+.notice-warn { border-left-color: var(--color-secondary); }
+.notice-error { border-left-color: var(--danger); }
+.notice-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.notice .notice-close { flex: none; width: var(--target); height: var(--target); margin: -6px -10px -6px 0; box-sizing: border-box; }   /* `.notice .` out-ranks index.html's inline .icon-btn { width: 40px; height: 40px } */
 
 /* === UI rework 4c: Netz row ===============================================
    Aus | Sin | Tan | Geo, the strength stepper, More. Same rules as the Form row: every control is --target high, a
