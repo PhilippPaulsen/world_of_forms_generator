@@ -289,13 +289,7 @@ function setup() {
 
     // Node count (Number Input). The ceiling depends on the shape (core/forms.js NODE_COUNT_MAX).
     const nodeInput = select('#node-count-input');
-    const nodeCountNote = select('#node-count-note');
-    let nodeCountNoteTimer = null;
-    function showNodeCountNote(text) {
-        if (!nodeCountNote) return;
-        nodeCountNote.html(text); nodeCountNote.elt.hidden = false;
-        clearTimeout(nodeCountNoteTimer); nodeCountNoteTimer = setTimeout(() => { nodeCountNote.elt.hidden = true; }, 9000);
-    }
+    function showNodeCountNote(text) { say('node-count', text, 'info'); }
     // Sets the input's own max for currentShape (the HTML attribute is only the universal default of 7) and, when the
     // current nodeCount is above it, clamps nodeCount and says so. `cause` names what triggered it.
     function clampNodeCountToShape(cause) {
@@ -629,17 +623,16 @@ function setup() {
         const sizeHint = select('#net-size-hint');
         // Domain (Single | Tiled | Field): ui.domain mirrors the state (baseNetTransform.domain / .repeat). Field is only valid
         // for an odd Shape Size 3..9 (netDomainEffective); an even one resets it to Single, visibly.
-        const domainBtns = selectAll('.net-domain-btn'), fieldBtn = select('#net-field-btn'), fieldHint = select('#net-field-hint'), fieldInfo = select('#net-field-info'), fieldNote = select('#net-field-note');
-        let fieldNoteTimer = null;
-        const showFieldNote = text => { fieldNote.html(text); fieldNote.elt.hidden = false; clearTimeout(fieldNoteTimer); fieldNoteTimer = setTimeout(() => { fieldNote.elt.hidden = true; }, 9000); };
+        const domainBtns = selectAll('.net-domain-btn'), fieldBtn = select('#net-field-btn'), fieldHint = select('#net-field-hint'), fieldInfo = select('#net-field-info');
+        const showFieldNote = text => { say('net-field', text, 'info'); };
         const stateDomain = () => baseNetTransform ? (baseNetTransform.domain === 'field' ? 'field' : baseNetTransform.domain === 'tiled' ? 'tiled' : baseNetTransform.domain === 'single' ? 'single' : (baseNetTransform.repeat ? 'tiled' : 'single')) : null;
         const setDomain = d => { ui.domain = d; if (baseNetTransform) { baseNetTransform.domain = d === 'field' ? 'field' : undefined; baseNetTransform.repeat = d === 'tiled'; } };
         // Macro cells (nested net): ui.macro = the chosen macro count, undefined = smooth (macro = E). The state's
         // baseNetTransform.macro is kept equal to it; the row lists the valid divisors of E = nodeCount - 1.
-        const macroRow = select('#net-macro-row'), macroBtns = select('#net-macro-buttons'), macroHint = select('#net-macro-hint'), macroNote = select('#net-macro-note');
-        let macroSig = null, macroNoteTimer = null;
+        const macroRow = select('#net-macro-row'), macroBtns = select('#net-macro-buttons'), macroHint = select('#net-macro-hint');
+        let macroSig = null;
         const setMacro = v => { ui.macro = v; if (baseNetTransform) baseNetTransform.macro = v; };
-        const showMacroNote = text => { macroNote.html(text); macroNote.elt.hidden = false; clearTimeout(macroNoteTimer); macroNoteTimer = setTimeout(() => { macroNote.elt.hidden = true; }, 9000); };
+        const showMacroNote = text => { say('net-macro', text, 'info'); };
         const target = () => (ui.axes === 'y' ? ui.y : ui.x);
         const axisSpec = c => c.mode === 'regular' ? { kind: 'uniform', w: 0 }
             : c.mode === 'sinus' ? (c.focus ? { kind: 'trig', w: -c.strength, focus: c.focus, alternate: c.alternate } : { kind: 'trig', w: -c.strength })
@@ -718,7 +711,7 @@ function setup() {
         domainBtns.forEach(b => b.mousePressed(() => {
             const d = b.elt.dataset.domain;
             if (d === 'field' && b.elt.disabled) return;
-            fieldNote.elt.hidden = true; setDomain(d); commit();
+            if (window.UI) UI.notifyClear('net-field'); setDomain(d); commit();
         }));
         const linesBtn = select('#net-lines-btn');
         linesBtn.mousePressed(() => { netLinesOn = !netLinesOn; linesBtn.elt.classList.toggle('active', netLinesOn); redraw(); });
@@ -775,7 +768,7 @@ function setup() {
                     const smooth = m === E; b.textContent = `${m}\u00d7${E / m}`;
                     b.title = smooth ? `${E} macro cells of 1: smooth, no nesting (default)` : `${m} unequal macro cells, each split uniformly into ${E / m}`;
                     if ((smooth && ui.macro === undefined) || ui.macro === m) b.classList.add('active');
-                    b.addEventListener('click', () => { macroNote.elt.hidden = true; setMacro(smooth ? undefined : m); commit(); });
+                    b.addEventListener('click', () => { if (window.UI) UI.notifyClear('net-macro'); setMacro(smooth ? undefined : m); commit(); });
                     macroBtns.elt.appendChild(b);
                 });
             }
@@ -1028,7 +1021,6 @@ function setup() {
     // a fresh "+Layer" + manual editing). See applyCatalogPatternToNewLayer()'s
     // own comment for why this reuses it unmodified.
     const pastePatternBtn = select('#btn-paste-pattern');
-    const pastePatternStatus = select('#paste-pattern-status');
     // Roadmap 1.8 Stage C: timeline controls - NOT contextual to
     // whichever tab is active (unlike layer-animation-group below),
     // since a timeline spans multiple layers rather than belonging to
@@ -1101,13 +1093,7 @@ function setup() {
     const nodeCountGroup = select('#layer-node-count-group');
     const shapeSizeGroup = select('#layer-shape-size-group');
     const layerNodeCountInput = select('#layer-node-count-input');
-    const layerNodeCountNote = select('#layer-node-count-note');
-    let layerNodeCountNoteTimer = null;
-    function showLayerNodeCountNote(text) {
-        if (!layerNodeCountNote) return;
-        layerNodeCountNote.html(text); layerNodeCountNote.elt.hidden = false;
-        clearTimeout(layerNodeCountNoteTimer); layerNodeCountNoteTimer = setTimeout(() => { layerNodeCountNote.elt.hidden = true; }, 9000);
-    }
+    function showLayerNodeCountNote(text) { say('layer-node-count', text, 'info'); }
     const layerShapeSizeInput = select('#layer-shape-size-input');
     // Roadmap 1.12 stage 4 (UI): this layer's own shape - same
     // contextual show/hide handling as the fields above, PLUS an
@@ -1138,7 +1124,6 @@ function setup() {
     // change or shape change it no longer applies to.
     const alignGroup = select('#layer-align-group');
     const alignBtn = select('#btn-align-to-base');
-    const alignStatus = select('#align-to-base-status');
     // Roadmap 1.12 stage 3: this layer's own rotation - same contextual
     // show/hide + populate-on-switch handling as the fields above,
     // folded into this same function for the same reason.
@@ -1271,7 +1256,7 @@ function setup() {
                 alignBtn.elt.disabled = !shapeMatches;
                 alignBtn.attribute('title', shapeMatches ? 'Align to base' : "Only available when this layer's shape matches the base's");
             }
-            if (alignStatus) alignStatus.html('');
+            if (window.UI) UI.notifyClear('align');
             // Roadmap 1.8 Stage B: a mismatch message belongs to whichever
             // layer produced it - clear it only on an ACTUAL tab switch
             // (see layerAnimConnectionsStatusOwner's own comment above for
@@ -1408,8 +1393,22 @@ function setup() {
     // convention as #layer-anim-connections-status. Exposed on window
     // since addLayerToTimeline()/applyTimelineFrame()/removeLayer() are
     // top-level functions.
-    function setTimelineStatus(msg) {
+    // say(key, text, kind): the one route from an action message to the notices (ui.js). notifyClear first: a repeated message replaces the showing one with a fresh timer and the
+    // "once per condition" suppression never hides action feedback. Guarded: sketch.js loads before ui.js, every caller runs after load.
+    function say(key, text, kind) {
+        if (!window.UI || !UI.notify) return;
+        UI.notifyClear(key);
+        UI.notify(text, { key: key, kind: kind });
+    }
+    window.say = say;
+    // kind: 'readout' (the default: the span only - the segment readout and the clears), 'refusal' (the span plus a warn notice: an action was refused), 'condition' (the span plus a warn notice
+    // ONCE per text; any readout call - the readout resuming, or a clear - ends it). The span is written once per call as before.
+    let timelineConditionSaid = null;
+    function setTimelineStatus(msg, kind) {
         if (timelineStatusEl) timelineStatusEl.html(msg || '');
+        if (kind === 'refusal' && msg) say('timeline-refusal', msg, 'warn');
+        else if (kind === 'condition' && msg) { if (msg !== timelineConditionSaid) { timelineConditionSaid = msg; say('timeline-condition', msg, 'warn'); } }
+        else if (kind !== 'refusal' && kind !== 'condition' && timelineConditionSaid !== null) { timelineConditionSaid = null; if (window.UI) UI.notifyClear('timeline-condition'); }
     }
     window.setTimelineStatus = setTimelineStatus;
 
@@ -1838,7 +1837,7 @@ function setup() {
     // permission surface (unlike writeText(), used on the gallery side)
     // - guarded for outright unavailability (insecure context, very old
     // browser) before ever calling it, and its rejection (permission
-    // denied, or blocked entirely) is reported via #paste-pattern-status,
+    // denied, or blocked entirely) is reported as a notice (the key "paste"),
     // never a silent no-op - this needed real, isolated browser
     // verification, not just code review (see this feature's own
     // implementation report).
@@ -1866,26 +1865,26 @@ function setup() {
             pastePatternBtn.elt.disabled = true;
             try {
                 if (!navigator.clipboard || !navigator.clipboard.readText) {
-                    if (pastePatternStatus) pastePatternStatus.html('Clipboard access is not available in this browser/context.');
+                    say('paste', 'Clipboard access is not available in this browser/context.', 'error');
                     return;
                 }
                 let text;
                 try {
                     text = await navigator.clipboard.readText();
                 } catch (err) {
-                    if (pastePatternStatus) pastePatternStatus.html("Clipboard permission denied - check your browser's site settings.");
+                    say('paste', "Clipboard permission denied - check your browser's site settings.", 'error');
                     console.warn('Failed to read clipboard for Paste Pattern:', err.message);
                     return;
                 }
                 const pattern = parseClipboardCatalogPattern(text);
                 if (!pattern) {
-                    if (pastePatternStatus) pastePatternStatus.html('Clipboard does not contain a valid copied pattern.');
+                    say('paste', 'Clipboard does not contain a valid copied pattern.', 'error');
                     return;
                 }
                 if (applyCatalogPatternToNewLayer(pattern)) {
-                    if (pastePatternStatus) pastePatternStatus.html('');
+                    if (window.UI) UI.notifyClear('paste');
                 } else {
-                    if (pastePatternStatus) pastePatternStatus.html('Failed to load the copied pattern - see console for details.');
+                    say('paste', 'Failed to load the copied pattern - see console for details.', 'error');
                 }
                 renderLayerTabs();
                 updateOffsetControls();
@@ -2052,10 +2051,10 @@ function setup() {
                 updateActiveLayerGrid({ shapeSizeFactor: result.shapeSizeFactor, nodeCount: result.nodeCount });
                 if (layerShapeSizeInput) layerShapeSizeInput.value(layer.shapeSizeFactor);
                 if (layerNodeCountInput) layerNodeCountInput.value(layer.nodeCount);
-                if (alignStatus) alignStatus.html('');
+                if (window.UI) UI.notifyClear('align');
                 redraw();
             } else {
-                if (alignStatus) alignStatus.html('Not achievable within the current parameter ranges.');
+                say('align', 'Not achievable within the current parameter ranges.', 'warn');
             }
         });
     }
@@ -2926,7 +2925,7 @@ function removeLayer(index) {
     }
     let orphanedPlaybackIndex = null;
     if (timeline && index === timeline.playbackLayerIndex) {
-        clearTimelineState(`Timeline removed: Layer ${index + 1} was deleted.`);
+        clearTimelineState(`Timeline removed: Layer ${index + 1} was deleted.`, 'refusal');
     } else if (timeline && timeline.keyframeLayerIds.includes(index)) {
         orphanedPlaybackIndex = spliceKeyframeOutOfTimeline(index);
     }
@@ -3417,7 +3416,7 @@ function recaptureTimelineKeyframeNet(pos) {
         const other = timeline.netStates && timeline.netStates[n];
         if (n < 0 || n >= timeline.keyframeLayerIds.length || !other) continue;
         const c = n < pos ? netAnimationCompat(other, snap) : netAnimationCompat(snap, other);
-        if (!c.ok) { setTimelineStatus(`Net of keyframe ${pos + 1} NOT captured: it cannot be interpolated with keyframe ${n + 1}'s net - ${c.reason}.`); return; }
+        if (!c.ok) { setTimelineStatus(`Net of keyframe ${pos + 1} NOT captured: it cannot be interpolated with keyframe ${n + 1}'s net - ${c.reason}.`, 'refusal'); return; }
     }
     if (!timeline.netStates) timeline.netStates = timeline.keyframeLayerIds.map(() => null);
     timeline.netStates[pos] = snap;
@@ -3583,13 +3582,13 @@ function addLayerToTimeline() {
     const prevLayer = additionalLayers[prevIdx];
     if (layer.shape !== prevLayer.shape || layer.nodeCount !== prevLayer.nodeCount ||
         layer.shapeSizeFactor !== prevLayer.shapeSizeFactor || layer.symmetryMode !== prevLayer.symmetryMode) {
-        setTimelineStatus(`Layer ${idx + 1} must share the same shape, order, size and symmetry mode as Layer ${prevIdx + 1} to extend the timeline.`);
+        setTimelineStatus(`Layer ${idx + 1} must share the same shape, order, size and symmetry mode as Layer ${prevIdx + 1} to extend the timeline.`, 'refusal');
         return;
     }
     const fromCoords = resolveConnectionsToCoords(prevLayer);
     const toCoords = resolveConnectionsToCoords(layer);
     if (fromCoords.length !== toCoords.length || fromCoords.length === 0) {
-        setTimelineStatus(`Line count mismatch: Layer ${prevIdx + 1} has ${fromCoords.length}, Layer ${idx + 1} has ${toCoords.length} - counts must match.`);
+        setTimelineStatus(`Line count mismatch: Layer ${prevIdx + 1} has ${fromCoords.length}, Layer ${idx + 1} has ${toCoords.length} - counts must match.`, 'refusal');
         return;
     }
 
@@ -3600,7 +3599,7 @@ function addLayerToTimeline() {
         netState = netSpecSnapshot();
         const prevNet = timeline.netStates && timeline.netStates[timeline.netStates.length - 1];
         const c = prevNet ? netAnimationCompat(prevNet, netState) : { ok: true };
-        if (!c.ok) { setTimelineStatus(`Layer ${idx + 1} not added: its net cannot be interpolated with Layer ${prevIdx + 1}'s net - ${c.reason}. Only the strength and focus of a same-family law can change between keyframes.`); return; }
+        if (!c.ok) { setTimelineStatus(`Layer ${idx + 1} not added: its net cannot be interpolated with Layer ${prevIdx + 1}'s net - ${c.reason}. Only the strength and focus of a same-family law can change between keyframes.`, 'refusal'); return; }
     }
 
     // Roadmap 1.8 Stage C phase (ii): the playback layer is created
@@ -4102,7 +4101,7 @@ function applyTimelineFrame() {
         playbackLayer._morphNodes = null;
         playbackLayer._morphConnections = null;
         timeline.currentFrame = null;
-        setTimelineStatus(resolved.reason);
+        setTimelineStatus(resolved.reason, 'condition');
         return;
     }
     // Group D item 4: which two keyframes bracket this frame and how far between them - read by
@@ -4394,7 +4393,7 @@ function removeTimelineAction() {
 // additionalLayers[] itself. Already fully N-agnostic (phase (i) never
 // needed to change here) - `timeline.keyframeLayerIds.forEach()` already
 // walks however many keyframes exist.
-function clearTimelineState(statusMessage) {
+function clearTimelineState(statusMessage, kind) {
     if (!timeline) return;
     timeline.keyframeLayerIds.forEach(i => {
         const layer = additionalLayers[i];
@@ -4405,7 +4404,7 @@ function clearTimelineState(statusMessage) {
     });
     timeline = null;
     syncAnimationLoopState(); // a playing timeline being torn down must not leave loop() running for nothing
-    if (statusMessage !== undefined) setTimelineStatus(statusMessage);
+    if (statusMessage !== undefined) setTimelineStatus(statusMessage, kind);
 }
 
 // ----------------- PATTERN NAME (Roadmap 1.11-B) ---------------------
@@ -4473,7 +4472,6 @@ function patternNameSignature() {
 let faceColorsSignature = null;
 // Roadmap 1.6 / Group E phase 2: set by setup() (it needs the curve/free/face button closures); called once per draw().
 let netControlsSync = null;
-let netFreeNoteTimer = null;
 // Net-line overlay (display aid, off by default): the warped net's own grid lines, edge to edge. Macro lines
 // black, the finer micro level of a nested net red. Not exported; a PNG export of the canvas includes it.
 let netLinesOn = false;
@@ -5117,8 +5115,7 @@ function pressAt(x, y, pointerType, hit) {
     const hitLayer = activeLayer === 'base' ? null : additionalLayers[activeLayer];
     if (foundId === null && freeEndpointsEnabled && netWarp && netWarpIsClosed(netWarp) && !netWarpInsideNet(netWarp, { x: x, y: y })) {
         // Closed net: there is nothing outside the net to attach a free endpoint to - refuse, visibly.
-        const note = document.getElementById('net-free-note');
-        if (note) { note.hidden = false; clearTimeout(netFreeNoteTimer); netFreeNoteTimer = setTimeout(() => { note.hidden = true; }, 3000); }
+        if (window.say) window.say('net-free', 'A free endpoint cannot be placed outside the net (Single and Field are closed nets).', 'warn');
         return;
     }
     if (foundId === null && freeEndpointsEnabled) {

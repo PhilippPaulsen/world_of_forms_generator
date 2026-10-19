@@ -142,9 +142,6 @@ T('dom', () => {
     check('Escape closes the NEWEST notice only', J(e.texts()) === J(['first']));
     e.fire('keydown', { key: 'a' }); e.fire('keydown', { key: 'Escape' });
     check('...another key does nothing; the next Escape closes the last one; Escape with none showing does not throw', e.host.children.length === 0 && (e.fire('keydown', { key: 'Escape' }), true));
-    e = build(); const lg = e.legacy(false); e.UI.notify('one');
-    e.fire('keydown', { key: 'Escape' });
-    check('the legacy `.toast` (#node-count-note, sketch.js) is still hidden by Escape, as before', lg.hidden === true && e.host.children.length === 0);
     // pointerdown
     e = build(); e.UI.notify('plain'); e.UI.notify('sticky', { sticky: true });
     const inside = e.host.children[0], outsideEl = e.doc.createElement('div');
@@ -152,8 +149,6 @@ T('dom', () => {
     check('a press INSIDE a notice closes nothing', e.host.children.length === 2);
     e.fire('pointerdown', { target: outsideEl });
     check('a press OUTSIDE closes the non-sticky notices and leaves the sticky one', J(e.texts()) === J(['sticky']));
-    e = build(); const lg2 = e.legacy(false); e.fire('pointerdown', { target: outsideEl });
-    check('a press outside also hides the legacy `.toast` (the sketch\'s own note), one inside it does not', lg2.hidden === true && (() => { const l3 = e.legacy(false); e.fire('pointerdown', { target: l3 }); return l3.hidden === false; })());
     // the close button
     e = build(); const a1 = e.UI.notify(x(70)), a2 = e.UI.notify(x(80));
     a1.children[1].dispatch('click', {}, false);
@@ -234,7 +229,7 @@ console.log('\n== the markup, the CSS and the call sites ==');
 T('source', () => {
     const cont = (HTML.match(/<div id="ui-notices"[^>]*>/) || [''])[0];
     check('index.html: #ui-notices is an always-rendered container: class "notices", role="status", aria-live="polite", NO hidden attribute, empty; the old #ui-toast is gone', /^<div id="ui-notices" class="notices" role="status" aria-live="polite">$/.test(cont) && /<div id="ui-notices"[^>]*><\/div>/.test(HTML) && !/id="ui-toast"/.test(HTML) && !/ui-toast/.test(strip(UI_SRC)));
-    check('index.html: #node-count-note stays EXACTLY as it was (a legacy .toast sketch.js writes into: class "limit-note toast", role="status", hidden) and the container comes after it in the body', /<div id="node-count-note" class="limit-note toast" role="status" hidden><\/div>/.test(HTML) && HTML.indexOf('id="node-count-note"') < HTML.indexOf('id="ui-notices"') && HTML.indexOf('id="ui-notices"') < HTML.indexOf('<script src="https://cdn.jsdelivr.net'));
+    check('index.html: #node-count-note is GONE (the second fixed toast that overlapped the stack): no element, no `limit-note toast` markup; the container is still there, after the body\'s other content and before the scripts', !/id="node-count-note"/.test(HTML) && !/class="[^"]*\btoast\b[^"]*"/.test(HTML) && HTML.indexOf('id="ui-notices"') > 0 && HTML.indexOf('id="ui-notices"') < HTML.indexOf('<script src="https://cdn.jsdelivr.net'));
     const css = strip(CSS);
     const rule = sel => { const m = css.match(new RegExp('(?:^|\\})\\s*' + sel.replace(/[.#]/g, '\\$&') + '\\s*\\{([^}]*)\\}')); return m ? m[1] : ''; };
     const nt = rule('.notices'), nn = rule('.notice');
@@ -246,7 +241,7 @@ T('source', () => {
     check('style.css: the text is clamped to three lines (-webkit-line-clamp: 3), the close button is --target square and does not shrink', /-webkit-line-clamp:\s*3/.test(tx) && /overflow:\s*hidden/.test(tx) && /width:\s*var\(--target\)/.test(cl) && /height:\s*var\(--target\)/.test(cl) && /flex:\s*none/.test(cl));
     const block = css.slice(css.indexOf('.notices {'), css.indexOf('.notice .notice-close {') + 200);
     check('no animation and no transition in the notices rules (nothing to reduce under prefers-reduced-motion), no @keyframes for them', !/animation|transition|@keyframes/.test(block) && !/@keyframes[^{]*notice/.test(css));
-    check('style.css: the legacy .toast rule stays for #node-count-note (fixed, bottom 16px, z-index 60)', /\.toast\s*\{[^}]*position:\s*fixed[^}]*bottom:\s*16px[^}]*z-index:\s*60/.test(css) && /\.toast\[hidden\]\s*\{\s*display:\s*none;\s*\}/.test(css));
+    check('style.css: no .toast rule is left (its only user, #node-count-note, is gone) and ui.js has no `.toast` handler any more (Escape, a click, a press outside)', !/(^|[}\s,])\.toast\b/.test(css) && !/\.toast\b/.test(strip(UI_SRC)));
     const ui = strip(UI_SRC);
     check('ui.js: the container is fetched by id once and never written with `hidden`; the component removes children with removeChild and appends with appendChild', (ui.match(/getElementById\('ui-notices'\)/g) || []).length === 1 && !/noticesEl\(\)\.hidden|host\.hidden/.test(ui) && /host\.appendChild\(n\.el\)/.test(ui) && /n\.el\.parentNode\.removeChild\(n\.el\)/.test(ui));
     check('ui.js: Escape closes the newest (notices[notices.length - 1]); a press outside closes only when the target is not inside a .notice; the timer restarts on pointerleave and focusout, stops on pointerenter and focusin', /removeNotice\(notices\[notices\.length - 1\], true\)/.test(ui) && /!\(e\.target && e\.target\.closest && e\.target\.closest\('\.notice'\)\)/.test(ui) && /'pointerenter'[\s\S]{0,80}stopTimer/.test(ui) && /'pointerleave'[\s\S]{0,80}startTimer/.test(ui) && /'focusin'[\s\S]{0,80}stopTimer/.test(ui) && /'focusout'[\s\S]{0,200}startTimer/.test(ui));
@@ -257,7 +252,7 @@ T('source', () => {
     const files = { 'ui.js': UI_SRC, 'ui-net.js': rd('ui-net.js'), 'ui-farbe.js': rd('ui-farbe.js'), 'ui-layers.js': rd('ui-layers.js'), 'sketch.js': rd('sketch.js') };
     const calls = {};
     Object.keys(files).forEach(f => { const c = strip(files[f]); calls[f] = (c.match(/\b(?:UI\.)?toast\(/g) || []).length - (f === 'ui.js' ? 1 : 0); });   // minus the definition in ui.js
-    check('the call sites of the toast are the same as before, signatures unchanged: ui.js 4 (showReason, the stepper\'s typed limit, blocked step, step note), ui-net.js 2 (the typed limits), ui-farbe.js 1 (the Farborgel error), ui-layers.js 1 (the diamond refusal), sketch.js 1 (the net notes)', J(calls) === J({ 'ui.js': 4, 'ui-net.js': 2, 'ui-farbe.js': 1, 'ui-layers.js': 1, 'sketch.js': 1 }), J(calls));
+    check('the call sites of the toast are the same as before, signatures unchanged: ui.js 4 (showReason, the stepper\'s typed limit, blocked step, step note), ui-net.js 2 (the typed limits), ui-farbe.js 1 (the Farborgel error), ui-layers.js 0 (the diamond no longer toasts: sketch.js\'s setTimelineStatus notifies the refusal), sketch.js 1 (the net notes)', J(calls) === J({ 'ui.js': 4, 'ui-net.js': 2, 'ui-farbe.js': 1, 'ui-layers.js': 0, 'sketch.js': 1 }), J(calls));
     check('no call site passes a key or options yet (the routing commit does): every UI.toast( call has the text and at most a number', Object.keys(files).every(f => !/\bUI\.toast\([^)]*\{/.test(strip(files[f]))));
 });
 
