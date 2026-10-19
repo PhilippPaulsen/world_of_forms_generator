@@ -477,13 +477,13 @@
 
   // ---- the tick -----------------------------------------------------------------------------------------------------------------------------------
   function readState() {
-    const more = document.getElementById('btn-more-layer');
+    const a = api(), more = a && a.moreState ? a.moreState() : null;   // the layer "Mehr" state; before sketch.js has set layerApi up: closed, no dot
     return {
       layers: typeof additionalLayers !== 'undefined' ? additionalLayers : [],
       active: typeof activeLayer !== 'undefined' ? activeLayer : 'base',
       timeline: typeof timeline !== 'undefined' ? timeline : null,
-      moreOpen: !!more && more.getAttribute('aria-expanded') === 'true',
-      moreDot: !!more && more.classList.contains('has-state'),
+      moreOpen: !!(more && more.open),
+      moreDot: !!(more && more.dot),
     };
   }
   function sync() {

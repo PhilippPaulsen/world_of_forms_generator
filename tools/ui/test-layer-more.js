@@ -42,12 +42,14 @@ T('dot', () => {
 console.log('\n== the toggle and the wrapper: visibility never fights ==');
 T('sync', () => {
     const m = /    function syncLayerMore\(\) \{[\s\S]*?\n    \}\n/.exec(SKETCH);
+    const md = /    function layerMoreDot\(\) \{[\s\S]*?\n    \}\n/.exec(SKETCH);   // the dot rule: since the cleanup (step 1) its own function, shared with layerApi.moreState()
     check('syncLayerMore() is found in setup()', !!m);
-    if (!m) return;
+    check('layerMoreDot(), the dot rule syncLayerMore() takes its dot from, is found in setup()', !!md);
+    if (!m || !md) return;
     const el = () => { const attrs = {}, cls = new Set(); return { hidden: true, getAttribute: k => (k in attrs ? attrs[k] : null), setAttribute: (k, v) => { attrs[k] = String(v); }, classList: { contains: c => cls.has(c), toggle: (c, on) => { const want = on === undefined ? !cls.has(c) : on; if (want) cls.add(c); else cls.delete(c); } } }; };
     const sb = { layerMoreRow: el(), layerMorePanel: el(), layerMoreBtn: el(), layerMoreOpen: false, activeLayer: 'base', additionalLayers: [], currentShape: 'triangle', symmetryMode: 'm', nodeCount: 3, shapeSizeFactor: 5,
         layerHasNonDefaultSettings: vm.runInContext('(' + topFn(SKETCH, 'layerHasNonDefaultSettings').replace(/^function layerHasNonDefaultSettings/, 'function') + ')', vm.createContext({})) };
-    vm.createContext(sb); vm.runInContext(m[0], sb);
+    vm.createContext(sb); vm.runInContext(md[0] + m[0], sb);
     const run = () => vm.runInContext('syncLayerMore()', sb);
     const st = () => ({ row: !sb.layerMoreRow.hidden, panel: !sb.layerMorePanel.hidden, expanded: sb.layerMoreBtn.getAttribute('aria-expanded'), dot: sb.layerMoreBtn.classList.contains('has-state') });
     const layer = () => ({ shape: 'triangle', symmetryMode: 'm', nodeCount: 3, shapeSizeFactor: 5, offsetX: 0, offsetY: 0, rotation: 0 });
