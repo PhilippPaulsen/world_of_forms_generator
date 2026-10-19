@@ -146,8 +146,6 @@ console.log('\n== sketch.js: the dynamic title sites ==');
         [/^b\.title = smooth \?/, 'macro cell button: visible text (4x2)'],
         [/^locked\.forEach\(b => \{ b\.elt\.dataset\.title = b\.elt\.title; \}\);/, 'remembers the static title of the Curve / Free / Face buttons'],
         [/^fieldBtn\.elt\.title = fieldOk \?/, 'Field: visible text, the reason when it is not available'],
-        [/^\[curveBtn, freeBtn\][\s\S]*b\.elt\.title = active \?/, 'Curve / Free: the reason while a net transform is active; the name is the static aria-label'],
-        [/^faceBtn\.elt\.title = /, 'Face fill: the reason; the name is the static aria-label'],
         [/^fieldBtn\.elt\.dataset\.title = fieldBtn\.elt\.title;/, 'restores the Field title'],
         [/^includeNetBtn\.attribute\('title'/, 'Include net: visible text'],
         [/^alignBtn\.attribute\('title'/, 'Align to base: an icon button since layers 1b-1; the title is the reason while it is disabled, the name is the static aria-label'],
@@ -158,7 +156,7 @@ console.log('\n== sketch.js: the dynamic title sites ==');
         [/^addToTimelineBtn\.attribute\('title'/, 'Add to Timeline: visible text'],
     ];
     const stray = sites.filter(s => !ALLOWED.some(([re]) => re.test(s.text)));
-    check('the scan found the raw title sites (not an empty result)', sites.length >= 12, sites.length + ' sites');
+    check('the scan found the raw title sites (not an empty result)', sites.length >= 10, sites.length + ' sites');   // the Curve / Free / Fill lock titles went to UI.setDisabled (notices commit 11)
     check('every raw title assignment in sketch.js is a control with visible text, a disabled reason or a non-control span (a new one must be decided: icon-only -> UI.name, text -> add it here)', stray.length === 0, stray.length ? stray.map(s => s.line + ': ' + s.text.slice(0, 70)).join(' | ') : sites.length + ' sites, all allowed');
     const unused = ALLOWED.filter(([re]) => !sites.some(s => re.test(s.text)));
     check('...and every entry of that list still exists (no stale entries)', unused.length === 0, unused.map(u => u[1]).join('; ') || 'none');

@@ -487,14 +487,18 @@ body.dark {
 #face-colors-unassigned-text { flex: 1; }
 #face-colors-timeline-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
 #face-colors-timeline-note[hidden] { display: none; }
-#net-locks-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
 #net-focus-hint, #net-size-hint, #net-free-note, #net-macro-hint, #net-macro-note, #net-field-hint, #net-field-info, #net-field-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
-#net-focus-hint[hidden], #net-focus-row[hidden], #net-size-hint[hidden], #net-free-note[hidden], #net-field-hint[hidden], #net-field-info[hidden], #net-field-note[hidden], #net-macro-hint[hidden], #net-macro-note[hidden], #net-macro-row[hidden], #net-alternate-btn[hidden], #net-locks-note[hidden], #net-geo-row[hidden], #net-group[hidden], #net-strength-row[hidden] { display: none; }
+#net-focus-hint[hidden], #net-focus-row[hidden], #net-size-hint[hidden], #net-free-note[hidden], #net-field-hint[hidden], #net-field-info[hidden], #net-field-note[hidden], #net-macro-hint[hidden], #net-macro-note[hidden], #net-macro-row[hidden], #net-alternate-btn[hidden], #net-geo-row[hidden], #net-group[hidden], #net-strength-row[hidden] { display: none; }
 #net-macro-row { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
 #net-focus-row, #net-strength-row { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
 #net-group .icon-row { flex-wrap: wrap; justify-content: center; }
 #net-group .net-kind-btn, #net-group .net-axes-btn { flex: 0 0 auto; }
 .icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+/* The net lock (sketch.js): Curve, Free and Fill are aria-disabled, not natively disabled, so they stay focusable and a tap shows the reason; they look as the native ones did. */
+#btn-toggle-curve[aria-disabled="true"], #btn-toggle-free[aria-disabled="true"], #btn-toggle-faces[aria-disabled="true"] { opacity: 0.35; cursor: not-allowed; }
+@media (hover: hover) {
+  #btn-toggle-curve[aria-disabled="true"]:hover, #btn-toggle-free[aria-disabled="true"]:hover, #btn-toggle-faces[aria-disabled="true"]:hover { background: var(--background); }
+}
 
 .limit-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
 .limit-note[hidden] { display: none; }
