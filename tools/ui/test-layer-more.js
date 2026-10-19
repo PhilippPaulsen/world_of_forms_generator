@@ -42,34 +42,33 @@ T('dot', () => {
 console.log('\n== the toggle and the wrapper: visibility never fights ==');
 T('sync', () => {
     const m = /    function syncLayerMore\(\) \{[\s\S]*?\n    \}\n/.exec(SKETCH);
-    const md = /    function layerMoreDot\(\) \{[\s\S]*?\n    \}\n/.exec(SKETCH);   // the dot rule: since the cleanup (step 1) its own function, shared with layerApi.moreState()
+    const md = /    function layerMoreDot\(\) \{[\s\S]*?\n    \}\n/.exec(SKETCH);   // the dot rule: its own function, read by layerApi.moreState() (the layer views show the dot)
     check('syncLayerMore() is found in setup()', !!m);
-    check('layerMoreDot(), the dot rule syncLayerMore() takes its dot from, is found in setup()', !!md);
+    check('layerMoreDot(), the dot rule, is found in setup()', !!md);
     if (!m || !md) return;
-    const el = () => { const attrs = {}, cls = new Set(); return { hidden: true, getAttribute: k => (k in attrs ? attrs[k] : null), setAttribute: (k, v) => { attrs[k] = String(v); }, classList: { contains: c => cls.has(c), toggle: (c, on) => { const want = on === undefined ? !cls.has(c) : on; if (want) cls.add(c); else cls.delete(c); } } }; };
-    const sb = { layerMoreRow: el(), layerMorePanel: el(), layerMoreBtn: el(), layerMoreOpen: false, activeLayer: 'base', additionalLayers: [], currentShape: 'triangle', symmetryMode: 'm', nodeCount: 3, shapeSizeFactor: 5,
+    const sb = { layerMorePanel: { hidden: true }, layerMoreOpen: false, activeLayer: 'base', additionalLayers: [], currentShape: 'triangle', symmetryMode: 'm', nodeCount: 3, shapeSizeFactor: 5,
         layerHasNonDefaultSettings: vm.runInContext('(' + topFn(SKETCH, 'layerHasNonDefaultSettings').replace(/^function layerHasNonDefaultSettings/, 'function') + ')', vm.createContext({})) };
     vm.createContext(sb); vm.runInContext(md[0] + m[0], sb);
     const run = () => vm.runInContext('syncLayerMore()', sb);
-    const st = () => ({ row: !sb.layerMoreRow.hidden, panel: !sb.layerMorePanel.hidden, expanded: sb.layerMoreBtn.getAttribute('aria-expanded'), dot: sb.layerMoreBtn.classList.contains('has-state') });
+    const st = () => ({ panel: !sb.layerMorePanel.hidden, dot: vm.runInContext('layerMoreDot()', sb) });
     const layer = () => ({ shape: 'triangle', symmetryMode: 'm', nodeCount: 3, shapeSizeFactor: 5, offsetX: 0, offsetY: 0, rotation: 0 });
     const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-    run(); check('the base is active: no toggle, no panel (closed)', eq(st(), { row: false, panel: false, expanded: 'false', dot: false }), JSON.stringify(st()));
+    run(); check('the base is active: no panel (closed)', eq(st(), { panel: false, dot: false }), JSON.stringify(st()));
     sb.additionalLayers = [layer(), layer()]; sb.activeLayer = 0; run();
-    check('a layer is active, closed: the toggle is there, the panel is not', eq(st(), { row: true, panel: false, expanded: 'false', dot: false }), JSON.stringify(st()));
+    check('a layer is active, closed: the panel is not there', eq(st(), { panel: false, dot: false }), JSON.stringify(st()));
     sb.layerMoreOpen = true; run();
-    check('...opened: the panel is there, aria-expanded is true', eq(st(), { row: true, panel: true, expanded: 'true', dot: false }), JSON.stringify(st()));
+    check('...opened: the panel is there', eq(st(), { panel: true, dot: false }), JSON.stringify(st()));
     sb.activeLayer = 1; run();
-    check('a layer switch keeps it open (the state survives)', eq(st(), { row: true, panel: true, expanded: 'true', dot: false }), JSON.stringify(st()));
+    check('a layer switch keeps it open (the state survives)', eq(st(), { panel: true, dot: false }), JSON.stringify(st()));
     sb.activeLayer = 'base'; run();
-    check('back to the base: toggle and panel are gone, although the state is still "open" (the wrapper does not show an empty block)', eq(st(), { row: false, panel: false, expanded: 'true', dot: false }), JSON.stringify(st()));
+    check('back to the base: the panel is gone, although the state is still "open" (the wrapper does not show an empty block)', eq(st(), { panel: false, dot: false }), JSON.stringify(st()));
     sb.additionalLayers.splice(1, 1); sb.activeLayer = 0; run();
-    check('after a layer is removed and another is active: it is open again, not stuck hidden', eq(st(), { row: true, panel: true, expanded: 'true', dot: false }), JSON.stringify(st()));
+    check('after a layer is removed and another is active: it is open again, not stuck hidden', eq(st(), { panel: true, dot: false }), JSON.stringify(st()));
     sb.additionalLayers = []; sb.activeLayer = 'base'; run();
-    check('after the last layer is removed: gone', eq(st(), { row: false, panel: false, expanded: 'true', dot: false }), JSON.stringify(st()));
+    check('after the last layer is removed: gone', eq(st(), { panel: false, dot: false }), JSON.stringify(st()));
     sb.layerMoreOpen = false; sb.additionalLayers = [Object.assign(layer(), { rotation: 30 })]; sb.activeLayer = 0; run();
-    check('a rotated layer, closed: the dot is on', eq(st(), { row: true, panel: false, expanded: 'false', dot: true }), JSON.stringify(st()));
+    check('a rotated layer, closed: the dot is on (layerMoreDot), the panel is not shown', eq(st(), { panel: false, dot: true }), JSON.stringify(st()));
     sb.additionalLayers[0].rotation = 0; run();
     check('...rotation back to 0: the dot is off', st().dot === false);
     sb.additionalLayers[0].nodeCount = 4; run();
@@ -78,7 +77,7 @@ T('sync', () => {
     check('the dot is off with the base active', st().dot === false);
     // a stale activeLayer index (no such layer) is treated like the base, not a crash
     sb.activeLayer = 7; run();
-    check('an activeLayer with no such layer is treated like the base (no throw, nothing shown)', st().row === false && st().panel === false);
+    check('an activeLayer with no such layer is treated like the base (no throw, nothing shown, no dot)', st().panel === false && st().dot === false);
 });
 
 console.log('\n== the markup ==');
@@ -108,12 +107,12 @@ check('the layer row, the timeline and the pairing editor are OUTSIDE the wrappe
 check('the toggle row is outside the wrapper and comes before it', outside.includes('id="layer-more-row"') && markup.indexOf('id="layer-more-row"') < pa && !panel.includes('btn-more-layer'));
 
 console.log('\n== the wiring ==');
-check('the toggle is ONE plain click listener (addEventListener; a second one would flip twice per click) that flips the state and calls syncLayerMore', /layerMoreBtn\.addEventListener\('click', \(\) => \{ layerMoreOpen = !layerMoreOpen; syncLayerMore\(\); \}\)/.test(SKETCH) && (SKETCH.match(/layerMoreBtn\.addEventListener\('click'/g) || []).length === 1);
+check('the old toggle is gone from sketch.js: no layerMoreBtn, no click listener for #btn-more-layer; the "..." of the layer views flips the state through layerApi.toggleMore (layerMoreOpen = !layerMoreOpen; syncLayerMore();)', !/layerMoreBtn|layerMoreRow|btn-more-layer/.test(SKETCH) && /toggleMore\(\) \{ layerMoreOpen = !layerMoreOpen; syncLayerMore\(\); \}/.test(SKETCH));
 check('no p5 mousePressed binding (or select()) for the toggle', !/layerMoreBtn\.mousePressed|btn-more-layer'\)\.mousePressed|select\('#btn-more-layer'\)/.test(SKETCH));
 check('the state starts closed (let layerMoreOpen = false) and is a plain variable, not saved: nothing in core/session*.js knows it', /let layerMoreOpen = false;/.test(SKETCH) && !['session.js', 'session-apply.js', 'session-store.js', 'session-writer.js'].some(f => /layerMore|layer-more/.test(fs.readFileSync(path.join(ROOT, 'core', f), 'utf8'))));
-const writers = [...SKETCH.matchAll(/(layerMoreRow|layerMorePanel)\.hidden\s*=[^=]/g)].length;
-check('syncLayerMore() is the only writer of the toggle row\'s and the wrapper\'s hidden (two writes, both in it)', writers === 2 && /function syncLayerMore\(\) \{[\s\S]*?layerMoreRow\.hidden = [\s\S]*?layerMorePanel\.hidden = /.test(SKETCH), writers + ' writes');
-check('updateOffsetControls() calls syncLayerMore() after it has written the groups\' own hidden, and draw() keeps the dot current', /\n        syncLayerMore\(\);[^\n]*\n    \}\n\n    \/\/ Roadmap 1.8 Stage A: populates/.test(SKETCH) && /if \(window\.syncLayerMore\) window\.syncLayerMore\(\);/.test(SKETCH));
+const writers = [...SKETCH.matchAll(/layerMorePanel\.hidden\s*=[^=]/g)].length;
+check('syncLayerMore() is the only writer of the wrapper\'s hidden (one write, in it)', writers === 1 && /function syncLayerMore\(\) \{[\s\S]*?layerMorePanel\.hidden = /.test(SKETCH), writers + ' writes');
+check('updateOffsetControls() calls syncLayerMore() after it has written the groups\' own hidden, and draw() keeps the wrapper current', /\n        syncLayerMore\(\);[^\n]*\n    \}\n\n    \/\/ Roadmap 1.8 Stage A: populates/.test(SKETCH) && /if \(window\.syncLayerMore\) window\.syncLayerMore\(\);/.test(SKETCH));
 check('updateOffsetControls() still writes each group\'s own hidden for the ten groups and the values into the inputs (restore fills them while the wrapper is closed)', ['offsetXGroup', 'offsetYGroup', 'meshPresetGroup', 'shapeGroup', 'modeGroup', 'alignGroup', 'nodeCountGroup', 'shapeSizeGroup', 'rotationGroup'].every(g => new RegExp(g + '\\.elt\\.hidden = !showOffsets').test(SKETCH)) && /offsetXInput\.value\(layer\.offsetX\)/.test(SKETCH) && /layerRotationInput\.value\(layer\.rotation \|\| 0\)/.test(SKETCH));
 
 console.log('\n== the CSS ==');
@@ -158,7 +157,7 @@ console.log('\n== 1b-1: the layer controls reuse the Form row\'s patterns ==');
     // no new p5 binding; the new file is plain
     const code = LAYER_JS.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
     check('ui-layer.js has no p5 binding of its own (no mousePressed, no select()) and wires the EXISTING inputs through UI.stepper and UI.pressed', !/mousePressed|\bselect\(/.test(code) && /UI\.stepper\(/.test(code) && /UI\.pressed\(/.test(code) && /UI\.onSync\(/.test(code));
-    check('sketch.js binds exactly the 47 p5 mousePressed handlers it bound before this commit (a new binding must be a decision: change this number on purpose)', (SKETCH.match(/\.mousePressed\(/g) || []).length === 47, String((SKETCH.match(/\.mousePressed\(/g) || []).length));
+    check('sketch.js binds exactly the 41 p5 mousePressed handlers (47 before the cleanup removed the six of the old layer row and timeline buttons: Add to Timeline, Remove Timeline, Play, Base, + Layer, Include net; a new binding must be a decision: change this number on purpose)', (SKETCH.match(/\.mousePressed\(/g) || []).length === 41, String((SKETCH.match(/\.mousePressed\(/g) || []).length));
     check('index.html loads ui-layer.js after ui-form.js (its input listener must come before sketch.js\'s own, which p5 adds in setup()) and before ui-net.js', (() => { const a = HTML.indexOf('src="ui-form.js'), b = HTML.indexOf('src="ui-layer.js'), c = HTML.indexOf('src="ui-net.js'); return a > 0 && b > a && c > b; })());
     // the CSS the panel needs from the Form row's rules
     check('the panel restates the three Form-row rules that are scoped to .nav-row or lose inside .control-group: the icon button size, the stepper\'s number field, the cluster gap; the fold numerals use the button default font like the Farbe numerals', /#layer-more-panel \.icon-btn,\s*#layer-more-panel \.layer-fold-btn \{[^}]*width: var\(--target\)[^}]*height: var\(--target\)/.test(css) && /#layer-more-panel \.stepper input\[type="number"\] \{[^}]*width: 2\.4ch[^}]*border: 0/.test(css) && /#layer-more-panel \.nav-cluster \{ gap: var\(--gap\); \}/.test(css) && /#layer-more-panel \.layer-fold-btn \{ font-size: 13\.3333px; font-weight: 400; \}/.test(css));
