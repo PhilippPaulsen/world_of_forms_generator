@@ -173,7 +173,8 @@
     moreBtn.setAttribute('aria-expanded', moreOpen ? 'true' : 'false');
     if (group) group.classList.toggle('ts-open', moreOpen);
   }
-  moreBtn.addEventListener('click', function () { setMore(!moreOpen); sync(); });
+  // opening brings the WHOLE group into view with the layer block's reveal (ui-layers.js: layerTable.revealPanel, the one implementation); closing scrolls nothing
+  moreBtn.addEventListener('click', function () { setMore(!moreOpen); sync(); if (moreOpen && group && root.layerTable && root.layerTable.revealPanel) root.layerTable.revealPanel(group); });
 
   // "Zeitleiste entfernen": inside the old group, always asks first
   const clearBtn = document.getElementById('btn-clear-timeline');
