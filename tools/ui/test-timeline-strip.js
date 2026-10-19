@@ -60,6 +60,8 @@ class El {
     setAttribute(k, v) { this._a[k] = String(v); } getAttribute(k) { return k in this._a ? this._a[k] : null; } removeAttribute(k) { delete this._a[k]; } hasAttribute(k) { return k in this._a; }
     addEventListener(t, fn) { (this.handlers[t] = this.handlers[t] || []).push(fn); }
     appendChild(c) { c.parent = this; this.children.push(c); return c; }
+    removeChild(c) { const i = this.children.indexOf(c); if (i >= 0) this.children.splice(i, 1); c.parent = null; return c; }
+    get parentNode() { return this.parent; }
     set textContent(v) { this._text = String(v); if (v === '') { this.children.forEach(c => { c.parent = null; }); this.children = []; } } get textContent() { return this._text + this.children.map(c => c.textContent).join(''); }
     set innerHTML(v) { this._html = String(v); this.children = []; } get innerHTML() { return this._html; }
     contains(n) { for (let e = n; e; e = e.parent) if (e === this) return true; return false; }
@@ -76,7 +78,7 @@ function build(o) {
     const mk = (id, tag, cls) => { const e = doc.createElement(tag || 'div'); e.id = id; if (cls) e.className = cls; byId[id] = e; return e; };
     const table = mk('layer-table', 'div', 'layer-table'), rail = mk('layer-rail', 'div', 'layer-rail'), strip = mk('layer-strip', 'div', 'layer-strip'), tstrip = o.noStrip ? null : mk('timeline-strip', 'div', 'timeline-strip');
     const group = mk('timeline-group', 'div', 'control-group'), clearBtn = mk('btn-clear-timeline', 'button', 'layer-btn'); clearBtn.hidden = true;
-    const toastEl = mk('ui-toast', 'div', 'toast'); toastEl.hidden = true;
+    const toastEl = mk('ui-notices', 'div', 'notices');   // the notification container (ui.js UI.notify): notices are inserted into it and removed from it
     const status = mk('timeline-status', 'span');
     // the layer-remove dialog and the timeline confirmation
     const mkDialog = (idOverlay, idTitle, idText, idCancel, idConfirm) => { const ov = mk(idOverlay, 'div', 'dialog-overlay hidden'), content = new El('div'); content.className = 'dialog-content'; content.ownerDoc = doc; ov.appendChild(content); const t = mk(idTitle, 'strong'); content.appendChild(t); mk(idText, 'p'); const c = mk(idCancel, 'button'), k = mk(idConfirm, 'button'); content.appendChild(c); content.appendChild(k); return { ov, c, k }; };
@@ -135,7 +137,7 @@ function build(o) {
 }
 const L = x => Object.assign({ connections: [], enabled: true }, x || {});
 const tlOf = (ids, extra) => Object.assign({ keyframeLayerIds: ids.slice(), playbackLayerIndex: ids.length > 1 ? 99 : null, segmentDurationsMs: ids.slice(1).map(() => 2000), segmentPairings: ids.slice(1).map(() => null), segmentFlips: ids.slice(1).map(() => null), segmentMembers: ids.slice(1).map(() => null), netStates: ids.map(() => null), elapsedMs: 0, playing: false, startTime: null }, extra || {});
-const toastText = e => (e.toastEl.hidden ? null : e.toastEl.textContent);
+const toastText = e => (e.toastEl.children.length ? e.toastEl.children[e.toastEl.children.length - 1].children[0].textContent : null);   // the newest notice's text, or null
 
 T('strip', () => {
     let e = build({});

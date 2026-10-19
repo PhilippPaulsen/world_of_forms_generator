@@ -2,7 +2,16 @@
  * Shared UI building blocks (UI rework 4b onward). UI only; no generator
  * state is read or written here.
  *
- *   UI.toast(text, ms)              a fixed-position, dismissible message (#ui-toast); it never moves the layout
+ *   UI.notify(text, opts)           the ONE notification component: a fixed-position message in the always-rendered live region #ui-notices (it never moves the
+ *                                   layout). opts { key, kind: 'info' | 'warn' | 'error', ttl, sticky }. With a key a showing notice is updated in place; once it was
+ *                                   dismissed or has expired the same key is NOT shown again until UI.notifyClear(key) (once per condition). At most two are visible
+ *                                   (a third replaces the oldest). The duration is clamp(3000 + 50 x length, 4000, 9000) ms unless ttl is given; the timer is
+ *                                   stopped while the pointer is over a notice or the focus is inside it and restarts on leave. A text of 60 or more characters,
+ *                                   or a sticky notice, has a close button; Escape closes the newest; a press outside notices closes the non-sticky ones. A notice that holds
+ *                                   the focus and is closed by the person (its close button, Escape) gives the focus back to the element that had it before, else to the
+ *                                   newest remaining notice's close button; an expiry never moves the focus, and a notice never takes it when it appears.
+ *   UI.notifyClear(key)             the condition ended: closes that notice if it is showing and forgets the key (it may show again)
+ *   UI.toast(text, ms)              a thin wrapper: UI.notify(text, { ttl: ms }); every older call site keeps working
  *   UI.setDisabled(el, reason)      "disabled, not hidden": aria-disabled (the control stays focusable and
  *                                   tappable); a tap, Enter/Space or a long press shows the reason as a toast,
  *                                   and the reason is the title (desktop hover). reason = null enables it again.
@@ -16,38 +25,155 @@
  *                                   a control with no visible text of its own (an icon, a glyph, an unlabelled field); a control with visible text is
  *                                   named by that text and keeps its title as a description, with no aria-label (WCAG 2.5.3)
  *
- * Toasts are dismissed by Escape, by a click on them, by the next tap anywhere, or after a few seconds.
+ * The sketch's own #node-count-note is still a legacy `.toast` (an element sketch.js writes into): Escape, a click on it and the next tap dismiss it as before.
  * Text is passed in by the caller (the dictionary comes in a later phase).
  */
+
+// ---- the notification model: PURE (no DOM), exported as window.noticeModel and tested in a vm without a document ------------------------------------
+(function (root) {
+  const TTL_BASE = 3000, TTL_PER_CHAR = 50, TTL_MIN = 4000, TTL_MAX = 9000, MAX_VISIBLE = 2, CLOSE_AT = 60;
+  const KINDS = ['info', 'warn', 'error'];
+  // how long a notice stays: an explicit ttl wins; otherwise clamp(3000 + 50 x the text length, 4000, 9000)
+  function noticeTtl(text, ttl) {
+    if (typeof ttl === 'number' && ttl > 0) return ttl;
+    return Math.min(TTL_MAX, Math.max(TTL_MIN, TTL_BASE + TTL_PER_CHAR * String(text == null ? '' : text).length));
+  }
+  // a long text or a sticky notice cannot be left to a timer alone: it gets a close button
+  function noticeNeedsClose(text, sticky) { return !!sticky || String(text == null ? '' : text).length >= CLOSE_AT; }
+  function noticeKind(kind) { return KINDS.indexOf(kind) >= 0 ? kind : 'info'; }
+  // how many of the visible notices make room for one more (the oldest go first)
+  function noticeEvictions(visible, max) { return Math.max(0, visible + 1 - (max || MAX_VISIBLE)); }
+  // "once per condition": a keyed notice that is showing is UPDATED, one that was dismissed or expired is SKIPPED until clear(key), anything else is SHOWN; no key always shows
+  function createKeyState() {
+    const st = new Map();
+    return {
+      decide: function (key) { if (key === null || key === undefined) return 'show'; const s = st.get(key); return s === 'showing' ? 'update' : s === 'done' ? 'skip' : 'show'; },
+      showing: function (key) { if (key !== null && key !== undefined) st.set(key, 'showing'); },
+      gone: function (key) { if (key !== null && key !== undefined && st.get(key) === 'showing') st.set(key, 'done'); },
+      clear: function (key) { st.delete(key); },
+      state: function (key) { return st.get(key) || 'none'; },
+    };
+  }
+  root.noticeModel = { noticeTtl: noticeTtl, noticeNeedsClose: noticeNeedsClose, noticeKind: noticeKind, noticeEvictions: noticeEvictions, createKeyState: createKeyState, MAX_VISIBLE: MAX_VISIBLE, CLOSE_AT: CLOSE_AT, TTL_MIN: TTL_MIN, TTL_MAX: TTL_MAX };
+})(typeof window !== 'undefined' ? window : globalThis);
+
 (function () {
+  if (typeof document === 'undefined') return;   // the model above is all a page without a document needs
   const LONG_PRESS_MS = 500;
 
-  // ---- toast -------------------------------------------------------------
-  let toastTimer = null;
-  function toastEl() { return document.getElementById('ui-toast'); }
-  function hideToast() {
-    const el = toastEl();
-    if (el) el.hidden = true;
-    clearTimeout(toastTimer);
+  // ---- notifications ---------------------------------------------------------
+  // The container #ui-notices is ALWAYS rendered (a live region that is toggled with `hidden` is announced unreliably): notices are inserted into it and removed from
+  // it. The close button sits next to the text node, not inside it, so the announcement is the text alone. Nothing here moves the focus.
+  const M = window.noticeModel;
+  const NOTICE_TEXT = { 'notice.close': 'Hinweis schließen' };
+  const NOTICE_X = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6 L18 18 M18 6 L6 18"/></svg>';
+  const keys = M.createKeyState();
+  const notices = [];   // oldest first; { el, textEl, closeBtn, key, sticky, ttl, timer, hover, focus }
+  function noticesEl() { return document.getElementById('ui-notices'); }
+  function stopTimer(n) { if (n.timer !== null) { clearTimeout(n.timer); n.timer = null; } }
+  function startTimer(n) {
+    stopTimer(n);
+    if (n.sticky || n.hover || n.focus) return;
+    n.timer = setTimeout(function () { n.timer = null; removeNotice(n); }, M.noticeTtl(n.textEl.textContent, n.ttl));
   }
-  function toast(text, ms) {
-    const el = toastEl();
-    if (!el || !text) return;
-    el.textContent = text;
-    el.hidden = false;
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(hideToast, ms || 4000);
+  // The last element that had the focus OUTSIDE #ui-notices: where the focus goes back to when a notice that holds it is closed by the person (a click, Enter or Space on its close button, Escape).
+  let lastOutsideFocus = null;
+  document.addEventListener('focusin', function (e) {
+    const host = noticesEl();
+    if (e.target && !(host && host.contains(e.target))) lastOutsideFocus = e.target;
+  }, true);
+  function focusableAgain(el) { return !!el && el.isConnected !== false && !el.disabled && !el.hidden && typeof el.focus === 'function'; }
+  // back to the recorded element if it is still connected and focusable; else the close button of the newest notice that is left; else nowhere (the focus stays where the browser put it)
+  function returnFocus() {
+    const t = lastOutsideFocus;
+    if (focusableAgain(t)) { t.focus(); if (document.activeElement === t) return; }
+    const left = notices[notices.length - 1];
+    if (left && left.closeBtn && typeof left.closeBtn.focus === 'function') left.closeBtn.focus();
   }
-  // The next tap anywhere dismisses (capture phase: it runs before a control's own handler, which may show a new toast).
+  // byPerson: closed by a click / Enter / Space on the close button or by Escape. Only then, and only when the notice held the focus, does the focus move back; an expiry, the cap, a press outside
+  // and notifyClear never move it.
+  function removeNotice(n, byPerson) {
+    const at = notices.indexOf(n);
+    if (at < 0) return;
+    const hadFocus = !!byPerson && !!document.activeElement && n.el.contains(document.activeElement);
+    notices.splice(at, 1);
+    stopTimer(n);
+    if (n.el.parentNode) n.el.parentNode.removeChild(n.el);
+    keys.gone(n.key);   // a keyed notice that leaves (closed, expired, replaced) is not shown again until notifyClear(key)
+    if (hadFocus) returnFocus();
+  }
+  function syncClose(n) {
+    const need = M.noticeNeedsClose(n.textEl.textContent, n.sticky);
+    if (need && !n.closeBtn) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'icon-btn notice-close';
+      b.setAttribute('data-i18n', 'notice.close');
+      b.innerHTML = NOTICE_X;
+      name(b, NOTICE_TEXT['notice.close']);
+      b.addEventListener('click', function () { removeNotice(n, true); });
+      n.el.appendChild(b);
+      n.closeBtn = b;
+    } else if (!need && n.closeBtn) {
+      n.el.removeChild(n.closeBtn);
+      n.closeBtn = null;
+    }
+  }
+  function buildNotice() {
+    const el = document.createElement('div'), textEl = document.createElement('span');
+    textEl.className = 'notice-text';
+    el.appendChild(textEl);
+    const n = { el: el, textEl: textEl, closeBtn: null, key: null, sticky: false, ttl: undefined, timer: null, hover: false, focus: false };
+    // the timer stops while the pointer is over the notice or the focus is inside it, and restarts (the full duration) when both have left
+    el.addEventListener('pointerenter', function () { n.hover = true; stopTimer(n); });
+    el.addEventListener('pointerleave', function () { n.hover = false; startTimer(n); });
+    el.addEventListener('focusin', function () { n.focus = true; stopTimer(n); });
+    el.addEventListener('focusout', function (e) { if (e.relatedTarget && el.contains(e.relatedTarget)) return; n.focus = false; startTimer(n); });
+    return n;
+  }
+  function notify(text, opts) {
+    opts = opts || {};
+    const host = noticesEl();
+    if (!host || !text) return null;
+    const key = opts.key === undefined ? null : opts.key;
+    const verdict = keys.decide(key);
+    if (verdict === 'skip') return null;
+    let n = null;
+    if (verdict === 'update') for (let i = 0; i < notices.length; i++) if (notices[i].key === key) n = notices[i];
+    if (!n) {
+      for (let k = M.noticeEvictions(notices.length); k > 0; k--) removeNotice(notices[0]);   // at most two: the oldest make room
+      n = buildNotice();
+      n.key = key;
+      host.appendChild(n.el);
+      notices.push(n);
+      keys.showing(key);
+    }
+    const kind = M.noticeKind(opts.kind);
+    n.el.className = 'notice notice-' + kind;
+    n.textEl.textContent = String(text);
+    n.el.setAttribute('title', String(text));   // the text is clamped to three lines: the full text is the title
+    n.sticky = !!opts.sticky;
+    n.ttl = opts.ttl;
+    syncClose(n);
+    startTimer(n);   // new or updated in place: the timer starts again
+    return n.el;
+  }
+  function notifyClear(key) {
+    for (let i = 0; i < notices.length; i++) if (notices[i].key === key) { removeNotice(notices[i]); break; }
+    keys.clear(key);
+  }
+  // a thin wrapper: every older call site (disabled-control reasons, stepper limits, the net notes, the Farborgel errors, the diamond refusal) keeps its signature
+  function toast(text, ms) { return notify(text, { ttl: ms }); }
+  function hideToast() { notices.slice().forEach(function (n) { if (!n.sticky) removeNotice(n); }); }
+  // a press outside every notice closes the non-sticky ones (capture phase: it runs before a control's own handler, which may show a new one); a press INSIDE one does not
   document.addEventListener('pointerdown', function (e) {
-    const t = toastEl();
-    if (t && !t.hidden) hideToast();
-    // the sketch's own notes (e.g. #node-count-note) are toasts too: dismiss them the same way
-    document.querySelectorAll('.toast:not(#ui-toast):not([hidden])').forEach(function (n) { if (!n.contains(e.target)) n.hidden = true; });
+    if (notices.length && !(e.target && e.target.closest && e.target.closest('.notice'))) hideToast();
+    // the sketch's own notes (#node-count-note, a legacy `.toast`) are dismissed the same way
+    document.querySelectorAll('.toast:not([hidden])').forEach(function (n) { if (!n.contains(e.target)) n.hidden = true; });
   }, true);
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
-      hideToast();
+      if (notices.length) removeNotice(notices[notices.length - 1], true);   // the newest
       document.querySelectorAll('.toast:not([hidden])').forEach(function (n) { n.hidden = true; });
     }
   });
@@ -467,5 +593,5 @@
   window.uiSync = function () { for (let i = 0; i < syncFns.length; i++) syncFns[i](); };
   function onSync(fn) { syncFns.push(fn); }
 
-  window.UI = { onSync: onSync, toast: toast, hideToast: hideToast, setDisabled: setDisabled, name: name, guard: guard, stepper: stepper, pressed: pressed, isDisabled: isDisabled, dialog: dialog, radiogroup: radiogroup, overlay: overlay, checkedFromActive: checkedFromActive, showReason: showReason };
+  window.UI = { onSync: onSync, notify: notify, notifyClear: notifyClear, toast: toast, hideToast: hideToast, setDisabled: setDisabled, name: name, guard: guard, stepper: stepper, pressed: pressed, isDisabled: isDisabled, dialog: dialog, radiogroup: radiogroup, overlay: overlay, checkedFromActive: checkedFromActive, showReason: showReason };
 })();
