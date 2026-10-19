@@ -105,7 +105,7 @@ function build(o) {
     const strip = o.noStrip ? null : mkEl('layer-strip', 'div', 'layer-strip');
     const overlay = mkEl('layer-remove-overlay', 'div', 'dialog-overlay hidden'), content = new El('div'); content.className = 'dialog-content'; content.ownerDoc = doc; overlay.appendChild(content);
     const title = mkEl('layer-remove-title', 'strong'); content.appendChild(title); mkEl('layer-remove-text', 'p'); const cancel = mkEl('cancel-layer-remove', 'button'), confirm = mkEl('confirm-layer-remove', 'button'); content.appendChild(cancel); content.appendChild(confirm);
-    const oldMore = mkEl('btn-more-layer', 'button'); oldMore.setAttribute('aria-expanded', 'false');
+    const moreSt = { open: !!o.moreOpen, dot: !!o.moreDot };   // what layerApi.moreState() reports (sketch.js: layerMoreOpen and layerMoreDot()); no hidden old toggle in the DOM any more
     // the rare-settings block: a wrapper with a HIDDEN group (a group hidden for this layer: it has a rect far away that must NOT count) and two visible groups; window.scrollBy is recorded
     const scrolls = [];
     const panel = o.noPanel ? null : mkEl('layer-more-panel', 'div');
@@ -129,8 +129,11 @@ function build(o) {
         add() { calls.push(['add']); layers.push({ connections: [], enabled: true }); ctx.activeLayer = layers.length - 1; },
         remove(i) { calls.push(['remove', i]); layers.splice(i, 1); if (ctx.activeLayer === i) ctx.activeLayer = 'base'; },
         setEnabled(i, on) { calls.push(['setEnabled', i, on]); if (layers[i]) layers[i].enabled = !!on; },
-        toggleMore() { calls.push(['toggleMore']); oldMore.setAttribute('aria-expanded', oldMore.getAttribute('aria-expanded') === 'true' ? 'false' : 'true'); },
+        toggleMore() { calls.push(['toggleMore']); moreSt.open = !moreSt.open; },
+        moreState() { return { open: moreSt.open, dot: moreSt.dot }; },
     };
+    if (o.noApi) delete ctx.layerApi;   // the first sync runs before sketch.js has set layerApi up
+    if (o.noMoreState) delete ctx.layerApi.moreState;
     if (UI_SRC) vm.runInContext(UI_SRC, ctx, { filename: 'ui.js' });
     vm.runInContext(LAYERS, ctx, { filename: 'ui-layers.js' });
     const sync = () => ctx.window.uiSync();
@@ -145,7 +148,7 @@ function build(o) {
     const sv = strip ? { base: () => strip.children[0].children[0], chips: () => strip.children[0].children[1], add: () => strip.children[0].children[2], actions: () => strip.children[1].children } : null;
     const scell = key => { for (const b of [sv.base()].concat(sv.chips().children, [sv.add()], sv.actions())) if (b.dataset.key === key) return b; return null; };
     const skeys = () => [sv.base().dataset.key].concat(sv.chips().children.map(b => b.dataset.key), [sv.add().dataset.key], sv.actions().map(b => b.dataset.key));
-    return { ctx, doc, table, rail, strip, sv, scell, skeys, scrolls, panel, pgFirst, pgSecond, railBase, railChips, railAdd, rcell, rkeys, calls, layers, sync, cell, keys, overlay, cancel, confirm, oldMore, byId, clk: b => { b.dispatch('click', { detail: 1 }); while (moq.length) moq.shift()([]); } };
+    return { ctx, doc, table, rail, strip, sv, scell, skeys, scrolls, panel, pgFirst, pgSecond, railBase, railChips, railAdd, rcell, rkeys, calls, layers, sync, cell, keys, overlay, cancel, confirm, moreSt, byId, clk: b => { b.dispatch('click', { detail: 1 }); while (moq.length) moq.shift()([]); } };
 }
 T('dom', () => {
     const L = (extra) => Object.assign({ connections: [], enabled: true }, extra || {});
@@ -415,6 +418,31 @@ T('table reveal', () => {
 
 // ================= 3. the source =================
 console.log('\n== the markup, the CSS and the one block in sketch.js ==');
+T('more state (layerApi.moreState)', () => {
+    const L = (extra) => Object.assign({ connections: [], enabled: true }, extra || {});
+    const views = e => [e.cell('more'), e.rcell('more'), e.scell('more')];
+    let e = build({ layers: [L()], active: 0 }); e.sync();
+    check('moreState { open: false, dot: false }: "..." is closed (aria-expanded false) and has no dot in the table, the rail and the strip', views(e).every(b => b.getAttribute('aria-expanded') === 'false' && !b.classList.contains('has-state')));
+    e = build({ layers: [L()], active: 0, moreOpen: true }); e.sync();
+    check('moreState { open: true, dot: false }: open (aria-expanded true) everywhere, no dot', views(e).every(b => b.getAttribute('aria-expanded') === 'true' && !b.classList.contains('has-state')));
+    e = build({ layers: [L()], active: 0, moreDot: true }); e.sync();
+    check('moreState { open: false, dot: true }: the dot (has-state) shows everywhere while closed', views(e).every(b => b.getAttribute('aria-expanded') === 'false' && b.classList.contains('has-state')));
+    e = build({ layers: [L()], active: 0, moreOpen: true, moreDot: true }); e.sync();
+    check('moreState { open: true, dot: true }: open with the dot', views(e).every(b => b.getAttribute('aria-expanded') === 'true' && b.classList.contains('has-state')));
+    e.moreSt.open = false; e.moreSt.dot = false; e.sync();
+    check('the views follow moreState on the next tick (no hidden old toggle is read): closed and no dot again', views(e).every(b => b.getAttribute('aria-expanded') === 'false' && !b.classList.contains('has-state')));
+    e.calls.length = 0; e.clk(e.cell('more')); e.sync();
+    check('a click on "..." still goes through layerApi.toggleMore() and the next tick shows it open in all three views', J(e.calls) === J([['toggleMore']]) && views(e).every(b => b.getAttribute('aria-expanded') === 'true'));
+    // the first sync runs before sketch.js has set layerApi up
+    let threw = null, n = null;
+    try { n = build({ layers: [L()], active: 0, noApi: true }); n.sync(); } catch (err) { threw = err; }
+    check('WITHOUT window.layerApi (the first sync runs before sketch.js sets it up) readState does not throw: the view is built, "..." closed and without a dot', !threw && !!n && views(n).every(b => b.getAttribute('aria-expanded') === 'false' && !b.classList.contains('has-state')), threw && threw.message);
+    threw = null; n = null;
+    try { n = build({ layers: [L()], active: 0, noMoreState: true }); n.sync(); } catch (err) { threw = err; }
+    check('...and with a layerApi that has no moreState (an older sketch.js): the same fallback', !threw && !!n && views(n).every(b => b.getAttribute('aria-expanded') === 'false' && !b.classList.contains('has-state')), threw && threw.message);
+    const code = LAYERS.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    check('ui-layers.js reads the layer "Mehr" state from layerApi.moreState() only: no lookup of #btn-more-layer, no aria-expanded or has-state read from the DOM', /a && a\.moreState \? a\.moreState\(\) : null/.test(code) && !/btn-more-layer/.test(code) && !/getAttribute\('aria-expanded'\)\s*===/.test(code) && !/contains\('has-state'\)\s*\)?\s*;?\s*$/m.test(code.split('function readState')[1] ? code.split('function readState')[1].split('function sync')[0] : ''));
+});
 T('source', () => {
     const rowStart = HTML.indexOf('<div class="canvas-row">'), rowEnd = HTML.indexOf('<div class="main-container">');
     const canvasRow = rowStart >= 0 && rowEnd > rowStart ? HTML.slice(rowStart, rowEnd) : '';
@@ -513,12 +541,12 @@ T('source', () => {
     // the block in sketch.js
     const bi = SKETCH.indexOf('    // layerApi: begin'), ei = SKETCH.indexOf('    // layerApi: end\n');
     const block = bi >= 0 && ei > bi ? SKETCH.slice(bi, ei) : '';
-    check('sketch.js: exactly ONE layerApi block (between its two marker comments), one `window.layerApi = {`, and it publishes exactly select, add, remove, setEnabled, toggleMore (commits 1-5) and addToTimeline, removeKeyframe, play, setProgress, clearTimeline, includeNet, toggleIncludeNet (commit 6)', (SKETCH.match(/window\.layerApi\s*=/g) || []).length === 1 && J([...block.matchAll(/^        (\w+)\(/gm)].map(m => m[1])) === J(['select', 'add', 'remove', 'setEnabled', 'toggleMore', 'addToTimeline', 'removeKeyframe', 'play', 'setProgress', 'clearTimeline', 'includeNet', 'toggleIncludeNet']));
+    check('sketch.js: exactly ONE layerApi block (between its two marker comments), one `window.layerApi = {`, and it publishes exactly select, add, remove, setEnabled, toggleMore (commits 1-5), addToTimeline, removeKeyframe, play, setProgress, clearTimeline, includeNet, toggleIncludeNet (commit 6) and moreState (the cleanup)', (SKETCH.match(/window\.layerApi\s*=/g) || []).length === 1 && J([...block.matchAll(/^        (\w+)\(/gm)].map(m => m[1])) === J(['select', 'add', 'remove', 'setEnabled', 'toggleMore', 'addToTimeline', 'removeKeyframe', 'play', 'setProgress', 'clearTimeline', 'includeNet', 'toggleIncludeNet', 'moreState']));
     const body = n => ((block.match(new RegExp('        ' + n + '\\([^)]*\\) \\{ ([^\\n]*) \\},')) || [, ''])[1]);
     check('...each is the sequence the old handlers run: select and add end with the five calls (renderLayerTabs, updateOffsetControls, updateFaceToggleControl, updateTimelineControls, redraw); remove has the tab remove handler\'s four; toggleMore is the old toggle',
         body('select') === 'activeLayer = sheet; renderLayerTabs(); updateOffsetControls(); updateFaceToggleControl(); updateTimelineControls(); redraw();' && body('add') === 'addLayer(); renderLayerTabs(); updateOffsetControls(); updateFaceToggleControl(); updateTimelineControls(); redraw();' && body('remove') === 'removeLayer(index); renderLayerTabs(); updateOffsetControls(); updateFaceToggleControl(); redraw();' && body('toggleMore') === 'layerMoreOpen = !layerMoreOpen; syncLayerMore();', J([body('select'), body('add')]));
     check('...setEnabled is a property write, the old row\'s checkbox refresh (renderLayerTabs) and a redraw: nothing else', body('setEnabled') === 'additionalLayers[index].enabled = !!on; renderLayerTabs(); redraw();');
-    check('...the timeline additions (commit 6) are the old handlers\' own calls or plain getters: addToTimeline = addLayerToTimeline(); removeKeyframe = removeKeyframeFromTimeline(index); play = the old Play button\'s three calls; setProgress = the old progress input\'s three calls; clearTimeline = removeTimelineAction(); includeNet returns the override; toggleIncludeNet is a mousedown on the (hidden) old Include net button - the old handler stays the one place that flips it (debt for the commit that removes the old DOM)', body('addToTimeline') === 'addLayerToTimeline();' && body('removeKeyframe') === 'removeKeyframeFromTimeline(index);' && body('play') === 'toggleTimelinePlayback(); syncTimelineDisplay(); redraw();' && body('setProgress') === 'setTimelineProgress(t); syncTimelineDisplay(); redraw();' && body('clearTimeline') === 'removeTimelineAction();' && body('includeNet') === 'return includeNetOverride;' && body('toggleIncludeNet') === "includeNetBtn.elt.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));");
+    check('...the timeline additions (commit 6) are the old handlers\' own calls or plain getters: addToTimeline = addLayerToTimeline(); removeKeyframe = removeKeyframeFromTimeline(index); play = the old Play button\'s three calls; setProgress = the old progress input\'s three calls; clearTimeline = removeTimelineAction(); includeNet returns the override; toggleIncludeNet runs the two statements the old handler runs (no hidden button needed); moreState hands out the layer "Mehr" state', body('addToTimeline') === 'addLayerToTimeline();' && body('removeKeyframe') === 'removeKeyframeFromTimeline(index);' && body('play') === 'toggleTimelinePlayback(); syncTimelineDisplay(); redraw();' && body('setProgress') === 'setTimelineProgress(t); syncTimelineDisplay(); redraw();' && body('clearTimeline') === 'removeTimelineAction();' && body('includeNet') === 'return includeNetOverride;' && body('toggleIncludeNet') === 'includeNetOverride = timelineIncludeNetToggle(includeNetOverride); window.syncTimelineNetUi();' && body('moreState') === 'return { open: layerMoreOpen, dot: layerMoreDot() };');
     check('the block has no logic: no if, no loop, no new let / const (setup() is scanned by p5\'s friendly-error reader) and no block comment', !/\b(if|for|while|let|const)\b|\/\*/.test(block.replace(/\/\/[^\n]*/g, '')));
     check('sketch.js never mentions the table (#layer-table, ui-layers, layerTable): the view is not wired from the sketch', !/layer-table|ui-layers|layerTable/.test(SKETCH.replace(/\/\/[^\n]*/g, '')));
     // the freed eye

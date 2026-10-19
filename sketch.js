@@ -1176,15 +1176,20 @@ function setup() {
     const layerMorePanel = document.getElementById('layer-more-panel');
     const layerMoreBtn = document.getElementById('btn-more-layer');
     let layerMoreOpen = false;
+    // The dot of the layer "Mehr": the ONE place that computes it (syncLayerMore writes it on the old toggle, layerApi.moreState hands it to the layer views).
+    function layerMoreDot() {   // (not "dot": p5's friendly-error reader reports a let/const named like a p5 member in setup() / draw())
+        return activeLayer !== 'base' && !!additionalLayers[activeLayer] && layerHasNonDefaultSettings(additionalLayers[activeLayer], { shape: currentShape, symmetryMode, nodeCount, shapeSizeFactor });
+    }
     function syncLayerMore() {
-        if (!layerMoreRow || !layerMorePanel || !layerMoreBtn) return;
+        if (!layerMorePanel) return;
         const layerActive = activeLayer !== 'base' && !!additionalLayers[activeLayer];
-        if (layerMoreRow.hidden === layerActive) layerMoreRow.hidden = !layerActive;
+        if (layerMoreRow && layerMoreRow.hidden === layerActive) layerMoreRow.hidden = !layerActive;
         const showPanel = layerActive && layerMoreOpen;
         if (layerMorePanel.hidden === showPanel) layerMorePanel.hidden = !showPanel;
+        if (!layerMoreBtn) return;
         const expanded = String(layerMoreOpen);
         if (layerMoreBtn.getAttribute('aria-expanded') !== expanded) layerMoreBtn.setAttribute('aria-expanded', expanded);
-        const needsDot = layerActive && layerHasNonDefaultSettings(additionalLayers[activeLayer], { shape: currentShape, symmetryMode, nodeCount, shapeSizeFactor });   // (not "dot": p5's friendly-error reader reports a let/const named like a p5 member in setup() / draw())
+        const needsDot = layerMoreDot();
         if (layerMoreBtn.classList.contains('has-state') !== needsDot) layerMoreBtn.classList.toggle('has-state', needsDot);
     }
     window.syncLayerMore = syncLayerMore;
@@ -1770,7 +1775,8 @@ function setup() {
         setProgress(t) { setTimelineProgress(t); syncTimelineDisplay(); redraw(); },
         clearTimeline() { removeTimelineAction(); },
         includeNet() { return includeNetOverride; },
-        toggleIncludeNet() { includeNetBtn.elt.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); },
+        toggleIncludeNet() { includeNetOverride = timelineIncludeNetToggle(includeNetOverride); window.syncTimelineNetUi(); },
+        moreState() { return { open: layerMoreOpen, dot: layerMoreDot() }; },
     };
     // layerApi: end
 
