@@ -228,7 +228,8 @@ function applyCatalogPatternToNewLayer(pattern) {
 
 // ----------------- SETUP ----------------------------------------
 // select() for an element that may not be on the page (the markup of a removed control whose mechanism is kept: the layer animation, the cross-layer compute
-// button and its status line): null when there is none, and no call to p5's select(), which warns about a selector that matches nothing.
+// button and its status line): null when there is none. p5 1.9.0's own select() is a querySelector too: it returns null for a selector that matches nothing and
+// writes nothing to the console (source read and measured), so this helper only makes the optional lookup explicit at the call sites.
 function optionalSelect(sel) { return document.querySelector(sel) ? select(sel) : null; }
 
 // Layer "Mehr" (5d, step 1): does a HIDDEN layer control hold a non-default? True when the layer's offset or rotation is not zero, or its shape, symmetry mode, node count or
