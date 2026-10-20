@@ -228,7 +228,8 @@ function applyCatalogPatternToNewLayer(pattern) {
 
 // ----------------- SETUP ----------------------------------------
 // select() for an element that may not be on the page (the markup of a removed control whose mechanism is kept: the layer animation, the cross-layer compute
-// button and its status line): null when there is none, and no call to p5's select(), which warns about a selector that matches nothing.
+// button and its status line): null when there is none. p5 1.9.0's own select() is a querySelector too: it returns null for a selector that matches nothing and
+// writes nothing to the console (source read and measured), so this helper only makes the optional lookup explicit at the call sites.
 function optionalSelect(sel) { return document.querySelector(sel) ? select(sel) : null; }
 
 // Layer "Mehr" (5d, step 1): does a HIDDEN layer control hold a non-default? True when the layer's offset or rotation is not zero, or its shape, symmetry mode, node count or
@@ -2331,7 +2332,8 @@ function draw() {
     // per-layer loop just above - applyTimelineFrame() may itself flip
     // timeline.playing to false (reaching the end), which
     // syncAnimationLoopState() needs to see this same frame, not one
-    // frame late. (The timeline strip follows the playback by itself: its own sync runs at the start of every draw.)
+    // frame late. (The timeline strip's own sync runs at the start of every draw, but NOT after the last frame: the draw that ends the playback
+    // is followed by noLoop(). ui-timeline.js therefore arms one timer for the end of a playback and syncs when it fires.)
     if (timeline && timeline.playing) applyTimelineFrame();
     syncAnimationLoopState();
     if (activeLayer !== 'base' && additionalLayers[activeLayer] && additionalLayers[activeLayer].animation) {
@@ -2557,7 +2559,7 @@ function handleAltNetClick(x, y) {
 
 function mouseMoved() {
     if (altNetActive && altNetPending && altNetPending.q !== undefined) {
-        altNetPending.previewSide = sideOfLine(altNetPending.p, altNetPending.q, mouseX, mouseY);
+        altNetPending.previewSide = sideOfLine(altNetPending.p, altNetPending.q, { x: mouseX, y: mouseY });
     }
     if (showNodes || (altNetActive && altNetPending)) redraw();
 }
@@ -4946,12 +4948,13 @@ function clientToSketch(clientX, clientY) {
 }
 
 // A valid tap, at pointerup. The state pressAt reads that only mouseMoved() writes is stale here (the emulated mousemove comes ~75 ms later): the Alt-net side preview
-// (altNetPending.previewSide, read by the third construction click). The same update mouseMoved() makes, with the tap's coordinates, comes first - the same call,
-// argument for argument: mouseMoved() passes (p, q, mouseX, mouseY) to sideOfLine(p, q, m), whose third parameter is a point, so m.y is undefined and the side is
-// always -1 (a bug that predates this track and is reported, not fixed here; touch and mouse behave alike on purpose).
+// (altNetPending.previewSide, read by the third construction click). The same update mouseMoved() makes, with the tap's position, comes first: sideOfLine(p, q, m)
+// takes the point m, here the tap's own point p (mouseMoved() passes { x: mouseX, y: mouseY }), so the side is the side of PQ the tap lands on. (Until this was fixed both
+// calls passed x and y as two arguments, m.y was undefined and the side was always -1.) A finger has no hover, so the preview shown BEFORE the third tap is the last
+// value (+1 after the second click); the tap then writes the side from its own position and the polygon is built on that side.
 function tapPress(tap) {
     const p = clientToSketch(tap.x, tap.y);
-    if (altNetActive && altNetPending && altNetPending.q !== undefined) altNetPending.previewSide = sideOfLine(altNetPending.p, altNetPending.q, p.x, p.y);
+    if (altNetActive && altNetPending && altNetPending.q !== undefined) altNetPending.previewSide = sideOfLine(altNetPending.p, altNetPending.q, p);
     pressAt(p.x, p.y, tap.pointerType, nodeHit(p.x, p.y, tap.pointerType));
 }
 
