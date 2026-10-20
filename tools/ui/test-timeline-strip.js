@@ -295,6 +295,69 @@ T('the scrub bar\'s arrow keys', () => {
     check('ui-timeline.js: the range\'s step stays 0.001; the arrows add 0.01 (0.1 with Shift) through scrub(), the same function as the range\'s input event; Home, End, PageUp and PageDown are not mentioned in the code', /input\.step = '0\.001'/.test(src) && /input\.addEventListener\('input', scrub\)/.test(src) && /e\.shiftKey \? 0\.1 : 0\.01/.test(src) && /input\.value = String\(Math\.max\(0, Math\.min\(1,/.test(src) && (src.match(/\bscrub\(\);/g) || []).length === 1 && !/['"](Home|End|PageUp|PageDown)['"]/.test(src));
 });
 
+T('the scrub bar takes the focus on a press', () => {
+    // Safari (the maintainer's keydown probe: ArrowRight went to BODY after a mouse click, to INPUT range after a Tab) does not focus a range input on a mouse click: the pointerdown does.
+    const withFocusSpy = e => { const f = []; e.s.input.focus = function (o) { f.push(o); e.doc.activeElement = this; }; return f; };
+    const down = (e, o) => { let pd = 0; e.s.input.dispatch('pointerdown', Object.assign({ preventDefault() { pd++; } }, o || {})); return pd; };
+    // a key goes where the focus is: to the bar only when it has the focus (else to BODY, as in Safari after a click)
+    const key = (e, k) => { if (e.doc.activeElement === e.s.input) e.s.input.dispatch('keydown', { key: k, preventDefault() { } }); };
+    let e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync(); e.calls.length = 0;
+    let f = withFocusSpy(e); let pd = down(e);
+    check('a pointerdown on the enabled bar focuses it ONCE, with { preventScroll: true }, and does not call preventDefault', f.length === 1 && J(f[0]) === '{"preventScroll":true}' && e.doc.activeElement === e.s.input && pd === 0, J(f) + ' pd=' + pd);
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync(); f = withFocusSpy(e); e.doc.activeElement = e.s.play;
+    down(e);
+    check('...also when another control has the focus (the Play button): the bar takes it', f.length === 1 && e.doc.activeElement === e.s.input);
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync(); f = withFocusSpy(e); e.doc.activeElement = e.s.input;
+    down(e); down(e);
+    check('when the bar already has the focus (after a Tab, or a second press) no focus call is made: nothing is stolen or re-focused, and the focus stays on the bar', f.length === 0 && e.doc.activeElement === e.s.input);
+    e = build({ layers: [L()], timeline: tlOf([0]), active: 0 }); e.sync(); f = withFocusSpy(e);
+    pd = down(e);
+    check('a DISABLED bar (one keyframe) takes no focus on a press (no focus call, the active element is unchanged) and preventDefault is not called either', f.length === 0 && e.doc.activeElement === null && pd === 0);
+    // the arrows after a press, without a Tab
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync(); withFocusSpy(e); e.calls.length = 0;
+    e.doc.activeElement = null;   // the page: BODY
+    for (let i = 0; i < 3; i++) key(e, 'ArrowRight');
+    check('(the Safari model) without a press and without a Tab the focus is on BODY: three ArrowRight go nowhere (the bar stays at 0, setProgress is not called)', e.s.input.value === '0' && e.calls.length === 0);
+    down(e);
+    for (let i = 0; i < 10; i++) key(e, 'ArrowRight');
+    check('after a press (no Tab) ten ArrowRight move the bar to exactly 0.1 ("10 %") through setProgress, ten times', e.s.input.value === '0.1' && e.s.input.getAttribute('aria-valuetext') === '10 %' && e.calls.filter(c => c[0] === 'setProgress').length === 10);
+    key(e, 'Tab'); e.s.input.dispatch('keyup');
+    // the drag path is unchanged
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1], { elapsedMs: 1000 }), active: 0 }); e.sync(); withFocusSpy(e); e.calls.length = 0;
+    down(e); e.s.input.value = '0.3'; e.s.input.dispatch('input'); e.s.input.value = '0.4'; e.s.input.dispatch('input');
+    check('a drag after the press: each input event calls setProgress with the new value (0.3, then 0.4) and the spoken value follows', J(e.calls.filter(c => c[0] === 'setProgress')) === J([['setProgress', 0.3], ['setProgress', 0.4]]) && e.s.input.getAttribute('aria-valuetext') === '40 %');
+    e.ctx.timeline.elapsedMs = 1800; e.sync();
+    check('...the thumb is NOT overwritten by the tick while the press is down (the interacting flag is as before)', e.s.input.value === '0.4');
+    e.s.input.dispatch('pointerup'); e.sync();
+    check('...and it follows the timeline after the pointerup (1800 of 2000: 0.9)', e.s.input.value === '0.9');
+    // WebKit runs the mousedown default (the focus is cleared when the pressed control is not mouse-focusable) AFTER the pointerdown handlers: the bar takes the focus again at the pointerup
+    const wup = (e) => ((e.ctx.__wl && e.ctx.__wl.pointerup) || []).forEach(fn => fn({ type: 'pointerup' })), wcancel = (e) => ((e.ctx.__wl && e.ctx.__wl.pointercancel) || []).forEach(fn => fn({ type: 'pointercancel' }));
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync(); f = withFocusSpy(e); e.calls.length = 0;
+    down(e); e.doc.activeElement = null;   // the press's default action cleared the focus (the model of WebKit; the pane shows ArrowRight going to BODY with only the pointerdown focus)
+    for (let i = 0; i < 3; i++) key(e, 'ArrowRight');
+    check('(the WebKit model) a focus taken only at pointerdown is cleared by the press\'s default: the keys go to BODY until the pointerup', e.s.input.value === '0' && f.length === 1);
+    wup(e);
+    check('...the pointerup that ends the press takes the focus again (a second focus call, { preventScroll: true }) and the arrows then work: ten ArrowRight give exactly 0.1', f.length === 2 && J(f[1]) === '{"preventScroll":true}' && e.doc.activeElement === e.s.input && (() => { for (let i = 0; i < 10; i++) key(e, 'ArrowRight'); return e.s.input.value === '0.1'; })());
+    e.doc.activeElement = e.s.play; wup(e);
+    check('...and only once per press: with the focus elsewhere, a second pointerup (no press in between) makes no focus call', f.length === 2 && e.doc.activeElement === e.s.play);
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync(); f = withFocusSpy(e);
+    wup(e); e.doc.activeElement = e.s.play; wup(e);
+    check('a pointerup without a press on the bar (a click somewhere else) takes no focus', f.length === 0 && e.doc.activeElement === e.s.play);
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync(); f = withFocusSpy(e);
+    down(e); wup(e);
+    check('a normal press (the focus stays on the bar, as in Chromium): pointerdown focuses once and the pointerup adds no second call', f.length === 1 && e.doc.activeElement === e.s.input);
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync(); f = withFocusSpy(e);
+    down(e); e.doc.activeElement = e.s.play; wcancel(e); wup(e);
+    check('a pointercancel ends the press without a focus: the later pointerup takes nothing', f.length === 1 && e.doc.activeElement === e.s.play);
+    e = build({ layers: [L()], timeline: tlOf([0]), active: 0 }); e.sync(); f = withFocusSpy(e);
+    down(e); wup(e);
+    check('a DISABLED bar: neither the pointerdown nor the pointerup focuses it', f.length === 0 && e.doc.activeElement === null);
+    // the source
+    const src = TLJS.replace(/\/\/[^\n]*/g, '');
+    const h = (src.match(/input\.addEventListener\('pointerdown', function \(\) \{([\s\S]*?)\n  \}\);/) || [, ''])[1];
+    check('ui-timeline.js: the pointerdown handler sets interacting and pressed and takes the focus; takeFocus() focuses with { preventScroll: true } unless the bar is disabled or already focused; no preventDefault in the handlers; the window pointerup takes it again only after a press', /interacting = true; pressed = true;/.test(h) && /takeFocus\(\);/.test(h) && /function takeFocus\(\) \{ if \(!UI\.isDisabled\(input\) && document\.activeElement !== input\) input\.focus\(\{ preventScroll: true \}\); \}/.test(src) && !/preventDefault/.test(h) && (src.match(/input\.focus\(/g) || []).length === 1 && /window\.addEventListener\('pointerup', function \(\) \{ interacting = false; if \(pressed\) \{ pressed = false; takeFocus\(\); \} \}\)/.test(src) && /window\.addEventListener\('pointercancel', function \(\) \{ interacting = false; pressed = false; \}\)/.test(src), h.replace(/\s+/g, ' ').slice(0, 160));
+});
+
 T('diamonds', () => {
     // table: column 3, the Base row has none
     let e = build({ layers: [L(), L(), L({ isTimelinePlayback: true }), L()], timeline: tlOf([0, 1]), active: 'base' });
@@ -409,7 +472,7 @@ T('source', () => {
     // ui-timeline.js
     const code = TLJS.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
     check('ui-timeline.js has no p5 binding (no mousePressed, no select(), no mousedown listener), writes no sketch state (no assignment to timeline / activeLayer / additionalLayers) and calls ONLY window.layerApi for actions (play, setProgress, toggleIncludeNet, clearTimeline) and reads includeNet', !/mousePressed|[^.\w]select\(|addEventListener\('mousedown'/.test(code) && !/(^|[;{}\n])\s*(timeline|activeLayer|additionalLayers)\s*=[^=]/.test(code) && ['play', 'setProgress', 'toggleIncludeNet', 'clearTimeline', 'includeNet'].every(m => new RegExp('api\\(\\)\\.' + m + '\\(').test(code)) && ['UI.guard(', 'UI.name(', 'UI.setDisabled(', 'UI.dialog(', 'UI.onSync('].every(x => code.includes(x)));
-    check('ui-timeline.js: exactly ONE Include net switch is built (one .ts-net), the thumb is guarded while the person drags or holds a key (pointerdown / keydown set, pointerup / pointercancel / keyup / blur clear), Play and the scrub bar are disabled with UI.setDisabled and the reason', (code.match(/btn\('ts-net'/g) || []).length === 1 && /input\.addEventListener\('pointerdown', function \(\) \{ interacting = true; \}\)/.test(code) && /input\.addEventListener\('keydown', function \(e\) \{\s*interacting = true;/.test(code) && /\['pointerup', 'pointercancel', 'keyup', 'blur'\]/.test(code) && /if \(!interacting\)/.test(code) && /UI\.setDisabled\(playBtn, reason\);/.test(code) && /UI\.setDisabled\(input, reason\);/.test(code));
+    check('ui-timeline.js: exactly ONE Include net switch is built (one .ts-net), the thumb is guarded while the person drags or holds a key (pointerdown / keydown set, pointerup / pointercancel / keyup / blur clear), Play and the scrub bar are disabled with UI.setDisabled and the reason', (code.match(/btn\('ts-net'/g) || []).length === 1 && /input\.addEventListener\('pointerdown', function \(\) \{\s*interacting = true;/.test(code) && /input\.addEventListener\('keydown', function \(e\) \{\s*interacting = true;/.test(code) && /\['pointerup', 'pointercancel', 'keyup', 'blur'\]/.test(code) && /if \(!interacting\)/.test(code) && /UI\.setDisabled\(playBtn, reason\);/.test(code) && /UI\.setDisabled\(input, reason\);/.test(code));
     check('ui-layers.js: the diamond calls select THEN addToTimeline (in that order), removes through layerApi.removeKeyframe, asks through timelineConfirm only when diamondPlan says needsConfirm, shows NO toast and does not read #timeline-status (the refusal is a notice from sketch.js), and never writes sketch state', /api\(\)\.select\(index\);\s*api\(\)\.addToTimeline\(\);/.test(LAYERS) && /api\(\)\.removeKeyframe\(index\)/.test(LAYERS) && /if \(!plan\.needsConfirm \|\| !root\.timelineConfirm\)/.test(LAYERS) && !/UI\.toast\(|UI\.notify\(|timeline-status/.test(LAYERS.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')) && !/(^|[;{}\n])\s*(activeLayer|additionalLayers|timeline)\s*=[^=]|\.enabled\s*=[^=]/.test(LAYERS));
     // the sketch.js block
     const bi = SKETCH.indexOf('    // layerApi: begin'), ei = SKETCH.indexOf('    // layerApi: end\n');
