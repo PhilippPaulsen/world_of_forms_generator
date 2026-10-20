@@ -31,16 +31,20 @@
  * `--target` forced). baseline-cleanup-1.json is the control recorded before the cleanup deleted the old layer, timeline and message DOM: the table, the rail, the strip, the timeline strip and
  * the notices are tracked, and `dom_present` lists the old elements that still exist. baseline-cleanup-1b.json is the same control recorded again on the tree after step 3 with the
  * DETERMINISTIC script (every snapshot but `notice` is taken with no notice on screen and #ui-notices is measured in viewport coordinates: two recordings of one tree give 0 differences,
- * whatever the speed or the visibility of the pane): compare the later states with 1b, not with the first control. Compare a later state with the file of the same method.
+ * whatever the speed or the visibility of the pane). baseline-cleanup-2.json is the state AFTER the cleanup (the tree of eeb1757d: the old layer, timeline and message DOM removed), with
+ * two extra widths, 936 (fine) and 1032c (real coarse), the thresholds where the layer table shows; its "before" note holds the comparison with 1b (exactly the 20 removed selectors of
+ * dom_present, true -> false, and nothing else). The relation: phase1 = before the whole UI rework; rail-3 = before the layer work; cleanup-1 and cleanup-1b = the controls on the old DOM
+ * (1 with the first, nondeterministic script, 1b with the deterministic one); cleanup-2 = after the cleanup. LATER RUNS ARE COMPARED WITH baseline-cleanup-2.json.
  *
  * Comparing a later run with a file. Record the same widths, tabs and pointer modes of the later tree (the same steps, the same script), save them as a second file with the same shape
  * ({ phase, commit, note, modes, widths }), then
  *
- *   node tools/ui/compare-baseline.js tools/ui/baseline-cleanup-1b.json <the new file>            (every difference: rect, presence, scalar)
+ *   node tools/ui/compare-baseline.js tools/ui/baseline-cleanup-2.json <the new file>            (every difference: rect, presence, scalar)
  *   node tools/ui/compare-baseline.js <a> <b> --shared                                            (only elements both files track; for a file of an older method)
  *
- * It prints each element that differs, per width, tab and scenario, with both rects, and a count per kind. For the cleanup the difference must be exactly the removed elements: their
- * `dom_present` entries go true -> false and no tracked rect of a kept element changes.
+ * It prints each element that differs, per width, tab and scenario, with both rects, and a count per kind. A run of a tree with no layout change gives 0 differences; a change that
+ * removes or adds an element shows as its `dom_present` entry (true <-> false, counted as a scalar) and any rect that moved. Use the same widths (375, 768, 768c, 936, 1032c, 1100, 1100c,
+ * 1440, 1440c; the suffix c = real coarse pointer) and pointer modes as the file you compare with.
  */
 async function recordBaseline(opts) {
   opts = opts || {};
