@@ -176,7 +176,16 @@
   }
   input.addEventListener('input', scrub);
   // the thumb is not overwritten while the person drags it or holds a key on it
-  input.addEventListener('pointerdown', function () { interacting = true; });
+  // Safari does not move the focus to a range input on a mouse click (the page's keydown then goes to BODY, not to the bar): a press takes it, so the arrow keys work after a click
+  // without a Tab. At pointerdown, and AGAIN at the pointerup that ends the press: WebKit runs the mousedown default (it clears the focus when the pressed control is not mouse-
+  // focusable) AFTER the pointerdown handlers, so a focus taken only at pointerdown can be undone at once (modelled in the pane: ArrowRight then goes to BODY). No preventDefault
+  // anywhere (a drag must stay native), no scroll, nothing on a disabled bar, nothing when the bar already has the focus.
+  let pressed = false;
+  function takeFocus() { if (!UI.isDisabled(input) && document.activeElement !== input) input.focus({ preventScroll: true }); }
+  input.addEventListener('pointerdown', function () {
+    interacting = true; pressed = true;
+    takeFocus();
+  });
   // The arrow keys move the thumb by 1 % (10 % with Shift). The range's own step is 0.001 (a drag and a playback stay smooth), which is 0.1 % = about half a pixel
   // and 2 ms of a 2 s timeline per press: nothing a person sees. Home, End, PageUp and PageDown stay native (0, 1, +-10 %). A chord with Ctrl, Alt or Cmd is the browser's
   // (Alt+Left is Back) and is left alone. A key press goes through scrub(), like an input event, so a running playback pauses at that position.
@@ -191,7 +200,7 @@
     scrub();
   });
   ['pointerup', 'pointercancel', 'keyup', 'blur'].forEach(function (t) { input.addEventListener(t, function () { interacting = false; }); });
-  if (typeof window !== 'undefined' && window.addEventListener) { window.addEventListener('pointerup', function () { interacting = false; }); window.addEventListener('pointercancel', function () { interacting = false; }); }
+  if (typeof window !== 'undefined' && window.addEventListener) { window.addEventListener('pointerup', function () { interacting = false; if (pressed) { pressed = false; takeFocus(); } }); window.addEventListener('pointercancel', function () { interacting = false; pressed = false; }); }
   netBtn.addEventListener('click', function () { if (api()) api().toggleIncludeNet(); sync(); });
   function setMore(open) {
     moreOpen = !!open;
