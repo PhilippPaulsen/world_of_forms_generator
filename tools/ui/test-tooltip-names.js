@@ -129,8 +129,7 @@ console.log('\n== index.html: every control without visible text has an aria-lab
     check('the three anchor-preview swatches are role="img" with an aria-label', ['farbe-anchor-preview', 'farbe-anchor-preview-kreis', 'farbe-anchor-preview-dreieck'].every(id => new RegExp('<span id="' + id + '"[^>]*\\brole="img"[^>]*\\baria-label="Anker-Vorschau"').test(body)));
 
     // controls with visible text: named by the text; the title is a description and there is NO aria-label (the harmony and net buttons that already had a label of their own are not in this list)
-    const TEXT_BUTTONS = ['btn-layer-base', 'btn-add-layer', 'btn-add-to-timeline', 'btn-timeline-include-net', 'btn-remove-timeline',
-        'export-png', 'export-json', 'export-svg', 'net-field-btn', 'net-lines-btn', 'net-reverse-btn', 'net-alternate-btn', 'btn-fold-3', 'btn-fold-6'];
+    const TEXT_BUTTONS = ['export-png', 'export-json', 'export-svg', 'net-field-btn', 'net-lines-btn', 'net-reverse-btn', 'net-alternate-btn', 'btn-fold-3', 'btn-fold-6'];
     const found = TEXT_BUTTONS.map(id => textTitle.find(t => t.id === id));
     check('the text buttons with a title are all found (the list is current)', found.every(Boolean), TEXT_BUTTONS.filter((id, i) => !found[i]).join(', ') || TEXT_BUTTONS.length + ' buttons');
     check('...and none of them has an aria-label: the visible text is the name, the title the description', found.filter(Boolean).every(t => !t.hasAria), found.filter(t => t && t.hasAria).map(t => t.id).join(', ') || 'none');
@@ -146,28 +145,20 @@ console.log('\n== sketch.js: the dynamic title sites ==');
         [/^b\.title = smooth \?/, 'macro cell button: visible text (4x2)'],
         [/^locked\.forEach\(b => \{ b\.elt\.dataset\.title = b\.elt\.title; \}\);/, 'remembers the static title of the Curve / Free / Face buttons'],
         [/^fieldBtn\.elt\.title = fieldOk \?/, 'Field: visible text, the reason when it is not available'],
-        [/^\[curveBtn, freeBtn\][\s\S]*b\.elt\.title = active \?/, 'Curve / Free: the reason while a net transform is active; the name is the static aria-label'],
-        [/^faceBtn\.elt\.title = /, 'Face fill: the reason; the name is the static aria-label'],
         [/^fieldBtn\.elt\.dataset\.title = fieldBtn\.elt\.title;/, 'restores the Field title'],
-        [/^includeNetBtn\.attribute\('title'/, 'Include net: visible text'],
         [/^alignBtn\.attribute\('title'/, 'Align to base: an icon button since layers 1b-1; the title is the reason while it is disabled, the name is the static aria-label'],
-        [/^btn\.title = 'Edit Layer '/, 'layer tab: visible text "Layer 2"'],
         [/^netBtn\.title = /, 'timeline keyframe "Net": visible text'],
         [/^countEl\.title = /, 'the "2/5" counter: a span that is not a control, its text is its content'],
         [/^btn\.title = cand\.orientation/, 'pairing candidate row: visible text'],
-        [/^addToTimelineBtn\.attribute\('title'/, 'Add to Timeline: visible text'],
     ];
     const stray = sites.filter(s => !ALLOWED.some(([re]) => re.test(s.text)));
-    check('the scan found the raw title sites (not an empty result)', sites.length >= 12, sites.length + ' sites');
+    check('the scan found the raw title sites (not an empty result)', sites.length >= 7, sites.length + ' sites');   // the Curve / Free / Fill lock titles went to UI.setDisabled (notices commit 11); the old layer row's and timeline buttons' went with them (cleanup step 3)
     check('every raw title assignment in sketch.js is a control with visible text, a disabled reason or a non-control span (a new one must be decided: icon-only -> UI.name, text -> add it here)', stray.length === 0, stray.length ? stray.map(s => s.line + ': ' + s.text.slice(0, 70)).join(' | ') : sites.length + ' sites, all allowed');
     const unused = ALLOWED.filter(([re]) => !sites.some(s => re.test(s.text)));
     check('...and every entry of that list still exists (no stale entries)', unused.length === 0, unused.map(u => u[1]).join('; ') || 'none');
 
     const NAMED = [
         [/UI\.name\(animPlayBtn\.elt, playing \? 'Pause' : 'Play'\)/, 'layer animation Play / Pause'],
-        [/UI\.name\(timelinePlayBtn\.elt, playing \? 'Pause' : 'Play'\)/, 'timeline Play / Pause'],
-        [/UI\.name\(checkbox, 'Show\/Hide Layer '/, 'layer checkbox'],
-        [/UI\.name\(removeBtn, 'Remove Layer '/, 'remove layer (x)'],
         [/UI\.name\(removeBtn, `Remove Layer \$\{layerIndex \+ 1\} from the timeline/, 'remove keyframe (x)'],
         [/UI\.name\(up, 'Swap this End assignment with the row above'\)/, 'End row up'],
         [/UI\.name\(down, 'Swap this End assignment with the row below'\)/, 'End row down'],

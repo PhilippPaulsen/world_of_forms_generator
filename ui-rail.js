@@ -28,6 +28,9 @@
   // does not read the 'disabled' state (Curve and Free stay pressed or not while a net transform disables them). Not toggles, so without aria-pressed: Undo, Redo, Random, Clear,
   // Download, Paste Pattern, "Neu anfangen" (actions), Info and Mehr (they open something: aria-expanded), the two catalog links.
   const TOGGLES = ['btn-toggle-nodes', 'btn-toggle-curve', 'btn-toggle-faces', 'btn-toggle-free', 'btn-toggle-free-endpoints', 'btn-alternative-net'].map(function (id) { return document.getElementById(id); }).filter(Boolean);
+  // Curve, Free and Fill are locked while a net transform is active (sketch.js: UI.setDisabled, aria-disabled, focusable). A tap, a click or a long press on a locked one shows the reason as a notice;
+  // an unlocked one is not touched here (sketch.js's own handler toggles it).
+  ['btn-toggle-curve', 'btn-toggle-free', 'btn-toggle-faces'].forEach(function (id) { const b = document.getElementById(id); if (b) UI.guard(b, function () { }); });
   const IN_MORE = ['btn-toggle-curve', 'btn-toggle-free', 'btn-toggle-free-endpoints', 'btn-alternative-net'].map(function (id) { return document.getElementById(id); }).filter(Boolean);
   function syncPressed() {
     TOGGLES.forEach(function (b) {

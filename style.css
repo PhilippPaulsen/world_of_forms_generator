@@ -141,11 +141,11 @@ label { touch-action: manipulation; }
 
 /* Phase 2 (touch), track A, commit B: the coarse-pointer minimum target (--target, 48px). Only under (pointer: coarse): a mouse keeps every size it has.
    What was below it at 375px (measured, scratchpad/ta-results/baseline/small-375.json): the header tab "Netz" (47.8px wide: text + 2 x 4px padding; all three tabs are
-   one bar high, 71px inside the header's 1px border), every .layer-btn / .icon-btn of the layer row (40px high), the layer remove button (22px high, squeezed to
-   10.8px wide by flex-shrink), the layer checkbox (24 x 13), the layer number fields (60 x 40), the selects (32px), the layer progress slider (6px), the export format and close buttons
+   one bar high, 71px inside the header's 1px border), every .layer-btn / .icon-btn of the old layer row (40px high), the layer remove button (22px high, squeezed to
+   10.8px wide by flex-shrink), the old layer checkbox (24 x 13), the layer number fields (60 x 40), the selects (32px), the layer progress slider (6px), the export format and close buttons
    (39-45px high), the node count / size / anchor hue number fields inside a stepper (28px high), and the two <a class="icon-btn"> links Gallery and Farborgel (content-box:
-   40px + border = 42px). The layer row is only made to WRAP and reach the minimum - not redesigned (that is 5c / 5d); Gallery and Farborgel are replaced by the organ
-   strip in 5b and only get their size. The one documented exception that stays below 48px: the stepper chevron halves (24px, WCAG 2.5.8, see .stepper). The ::before / ::after of the checkbox below draw its box (its selector carries input[type="checkbox"] to out-rank index.html's `input[type="range"], input[type="checkbox"] { width: 100% }`). */
+   40px + border = 42px). (The old layer row and its checkbox are gone: the layer table, rail and strip replaced them.) Gallery and Farborgel are replaced by the organ
+   strip in 5b and only get their size. The one documented exception that stays below 48px: the stepper chevron halves (24px, WCAG 2.5.8, see .stepper). */
 @media (pointer: coarse) {
   .app-tabs a { min-width: var(--target); justify-content: center; }
   .icon-btn,
@@ -160,7 +160,6 @@ label { touch-action: manipulation; }
   .layer-btn,
   .layer-remove-btn { flex: none; white-space: nowrap; }
   .icon-row { flex-wrap: wrap; }
-  #layer-tabs { display: contents; }
   .layer-tab { flex: none; }
   #timeline-keyframe-list { flex-wrap: wrap; }
   .pairing-row { flex-wrap: wrap; }          /* label + 5 buttons at --target do not fit a 320px row */
@@ -173,45 +172,6 @@ label { touch-action: manipulation; }
   html .stepper > input[type="number"],
   html .stepper > .stepper-display { align-self: stretch; width: var(--target); min-width: var(--target); }
   html .stepper > .stepper-display { display: flex; align-items: center; justify-content: center; }
-  input[type="checkbox"].layer-enable-checkbox {
-    -webkit-appearance: none;
-    appearance: none;
-    position: relative;
-    flex: none;
-    width: var(--target);
-    height: var(--target);
-    margin: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    cursor: pointer;
-  }
-  input[type="checkbox"].layer-enable-checkbox::before {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 22px;
-    height: 22px;
-    margin: -11px 0 0 -11px;
-    box-sizing: border-box;
-    border: 1px solid var(--color-text);
-    border-radius: 4px;
-    background: var(--color-bg);
-  }
-  input[type="checkbox"].layer-enable-checkbox:checked::before { background: var(--color-text); }
-  input[type="checkbox"].layer-enable-checkbox:checked::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 6px;
-    height: 11px;
-    margin: -8px 0 0 -3px;
-    border: solid var(--color-bg);
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-  }
 }
 
 /* iOS Safari zooms the page when a field with a font size below 16px takes focus (#face-colors-rule, #timeline-pairing-segment and
@@ -256,9 +216,6 @@ label { touch-action: manipulation; }
    where it was before the wrapper existed; [hidden] must be restated because display: contents would win over the attribute. */
 #layer-more-panel { display: contents; }
 #layer-more-panel[hidden] { display: none; }
-/* The toggle row takes its own line in #controls-container (a centred flex-wrap row): were it an ordinary item, opening and closing the block would re-centre the line it shares
-   with the layer row and the timeline and move those sideways (measured: 44-54 px at 1440). */
-#layer-more-row { flex-basis: 100%; justify-content: center; }
 
 /* Layer "Mehr" block, step 1b-1: the shape icons, the node count and size steppers, the fold buttons, Align to base and the mesh presets use the SAME markup and classes as the Form row
    (.nav-cluster, .ico, .stepper, .stepper-btn, .icon-btn). Three things in the Form row's CSS are scoped to .nav-row or lose to a rule that only applies inside .control-group, so
@@ -487,25 +444,25 @@ body.dark {
 #face-colors-unassigned-text { flex: 1; }
 #face-colors-timeline-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
 #face-colors-timeline-note[hidden] { display: none; }
-#net-locks-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
-#net-focus-hint, #net-size-hint, #net-free-note, #net-macro-hint, #net-macro-note, #net-field-hint, #net-field-info, #net-field-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
-#net-focus-hint[hidden], #net-focus-row[hidden], #net-size-hint[hidden], #net-free-note[hidden], #net-field-hint[hidden], #net-field-info[hidden], #net-field-note[hidden], #net-macro-hint[hidden], #net-macro-note[hidden], #net-macro-row[hidden], #net-alternate-btn[hidden], #net-locks-note[hidden], #net-geo-row[hidden], #net-group[hidden], #net-strength-row[hidden] { display: none; }
+#net-focus-hint, #net-size-hint, #net-macro-hint, #net-field-hint, #net-field-info { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
+#net-focus-hint[hidden], #net-focus-row[hidden], #net-size-hint[hidden], #net-field-hint[hidden], #net-field-info[hidden], #net-macro-hint[hidden], #net-macro-row[hidden], #net-alternate-btn[hidden], #net-geo-row[hidden], #net-group[hidden], #net-strength-row[hidden] { display: none; }
 #net-macro-row { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
 #net-focus-row, #net-strength-row { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
 #net-group .icon-row { flex-wrap: wrap; justify-content: center; }
 #net-group .net-kind-btn, #net-group .net-axes-btn { flex: 0 0 auto; }
 .icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+/* The net lock (sketch.js): Curve, Free and Fill are aria-disabled, not natively disabled, so they stay focusable and a tap shows the reason; they look as the native ones did. */
+#btn-toggle-curve[aria-disabled="true"], #btn-toggle-free[aria-disabled="true"], #btn-toggle-faces[aria-disabled="true"] { opacity: 0.35; cursor: not-allowed; }
+@media (hover: hover) {
+  #btn-toggle-curve[aria-disabled="true"]:hover, #btn-toggle-free[aria-disabled="true"]:hover, #btn-toggle-faces[aria-disabled="true"]:hover { background: var(--background); }
+}
 
-.limit-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
-.limit-note[hidden] { display: none; }
-
-#timeline-net-warning { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #d9822b; background: #fdf1e3; }
 #timeline-net-state { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
 #timeline-net-state[data-state="animated"] { border-left-color: #2e8b57; background: #eaf6ee; }
 #timeline-net-state[data-state="none"], #timeline-net-state[data-state="incompatible"] { border-left-color: #c0392b; background: #fbeae8; }
 #timeline-net-state[data-state="partial"] { border-left-color: #d9822b; background: #fdf1e3; }
 #timeline-net-state[data-state="constant"], #timeline-net-state[data-state="pending"] { border-left-color: #888; background: #f4f4f4; }
-#timeline-net-warning[hidden], #timeline-net-state[hidden] { display: none; }
+#timeline-net-state[hidden] { display: none; }
 .kf-no-net { color: #c0392b; }
 
 /* === UI rework 4a: header, tabs, nav rows ===============================
@@ -841,28 +798,54 @@ body.dark {
 /* The old three-button symmetry group and the fold group stay in the DOM (sketch.js owns them) but are hidden. */
 .legacy-controls[hidden] { display: none; }
 
-/* Toasts: fixed-position messages that never move the layout - the reason a disabled control gives when tapped
-   (#ui-toast, ui.js) and the sketch's own notes (#node-count-note). Dismissible: Escape, a click on it, or the next tap. */
-.toast {
+/* === The notices (ui.js: UI.notify, UI.toast) ===================================================================================================
+   #ui-notices is always rendered (a live region, never toggled with `hidden`) and empty most of the time. Fixed, centred, `min(92vw, 480px)` wide, 16px above the bottom edge plus the
+   bottom safe-area inset, a column with an 8px gap, newest at the bottom, at most two. The container does not catch the pointer; a notice does. The look is the toast's (background, text,
+   radius) plus a 3px left border per kind: info = the text colour, warn = a neutral grey, error = --danger. Nothing is filled. The text is clamped to three lines (the title has all of it).
+   A notice of 60 or more characters, or a sticky one, has a close button (--target square: 36 fine, 48 coarse). No animation, so nothing to reduce under prefers-reduced-motion. */
+.notices {
   position: fixed;
   left: 50%;
-  bottom: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   z-index: 60;
   box-sizing: border-box;
-  max-width: min(92vw, 480px);
+  width: min(92vw, 480px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin: 0;
+  pointer-events: none;
+}
+.notice {
+  pointer-events: auto;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
   padding: 12px 16px;
   background: var(--color-bg);
   color: var(--color-text);
   border: 1px solid var(--color-text);
+  border-left-width: 3px;
   border-radius: var(--radius);
   font-size: var(--size-base);
   line-height: 1.25;
   text-align: left;
-  opacity: 1;
 }
-.toast[hidden] { display: none; }
+.notice-info { border-left-color: var(--color-text); }
+.notice-warn { border-left-color: var(--color-secondary); }
+.notice-error { border-left-color: var(--danger); }
+.notice-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.notice .notice-close { flex: none; width: var(--target); height: var(--target); margin: -6px -10px -6px 0; box-sizing: border-box; }   /* `.notice .` out-ranks index.html's inline .icon-btn { width: 40px; height: 40px } */
 
 /* === UI rework 4c: Netz row ===============================================
    Aus | Sin | Tan | Geo, the strength stepper, More. Same rules as the Form row: every control is --target high, a
@@ -1083,7 +1066,16 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
     gap: var(--gap);
   }
   .rail-left { display: contents; }
-  .canvas-row #canvas-container { flex: 0 0 100%; order: 0; }
+  /* The canvas is a square of --canvas-size (560px, or the row when that is narrower), centred in the row: flex-basis 100% used to beat the container's own width, so from 593px (the
+     row, 100vw - 32px, wider than 560px) the container filled the row and the 1200 x 1200 bitmap was stretched to row x 560. The side margins are what is left of the row, so the container's
+     outer size stays 100%: nothing else joins its line (the rail rows, and in the Farbe tab the groups that are display: contents, still wrap below it). Up to 592px the row is not wider than
+     --canvas-size and every term is 0 or 100%: identical to the old rule. */
+  .canvas-row #canvas-container {
+    flex: 0 0 min(var(--canvas-size), 100%);
+    margin-left: calc((100% - min(var(--canvas-size), 100%)) / 2);
+    margin-right: calc((100% - min(var(--canvas-size), 100%)) / 2);
+    order: 0;
+  }
   /* Two rows, each wrapping between groups only: a group is one flex item. At 320px the 6 icons of A + B + More (328px) do not fit the 288px row, so A (3) and B + More (3)
      wrap separately; C + D + E (5 icons, 272px) fits. B and More stay together (.rail-bm). */
   .rail-top, .rail-bottom { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); flex: 0 0 100%; }
@@ -1126,6 +1118,223 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
 }
 #more-rail .more-name-state { font-weight: var(--weight-strong); color: var(--color-text); }
 
+
+/* === The layer table (layer-table commit 1; ui-layers.js builds it) ==================================================================================================
+   The Base and one row per layer: a number chip (the Base: a stack), the eye, the remove x; below them "+" and "..." and a fixed name line. The table is 4 columns wide in its
+   final form (chip, eye, diamond, x: 4 x --target + 3 gaps of 4px = 156px at a fine pointer, 204px at a coarse one); commit 1 draws three of them (chip in column 1, eye in 2, x in 4)
+   and reserves the third, so the width, and with it the thresholds, stay valid when the diamond column comes. It sits at the right gutter, absolutely positioned (the canvas stays
+   centred: the free width right of the canvas is (W - 560) / 2 - 24, the table needs its width + an 8px gap): a fine pointer from 936px, a coarse pointer from 1032px. Below
+   that the rail (768px up) or the strip (below 768px) shows. The old layer row is display: none at every width (a rule of its own, see the strip block; never removed: its handlers are what layerApi (sketch.js) runs); "..." toggles
+   the same block. */
+.layer-table { display: none; }
+@media (pointer: fine) and (min-width: 936px), (pointer: coarse) and (min-width: 1032px) {
+  .layer-table {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    top: var(--gap);
+    right: 24px;
+    box-sizing: border-box;
+    width: calc(4 * var(--target) + 3 * var(--rail-gap));
+    max-height: var(--canvas-size);
+  }
+}
+.layer-table .lt-base { flex: none; }   /* the Base row: fixed, outside the scrolling layer rows (like "+" and "..." in the foot) */
+.layer-table .lt-rows { display: flex; flex-direction: column; gap: var(--rail-gap); padding: 4px; margin: 0 -4px -4px; overflow-y: auto; min-height: 0; flex: 0 1 auto; }   /* only the layer rows scroll; the 4px of padding on top is the gap under the Base row (and the focus ring's room), so a scrolled row is clipped at the Base row's bottom edge */
+.layer-table .lt-rows:empty { display: none; }   /* no layers: the table is the Base row and the foot, as before */
+.layer-table .lt-row, .layer-table .lt-foot { display: grid; grid-template-columns: repeat(4, var(--target)); gap: var(--rail-gap); }
+.layer-table .lt-chip { grid-column: 1; }
+.layer-table .lt-chip, .layer-rail .lt-chip, .layer-strip .lt-chip { font: inherit; font-size: var(--size-base); font-variant-numeric: tabular-nums; }
+.layer-table .lt-eye { grid-column: 2; }
+.layer-table .lt-dia { grid-column: 3; }
+.layer-table .lt-x { grid-column: 4; }
+.layer-table .lt-add { grid-column: 1; }
+.layer-table .lt-more { grid-column: 2; position: relative; }
+.layer-table .icon-btn[aria-disabled="true"], .layer-rail .icon-btn[aria-disabled="true"], .layer-strip .icon-btn[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-disabled); cursor: not-allowed; }
+.layer-table .lt-chip.is-hidden:not(.active), .layer-rail .lt-chip.is-hidden:not(.active), .layer-strip .lt-chip.is-hidden:not(.active) { color: var(--color-secondary); border-color: var(--color-secondary); }
+.layer-table .lt-foot { position: relative; margin-top: var(--rail-group-gap); flex: none; }
+.layer-table .lt-foot::before {
+  content: "";
+  position: absolute;
+  top: calc(-1 * var(--rail-group-gap) / 2 - 0.5px);
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--color-hairline);
+}
+/* the name line: a reserved height (two lines), as wide as the table and never wider, so filling or emptying it moves nothing */
+.layer-table .lt-name {
+  box-sizing: border-box;
+  width: 0;
+  min-width: 100%;
+  height: 2.5em;
+  margin: var(--rail-gap) 0 0;
+  overflow: hidden;
+  font-size: var(--size-secondary);
+  line-height: 1.25;
+  color: var(--color-secondary);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  flex: none;
+}
+.layer-table .lt-name-state { font-weight: var(--weight-strong); color: var(--color-text); }
+
+/* === The layer rail (layer-table commit 2; ui-layers.js builds it) ==================================================================================================
+   The narrow view of the same model: ONE column, as wide as a button (--target: 36px fine, 48px coarse), at the right gutter (right: 24px, like the left tool rail) and level with the
+   canvas top (top: var(--gap)); absolutely positioned, so the canvas stays centred. From 768px (the width where the left tool rail turns vertical, so both rails appear together) up to the
+   table's threshold: a fine pointer 768 to 935px, a coarse pointer 768 to 1031px; there the table shows instead (above) and below 768px the strip (commit 4, below) shows. 768px leaves 104px right of the canvas (24px gutter included): the rail needs --target + 8px. The old row is hidden at every width (the strip block).
+   Group 1 = the chips (.lr-chips, scrolls inside the rail's max-height; "+" sits under it, outside the scrolling part), a hairline, group 2 = the actions of the active sheet. The scrolling
+   part has 4px of padding (and an equal negative margin) so the keyboard focus ring of an edge chip is not clipped by its overflow. */
+.layer-rail { display: none; }
+@media (min-width: 768px) and (max-width: 935px) and (pointer: fine), (min-width: 768px) and (max-width: 1031px) and (pointer: coarse) {
+  .layer-rail {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    top: var(--gap);
+    right: 24px;
+    box-sizing: border-box;
+    width: var(--target);
+    max-height: var(--canvas-size);
+  }
+}
+.layer-rail .lr-group { display: flex; flex-direction: column; gap: var(--rail-gap); }
+.layer-rail .lr-g1 { min-height: 0; flex: 0 1 auto; }
+.layer-rail .lr-chips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rail-gap);
+  padding: 4px;
+  margin: -4px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 0 1 auto;
+  scrollbar-width: none;
+}
+.layer-rail .lr-chips::-webkit-scrollbar { display: none; }
+.layer-rail .lr-g2 { position: relative; margin-top: var(--rail-group-gap); flex: none; }
+.layer-rail .lr-g2::before {
+  content: "";
+  position: absolute;
+  top: calc(-1 * var(--rail-group-gap) / 2 - 0.5px);
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--color-hairline);
+}
+.layer-rail .lt-more { position: relative; }
+
+/* === The confirmation dialogs ("Neu anfangen", "Ebene entfernen") ===================================================================================================
+   index.html's inline `.dialog-content button { background: var(--accent); color: white; border: none }` (specificity 0,1,1) is meant for the Help and Export "Close" buttons and hits EVERY
+   button inside any .dialog-content, so both buttons of both confirmations were filled red. These two rules (0,2,1 and 0,3,0) out-rank it for the buttons in .restart-actions only: "Abbrechen" is
+   the normal outlined button (the focus ring is the global one, untouched), the destructive confirm button (.dialog-danger) differs only in a red text and border (var(--danger), a token of its own: --accent is 3.55:1 on white, --danger 5.38:1), nothing filled. */
+.dialog-content .restart-actions button {
+  box-sizing: border-box;
+  margin-top: 12px;
+  padding: 8px 16px;
+  border: 1px solid var(--text);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--text);
+}
+.dialog-content .restart-actions .dialog-danger { color: var(--danger); border-color: var(--danger); }
+@media (hover: hover) {
+  .dialog-content .restart-actions button:hover { background: var(--hover-bg); }
+}
+
+/* === The layer strip (layer-table commit 4; ui-layers.js builds it) ==================================================================================================
+   The phone view of the same model: two rows of --target buttons with 8px gaps, left-aligned at the gutter (.canvas-row's 16px padding), directly under the canvas. Shown below 768px for
+   BOTH pointer types (from 768px the rail or the table shows). Row 1 (.lr-g1) = the Base chip and "+" (fixed) around the layer chips, which scroll SIDEWAYS (.lr-chips: overflow-x: auto, no
+   scrollbar, 4px of padding and an equal negative margin so the focus ring of an edge chip is not clipped); row 2 (.lr-g2) = the eye, "..." and the remove x of the active sheet (a
+   fourth slot is for the diamond, a later commit). It is a flex item of .canvas-row (the phone's wrapping flex row) and takes a full line; the tool rail's rows follow it. The old layer row is gone: the strip, the rail and the table replaced it. */
+.layer-strip { display: none; }
+@media (max-width: 767px) {
+  .layer-strip {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap);
+    flex: 0 0 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+}
+.layer-strip .lr-group { display: flex; flex-direction: row; align-items: center; gap: var(--gap); min-width: 0; }
+.layer-strip .lr-chips {
+  display: flex;
+  flex-direction: row;
+  gap: var(--gap);
+  padding: 4px;
+  margin: -4px;
+  overflow-x: auto;
+  min-width: 0;
+  flex: 0 1 auto;
+  scrollbar-width: none;
+}
+.layer-strip .lr-chips::-webkit-scrollbar { display: none; }
+.layer-strip .lt-more { position: relative; }
+
+/* === The timeline strip (layer-table commit 6; ui-timeline.js builds it) ==================================================================================================
+   Play, the scrub bar, the Include net switch and "Mehr", in one row under the canvas. Below 768px it is a flex item of .canvas-row's wrapping row (a full line, between the canvas and the layer
+   strip: the DOM order); from 768px it is the SECOND grid row, in the canvas column, as wide as the canvas (--canvas-size) and centred: the canvas row stays where it was (row 1), so the canvas
+   does not move. The buttons are --target high (36px fine, 48px coarse: .canvas-row .icon-btn); the bar takes the rest. The scrub bar is a real <input type="range"> as high as a button
+   (a touch target) with the slider look of the other sliders (6px track, 14px thumb); the diamond marks sit on top of it at their time positions (decorative: aria-hidden, no pointer events),
+   computed from --f (0..1) over the track's length, which is the bar minus the thumb. The old timeline controls (Add to Timeline, Include net, the Play row, the progress input, Remove Timeline) are gone: the layers' diamonds,
+   this strip and "Zeitleiste entfernen" replaced them. #timeline-group (the keyframe list, the net status, the pairing editor, the status line, "Zeitleiste entfernen") is shown only while
+   "Mehr" is open. */
+#timeline-group:not(.ts-open) { display: none; }
+.timeline-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  box-sizing: border-box;
+  min-width: 0;
+  flex: 0 0 100%;
+}
+.timeline-strip .ts-bar { position: relative; flex: 1 1 auto; min-width: 0; height: var(--target); --ts-thumb: 14px; }
+.timeline-strip .ts-range {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  position: relative;
+  width: 100%;
+  height: var(--target);
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  touch-action: manipulation;
+}
+.timeline-strip .ts-range::-webkit-slider-runnable-track { height: 6px; background: var(--slider-track-bg); border-radius: 3px; }
+.timeline-strip .ts-range::-moz-range-track { height: 6px; background: var(--slider-track-bg); border-radius: 3px; }
+.timeline-strip .ts-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: var(--ts-thumb); height: var(--ts-thumb); margin-top: -4px; border-radius: 50%; background: var(--slider-thumb-bg); }
+.timeline-strip .ts-range::-moz-range-thumb { width: var(--ts-thumb); height: var(--ts-thumb); border: none; border-radius: 50%; background: var(--slider-thumb-bg); }
+.timeline-strip .ts-range[aria-disabled="true"] { opacity: 0.4; cursor: not-allowed; }
+.timeline-strip .ts-marks { position: absolute; left: 0; right: 0; top: 0; height: 100%; pointer-events: none; }
+.timeline-strip .ts-mark {
+  position: absolute;
+  top: 3px;
+  left: calc(var(--ts-thumb) / 2 + var(--f, 0) * (100% - var(--ts-thumb)));
+  transform: translateX(-50%);
+  line-height: 0;
+  color: var(--text);
+}
+.timeline-strip .icon-btn[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-disabled); cursor: not-allowed; }
+.timeline-strip .ts-net, .timeline-strip .ts-more { position: relative; }
+.timeline-strip .ts-net.has-state::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+@media (min-width: 768px) {
+  .timeline-strip { flex: none; grid-column: 2; grid-row: 2; width: var(--canvas-size); justify-self: center; }
+}
 
 /* Keyboard focus: its own 2px outline with a 2px offset, never the same
    as the active state (black fill). :focus-visible = keyboard only. */

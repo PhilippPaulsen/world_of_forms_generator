@@ -195,7 +195,7 @@ function applyCatalogPattern(pattern) {
 // param, see parseCatalogUrlParams()). Targets a freshly-created
 // additionalLayers[] entry instead of the base globals -
 // addLayer() + updateActiveLayerGrid() are the EXACT same mechanism a
-// real "+Layer" click followed by manually changing its Shape/Node
+// real new-layer action (layerApi.add) followed by manually changing its Shape/Node
 // Count controls would use (design session point 2: indistinguishable
 // from a real user action, not a special-cased silent write).
 // symmetryMode is written directly to the layer's own field, mirroring
@@ -262,7 +262,7 @@ function setup() {
             // visibly (a note), before the grid is built from it.
             clampNodeCountToShape('Shape');
             rebuildGrid(currentShape);
-            renderLayerTabs(); // rebuildGrid() clears additionalLayers - keep the tab strip in sync
+            renderLayerTabs(); // rebuildGrid() clears additionalLayers - the layer views follow on the next tick
             updateOffsetControls();
             updateTimelineControls(); // rebuildGrid() also clears timeline - see its own comment (core/state.js)
             updateSymmetryModeControl(); // Roadmap 1.11: fold row only applies to hex - show/hide it and re-resolve symmetryMode for the new shape (function declaration, hoisted within setup() regardless of textual order below)
@@ -289,13 +289,7 @@ function setup() {
 
     // Node count (Number Input). The ceiling depends on the shape (core/forms.js NODE_COUNT_MAX).
     const nodeInput = select('#node-count-input');
-    const nodeCountNote = select('#node-count-note');
-    let nodeCountNoteTimer = null;
-    function showNodeCountNote(text) {
-        if (!nodeCountNote) return;
-        nodeCountNote.html(text); nodeCountNote.elt.hidden = false;
-        clearTimeout(nodeCountNoteTimer); nodeCountNoteTimer = setTimeout(() => { nodeCountNote.elt.hidden = true; }, 9000);
-    }
+    function showNodeCountNote(text) { say('node-count', text, 'info'); }
     // Sets the input's own max for currentShape (the HTML attribute is only the universal default of 7) and, when the
     // current nodeCount is above it, clamps nodeCount and says so. `cause` names what triggered it.
     function clampNodeCountToShape(cause) {
@@ -496,8 +490,16 @@ function setup() {
     const curveBtn = select('#btn-toggle-curve');
     const freeBtn = select('#btn-toggle-free');
     const faceBtn = select('#btn-toggle-faces');
+    // A locked toggle (a net transform is active) is aria-disabled, not natively disabled: it stays focusable and says why. Native disabled used to stop the mousedown that p5's
+    // mousePressed listens for; now the handlers below return first when their button is locked.
+    function btnLocked(b) { return !!b && (b.elt.disabled || b.elt.getAttribute('aria-disabled') === 'true'); }
+    function lockBtn(b, reason) {
+        if (window.UI && UI.setDisabled) UI.setDisabled(b.elt, reason);
+        else b.elt.disabled = !!reason;   // no UI layer (a page without ui.js): the native disabled, as before
+    }
     if (curveBtn) {
         curveBtn.mousePressed(() => {
+            if (btnLocked(curveBtn)) return;
             if (curveType.kind === 'curve') {
                 curveType = { kind: 'straight' }; // Disable curve
                 curveBtn.removeClass('active');
@@ -544,6 +546,7 @@ function setup() {
     // never calls random() itself - see the 1.5-A design).
     if (freeBtn) {
         freeBtn.mousePressed(() => {
+            if (btnLocked(freeBtn)) return;
             if (curveType.kind === 'free') {
                 curveType = { kind: 'straight' }; // Disable free clothing
                 freeBtn.removeClass('active');
@@ -593,6 +596,7 @@ function setup() {
     }
     if (faceBtn) {
         faceBtn.mousePressed(() => {
+            if (btnLocked(faceBtn)) return;
             const next = !activeShowFaces();
             setActiveShowFaces(next);
             if (next) {
@@ -623,23 +627,21 @@ function setup() {
         const strengthInput = select('#net-strength-input'), strengthValue = select('#net-strength-value'), strengthRow = select('#net-strength-row');
         const focusRow = select('#net-focus-row'), focusInput = select('#net-focus-input'), focusValue = select('#net-focus-value'), focusHint = select('#net-focus-hint');
         const geoRow = select('#net-geo-row'), reverseBtn = select('#net-reverse-btn'), alternateBtn = select('#net-alternate-btn');
-        const note = select('#net-locks-note');
         const fresh = () => ({ mode: 'regular', strength: 0.5, reverse: false, alternate: false, focus: 0 });
         const ui = { axes: 'both', domain: 'single', macro: undefined, x: fresh(), y: fresh() };
         const sizeHint = select('#net-size-hint');
         // Domain (Single | Tiled | Field): ui.domain mirrors the state (baseNetTransform.domain / .repeat). Field is only valid
         // for an odd Shape Size 3..9 (netDomainEffective); an even one resets it to Single, visibly.
-        const domainBtns = selectAll('.net-domain-btn'), fieldBtn = select('#net-field-btn'), fieldHint = select('#net-field-hint'), fieldInfo = select('#net-field-info'), fieldNote = select('#net-field-note');
-        let fieldNoteTimer = null;
-        const showFieldNote = text => { fieldNote.html(text); fieldNote.elt.hidden = false; clearTimeout(fieldNoteTimer); fieldNoteTimer = setTimeout(() => { fieldNote.elt.hidden = true; }, 9000); };
+        const domainBtns = selectAll('.net-domain-btn'), fieldBtn = select('#net-field-btn'), fieldHint = select('#net-field-hint'), fieldInfo = select('#net-field-info');
+        const showFieldNote = text => { say('net-field', text, 'info'); };
         const stateDomain = () => baseNetTransform ? (baseNetTransform.domain === 'field' ? 'field' : baseNetTransform.domain === 'tiled' ? 'tiled' : baseNetTransform.domain === 'single' ? 'single' : (baseNetTransform.repeat ? 'tiled' : 'single')) : null;
         const setDomain = d => { ui.domain = d; if (baseNetTransform) { baseNetTransform.domain = d === 'field' ? 'field' : undefined; baseNetTransform.repeat = d === 'tiled'; } };
         // Macro cells (nested net): ui.macro = the chosen macro count, undefined = smooth (macro = E). The state's
         // baseNetTransform.macro is kept equal to it; the row lists the valid divisors of E = nodeCount - 1.
-        const macroRow = select('#net-macro-row'), macroBtns = select('#net-macro-buttons'), macroHint = select('#net-macro-hint'), macroNote = select('#net-macro-note');
-        let macroSig = null, macroNoteTimer = null;
+        const macroRow = select('#net-macro-row'), macroBtns = select('#net-macro-buttons'), macroHint = select('#net-macro-hint');
+        let macroSig = null;
         const setMacro = v => { ui.macro = v; if (baseNetTransform) baseNetTransform.macro = v; };
-        const showMacroNote = text => { macroNote.html(text); macroNote.elt.hidden = false; clearTimeout(macroNoteTimer); macroNoteTimer = setTimeout(() => { macroNote.elt.hidden = true; }, 9000); };
+        const showMacroNote = text => { say('net-macro', text, 'info'); };
         const target = () => (ui.axes === 'y' ? ui.y : ui.x);
         const axisSpec = c => c.mode === 'regular' ? { kind: 'uniform', w: 0 }
             : c.mode === 'sinus' ? (c.focus ? { kind: 'trig', w: -c.strength, focus: c.focus, alternate: c.alternate } : { kind: 'trig', w: -c.strength })
@@ -718,7 +720,7 @@ function setup() {
         domainBtns.forEach(b => b.mousePressed(() => {
             const d = b.elt.dataset.domain;
             if (d === 'field' && b.elt.disabled) return;
-            fieldNote.elt.hidden = true; setDomain(d); commit();
+            if (window.UI) UI.notifyClear('net-field'); setDomain(d); commit();
         }));
         const linesBtn = select('#net-lines-btn');
         linesBtn.mousePressed(() => { netLinesOn = !netLinesOn; linesBtn.elt.classList.toggle('active', netLinesOn); redraw(); });
@@ -728,7 +730,6 @@ function setup() {
         const locked = [curveBtn, freeBtn, faceBtn].filter(Boolean);
         locked.forEach(b => { b.elt.dataset.title = b.elt.title; });
         let wasActive = null;
-        if (note) { note.elt.dataset.text = note.elt.textContent; note.elt.dataset.fieldText = 'Curve and free-clothing (under Mehr) are off while a net transform is active (lines are kept straight). Face fills are exact on a Field and work for the base sheet and for layers on the base grid (same shape and size, no offset, no rotation - every timeline playback layer); other layers are not filled. Set the net back to Regular (Base sheet, square) to use curves again.'; }
         netControlsSync = function () {
             group.elt.hidden = !(currentShape === 'square' && activeLayer === 'base');
             const active = netWarpActive();
@@ -744,7 +745,7 @@ function setup() {
             fieldHint.elt.hidden = fieldOk;
             const isField = ui.domain === 'field', E0 = nodeCount - 1;
             fieldInfo.elt.hidden = !(active && isField);
-            if (active && isField) fieldInfo.html(`Field: macro = R = ${R} tiles, micro = E = ${E0} per tile.`);
+            if (active && isField) fieldInfo.html(`Field: macro = R = ${R} tiles, micro = E = ${E0} per tile. Face fills are exact on a Field and work for the base sheet and for layers on the base grid (same shape and size, no offset, no rotation - every timeline playback layer); other layers are not filled.`);
             // The Shape Size hint says what Shape Size does in the CURRENT mode
             const hintText = !active ? null
                 : ui.domain === 'single' ? (R > 1 ? 'Single: one closed net. Shape Size 1 fills the canvas, larger sizes give a smaller net; Field (odd Shape Size 3-9) spreads the law over all the tiles instead.' : null)
@@ -775,7 +776,7 @@ function setup() {
                     const smooth = m === E; b.textContent = `${m}\u00d7${E / m}`;
                     b.title = smooth ? `${E} macro cells of 1: smooth, no nesting (default)` : `${m} unequal macro cells, each split uniformly into ${E / m}`;
                     if ((smooth && ui.macro === undefined) || ui.macro === m) b.classList.add('active');
-                    b.addEventListener('click', () => { macroNote.elt.hidden = true; setMacro(smooth ? undefined : m); commit(); });
+                    b.addEventListener('click', () => { if (window.UI) UI.notifyClear('net-macro'); setMacro(smooth ? undefined : m); commit(); });
                     macroBtns.elt.appendChild(b);
                 });
             }
@@ -789,15 +790,8 @@ function setup() {
             const faceOk = isField && active && (activeLayer === 'base' || layerGridMatchesBase(additionalLayers[activeLayer]));
             const lockSig = `${active}|${faceOk}|${isField && active}`;
             if (lockSig !== wasActive) {
-                [curveBtn, freeBtn].filter(Boolean).forEach(b => { b.elt.disabled = active; b.elt.title = active ? 'Off while a net transform is active' : b.elt.dataset.title; });
-                if (faceBtn) {
-                    faceBtn.elt.disabled = active && !faceOk;
-                    faceBtn.elt.title = !active ? faceBtn.elt.dataset.title : faceOk ? faceBtn.elt.dataset.title : (isField ? 'Face fills on a Field: the base sheet and layers on the base grid (same shape and size, no offset, no rotation) only' : 'Off while a net transform is active (faces are exact only on a Field)');
-                }
-                if (note) {
-                    note.elt.hidden = !active;
-                    note.elt.textContent = isField && active ? note.elt.dataset.fieldText : note.elt.dataset.text;
-                }
+                [curveBtn, freeBtn].filter(Boolean).forEach(b => lockBtn(b, active ? 'Off while a net transform is active. Set the net back to Regular (Base sheet, square) to use curves again.' : null));
+                if (faceBtn) lockBtn(faceBtn, !active || faceOk ? null : (isField ? 'Face fills on a Field: the base sheet and layers on the base grid (same shape and size, no offset, no rotation) only' : 'Off while a net transform is active (faces are exact only on a Field)'));
                 wasActive = lockSig;
             }
         };
@@ -950,10 +944,10 @@ function setup() {
         if (!freeVisibleBtn) return;
         if (curveType.visible) {
             freeVisibleBtn.addClass('active');
-            freeVisibleBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>');
+            freeVisibleBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 17 L12 8 L18 15"/></svg>');
         } else {
             freeVisibleBtn.removeClass('active');
-            freeVisibleBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M1 1l22 22"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/></svg>');
+            freeVisibleBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 17 L12 8 L18 15"/><path d="M3 3 L21 21"/></svg>');
         }
     }
     if (freeVisibleBtn) {
@@ -1006,69 +1000,35 @@ function setup() {
         });
     }
 
-    // ----------------- LAYER TAB STRIP (Roadmap 1.9) -----------------
-    // Base tab is static HTML (#btn-layer-base) since the base sheet is
-    // structurally special (always present, can't be removed, see
-    // core/state.js). Additional-layer tabs are rendered dynamically
-    // into #layer-tabs since their count is variable - the first place
-    // this app generates DOM elements at runtime rather than wiring
-    // fixed IDs from index.html. Offset inputs are contextual to
-    // whichever tab is active (one X/Y pair, not one per layer, per
-    // the 1.9 design session) - updateOffsetControls() shows/hides and
-    // (re)populates them; renderLayerTabs() rebuilds the tab strip
-    // itself. Both are `function` declarations (not `const`) so they're
-    // hoisted and safely callable from the shape/size/node-count
-    // handlers above, which are defined earlier in this same setup().
-    const layerBaseBtn = select('#btn-layer-base');
-    const layerTabsContainer = select('#layer-tabs');
-    const addLayerBtn = select('#btn-add-layer');
-    // Roadmap: catalog -> clipboard "Paste Pattern" action - same role
-    // as addLayerBtn above (adds a layer), different source (a
-    // gallery.html "Copy pattern" click, via the clipboard, instead of
-    // a fresh "+Layer" + manual editing). See applyCatalogPatternToNewLayer()'s
-    // own comment for why this reuses it unmodified.
+    // ----------------- LAYER CONTROLS (Roadmap 1.9) -----------------
+    // The layers' controls are the layer table, rail and strip (ui-layers.js, through window.layerApi below) and the timeline's are the timeline strip (ui-timeline.js) and the
+    // layers' diamonds; the old layer row (Base, the tabs, "+ Layer") and the old timeline buttons are gone. Offset inputs are contextual to whichever tab is active (one X/Y pair,
+    // not one per layer, per the 1.9 design session) - updateOffsetControls() shows/hides and (re)populates them. Both it and renderLayerTabs() are `function` declarations
+    // (not `const`) so they're hoisted and safely callable from the shape/size/node-count handlers above, which are defined earlier in this same setup().
+    // Roadmap: catalog -> clipboard "Paste Pattern" action - it adds a layer, sourced from a gallery.html "Copy pattern" click via the clipboard. See
+    // applyCatalogPatternToNewLayer()'s own comment for why this reuses it unmodified.
     const pastePatternBtn = select('#btn-paste-pattern');
-    const pastePatternStatus = select('#paste-pattern-status');
-    // Roadmap 1.8 Stage C: timeline controls - NOT contextual to
-    // whichever tab is active (unlike layer-animation-group below),
-    // since a timeline spans multiple layers rather than belonging to
-    // one - always visible, with individual pieces shown/hidden by
-    // updateTimelineControls() based on whether `timeline` exists and
-    // how many keyframes it currently has (phase (ii)).
-    const addToTimelineBtn = select('#btn-add-to-timeline');
-    // Case B1: "Include net" - a toggle button (the labels of a control group are hidden by style.css, a checkbox inside one would be
-    // invisible). null = automatic (ON exactly when a net warp is active), true/false = chosen; the shown value is timelineIncludeNetValue().
-    const includeNetBtn = select('#btn-timeline-include-net'), includeNetWarn = select('#timeline-net-warning'), netStateEl = select('#timeline-net-state');
+    // Roadmap 1.8 Stage C: the timeline is NOT contextual to whichever tab is active, since it spans multiple layers rather than belonging to one. Its controls are the
+    // timeline strip (Play, the scrub bar, Include net, "Mehr") and the layers' diamonds; behind "Mehr" the group #timeline-group holds the keyframe list, the net status, the
+    // pairing editor and the status line, with pieces shown/hidden by updateTimelineControls() based on whether `timeline` exists.
+    // Case B1: "Include net" - null = automatic (ON exactly when a net warp is active), true/false = chosen; the shown value is timelineIncludeNetValue(). The switch is
+    // in the timeline strip and goes through layerApi.toggleIncludeNet().
+    const netStateEl = select('#timeline-net-state');
     let includeNetOverride = null;
     window.timelineIncludeNet = () => timelineIncludeNetValue(includeNetOverride);
-    let netUiSig = '';
-    // The persistent Timeline-net indicator, the toggle's state and the warning; cheap, called whenever any of their inputs can change
+    let netUiSig = null;
+    // The persistent Timeline-net indicator (#timeline-net-state); cheap, called whenever its input can change
     window.syncTimelineNetUi = () => {
-        const on = timelineIncludeNetValue(includeNetOverride), active = netAuthorWarpActive(), sum = timelineNetSummary();
-        const sig = `${on}|${active}|${includeNetOverride}|${sum ? sum.state + sum.text : ''}`;
+        const sum = timelineNetSummary();
+        const sig = sum ? sum.state + sum.text : '';
         if (sig === netUiSig) return;
         netUiSig = sig;
-        if (includeNetBtn) {
-            includeNetBtn.elt.classList.toggle('active', on);
-            includeNetBtn.elt.textContent = on ? 'Include net: on' : 'Include net: off';
-            includeNetBtn.attribute('title', `Also capture the current net when a keyframe is added, so the net moves with the timeline. ${includeNetOverride === null ? 'Automatic: on while a net warp is active.' : 'Set by you (click to change).'}`);
-        }
-        if (includeNetWarn) {
-            const warn = active && !on;
-            includeNetWarn.elt.hidden = !warn;
-            if (warn) includeNetWarn.html('A net warp is active but "Include net" is off: it will NOT move with the timeline.');
-        }
         if (netStateEl) {
             netStateEl.elt.hidden = !sum;
             if (sum) { netStateEl.html(sum.text); netStateEl.elt.dataset.state = sum.state; }
         }
     };
-    if (includeNetBtn) includeNetBtn.mousePressed(() => { includeNetOverride = timelineIncludeNetToggle(includeNetOverride); window.syncTimelineNetUi(); });
-    const removeTimelineBtn = select('#btn-remove-timeline');
     const timelineKeyframeList = select('#timeline-keyframe-list');
-    const timelinePlaybackControls = select('#timeline-playback-controls');
-    const timelinePlayBtn = select('#btn-timeline-play');
-    const timelineProgressInput = select('#timeline-progress-input');
     const timelineStatusEl = select('#timeline-status');
     // Roadmap 1.8 Stage D phase (i): manual line-pairing editor.
     const timelinePairingPanel = select('#timeline-pairing');
@@ -1101,13 +1061,7 @@ function setup() {
     const nodeCountGroup = select('#layer-node-count-group');
     const shapeSizeGroup = select('#layer-shape-size-group');
     const layerNodeCountInput = select('#layer-node-count-input');
-    const layerNodeCountNote = select('#layer-node-count-note');
-    let layerNodeCountNoteTimer = null;
-    function showLayerNodeCountNote(text) {
-        if (!layerNodeCountNote) return;
-        layerNodeCountNote.html(text); layerNodeCountNote.elt.hidden = false;
-        clearTimeout(layerNodeCountNoteTimer); layerNodeCountNoteTimer = setTimeout(() => { layerNodeCountNote.elt.hidden = true; }, 9000);
-    }
+    function showLayerNodeCountNote(text) { say('layer-node-count', text, 'info'); }
     const layerShapeSizeInput = select('#layer-shape-size-input');
     // Roadmap 1.12 stage 4 (UI): this layer's own shape - same
     // contextual show/hide handling as the fields above, PLUS an
@@ -1125,7 +1079,7 @@ function setup() {
     // updateOffsetControls() below (keyed to THIS layer's own shape,
     // not currentShape) - the line here only handles the base showOffsets
     // toggle, same two-tier pattern the base's own mode-fold-group has
-    // (always hex-gated) layered on top of "only when a layer tab is
+    // (always hex-gated) layered on top of "only when a layer is
     // active" (layers only).
     const modeGroup = select('#layer-mode-group');
     const foldGroup = select('#layer-fold-group');
@@ -1138,7 +1092,6 @@ function setup() {
     // change or shape change it no longer applies to.
     const alignGroup = select('#layer-align-group');
     const alignBtn = select('#btn-align-to-base');
-    const alignStatus = select('#align-to-base-status');
     // Roadmap 1.12 stage 3: this layer's own rotation - same contextual
     // show/hide + populate-on-switch handling as the fields above,
     // folded into this same function for the same reason.
@@ -1161,8 +1114,8 @@ function setup() {
     const animPlayBtn = optionalSelect('#btn-layer-anim-play');
     const animProgressInput = optionalSelect('#layer-anim-progress-input');
     // Roadmap 1.8 Stage B (connections morph): status line for a
-    // refused Set Start/End line-count mismatch - same plain-<span>
-    // convention as #align-to-base-status. Exposed on window (mirroring
+    // refused Set Start/End line-count mismatch - a plain <span>, not a
+    // notice (the layer animation has no UI). Exposed on window (mirroring
     // updateOffsetControls/syncLayerAnimationDisplay just below) since
     // setActiveLayerAnimationStart()/End() are top-level functions, not
     // declared inside this setup() closure.
@@ -1173,7 +1126,7 @@ function setup() {
     // End() (a pre-existing "refresh the whole panel" pattern, unrelated
     // to this feature), so updateOffsetControls()'s own populate-on-
     // switch block can't unconditionally clear this status the way
-    // alignStatus does (alignBtn's own handler never calls
+    // the align notice's own reset does (alignBtn's own handler never calls
     // updateOffsetControls() itself, so it never hits this) - doing so
     // would immediately wipe out the very message Set Start/End just
     // set, before the person ever sees it (caught via a real Set-Start
@@ -1188,26 +1141,21 @@ function setup() {
     }
     window.setLayerAnimConnectionsStatus = setLayerAnimConnectionsStatus;
 
-    // Layer "Mehr" (5d, step 1): the toggle row, the wrapper and the dot. The open / closed state is a plain variable: kept across layer switches, not saved by the autosave,
-    // closed after a reload. syncLayerMore() is the ONLY writer of the toggle row's and the wrapper's `hidden`; the groups inside keep their own `hidden`, written by
-    // updateOffsetControls() as before, so a group shows only when both are off. The toggle is a plain click listener, not a p5 mousePressed binding.
-    const layerMoreRow = document.getElementById('layer-more-row');
+    // Layer "Mehr" (5d, step 1): the wrapper and the dot. The open / closed state is a plain variable: kept across layer switches, not saved by the autosave, closed after a reload;
+    // the "..." of the layer table, rail and strip flips it (layerApi.toggleMore) and reads it back (layerApi.moreState). syncLayerMore() is the ONLY writer of the wrapper's
+    // `hidden`; the groups inside keep their own `hidden`, written by updateOffsetControls() as before, so a group shows only when both are off.
     const layerMorePanel = document.getElementById('layer-more-panel');
-    const layerMoreBtn = document.getElementById('btn-more-layer');
     let layerMoreOpen = false;
+    // The dot of the layer "Mehr": the ONE place that computes it (layerApi.moreState hands it to the layer views).
+    function layerMoreDot() {   // (not "dot": p5's friendly-error reader reports a let/const named like a p5 member in setup() / draw())
+        return activeLayer !== 'base' && !!additionalLayers[activeLayer] && layerHasNonDefaultSettings(additionalLayers[activeLayer], { shape: currentShape, symmetryMode, nodeCount, shapeSizeFactor });
+    }
     function syncLayerMore() {
-        if (!layerMoreRow || !layerMorePanel || !layerMoreBtn) return;
-        const layerActive = activeLayer !== 'base' && !!additionalLayers[activeLayer];
-        if (layerMoreRow.hidden === layerActive) layerMoreRow.hidden = !layerActive;
-        const showPanel = layerActive && layerMoreOpen;
+        if (!layerMorePanel) return;
+        const showPanel = activeLayer !== 'base' && !!additionalLayers[activeLayer] && layerMoreOpen;
         if (layerMorePanel.hidden === showPanel) layerMorePanel.hidden = !showPanel;
-        const expanded = String(layerMoreOpen);
-        if (layerMoreBtn.getAttribute('aria-expanded') !== expanded) layerMoreBtn.setAttribute('aria-expanded', expanded);
-        const needsDot = layerActive && layerHasNonDefaultSettings(additionalLayers[activeLayer], { shape: currentShape, symmetryMode, nodeCount, shapeSizeFactor });   // (not "dot": p5's friendly-error reader reports a let/const named like a p5 member in setup() / draw())
-        if (layerMoreBtn.classList.contains('has-state') !== needsDot) layerMoreBtn.classList.toggle('has-state', needsDot);
     }
     window.syncLayerMore = syncLayerMore;
-    if (layerMoreBtn) layerMoreBtn.addEventListener('click', () => { layerMoreOpen = !layerMoreOpen; syncLayerMore(); });
 
     function updateOffsetControls() {
         const showOffsets = activeLayer !== 'base';
@@ -1271,17 +1219,17 @@ function setup() {
                 alignBtn.elt.disabled = !shapeMatches;
                 alignBtn.attribute('title', shapeMatches ? 'Align to base' : "Only available when this layer's shape matches the base's");
             }
-            if (alignStatus) alignStatus.html('');
+            if (window.UI) UI.notifyClear('align');
             // Roadmap 1.8 Stage B: a mismatch message belongs to whichever
             // layer produced it - clear it only on an ACTUAL tab switch
             // (see layerAnimConnectionsStatusOwner's own comment above for
-            // why this can't be an unconditional clear the way alignStatus'
-            // own reset above is).
+            // why this can't be an unconditional clear the way the align
+            // notice's own reset above is).
             if (layerAnimConnectionsStatusOwner !== null && layerAnimConnectionsStatusOwner !== activeLayer) {
                 setLayerAnimConnectionsStatus('');
             }
         }
-        syncLayerMore();   // the toggle row, the wrapper and the dot follow the active layer (after the groups above have their own `hidden`)
+        syncLayerMore();   // the wrapper follows the active layer (after the groups above have their own `hidden`)
     }
 
     // Roadmap 1.8 Stage A: populates the animation controls (duration/
@@ -1311,7 +1259,7 @@ function setup() {
     }
     // Roadmap 1.2-C: exposed as a global - updateOffsetControls()/
     // renderLayerTabs() are declared here (closing over setup()-local DOM
-    // refs like offsetXInput/layerTabsContainer), so they're invisible
+    // refs like offsetXInput), so they're invisible
     // from handleAltNetClick() (a top-level function, same scope
     // mousePressed()/mouseMoved() must be in for p5's global mode - see
     // CLAUDE.md). Every OTHER call site is itself inside setup()'s own
@@ -1323,123 +1271,37 @@ function setup() {
     window.updateOffsetControls = updateOffsetControls;
     window.syncLayerAnimationDisplay = syncLayerAnimationDisplay;
 
-    function renderLayerTabs() {
-        if (layerBaseBtn) {
-            if (activeLayer === 'base') layerBaseBtn.addClass('active');
-            else layerBaseBtn.removeClass('active');
-        }
-        if (!layerTabsContainer) return;
-        const container = layerTabsContainer.elt;
-        container.innerHTML = '';
-
-        additionalLayers.forEach((layer, i) => {
-            // Roadmap 1.8 Stage C: the auto-created timeline playback
-            // layer is an ordinary additionalLayers[] entry (so every
-            // existing rendering/enabled-flag mechanism already works
-            // for it unmodified - see addLayerToTimeline()'s own
-            // comment) but isn't meant to be hand-edited like a real
-            // pattern layer, so it gets no tab here. Its true array index
-            // (i) is unaffected - only its OWN tab's rendering is skipped,
-            // every other layer's tab/click-handler still closes over its
-            // own correct, real index exactly as before.
-            if (layer.isTimelinePlayback) return;
-            const tab = document.createElement('span');
-            tab.className = 'layer-tab';
-
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.className = 'layer-enable-checkbox';
-            checkbox.checked = layer.enabled;
-            UI.name(checkbox, 'Show/Hide Layer ' + (i + 1));
-            checkbox.addEventListener('change', () => {
-                layer.enabled = checkbox.checked;
-                redraw();
-            });
-
-            const btn = document.createElement('button');
-            btn.className = 'layer-btn' + (activeLayer === i ? ' active' : '');
-            btn.textContent = 'Layer ' + (i + 1);
-            btn.title = 'Edit Layer ' + (i + 1);
-            btn.addEventListener('click', () => {
-                activeLayer = i;
-                renderLayerTabs();
-                updateOffsetControls();
-                updateFaceToggleControl();
-                // Roadmap 1.8 Stage C phase (ii): "Add to Timeline"'s own
-                // eligibility (canAddLayerToTimeline()) depends on
-                // activeLayer - switching tabs can change whether the
-                // NOW-active layer is addable, so its disabled/tooltip
-                // state needs a refresh here too, not just after add/
-                // remove-layer actions.
-                updateTimelineControls();
-                // Roadmap 1.11-B: switching tabs alone didn't previously
-                // trigger a redraw() (canvas content doesn't change just
-                // by selecting a tab) - added so #pattern-name-status
-                // (contextual to activeLayer, see updatePatternNameStatus())
-                // actually reflects the newly-selected sheet immediately,
-                // not only after some unrelated later redraw.
-                redraw();
-            });
-
-            const removeBtn = document.createElement('button');
-            removeBtn.className = 'layer-remove-btn';
-            removeBtn.textContent = '×';
-            UI.name(removeBtn, 'Remove Layer ' + (i + 1));
-            removeBtn.addEventListener('click', () => {
-                removeLayer(i);
-                renderLayerTabs();
-                updateOffsetControls();
-                updateFaceToggleControl();
-                redraw();
-            });
-
-            tab.appendChild(checkbox);
-            tab.appendChild(btn);
-            tab.appendChild(removeBtn);
-            container.appendChild(tab);
-        });
-    }
+    // The sync point after every layer change (about twenty callers, and the session restore's 'layers' step). It used to rebuild the old tab strip; the layer table, rail and
+    // strip rebuild themselves from the model on the next tick (ui-layers.js reads additionalLayers and activeLayer), so it does nothing now. It stays as the one named place
+    // those callers and the restore sequence share.
+    function renderLayerTabs() { }
     window.renderLayerTabs = renderLayerTabs; // see updateOffsetControls()'s own comment above
 
-    // Roadmap 1.8 Stage C: status line for a refused "Add to Timeline"
-    // (shape/order/symmetryMode or line-count mismatch), a live
+    // Roadmap 1.8 Stage C: status line for a refused add of a layer to the
+    // timeline (the diamond; shape/order/symmetryMode or line-count mismatch), a live
     // mismatch discovered during playback, or (phase (ii)) a plain
     // "which segment am I looking at" readout - same plain-<span>
     // convention as #layer-anim-connections-status. Exposed on window
     // since addLayerToTimeline()/applyTimelineFrame()/removeLayer() are
     // top-level functions.
-    function setTimelineStatus(msg) {
+    // say(key, text, kind): the one route from an action message to the notices (ui.js). notifyClear first: a repeated message replaces the showing one with a fresh timer and the
+    // "once per condition" suppression never hides action feedback. Guarded: sketch.js loads before ui.js, every caller runs after load.
+    function say(key, text, kind) {
+        if (!window.UI || !UI.notify) return;
+        UI.notifyClear(key);
+        UI.notify(text, { key: key, kind: kind });
+    }
+    window.say = say;
+    // kind: 'readout' (the default: the span only - the segment readout and the clears), 'refusal' (the span plus a warn notice: an action was refused), 'condition' (the span plus a warn notice
+    // ONCE per text; any readout call - the readout resuming, or a clear - ends it). The span is written once per call as before.
+    let timelineConditionSaid = null;
+    function setTimelineStatus(msg, kind) {
         if (timelineStatusEl) timelineStatusEl.html(msg || '');
+        if (kind === 'refusal' && msg) say('timeline-refusal', msg, 'warn');
+        else if (kind === 'condition' && msg) { if (msg !== timelineConditionSaid) { timelineConditionSaid = msg; say('timeline-condition', msg, 'warn'); } }
+        else if (kind !== 'refusal' && kind !== 'condition' && timelineConditionSaid !== null) { timelineConditionSaid = null; if (window.UI) UI.notifyClear('timeline-condition'); }
     }
     window.setTimelineStatus = setTimelineStatus;
-
-    // Roadmap 1.8 Stage C: populates the Play/Pause icon and progress
-    // slider from the timeline's own current state - split out of
-    // updateTimelineControls() (unlike the align-button pattern this
-    // otherwise mirrors) because draw() also needs to call it every
-    // frame during active playback, the same reason Stage A's
-    // syncLayerAnimationDisplay() is its own function. Phase (ii): reads
-    // totalTimelineDurationMs(timeline) (the SUM of every segment's own
-    // fixed duration) instead of a single timeline.durationMs field -
-    // the scrub slider's 0..1 range always spans the whole sequence.
-    function syncTimelineDisplay() {
-        if (!timeline) return;
-        const totalDuration = totalTimelineDurationMs(timeline);
-        if (timelineProgressInput) {
-            const progress = totalDuration > 0
-                ? (timeline.playing ? Math.max(0, Math.min(totalDuration, millis() - timeline.startTime)) : timeline.elapsedMs) / totalDuration
-                : 0;
-            timelineProgressInput.value(progress);
-        }
-        if (timelinePlayBtn) {
-            const playing = timeline.playing;
-            UI.name(timelinePlayBtn.elt, playing ? 'Pause' : 'Play');
-            timelinePlayBtn.html(playing
-                ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="5" width="4" height="14" /><rect x="14" y="5" width="4" height="14" /></svg>'
-                : '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 5 L19 12 L7 19 Z" /></svg>');
-        }
-    }
-    window.syncTimelineDisplay = syncTimelineDisplay;
 
     // Roadmap 1.8 Stage C phase (ii): the simple ordered keyframe list
     // (design session point 5) - "1. Layer 2", "2. Layer 5", ... in
@@ -1447,13 +1309,12 @@ function setup() {
     // (removeKeyframeFromTimeline() - takes the keyframe OUT of the
     // sequence, restoring that layer's own visibility, WITHOUT deleting
     // the layer itself, unlike its tab's own "x"). Reuses the exact
-    // .layer-tab/.layer-remove-btn chrome renderLayerTabs() already
-    // established, so this reads as part of the same visual language,
-    // not a new widget. No drag-reorder in this phase (design session
-    // point 5) - order is authored by the sequence "Add to Timeline" was
+    // .layer-tab/.layer-remove-btn chrome (the old layer tabs' look,
+    // kept for this list). No drag-reorder in this phase (design session
+    // point 5) - order is authored by the sequence the diamonds were
     // clicked in; reorder today by removing and re-adding in the wanted
     // order. Rebuilt fresh on every call (container.innerHTML = ''),
-    // same "no stale entries" discipline renderLayerTabs() itself uses.
+    // so there are no stale entries.
     function renderTimelineKeyframeList() {
         if (!timelineKeyframeList) return;
         const container = timelineKeyframeList.elt;
@@ -1728,90 +1589,35 @@ function setup() {
         timelinePairingResetBtn.elt.addEventListener('click', () => resetTimelinePairing(timelinePairingSegment));
     }
 
-    // Roadmap 1.8 Stage C phase (ii): shows/hides the timeline controls
-    // based on THREE states, not phase (i)'s original binary create-vs-
-    // remove toggle: no timeline yet (only "Add to Timeline" matters,
-    // enabled/disabled + tooltipped via canAddLayerToTimeline()'s own
-    // coarse check - same pattern "Align to base" uses); a timeline with
-    // exactly one keyframe (started, not yet playable - the list and
-    // "Remove Timeline" already make sense, but there is no segment yet
-    // to play/scrub); and a timeline with two or more keyframes (fully
-    // playable). "Add to Timeline" itself stays visible and just
-    // disables/re-enables in ALL three states, rather than hiding like
-    // phase (i)'s single create button did - its role (start vs. extend)
-    // changes, but the affordance itself doesn't need to disappear.
-    // Called after every add/remove-layer action and every base-level
-    // shape/order rebuild (all of which can change eligibility or the
-    // timeline's own shape) - see each of those call sites.
+    // Roadmap 1.8 Stage C phase (ii): shows/hides the pieces of the timeline group (the keyframe list, the pairing editor) and refreshes the net status, based on whether a
+    // timeline exists. Called after every add/remove-layer action and every base-level shape/order rebuild (all of which can change the timeline's own shape) - see each
+    // of those call sites.
     function updateTimelineControls() {
         const hasTimeline = !!timeline;
-        const playable = hasTimeline && timeline.keyframeLayerIds.length >= 2;
-        if (addToTimelineBtn) {
-            const can = canAddLayerToTimeline();
-            addToTimelineBtn.elt.disabled = !can;
-            addToTimelineBtn.attribute('title', can ? 'Add to Timeline' : 'Select a real layer (not Base) not already in the timeline to add it as the next keyframe.');
-        }
-        if (removeTimelineBtn) removeTimelineBtn.elt.hidden = !hasTimeline;
         if (timelineKeyframeList) timelineKeyframeList.elt.hidden = !hasTimeline;
-        if (timelinePlaybackControls) timelinePlaybackControls.elt.hidden = !playable;
-        if (timelineProgressInput) timelineProgressInput.elt.hidden = !playable;
         renderTimelineKeyframeList();
         renderTimelinePairingEditor();
-        if (playable) syncTimelineDisplay();
         enforceNetAnimationLockout();   // Case B1: the standalone net animation locks/unlocks with the coupling
         if (window.syncTimelineNetUi) window.syncTimelineNetUi();
     }
     window.updateTimelineControls = updateTimelineControls;
-
-    if (addToTimelineBtn) {
-        addToTimelineBtn.mousePressed(() => {
-            addLayerToTimeline();
-        });
-    }
-    if (removeTimelineBtn) {
-        removeTimelineBtn.mousePressed(() => {
-            removeTimelineAction();
-        });
-    }
-    if (timelinePlayBtn) {
-        timelinePlayBtn.mousePressed(() => {
-            toggleTimelinePlayback();
-            syncTimelineDisplay();
-            redraw();
-        });
-    }
-    if (timelineProgressInput) {
-        timelineProgressInput.input(() => {
-            setTimelineProgress(parseFloat(timelineProgressInput.value()));
-            syncTimelineDisplay();
-            redraw();
-        });
-    }
-
-    if (layerBaseBtn) {
-        layerBaseBtn.mousePressed(() => {
-            activeLayer = 'base';
-            renderLayerTabs();
-            updateOffsetControls();
-            updateFaceToggleControl();
-            updateTimelineControls(); // Roadmap 1.8 Stage C phase (ii): see the per-layer tab handler's own comment above - "Add to Timeline" is always disabled for Base, but its tooltip/state still needs refreshing on the way there
-            redraw(); // Roadmap 1.11-B: see the per-layer tab handler's own comment above
-        });
-    }
-
-    if (addLayerBtn) {
-        addLayerBtn.mousePressed(() => {
-            addLayer();
-            renderLayerTabs();
-            updateOffsetControls();
-            updateFaceToggleControl();
-            // Roadmap 1.8 Stage C: addLayer() changes activeLayer to the
-            // new layer, which changes canAddLayerToTimeline()'s own
-            // result ("Add to Timeline" now targets THIS new layer).
-            updateTimelineControls();
-            redraw();
-        });
-    }
+    // layerApi: begin - the layer table, rail and strip (ui-layers.js) and the timeline strip (ui-timeline.js) call these; each is a sequence of existing calls (assignments only, no new logic)
+    window.layerApi = {
+        select(sheet) { activeLayer = sheet; renderLayerTabs(); updateOffsetControls(); updateFaceToggleControl(); updateTimelineControls(); redraw(); },
+        add() { addLayer(); renderLayerTabs(); updateOffsetControls(); updateFaceToggleControl(); updateTimelineControls(); redraw(); },
+        remove(index) { removeLayer(index); renderLayerTabs(); updateOffsetControls(); updateFaceToggleControl(); redraw(); },
+        setEnabled(index, on) { additionalLayers[index].enabled = !!on; renderLayerTabs(); redraw(); },
+        toggleMore() { layerMoreOpen = !layerMoreOpen; syncLayerMore(); },
+        addToTimeline() { addLayerToTimeline(); },
+        removeKeyframe(index) { removeKeyframeFromTimeline(index); },
+        play() { toggleTimelinePlayback(); redraw(); },
+        setProgress(t) { setTimelineProgress(t); redraw(); },
+        clearTimeline() { removeTimelineAction(); },
+        includeNet() { return includeNetOverride; },
+        toggleIncludeNet() { includeNetOverride = timelineIncludeNetToggle(includeNetOverride); window.syncTimelineNetUi(); },
+        moreState() { return { open: layerMoreOpen, dot: layerMoreDot() }; },
+    };
+    // layerApi: end
 
     // Roadmap: catalog -> clipboard "Paste Pattern" action. Mirrors
     // setup()'s own catalogUrlPattern.layer==='new' tail handling
@@ -1822,7 +1628,7 @@ function setup() {
     // permission surface (unlike writeText(), used on the gallery side)
     // - guarded for outright unavailability (insecure context, very old
     // browser) before ever calling it, and its rejection (permission
-    // denied, or blocked entirely) is reported via #paste-pattern-status,
+    // denied, or blocked entirely) is reported as a notice (the key "paste"),
     // never a silent no-op - this needed real, isolated browser
     // verification, not just code review (see this feature's own
     // implementation report).
@@ -1850,26 +1656,26 @@ function setup() {
             pastePatternBtn.elt.disabled = true;
             try {
                 if (!navigator.clipboard || !navigator.clipboard.readText) {
-                    if (pastePatternStatus) pastePatternStatus.html('Clipboard access is not available in this browser/context.');
+                    say('paste', 'Clipboard access is not available in this browser/context.', 'error');
                     return;
                 }
                 let text;
                 try {
                     text = await navigator.clipboard.readText();
                 } catch (err) {
-                    if (pastePatternStatus) pastePatternStatus.html("Clipboard permission denied - check your browser's site settings.");
+                    say('paste', "Clipboard permission denied - check your browser's site settings.", 'error');
                     console.warn('Failed to read clipboard for Paste Pattern:', err.message);
                     return;
                 }
                 const pattern = parseClipboardCatalogPattern(text);
                 if (!pattern) {
-                    if (pastePatternStatus) pastePatternStatus.html('Clipboard does not contain a valid copied pattern.');
+                    say('paste', 'Clipboard does not contain a valid copied pattern.', 'error');
                     return;
                 }
                 if (applyCatalogPatternToNewLayer(pattern)) {
-                    if (pastePatternStatus) pastePatternStatus.html('');
+                    if (window.UI) UI.notifyClear('paste');
                 } else {
-                    if (pastePatternStatus) pastePatternStatus.html('Failed to load the copied pattern - see console for details.');
+                    say('paste', 'Failed to load the copied pattern - see console for details.', 'error');
                 }
                 renderLayerTabs();
                 updateOffsetControls();
@@ -2036,10 +1842,10 @@ function setup() {
                 updateActiveLayerGrid({ shapeSizeFactor: result.shapeSizeFactor, nodeCount: result.nodeCount });
                 if (layerShapeSizeInput) layerShapeSizeInput.value(layer.shapeSizeFactor);
                 if (layerNodeCountInput) layerNodeCountInput.value(layer.nodeCount);
-                if (alignStatus) alignStatus.html('');
+                if (window.UI) UI.notifyClear('align');
                 redraw();
             } else {
-                if (alignStatus) alignStatus.html('Not achievable within the current parameter ranges.');
+                say('align', 'Not achievable within the current parameter ranges.', 'warn');
             }
         });
     }
@@ -2156,10 +1962,10 @@ function setup() {
         if (!nodeBtn) return;
         if (showNodes) {
             nodeBtn.addClass('active');
-            nodeBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>');
+            nodeBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="6" cy="17" r="2.2"/><circle cx="12" cy="8" r="2.2"/><circle cx="18" cy="15" r="2.2"/></svg>');
         } else {
             nodeBtn.removeClass('active');
-            nodeBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M1 1l22 22"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/></svg>'); // Eye Off
+            nodeBtn.html('<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="6" cy="17" r="2.2"/><circle cx="12" cy="8" r="2.2"/><circle cx="18" cy="15" r="2.2"/><path d="M3 3 L21 21" fill="none" stroke="currentColor" stroke-width="2"/></svg>'); // dots with a slash
         }
     }
     if (nodeBtn) {
@@ -2460,7 +2266,7 @@ function setup() {
     // rebuildGrid() above - a layer created just now by
     // applyCatalogPatternToNewLayer() needs an explicit re-sync so its
     // tab/controls actually appear on the very first paint, the same
-    // sync a real "+Layer" click's own handler already does. Harmless
+    // sync layerApi.add() already does. Harmless
     // (redundant, not wrong) when no layer was created.
     renderLayerTabs();
     updateOffsetControls();
@@ -2525,19 +2331,13 @@ function draw() {
     // per-layer loop just above - applyTimelineFrame() may itself flip
     // timeline.playing to false (reaching the end), which
     // syncAnimationLoopState() needs to see this same frame, not one
-    // frame late. syncTimelineDisplay() runs unconditionally whenever a
-    // timeline exists (not gated on `playing`) so the progress
-    // slider/play-icon stay live during playback the same way
-    // syncLayerAnimationDisplay() already does below for the per-layer
-    // case - timeline isn't tab-contextual, so this isn't gated on
-    // activeLayer either.
+    // frame late. (The timeline strip follows the playback by itself: its own sync runs at the start of every draw.)
     if (timeline && timeline.playing) applyTimelineFrame();
     syncAnimationLoopState();
     if (activeLayer !== 'base' && additionalLayers[activeLayer] && additionalLayers[activeLayer].animation) {
         syncLayerAnimationDisplay(additionalLayers[activeLayer]);
     }
     if (window.syncLayerMore) window.syncLayerMore();   // the dot of the layer "Mehr" toggle follows edits made through the (closed) controls and the base's values; writes only on a change
-    if (timeline) syncTimelineDisplay();
 
     drawTessellation();
 
@@ -2583,7 +2383,7 @@ function draw() {
     // were never actually drawn, making it impossible to see where to
     // click to build a theme-line for that layer. Base sheet: full
     // interactive styling when it IS the active sheet (byte-identical to
-    // before this fix), dimmed light gray when a layer tab is active
+    // before this fix), dimmed light gray when a layer is active
     // instead - drawTessellation() still renders the base's own
     // connections regardless of activeLayer, so its dots stay visible
     // for spatial reference (shared centroid) rather than disappearing
@@ -2748,7 +2548,7 @@ function handleAltNetClick(x, y) {
     const { p, q, previewSide } = altNetPending;
     const n = shapeToN(currentShape);
     rebuildGridFromConstruction(p, q, n, previewSide);
-    renderLayerTabs(); // rebuildGridFromConstruction() clears additionalLayers - keep the tab strip in sync, same as the shape-button handler
+    renderLayerTabs(); // rebuildGridFromConstruction() clears additionalLayers - the layer views follow on the next tick, same as the shape-button handler
     updateOffsetControls();
     updateTimelineControls(); // rebuildGridFromConstruction() also clears timeline - see its own comment (core/state.js)
     cancelAltNetConstruction();
@@ -2910,7 +2710,7 @@ function removeLayer(index) {
     }
     let orphanedPlaybackIndex = null;
     if (timeline && index === timeline.playbackLayerIndex) {
-        clearTimelineState(`Timeline removed: Layer ${index + 1} was deleted.`);
+        clearTimelineState(`Timeline removed: Layer ${index + 1} was deleted.`, 'refusal');
     } else if (timeline && timeline.keyframeLayerIds.includes(index)) {
         orphanedPlaybackIndex = spliceKeyframeOutOfTimeline(index);
     }
@@ -3401,7 +3201,7 @@ function recaptureTimelineKeyframeNet(pos) {
         const other = timeline.netStates && timeline.netStates[n];
         if (n < 0 || n >= timeline.keyframeLayerIds.length || !other) continue;
         const c = n < pos ? netAnimationCompat(other, snap) : netAnimationCompat(snap, other);
-        if (!c.ok) { setTimelineStatus(`Net of keyframe ${pos + 1} NOT captured: it cannot be interpolated with keyframe ${n + 1}'s net - ${c.reason}.`); return; }
+        if (!c.ok) { setTimelineStatus(`Net of keyframe ${pos + 1} NOT captured: it cannot be interpolated with keyframe ${n + 1}'s net - ${c.reason}.`, 'refusal'); return; }
     }
     if (!timeline.netStates) timeline.netStates = timeline.keyframeLayerIds.map(() => null);
     timeline.netStates[pos] = snap;
@@ -3500,13 +3300,12 @@ function syncAnimationLoopState() {
 // time (resolveTimelineSegment() below) and feeding it in exactly the
 // same shape phase (i) always did.
 
-// Roadmap 1.8 Stage C phase (ii): "Add to Timeline"'s own eligibility -
-// the active layer must be a real, ordinary layer (not base, not the
-// playback layer) and not already part of the sequence. Mirrors "Align
-// to base"'s own disabled-button pattern. Finer content checks (shape/
-// order/symmetryMode/line-count matching the PREVIOUS keyframe) are only
-// evaluated when the button is actually clicked - see
-// addLayerToTimeline() - and reported via #timeline-status.
+// Roadmap 1.8 Stage C phase (ii): the eligibility of adding a layer to the
+// timeline - the active layer must be a real, ordinary layer (not base,
+// not the playback layer) and not already part of the sequence. Finer
+// content checks (shape/order/symmetryMode/line-count matching the
+// PREVIOUS keyframe) are only evaluated when the layer is actually added
+// (the diamond) - see addLayerToTimeline() - and reported as a notice.
 function canAddLayerToTimeline() {
     if (activeLayer === 'base') return false;
     const layer = additionalLayers[activeLayer];
@@ -3515,7 +3314,7 @@ function canAddLayerToTimeline() {
     return true;
 }
 
-// Roadmap 1.8 Stage C phase (ii): "Add to Timeline" - appends the
+// Roadmap 1.8 Stage C phase (ii): adding a layer to the timeline (the diamond) - appends the
 // CURRENTLY ACTIVE layer (typically just pasted or just built) as the
 // next keyframe. Design session point 3: this directly matches the
 // stated paste-then-add authoring rhythm - addLayer()/
@@ -3567,13 +3366,13 @@ function addLayerToTimeline() {
     const prevLayer = additionalLayers[prevIdx];
     if (layer.shape !== prevLayer.shape || layer.nodeCount !== prevLayer.nodeCount ||
         layer.shapeSizeFactor !== prevLayer.shapeSizeFactor || layer.symmetryMode !== prevLayer.symmetryMode) {
-        setTimelineStatus(`Layer ${idx + 1} must share the same shape, order, size and symmetry mode as Layer ${prevIdx + 1} to extend the timeline.`);
+        setTimelineStatus(`Layer ${idx + 1} must share the same shape, order, size and symmetry mode as Layer ${prevIdx + 1} to extend the timeline.`, 'refusal');
         return;
     }
     const fromCoords = resolveConnectionsToCoords(prevLayer);
     const toCoords = resolveConnectionsToCoords(layer);
     if (fromCoords.length !== toCoords.length || fromCoords.length === 0) {
-        setTimelineStatus(`Line count mismatch: Layer ${prevIdx + 1} has ${fromCoords.length}, Layer ${idx + 1} has ${toCoords.length} - counts must match.`);
+        setTimelineStatus(`Line count mismatch: Layer ${prevIdx + 1} has ${fromCoords.length}, Layer ${idx + 1} has ${toCoords.length} - counts must match.`, 'refusal');
         return;
     }
 
@@ -3584,13 +3383,13 @@ function addLayerToTimeline() {
         netState = netSpecSnapshot();
         const prevNet = timeline.netStates && timeline.netStates[timeline.netStates.length - 1];
         const c = prevNet ? netAnimationCompat(prevNet, netState) : { ok: true };
-        if (!c.ok) { setTimelineStatus(`Layer ${idx + 1} not added: its net cannot be interpolated with Layer ${prevIdx + 1}'s net - ${c.reason}. Only the strength and focus of a same-family law can change between keyframes.`); return; }
+        if (!c.ok) { setTimelineStatus(`Layer ${idx + 1} not added: its net cannot be interpolated with Layer ${prevIdx + 1}'s net - ${c.reason}. Only the strength and focus of a same-family law can change between keyframes.`, 'refusal'); return; }
     }
 
     // Roadmap 1.8 Stage C phase (ii): the playback layer is created
     // LAZILY, here, the first time a real segment becomes possible (the
-    // second keyframe) - not at the first "Add to Timeline" click, which
-    // has nothing yet to interpolate. Every later "Add to Timeline" call
+    // second keyframe) - not at the first add, which
+    // has nothing yet to interpolate. Every later add
     // (3rd, 4th, ... keyframe) reuses this SAME playback layer unchanged
     // - only keyframeLayerIds/segmentDurationsMs grow.
     if (timeline.playbackLayerIndex === null) {
@@ -4086,7 +3885,7 @@ function applyTimelineFrame() {
         playbackLayer._morphNodes = null;
         playbackLayer._morphConnections = null;
         timeline.currentFrame = null;
-        setTimelineStatus(resolved.reason);
+        setTimelineStatus(resolved.reason, 'condition');
         return;
     }
     // Group D item 4: which two keyframes bracket this frame and how far between them - read by
@@ -4157,7 +3956,6 @@ function previewTimelineSegmentMidpoint(segmentIndex) {
     timeline.netLive = true;
     syncAnimationLoopState();
     applyTimelineFrame();
-    if (window.syncTimelineDisplay) window.syncTimelineDisplay();
 }
 
 // Roadmap 1.8 Stage D phase (ii): the ONE place a pairing is committed -
@@ -4353,7 +4151,7 @@ function removeKeyframeFromTimeline(layerIndex) {
     redraw();
 }
 
-// Explicit "Remove Timeline" action - tears down the WHOLE sequence at
+// Explicit "Zeitleiste entfernen" action - tears down the WHOLE sequence at
 // once (distinct from removeKeyframeFromTimeline()'s one-at-a-time
 // removal): restores every keyframe's saved visibility via
 // clearTimelineState(), then removes the playback layer (if one had
@@ -4378,7 +4176,7 @@ function removeTimelineAction() {
 // additionalLayers[] itself. Already fully N-agnostic (phase (i) never
 // needed to change here) - `timeline.keyframeLayerIds.forEach()` already
 // walks however many keyframes exist.
-function clearTimelineState(statusMessage) {
+function clearTimelineState(statusMessage, kind) {
     if (!timeline) return;
     timeline.keyframeLayerIds.forEach(i => {
         const layer = additionalLayers[i];
@@ -4389,11 +4187,11 @@ function clearTimelineState(statusMessage) {
     });
     timeline = null;
     syncAnimationLoopState(); // a playing timeline being torn down must not leave loop() running for nothing
-    if (statusMessage !== undefined) setTimelineStatus(statusMessage);
+    if (statusMessage !== undefined) setTimelineStatus(statusMessage, kind);
 }
 
 // ----------------- PATTERN NAME (Roadmap 1.11-B) ---------------------
-// Per-sheet only (Base or whichever layer tab is active), same scoping
+// Per-sheet only (Base or whichever layer is active), same scoping
 // as 1.10a's own per-sheet face detection - no combined/cross-layer
 // name, since 1.9's offset overlay is a continuous parameter with no
 // orbit structure to name against (see core/orbits.js's own docblock).
@@ -4457,7 +4255,6 @@ function patternNameSignature() {
 let faceColorsSignature = null;
 // Roadmap 1.6 / Group E phase 2: set by setup() (it needs the curve/free/face button closures); called once per draw().
 let netControlsSync = null;
-let netFreeNoteTimer = null;
 // Net-line overlay (display aid, off by default): the warped net's own grid lines, edge to edge. Macro lines
 // black, the finer micro level of a nested net red. Not exported; a PNG export of the canvas includes it.
 let netLinesOn = false;
@@ -5090,7 +4887,7 @@ function pressAt(x, y, pointerType, hit) {
     // of the bare global `nodes` - both the hit-test below and 1.3(a)'s
     // free-endpoint creation previously always read/wrote the base's
     // array regardless of activeLayer, so a free-endpoint node created
-    // while a layer tab was active silently landed in the BASE's node
+    // while a layer was active silently landed in the BASE's node
     // space (and id range) instead of that layer's own.
     const activeNodeArr = activeNodes();
     // Roadmap 1.6 / Group E phase 2: under a net warp a node is DRAWN at F(node), so that is where the
@@ -5101,8 +4898,7 @@ function pressAt(x, y, pointerType, hit) {
     const hitLayer = activeLayer === 'base' ? null : additionalLayers[activeLayer];
     if (foundId === null && freeEndpointsEnabled && netWarp && netWarpIsClosed(netWarp) && !netWarpInsideNet(netWarp, { x: x, y: y })) {
         // Closed net: there is nothing outside the net to attach a free endpoint to - refuse, visibly.
-        const note = document.getElementById('net-free-note');
-        if (note) { note.hidden = false; clearTimeout(netFreeNoteTimer); netFreeNoteTimer = setTimeout(() => { note.hidden = true; }, 3000); }
+        if (window.say) window.say('net-free', 'A free endpoint cannot be placed outside the net (Single and Field are closed nets).', 'warn');
         return;
     }
     if (foundId === null && freeEndpointsEnabled) {

@@ -260,7 +260,7 @@ console.log('\n== 8. indicator states, automatic default, warning, separator =='
     check('several segments: the note follows the segment text with " | "', /^Segment 1\/2 \(Layer 1 .+ Layer 2\) \| Net not animated/.test(st3), st3);
     // wiring
     const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'), css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
-    check('the include control is a .layer-btn button (not a label + checkbox, which style.css hides inside a control group); the indicator and the warning are divs', /<button id="btn-timeline-include-net" class="layer-btn"/.test(html) && !/type="checkbox"/.test(html.slice(html.indexOf('id="timeline-group"'), html.indexOf('id="timeline-group"') + 3000)) && /<div id="timeline-net-state"/.test(html) && /<div id="timeline-net-warning"/.test(html) && css.length > 0);
+    check('the include control is not a label + checkbox (which style.css hides inside a control group); the indicator is a div', !/type="checkbox"/.test(html.slice(html.indexOf('id="timeline-group"'), html.indexOf('id="timeline-group"') + 3000)) && /<div id="timeline-net-state"/.test(html) && css.length > 0);
     check('index.html keeps NO label element inside the timeline group that the control depends on', !/<div class="control-group" id="timeline-group">[\s\S]*?<label[^>]*timeline-include/.test(html));
     check('sketch.js: the toggle, the indicator and the warning are synced from updateTimelineControls(), the net commit() and draw()', /syncTimelineNetUi\(\);\n    \}\n    window\.updateTimelineControls/.test(SKETCH) && /window\.syncTimelineNetUi\) window\.syncTimelineNetUi\(\);   \/\/ the automatic/.test(SKETCH) && /applyNetAnimationFrame\(\);[^\n]*\n    if \(window\.syncTimelineNetUi\)/.test(SKETCH));
 }
