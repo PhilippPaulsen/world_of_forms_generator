@@ -358,6 +358,30 @@ T('the scrub bar takes the focus on a press', () => {
     check('ui-timeline.js: the pointerdown handler sets interacting and pressed and takes the focus; takeFocus() focuses with { preventScroll: true } unless the bar is disabled or already focused; no preventDefault in the handlers; the window pointerup takes it again only after a press', /interacting = true; pressed = true;/.test(h) && /takeFocus\(\);/.test(h) && /function takeFocus\(\) \{ if \(!UI\.isDisabled\(input\) && document\.activeElement !== input\) input\.focus\(\{ preventScroll: true \}\); \}/.test(src) && !/preventDefault/.test(h) && (src.match(/input\.focus\(/g) || []).length === 1 && /window\.addEventListener\('pointerup', function \(\) \{ interacting = false; if \(pressed\) \{ pressed = false; takeFocus\(\); \} \}\)/.test(src) && /window\.addEventListener\('pointercancel', function \(\) \{ interacting = false; pressed = false; \}\)/.test(src), h.replace(/\s+/g, ' ').slice(0, 160));
 });
 
+T('the scrub bar\'s focus ring', () => {
+    // Why the bar showed no ring (Safari and Chromium, a real Tab: :focus-visible matched, outline-style none): index.html's inline `input[type="range"] { outline: none }` comes AFTER style.css and has the
+    // same specificity (0,1,1) as the global `input:focus-visible` rule, so it won. The bar's own rule has the higher specificity (0,3,0) and the buttons' tokens.
+    const rules = text => { const out = []; const t = text.replace(/\/\*[\s\S]*?\*\//g, ''); const re = /([^{}]+)\{([^{}]*)\}/g; let m; while ((m = re.exec(t))) out.push({ sel: m[1].trim().replace(/^@media[^{]*\{\s*/, ''), decl: m[2].trim() }); return out; };
+    const spec = sel => { let s = sel.replace(/::?[a-z-]+\(([^)]*)\)/g, (x, inner) => (/^:(not|has|is|where)/.test(x) ? ' ' + inner + ' ' : x));   // :not() / :has() count their argument
+        const ids = (s.match(/#[\w-]+/g) || []).length, cls = (s.match(/\.[\w-]+|\[[^\]]*\]|:(?!:)[a-z-]+/g) || []).length, typ = (s.replace(/\[[^\]]*\]|[.#:][\w-]+/g, ' ').match(/(^|[\s>+~])[a-z][\w-]*/gi) || []).length + (s.match(/::[a-z-]+/g) || []).length; return [ids, cls, typ]; };
+    const cmp = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+    const inline = (HTML.match(/<style>([\s\S]*?)<\/style>/g) || []).map(x => x.replace(/<\/?style>/g, '')).join('\n');
+    const all = rules(CSS).map(r => Object.assign(r, { src: 'style.css' })).concat(rules(inline).map(r => Object.assign(r, { src: 'index.html' })));
+    const declsOf = r => r.decl.split(';').map(x => x.trim()).filter(Boolean).map(x => x.replace(/\s+/g, ' ')).sort();
+    const glob = all.find(r => r.src === 'style.css' && /^a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible$/.test(r.sel.replace(/\s+/g, ' ')));
+    const own = all.find(r => r.src === 'style.css' && r.sel.replace(/\s+/g, ' ') === '.timeline-strip .ts-range:focus-visible');
+    const onBar = all.find(r => r.src === 'style.css' && r.sel.replace(/\s+/g, ' ') === '.timeline-strip .ts-bar:has(> .ts-range:focus-visible)');
+    check('the buttons\' ring is the global rule (2px solid var(--color-text), offset 2px) and the bar has a :focus-visible rule of its own with EXACTLY the same two declarations (same width, style, token, offset)', !!glob && !!own && J(declsOf(glob)) === J(['outline-offset: 2px', 'outline: 2px solid var(--color-text)'].sort()) && J(declsOf(own)) === J(declsOf(glob)), glob && own ? J(declsOf(own)) : 'missing');
+    check('...and the same ring on the .ts-bar around it (the same box: the ring stays opaque when the input is aria-disabled and 0.4 transparent: 0.4 black on white is 2.85:1)', !!onBar && J(declsOf(onBar)) === J(declsOf(glob)) && !all.some(r => /\.ts-bar\b/.test(r.sel) && !/\.ts-range/.test(r.sel) && /\bopacity\s*:/.test(r.decl)) && /\.ts-range\[aria-disabled="true"\]\s*\{[^}]*opacity:\s*0\.4/.test(CSS));
+    check('the rules only draw an outline: nothing that takes space (no border, margin, padding, width, height, display, position), so nothing shifts', [own, onBar].every(r => !!r && declsOf(r).every(x => /^outline(-offset)?:/.test(x))));
+    check('the bar is :focus-visible, not :focus (no ring after a mouse click is the browser\'s rule): no .ts-range:focus rule', !/\.ts-range:focus(?!-visible)/.test(CSS) && !/\.ts-range:focus(?!-visible)/.test(inline));
+    const killers = all.filter(r => /\boutline\s*:\s*(none|0)\b/.test(r.decl) || /\boutline-style\s*:\s*none/.test(r.decl)).filter(r => r.sel.split(',').some(s => { s = s.trim(); return /^(\*|input|input\[type="range"\])$/.test(s) || /(^|[\s>])\.ts-range\b/.test(s) || /\.timeline-strip\b/.test(s) || /\.ts-bar\b/.test(s) || /#timeline-strip\b/.test(s); }));
+    const specs = killers.flatMap(r => r.sel.split(',').map(s => ({ src: r.src, sel: s.trim().replace(/\s+/g, ' '), s: spec(s.trim()), important: /!important/.test(r.decl) })));
+    const ownSpec = own ? spec(own.sel) : [0, 0, 0];
+    check('every rule that removes an outline and can match the bar (the two `input[type="range"] { outline: none }`, in style.css and in index.html) is found, none is !important, and the bar\'s rule beats each of them in specificity (0,3,0 against 0,1,1)', specs.length >= 2 && specs.some(x => x.src === 'index.html') && specs.every(x => !x.important && cmp(ownSpec, x.s) > 0), J(specs.map(x => x.src + ' ' + x.sel + ' ' + x.s.join(','))) + ' own ' + ownSpec.join(','));
+    check('the ring rule sits after nothing that could still beat it: the bar\'s rule is not weaker than the global one (0,1,1) and uses no !important', own && !/!important/.test(own.decl) && cmp(ownSpec, spec('input:focus-visible')) > 0);
+});
+
 T('diamonds', () => {
     // table: column 3, the Base row has none
     let e = build({ layers: [L(), L(), L({ isTimelinePlayback: true }), L()], timeline: tlOf([0, 1]), active: 'base' });
