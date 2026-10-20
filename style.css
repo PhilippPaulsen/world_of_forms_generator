@@ -459,11 +459,12 @@ body.dark {
 
 #timeline-net-state { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
 #timeline-net-state[data-state="animated"] { border-left-color: #2e8b57; background: #eaf6ee; }
-#timeline-net-state[data-state="none"], #timeline-net-state[data-state="incompatible"] { border-left-color: #c0392b; background: #fbeae8; }
+#timeline-net-state[data-state="incompatible"] { border-left-color: #c0392b; background: #fbeae8; }
 #timeline-net-state[data-state="partial"] { border-left-color: #d9822b; background: #fdf1e3; }
-#timeline-net-state[data-state="constant"], #timeline-net-state[data-state="pending"] { border-left-color: #888; background: #f4f4f4; }
+/* "none" (no keyframe has a net captured) is the normal state of a timeline that never uses a net: grey like "constant" and "pending", not an error. Red is for "incompatible" only. */
+#timeline-net-state[data-state="constant"], #timeline-net-state[data-state="pending"], #timeline-net-state[data-state="none"] { border-left-color: #888; background: #f4f4f4; }
 #timeline-net-state[hidden] { display: none; }
-.kf-no-net { color: #c0392b; }
+.kf-no-net { color: var(--color-secondary); }   /* "no net" on a keyframe is information, not an error: the secondary grey, 4.61:1 on the white page */
 
 /* === UI rework 4a: header, tabs, nav rows ===============================
    Header: the three tabs (in-page hash links, nav.js) on the left, Help on

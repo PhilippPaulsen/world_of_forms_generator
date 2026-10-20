@@ -382,6 +382,29 @@ T('the scrub bar\'s focus ring', () => {
     check('the ring rule sits after nothing that could still beat it: the bar\'s rule is not weaker than the global one (0,1,1) and uses no !important', own && !/!important/.test(own.decl) && cmp(ownSpec, spec('input:focus-visible')) > 0);
 });
 
+T('the net state colours', () => {
+    // "none" (no keyframe has a net captured) is the normal state of a timeline that never uses a net, so it is grey like "constant" and "pending", not red like an error. Red is for "incompatible"
+    // only, orange for "partial", green for "animated". The "no net" label of a keyframe is the secondary grey. Source text of style.css (the text, the model and the dot are not touched).
+    const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+    const ruleFor = st => { const out = []; const re = /([^{}]+)\{([^{}]*)\}/g; let m; while ((m = re.exec(css))) if (m[1].split(',').some(s => s.trim() === '#timeline-net-state[data-state="' + st + '"]')) out.push({ sels: m[1].split(',').map(s => s.trim()), decl: m[2].replace(/\s+/g, ' ').trim() }); return out; };
+    const only = st => { const r = ruleFor(st); return r.length === 1 ? r[0] : null; };
+    const GREY = 'border-left-color: #888; background: #f4f4f4;', RED = 'border-left-color: #c0392b; background: #fbeae8;', ORANGE = 'border-left-color: #d9822b; background: #fdf1e3;', GREEN = 'border-left-color: #2e8b57; background: #eaf6ee;';
+    const states = ['none', 'partial', 'pending', 'incompatible', 'constant', 'animated'];
+    check('every state has exactly ONE rule (nothing later overrides it): ' + states.join(', '), states.every(s => ruleFor(s).length === 1), states.map(s => s + ':' + ruleFor(s).length).join(' '));
+    const n = only('none');
+    check('"none" is in the GREY rule (border-left-color #888, background #f4f4f4), shared with "constant" and "pending", and in no red rule', !!n && n.decl === GREY && n.sels.includes('#timeline-net-state[data-state="constant"]') && n.sels.includes('#timeline-net-state[data-state="pending"]'), n && n.decl);
+    check('"incompatible" is in the RED rule (#c0392b, #fbeae8) alone; "partial" is ORANGE (#d9822b, #fdf1e3); "animated" is GREEN (#2e8b57, #eaf6ee); "pending" and "constant" are grey', (r => !!r && r.decl === RED && r.sels.length === 1)(only('incompatible')) && (only('partial') || {}).decl === ORANGE && (only('animated') || {}).decl === GREEN && (only('pending') || {}).decl === GREY && (only('constant') || {}).decl === GREY);
+    check('the red #c0392b is used by exactly one rule in style.css: the "incompatible" one (not the keyframe label any more)', (CSS.match(/#c0392b/gi) || []).length === 1 && /data-state="incompatible"\]\s*\{[^}]*#c0392b/.test(css));
+    const kf = (css.match(/\.kf-no-net\s*\{([^}]*)\}/) || [, null])[1];
+    check('.kf-no-net ("1. Layer 1 · no net" in the keyframe list) uses the secondary token, var(--color-secondary), and no hard-coded colour', kf !== null && kf.replace(/\s+/g, ' ').trim() === 'color: var(--color-secondary);', String(kf));
+    const hex = name => ((CSS.match(new RegExp('--' + name + ':\\s*(#[0-9a-fA-F]{6})')) || [, null])[1]);
+    const lum = h => { const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+    const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+    const sec = hex('color-secondary'), bg = hex('color-bg'), r = sec && bg ? ratio(sec, bg) : 0;
+    check('the secondary token on the page background (the keyframe list sits on it) reaches 4.5:1 (light scheme): ' + sec + ' on ' + bg + ' = ' + r.toFixed(2) + ':1', r >= 4.5 && r < 4.7, r.toFixed(3));
+    check('the Include net dot is unchanged: only "partial" and "incompatible" show it, "none" does not (the model)', ['partial', 'incompatible'].every(s => mctx.timelineModel.netStateDot({ state: s }) === true) && ['none', 'pending', 'constant', 'animated'].every(s => mctx.timelineModel.netStateDot({ state: s }) === false) && mctx.timelineModel.netStateDot(null) === false);
+});
+
 T('diamonds', () => {
     // table: column 3, the Base row has none
     let e = build({ layers: [L(), L(), L({ isTimelinePlayback: true }), L()], timeline: tlOf([0, 1]), active: 'base' });
