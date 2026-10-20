@@ -5,7 +5,7 @@
 //
 // Why. A new layer copies the base's shape, symmetry, node count and size; the timeline rejects keyframes with another shape, symmetry, size or node count and ignores a keyframe's offset and
 // rotation; Farbe excludes a layer with another size or rotation. So the layer's shape, node count, size, symmetry, fold, align, offset, mesh presets and rotation controls are rarely useful and
-// took a row each. They are behind #btn-more-layer, closed by default, visible only while a layer is active. The wrapper #layer-more-panel has its OWN `hidden`; every group inside keeps the
+// took a row each. They are behind the "..." of the layer table, rail and strip (layerApi.toggleMore; the old toggle button #btn-more-layer and its row are gone), closed by default, visible only while a layer is active. The wrapper #layer-more-panel has its OWN `hidden`; every group inside keeps the
 // `hidden` that updateOffsetControls() writes (shown only for a layer): a group is visible only when both are off, and the two never write each other's attribute.
 const fs = require('fs');
 const path = require('path');
@@ -82,12 +82,7 @@ T('sync', () => {
 
 console.log('\n== the markup ==');
 const markup = HTML.replace(/<!--[\s\S]*?-->/g, m => m.replace(/[^\n]/g, ' ')).replace(/<script[\s\S]*?<\/script>/g, m => m.replace(/[^\n]/g, ' '));
-const btn = (markup.match(/<button\b[^>]*\bid="btn-more-layer"[^>]*>/) || [''])[0];
-check('the toggle is a <button type="button"> with aria-expanded="false" (closed by default) and aria-controls="layer-more-panel"', /type="button"/.test(btn) && /aria-expanded="false"/.test(btn) && /aria-controls="layer-more-panel"/.test(btn), btn.slice(0, 80));
-check('title and aria-label are "Mehr Ebenen-Einstellungen"; it has a data-i18n key; it is an .icon-btn.nav-more (the has-state dot rule)', /title="Mehr Ebenen-Einstellungen"/.test(btn) && /aria-label="Mehr Ebenen-Einstellungen"/.test(btn) && /data-i18n="[a-z.]+"/.test(btn) && /class="icon-btn nav-more"/.test(btn));
-const toggleMarkup = (markup.match(/<button\b[^>]*\bid="btn-more-layer"[\s\S]*?<\/button>/) || [''])[0];
-check('the toggle shows the "..." icon of the other More buttons: three circles, 18 px', /<svg class="ico" width="18" height="18"/.test(toggleMarkup) && (toggleMarkup.match(/<circle/g) || []).length === 3);
-check('the toggle row starts hidden (it is shown only while a layer is active) and the wrapper starts hidden (closed)', /<div class="control-group" id="layer-more-row" hidden>/.test(markup) && /<div id="layer-more-panel" hidden>/.test(markup));
+check('the wrapper starts hidden (closed), and the old toggle row and its button are GONE from the markup: no #layer-more-row, no #btn-more-layer', /<div id="layer-more-panel" hidden>/.test(markup) && !/layer-more-row|btn-more-layer/.test(markup));
 
 const pa = markup.indexOf('<div id="layer-more-panel"');
 // find the end of the wrapper by depth counting
@@ -101,10 +96,10 @@ const CONTROLS = ['layer-node-count-input', 'layer-shape-size-input', 'layer-off
 check('...and so are the controls of those groups (the inputs, Align to base, the two mesh presets) and the .layer-shape-icon-btn / .layer-mode-btn / .layer-fold-btn buttons', CONTROLS.every(id => panel.includes('id="' + id + '"')) && (panel.match(/layer-shape-icon-btn/g) || []).length >= 3 && (panel.match(/layer-mode-btn/g) || []).length >= 3 && (panel.match(/layer-fold-btn/g) || []).length >= 2);
 const groupDepths = []; { let d = 0; for (const m of panel.matchAll(/<(\/?)div\b([^>]*)>/g)) { if (m[1]) { d--; continue; } if (/class="control-group"/.test(m[2])) groupDepths.push(d); d++; } }
 check('the groups inside are not nested in another wrapper (each of the ten is a DIRECT child of the wrapper: one block per group)', groupDepths.length === GROUPS.length && groupDepths.every(d => d === 1), groupDepths.join(','));
-const LAYER_ROW = ['btn-layer-base', 'layer-tabs', 'btn-add-layer', 'paste-pattern-status', 'timeline-group', 'btn-add-to-timeline', 'btn-timeline-include-net', 'btn-remove-timeline', 'timeline-keyframe-list', 'timeline-pairing', 'btn-timeline-play', 'timeline-progress-input'];
+const LAYER_ROW = ['timeline-group', 'btn-clear-timeline', 'timeline-keyframe-list', 'timeline-net-state', 'timeline-pairing', 'timeline-status'];
 const outside = markup.slice(0, pa) + markup.slice(end);
-check('the layer row, the timeline and the pairing editor are OUTSIDE the wrapper (ids unchanged)', LAYER_ROW.every(id => outside.includes('id="' + id + '"') && !panel.includes('id="' + id + '"')), LAYER_ROW.filter(id => !outside.includes('id="' + id + '"') || panel.includes('id="' + id + '"')).join(', ') || LAYER_ROW.length + ' ids');
-check('the toggle row is outside the wrapper and comes before it', outside.includes('id="layer-more-row"') && markup.indexOf('id="layer-more-row"') < pa && !panel.includes('btn-more-layer'));
+check('the timeline group ("Zeitleiste entfernen", the keyframe list, the net status, the pairing editor, the status line) is OUTSIDE the wrapper (ids unchanged), and the old layer row, its buttons and its status line are gone from the markup', LAYER_ROW.every(id => outside.includes('id="' + id + '"') && !panel.includes('id="' + id + '"')) && ['layer-row-group', 'layer-row', 'btn-layer-base', 'layer-tabs', 'btn-add-layer', 'paste-pattern-status', 'btn-add-to-timeline', 'btn-timeline-include-net', 'btn-remove-timeline', 'timeline-playback-controls', 'btn-timeline-play', 'timeline-progress-input'].every(id => !markup.includes('id="' + id + '"')));
+check('the wrapper is not preceded by a toggle: nothing of the old toggle row is left before it', !markup.includes('layer-more-row') && pa > 0);
 
 console.log('\n== the wiring ==');
 check('the old toggle is gone from sketch.js: no layerMoreBtn, no click listener for #btn-more-layer; the "..." of the layer views flips the state through layerApi.toggleMore (layerMoreOpen = !layerMoreOpen; syncLayerMore();)', !/layerMoreBtn|layerMoreRow|btn-more-layer/.test(SKETCH) && /toggleMore\(\) \{ layerMoreOpen = !layerMoreOpen; syncLayerMore\(\); \}/.test(SKETCH));
@@ -119,7 +114,7 @@ console.log('\n== the CSS ==');
 const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
 check('the wrapper is display: contents (its groups stay flex items of #controls-container) and [hidden] is restated so that it still hides', /#layer-more-panel\s*\{\s*display:\s*contents;\s*\}/.test(css) && /#layer-more-panel\[hidden\]\s*\{\s*display:\s*none;\s*\}/.test(css));
 
-check('the toggle row takes its own line (flex-basis: 100%, centred): opening or closing the block does not re-centre the line of the layer row and the timeline', /#layer-more-row\s*\{\s*flex-basis:\s*100%;\s*justify-content:\s*center;\s*\}/.test(css));
+check('the old toggle row rule is gone from style.css (#layer-more-row)', !/layer-more-row/.test(css));
 
 console.log('\n== 1b-1: the layer controls reuse the Form row\'s patterns ==');
 {
@@ -133,7 +128,7 @@ console.log('\n== 1b-1: the layer controls reuse the Form row\'s patterns ==');
         check(`${kind}: the group, the input and both chevrons have an aria-label, a title and a data-i18n key`, /<div class="stepper"[^>]*aria-label="[^"]+"[^>]*data-i18n="[^"]+"/.test(g) && new RegExp('id="' + inputId + '"[^>]*aria-label="[^"]+"[^>]*data-i18n="[^"]+"').test(g) && [...g.matchAll(/<button class="stepper-btn"[^>]*>/g)].every(m => /title="[^"]+"/.test(m[0]) && /aria-label="[^"]+"/.test(m[0]) && /data-i18n="[^"]+"/.test(m[0])));
         check(`${kind}: the old <label for="${inputId}"> and the id are still there (nothing renamed or removed)`, new RegExp('<label for="' + inputId + '">').test(g) && g.includes('id="' + inputId + '"'));
     }
-    check('the node-count note (#layer-node-count-note) is still in its group', group('layer-node-count-group').includes('id="layer-node-count-note"'));
+    check('the node-count note (#layer-node-count-note) is GONE (it was written by nothing since the notices; the limit goes to a notice)', !group('layer-node-count-group').includes('layer-node-count-note') && !HTML.includes('layer-node-count-note'));
     // the shape icon row
     const sg = group('layer-shape-group');
     const shapeBtns = [...sg.matchAll(/<button class="layer-shape-icon-btn icon-btn"[^>]*>[\s\S]*?<\/button>/g)].map(m => m[0]);
@@ -151,8 +146,8 @@ console.log('\n== 1b-1: the layer controls reuse the Form row\'s patterns ==');
             /class="layer-btn icon-btn"/.test(b) && /class="ico" width="18" height="18"/.test(b) && b.replace(/<svg[\s\S]*?<\/svg>/, '').replace(/<[^>]+>/g, '').trim() === '' && /aria-label="[^"]+"/.test(b) && /title="[^"]+"/.test(b) && /data-i18n="[^"]+"/.test(b));
     }
     // the ids and classes the handlers use, unchanged
-    check('every id and class sketch.js binds is unchanged: #layer-node-count-input, #layer-shape-size-input, #btn-align-to-base, #btn-mesh-preset-x / -y, .layer-shape-icon-btn[data-shape], .layer-fold-btn[data-fold], #layer-node-count-note, #align-to-base-status',
-        ['layer-node-count-input', 'layer-shape-size-input', 'btn-align-to-base', 'btn-mesh-preset-x', 'btn-mesh-preset-y', 'layer-node-count-note', 'align-to-base-status'].every(id => panel.includes('id="' + id + '"')) &&
+    check('every id and class sketch.js binds is unchanged: #layer-node-count-input, #layer-shape-size-input, #btn-align-to-base, #btn-mesh-preset-x / -y, .layer-shape-icon-btn[data-shape], .layer-fold-btn[data-fold] (the two note spans #layer-node-count-note and #align-to-base-status are gone: their messages are notices)',
+        ['layer-node-count-input', 'layer-shape-size-input', 'btn-align-to-base', 'btn-mesh-preset-x', 'btn-mesh-preset-y'].every(id => panel.includes('id="' + id + '"')) && !panel.includes('layer-node-count-note') && !panel.includes('align-to-base-status') &&
         /select\('#layer-node-count-input'\)/.test(SKETCH) && /select\('#layer-shape-size-input'\)/.test(SKETCH) && /selectAll\('\.layer-shape-icon-btn'\)/.test(SKETCH) && /selectAll\('\.layer-fold-btn'\)/.test(SKETCH) && /select\('#btn-align-to-base'\)/.test(SKETCH));
     // no new p5 binding; the new file is plain
     const code = LAYER_JS.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
