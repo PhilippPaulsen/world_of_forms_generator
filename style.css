@@ -1311,6 +1311,12 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
 .timeline-strip .ts-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: var(--ts-thumb); height: var(--ts-thumb); margin-top: -4px; border-radius: 50%; background: var(--slider-thumb-bg); }
 .timeline-strip .ts-range::-moz-range-thumb { width: var(--ts-thumb); height: var(--ts-thumb); border: none; border-radius: 50%; background: var(--slider-thumb-bg); }
 .timeline-strip .ts-range[aria-disabled="true"] { opacity: 0.4; cursor: not-allowed; }
+/* The keyboard focus ring of the scrub bar. Safari (and Chromium) showed none: index.html's inline `input[type="range"] { outline: none }` comes after this file and has the same
+   specificity as the global `input:focus-visible` rule below, so it won. The ring is the buttons' own (2px solid var(--color-text), offset 2px: the global rule at the end of this
+   file); an outline takes no space. It is drawn on the input and, with :has, on the .ts-bar around it (the same box, so the two coincide): a focused DISABLED bar (aria-disabled, which
+   keeps it focusable) is 0.4 opaque, and 0.4 black on white is 2.85:1 - the ring on the .ts-bar stays opaque (21:1). */
+.timeline-strip .ts-range:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+.timeline-strip .ts-bar:has(> .ts-range:focus-visible) { outline: 2px solid var(--color-text); outline-offset: 2px; }
 .timeline-strip .ts-marks { position: absolute; left: 0; right: 0; top: 0; height: 100%; pointer-events: none; }
 .timeline-strip .ts-mark {
   position: absolute;
