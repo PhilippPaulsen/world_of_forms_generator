@@ -150,26 +150,57 @@
   UI.name(moreBtn, T['timeline.more']);
   UI.name(netBtn, T['timeline.net.auto.off']);
 
-  let tlNow = null, interacting = false, moreOpen = false, sigNow = null, marksKey = null, lastNet = '', lastPlaying = null, lastValue = null;
+  let tlNow = null, interacting = false, moreOpen = false, sigNow = null, marksKey = null, lastNet = '', lastPlaying = null, lastValue = null, endTimer = null;
   function timelineNow() { return typeof timeline !== 'undefined' ? timeline : null; }
   function clock() { return typeof millis === 'function' ? millis() : (typeof performance !== 'undefined' ? performance.now() : 0); }
   function sync() { /* assigned below */ }
+  // The end of a playback: draw() syncs at its START, and the draw that ends the playback is followed by noLoop(), so no sync runs once timeline.playing is false and the Play button
+  // would keep its Pause icon and name. While the timeline plays, ONE timer is pending, due when the playback ends plus 50 ms; it only calls sync(), which reads the state (it writes
+  // nothing itself) and arms the next one if the playback still runs. A pause (or any end) cancels it in sync().
+  function armEnd(tl) {
+    let total = 0;
+    for (let i = 0; Array.isArray(tl.segmentDurationsMs) && i < tl.segmentDurationsMs.length; i++) total += tl.segmentDurationsMs[i];
+    const left = total - (clock() - tl.startTime);
+    endTimer = setTimeout(function () { endTimer = null; sync(); }, (left > 0 ? left : 0) + 50);
+  }
 
   UI.guard(playBtn, function () { if (api()) api().play(); sync(); });
   UI.guard(input, function () { });   // a click on the disabled scrub bar shows its reason
-  input.addEventListener('input', function () {
+  function scrub() {   // the ONE path of a new position: the range's own input event and the arrow keys below
     if (UI.isDisabled(input)) { input.value = '0'; return; }
     const p = parseFloat(input.value);
     if (api()) api().setProgress(p);
     lastValue = input.value;   // what the person set is what the thumb shows: the tick does not overwrite it, and the spoken value follows at once
     setIf(input, 'aria-valuetext', Math.round(p * 100) + ' %');
     sync();
-  });
+  }
+  input.addEventListener('input', scrub);
   // the thumb is not overwritten while the person drags it or holds a key on it
-  input.addEventListener('pointerdown', function () { interacting = true; });
-  input.addEventListener('keydown', function () { interacting = true; });
+  // Safari does not move the focus to a range input on a mouse click (the page's keydown then goes to BODY, not to the bar): a press takes it, so the arrow keys work after a click
+  // without a Tab. At pointerdown, and AGAIN at the pointerup that ends the press: WebKit runs the mousedown default (it clears the focus when the pressed control is not mouse-
+  // focusable) AFTER the pointerdown handlers, so a focus taken only at pointerdown can be undone at once (modelled in the pane: ArrowRight then goes to BODY). No preventDefault
+  // anywhere (a drag must stay native), no scroll, nothing on a disabled bar, nothing when the bar already has the focus.
+  let pressed = false;
+  function takeFocus() { if (!UI.isDisabled(input) && document.activeElement !== input) input.focus({ preventScroll: true }); }
+  input.addEventListener('pointerdown', function () {
+    interacting = true; pressed = true;
+    takeFocus();
+  });
+  // The arrow keys move the thumb by 1 % (10 % with Shift). The range's own step is 0.001 (a drag and a playback stay smooth), which is 0.1 % = about half a pixel
+  // and 2 ms of a 2 s timeline per press: nothing a person sees. Home, End, PageUp and PageDown stay native (0, 1, +-10 %). A chord with Ctrl, Alt or Cmd is the browser's
+  // (Alt+Left is Back) and is left alone. A key press goes through scrub(), like an input event, so a running playback pauses at that position.
+  input.addEventListener('keydown', function (e) {
+    interacting = true;
+    const k = e.key;
+    const dir = k === 'ArrowRight' || k === 'ArrowUp' ? 1 : (k === 'ArrowLeft' || k === 'ArrowDown' ? -1 : 0);
+    if (!dir || e.ctrlKey || e.altKey || e.metaKey) return;
+    e.preventDefault();
+    const now = parseFloat(input.value) || 0;
+    input.value = String(Math.max(0, Math.min(1, Math.round((now + dir * (e.shiftKey ? 0.1 : 0.01)) * 1000) / 1000)));
+    scrub();
+  });
   ['pointerup', 'pointercancel', 'keyup', 'blur'].forEach(function (t) { input.addEventListener(t, function () { interacting = false; }); });
-  if (typeof window !== 'undefined' && window.addEventListener) { window.addEventListener('pointerup', function () { interacting = false; }); window.addEventListener('pointercancel', function () { interacting = false; }); }
+  if (typeof window !== 'undefined' && window.addEventListener) { window.addEventListener('pointerup', function () { interacting = false; if (pressed) { pressed = false; takeFocus(); } }); window.addEventListener('pointercancel', function () { interacting = false; pressed = false; }); }
   netBtn.addEventListener('click', function () { if (api()) api().toggleIncludeNet(); sync(); });
   function setMore(open) {
     moreOpen = !!open;
@@ -215,6 +246,8 @@
     UI.setDisabled(playBtn, reason);
     UI.setDisabled(input, reason);
     const playing = !!(tl && tl.playing);
+    if (playing && endTimer === null) armEnd(tl);
+    else if (!playing && endTimer !== null) { clearTimeout(endTimer); endTimer = null; }
     if (playing !== lastPlaying) { lastPlaying = playing; playBtn.innerHTML = playing ? ICON.pause : ICON.play; UI.name(playBtn, playing ? T['timeline.pause'] : T['timeline.play']); }
     // the thumb
     if (!interacting) {

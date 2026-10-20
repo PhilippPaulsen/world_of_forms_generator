@@ -95,8 +95,9 @@ function build(o) {
          g.getBoundingClientRect = () => ({ top: gRects[k][0], bottom: gRects[k][1], left: 0, right: 100 }); });
     [gHidden, gNoRects, gA, gB].forEach(g => group.appendChild(g));
     const clock = { t: 0 }, calls = [], moq = [];
+    const timers = []; let tseq = 0;   // a controllable setTimeout: nothing runs until a test calls fire() (timers[0] first, as the earliest due)
     const layers = o.layers || [];
-    const ctx = vm.createContext({ document: doc, console, MutationObserver: class { constructor(cb) { this.cb = cb; } observe(el) { el.onClass = () => { moq.push(this.cb); }; } }, setTimeout: () => 0, clearTimeout() { }, performance: { now: () => clock.t } });
+    const ctx = vm.createContext({ document: doc, console, MutationObserver: class { constructor(cb) { this.cb = cb; } observe(el) { el.onClass = () => { moq.push(this.cb); }; } }, setTimeout: (fn, ms) => { timers.push({ id: ++tseq, fn, ms }); return tseq; }, clearTimeout: id => { const k = timers.findIndex(t => t.id === id); if (k >= 0) timers.splice(k, 1); }, performance: { now: () => clock.t } });
     ctx.window = ctx; ctx.matchMedia = q => ({ matches: !!o.reduced && /prefers-reduced-motion:\s*reduce\b/.test(q) }); ctx.scrollBy = opts => { scrolls.push(opts); }; ctx.innerWidth = 800; ctx.innerHeight = 900; ctx.addEventListener = (t, fn) => { (ctx.__wl = ctx.__wl || {})[t] = (ctx.__wl[t] || []).concat(fn); };
     ctx.additionalLayers = layers; ctx.activeLayer = o.active === undefined ? 'base' : o.active; ctx.timeline = o.timeline === undefined ? null : o.timeline;
     ctx.millis = () => clock.t;
@@ -133,7 +134,8 @@ function build(o) {
     const s = tstrip ? { play: tstrip.children[0], bar: tstrip.children[1], net: tstrip.children[2], more: tstrip.children[3], marks: () => tstrip.children[1].children[0].children, input: tstrip.children[1].children[1] } : null;
     const rcell = key => { const g1 = rail.children[0].children, g2 = rail.children[1].children; for (const b of [g1[0]].concat(g1[1].children, [g1[2]], g2)) if (b.dataset.key === key) return b; return null; };
     const tcell = key => { for (const r of [table.children[0]].concat(table.children[1].children)) for (const b of r.children) if (b.dataset.key === key) return b; return null; };
-    return { ctx, doc, byId, calls, layers, clk, sync, s, rail, table, rcell, tcell, status, toastEl, group, clearBtn, lrd, tcd, clock, moq, scrolls };
+    const fire = () => { const t = timers.shift(); if (t) t.fn(); return !!t; };
+    return { ctx, doc, byId, calls, layers, timers, fire, clk, sync, s, rail, table, rcell, tcell, status, toastEl, group, clearBtn, lrd, tcd, clock, moq, scrolls };
 }
 const L = x => Object.assign({ connections: [], enabled: true }, x || {});
 const tlOf = (ids, extra) => Object.assign({ keyframeLayerIds: ids.slice(), playbackLayerIndex: ids.length > 1 ? 99 : null, segmentDurationsMs: ids.slice(1).map(() => 2000), segmentPairings: ids.slice(1).map(() => null), segmentFlips: ids.slice(1).map(() => null), segmentMembers: ids.slice(1).map(() => null), netStates: ids.map(() => null), elapsedMs: 0, playing: false, startTime: null }, extra || {});
@@ -194,6 +196,213 @@ T('strip', () => {
     check('...Cancel closes it without clearing and the focus returns to the button that opened it', e.calls.length === 0 && e.tcd.ov.classList.contains('hidden') && e.doc.activeElement === e.clearBtn);
     e.clk(e.clearBtn); e.clk(e.tcd.k);
     check('...Confirm calls layerApi.clearTimeline() once and closes the dialog', J(e.calls) === J([['clearTimeline']]) && e.tcd.ov.classList.contains('hidden') && e.ctx.timeline === null);
+});
+
+T('the end of a playback', () => {
+    // sketch.js's draw() syncs the strip at its START and noLoop() follows the draw that ends the playback, so no sync runs after timeline.playing turns false: ui-timeline.js arms ONE timer
+    // for the end (due when the playback ends + 50 ms) that only calls sync(). The fake layerApi.play toggles timeline.playing, like the real one; sketch.js's draw is simulated by the test.
+    const isPlay = e => /M7 5/.test(e.s.play.innerHTML) && !/rect/.test(e.s.play.innerHTML), isPause = e => /rect/.test(e.s.play.innerHTML);
+    const start = (e, at) => { e.clock.t = at; e.ctx.timeline.startTime = at; e.clk(e.s.play); };   // the click: layerApi.play() (playing = true) and the sync after it
+    let e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 });
+    e.sync(); e.sync();
+    check('no timer while the timeline does not play (two syncs, nothing pending)', e.timers.length === 0);
+    start(e, 500);
+    check('Play arms exactly ONE timer, due at the end: 2000 - (500 - 500) + 50 = 2050 ms; the button is Pause', e.timers.length === 1 && e.timers[0].ms === 2050 && e.s.play.getAttribute('aria-label') === 'Pause' && isPause(e), J(e.timers.map(t => t.ms)));
+    e.clock.t = 900; e.sync(); e.sync(); e.sync();
+    check('...further syncs while it plays (the draw loop: one per frame) arm no second one', e.timers.length === 1);
+    // the end: draw() ends the playback (applyTimelineFrame: playing = false, elapsedMs = total) and noLoop() follows; no sync runs
+    e.clock.t = 2500; e.ctx.timeline.playing = false; e.ctx.timeline.elapsedMs = 2000;
+    check('the playback ended and NO sync ran yet: the button still says Pause (the defect)', e.s.play.getAttribute('aria-label') === 'Pause' && isPause(e));
+    const callsBefore = J(e.calls);
+    check('the timer fires: the name is "Abspielen" and the icon is Play (no pause bars)', e.fire() === true && e.s.play.getAttribute('aria-label') === 'Abspielen' && isPlay(e));
+    check('...nothing is re-armed, the thumb is at 1, and the timer called nothing of layerApi', e.timers.length === 0 && e.s.input.value === '1' && J(e.calls) === callsBefore, J(e.timers.map(t => t.ms)));
+    // a second Play press (from the end the real toggle restarts at 0)
+    e.ctx.timeline.elapsedMs = 0; start(e, 3000);
+    check('a second Play press arms exactly ONE timer again (2050 ms) and the button is Pause', e.timers.length === 1 && e.timers[0].ms === 2050 && isPause(e));
+    // the timer fires while the playback still runs (a late frame, a hidden tab): it re-arms once and does not flip the icon
+    e.clock.t = 5200; e.fire();
+    check('the timer fires while the playback STILL runs (no draw ended it yet): still Pause, ONE new timer (50 ms: nothing is left of the playback)', e.timers.length === 1 && e.timers[0].ms === 50 && isPause(e) && e.s.play.getAttribute('aria-label') === 'Pause', J(e.timers.map(t => t.ms)));
+    e.ctx.timeline.playing = false; e.fire();
+    check('...and when it fires after the end the button flips and nothing is pending', isPlay(e) && e.timers.length === 0);
+    // a pause in the middle
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 });
+    start(e, 0);
+    const stale = e.timers[0].fn;   // the callback the pause must neutralise
+    e.clock.t = 700; e.clk(e.s.play);
+    check('a pause in the middle (a second click: playing false) cancels the pending timer and the button is Play', e.timers.length === 0 && isPlay(e) && e.s.play.getAttribute('aria-label') === 'Abspielen', J(e.timers.map(t => t.ms)));
+    e.clock.t = 800; e.clk(e.s.play);
+    check('...Play again after the pause arms exactly ONE new timer, due for what is left of the playback: 2000 - (800 - 0) + 50 = 1250 ms (the cancel left no stale handle behind)', e.timers.length === 1 && e.timers[0].ms === 1250 && isPause(e), J(e.timers.map(t => t.ms)));
+    e.clk(e.s.play);   // paused again; the callback queued BEFORE the first pause is now stale
+    const snap = () => J([e.s.play.innerHTML, e.s.play.getAttribute('aria-label'), e.s.input.value, e.s.input.getAttribute('aria-valuetext'), e.calls.length, e.timers.length]);
+    const before = snap(); stale();
+    check('...and even a callback that was already queued (called by hand) writes nothing: it only syncs the state it reads', snap() === before && e.timers.length === 0);
+    e.fire();
+    check('...fire() with nothing pending does nothing', snap() === before);
+    // the timeline is cleared / loses a keyframe while it plays
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 });
+    start(e, 0); e.ctx.timeline = null; e.sync();
+    check('a timeline that disappears while it plays (cleared): the timer is cancelled, Play is disabled and shows Play', e.timers.length === 0 && isPlay(e) && e.s.play.getAttribute('aria-disabled') === 'true');
+    // the due time follows the sum of the durations
+    e = build({ layers: [L(), L(), L()], timeline: tlOf([0, 1, 2]), active: 0 });
+    e.ctx.timeline.segmentDurationsMs = [1000, 3000]; start(e, 400);
+    check('the due time is the SUM of the segment durations (1000 + 3000) minus what has run: 4000 + 50 = 4050 ms', e.timers.length === 1 && e.timers[0].ms === 4050, J(e.timers.map(t => t.ms)));
+    check('the scrub bar during a running playback still works: an input calls layerApi.setProgress and the playback pauses (the timer is cancelled by that sync)', (e.s.input.value = '0.5', e.s.input.dispatch('input'), e.calls.some(c => c[0] === 'setProgress' && c[1] === 0.5) && e.ctx.timeline.playing === false && e.timers.length === 0 && isPlay(e)));
+    check('ui-timeline.js arms the timer in sync() only, with ONE variable for it, and the callback only calls sync()', (() => { const src = TLJS.replace(/\/\/[^\n]*/g, ''); return (src.match(/setTimeout\(/g) || []).length === 1 && /endTimer = setTimeout\(function \(\) \{ endTimer = null; sync\(\); \}/.test(src) && (src.match(/armEnd\(/g) || []).length === 2; })());
+});
+
+T('the scrub bar\'s arrow keys', () => {
+    // The range's step is 0.001 (a drag and a playback stay smooth): one native arrow press is 0.1 % = about half a pixel, so the arrows are handled: +-0.01, +-0.1 with Shift.
+    // Home, End, PageUp and PageDown are NOT handled (the browser moves the range to 0, 1 and +-10 %): no preventDefault, no value written.
+    const press = (e, key, o) => { let pd = 0; e.s.input.dispatch('keydown', Object.assign({ key, preventDefault() { pd++; } }, o || {})); return pd; };
+    const fresh = (v, extra) => { const e = build({ layers: [L(), L()], timeline: tlOf([0, 1], extra), active: 0 }); e.sync(); e.s.input.value = String(v); e.calls.length = 0; return e; };
+    const sp = e => e.calls.filter(c => c[0] === 'setProgress').map(c => c[1]);
+    let e = fresh(0);
+    check('ArrowRight from 0: preventDefault, the value 0.01, setProgress(0.01) once (the range\'s own path), the spoken value "1 %"', press(e, 'ArrowRight') === 1 && e.s.input.value === '0.01' && J(sp(e)) === '[0.01]' && e.s.input.getAttribute('aria-valuetext') === '1 %', e.s.input.value + ' ' + J(sp(e)));
+    const dirs = [['ArrowRight', 0.51, '51 %'], ['ArrowUp', 0.51, '51 %'], ['ArrowLeft', 0.49, '49 %'], ['ArrowDown', 0.49, '49 %']];
+    check('from 0.5: Right and Up add 0.01, Left and Down subtract it; each calls preventDefault once and setProgress once, and the spoken value follows', dirs.every(([k, v, t]) => { const x = fresh(0.5); return press(x, k) === 1 && x.s.input.value === String(v) && J(sp(x)) === J([v]) && x.s.input.getAttribute('aria-valuetext') === t; }));
+    check('Shift: +-0.1 in every direction (0.5 to 0.6, 0.4)', [['ArrowRight', '0.6'], ['ArrowUp', '0.6'], ['ArrowLeft', '0.4'], ['ArrowDown', '0.4']].every(([k, v]) => { const x = fresh(0.5); return press(x, k, { shiftKey: true }) === 1 && x.s.input.value === v && J(sp(x)) === J([parseFloat(v)]); }) && fresh(0.5).s.input.getAttribute('aria-valuetext') !== '60 %');
+    check('...and the spoken value after Shift+ArrowRight is "60 %"', (() => { const x = fresh(0.5); press(x, 'ArrowRight', { shiftKey: true }); return x.s.input.getAttribute('aria-valuetext') === '60 %'; })());
+    e = fresh(0);
+    for (let i = 0; i < 10; i++) press(e, 'ArrowRight');
+    check('ten ArrowRight presses from 0 give exactly 0.1 and "10 %" (no float noise: 0.09999999999999999)', e.s.input.value === '0.1' && e.s.input.getAttribute('aria-valuetext') === '10 %' && sp(e).length === 10, e.s.input.value);
+    check('clamping at 1: 0.995 + 0.01 = 1; at 1 the value stays 1 (and still goes through setProgress); Shift at 0.95 = 1', (() => { const a1 = fresh(0.995); press(a1, 'ArrowRight'); const a2 = fresh(1); press(a2, 'ArrowRight'); const a3 = fresh(0.95); press(a3, 'ArrowUp', { shiftKey: true }); return a1.s.input.value === '1' && a2.s.input.value === '1' && J(sp(a2)) === '[1]' && a3.s.input.value === '1' && a1.s.input.getAttribute('aria-valuetext') === '100 %'; })());
+    check('clamping at 0: 0.005 - 0.01 = 0; at 0 the value stays 0; Shift at 0.05 = 0 ("0 %")', (() => { const a1 = fresh(0.005); press(a1, 'ArrowLeft'); const a2 = fresh(0); press(a2, 'ArrowDown'); const a3 = fresh(0.05); press(a3, 'ArrowLeft', { shiftKey: true }); return a1.s.input.value === '0' && a2.s.input.value === '0' && J(sp(a2)) === '[0]' && a3.s.input.value === '0' && a3.s.input.getAttribute('aria-valuetext') === '0 %'; })());
+    // the keys that are NOT ours
+    const others = ['Tab', 'Home', 'End', 'PageUp', 'PageDown', 'Enter', ' ', 'a', 'Shift', 'Escape', 'ArrowRight+'];
+    check('preventDefault is NOT called, the value is not written and setProgress is not called for Tab, Home, End, PageUp, PageDown, Enter, Space, a letter, Shift or Escape', others.every(k => { const x = fresh(0.5); const pd = press(x, k); return pd === 0 && x.s.input.value === '0.5' && sp(x).length === 0; }));
+    check('...nor for an arrow with Ctrl, Alt or Cmd held (Alt+Left is the browser\'s Back) - and a key with no key name at all (the older tests dispatch a bare keydown)', ['ctrlKey', 'altKey', 'metaKey'].every(m => { const x = fresh(0.5); const pd = press(x, 'ArrowLeft', { [m]: true }); return pd === 0 && x.s.input.value === '0.5' && sp(x).length === 0; }) && (() => { const x = fresh(0.5); x.s.input.dispatch('keydown'); return x.s.input.value === '0.5' && sp(x).length === 0; })());
+    // disabled
+    e = build({ layers: [L()], timeline: tlOf([0]), active: 0 }); e.sync(); e.calls.length = 0;
+    const pdD = press(e, 'ArrowRight');
+    check('with ONE keyframe (the bar is aria-disabled) an arrow is swallowed (preventDefault), nothing is called and the thumb stays at 0', pdD === 1 && sp(e).length === 0 && e.s.input.value === '0' && e.calls.length === 0, e.s.input.value + ' ' + J(e.calls));
+    // the interacting flag and a running playback
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync();
+    e.ctx.timeline.playing = true; e.ctx.timeline.startTime = 0; e.clock.t = 1000; e.sync(); e.calls.length = 0;
+    check('playing, the thumb follows the clock (1000 of 2000: 0.5)', e.s.input.value === '0.5');
+    press(e, 'ArrowRight');
+    check('an arrow DURING a playback goes through setProgress(0.51) (the real one pauses the playback there: the fake does as well) and the thumb shows 0.51', J(sp(e)) === '[0.51]' && e.ctx.timeline.playing === false && e.ctx.timeline.elapsedMs === 1020 && e.s.input.value === '0.51');
+    e.ctx.timeline.elapsedMs = 1500; e.clock.t = 3000; e.sync();
+    check('...the key is still down (no keyup): the tick does NOT overwrite the thumb (it would show 0.75 from the timeline)', e.s.input.value === '0.51');
+    press(e, 'ArrowRight'); press(e, 'ArrowRight');
+    check('...a held key (auto-repeat: more keydowns without a keyup) keeps moving it: 0.52, 0.53 - each press adds 0.01 to what is shown, not to what the tick would say', e.s.input.value === '0.53' && J(sp(e)) === '[0.51,0.52,0.53]', e.s.input.value + ' ' + J(sp(e)));
+    e.s.input.dispatch('keyup'); e.ctx.timeline.elapsedMs = 1500; e.sync();
+    check('...after the keyup the tick follows the timeline again (elapsedMs 1500 of 2000: 0.75)', e.s.input.value === '0.75');
+    // blur also ends the guard
+    press(e, 'ArrowLeft'); e.ctx.timeline.elapsedMs = 400; e.s.input.dispatch('blur'); e.sync();
+    check('a blur after a key ends the guard too (the thumb follows the timeline: 400 of 2000: 0.2)', e.s.input.value === '0.2');
+    // the source
+    const src = TLJS.replace(/\/\/[^\n]*/g, '');
+    check('ui-timeline.js: the range\'s step stays 0.001; the arrows add 0.01 (0.1 with Shift) through scrub(), the same function as the range\'s input event; Home, End, PageUp and PageDown are not mentioned in the code', /input\.step = '0\.001'/.test(src) && /input\.addEventListener\('input', scrub\)/.test(src) && /e\.shiftKey \? 0\.1 : 0\.01/.test(src) && /input\.value = String\(Math\.max\(0, Math\.min\(1,/.test(src) && (src.match(/\bscrub\(\);/g) || []).length === 1 && !/['"](Home|End|PageUp|PageDown)['"]/.test(src));
+});
+
+T('the scrub bar takes the focus on a press', () => {
+    // Safari (the maintainer's keydown probe: ArrowRight went to BODY after a mouse click, to INPUT range after a Tab) does not focus a range input on a mouse click: the pointerdown does.
+    const withFocusSpy = e => { const f = []; e.s.input.focus = function (o) { f.push(o); e.doc.activeElement = this; }; return f; };
+    const down = (e, o) => { let pd = 0; e.s.input.dispatch('pointerdown', Object.assign({ preventDefault() { pd++; } }, o || {})); return pd; };
+    // a key goes where the focus is: to the bar only when it has the focus (else to BODY, as in Safari after a click)
+    const key = (e, k) => { if (e.doc.activeElement === e.s.input) e.s.input.dispatch('keydown', { key: k, preventDefault() { } }); };
+    let e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync(); e.calls.length = 0;
+    let f = withFocusSpy(e); let pd = down(e);
+    check('a pointerdown on the enabled bar focuses it ONCE, with { preventScroll: true }, and does not call preventDefault', f.length === 1 && J(f[0]) === '{"preventScroll":true}' && e.doc.activeElement === e.s.input && pd === 0, J(f) + ' pd=' + pd);
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync(); f = withFocusSpy(e); e.doc.activeElement = e.s.play;
+    down(e);
+    check('...also when another control has the focus (the Play button): the bar takes it', f.length === 1 && e.doc.activeElement === e.s.input);
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync(); f = withFocusSpy(e); e.doc.activeElement = e.s.input;
+    down(e); down(e);
+    check('when the bar already has the focus (after a Tab, or a second press) no focus call is made: nothing is stolen or re-focused, and the focus stays on the bar', f.length === 0 && e.doc.activeElement === e.s.input);
+    e = build({ layers: [L()], timeline: tlOf([0]), active: 0 }); e.sync(); f = withFocusSpy(e);
+    pd = down(e);
+    check('a DISABLED bar (one keyframe) takes no focus on a press (no focus call, the active element is unchanged) and preventDefault is not called either', f.length === 0 && e.doc.activeElement === null && pd === 0);
+    // the arrows after a press, without a Tab
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync(); withFocusSpy(e); e.calls.length = 0;
+    e.doc.activeElement = null;   // the page: BODY
+    for (let i = 0; i < 3; i++) key(e, 'ArrowRight');
+    check('(the Safari model) without a press and without a Tab the focus is on BODY: three ArrowRight go nowhere (the bar stays at 0, setProgress is not called)', e.s.input.value === '0' && e.calls.length === 0);
+    down(e);
+    for (let i = 0; i < 10; i++) key(e, 'ArrowRight');
+    check('after a press (no Tab) ten ArrowRight move the bar to exactly 0.1 ("10 %") through setProgress, ten times', e.s.input.value === '0.1' && e.s.input.getAttribute('aria-valuetext') === '10 %' && e.calls.filter(c => c[0] === 'setProgress').length === 10);
+    key(e, 'Tab'); e.s.input.dispatch('keyup');
+    // the drag path is unchanged
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1], { elapsedMs: 1000 }), active: 0 }); e.sync(); withFocusSpy(e); e.calls.length = 0;
+    down(e); e.s.input.value = '0.3'; e.s.input.dispatch('input'); e.s.input.value = '0.4'; e.s.input.dispatch('input');
+    check('a drag after the press: each input event calls setProgress with the new value (0.3, then 0.4) and the spoken value follows', J(e.calls.filter(c => c[0] === 'setProgress')) === J([['setProgress', 0.3], ['setProgress', 0.4]]) && e.s.input.getAttribute('aria-valuetext') === '40 %');
+    e.ctx.timeline.elapsedMs = 1800; e.sync();
+    check('...the thumb is NOT overwritten by the tick while the press is down (the interacting flag is as before)', e.s.input.value === '0.4');
+    e.s.input.dispatch('pointerup'); e.sync();
+    check('...and it follows the timeline after the pointerup (1800 of 2000: 0.9)', e.s.input.value === '0.9');
+    // WebKit runs the mousedown default (the focus is cleared when the pressed control is not mouse-focusable) AFTER the pointerdown handlers: the bar takes the focus again at the pointerup
+    const wup = (e) => ((e.ctx.__wl && e.ctx.__wl.pointerup) || []).forEach(fn => fn({ type: 'pointerup' })), wcancel = (e) => ((e.ctx.__wl && e.ctx.__wl.pointercancel) || []).forEach(fn => fn({ type: 'pointercancel' }));
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync(); f = withFocusSpy(e); e.calls.length = 0;
+    down(e); e.doc.activeElement = null;   // the press's default action cleared the focus (the model of WebKit; the pane shows ArrowRight going to BODY with only the pointerdown focus)
+    for (let i = 0; i < 3; i++) key(e, 'ArrowRight');
+    check('(the WebKit model) a focus taken only at pointerdown is cleared by the press\'s default: the keys go to BODY until the pointerup', e.s.input.value === '0' && f.length === 1);
+    wup(e);
+    check('...the pointerup that ends the press takes the focus again (a second focus call, { preventScroll: true }) and the arrows then work: ten ArrowRight give exactly 0.1', f.length === 2 && J(f[1]) === '{"preventScroll":true}' && e.doc.activeElement === e.s.input && (() => { for (let i = 0; i < 10; i++) key(e, 'ArrowRight'); return e.s.input.value === '0.1'; })());
+    e.doc.activeElement = e.s.play; wup(e);
+    check('...and only once per press: with the focus elsewhere, a second pointerup (no press in between) makes no focus call', f.length === 2 && e.doc.activeElement === e.s.play);
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync(); f = withFocusSpy(e);
+    wup(e); e.doc.activeElement = e.s.play; wup(e);
+    check('a pointerup without a press on the bar (a click somewhere else) takes no focus', f.length === 0 && e.doc.activeElement === e.s.play);
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync(); f = withFocusSpy(e);
+    down(e); wup(e);
+    check('a normal press (the focus stays on the bar, as in Chromium): pointerdown focuses once and the pointerup adds no second call', f.length === 1 && e.doc.activeElement === e.s.input);
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync(); f = withFocusSpy(e);
+    down(e); e.doc.activeElement = e.s.play; wcancel(e); wup(e);
+    check('a pointercancel ends the press without a focus: the later pointerup takes nothing', f.length === 1 && e.doc.activeElement === e.s.play);
+    e = build({ layers: [L()], timeline: tlOf([0]), active: 0 }); e.sync(); f = withFocusSpy(e);
+    down(e); wup(e);
+    check('a DISABLED bar: neither the pointerdown nor the pointerup focuses it', f.length === 0 && e.doc.activeElement === null);
+    // the source
+    const src = TLJS.replace(/\/\/[^\n]*/g, '');
+    const h = (src.match(/input\.addEventListener\('pointerdown', function \(\) \{([\s\S]*?)\n  \}\);/) || [, ''])[1];
+    check('ui-timeline.js: the pointerdown handler sets interacting and pressed and takes the focus; takeFocus() focuses with { preventScroll: true } unless the bar is disabled or already focused; no preventDefault in the handlers; the window pointerup takes it again only after a press', /interacting = true; pressed = true;/.test(h) && /takeFocus\(\);/.test(h) && /function takeFocus\(\) \{ if \(!UI\.isDisabled\(input\) && document\.activeElement !== input\) input\.focus\(\{ preventScroll: true \}\); \}/.test(src) && !/preventDefault/.test(h) && (src.match(/input\.focus\(/g) || []).length === 1 && /window\.addEventListener\('pointerup', function \(\) \{ interacting = false; if \(pressed\) \{ pressed = false; takeFocus\(\); \} \}\)/.test(src) && /window\.addEventListener\('pointercancel', function \(\) \{ interacting = false; pressed = false; \}\)/.test(src), h.replace(/\s+/g, ' ').slice(0, 160));
+});
+
+T('the scrub bar\'s focus ring', () => {
+    // Why the bar showed no ring (Safari and Chromium, a real Tab: :focus-visible matched, outline-style none): index.html's inline `input[type="range"] { outline: none }` comes AFTER style.css and has the
+    // same specificity (0,1,1) as the global `input:focus-visible` rule, so it won. The bar's own rule has the higher specificity (0,3,0) and the buttons' tokens.
+    const rules = text => { const out = []; const t = text.replace(/\/\*[\s\S]*?\*\//g, ''); const re = /([^{}]+)\{([^{}]*)\}/g; let m; while ((m = re.exec(t))) out.push({ sel: m[1].trim().replace(/^@media[^{]*\{\s*/, ''), decl: m[2].trim() }); return out; };
+    const spec = sel => { let s = sel.replace(/::?[a-z-]+\(([^)]*)\)/g, (x, inner) => (/^:(not|has|is|where)/.test(x) ? ' ' + inner + ' ' : x));   // :not() / :has() count their argument
+        const ids = (s.match(/#[\w-]+/g) || []).length, cls = (s.match(/\.[\w-]+|\[[^\]]*\]|:(?!:)[a-z-]+/g) || []).length, typ = (s.replace(/\[[^\]]*\]|[.#:][\w-]+/g, ' ').match(/(^|[\s>+~])[a-z][\w-]*/gi) || []).length + (s.match(/::[a-z-]+/g) || []).length; return [ids, cls, typ]; };
+    const cmp = (a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+    const inline = (HTML.match(/<style>([\s\S]*?)<\/style>/g) || []).map(x => x.replace(/<\/?style>/g, '')).join('\n');
+    const all = rules(CSS).map(r => Object.assign(r, { src: 'style.css' })).concat(rules(inline).map(r => Object.assign(r, { src: 'index.html' })));
+    const declsOf = r => r.decl.split(';').map(x => x.trim()).filter(Boolean).map(x => x.replace(/\s+/g, ' ')).sort();
+    const glob = all.find(r => r.src === 'style.css' && /^a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible$/.test(r.sel.replace(/\s+/g, ' ')));
+    const own = all.find(r => r.src === 'style.css' && r.sel.replace(/\s+/g, ' ') === '.timeline-strip .ts-range:focus-visible');
+    const onBar = all.find(r => r.src === 'style.css' && r.sel.replace(/\s+/g, ' ') === '.timeline-strip .ts-bar:has(> .ts-range:focus-visible)');
+    check('the buttons\' ring is the global rule (2px solid var(--color-text), offset 2px) and the bar has a :focus-visible rule of its own with EXACTLY the same two declarations (same width, style, token, offset)', !!glob && !!own && J(declsOf(glob)) === J(['outline-offset: 2px', 'outline: 2px solid var(--color-text)'].sort()) && J(declsOf(own)) === J(declsOf(glob)), glob && own ? J(declsOf(own)) : 'missing');
+    check('...and the same ring on the .ts-bar around it (the same box: the ring stays opaque when the input is aria-disabled and 0.4 transparent: 0.4 black on white is 2.85:1)', !!onBar && J(declsOf(onBar)) === J(declsOf(glob)) && !all.some(r => /\.ts-bar\b/.test(r.sel) && !/\.ts-range/.test(r.sel) && /\bopacity\s*:/.test(r.decl)) && /\.ts-range\[aria-disabled="true"\]\s*\{[^}]*opacity:\s*0\.4/.test(CSS));
+    check('the rules only draw an outline: nothing that takes space (no border, margin, padding, width, height, display, position), so nothing shifts', [own, onBar].every(r => !!r && declsOf(r).every(x => /^outline(-offset)?:/.test(x))));
+    check('the bar is :focus-visible, not :focus (no ring after a mouse click is the browser\'s rule): no .ts-range:focus rule', !/\.ts-range:focus(?!-visible)/.test(CSS) && !/\.ts-range:focus(?!-visible)/.test(inline));
+    const killers = all.filter(r => /\boutline\s*:\s*(none|0)\b/.test(r.decl) || /\boutline-style\s*:\s*none/.test(r.decl)).filter(r => r.sel.split(',').some(s => { s = s.trim(); return /^(\*|input|input\[type="range"\])$/.test(s) || /(^|[\s>])\.ts-range\b/.test(s) || /\.timeline-strip\b/.test(s) || /\.ts-bar\b/.test(s) || /#timeline-strip\b/.test(s); }));
+    const specs = killers.flatMap(r => r.sel.split(',').map(s => ({ src: r.src, sel: s.trim().replace(/\s+/g, ' '), s: spec(s.trim()), important: /!important/.test(r.decl) })));
+    const ownSpec = own ? spec(own.sel) : [0, 0, 0];
+    check('every rule that removes an outline and can match the bar (the two `input[type="range"] { outline: none }`, in style.css and in index.html) is found, none is !important, and the bar\'s rule beats each of them in specificity (0,3,0 against 0,1,1)', specs.length >= 2 && specs.some(x => x.src === 'index.html') && specs.every(x => !x.important && cmp(ownSpec, x.s) > 0), J(specs.map(x => x.src + ' ' + x.sel + ' ' + x.s.join(','))) + ' own ' + ownSpec.join(','));
+    check('the ring rule sits after nothing that could still beat it: the bar\'s rule is not weaker than the global one (0,1,1) and uses no !important', own && !/!important/.test(own.decl) && cmp(ownSpec, spec('input:focus-visible')) > 0);
+});
+
+T('the net state colours', () => {
+    // "none" (no keyframe has a net captured) is the normal state of a timeline that never uses a net, so it is grey like "constant" and "pending", not red like an error. Red is for "incompatible"
+    // only, orange for "partial", green for "animated". The "no net" label of a keyframe is the secondary grey. Source text of style.css (the text, the model and the dot are not touched).
+    const css = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+    const ruleFor = st => { const out = []; const re = /([^{}]+)\{([^{}]*)\}/g; let m; while ((m = re.exec(css))) if (m[1].split(',').some(s => s.trim() === '#timeline-net-state[data-state="' + st + '"]')) out.push({ sels: m[1].split(',').map(s => s.trim()), decl: m[2].replace(/\s+/g, ' ').trim() }); return out; };
+    const only = st => { const r = ruleFor(st); return r.length === 1 ? r[0] : null; };
+    const GREY = 'border-left-color: #888; background: #f4f4f4;', RED = 'border-left-color: #c0392b; background: #fbeae8;', ORANGE = 'border-left-color: #d9822b; background: #fdf1e3;', GREEN = 'border-left-color: #2e8b57; background: #eaf6ee;';
+    const states = ['none', 'partial', 'pending', 'incompatible', 'constant', 'animated'];
+    check('every state has exactly ONE rule (nothing later overrides it): ' + states.join(', '), states.every(s => ruleFor(s).length === 1), states.map(s => s + ':' + ruleFor(s).length).join(' '));
+    const n = only('none');
+    check('"none" is in the GREY rule (border-left-color #888, background #f4f4f4), shared with "constant" and "pending", and in no red rule', !!n && n.decl === GREY && n.sels.includes('#timeline-net-state[data-state="constant"]') && n.sels.includes('#timeline-net-state[data-state="pending"]'), n && n.decl);
+    check('"incompatible" is in the RED rule (#c0392b, #fbeae8) alone; "partial" is ORANGE (#d9822b, #fdf1e3); "animated" is GREEN (#2e8b57, #eaf6ee); "pending" and "constant" are grey', (r => !!r && r.decl === RED && r.sels.length === 1)(only('incompatible')) && (only('partial') || {}).decl === ORANGE && (only('animated') || {}).decl === GREEN && (only('pending') || {}).decl === GREY && (only('constant') || {}).decl === GREY);
+    check('the red #c0392b is used by exactly one rule in style.css: the "incompatible" one (not the keyframe label any more)', (CSS.match(/#c0392b/gi) || []).length === 1 && /data-state="incompatible"\]\s*\{[^}]*#c0392b/.test(css));
+    const kf = (css.match(/\.kf-no-net\s*\{([^}]*)\}/) || [, null])[1];
+    check('.kf-no-net ("1. Layer 1 · no net" in the keyframe list) uses the secondary token, var(--color-secondary), and no hard-coded colour', kf !== null && kf.replace(/\s+/g, ' ').trim() === 'color: var(--color-secondary);', String(kf));
+    const hex = name => ((CSS.match(new RegExp('--' + name + ':\\s*(#[0-9a-fA-F]{6})')) || [, null])[1]);
+    const lum = h => { const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+    const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+    const sec = hex('color-secondary'), bg = hex('color-bg'), r = sec && bg ? ratio(sec, bg) : 0;
+    check('the secondary token on the page background (the keyframe list sits on it) reaches 4.5:1 (light scheme): ' + sec + ' on ' + bg + ' = ' + r.toFixed(2) + ':1', r >= 4.5 && r < 4.7, r.toFixed(3));
+    check('the Include net dot is unchanged: only "partial" and "incompatible" show it, "none" does not (the model)', ['partial', 'incompatible'].every(s => mctx.timelineModel.netStateDot({ state: s }) === true) && ['none', 'pending', 'constant', 'animated'].every(s => mctx.timelineModel.netStateDot({ state: s }) === false) && mctx.timelineModel.netStateDot(null) === false);
 });
 
 T('diamonds', () => {
@@ -310,7 +519,7 @@ T('source', () => {
     // ui-timeline.js
     const code = TLJS.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
     check('ui-timeline.js has no p5 binding (no mousePressed, no select(), no mousedown listener), writes no sketch state (no assignment to timeline / activeLayer / additionalLayers) and calls ONLY window.layerApi for actions (play, setProgress, toggleIncludeNet, clearTimeline) and reads includeNet', !/mousePressed|[^.\w]select\(|addEventListener\('mousedown'/.test(code) && !/(^|[;{}\n])\s*(timeline|activeLayer|additionalLayers)\s*=[^=]/.test(code) && ['play', 'setProgress', 'toggleIncludeNet', 'clearTimeline', 'includeNet'].every(m => new RegExp('api\\(\\)\\.' + m + '\\(').test(code)) && ['UI.guard(', 'UI.name(', 'UI.setDisabled(', 'UI.dialog(', 'UI.onSync('].every(x => code.includes(x)));
-    check('ui-timeline.js: exactly ONE Include net switch is built (one .ts-net), the thumb is guarded while the person drags or holds a key (pointerdown / keydown set, pointerup / pointercancel / keyup / blur clear), Play and the scrub bar are disabled with UI.setDisabled and the reason', (code.match(/btn\('ts-net'/g) || []).length === 1 && /input\.addEventListener\('pointerdown', function \(\) \{ interacting = true; \}\)/.test(code) && /input\.addEventListener\('keydown', function \(\) \{ interacting = true; \}\)/.test(code) && /\['pointerup', 'pointercancel', 'keyup', 'blur'\]/.test(code) && /if \(!interacting\)/.test(code) && /UI\.setDisabled\(playBtn, reason\);/.test(code) && /UI\.setDisabled\(input, reason\);/.test(code));
+    check('ui-timeline.js: exactly ONE Include net switch is built (one .ts-net), the thumb is guarded while the person drags or holds a key (pointerdown / keydown set, pointerup / pointercancel / keyup / blur clear), Play and the scrub bar are disabled with UI.setDisabled and the reason', (code.match(/btn\('ts-net'/g) || []).length === 1 && /input\.addEventListener\('pointerdown', function \(\) \{\s*interacting = true;/.test(code) && /input\.addEventListener\('keydown', function \(e\) \{\s*interacting = true;/.test(code) && /\['pointerup', 'pointercancel', 'keyup', 'blur'\]/.test(code) && /if \(!interacting\)/.test(code) && /UI\.setDisabled\(playBtn, reason\);/.test(code) && /UI\.setDisabled\(input, reason\);/.test(code));
     check('ui-layers.js: the diamond calls select THEN addToTimeline (in that order), removes through layerApi.removeKeyframe, asks through timelineConfirm only when diamondPlan says needsConfirm, shows NO toast and does not read #timeline-status (the refusal is a notice from sketch.js), and never writes sketch state', /api\(\)\.select\(index\);\s*api\(\)\.addToTimeline\(\);/.test(LAYERS) && /api\(\)\.removeKeyframe\(index\)/.test(LAYERS) && /if \(!plan\.needsConfirm \|\| !root\.timelineConfirm\)/.test(LAYERS) && !/UI\.toast\(|UI\.notify\(|timeline-status/.test(LAYERS.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')) && !/(^|[;{}\n])\s*(activeLayer|additionalLayers|timeline)\s*=[^=]|\.enabled\s*=[^=]/.test(LAYERS));
     // the sketch.js block
     const bi = SKETCH.indexOf('    // layerApi: begin'), ei = SKETCH.indexOf('    // layerApi: end\n');
