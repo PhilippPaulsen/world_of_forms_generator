@@ -141,11 +141,11 @@ label { touch-action: manipulation; }
 
 /* Phase 2 (touch), track A, commit B: the coarse-pointer minimum target (--target, 48px). Only under (pointer: coarse): a mouse keeps every size it has.
    What was below it at 375px (measured, scratchpad/ta-results/baseline/small-375.json): the header tab "Netz" (47.8px wide: text + 2 x 4px padding; all three tabs are
-   one bar high, 71px inside the header's 1px border), every .layer-btn / .icon-btn of the layer row (40px high), the layer remove button (22px high, squeezed to
-   10.8px wide by flex-shrink), the layer checkbox (24 x 13), the layer number fields (60 x 40), the selects (32px), the layer progress slider (6px), the export format and close buttons
+   one bar high, 71px inside the header's 1px border), every .layer-btn / .icon-btn of the old layer row (40px high), the layer remove button (22px high, squeezed to
+   10.8px wide by flex-shrink), the old layer checkbox (24 x 13), the layer number fields (60 x 40), the selects (32px), the layer progress slider (6px), the export format and close buttons
    (39-45px high), the node count / size / anchor hue number fields inside a stepper (28px high), and the two <a class="icon-btn"> links Gallery and Farborgel (content-box:
-   40px + border = 42px). The layer row is only made to WRAP and reach the minimum - not redesigned (that is 5c / 5d); Gallery and Farborgel are replaced by the organ
-   strip in 5b and only get their size. The one documented exception that stays below 48px: the stepper chevron halves (24px, WCAG 2.5.8, see .stepper). The ::before / ::after of the checkbox below draw its box (its selector carries input[type="checkbox"] to out-rank index.html's `input[type="range"], input[type="checkbox"] { width: 100% }`). */
+   40px + border = 42px). (The old layer row and its checkbox are gone: the layer table, rail and strip replaced them.) Gallery and Farborgel are replaced by the organ
+   strip in 5b and only get their size. The one documented exception that stays below 48px: the stepper chevron halves (24px, WCAG 2.5.8, see .stepper). */
 @media (pointer: coarse) {
   .app-tabs a { min-width: var(--target); justify-content: center; }
   .icon-btn,
@@ -160,7 +160,6 @@ label { touch-action: manipulation; }
   .layer-btn,
   .layer-remove-btn { flex: none; white-space: nowrap; }
   .icon-row { flex-wrap: wrap; }
-  #layer-tabs { display: contents; }
   .layer-tab { flex: none; }
   #timeline-keyframe-list { flex-wrap: wrap; }
   .pairing-row { flex-wrap: wrap; }          /* label + 5 buttons at --target do not fit a 320px row */
@@ -173,45 +172,6 @@ label { touch-action: manipulation; }
   html .stepper > input[type="number"],
   html .stepper > .stepper-display { align-self: stretch; width: var(--target); min-width: var(--target); }
   html .stepper > .stepper-display { display: flex; align-items: center; justify-content: center; }
-  input[type="checkbox"].layer-enable-checkbox {
-    -webkit-appearance: none;
-    appearance: none;
-    position: relative;
-    flex: none;
-    width: var(--target);
-    height: var(--target);
-    margin: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    cursor: pointer;
-  }
-  input[type="checkbox"].layer-enable-checkbox::before {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 22px;
-    height: 22px;
-    margin: -11px 0 0 -11px;
-    box-sizing: border-box;
-    border: 1px solid var(--color-text);
-    border-radius: 4px;
-    background: var(--color-bg);
-  }
-  input[type="checkbox"].layer-enable-checkbox:checked::before { background: var(--color-text); }
-  input[type="checkbox"].layer-enable-checkbox:checked::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 6px;
-    height: 11px;
-    margin: -8px 0 0 -3px;
-    border: solid var(--color-bg);
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-  }
 }
 
 /* iOS Safari zooms the page when a field with a font size below 16px takes focus (#face-colors-rule, #timeline-pairing-segment and
@@ -256,9 +216,6 @@ label { touch-action: manipulation; }
    where it was before the wrapper existed; [hidden] must be restated because display: contents would win over the attribute. */
 #layer-more-panel { display: contents; }
 #layer-more-panel[hidden] { display: none; }
-/* The toggle row takes its own line in #controls-container (a centred flex-wrap row): were it an ordinary item, opening and closing the block would re-centre the line it shares
-   with the layer row and the timeline and move those sideways (measured: 44-54 px at 1440). */
-#layer-more-row { flex-basis: 100%; justify-content: center; }
 
 /* Layer "Mehr" block, step 1b-1: the shape icons, the node count and size steppers, the fold buttons, Align to base and the mesh presets use the SAME markup and classes as the Form row
    (.nav-cluster, .ico, .stepper, .stepper-btn, .icon-btn). Three things in the Form row's CSS are scoped to .nav-row or lose to a rule that only applies inside .control-group, so
@@ -487,8 +444,8 @@ body.dark {
 #face-colors-unassigned-text { flex: 1; }
 #face-colors-timeline-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
 #face-colors-timeline-note[hidden] { display: none; }
-#net-focus-hint, #net-size-hint, #net-free-note, #net-macro-hint, #net-macro-note, #net-field-hint, #net-field-info, #net-field-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
-#net-focus-hint[hidden], #net-focus-row[hidden], #net-size-hint[hidden], #net-free-note[hidden], #net-field-hint[hidden], #net-field-info[hidden], #net-field-note[hidden], #net-macro-hint[hidden], #net-macro-note[hidden], #net-macro-row[hidden], #net-alternate-btn[hidden], #net-geo-row[hidden], #net-group[hidden], #net-strength-row[hidden] { display: none; }
+#net-focus-hint, #net-size-hint, #net-macro-hint, #net-field-hint, #net-field-info { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
+#net-focus-hint[hidden], #net-focus-row[hidden], #net-size-hint[hidden], #net-field-hint[hidden], #net-field-info[hidden], #net-macro-hint[hidden], #net-macro-row[hidden], #net-alternate-btn[hidden], #net-geo-row[hidden], #net-group[hidden], #net-strength-row[hidden] { display: none; }
 #net-macro-row { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
 #net-focus-row, #net-strength-row { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
 #net-group .icon-row { flex-wrap: wrap; justify-content: center; }
@@ -500,16 +457,12 @@ body.dark {
   #btn-toggle-curve[aria-disabled="true"]:hover, #btn-toggle-free[aria-disabled="true"]:hover, #btn-toggle-faces[aria-disabled="true"]:hover { background: var(--background); }
 }
 
-.limit-note { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
-.limit-note[hidden] { display: none; }
-
-#timeline-net-warning { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #d9822b; background: #fdf1e3; }
 #timeline-net-state { font-size: 12px; margin: 2px 0; padding: 3px 6px; border-left: 3px solid #888; background: #f4f4f4; }
 #timeline-net-state[data-state="animated"] { border-left-color: #2e8b57; background: #eaf6ee; }
 #timeline-net-state[data-state="none"], #timeline-net-state[data-state="incompatible"] { border-left-color: #c0392b; background: #fbeae8; }
 #timeline-net-state[data-state="partial"] { border-left-color: #d9822b; background: #fdf1e3; }
 #timeline-net-state[data-state="constant"], #timeline-net-state[data-state="pending"] { border-left-color: #888; background: #f4f4f4; }
-#timeline-net-warning[hidden], #timeline-net-state[hidden] { display: none; }
+#timeline-net-state[hidden] { display: none; }
 .kf-no-net { color: #c0392b; }
 
 /* === UI rework 4a: header, tabs, nav rows ===============================
@@ -1294,10 +1247,7 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
    The phone view of the same model: two rows of --target buttons with 8px gaps, left-aligned at the gutter (.canvas-row's 16px padding), directly under the canvas. Shown below 768px for
    BOTH pointer types (from 768px the rail or the table shows). Row 1 (.lr-g1) = the Base chip and "+" (fixed) around the layer chips, which scroll SIDEWAYS (.lr-chips: overflow-x: auto, no
    scrollbar, 4px of padding and an equal negative margin so the focus ring of an edge chip is not clipped); row 2 (.lr-g2) = the eye, "..." and the remove x of the active sheet (a
-   fourth slot is for the diamond, a later commit). It is a flex item of .canvas-row (the phone's wrapping flex row) and takes a full line; the tool rail's rows follow it. The old layer row
-   (#layer-row, #layer-more-row) is hidden at EVERY width now (below); its DOM stays until a later commit, its handlers are what layerApi runs. */
-#layer-row, #layer-more-row { display: none; }
-#layer-row-group:has(> #paste-pattern-status:empty) { display: none; }
+   fourth slot is for the diamond, a later commit). It is a flex item of .canvas-row (the phone's wrapping flex row) and takes a full line; the tool rail's rows follow it. The old layer row is gone: the strip, the rail and the table replaced it. */
 .layer-strip { display: none; }
 @media (max-width: 767px) {
   .layer-strip {
@@ -1329,10 +1279,9 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
    strip: the DOM order); from 768px it is the SECOND grid row, in the canvas column, as wide as the canvas (--canvas-size) and centred: the canvas row stays where it was (row 1), so the canvas
    does not move. The buttons are --target high (36px fine, 48px coarse: .canvas-row .icon-btn); the bar takes the rest. The scrub bar is a real <input type="range"> as high as a button
    (a touch target) with the slider look of the other sliders (6px track, 14px thumb); the diamond marks sit on top of it at their time positions (decorative: aria-hidden, no pointer events),
-   computed from --f (0..1) over the track's length, which is the bar minus the thumb. The old timeline controls are hidden for good here (their DOM stays until a later commit; their handlers
-   are what layerApi runs): Add to Timeline (the layers' diamonds replace it), the old Include net, the old Play row, the old progress input and Remove Timeline. #timeline-group (the keyframe
-   list, the net status, the pairing editor, the status line, "Zeitleiste entfernen") is shown only while "Mehr" is open. */
-#btn-add-to-timeline, #btn-timeline-include-net, #timeline-playback-controls, #timeline-progress-input, #btn-remove-timeline { display: none; }
+   computed from --f (0..1) over the track's length, which is the bar minus the thumb. The old timeline controls (Add to Timeline, Include net, the Play row, the progress input, Remove Timeline) are gone: the layers' diamonds,
+   this strip and "Zeitleiste entfernen" replaced them. #timeline-group (the keyframe list, the net status, the pairing editor, the status line, "Zeitleiste entfernen") is shown only while
+   "Mehr" is open. */
 #timeline-group:not(.ts-open) { display: none; }
 .timeline-strip {
   display: flex;
