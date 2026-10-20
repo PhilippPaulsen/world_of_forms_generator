@@ -95,8 +95,9 @@ function build(o) {
          g.getBoundingClientRect = () => ({ top: gRects[k][0], bottom: gRects[k][1], left: 0, right: 100 }); });
     [gHidden, gNoRects, gA, gB].forEach(g => group.appendChild(g));
     const clock = { t: 0 }, calls = [], moq = [];
+    const timers = []; let tseq = 0;   // a controllable setTimeout: nothing runs until a test calls fire() (timers[0] first, as the earliest due)
     const layers = o.layers || [];
-    const ctx = vm.createContext({ document: doc, console, MutationObserver: class { constructor(cb) { this.cb = cb; } observe(el) { el.onClass = () => { moq.push(this.cb); }; } }, setTimeout: () => 0, clearTimeout() { }, performance: { now: () => clock.t } });
+    const ctx = vm.createContext({ document: doc, console, MutationObserver: class { constructor(cb) { this.cb = cb; } observe(el) { el.onClass = () => { moq.push(this.cb); }; } }, setTimeout: (fn, ms) => { timers.push({ id: ++tseq, fn, ms }); return tseq; }, clearTimeout: id => { const k = timers.findIndex(t => t.id === id); if (k >= 0) timers.splice(k, 1); }, performance: { now: () => clock.t } });
     ctx.window = ctx; ctx.matchMedia = q => ({ matches: !!o.reduced && /prefers-reduced-motion:\s*reduce\b/.test(q) }); ctx.scrollBy = opts => { scrolls.push(opts); }; ctx.innerWidth = 800; ctx.innerHeight = 900; ctx.addEventListener = (t, fn) => { (ctx.__wl = ctx.__wl || {})[t] = (ctx.__wl[t] || []).concat(fn); };
     ctx.additionalLayers = layers; ctx.activeLayer = o.active === undefined ? 'base' : o.active; ctx.timeline = o.timeline === undefined ? null : o.timeline;
     ctx.millis = () => clock.t;
@@ -133,7 +134,8 @@ function build(o) {
     const s = tstrip ? { play: tstrip.children[0], bar: tstrip.children[1], net: tstrip.children[2], more: tstrip.children[3], marks: () => tstrip.children[1].children[0].children, input: tstrip.children[1].children[1] } : null;
     const rcell = key => { const g1 = rail.children[0].children, g2 = rail.children[1].children; for (const b of [g1[0]].concat(g1[1].children, [g1[2]], g2)) if (b.dataset.key === key) return b; return null; };
     const tcell = key => { for (const r of [table.children[0]].concat(table.children[1].children)) for (const b of r.children) if (b.dataset.key === key) return b; return null; };
-    return { ctx, doc, byId, calls, layers, clk, sync, s, rail, table, rcell, tcell, status, toastEl, group, clearBtn, lrd, tcd, clock, moq, scrolls };
+    const fire = () => { const t = timers.shift(); if (t) t.fn(); return !!t; };
+    return { ctx, doc, byId, calls, layers, timers, fire, clk, sync, s, rail, table, rcell, tcell, status, toastEl, group, clearBtn, lrd, tcd, clock, moq, scrolls };
 }
 const L = x => Object.assign({ connections: [], enabled: true }, x || {});
 const tlOf = (ids, extra) => Object.assign({ keyframeLayerIds: ids.slice(), playbackLayerIndex: ids.length > 1 ? 99 : null, segmentDurationsMs: ids.slice(1).map(() => 2000), segmentPairings: ids.slice(1).map(() => null), segmentFlips: ids.slice(1).map(() => null), segmentMembers: ids.slice(1).map(() => null), netStates: ids.map(() => null), elapsedMs: 0, playing: false, startTime: null }, extra || {});
@@ -194,6 +196,58 @@ T('strip', () => {
     check('...Cancel closes it without clearing and the focus returns to the button that opened it', e.calls.length === 0 && e.tcd.ov.classList.contains('hidden') && e.doc.activeElement === e.clearBtn);
     e.clk(e.clearBtn); e.clk(e.tcd.k);
     check('...Confirm calls layerApi.clearTimeline() once and closes the dialog', J(e.calls) === J([['clearTimeline']]) && e.tcd.ov.classList.contains('hidden') && e.ctx.timeline === null);
+});
+
+T('the end of a playback', () => {
+    // sketch.js's draw() syncs the strip at its START and noLoop() follows the draw that ends the playback, so no sync runs after timeline.playing turns false: ui-timeline.js arms ONE timer
+    // for the end (due when the playback ends + 50 ms) that only calls sync(). The fake layerApi.play toggles timeline.playing, like the real one; sketch.js's draw is simulated by the test.
+    const isPlay = e => /M7 5/.test(e.s.play.innerHTML) && !/rect/.test(e.s.play.innerHTML), isPause = e => /rect/.test(e.s.play.innerHTML);
+    const start = (e, at) => { e.clock.t = at; e.ctx.timeline.startTime = at; e.clk(e.s.play); };   // the click: layerApi.play() (playing = true) and the sync after it
+    let e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 });
+    e.sync(); e.sync();
+    check('no timer while the timeline does not play (two syncs, nothing pending)', e.timers.length === 0);
+    start(e, 500);
+    check('Play arms exactly ONE timer, due at the end: 2000 - (500 - 500) + 50 = 2050 ms; the button is Pause', e.timers.length === 1 && e.timers[0].ms === 2050 && e.s.play.getAttribute('aria-label') === 'Pause' && isPause(e), J(e.timers.map(t => t.ms)));
+    e.clock.t = 900; e.sync(); e.sync(); e.sync();
+    check('...further syncs while it plays (the draw loop: one per frame) arm no second one', e.timers.length === 1);
+    // the end: draw() ends the playback (applyTimelineFrame: playing = false, elapsedMs = total) and noLoop() follows; no sync runs
+    e.clock.t = 2500; e.ctx.timeline.playing = false; e.ctx.timeline.elapsedMs = 2000;
+    check('the playback ended and NO sync ran yet: the button still says Pause (the defect)', e.s.play.getAttribute('aria-label') === 'Pause' && isPause(e));
+    const callsBefore = J(e.calls);
+    check('the timer fires: the name is "Abspielen" and the icon is Play (no pause bars)', e.fire() === true && e.s.play.getAttribute('aria-label') === 'Abspielen' && isPlay(e));
+    check('...nothing is re-armed, the thumb is at 1, and the timer called nothing of layerApi', e.timers.length === 0 && e.s.input.value === '1' && J(e.calls) === callsBefore, J(e.timers.map(t => t.ms)));
+    // a second Play press (from the end the real toggle restarts at 0)
+    e.ctx.timeline.elapsedMs = 0; start(e, 3000);
+    check('a second Play press arms exactly ONE timer again (2050 ms) and the button is Pause', e.timers.length === 1 && e.timers[0].ms === 2050 && isPause(e));
+    // the timer fires while the playback still runs (a late frame, a hidden tab): it re-arms once and does not flip the icon
+    e.clock.t = 5200; e.fire();
+    check('the timer fires while the playback STILL runs (no draw ended it yet): still Pause, ONE new timer (50 ms: nothing is left of the playback)', e.timers.length === 1 && e.timers[0].ms === 50 && isPause(e) && e.s.play.getAttribute('aria-label') === 'Pause', J(e.timers.map(t => t.ms)));
+    e.ctx.timeline.playing = false; e.fire();
+    check('...and when it fires after the end the button flips and nothing is pending', isPlay(e) && e.timers.length === 0);
+    // a pause in the middle
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 });
+    start(e, 0);
+    const stale = e.timers[0].fn;   // the callback the pause must neutralise
+    e.clock.t = 700; e.clk(e.s.play);
+    check('a pause in the middle (a second click: playing false) cancels the pending timer and the button is Play', e.timers.length === 0 && isPlay(e) && e.s.play.getAttribute('aria-label') === 'Abspielen', J(e.timers.map(t => t.ms)));
+    e.clock.t = 800; e.clk(e.s.play);
+    check('...Play again after the pause arms exactly ONE new timer, due for what is left of the playback: 2000 - (800 - 0) + 50 = 1250 ms (the cancel left no stale handle behind)', e.timers.length === 1 && e.timers[0].ms === 1250 && isPause(e), J(e.timers.map(t => t.ms)));
+    e.clk(e.s.play);   // paused again; the callback queued BEFORE the first pause is now stale
+    const snap = () => J([e.s.play.innerHTML, e.s.play.getAttribute('aria-label'), e.s.input.value, e.s.input.getAttribute('aria-valuetext'), e.calls.length, e.timers.length]);
+    const before = snap(); stale();
+    check('...and even a callback that was already queued (called by hand) writes nothing: it only syncs the state it reads', snap() === before && e.timers.length === 0);
+    e.fire();
+    check('...fire() with nothing pending does nothing', snap() === before);
+    // the timeline is cleared / loses a keyframe while it plays
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 });
+    start(e, 0); e.ctx.timeline = null; e.sync();
+    check('a timeline that disappears while it plays (cleared): the timer is cancelled, Play is disabled and shows Play', e.timers.length === 0 && isPlay(e) && e.s.play.getAttribute('aria-disabled') === 'true');
+    // the due time follows the sum of the durations
+    e = build({ layers: [L(), L(), L()], timeline: tlOf([0, 1, 2]), active: 0 });
+    e.ctx.timeline.segmentDurationsMs = [1000, 3000]; start(e, 400);
+    check('the due time is the SUM of the segment durations (1000 + 3000) minus what has run: 4000 + 50 = 4050 ms', e.timers.length === 1 && e.timers[0].ms === 4050, J(e.timers.map(t => t.ms)));
+    check('the scrub bar during a running playback still works: an input calls layerApi.setProgress and the playback pauses (the timer is cancelled by that sync)', (e.s.input.value = '0.5', e.s.input.dispatch('input'), e.calls.some(c => c[0] === 'setProgress' && c[1] === 0.5) && e.ctx.timeline.playing === false && e.timers.length === 0 && isPlay(e)));
+    check('ui-timeline.js arms the timer in sync() only, with ONE variable for it, and the callback only calls sync()', (() => { const src = TLJS.replace(/\/\/[^\n]*/g, ''); return (src.match(/setTimeout\(/g) || []).length === 1 && /endTimer = setTimeout\(function \(\) \{ endTimer = null; sync\(\); \}/.test(src) && (src.match(/armEnd\(/g) || []).length === 2; })());
 });
 
 T('diamonds', () => {

@@ -2332,7 +2332,8 @@ function draw() {
     // per-layer loop just above - applyTimelineFrame() may itself flip
     // timeline.playing to false (reaching the end), which
     // syncAnimationLoopState() needs to see this same frame, not one
-    // frame late. (The timeline strip follows the playback by itself: its own sync runs at the start of every draw.)
+    // frame late. (The timeline strip's own sync runs at the start of every draw, but NOT after the last frame: the draw that ends the playback
+    // is followed by noLoop(). ui-timeline.js therefore arms one timer for the end of a playback and syncs when it fires.)
     if (timeline && timeline.playing) applyTimelineFrame();
     syncAnimationLoopState();
     if (activeLayer !== 'base' && additionalLayers[activeLayer] && additionalLayers[activeLayer].animation) {

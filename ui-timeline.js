@@ -150,10 +150,19 @@
   UI.name(moreBtn, T['timeline.more']);
   UI.name(netBtn, T['timeline.net.auto.off']);
 
-  let tlNow = null, interacting = false, moreOpen = false, sigNow = null, marksKey = null, lastNet = '', lastPlaying = null, lastValue = null;
+  let tlNow = null, interacting = false, moreOpen = false, sigNow = null, marksKey = null, lastNet = '', lastPlaying = null, lastValue = null, endTimer = null;
   function timelineNow() { return typeof timeline !== 'undefined' ? timeline : null; }
   function clock() { return typeof millis === 'function' ? millis() : (typeof performance !== 'undefined' ? performance.now() : 0); }
   function sync() { /* assigned below */ }
+  // The end of a playback: draw() syncs at its START, and the draw that ends the playback is followed by noLoop(), so no sync runs once timeline.playing is false and the Play button
+  // would keep its Pause icon and name. While the timeline plays, ONE timer is pending, due when the playback ends plus 50 ms; it only calls sync(), which reads the state (it writes
+  // nothing itself) and arms the next one if the playback still runs. A pause (or any end) cancels it in sync().
+  function armEnd(tl) {
+    let total = 0;
+    for (let i = 0; Array.isArray(tl.segmentDurationsMs) && i < tl.segmentDurationsMs.length; i++) total += tl.segmentDurationsMs[i];
+    const left = total - (clock() - tl.startTime);
+    endTimer = setTimeout(function () { endTimer = null; sync(); }, (left > 0 ? left : 0) + 50);
+  }
 
   UI.guard(playBtn, function () { if (api()) api().play(); sync(); });
   UI.guard(input, function () { });   // a click on the disabled scrub bar shows its reason
@@ -215,6 +224,8 @@
     UI.setDisabled(playBtn, reason);
     UI.setDisabled(input, reason);
     const playing = !!(tl && tl.playing);
+    if (playing && endTimer === null) armEnd(tl);
+    else if (!playing && endTimer !== null) { clearTimeout(endTimer); endTimer = null; }
     if (playing !== lastPlaying) { lastPlaying = playing; playBtn.innerHTML = playing ? ICON.pause : ICON.play; UI.name(playBtn, playing ? T['timeline.pause'] : T['timeline.play']); }
     // the thumb
     if (!interacting) {
