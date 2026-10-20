@@ -166,17 +166,30 @@
 
   UI.guard(playBtn, function () { if (api()) api().play(); sync(); });
   UI.guard(input, function () { });   // a click on the disabled scrub bar shows its reason
-  input.addEventListener('input', function () {
+  function scrub() {   // the ONE path of a new position: the range's own input event and the arrow keys below
     if (UI.isDisabled(input)) { input.value = '0'; return; }
     const p = parseFloat(input.value);
     if (api()) api().setProgress(p);
     lastValue = input.value;   // what the person set is what the thumb shows: the tick does not overwrite it, and the spoken value follows at once
     setIf(input, 'aria-valuetext', Math.round(p * 100) + ' %');
     sync();
-  });
+  }
+  input.addEventListener('input', scrub);
   // the thumb is not overwritten while the person drags it or holds a key on it
   input.addEventListener('pointerdown', function () { interacting = true; });
-  input.addEventListener('keydown', function () { interacting = true; });
+  // The arrow keys move the thumb by 1 % (10 % with Shift). The range's own step is 0.001 (a drag and a playback stay smooth), which is 0.1 % = about half a pixel
+  // and 2 ms of a 2 s timeline per press: nothing a person sees. Home, End, PageUp and PageDown stay native (0, 1, +-10 %). A chord with Ctrl, Alt or Cmd is the browser's
+  // (Alt+Left is Back) and is left alone. A key press goes through scrub(), like an input event, so a running playback pauses at that position.
+  input.addEventListener('keydown', function (e) {
+    interacting = true;
+    const k = e.key;
+    const dir = k === 'ArrowRight' || k === 'ArrowUp' ? 1 : (k === 'ArrowLeft' || k === 'ArrowDown' ? -1 : 0);
+    if (!dir || e.ctrlKey || e.altKey || e.metaKey) return;
+    e.preventDefault();
+    const now = parseFloat(input.value) || 0;
+    input.value = String(Math.max(0, Math.min(1, Math.round((now + dir * (e.shiftKey ? 0.1 : 0.01)) * 1000) / 1000)));
+    scrub();
+  });
   ['pointerup', 'pointercancel', 'keyup', 'blur'].forEach(function (t) { input.addEventListener(t, function () { interacting = false; }); });
   if (typeof window !== 'undefined' && window.addEventListener) { window.addEventListener('pointerup', function () { interacting = false; }); window.addEventListener('pointercancel', function () { interacting = false; }); }
   netBtn.addEventListener('click', function () { if (api()) api().toggleIncludeNet(); sync(); });

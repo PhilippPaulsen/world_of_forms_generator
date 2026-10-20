@@ -250,6 +250,51 @@ T('the end of a playback', () => {
     check('ui-timeline.js arms the timer in sync() only, with ONE variable for it, and the callback only calls sync()', (() => { const src = TLJS.replace(/\/\/[^\n]*/g, ''); return (src.match(/setTimeout\(/g) || []).length === 1 && /endTimer = setTimeout\(function \(\) \{ endTimer = null; sync\(\); \}/.test(src) && (src.match(/armEnd\(/g) || []).length === 2; })());
 });
 
+T('the scrub bar\'s arrow keys', () => {
+    // The range's step is 0.001 (a drag and a playback stay smooth): one native arrow press is 0.1 % = about half a pixel, so the arrows are handled: +-0.01, +-0.1 with Shift.
+    // Home, End, PageUp and PageDown are NOT handled (the browser moves the range to 0, 1 and +-10 %): no preventDefault, no value written.
+    const press = (e, key, o) => { let pd = 0; e.s.input.dispatch('keydown', Object.assign({ key, preventDefault() { pd++; } }, o || {})); return pd; };
+    const fresh = (v, extra) => { const e = build({ layers: [L(), L()], timeline: tlOf([0, 1], extra), active: 0 }); e.sync(); e.s.input.value = String(v); e.calls.length = 0; return e; };
+    const sp = e => e.calls.filter(c => c[0] === 'setProgress').map(c => c[1]);
+    let e = fresh(0);
+    check('ArrowRight from 0: preventDefault, the value 0.01, setProgress(0.01) once (the range\'s own path), the spoken value "1 %"', press(e, 'ArrowRight') === 1 && e.s.input.value === '0.01' && J(sp(e)) === '[0.01]' && e.s.input.getAttribute('aria-valuetext') === '1 %', e.s.input.value + ' ' + J(sp(e)));
+    const dirs = [['ArrowRight', 0.51, '51 %'], ['ArrowUp', 0.51, '51 %'], ['ArrowLeft', 0.49, '49 %'], ['ArrowDown', 0.49, '49 %']];
+    check('from 0.5: Right and Up add 0.01, Left and Down subtract it; each calls preventDefault once and setProgress once, and the spoken value follows', dirs.every(([k, v, t]) => { const x = fresh(0.5); return press(x, k) === 1 && x.s.input.value === String(v) && J(sp(x)) === J([v]) && x.s.input.getAttribute('aria-valuetext') === t; }));
+    check('Shift: +-0.1 in every direction (0.5 to 0.6, 0.4)', [['ArrowRight', '0.6'], ['ArrowUp', '0.6'], ['ArrowLeft', '0.4'], ['ArrowDown', '0.4']].every(([k, v]) => { const x = fresh(0.5); return press(x, k, { shiftKey: true }) === 1 && x.s.input.value === v && J(sp(x)) === J([parseFloat(v)]); }) && fresh(0.5).s.input.getAttribute('aria-valuetext') !== '60 %');
+    check('...and the spoken value after Shift+ArrowRight is "60 %"', (() => { const x = fresh(0.5); press(x, 'ArrowRight', { shiftKey: true }); return x.s.input.getAttribute('aria-valuetext') === '60 %'; })());
+    e = fresh(0);
+    for (let i = 0; i < 10; i++) press(e, 'ArrowRight');
+    check('ten ArrowRight presses from 0 give exactly 0.1 and "10 %" (no float noise: 0.09999999999999999)', e.s.input.value === '0.1' && e.s.input.getAttribute('aria-valuetext') === '10 %' && sp(e).length === 10, e.s.input.value);
+    check('clamping at 1: 0.995 + 0.01 = 1; at 1 the value stays 1 (and still goes through setProgress); Shift at 0.95 = 1', (() => { const a1 = fresh(0.995); press(a1, 'ArrowRight'); const a2 = fresh(1); press(a2, 'ArrowRight'); const a3 = fresh(0.95); press(a3, 'ArrowUp', { shiftKey: true }); return a1.s.input.value === '1' && a2.s.input.value === '1' && J(sp(a2)) === '[1]' && a3.s.input.value === '1' && a1.s.input.getAttribute('aria-valuetext') === '100 %'; })());
+    check('clamping at 0: 0.005 - 0.01 = 0; at 0 the value stays 0; Shift at 0.05 = 0 ("0 %")', (() => { const a1 = fresh(0.005); press(a1, 'ArrowLeft'); const a2 = fresh(0); press(a2, 'ArrowDown'); const a3 = fresh(0.05); press(a3, 'ArrowLeft', { shiftKey: true }); return a1.s.input.value === '0' && a2.s.input.value === '0' && J(sp(a2)) === '[0]' && a3.s.input.value === '0' && a3.s.input.getAttribute('aria-valuetext') === '0 %'; })());
+    // the keys that are NOT ours
+    const others = ['Tab', 'Home', 'End', 'PageUp', 'PageDown', 'Enter', ' ', 'a', 'Shift', 'Escape', 'ArrowRight+'];
+    check('preventDefault is NOT called, the value is not written and setProgress is not called for Tab, Home, End, PageUp, PageDown, Enter, Space, a letter, Shift or Escape', others.every(k => { const x = fresh(0.5); const pd = press(x, k); return pd === 0 && x.s.input.value === '0.5' && sp(x).length === 0; }));
+    check('...nor for an arrow with Ctrl, Alt or Cmd held (Alt+Left is the browser\'s Back) - and a key with no key name at all (the older tests dispatch a bare keydown)', ['ctrlKey', 'altKey', 'metaKey'].every(m => { const x = fresh(0.5); const pd = press(x, 'ArrowLeft', { [m]: true }); return pd === 0 && x.s.input.value === '0.5' && sp(x).length === 0; }) && (() => { const x = fresh(0.5); x.s.input.dispatch('keydown'); return x.s.input.value === '0.5' && sp(x).length === 0; })());
+    // disabled
+    e = build({ layers: [L()], timeline: tlOf([0]), active: 0 }); e.sync(); e.calls.length = 0;
+    const pdD = press(e, 'ArrowRight');
+    check('with ONE keyframe (the bar is aria-disabled) an arrow is swallowed (preventDefault), nothing is called and the thumb stays at 0', pdD === 1 && sp(e).length === 0 && e.s.input.value === '0' && e.calls.length === 0, e.s.input.value + ' ' + J(e.calls));
+    // the interacting flag and a running playback
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 }); e.sync();
+    e.ctx.timeline.playing = true; e.ctx.timeline.startTime = 0; e.clock.t = 1000; e.sync(); e.calls.length = 0;
+    check('playing, the thumb follows the clock (1000 of 2000: 0.5)', e.s.input.value === '0.5');
+    press(e, 'ArrowRight');
+    check('an arrow DURING a playback goes through setProgress(0.51) (the real one pauses the playback there: the fake does as well) and the thumb shows 0.51', J(sp(e)) === '[0.51]' && e.ctx.timeline.playing === false && e.ctx.timeline.elapsedMs === 1020 && e.s.input.value === '0.51');
+    e.ctx.timeline.elapsedMs = 1500; e.clock.t = 3000; e.sync();
+    check('...the key is still down (no keyup): the tick does NOT overwrite the thumb (it would show 0.75 from the timeline)', e.s.input.value === '0.51');
+    press(e, 'ArrowRight'); press(e, 'ArrowRight');
+    check('...a held key (auto-repeat: more keydowns without a keyup) keeps moving it: 0.52, 0.53 - each press adds 0.01 to what is shown, not to what the tick would say', e.s.input.value === '0.53' && J(sp(e)) === '[0.51,0.52,0.53]', e.s.input.value + ' ' + J(sp(e)));
+    e.s.input.dispatch('keyup'); e.ctx.timeline.elapsedMs = 1500; e.sync();
+    check('...after the keyup the tick follows the timeline again (elapsedMs 1500 of 2000: 0.75)', e.s.input.value === '0.75');
+    // blur also ends the guard
+    press(e, 'ArrowLeft'); e.ctx.timeline.elapsedMs = 400; e.s.input.dispatch('blur'); e.sync();
+    check('a blur after a key ends the guard too (the thumb follows the timeline: 400 of 2000: 0.2)', e.s.input.value === '0.2');
+    // the source
+    const src = TLJS.replace(/\/\/[^\n]*/g, '');
+    check('ui-timeline.js: the range\'s step stays 0.001; the arrows add 0.01 (0.1 with Shift) through scrub(), the same function as the range\'s input event; Home, End, PageUp and PageDown are not mentioned in the code', /input\.step = '0\.001'/.test(src) && /input\.addEventListener\('input', scrub\)/.test(src) && /e\.shiftKey \? 0\.1 : 0\.01/.test(src) && /input\.value = String\(Math\.max\(0, Math\.min\(1,/.test(src) && (src.match(/\bscrub\(\);/g) || []).length === 1 && !/['"](Home|End|PageUp|PageDown)['"]/.test(src));
+});
+
 T('diamonds', () => {
     // table: column 3, the Base row has none
     let e = build({ layers: [L(), L(), L({ isTimelinePlayback: true }), L()], timeline: tlOf([0, 1]), active: 'base' });
@@ -364,7 +409,7 @@ T('source', () => {
     // ui-timeline.js
     const code = TLJS.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
     check('ui-timeline.js has no p5 binding (no mousePressed, no select(), no mousedown listener), writes no sketch state (no assignment to timeline / activeLayer / additionalLayers) and calls ONLY window.layerApi for actions (play, setProgress, toggleIncludeNet, clearTimeline) and reads includeNet', !/mousePressed|[^.\w]select\(|addEventListener\('mousedown'/.test(code) && !/(^|[;{}\n])\s*(timeline|activeLayer|additionalLayers)\s*=[^=]/.test(code) && ['play', 'setProgress', 'toggleIncludeNet', 'clearTimeline', 'includeNet'].every(m => new RegExp('api\\(\\)\\.' + m + '\\(').test(code)) && ['UI.guard(', 'UI.name(', 'UI.setDisabled(', 'UI.dialog(', 'UI.onSync('].every(x => code.includes(x)));
-    check('ui-timeline.js: exactly ONE Include net switch is built (one .ts-net), the thumb is guarded while the person drags or holds a key (pointerdown / keydown set, pointerup / pointercancel / keyup / blur clear), Play and the scrub bar are disabled with UI.setDisabled and the reason', (code.match(/btn\('ts-net'/g) || []).length === 1 && /input\.addEventListener\('pointerdown', function \(\) \{ interacting = true; \}\)/.test(code) && /input\.addEventListener\('keydown', function \(\) \{ interacting = true; \}\)/.test(code) && /\['pointerup', 'pointercancel', 'keyup', 'blur'\]/.test(code) && /if \(!interacting\)/.test(code) && /UI\.setDisabled\(playBtn, reason\);/.test(code) && /UI\.setDisabled\(input, reason\);/.test(code));
+    check('ui-timeline.js: exactly ONE Include net switch is built (one .ts-net), the thumb is guarded while the person drags or holds a key (pointerdown / keydown set, pointerup / pointercancel / keyup / blur clear), Play and the scrub bar are disabled with UI.setDisabled and the reason', (code.match(/btn\('ts-net'/g) || []).length === 1 && /input\.addEventListener\('pointerdown', function \(\) \{ interacting = true; \}\)/.test(code) && /input\.addEventListener\('keydown', function \(e\) \{\s*interacting = true;/.test(code) && /\['pointerup', 'pointercancel', 'keyup', 'blur'\]/.test(code) && /if \(!interacting\)/.test(code) && /UI\.setDisabled\(playBtn, reason\);/.test(code) && /UI\.setDisabled\(input, reason\);/.test(code));
     check('ui-layers.js: the diamond calls select THEN addToTimeline (in that order), removes through layerApi.removeKeyframe, asks through timelineConfirm only when diamondPlan says needsConfirm, shows NO toast and does not read #timeline-status (the refusal is a notice from sketch.js), and never writes sketch state', /api\(\)\.select\(index\);\s*api\(\)\.addToTimeline\(\);/.test(LAYERS) && /api\(\)\.removeKeyframe\(index\)/.test(LAYERS) && /if \(!plan\.needsConfirm \|\| !root\.timelineConfirm\)/.test(LAYERS) && !/UI\.toast\(|UI\.notify\(|timeline-status/.test(LAYERS.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')) && !/(^|[;{}\n])\s*(activeLayer|additionalLayers|timeline)\s*=[^=]|\.enabled\s*=[^=]/.test(LAYERS));
     // the sketch.js block
     const bi = SKETCH.indexOf('    // layerApi: begin'), ei = SKETCH.indexOf('    // layerApi: end\n');
