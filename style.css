@@ -1349,3 +1349,108 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   outline: 2px solid var(--color-text);
   outline-offset: 2px;
 }
+
+/* === Phone layout (phone layout, commit 1a; ui-phone.js builds it, ui-phone-config.js says what goes where) ===========================================================
+   Every rule here sits inside @media (max-width: 767px) AND starts with `html.ph`: the class is set only by ui-phone.js, only while a covered tab (today: Form) is applied below 768px, and removed
+   by release(). Without the script, at 768px and up, and in the Farbe and Netz tabs nothing below matches, so those keep the layout they had. Nothing above this block was changed.
+   Stack (px): header 48 | the canvas | tool row 56 | sub-tab row 44 | 8 | panel 104 (two rows of 48 with an 8px gap). --chrome-h is everything but the canvas; the canvas is a square of
+   min(100vw, the viewport height - --chrome-h) (--canvas-ratio 1: width = height x ratio, so another proportion is a change of one number here; the bitmap, the sketch and the pointer mapping stay as they are).
+   --ph-inner-h is window.innerHeight from the script: the fallback of a browser without the small viewport unit (svh). */
+@media (max-width: 767px) {
+  html.ph {
+    --target: 48px;
+    --ph-header-h: 48px;
+    --ph-toolrow-h: 56px;
+    --ph-subtabs-h: 44px;
+    --ph-gap: 8px;
+    --panel-h: 104px;
+    --chrome-h: calc(var(--ph-header-h) + var(--ph-toolrow-h) + var(--ph-subtabs-h) + var(--ph-gap) + var(--panel-h));
+    --ph-h: var(--ph-inner-h, 100vh);
+    --canvas-ratio: 1;
+    --canvas-h: min(calc(100vw / var(--canvas-ratio)), calc(var(--ph-h) - var(--chrome-h)));
+    --canvas-w: calc(var(--canvas-h) * var(--canvas-ratio));
+  }
+  @supports (height: 100svh) {
+    html.ph { --ph-h: 100svh; }
+  }
+
+  /* header: the tabs on the left in text style, Help a frameless muted icon on the right (same element, id, handler and aria-label) */
+  html.ph .app-header { height: var(--ph-header-h); }
+  html.ph .app-header .icon-btn { border: 0; background: transparent; color: var(--color-secondary); }
+
+  /* the Form nav row is empty (its controls are in the panel) and the rail has nothing left for Form: neither takes room */
+  html.ph .nav-rows,
+  html.ph .rail-left { display: none; }
+
+  /* the canvas: a box of --canvas-w x --canvas-h, centred when narrower than the screen, no margin (the sketch draws its own 2px frame inside the bitmap) */
+  html.ph .canvas-row { display: flex; flex-wrap: nowrap; justify-content: center; align-items: flex-start; gap: 0; padding: 0; }
+  html.ph .canvas-row #canvas-container { flex: none; width: var(--canvas-w); height: var(--canvas-h); margin: 0; }
+
+  html.ph .ph-stack { align-self: stretch; width: 100%; }
+
+  /* the tool row: 48px icons, 4px inside a group, a hairline between groups; the groups scroll sideways when they do not fit and More stays at the end (16px gutters, left aligned) */
+  html.ph .ph-toolrow { box-sizing: border-box; height: var(--ph-toolrow-h); padding: 0 var(--gutter); border-bottom: 1px solid var(--color-hairline); display: flex; align-items: center; justify-content: flex-start; }
+  html.ph .ph-tools { display: flex; align-items: center; flex: 0 1 auto; min-width: 0; padding: 4px; margin: -4px; overflow-x: auto; scrollbar-width: none; }   /* 4px: room for the focus ring of an edge icon */
+  html.ph .ph-tools::-webkit-scrollbar { display: none; }
+  html.ph .ph-toolgroup { display: flex; align-items: center; gap: 4px; flex: none; }
+  html.ph .ph-sep { flex: none; width: 1px; height: var(--target); margin: 0 8px; background: var(--color-hairline); }
+  @media (max-width: 365px) {
+    html.ph .ph-sep { margin: 0 4px; }
+  }
+  @media (max-width: 349px) {
+    html.ph .ph-sep { margin: 0 1px; }
+  }
+
+  /* the sub-tab row: text tabs like the header's (18px, muted, the current one 600 and black); same semantics - every tab in the Tab order, aria-current on the active one */
+  html.ph .ph-subtabs { box-sizing: border-box; height: var(--ph-subtabs-h); padding: 0 var(--gutter); border-bottom: 1px solid var(--color-hairline); display: flex; align-items: flex-start; gap: 24px; }
+  html.ph .ph-subtab {
+    box-sizing: border-box;
+    height: var(--ph-subtabs-h);   /* the whole row high: the 1px of the hairline below is under the button, which has no background */
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    font: inherit;
+    font-size: var(--fs-tab);
+    font-weight: var(--weight-regular);
+    line-height: 1.1;
+    color: var(--color-secondary);
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  html.ph .ph-subtab[aria-current="true"] { font-weight: var(--weight-strong); color: var(--color-text); }
+  @media (max-width: 339px) {
+    html.ph .ph-subtabs { gap: 16px; }
+  }
+
+  /* the panel: ONE slot, 104px high, two rows of 48 with an 8px gap, 16px gutters, left aligned. The parking container holds the panes that are not shown (hidden: out of the Tab order and the accessibility tree) */
+  html.ph .ph-slot { box-sizing: border-box; height: var(--panel-h); margin-top: var(--ph-gap); padding: 0 var(--gutter); display: flex; flex-direction: column; align-items: stretch; }
+  html.ph .ph-pane { display: flex; flex-direction: column; gap: var(--gap); }
+  html.ph .ph-row { display: flex; align-items: center; justify-content: flex-start; gap: var(--gap); min-width: 0; }
+  html.ph .ph-park[hidden] { display: none; }
+
+  /* the Form row's rules are scoped to .nav-row and the rail's to .canvas-row: restated for the tool row and the panel, with the same values */
+  html.ph .ph-toolrow .icon-btn,
+  html.ph .ph-slot .icon-btn {
+    box-sizing: border-box;
+    width: var(--target);
+    height: var(--target);
+    border-radius: var(--radius);
+    flex: none;
+    touch-action: manipulation;
+  }
+  html.ph .ph-slot .nav-cluster { gap: var(--gap); }
+  html.ph .ph-slot .icon-btn[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
+  /* the narrowest phones (320px): the two steppers and More must fit the 288px row, so the number field gives up 8px */
+  @media (max-width: 339px) {
+    html.ph .ph-slot .stepper > input[type="number"] { width: 40px; min-width: 40px; }
+  }
+
+  /* the narrowest phones (320px): the tool row scrolls, so its separators keep a 4px margin again (the 1px margin of 340 to 349px is for a row that still fits) */
+  @media (max-width: 339px) {
+    html.ph .ph-sep { margin: 0 4px; }
+  }
+}
