@@ -69,16 +69,34 @@
     if (nameState.textContent !== state) nameState.textContent = state;
     if (nameLabel.textContent !== label) nameLabel.textContent = label;
   }
+  // The listeners sit on the whole sheet, not on the first row: the phone layout (ui-phone.js) adds a second icon row (.more-extra) with the former rail buttons, and the name line names those too. They are
+  // buttons and links with an accessible name; a link (the catalog) is not a button, so `a` counts as well.
   function touched(e) {
-    const b = e.target.closest && e.target.closest('button');
-    if (!b || !moreRow || !moreRow.contains(b)) return;
+    const b = e.target.closest && e.target.closest('button, a');
+    if (!b || !morePanel || !morePanel.contains(b) || !(b.closest && b.closest('.more-row'))) return;
     last = b;
     refreshName();
   }
-  if (moreRow) {
-    moreRow.addEventListener('pointerdown', touched, true);
-    moreRow.addEventListener('focusin', touched);
-    moreRow.addEventListener('pointerover', function (e) { if (e.pointerType === 'mouse') touched(e); });
+  if (moreRow && morePanel) {
+    morePanel.addEventListener('pointerdown', touched, true);
+    morePanel.addEventListener('focusin', touched);
+    morePanel.addEventListener('pointerover', function (e) { if (e.pointerType === 'mouse') touched(e); });
+    // The second row's buttons leave the sheet when they are used. Clear, Paste Pattern and Download are wired by sketch.js on the MOUSEDOWN (p5's press handler), and Download's dialog then covers the button, so the
+    // click never reaches it: the sheet closes on the mousedown, after the button's own handler has run (the bridge in ui.js sends a mousedown for a keyboard activation too). The browser's mousedown default would
+    // focus the pressed button - in a closed sheet, i.e. nowhere - so it is cancelled, and the focus goes to the Mehr button unless a dialog that just opened has taken it (UI.dialog does). Info opens its own card
+    // on the click (UI.overlay: one overlay at a time) and the catalog link needs its click to navigate: they close the sheet on the click.
+    morePanel.addEventListener('mousedown', function (e) {
+      const b = e.target.closest && e.target.closest('.more-extra button:not(#btn-info)');
+      if (!b || !moreRail || !moreRail.isOpen) return;
+      e.preventDefault();
+      moreRail.close(false);
+      const a = document.activeElement;
+      if ((!a || a === document.body || morePanel.contains(a)) && moreBtn) moreBtn.focus();
+    });
+    morePanel.addEventListener('click', function (e) {
+      const b = e.target.closest && e.target.closest('.more-extra a, #btn-info');
+      if (b && moreRail && moreRail.isOpen) moreRail.close(true);
+    });
   }
 
   UI.onSync(function () { syncPressed(); syncDot(); refreshName(); });
