@@ -21,8 +21,10 @@
     version: 1,
     query: '(max-width: 767px)',
     anchor: '.canvas-row',   // the containers are inserted right after this element (before .main-container)
-    // px. chromeH = header + toolRow + subtabs + gap + panel is the height the canvas leaves free (the CSS has the same numbers as --ph-* tokens; tools/ui/test-phone-config.js compares them).
-    sizes: { header: 48, toolRow: 56, subtabs: 44, gap: 8, target: 48, rowGap: 8, gutter: 16, designWidth: 375, narrowWidth: 320 },
+    // px. chromeH = header + gap (above the canvas) + toolRow + subtabs + gap (above the panel) + panel is the height the canvas leaves free (the CSS has the same numbers as --ph-* tokens and --sp-2;
+    // tools/ui/test-phone-config.js compares them). scale = the four spacings of the phone CSS (--sp-1 .. --sp-4): gap = scale[1], gutter = scale[2].
+    sizes: { header: 40, toolRow: 64, subtabs: 44, gap: 8, target: 48, rowGap: 8, gutter: 16, designWidth: 375, narrowWidth: 320 },
+    scale: [4, 8, 16, 32],
     // the ids that no HTML file holds because a script creates them: id -> the script. (None yet; the layer and timeline strips are containers in index.html that ui-layers.js / ui-timeline.js fill.)
     createdByScript: {},
     tabs: {
@@ -140,7 +142,7 @@
     return bad;
   }
 
-  const api = { config: config, validate: validate, chromeH: function (cfg, tab) { const S = cfg.sizes; return S.header + S.toolRow + S.subtabs + S.gap + cfg.tabs[tab].panelH; } };
+  const api = { config: config, validate: validate, chromeH: function (cfg, tab) { const S = cfg.sizes; return S.header + S.gap + S.toolRow + S.subtabs + S.gap + cfg.tabs[tab].panelH; } };
   root.PHONE_CONFIG = config;
   root.PHONE_CONFIG_API = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
