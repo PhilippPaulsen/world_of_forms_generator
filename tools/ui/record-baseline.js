@@ -45,6 +45,19 @@
  * It prints each element that differs, per width, tab and scenario, with both rects, and a count per kind. A run of a tree with no layout change gives 0 differences; a change that
  * removes or adds an element shows as its `dom_present` entry (true <-> false, counted as a scalar) and any rect that moved. Use the same widths (375, 768, 768c, 936, 1032c, 1100, 1100c,
  * 1440, 1440c; the suffix c = real coarse pointer) and pointer modes as the file you compare with.
+ *
+ * THE PHONE BASELINE (phone layout, commit 5). `recordPhone({ width, heights, tabs, expect, path, postTo })` records the phone layout (html.ph, widths up to 767px) with tools/ui/measure-phone.js: the
+ * rects of the header, tabs, canvas, tool row, sub-tab row, every sub-tab's rows and controls, the sheets (rail More, panel More, Kreis, Dreieck, layer sheet, timeline sheet), a notice, and the scalars
+ * (document height and overflow, the canvas side). A cell is one tab in an iframe of the exact size width x height (the VISIBLE height: 553, 610, 718), loaded fresh (localStorage cleared first, a unique ?v=).
+ * One call records one width, all heights and tabs (nine cells, about a minute: start it and poll, the Claude pane's javascript tool stops after 45 s):
+ *
+ *   window.__r = null; recordPhone({ width: 375, expect: 'coarse', postTo: 'http://127.0.0.1:8874/p375' }).then(r => { window.__r = r; });      // ... poll window.__r
+ *
+ * It needs a REAL coarse pointer (the Mobile preset of the pane: `expect: 'coarse'` throws otherwise) and a visible pane (a hidden page throttles timers; the result says document.visibilityState).
+ * The result is { "375x553": { form: { env, states }, farbe: ..., netz: ... }, "375x610": ..., "375x718": ... }; merge the three widths (320, 375, 430) with
+ * `node tools/ui/merge-baseline.js out.json a.json b.json c.json` and compare a later run with the file of the same shape:
+ *
+ *   node tools/ui/compare-baseline.js tools/ui/baseline-phone-1.json <the new file>              (compare-baseline.js reads the phone files unchanged; --widths 375x610 and --tabs netz filter)
  */
 async function recordBaseline(opts) {
   opts = opts || {};
@@ -75,3 +88,34 @@ async function recordBaseline(opts) {
   return out;
 }
 window.recordBaseline = recordBaseline;
+
+// the phone baseline: one width, every height and tab; see the header
+async function recordPhone(opts) {
+  opts = opts || {};
+  const width = opts.width, heights = opts.heights || [553, 610, 718], tabs = opts.tabs || ['form', 'farbe', 'netz'], path = opts.path || '';
+  if (!width) throw new Error('recordPhone({ width }) needs a width');
+  const src = await (await fetch(opts.script || (path + 'tools/ui/measure-phone.js'), { cache: 'reload' })).text();
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const out = {};
+  for (const h of heights) {
+    out[width + 'x' + h] = {};
+    for (const tab of tabs) {
+      try { localStorage.clear(); sessionStorage.clear(); } catch (e) { /* none: the page measures from its start state */ }
+      const f = document.createElement('iframe');
+      f.style.cssText = 'position:absolute;left:0;top:0;border:0;width:' + width + 'px;height:' + h + 'px;background:#fff';
+      document.body.appendChild(f);
+      f.src = path + 'index.html?v=phone' + Math.random().toString(36).slice(2) + '#' + tab;
+      await new Promise((r) => f.addEventListener('load', r, { once: true }));
+      const d = f.contentDocument;
+      for (let i = 0; i < 100 && !(d.querySelector('#canvas-container canvas') && d.documentElement.classList.contains('ph') && d.getElementById('ph-slot')); i++) await sleep(100);
+      await sleep(500);
+      if (opts.expect) { const isCoarse = f.contentWindow.matchMedia('(pointer: coarse)').matches; if ((opts.expect === 'coarse') !== isCoarse) { f.remove(); throw new Error('recordPhone: expected a ' + opts.expect + ' pointer'); } }
+      f.contentWindow.eval(src);
+      out[width + 'x' + h][tab] = await f.contentWindow.measurePhone();
+      f.remove();
+    }
+  }
+  if (opts.postTo) await fetch(opts.postTo, { method: 'POST', body: JSON.stringify(out) });
+  return out;
+}
+window.recordPhone = recordPhone;

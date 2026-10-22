@@ -1454,7 +1454,7 @@ function setup() {
                 stepper.className = 'pairing-variant';
                 const prevBtn = document.createElement('button');
                 prevBtn.className = 'layer-btn pairing-move-btn pairing-variant-prev';
-                prevBtn.textContent = '\u25C0';
+                prevBtn.innerHTML = pairingStepIcon('left');
                 UI.name(prevBtn, 'Previous variant of this End line (distinct pictures against this row\'s Start line)');
                 prevBtn.addEventListener('click', () => {
                     const v = variants[(vIdx - 1 + vCount) % vCount];
@@ -1468,7 +1468,7 @@ function setup() {
                 countEl.title = `End line variant ${vIdx + 1} of ${vCount} distinct pictures for this row's current Start\u2194End pairing`;
                 const nextBtn = document.createElement('button');
                 nextBtn.className = 'layer-btn pairing-move-btn pairing-variant-next';
-                nextBtn.textContent = '\u25B6';
+                nextBtn.innerHTML = pairingStepIcon('right');
                 UI.name(nextBtn, 'Next variant of this End line (distinct pictures against this row\'s Start line)');
                 nextBtn.addEventListener('click', () => {
                     const v = variants[(vIdx + 1) % vCount];
@@ -4336,13 +4336,20 @@ function faceColorsAxisValue(rule, axis, k) {
     return '';
 }
 
+// The arrows of the stepper buttons (the pairing editor's variant stepper, the Face Colors stepper): an inline SVG chevron in the UI's 20px icon style (stroke, currentColor), returned as markup for
+// innerHTML. The characters U+25C0 and U+25B6 they replace are drawn as blue emoji on iOS. The box is as wide as the old glyph (13px and 11.45px in the UI font), so the buttons keep their size.
+function pairingStepIcon(dir) {
+    const left = dir === 'left', w = left ? 13 : 11.45, vw = w * 1.2, cx = left ? 11.5 : 12.5;
+    return '<svg width="' + w + '" height="20" viewBox="' + (cx - vw / 2).toFixed(2) + ' 0 ' + vw.toFixed(2) + ' 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="' + (left ? 'M15 5 L8 12 L15 19' : 'M9 5 L16 12 L9 19') + '"/></svg>';
+}
+
 function faceColorsStepper(k, c, title, onStep) {
     const wrap = document.createElement('span');
     wrap.className = 'pairing-variant';
     const mk = (txt, delta) => {
         const b = document.createElement('button');
         b.className = 'layer-btn pairing-move-btn';
-        b.textContent = txt;
+        b.innerHTML = pairingStepIcon(txt);
         UI.name(b, title);
         b.addEventListener('click', () => onStep(delta));
         return b;
@@ -4352,9 +4359,9 @@ function faceColorsStepper(k, c, title, onStep) {
     cnt.textContent = `${k + 1}/${c}`;
     cnt.dataset.k = String(k + 1);
     cnt.dataset.c = String(c);
-    wrap.appendChild(mk('◀', -1));
+    wrap.appendChild(mk('left', -1));
     wrap.appendChild(cnt);
-    wrap.appendChild(mk('▶', 1));
+    wrap.appendChild(mk('right', 1));
     return wrap;
 }
 
