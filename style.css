@@ -166,6 +166,7 @@ label { touch-action: manipulation; }
   .pairing-label { min-width: 8em; }
   .layer-btn.pairing-move-btn { min-width: var(--target); }   /* beats .pairing-move-btn { min-width: 24px } further down */
   .control-group input[type="number"],
+  .control-group input.exact-field,
   select { min-height: var(--target); }
   /* a stepper's value (a typable number field, or the display span of the Netz / Farbe steppers) is --target wide and high too: the stepper's chevron
      halves stay 24px (the documented exception) but the value is the one big target in it. "html" and ">" out-rank the base rules further down and index.html's `.control-group input[type="number"] { width: 60px }`. */
@@ -1348,4 +1349,182 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
   outline: 2px solid var(--color-text);
   outline-offset: 2px;
+}
+
+/* === Phone layout (phone layout, commits 1a to 3; ui-phone.js builds it, ui-phone-config.js says what goes where) =====================================================
+   Every rule here sits inside @media (max-width: 767px) AND starts with `html.ph`: the class is set only by ui-phone.js, only while a covered tab (Form, Farbe, Netz: all of them since commit 3) is applied below
+   768px, and removed by release(). Without the script and at 768px and up nothing below matches, so those keep the layout they had. Nothing above this block was changed.
+   SPACING (1a2): four values only - --sp-1 4px (inside a group of buttons, separator margins), --sp-2 8px (between zones and rows), --sp-3 16px (the gutter, the canvas margins), --sp-4 32px (between the
+   text tabs). Every padding, margin and gap below is one of them, 0, or a calc of them (tools/ui/test-phone-config.js lists a violation with its selector). 48, 44, 40 are control and bar sizes, not spacing.
+   Stack (px): header 40 | 8 | the canvas | tool row 64 (8 + 48 + 8, its hairline inside) | sub-tab row 44 (hairline inside) | 8 | panel 104 (two rows of 48 with an 8px gap). --chrome-h is everything but the
+   canvas (268); the canvas is a square of min(100vw - 2 x --sp-3, the viewport height - --chrome-h), left aligned at the 16px gutter (--canvas-ratio 1: width = height x ratio, so another proportion is a change of
+   one number here; the bitmap, the sketch and the pointer mapping stay as they are). --ph-inner-h is window.innerHeight from the script: the fallback of a browser without the small viewport unit (svh). */
+@media (max-width: 767px) {
+  html.ph {
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 16px;
+    --sp-4: 32px;
+    --target: 48px;
+    --ph-header-h: 40px;
+    --ph-toolrow-h: 64px;
+    --ph-subtabs-h: 44px;
+    --panel-h: 104px;
+    --chrome-h: calc(var(--ph-header-h) + var(--sp-2) + var(--ph-toolrow-h) + var(--ph-subtabs-h) + var(--sp-2) + var(--panel-h));
+    --ph-h: var(--ph-inner-h, 100vh);
+    --canvas-ratio: 1;
+    --canvas-h: min(calc((100vw - 2 * var(--sp-3)) / var(--canvas-ratio)), calc(var(--ph-h) - var(--chrome-h)));
+    --canvas-w: calc(var(--canvas-h) * var(--canvas-ratio));
+  }
+  @supports (height: 100svh) {
+    html.ph { --ph-h: 100svh; }
+  }
+
+  /* header: 40px with the hairline inside, the tabs on the left in text style, Help a frameless muted icon on the right (same element, id, handler and aria-label) with a 40px hit area */
+  html.ph .app-header { height: var(--ph-header-h); }
+  html.ph .app-header .icon-btn { width: var(--ph-header-h); height: var(--ph-header-h); min-width: var(--ph-header-h); min-height: var(--ph-header-h); border: 0; background: transparent; color: var(--color-secondary); }
+
+  /* the Form nav row is empty (its controls are in the panel) and the rail has nothing left for Form: neither takes room */
+  html.ph .nav-rows,
+  html.ph .rail-left { display: none; }
+
+  /* the canvas: 8px under the header, LEFT aligned at the gutter (the same 16px as the buttons below), a box of --canvas-w x --canvas-h; the right margin is what remains (16px when the width limits it). The 2px
+     frame is drawn by the sketch inside the bitmap */
+  html.ph .canvas-row { display: flex; flex-wrap: nowrap; justify-content: flex-start; align-items: flex-start; gap: 0; padding: var(--sp-2) var(--sp-3) 0; }
+  html.ph .canvas-row #canvas-container { flex: none; width: var(--canvas-w); height: var(--canvas-h); margin: 0; }
+
+  html.ph .ph-stack { align-self: stretch; width: 100%; }
+
+  /* the tool row: 64px = 8 + 48 + 8, its hairline drawn inside (a shadow takes no room); 48px icons, 4px inside a group, a hairline between groups; the groups scroll sideways when they do not fit and More
+     stays at the end (16px gutter, left aligned) */
+  html.ph .ph-toolrow { box-sizing: border-box; height: var(--ph-toolrow-h); padding: var(--sp-2) var(--sp-3); box-shadow: inset 0 -1px 0 var(--color-hairline); display: flex; align-items: center; justify-content: flex-start; }
+  html.ph .ph-tools { display: flex; align-items: center; flex: 0 1 auto; min-width: 0; padding: var(--sp-1); margin: calc(-1 * var(--sp-1)); overflow-x: auto; scrollbar-width: none; }   /* room for the focus ring of an edge icon */
+  html.ph .ph-tools::-webkit-scrollbar { display: none; }
+  html.ph .ph-toolgroup { display: flex; align-items: center; gap: var(--sp-1); flex: none; }
+  html.ph .ph-sep { flex: none; width: 1px; height: var(--target); margin: 0 var(--sp-2); background: var(--color-hairline); }
+  @media (max-width: 365px) {
+    html.ph .ph-sep { margin: 0 var(--sp-1); }
+  }
+  @media (max-width: 349px) {
+    html.ph .ph-sep { margin: 0; }
+  }
+  @media (max-width: 339px) {
+    html.ph .ph-sep { margin: 0 var(--sp-1); }   /* the row scrolls here */
+  }
+
+  /* the sub-tab row: text tabs like the header's (18px, muted, the current one 600 and black); same semantics - every tab in the Tab order, aria-current on the active one */
+  html.ph .ph-subtabs { box-sizing: border-box; height: var(--ph-subtabs-h); padding: 0 var(--sp-3); border-bottom: 1px solid var(--color-hairline); display: flex; align-items: flex-start; gap: calc(var(--sp-3) + var(--sp-2)); overflow-x: auto; scrollbar-width: none; }   /* 24px between the tabs; Farbe's four fit 343px, below that the row scrolls */
+  html.ph .ph-subtabs::-webkit-scrollbar { display: none; }
+  html.ph .ph-subtab {
+    box-sizing: border-box;
+    height: var(--ph-subtabs-h);   /* the whole row high: the 1px of the hairline below is under the button, which has no background */
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+    padding: 0;   /* the text starts at the gutter and the labels are 24px apart (the gap); the hit area is widened by the ::after below */
+    border: 0;
+    border-radius: 0;
+    background: none;
+    font: inherit;
+    font-size: var(--fs-tab);
+    font-weight: var(--weight-regular);
+    line-height: 1.1;
+    color: var(--color-secondary);
+    cursor: pointer;
+    touch-action: manipulation;
+    flex: none;
+  }
+  html.ph .ph-subtab::after { content: ""; position: absolute; top: 0; bottom: 0; left: calc(-1 * (var(--sp-2) + var(--sp-1))); right: calc(-1 * (var(--sp-2) + var(--sp-1))); }   /* half the 24px gap on each side: neighbours meet in the middle */
+  html.ph .ph-subtab[aria-current="true"] { font-weight: var(--weight-strong); color: var(--color-text); }
+
+  /* the panel: ONE slot, 104px high, two rows of 48 with an 8px gap, 16px gutters, left aligned, 8px under the sub-tab row. The parking container holds the panes that are not shown (hidden: out of the Tab
+     order and the accessibility tree) */
+  html.ph .ph-slot { box-sizing: border-box; height: var(--panel-h); margin-top: var(--sp-2); padding: 0 var(--sp-3); display: flex; flex-direction: column; align-items: stretch; }
+  html.ph .ph-pane { display: flex; flex-direction: column; gap: var(--sp-2); }
+  html.ph .ph-row { display: flex; align-items: center; justify-content: flex-start; gap: var(--sp-2); min-width: 0; }
+  html.ph .ph-park[hidden] { display: none; }
+
+  /* the Form row's rules are scoped to .nav-row and the rail's to .canvas-row: restated for the tool row and the panel, with the same values */
+  html.ph .ph-toolrow .icon-btn,
+  html.ph .ph-slot .icon-btn {
+    box-sizing: border-box;
+    width: var(--target);
+    height: var(--target);
+    border-radius: var(--radius);
+    flex: none;
+    touch-action: manipulation;
+  }
+  html.ph .ph-slot .nav-cluster { gap: var(--sp-2); }
+  html.ph .ph-slot .icon-btn[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
+  /* the narrowest phones (320px): the two steppers and More must fit the 288px row, so the number field gives up 8px */
+  @media (max-width: 339px) {
+    html.ph .ph-slot .stepper > input[type="number"] { width: 40px; min-width: 40px; }
+  }
+
+  /* ---- commit 1b: sheets, no scrolling ------------------------------------------------------------------------------------------------------------------------------------------------------ */
+  /* The page does not scroll: html and body are exactly the viewport (--ph-h is 100svh, or window.innerHeight where svh does not exist) and clip. The leftover containers (the controls container, whose
+     two big blocks are sheets now and whose contextual groups moved into the rail's sheet) take no room. What still scrolls: the sheets (.overlay.sheet: max-height 80dvh, overflow auto), the info card, the
+     dialogs (below), the strips of chips and the tool row (sideways). */
+  html.ph, html.ph body { height: var(--ph-h); min-height: 0; overflow: hidden; }
+  html.ph .main-container { display: none; }
+
+  /* the layer "Mehr" and timeline "Mehr" blocks in their sheets (ui-phone.js makes the host, UI.overlay opens it): the groups flow like they did in the controls container */
+  html.ph .ph-sheet { flex-direction: row; flex-wrap: wrap; align-items: flex-start; justify-content: center; gap: var(--sp-3); }
+  html.ph .ph-sheet .control-group { max-width: 100%; }
+
+  /* the rail's sheet: the contextual groups (Curve / Free settings) sit under the second icon row; the wrapper takes no room of its own, so a hidden group leaves no gap */
+  html.ph #more-rail .more-settings { display: contents; }
+
+  /* a dialog never gets taller than the screen, and scrolls inside (the Download, Neu anfangen, remove and timeline dialogs had no maximum) */
+  html.ph .dialog-content { box-sizing: border-box; max-height: calc(var(--ph-h) - 2 * var(--sp-3)); overflow-y: auto; }
+  html.ph .dialog-content button { min-height: var(--target); }   /* a mouse at a phone width gets the same 48px buttons the coarse rule gives a finger */
+
+  /* ---- commit 2: the Farbe tab --------------------------------------------------------------------------------------------------------------------------------------------------------------- */
+  /* a hairline inside a panel row sits between two 8px gaps (no margin of its own: validate() counts the gaps only); a row that does not fit 288px (the harmony row) scrolls sideways below 340px */
+  html.ph .ph-row > .ph-sep { margin: 0; }
+  @media (max-width: 339px) {
+    html.ph .ph-row-scroll { overflow-x: auto; scrollbar-width: none; padding: var(--sp-1); margin: calc(-1 * var(--sp-1)); }
+    html.ph .ph-row-scroll::-webkit-scrollbar { display: none; }
+    html.ph .ph-row-scroll > * { flex: none; }
+  }
+
+  /* the tool row's strategy group is the Farbe rail's radiogroup wrapper (.rail-group): four 48px icons 4px apart in a row, no rail margins or hairline */
+  html.ph .ph-toolgroup .rail-group { display: flex; flex-direction: row; align-items: center; gap: var(--sp-1); margin: 0; padding: 0; }
+  html.ph .ph-toolgroup .rail-group::before { display: none; }
+
+  /* the rail's sheet in Farbe: Form's first row (Curve, Free, Free Endpoints, Alternative Net, Neu anfangen) is not offered there (it was hidden in Farbe before); the second row holds Farbe's buttons */
+  html.ph[data-tab="farbe"] #more-rail > .more-row:not(.more-extra) { display: none; }
+
+  /* the anchor preview: a 48px swatch at the end of the second row */
+  html.ph .ph-slot #farbe-anchor-preview { box-sizing: border-box; width: var(--target); height: var(--target); border-radius: var(--radius); flex: none; }
+
+  /* Spuren: row 1 = one 48px chip per trail (the number centred, a 4px bar of the trail's colour at the bottom edge), scrolling sideways, the selected one black; row 2 = the stepper of the selected trail */
+  html.ph .ph-chips { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; padding: var(--sp-1); margin: calc(-1 * var(--sp-1)); overflow-x: auto; scrollbar-width: none; }
+  html.ph .ph-chips::-webkit-scrollbar { display: none; }
+  html.ph .ph-chip { position: relative; box-sizing: border-box; flex: none; width: var(--target); height: var(--target); margin: 0; padding: 0; overflow: hidden; border: 1px solid var(--color-text); border-radius: var(--radius); background: var(--color-bg); color: var(--color-text); font: inherit; font-size: var(--fs-tab); cursor: pointer; touch-action: manipulation; }
+  html.ph .ph-chip.active { background: var(--color-text); color: var(--color-bg); }
+  html.ph .ph-chip-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; }
+  html.ph .ph-chips-empty { display: flex; align-items: center; height: var(--target); color: var(--color-secondary); font-size: var(--size-secondary); }
+  html.ph .ph-trail-stepper { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+  html.ph .ph-trail-count { min-width: var(--target); text-align: center; font-variant-numeric: tabular-nums; }
+  html.ph .ph-trail-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-secondary); font-size: var(--size-secondary); }
+  /* ---- commit 3: the Netz tab ---------------------------------------------------------------------------------------------------------------------------------------------------------------- */
+  /* Art: the four kind buttons are 60px wide ("Aus" / "Sin" / "Tan" / "Geo", as in the Netz row); the text buttons of the panel (Both / X / Y, Reverse) are --target high */
+  /* an element sketch.js hides (Reverse, the Fokus stepper) stays hidden whatever display its class gives it */
+  html.ph .ph-slot [hidden] { display: none; }
+  html.ph .ph-slot .net-kind-btn { width: 60px; }
+  html.ph .ph-slot .layer-btn { box-sizing: border-box; min-height: var(--target); }
+  /* Net lines: the text button of the Netz sheet (#more-netz) becomes an icon in the tool row - two wavy lines drawn with a mask, so the button, its text (the accessible name), its title and its active state
+     are the ones it has; the text is visually emptied, not removed */
+  html.ph .ph-toolrow #net-lines-btn { position: relative; box-sizing: border-box; flex: none; width: var(--target); height: var(--target); min-width: var(--target); padding: 0; border-radius: var(--radius); font-size: 0; line-height: 0; touch-action: manipulation; }
+  html.ph .ph-toolrow #net-lines-btn::before { content: ""; position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); background-color: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 8 C6 4 9 4 12 8 S18 12 21 8'/%3E%3Cpath d='M3 16 C6 12 9 12 12 16 S18 20 21 16'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 8 C6 4 9 4 12 8 S18 12 21 8'/%3E%3Cpath d='M3 16 C6 12 9 12 12 16 S18 20 21 16'/%3E%3C/svg%3E") center / contain no-repeat; }
+  /* ---- commit 4: the notices ----------------------------------------------------------------------------------------------------------------------------------------------------------------- */
+  /* Under the phone layout the notices stack (#ui-notices, at most ONE notice: ui.js) sits over the BOTTOM of the canvas: as wide as the canvas and at its left edge, its bottom edge 8px above the canvas's bottom
+     edge (header + the 8px above the canvas + --canvas-h - 8px), growing upward; so it never reaches the tool row, the sub-tab row or the panel. `top` and translateY(-100%) rather than `bottom`: the position
+     does not depend on the viewport height the browser reports (svh against lvh). Without html.ph (768px and up, and nothing else) the stack keeps the bottom anchor above. */
+  html.ph .notices { top: calc(var(--ph-header-h) + var(--sp-2) + var(--canvas-h) - var(--sp-2)); bottom: auto; left: var(--sp-3); width: var(--canvas-w); transform: translateY(-100%); }
+  /* While an overlay is open (ui.js: UI.overlay puts the class overlay-open on html) a bottom sheet covers the lower part of the canvas and would lie under the notice, which sits above it (z-index 60 against 40)
+     and would hide the field being edited: the stack goes to the TOP of the canvas then, 8px under the header, growing downward. */
+  html.ph.overlay-open .notices { top: calc(var(--ph-header-h) + var(--sp-2)); transform: none; }
 }

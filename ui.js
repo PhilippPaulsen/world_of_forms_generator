@@ -5,7 +5,7 @@
  *   UI.notify(text, opts)           the ONE notification component: a fixed-position message in the always-rendered live region #ui-notices (it never moves the
  *                                   layout). opts { key, kind: 'info' | 'warn' | 'error', ttl, sticky }. With a key a showing notice is updated in place; once it was
  *                                   dismissed or has expired the same key is NOT shown again until UI.notifyClear(key) (once per condition). At most two are visible
- *                                   (a third replaces the oldest). The duration is clamp(3000 + 50 x length, 4000, 9000) ms unless ttl is given; the timer is
+ *                                   (a third replaces the oldest); under the phone layout (html.ph) ONE (a new one replaces the showing one). The duration is clamp(3000 + 50 x length, 4000, 9000) ms unless ttl is given; the timer is
  *                                   stopped while the pointer is over a notice or the focus is inside it and restarts on leave. A text of 60 or more characters,
  *                                   or a sticky notice, has a close button; Escape closes the newest; a press outside notices closes the non-sticky ones. A notice that holds
  *                                   the focus and is closed by the person (its close button, Escape) gives the focus back to the element that had it before, else to the
@@ -16,6 +16,9 @@
  *                                   tappable); a tap, Enter/Space or a long press shows the reason as a toast,
  *                                   and the reason is the title (desktop hover). reason = null enables it again.
  *   UI.guard(el, onActivate)        runs onActivate on a click unless the control is aria-disabled (then: the reason)
+ *   UI.normalizeNumber(text)        a typed number as a string the existing parse (parseFloat) can read: trimmed; ONE comma and no dot becomes a dot (the German decimal pad types
+ *                                   "0,35"); a dot stays; any other mix of separators ("1,2,3", "1.2,3", "1.234,5", "1.2.3") gives '' (invalid: the field falls back to its
+ *                                   previous value, as for any text that is not a number); the minus and everything else stay. "1," -> "1." (parseFloat 1), ",5" -> ".5" (0.5).
  *   UI.stepper(root, opts)          number + stacked up/down chevrons around an existing number input (see below)
  *   UI.radiogroup(container, fn)    an exclusive choice: role="radio" options, aria-checked, arrow keys
  *   UI.overlay(trigger, panel)      a popover / bottom sheet ("More") opened by a button
@@ -30,7 +33,7 @@
 
 // ---- the notification model: PURE (no DOM), exported as window.noticeModel and tested in a vm without a document ------------------------------------
 (function (root) {
-  const TTL_BASE = 3000, TTL_PER_CHAR = 50, TTL_MIN = 4000, TTL_MAX = 9000, MAX_VISIBLE = 2, CLOSE_AT = 60;
+  const TTL_BASE = 3000, TTL_PER_CHAR = 50, TTL_MIN = 4000, TTL_MAX = 9000, MAX_VISIBLE = 2, PHONE_MAX_VISIBLE = 1, CLOSE_AT = 60;
   const KINDS = ['info', 'warn', 'error'];
   // how long a notice stays: an explicit ttl wins; otherwise clamp(3000 + 50 x the text length, 4000, 9000)
   function noticeTtl(text, ttl) {
@@ -40,6 +43,8 @@
   // a long text or a sticky notice cannot be left to a timer alone: it gets a close button
   function noticeNeedsClose(text, sticky) { return !!sticky || String(text == null ? '' : text).length >= CLOSE_AT; }
   function noticeKind(kind) { return KINDS.indexOf(kind) >= 0 ? kind : 'info'; }
+  // how many notices may show at once: two, and ONE under the phone layout (a new one replaces the showing one); the caller chooses at every call: matchMedia plus html.ph
+  function noticeLimit(phone) { return phone ? PHONE_MAX_VISIBLE : MAX_VISIBLE; }
   // how many of the visible notices make room for one more (the oldest go first)
   function noticeEvictions(visible, max) { return Math.max(0, visible + 1 - (max || MAX_VISIBLE)); }
   // "once per condition": a keyed notice that is showing is UPDATED, one that was dismissed or expired is SKIPPED until clear(key), anything else is SHOWN; no key always shows
@@ -53,7 +58,7 @@
       state: function (key) { return st.get(key) || 'none'; },
     };
   }
-  root.noticeModel = { noticeTtl: noticeTtl, noticeNeedsClose: noticeNeedsClose, noticeKind: noticeKind, noticeEvictions: noticeEvictions, createKeyState: createKeyState, MAX_VISIBLE: MAX_VISIBLE, CLOSE_AT: CLOSE_AT, TTL_MIN: TTL_MIN, TTL_MAX: TTL_MAX };
+  root.noticeModel = { noticeLimit: noticeLimit, PHONE_MAX_VISIBLE: PHONE_MAX_VISIBLE, noticeTtl: noticeTtl, noticeNeedsClose: noticeNeedsClose, noticeKind: noticeKind, noticeEvictions: noticeEvictions, createKeyState: createKeyState, MAX_VISIBLE: MAX_VISIBLE, CLOSE_AT: CLOSE_AT, TTL_MIN: TTL_MIN, TTL_MAX: TTL_MAX };
 })(typeof window !== 'undefined' ? window : globalThis);
 
 (function () {
@@ -69,6 +74,11 @@
   const keys = M.createKeyState();
   const notices = [];   // oldest first; { el, textEl, closeBtn, key, sticky, ttl, timer, hover, focus }
   function noticesEl() { return document.getElementById('ui-notices'); }
+  // the phone layout: html.ph (set by ui-phone.js only, at 767px and below) AND the narrow media query; chosen at every call, so a resize or a tab change is followed
+  function phoneNow() {
+    const h = document.documentElement;
+    return !!(h && h.classList && h.classList.contains('ph')) && (typeof window.matchMedia !== 'function' || window.matchMedia('(max-width: 767px)').matches);
+  }
   function stopTimer(n) { if (n.timer !== null) { clearTimeout(n.timer); n.timer = null; } }
   function startTimer(n) {
     stopTimer(n);
@@ -140,7 +150,7 @@
     let n = null;
     if (verdict === 'update') for (let i = 0; i < notices.length; i++) if (notices[i].key === key) n = notices[i];
     if (!n) {
-      for (let k = M.noticeEvictions(notices.length); k > 0; k--) removeNotice(notices[0]);   // at most two: the oldest make room
+      for (let k = M.noticeEvictions(notices.length, M.noticeLimit(phoneNow())); k > 0; k--) removeNotice(notices[0]);   // at most two (one under the phone layout): the oldest make room
       n = buildNotice();
       n.key = key;
       host.appendChild(n.el);
@@ -168,6 +178,12 @@
   document.addEventListener('pointerdown', function (e) {
     if (notices.length && !(e.target && e.target.closest && e.target.closest('.notice'))) hideToast();
   }, true);
+  // A press on a notice must not reach the sketch: p5 listens for a mousedown on the WINDOW and sketch.js's mousePressed() acts on the pointer position, so a notice over the canvas (the phone layout anchors
+  // it there) would draw or select a node under the finger (measured: with free endpoints on, a tap on a notice added a node). The listener is on the document in the bubble phase: it runs before the
+  // window's and stops the event there; the notice's own controls (its close button: a click) are not affected, and nothing in the capture phase is.
+  document.addEventListener('mousedown', function (e) {
+    if (e.target && e.target.closest && e.target.closest('.notice')) e.stopPropagation();
+  });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
       if (notices.length) removeNotice(notices[notices.length - 1], true);   // the newest
@@ -190,6 +206,15 @@
   }
   function isDisabled(el) { return el.getAttribute('aria-disabled') === 'true'; }
 
+  // ---- a typed number (decimal comma) --------------------------------------
+  // The German iOS decimal pad types a comma. Only the separators are looked at: the text is not validated further (parseFloat reads "0.35abc" as 0.35 as it always did).
+  function normalizeNumber(text) {
+    const s = String(text === null || text === undefined ? '' : text).trim();
+    const seps = s.match(/[.,]/g) || [];
+    if (seps.length > 1) return '';                  // two separators: a thousands separator or a typo
+    return seps.length === 1 && seps[0] === ',' ? s.replace(',', '.') : s;
+  }
+
   // ---- a control's name ----------------------------------------------------
   // setDisabled swaps the title for the reason and keeps the name in dataset.baseTitle; a name set while a reason is showing goes there, so the reason stays on
   // hover and the new name comes back when the control is enabled. The aria-label is never touched by setDisabled: the name outlives every disable / enable.
@@ -199,7 +224,7 @@
     else if (el.getAttribute('title') !== text) el.setAttribute('title', text);
     if (el.getAttribute('aria-label') !== text) el.setAttribute('aria-label', text);
   }
-  function showReason(el) { toast(el.dataset.reason || '', 5000); }
+  function showReason(el, from) { toast(el.dataset.reason || (from && from.dataset.reason) || '', 5000); }   // from: the element whose reason stands in when el has none yet (a stepper's root)
 
   function attachReason(el) {
     if (el.dataset.reasonBound) return;
@@ -237,6 +262,8 @@
    *            display otherwise)
    *   Hold a button: it repeats after 600 ms (every 150 ms, every 70 ms after 1.8 s of repeating - see holdRepeat). Arrow keys on the input step too.
    *   refresh() re-reads compute() for both directions and updates the buttons; call it after any state change.
+   *   A stepper whose ROOT is aria-disabled (UI.setDisabled(root, reason); the phone layout does it for a stepper whose block is hidden) does nothing: compute() is not asked, a step is refused with the
+   *   root's reason (a toast, no change), the chevrons are disabled with it, and a typed value is put back.
    */
   // Hold-to-repeat of a stepper chevron (Phase 2, track A, commit C). A SELF-RESCHEDULING timeout, not a setInterval: a setInterval keeps firing while the step
   // (the handler: setValue -> input/change events -> sketch.js rebuilds the grid and redraw()s, all synchronous) takes longer than the interval, and the queued
@@ -273,6 +300,7 @@
 
   function stepper(root, opts) {
     const input = opts.input, buttons = Array.prototype.slice.call(root.querySelectorAll('.stepper-btn'));
+    const compute = function (dir) { return isDisabled(root) ? { to: null, reason: root.dataset.reason || '' } : opts.compute(dir); };
     let last = parseInt(input.value, 10); // the last valid value, for restoring an emptied field
     function setValue(v) {
       input.value = String(v);
@@ -286,6 +314,7 @@
     // reads it.
     if (!opts.noTyping) {
       input.addEventListener('input', function (e) {
+        if (isDisabled(root)) { input.value = String(last); e.stopImmediatePropagation(); return; }
         const v = parseInt(input.value, 10);
         if (input.value === '' || isNaN(v)) { e.stopImmediatePropagation(); return; }
         const rg = opts.range ? opts.range() : null;
@@ -305,7 +334,7 @@
       input.addEventListener('blur', normalise);
     }
     function step(dir) {
-      const r = opts.compute(dir);
+      const r = compute(dir);
       if (r.to === null || r.to === undefined) { toast(r.reason, 4000); return false; }
       setValue(r.to);
       if (r.note) toast(r.note, 4000);
@@ -316,7 +345,7 @@
       const cur = parseInt(input.value, 10);
       if (!isNaN(cur) && document.activeElement !== input) last = cur; // follows programmatic changes (catalog, shape switch)
       buttons.forEach(function (b) {
-        const r = opts.compute(parseInt(b.dataset.dir, 10));
+        const r = compute(parseInt(b.dataset.dir, 10));
         setDisabled(b, r.to === null || r.to === undefined ? r.reason : null);
       });
     }
@@ -330,7 +359,7 @@
       let downDisabled = false; // was the button disabled when the press began? (the step itself may disable it)
       b.addEventListener('pointerdown', function (e) {
         if (e.button !== undefined && e.button !== 0) return;
-        downDisabled = isDisabled(b);
+        downDisabled = isDisabled(b) || isDisabled(root);
         if (downDisabled) return; // the click shows the reason
         step(dir);
         hold.start();
@@ -340,8 +369,8 @@
       // click: a mouse/touch click (event.detail >= 1) was already handled on pointerdown; a keyboard activation
       // (Enter/Space, or a scripted .click()) has detail 0 and steps here. Either way a disabled button shows its reason.
       b.addEventListener('click', function (e) {
-        if (e.detail > 0) { if (downDisabled) showReason(b); return; }
-        if (isDisabled(b)) { showReason(b); return; }
+        if (e.detail > 0) { if (downDisabled) showReason(b, root); return; }
+        if (isDisabled(b) || isDisabled(root)) { showReason(b, root); return; }
         step(dir);
       });
       b.style.touchAction = 'manipulation';
@@ -352,6 +381,8 @@
       if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); step(1); }
       else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
     });
+    // a root that is (un)disabled from outside (the phone layout, in the middle of a UI tick that already refreshed this stepper) brings the chevrons up to date at once, not on the next redraw
+    if (typeof MutationObserver === 'function') new MutationObserver(function () { refresh(); }).observe(root, { attributes: true, attributeFilter: ['aria-disabled'] });
     return { refresh: refresh, step: step };
   }
 
@@ -458,9 +489,21 @@
    * (with a scrim) on the phone (< 768px). One at a time. Escape, a tap outside, the trigger again, scrolling or
    * resizing closes it; focus moves in on open and back to the trigger on Escape/close. opts.onOpen() runs first,
    * so the content can be synced before it shows.
+   * opts.onClose(returnFocus) runs after EVERY close (Escape, the scrim, a tap outside, a resize, close()), so an owner of the state behind the
+   * panel can follow it. opts.toggleOnClick === false: the trigger's click is NOT bound here (the owner opens and closes the panel itself - the
+   * phone layout's sheets follow a state some other handler of the same button flips). A resize does not close the panel while a text field inside
+   * it has the focus: the soft keyboard of a phone resizes the window, and closing the sheet then would throw away what the person is typing in.
+   * A tap inside a modal dialog (aria-modal="true", made by UI.dialog) does not count as a tap outside: a dialog opened from the panel leaves it open. The same for a tap on a notice (.notice).
+   * A 'tabchange' (nav.js) closes the open overlay (the Back button and a hash edit change the tab without a tap).
    */
   const SHEET_QUERY = '(max-width: 767px)';
   let openOverlay = null;
+  // html.overlay-open while an overlay (a "More" sheet, the info card) is open: the phone layout anchors the notices under the header then (style.css), because a bottom sheet covers the canvas's lower half
+  // and the notice would lie over the very field being edited. One overlay is open at a time (openOverlay), so a flag is enough; it is only a class: nothing outside the phone layout reads it.
+  function markOverlayOpen(on) {
+    const cl = document.documentElement && document.documentElement.classList;
+    if (cl && typeof cl[on ? 'add' : 'remove'] === 'function') cl[on ? 'add' : 'remove']('overlay-open');
+  }
   function overlay(trigger, panel, opts) {
     const scrim = document.getElementById('overlay-scrim');
     const api = { isOpen: false, open: open, close: close, toggle: toggle };
@@ -482,7 +525,7 @@
       if (openOverlay && openOverlay !== api) openOverlay.close();
       if (opts && opts.onOpen) opts.onOpen();
       panel.hidden = false;
-      api.isOpen = true; openOverlay = api;
+      api.isOpen = true; openOverlay = api; markOverlayOpen(true);
       trigger.setAttribute('aria-expanded', 'true');
       place();
       // querySelector alone would also match a button inside a `hidden` ancestor (e.g. #more-farbe's Spread
@@ -505,16 +548,18 @@
       if (!api.isOpen) return;
       panel.hidden = true;
       if (scrim) scrim.hidden = true;
-      api.isOpen = false; if (openOverlay === api) openOverlay = null;
+      api.isOpen = false; if (openOverlay === api) { openOverlay = null; markOverlayOpen(false); }
       trigger.setAttribute('aria-expanded', 'false');
       if (returnFocus) trigger.focus();
+      if (opts && opts.onClose) opts.onClose(!!returnFocus);
     }
     function toggle() { if (api.isOpen) close(true); else open(); }
-    trigger.addEventListener('click', toggle);
+    if (!opts || opts.toggleOnClick !== false) trigger.addEventListener('click', toggle);
     panel.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') { e.stopPropagation(); close(true); return; }
       if (e.key !== 'Tab') return;
-      const items = Array.prototype.slice.call(panel.querySelectorAll('button, [tabindex="0"]')).filter(function (n) { return n.tabIndex >= 0; });
+      // every control the Tab key can reach: a number field after the last button used to fall outside the loop (Tab skipped it), and a hidden button as the "last" one broke the wrap
+      const items = Array.prototype.slice.call(panel.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex="0"]')).filter(function (n) { return n.tabIndex >= 0 && n.offsetParent !== null; });
       if (!items.length) return;
       const first = items[0], last = items[items.length - 1];
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
@@ -522,9 +567,12 @@
     });
     if (scrim) scrim.addEventListener('click', function () { if (api.isOpen) close(false); });
     document.addEventListener('pointerdown', function (e) {
-      if (api.isOpen && !panel.contains(e.target) && !trigger.contains(e.target) && e.target !== scrim) close(false);
+      // a confirmation dialog (UI.dialog: aria-modal) opened from this panel lies outside it: a tap on its buttons or its backdrop is not "outside" - the panel stays, and the dialog's own focus return finds its opener
+      // a notice (UI.notify) lies outside the panel too, and over it under the phone layout (z-index 60 against 40): a tap on its close button or its text is not "outside" either - it dismisses the notice, the panel stays
+      if (api.isOpen && !panel.contains(e.target) && !trigger.contains(e.target) && e.target !== scrim && !(e.target && e.target.closest && e.target.closest('[aria-modal="true"], .notice'))) close(false);
     }, true);
-    window.addEventListener('resize', function () { if (api.isOpen) close(false); });
+    const typing = function () { const a = document.activeElement; return !!a && panel.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName || '') && !/^(button|checkbox|radio|range|submit|reset)$/.test(a.type || ''); };
+    window.addEventListener('resize', function () { if (api.isOpen && !typing()) close(false); });
     window.addEventListener('scroll', function () { if (api.isOpen && !window.matchMedia(SHEET_QUERY).matches) close(false); }, { passive: true });
     panel.hidden = true;
     if (!panel.hasAttribute('tabindex')) panel.tabIndex = -1;
@@ -532,6 +580,10 @@
     trigger.setAttribute('aria-expanded', 'false');
     return api;
   }
+
+  // A tab change (nav.js's 'tabchange': the header tab, the Back button, a hash edit) closes the open overlay: its trigger may be about to move or hide, and an overlay left open would keep its scrim and its
+  // sheet over the next tab. A tap on a header tab already closes it (an outside tap); this covers the ways that do not tap.
+  document.addEventListener('tabchange', function () { if (openOverlay) openOverlay.close(false); });
 
   // ---- modal dialog whose open/close logic lives elsewhere (Help, Download) ---------------------
   /*
@@ -585,5 +637,5 @@
   window.uiSync = function () { for (let i = 0; i < syncFns.length; i++) syncFns[i](); };
   function onSync(fn) { syncFns.push(fn); }
 
-  window.UI = { onSync: onSync, notify: notify, notifyClear: notifyClear, toast: toast, hideToast: hideToast, setDisabled: setDisabled, name: name, guard: guard, stepper: stepper, pressed: pressed, isDisabled: isDisabled, dialog: dialog, radiogroup: radiogroup, overlay: overlay, checkedFromActive: checkedFromActive, showReason: showReason };
+  window.UI = { normalizeNumber: normalizeNumber, onSync: onSync, notify: notify, notifyClear: notifyClear, toast: toast, hideToast: hideToast, setDisabled: setDisabled, name: name, guard: guard, stepper: stepper, pressed: pressed, isDisabled: isDisabled, dialog: dialog, radiogroup: radiogroup, overlay: overlay, checkedFromActive: checkedFromActive, showReason: showReason };
 })();
