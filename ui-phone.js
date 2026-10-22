@@ -95,8 +95,12 @@
       t.subtabs.forEach(function (sid) {
         const pane = el('div', 'ph-pane', { 'data-subtab': sid });
         config.subtabs[sid].rows.forEach(function (row) {
-          const r = el('div', 'ph-row');
-          row.items.forEach(function (it) { take(it.id, r); });
+          const r = el('div', row.scroll ? 'ph-row ph-row-scroll' : 'ph-row');
+          row.items.forEach(function (it) {
+            if (it.sep) { r.appendChild(el('span', 'ph-sep', { 'aria-hidden': 'true' })); return; }
+            take(it.id, r);
+            (it.also || []).forEach(function (id) { take(id, r); });   // elements that share the item's slot (one of them is hidden)
+          });
           pane.appendChild(r);
         });
         b.park.appendChild(pane);
@@ -124,6 +128,12 @@
           // A button in the closed sheet cannot take the focus back (UI.overlay and UI.dialog call trigger.focus() when Info or the Download dialog closes): while the layout is on, its focus() hands the
           // focus to the sheet's opener (in the tool row) when the button itself is not visible.
           const opener = tr.sheet.opener ? doc.getElementById(tr.sheet.opener) : null;
+          // the opener's name while this tool row is on (its own describes Form's sheet): put back by release()
+          if (opener && tr.sheet.openerLabel) {
+            b.openerSaved = { node: opener, label: opener.getAttribute('aria-label'), title: opener.getAttribute('title'), i18n: opener.getAttribute('data-i18n') };
+            opener.setAttribute('aria-label', tr.sheet.openerLabel.text); opener.setAttribute('title', tr.sheet.openerLabel.text);
+            if (tr.sheet.openerLabel.i18n) opener.setAttribute('data-i18n', tr.sheet.openerLabel.i18n);
+          }
           if (opener) tr.sheet.items.forEach(function (id) {
             const node = doc.getElementById(id);
             if (!node) return;
@@ -209,6 +219,10 @@
         restoreAll();
         if (built) {
           built.proxied.forEach(function (node) { delete node.focus; });
+          if (built.openerSaved) {
+            const o = built.openerSaved;
+            [['aria-label', o.label], ['title', o.title], ['data-i18n', o.i18n]].forEach(function (a) { if (a[1] === null) o.node.removeAttribute(a[0]); else o.node.setAttribute(a[0], a[1]); });
+          }
           if (built.settingsRow && built.settingsRow.parentNode) built.settingsRow.parentNode.removeChild(built.settingsRow);
           if (built.sheetRow && built.sheetRow.parentNode) built.sheetRow.parentNode.removeChild(built.sheetRow);
           if (built.stack.parentNode) built.stack.parentNode.removeChild(built.stack);

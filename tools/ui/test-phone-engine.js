@@ -20,12 +20,13 @@ const T = (name, fn) => { try { fn(); } catch (e) { check(name, false, 'threw: '
 
 // ---- a small fake DOM -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 class Node_ {
-    constructor(doc, type, tag) { this.doc = doc; this.nodeType = type; this.tagName = tag ? tag.toUpperCase() : ''; this.childNodes = []; this.parentNode = null; this.attrs = {}; this.handlers = {}; this.hidden = false; this.text = ''; this.clicks = 0; }
+    constructor(doc, type, tag) { this.doc = doc; this.nodeType = type; this.tagName = tag ? tag.toUpperCase() : ''; this.childNodes = []; this.parentNode = null; this.attrs = {}; this.handlers = {}; this.hidden = false; this.text = ''; this.clicks = 0; this.dataset = {}; }
     get children() { return this.childNodes.filter(n => n.nodeType === 1); }
     get id() { return this.attrs.id || ''; }
     get className() { return this.attrs.class || ''; } set className(v) { this.attrs.class = String(v); }
     get classList() { const n = this; const list = () => (n.attrs.class || '').split(/\s+/).filter(Boolean); return { add: c => { if (!list().includes(c)) n.attrs.class = list().concat(c).join(' '); }, remove: c => { n.attrs.class = list().filter(x => x !== c).join(' '); }, contains: c => list().includes(c) }; }
-    get style() { const n = this; n._style = n._style || {}; return { setProperty: (k, v) => { n._style[k] = String(v); }, removeProperty: k => { delete n._style[k]; }, getPropertyValue: k => n._style[k] || '' }; }
+    get style() { const n = this; if (!n._st) { n._style = n._style || {}; n._st = { setProperty: (k, v) => { n._style[k] = String(v); }, removeProperty: k => { delete n._style[k]; }, getPropertyValue: k => n._style[k] || '' }; } return n._st; }   // one object: a property written to it (background) stays
+    get firstChild() { return this.childNodes[0] || null; }
     get offsetParent() { return this.doc.reachable(this) ? this.parentNode : null; }   // null when it has no box (a hidden ancestor), like the DOM
     get isConnected() { let e = this; while (e.parentNode) e = e.parentNode; return e === this.doc.documentElement || e === this.doc; }
     get nextSibling() { const p = this.parentNode; if (!p) return null; const i = p.childNodes.indexOf(this); return p.childNodes[i + 1] || null; }
@@ -33,7 +34,7 @@ class Node_ {
     get textContent() { return this.text; } set textContent(v) { this.text = String(v); }
     setAttribute(k, v) { this.attrs[k] = String(v); } getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; } removeAttribute(k) { delete this.attrs[k]; } hasAttribute(k) { return k in this.attrs; }
     addEventListener(t, fn) { (this.handlers[t] = this.handlers[t] || []).push(fn); }
-    dispatch(t, ev) { (this.handlers[t] || []).slice().forEach(h => h(Object.assign({ type: t, target: this }, ev || {}))); }
+    dispatch(t, ev) { (this.handlers[t] || []).slice().forEach(h => h(Object.assign({ type: t, target: this, preventDefault() { }, stopPropagation() { } }, ev || {}))); }
     contains(n) { for (let e = n; e; e = e.parentNode) if (e === this) return true; return false; }
     cloneNode(deep) { const c = new Node_(this.doc, this.nodeType, this.tagName); c.attrs = Object.assign({}, this.attrs); c.text = this.text; c.hidden = this.hidden; if (deep) this.childNodes.forEach(k => c.appendChild(k.cloneNode(true))); return c; }   // a clone has the attributes (so the same id) and NO listeners, as in the DOM
     _detach() { this.doc.mutations++; const p = this.parentNode; if (p) { p.childNodes.splice(p.childNodes.indexOf(this), 1); this.parentNode = null; if (this.doc.activeElement && this.contains(this.doc.activeElement)) this.doc.activeElement = this.doc.body; } }
@@ -83,7 +84,16 @@ function buildPage(opts) {
             el('span', { class: 'nav-divider' }),
             el('div', { id: 'nav-symmetry', class: 'nav-cluster nav-symmetry' }, [btn('btn-sym-rotation'), btn('btn-sym-rotation-mirror')]),
             btn('btn-more-form', 'icon-btn nav-more'), el('span', { class: 'nav-break' })]),
-        el('div', { id: 'nav-farbe', class: 'nav-row nav-farbe' }, [btn('btn-open-kreis')]),
+        el('div', { id: 'nav-farbe', class: 'nav-row nav-farbe' }, [
+            el('div', { id: 'nav-anchor-views', class: 'nav-cluster nav-anchor-views' }, [btn('btn-open-kreis'), btn('btn-open-dreieck')]),
+            el('span', { class: 'nav-divider nav-divider-a' }),
+            el('div', { id: 'farbe-family-circle', class: 'nav-cluster nav-harmony-family' }, [btn('btn-harmony-2'), btn('btn-harmony-3'), btn('btn-harmony-4')]),
+            el('div', { id: 'farbe-family-triangle', class: 'nav-cluster nav-harmony-family' }, ['b', 'w', 's', 'v'].map(k => btn('btn-harmony-' + k))),
+            el('span', { class: 'nav-divider nav-divider-b' }),
+            el('div', { id: 'farbe-anchor-hue-stepper', class: 'stepper' }, [el('input', { id: 'farbe-anchor-hue-input', type: 'number' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')]),
+            el('div', { id: 'farbe-anchor-register-stepper', class: 'stepper' }, [el('span', { id: 'farbe-anchor-register-display', class: 'stepper-display' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')]),
+            el('span', { id: 'farbe-anchor-preview', class: 'fc-swatch' }),
+            el('select', { id: 'face-colors-rule' })]),
         el('div', { id: 'nav-netz', class: 'nav-row nav-netz' }, [btn('btn-kind-sin')])]));
     body.appendChild(el('div', { class: 'canvas-row' }, [
         el('div', { id: 'canvas-container' }),
@@ -92,13 +102,16 @@ function buildPage(opts) {
         el('div', { class: 'rail-left' }, [
             el('div', { class: 'rail-top' }, [el('div', { id: 'rail-group-a', class: 'rail-group' }, [btn('btn-undo'), btn('btn-redo'), btn('btn-random')]),
                 el('div', { class: 'rail-bm' }, [el('div', { id: 'rail-group-b', class: 'rail-group' }, [btn('btn-toggle-nodes'), btn('btn-toggle-faces')]), el('div', { id: 'rail-group-more', class: 'rail-group' }, [btn('btn-more-rail', 'icon-btn nav-more')])])]),
-            el('div', { class: 'rail-bottom' }, [el('div', { id: 'rail-group-c', class: 'rail-group' }, [el('a', { id: 'btn-gallery', class: 'icon-btn', href: 'gallery.html' }, [], true), btn('btn-paste-pattern', 'icon-btn rail-form-only')]),
-                el('div', { id: 'rail-group-d', class: 'rail-group' }, [btn('btn-info'), btn('btn-save')]), el('div', { id: 'rail-group-e', class: 'rail-group' }, [btn('btn-clear')])])])]));
+            el('div', { class: 'rail-bottom' }, [el('div', { id: 'rail-group-c', class: 'rail-group' }, [el('a', { id: 'btn-gallery', class: 'icon-btn', href: 'gallery.html' }, [], true), el('a', { id: 'btn-farborgel', class: 'icon-btn rail-farbe-only', href: 'color-harmony/ui/index.html' }, [], true), btn('btn-paste-pattern', 'icon-btn rail-form-only')]),
+                el('div', { id: 'rail-group-d', class: 'rail-group' }, [btn('btn-info'), btn('btn-save')]), el('div', { id: 'rail-group-e', class: 'rail-group' }, [btn('btn-clear')]),
+                el('div', { id: 'farbe-strategy-group', class: 'rail-group rail-farbe-only', role: 'radiogroup' }, ['cyclic', 'area', 'symmetry', 'rings'].map(k => btn('btn-strategy-' + k))),
+                el('div', { id: 'rail-group-reset', class: 'rail-group rail-farbe-only' }, [btn('btn-face-colors-reset')])])])]));
     // the leftover containers: the layer "Mehr" wrapper (hidden unless its state is open), the timeline group (a class ts-open when open) and the contextual groups sketch.js shows for Curve / Free
     const layerPanel = el('div', { id: 'layer-more-panel' }, [btn('layer-align', 'layer-btn'), el('input', { id: 'layer-offset-x-input', type: 'number' })]); layerPanel.hidden = true;
     const tlGroup = el('div', { id: 'timeline-group', class: 'control-group' }, [btn('btn-clear-timeline', 'layer-btn'), el('input', { id: 'timeline-pairing-filter', type: 'number' })]);
     const settings = ['curve-fold-group', 'curve-strength-group', 'free-roughness-group', 'free-controls-group'].map(id => { const g = el('div', { id, class: 'control-group' }, [el('input', { type: 'range' })]); g.hidden = true; return g; });
-    body.appendChild(el('div', { class: 'main-container' }, [el('div', { class: 'controls-container' }, [btn('btn-leftover', 'layer-btn')].concat(settings, [tlGroup, layerPanel]))]));
+    const faceList = el('div', { id: 'face-colors-list' }), faceGroup = el('div', { id: 'face-colors-group', class: 'control-group' }, [faceList]); faceGroup.hidden = true;
+    body.appendChild(el('div', { class: 'main-container' }, [el('div', { class: 'controls-container' }, [btn('btn-leftover', 'layer-btn')].concat(settings, [tlGroup, layerPanel, faceGroup]))]));
     const scrim = el('div', { id: 'overlay-scrim', class: 'overlay-scrim' }); scrim.hidden = true; body.appendChild(scrim);
     // what ui-layers.js and ui-timeline.js do on the "..." click (the existing handlers, bound BEFORE the engine starts, as on the page): flip the block's own state
     const layerModel = { open: false };
@@ -117,7 +130,7 @@ function buildPage(opts) {
         Object.assign(win, { window: win, document: doc, console, MutationObserver: class { constructor(cb) { (win.observers = win.observers || []).push(cb); } observe() { } }, performance: { now: () => 0 }, setTimeout, clearTimeout });
         vm.runInContext(fs.readFileSync(process.env.UI_JS || path.join(ROOT, 'ui.js'), 'utf8'), win, { filename: 'ui.js' });
     }
-    return { doc, win, mq, calls, scrim, layerModel, layerPanel, tlGroup };
+    return { doc, win, mq, calls, scrim, layerModel, layerPanel, tlGroup, faceList, faceGroup };
 }
 const ph = (page, cfg) => createPhone(page.doc, page.win, cfg || config);
 // a structure string of the whole tree (tag, id, class, kids; comments by text): equal before apply and after release
@@ -205,9 +218,9 @@ T('subtabs', () => {
     check('"Zeit": the timeline strip is in the slot, one row; the layer strip is parked again', slot().children[0].getAttribute('data-subtab') === 'zeit' && slot().children[0].children.length === 1 && p.doc.reachable(orig['timeline-strip']) && !p.doc.reachable(orig['layer-strip']));
     check('only ONE pane is ever in the slot (never two)', slot().children.length === 1);
     check('show() of an unknown sub-tab changes nothing and returns false', (() => { const d = dump(p.doc.documentElement); const r = eng.show('nirgends'); return r === false && dump(p.doc.documentElement) === d; })());
-    // remembered per tab: leave the tab (Farbe is not covered: released), come back
-    p.doc.documentElement.setAttribute('data-tab', 'farbe'); p.doc.dispatch('tabchange', { detail: { tab: 'farbe' } });
-    check('Farbe is not covered: the tabchange releases (class gone, controls back in the Form row and the rail)', !p.doc.documentElement.classList.contains('ph') && orig['btn-undo'].parentNode.id === 'rail-group-a' && orig['nav-shapes'].parentNode.id === 'nav-form' && p.doc.getElementById('ph-stack') === null);
+    // remembered per tab: leave the tab (Netz is not covered: released), come back
+    p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
+    check('Netz is not covered: the tabchange releases (class gone, controls back in the Form row and the rail)', !p.doc.documentElement.classList.contains('ph') && orig['btn-undo'].parentNode.id === 'rail-group-a' && orig['nav-shapes'].parentNode.id === 'nav-form' && p.doc.getElementById('ph-stack') === null);
     p.doc.documentElement.setAttribute('data-tab', 'form'); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
     check('back to Form: the layout is on again and shows the sub-tab it had (Zeit), remembered per tab', p.doc.documentElement.classList.contains('ph') && p.doc.getElementById('ph-slot').children[0].getAttribute('data-subtab') === 'zeit' && p.doc.getElementById('ph-subtab-zeit').getAttribute('aria-current') === 'true' && eng.state().remembered.form === 'zeit');
     // the focus
@@ -240,8 +253,8 @@ T('events', () => {
     check('the first tabchange (Netz: not covered) leaves it alone', dump(r.doc.documentElement) === d0);
     r.doc.documentElement.setAttribute('data-tab', 'form'); r.doc.dispatch('tabchange', { detail: { tab: 'form' } });
     check('the first tabchange for Form applies, and the document was still "interactive" then (before the load event, when p5 runs setup)', r.doc.documentElement.classList.contains('ph') && e3.state().firstApplyState === 'interactive');
-    ['farbe', 'netz'].forEach(t => { r.doc.dispatch('tabchange', { detail: { tab: t } }); });
-    check('every not covered tab releases (Farbe, Netz): all controls where they were', dump(r.doc.documentElement) === d0);
+    ['netz'].forEach(t => { r.doc.documentElement.setAttribute('data-tab', t); r.doc.dispatch('tabchange', { detail: { tab: t } }); });
+    check('every not covered tab releases (Netz, from commit 2 the only one): all controls where they were', dump(r.doc.documentElement) === d0);
     check('an unknown tab (a hash nav.js would not produce) is treated as not covered', ph(buildPage()).apply('nirgends') === false);
 });
 
@@ -404,6 +417,87 @@ T('sheet-dialogs', () => {
         check('pointer path and keyboard path give the same state (dialog closed, sheet open, focus on the opener, block open)', rp === rk && rp === 'false,true,btn-clear-timeline,true', rp + ' / ' + rk);
     }
 });
+console.log('\n== the Farbe tab (commit 2) ==');
+const CHIPS = require(process.env.UI_PHONE_CHIPS_JS || path.join(ROOT, 'ui-phone-chips.js'));
+const farbePage = opts => { const p = buildPage(Object.assign({ ui: true }, opts || {})); const chips = CHIPS.createChips(p.doc, p.win); p.chips = chips; p.doc.documentElement.setAttribute('data-tab', 'farbe'); return p; };
+const farbeIds = () => { const t = config.tabs.farbe, tr = config.toolRows[t.toolRow], out = [].concat.apply([], tr.groups).concat(tr.end, tr.sheet.items); t.subtabs.forEach(s => config.subtabs[s].rows.forEach(r => r.items.forEach(i => { if (i.id) out.push(i.id); (i.also || []).forEach(x => out.push(x)); }))); return out; };
+T('farbe-apply', () => {
+    const p = farbePage(), eng = ph(p); const before = dump(p.doc.documentElement), orig = {}; farbeIds().forEach(id => { orig[id] = p.doc.getElementById(id); });
+    const opener = p.doc.getElementById('btn-more-rail'), label0 = opener.getAttribute('aria-label'), i18n0 = opener.getAttribute('data-i18n'), title0 = opener.getAttribute('title');
+    opener.setAttribute('aria-label', 'Mehr: Kurve, Frei'); opener.setAttribute('data-i18n', 'more.rail.button'); opener.setAttribute('title', 'Mehr: Kurve, Frei');
+    const before2 = dump(p.doc.documentElement);
+    eng.start();
+    check('Farbe is covered: start() with html[data-tab=farbe] applies it (class ph, applied "farbe", the first sub-tab Harmonie)', p.doc.documentElement.classList.contains('ph') && eng.state().applied === 'farbe' && eng.state().sub === 'harmonie', JSON.stringify(eng.state().missing));
+    check('every listed control exists (the chip containers come from the chip view); nothing is missing', eng.state().missing.length === 0 && farbeIds().every(id => orig[id]), eng.state().missing.join());
+    const toolRow = p.doc.getElementById('ph-toolrow'), tools = toolRow.children[0];
+    check('the tool row: [ Fill | the strategy group ] scrolling part, a separator, then More at the end; Undo, Redo, Random, Clear stay where they were (hidden in Farbe by the rail CSS)', tools.children.map(g => g.className.split(' ')[0]).join() === 'ph-toolgroup,ph-sep,ph-toolgroup' && tools.children[0].children.map(c => c.id).join() === 'btn-toggle-faces' && tools.children[2].children.map(c => c.id).join() === 'farbe-strategy-group' && toolRow.children.map(c => c.id || c.className.split(' ')[0]).join() === 'ph-tools,ph-sep,btn-more-rail' && p.doc.getElementById('btn-undo').parentNode.id === 'rail-group-a' && p.doc.getElementById('btn-clear').parentNode.id === 'rail-group-e');
+    check('the strategy radiogroup moved WHOLE: the wrapper (role radiogroup) with its four buttons, the same nodes', orig['farbe-strategy-group'].getAttribute('role') === 'radiogroup' && orig['farbe-strategy-group'].children.map(c => c.id).join() === 'btn-strategy-cyclic,btn-strategy-area,btn-strategy-symmetry,btn-strategy-rings');
+    check('the sub-tab row: Harmonie, Spuren, Ebenen, Zeit; Harmonie is current', p.doc.getElementById('ph-subtabs').children.map(b => b.textContent).join() === 'Harmonie,Spuren,Ebenen,Zeit' && p.doc.getElementById('ph-subtab-harmonie').getAttribute('aria-current') === 'true');
+    const pane = id => p.doc.getElementById('ph-slot').children[0].getAttribute('data-subtab') === id ? p.doc.getElementById('ph-slot').children[0] : p.doc.getElementById('ph-park').children.find(c => c.getAttribute('data-subtab') === id);
+    const rowsOf = pane => pane.children.map(r => r.children.map(c => c.id || c.className.split(' ')[0]).join('+')).join(' / ');
+    check('Harmonie: row 1 = the anchor views (Kreis, Dreieck), a hairline the engine made, the two harmony clusters in one slot; row 2 = hue stepper, register stepper, the swatch', rowsOf(pane('harmonie')) === 'nav-anchor-views+ph-sep+farbe-family-triangle+farbe-family-circle / farbe-anchor-hue-stepper+farbe-anchor-register-stepper+farbe-anchor-preview', rowsOf(pane('harmonie')));
+    check('Harmonie row 1 is a scrolling row (below 340px), row 2 is not', pane('harmonie').children[0].className === 'ph-row ph-row-scroll' && pane('harmonie').children[1].className === 'ph-row');
+    check('Spuren: row 1 = #ph-trail-chips, row 2 = #ph-trail-stepper (the chip view\'s containers); Ebenen and Zeit are the shared strips', rowsOf(pane('spuren')) === 'ph-trail-chips / ph-trail-stepper' && rowsOf(pane('ebenen')) === 'layer-strip' && rowsOf(pane('zeit')) === 'timeline-strip');
+    const sheet = p.doc.getElementById('more-rail');
+    check('the rail\'s sheet got ONE extra row: Reset Color, Nodes, the Farborgel link, Info, Download (and no Curve / Free settings row: Farbe has none); Form\'s own first row is still its first child', sheet.children.map(c => c.id || c.className).join() === 'more-row,more-row more-extra,more-name' && sheet.children[1].children.map(c => c.id).join() === 'btn-face-colors-reset,btn-toggle-nodes,btn-farborgel,btn-info,btn-save', sheet.children.map(c => c.id || c.className).join());
+    check('the opener More says what is in it while Farbe is on (aria-label, title, data-i18n key)', opener.getAttribute('aria-label') === config.toolRows.farbe.sheet.openerLabel.text && opener.getAttribute('title') === config.toolRows.farbe.sheet.openerLabel.text && opener.getAttribute('data-i18n') === config.toolRows.farbe.sheet.openerLabel.i18n, opener.getAttribute('aria-label'));
+    check('every listed control is the SAME node as before, one element per id, no id twice in the document', farbeIds().every(id => p.doc.getElementById(id) === orig[id] && p.doc.all().filter(n => n.id === id).length === 1) && (() => { const ids2 = p.doc.all().map(n => n.id).filter(Boolean); return new Set(ids2).size === ids2.length; })());
+    check('the chip containers left their holder for the panel: the holder (hidden) is empty', p.doc.getElementById('ph-chip-home').hidden === true && p.doc.getElementById('ph-chip-home').children.length === 0);
+    // Form <-> Farbe <-> Netz
+    p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
+    check('Farbe -> Netz (not covered) releases: the tree is the tree before apply, the opener has its own label, title and data-i18n again, the chip containers are back in their holder', dump(p.doc.documentElement) === before2 && opener.getAttribute('aria-label') === 'Mehr: Kurve, Frei' && opener.getAttribute('title') === 'Mehr: Kurve, Frei' && opener.getAttribute('data-i18n') === 'more.rail.button' && p.doc.getElementById('ph-chip-home').children.length === 2);
+    p.doc.documentElement.setAttribute('data-tab', 'form'); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
+    check('Netz -> Form applies Form (Raster, remembered per tab: Farbe\'s own sub-tab is not Form\'s) and the opener has no Farbe label', eng.state().applied === 'form' && eng.state().sub === 'raster' && opener.getAttribute('aria-label') === 'Mehr: Kurve, Frei' && p.doc.getElementById('more-rail').children.map(c => c.id || c.className).join() === 'more-row,more-row more-extra,more-settings,more-name');
+    eng.show('zeit');
+    p.doc.documentElement.setAttribute('data-tab', 'farbe'); p.doc.dispatch('tabchange', { detail: { tab: 'farbe' } });
+    check('Form -> Farbe directly (no Netz between): Form is released first, Farbe applied, its first sub-tab Harmonie, and Form\'s sub-tab (Zeit) is remembered for its return', eng.state().applied === 'farbe' && eng.state().sub === 'harmonie' && eng.state().remembered.form === 'zeit');
+    eng.show('spuren'); eng.release();
+    check('release from Farbe with Spuren shown: the whole tree is the one before (every marker removed, the opener restored)', dump(p.doc.documentElement) === before2 && !p.doc.documentElement.classList.contains('ph'));
+    const k = farbePage(), ek = ph(k); ek.start(); ek.release(); ek.apply('farbe'); ek.release(); ek.apply('farbe'); ek.release();
+    check('three apply / release round trips of Farbe leave no drift (the tree equals the first state, no marker, no container)', (() => { const q = farbePage(); const d = dump(q.doc.documentElement); const e = ph(q); q.doc.documentElement.setAttribute('data-tab', 'farbe'); e.apply('farbe'); e.release(); e.apply('farbe'); e.release(); e.apply('farbe'); e.release(); return dump(q.doc.documentElement) === d; })());
+    // the wrong-tab guard: Farbe's buttons are not touched by Form
+    const f = farbePage(); f.doc.documentElement.setAttribute('data-tab', 'form'); const ef = ph(f); ef.start();
+    check('Form applied while the Farbe pieces are on the page: they stay where they are (the strategy group in the rail, the families in the Farbe row)', f.doc.getElementById('farbe-strategy-group').parentNode.className === 'rail-bottom' && f.doc.getElementById('farbe-family-circle').parentNode.id === 'nav-farbe');
+});
+T('farbe-chips', () => {
+    const p = farbePage(), eng = ph(p); eng.start(); eng.show('spuren');
+    const ch = p.chips, N = ch.nodes;
+    const mkRows = specs => { while (p.faceList.firstChild) p.faceList.removeChild(p.faceList.firstChild); const clicks = []; specs.forEach((sp, i) => { const row = p.doc.createElement('div'); row.className = 'fc-row'; row.dataset.key = sp.key; const sw = p.doc.createElement('span'); sw.className = 'fc-swatch'; sw.style.background = sp.color; sw.style.backgroundColor = sp.color; const lab = p.doc.createElement('span'); lab.className = 'fc-label'; lab.textContent = 'Trail ' + (i + 1) + ' · ' + sp.faces + ' face' + (sp.faces === 1 ? '' : 's'); row.appendChild(sw); row.appendChild(lab);
+            if (sp.n !== undefined) { const wrap = p.doc.createElement('span'); wrap.className = 'pairing-variant'; ['◀', 'cnt', '▶'].forEach((t, j) => { if (j === 1) { const c = p.doc.createElement('span'); c.className = 'pairing-variant-count'; c.dataset.k = String(sp.n || 1); c.dataset.c = '3'; c.textContent = sp.n ? sp.n + '/3' : '–/3'; wrap.appendChild(c); } else { const b = p.doc.createElement('button'); b.className = 'layer-btn pairing-move-btn'; b.addEventListener('click', () => { clicks.push(sp.key + (j ? '+' : '-')); }); wrap.appendChild(b); } }); row.appendChild(wrap); }
+            p.faceList.appendChild(row); }); return clicks; };
+    p.faceGroup.hidden = false;
+    let clicks = mkRows([{ key: 'k1', color: 'rgb(1, 1, 1)', faces: 6, n: 1 }, { key: 'k2', color: 'rgb(2, 2, 2)', faces: 1, n: 2 }, { key: 'k3', color: 'rgb(3, 3, 3)', faces: 4, n: 3 }]);
+    ch.refresh();
+    check('the chip view shows one chip per model row with its number, its accessible label and the colour bar read from the row\'s swatch; the first is selected and aria-pressed', N.chips.children.length === 3 && N.chips.children.map(c => c.textContent).join() === '1,2,3' && N.chips.children[0].getAttribute('aria-pressed') === 'true' && N.chips.children[1].getAttribute('aria-pressed') === 'false' && N.chips.children[1].getAttribute('aria-label') === 'Spur 2 · 1 Fläche' && N.chips.children.map(c => c.children[0].style.background).join('|') === 'rgb(1, 1, 1)|rgb(2, 2, 2)|rgb(3, 3, 3)');
+    check('the stepper shows the selected trail\'s counter "1/3" and its label "Spur 1 · 6 Flächen"', N.count.textContent === '1/3' && N.label.textContent === 'Spur 1 · 6 Flächen');
+    N.chips.children[2].dispatch('click');
+    check('a tap on chip 3 selects it (aria-pressed, the label and counter follow); the getter says which', N.chips.children[2].getAttribute('aria-pressed') === 'true' && N.chips.children[0].getAttribute('aria-pressed') === 'false' && N.label.textContent === 'Spur 3 · 4 Flächen' && N.count.textContent === '3/3' && ch.selectedTrail().index === 2 && ch.selectedTrail().key === 'k3' && ch.selectedTrail().color === 'rgb(3, 3, 3)' && ch.selectedTrail().faceCount === 4);
+    N.next.dispatch('click'); N.prev.dispatch('click');
+    check('Next and Previous FORWARD the click to the SELECTED trail\'s own buttons (the model row\'s: the same handlers); no other row\'s button is clicked', clicks.join() === 'k3+,k3-', clicks.join());
+    const m0 = p.doc.mutations; ch.sync(); ch.sync();
+    check('a sync with nothing changed does no work (the signature is the same: not one node is touched)', p.doc.mutations === m0);
+    clicks = mkRows([{ key: 'k1', color: 'rgb(1, 1, 1)', faces: 6, n: 1 }, { key: 'k2', color: 'rgb(2, 2, 2)', faces: 1, n: 2 }]);
+    ch.refresh();
+    check('the model lost the selected trail (3 rows -> 2): the selection is clamped to the last one, not left dangling; chips and stepper follow', N.chips.children.length === 2 && N.chips.children[1].getAttribute('aria-pressed') === 'true' && ch.selectedTrail().index === 1 && N.label.textContent === 'Spur 2 · 1 Fläche');
+    clicks = mkRows([{ key: 'k0', color: 'rgb(9, 9, 9)', faces: 2, n: 1 }, { key: 'k1', color: 'rgb(1, 1, 1)', faces: 6, n: 1 }, { key: 'k2', color: 'rgb(2, 2, 2)', faces: 1, n: 2 }]);
+    ch.refresh();
+    check('a trail inserted before the selected one: the selection stays on the same trail (by key)', ch.selectedTrail().key === 'k2' && ch.selectedTrail().index === 2);
+    const mark = p.doc.documentElement; mark.setAttribute('data-tab', 'netz'); const d1 = p.doc.mutations; clicks = mkRows([{ key: 'z', color: 'red', faces: 1, n: 1 }]); const d2 = p.doc.mutations; ch.sync();
+    check('outside the Farbe phone layout the view does no work on a sync (it is not on screen)', p.doc.mutations === d2); mark.setAttribute('data-tab', 'farbe');
+    mkRows([]); ch.refresh();
+    check('no trails: ONE muted line "Keine Flächen" replaces the chips (data-i18n), the stepper shows nothing and its buttons are disabled with a reason', N.chips.children.length === 1 && N.chips.children[0].textContent === 'Keine Flächen' && N.chips.children[0].getAttribute('data-i18n') === 'trails.none' && N.count.textContent === '' && N.label.textContent === '' && N.prev.getAttribute('aria-disabled') === 'true' && N.next.getAttribute('aria-disabled') === 'true' && !!N.prev.dataset.reason && ch.selectedTrail() === null, N.prev.dataset.reason);
+    mkRows([{ key: 'k1', color: 'rgb(1, 1, 1)', faces: 2, n: 1 }]); p.faceGroup.hidden = true; ch.refresh();
+    check('the model group is hidden (Fill is off: its rows are stale): the view is empty, whatever the old rows say', N.chips.children.length === 1 && N.chips.children[0].textContent === 'Keine Flächen');
+    p.win.farbeReason = () => 'Fläche füllen einschalten'; ch.refresh();
+    check('with the panel\'s reason (window.farbeReason: Fill is off) the stepper buttons carry THAT reason (aria-disabled, data-reason), the one the other Farbe controls show', N.prev.dataset.reason === 'Fläche füllen einschalten' && N.next.getAttribute('aria-disabled') === 'true');
+    p.win.farbeReason = () => null; p.faceGroup.hidden = false; mkRows([{ key: 'k1', color: 'rgb(1, 1, 1)', faces: 2, n: 1 }]); ch.refresh();
+    check('rows and no reason: the buttons are enabled again (no aria-disabled left)', !N.prev.getAttribute('aria-disabled') && !N.next.getAttribute('aria-disabled'));
+    const tr = N.prev.dispatch.bind(N.prev); mkRows([{ key: 'u', color: 'red', faces: 2, n: 0 }]); ch.refresh();
+    check('an uncoloured trail (counter "–/3") is shown with the dash and still steps (the first click of the row\'s own stepper picks the first colour)', N.count.textContent === '–/3');
+    const nm0 = p.doc.all().filter(n => n.id === 'ph-trail-chips').length;
+    eng.release(); eng.apply('farbe'); eng.release();
+    check('through release and apply the chip view keeps its single listener set (one container each, no duplicated ids)', p.doc.all().filter(n => n.id === 'ph-trail-chips').length === nm0 && p.doc.all().filter(n => n.id === 'ph-trail-stepper').length === 1);
+});
 T('overlay-options', () => {
     // the two options and the resize rule added to UI.overlay in 1b, on a plain trigger / panel pair (nothing of the phone engine)
     const p = buildPage({ ui: true }), UI = p.win.UI, mk = (tag, id) => { const n = p.doc.createElement(tag); n.setAttribute('id', id); p.doc.body.appendChild(n); return n; };
@@ -423,6 +517,10 @@ T('overlay-options', () => {
     const r1 = tab(c4), r2 = tab(a4, true), r3 = tab(b4), r4 = tab(n4, true);
     check('Tab on the LAST control of the panel wraps to the first, Shift+Tab on the first wraps to the last: here the last is a number field after the last button, and a hidden button after it is ignored', r1.prevented === 1 && r1.active === a4 && r2.prevented === 1 && r2.active === c4, r1.active.id + ' / ' + r2.active.id);
     check('...and a Tab in the middle is left to the browser (not prevented), also from a number field', r3.prevented === 0 && r4.prevented === 0);
+    // a tab change (the Back button, a hash edit: no tap) closes the open overlay and its onClose runs: no stuck scrim over the next tab
+    const t5 = mk('button', 't5'), p5 = mk('div', 'p5'), cl5 = []; const o5 = UI.overlay(t5, p5, { onClose: rf => cl5.push(rf) });
+    o5.open(); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
+    check('a tabchange (nav.js) closes the open overlay (scrim hidden, onClose(false)); with none open it does nothing', o5.isOpen === false && p.scrim.hidden === true && cl5.join() === 'false' && (p.doc.dispatch('tabchange', {}), cl5.length === 1));
     const t3 = mk('button', 't3'), p3 = mk('div', 'p3'), f3 = p3.appendChild(p.doc.createElement('input')), b3 = p3.appendChild(p.doc.createElement('button')), o3 = UI.overlay(t3, p3);
     o3.open(); f3.focus(); p.win.dispatch('resize');
     check('a resize with the focus in a text field of the panel keeps it open; with the focus on a button it closes', o3.isOpen === true && (b3.focus(), p.win.dispatch('resize'), o3.isOpen === false));

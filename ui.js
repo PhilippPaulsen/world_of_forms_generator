@@ -463,6 +463,7 @@
    * phone layout's sheets follow a state some other handler of the same button flips). A resize does not close the panel while a text field inside
    * it has the focus: the soft keyboard of a phone resizes the window, and closing the sheet then would throw away what the person is typing in.
    * A tap inside a modal dialog (aria-modal="true", made by UI.dialog) does not count as a tap outside: a dialog opened from the panel leaves it open.
+   * A 'tabchange' (nav.js) closes the open overlay (the Back button and a hash edit change the tab without a tap).
    */
   const SHEET_QUERY = '(max-width: 767px)';
   let openOverlay = null;
@@ -541,6 +542,10 @@
     trigger.setAttribute('aria-expanded', 'false');
     return api;
   }
+
+  // A tab change (nav.js's 'tabchange': the header tab, the Back button, a hash edit) closes the open overlay: its trigger may be about to move or hide, and an overlay left open would keep its scrim and its
+  // sheet over the next tab. A tap on a header tab already closes it (an outside tap); this covers the ways that do not tap.
+  document.addEventListener('tabchange', function () { if (openOverlay) openOverlay.close(false); });
 
   // ---- modal dialog whose open/close logic lives elsewhere (Help, Download) ---------------------
   /*

@@ -1350,7 +1350,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   outline-offset: 2px;
 }
 
-/* === Phone layout (phone layout, commits 1a and 1a2; ui-phone.js builds it, ui-phone-config.js says what goes where) =====================================================
+/* === Phone layout (phone layout, commits 1a to 2; ui-phone.js builds it, ui-phone-config.js says what goes where) =====================================================
    Every rule here sits inside @media (max-width: 767px) AND starts with `html.ph`: the class is set only by ui-phone.js, only while a covered tab (today: Form) is applied below 768px, and removed
    by release(). Without the script, at 768px and up, and in the Farbe and Netz tabs nothing below matches, so those keep the layout they had. Nothing above this block was changed.
    SPACING (1a2): four values only - --sp-1 4px (inside a group of buttons, separator margins), --sp-2 8px (between zones and rows), --sp-3 16px (the gutter, the canvas margins), --sp-4 32px (between the
@@ -1412,14 +1412,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   /* the sub-tab row: text tabs like the header's (18px, muted, the current one 600 and black); same semantics - every tab in the Tab order, aria-current on the active one */
-  html.ph .ph-subtabs { box-sizing: border-box; height: var(--ph-subtabs-h); padding: 0 var(--sp-3); border-bottom: 1px solid var(--color-hairline); display: flex; align-items: flex-start; gap: var(--sp-4); }
+  html.ph .ph-subtabs { box-sizing: border-box; height: var(--ph-subtabs-h); padding: 0 var(--sp-3); border-bottom: 1px solid var(--color-hairline); display: flex; align-items: flex-start; gap: calc(var(--sp-3) + var(--sp-2)); overflow-x: auto; scrollbar-width: none; }   /* 24px between the tabs; Farbe's four fit 343px, below that the row scrolls */
+  html.ph .ph-subtabs::-webkit-scrollbar { display: none; }
   html.ph .ph-subtab {
     box-sizing: border-box;
     height: var(--ph-subtabs-h);   /* the whole row high: the 1px of the hairline below is under the button, which has no background */
+    position: relative;
     display: inline-flex;
     align-items: center;
     margin: 0;
-    padding: 0 var(--sp-1);
+    padding: 0;   /* the text starts at the gutter and the labels are 24px apart (the gap); the hit area is widened by the ::after below */
     border: 0;
     border-radius: 0;
     background: none;
@@ -1430,11 +1432,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     color: var(--color-secondary);
     cursor: pointer;
     touch-action: manipulation;
+    flex: none;
   }
+  html.ph .ph-subtab::after { content: ""; position: absolute; top: 0; bottom: 0; left: calc(-1 * (var(--sp-2) + var(--sp-1))); right: calc(-1 * (var(--sp-2) + var(--sp-1))); }   /* half the 24px gap on each side: neighbours meet in the middle */
   html.ph .ph-subtab[aria-current="true"] { font-weight: var(--weight-strong); color: var(--color-text); }
-  @media (max-width: 339px) {
-    html.ph .ph-subtabs { gap: var(--sp-3); }
-  }
 
   /* the panel: ONE slot, 104px high, two rows of 48 with an 8px gap, 16px gutters, left aligned, 8px under the sub-tab row. The parking container holds the panes that are not shown (hidden: out of the Tab
      order and the accessibility tree) */
@@ -1477,4 +1478,34 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   /* a dialog never gets taller than the screen, and scrolls inside (the Download, Neu anfangen, remove and timeline dialogs had no maximum) */
   html.ph .dialog-content { box-sizing: border-box; max-height: calc(var(--ph-h) - 2 * var(--sp-3)); overflow-y: auto; }
   html.ph .dialog-content button { min-height: var(--target); }   /* a mouse at a phone width gets the same 48px buttons the coarse rule gives a finger */
+
+  /* ---- commit 2: the Farbe tab --------------------------------------------------------------------------------------------------------------------------------------------------------------- */
+  /* a hairline inside a panel row sits between two 8px gaps (no margin of its own: validate() counts the gaps only); a row that does not fit 288px (the harmony row) scrolls sideways below 340px */
+  html.ph .ph-row > .ph-sep { margin: 0; }
+  @media (max-width: 339px) {
+    html.ph .ph-row-scroll { overflow-x: auto; scrollbar-width: none; padding: var(--sp-1); margin: calc(-1 * var(--sp-1)); }
+    html.ph .ph-row-scroll::-webkit-scrollbar { display: none; }
+    html.ph .ph-row-scroll > * { flex: none; }
+  }
+
+  /* the tool row's strategy group is the Farbe rail's radiogroup wrapper (.rail-group): four 48px icons 4px apart in a row, no rail margins or hairline */
+  html.ph .ph-toolgroup .rail-group { display: flex; flex-direction: row; align-items: center; gap: var(--sp-1); margin: 0; padding: 0; }
+  html.ph .ph-toolgroup .rail-group::before { display: none; }
+
+  /* the rail's sheet in Farbe: Form's first row (Curve, Free, Free Endpoints, Alternative Net, Neu anfangen) is not offered there (it was hidden in Farbe before); the second row holds Farbe's buttons */
+  html.ph[data-tab="farbe"] #more-rail > .more-row:not(.more-extra) { display: none; }
+
+  /* the anchor preview: a 48px swatch at the end of the second row */
+  html.ph .ph-slot #farbe-anchor-preview { box-sizing: border-box; width: var(--target); height: var(--target); border-radius: var(--radius); flex: none; }
+
+  /* Spuren: row 1 = one 48px chip per trail (the number centred, a 4px bar of the trail's colour at the bottom edge), scrolling sideways, the selected one black; row 2 = the stepper of the selected trail */
+  html.ph .ph-chips { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; padding: var(--sp-1); margin: calc(-1 * var(--sp-1)); overflow-x: auto; scrollbar-width: none; }
+  html.ph .ph-chips::-webkit-scrollbar { display: none; }
+  html.ph .ph-chip { position: relative; box-sizing: border-box; flex: none; width: var(--target); height: var(--target); margin: 0; padding: 0; overflow: hidden; border: 1px solid var(--color-text); border-radius: var(--radius); background: var(--color-bg); color: var(--color-text); font: inherit; font-size: var(--fs-tab); cursor: pointer; touch-action: manipulation; }
+  html.ph .ph-chip.active { background: var(--color-text); color: var(--color-bg); }
+  html.ph .ph-chip-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; }
+  html.ph .ph-chips-empty { display: flex; align-items: center; height: var(--target); color: var(--color-secondary); font-size: var(--size-secondary); }
+  html.ph .ph-trail-stepper { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+  html.ph .ph-trail-count { min-width: var(--target); text-align: center; font-variant-numeric: tabular-nums; }
+  html.ph .ph-trail-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-secondary); font-size: var(--size-secondary); }
 }
