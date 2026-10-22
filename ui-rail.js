@@ -53,6 +53,11 @@
   // button on a tap), a focusin (keyboard) or a mouse pointerover, and is refreshed on every tick, so a tap that toggles the state shows the new state. Nothing depends on hover
   // or focus alone. The words are keyed (the dictionary comes in a later phase).
   const T = { 'more.state.on': 'an', 'more.state.off': 'aus', 'more.hint': 'Symbol antippen' };
+  // Which buttons of the second row close the sheet on the mousedown and which on the click. Clear, Paste Pattern and Download are wired by p5 on the mousedown (their handlers run on it), so a click may never
+  // come: close on the mousedown. Reset Color (Farbe) is wired on the CLICK (sketch.js addEventListener('click')): closing the sheet on its mousedown would cancel the click and the button would do nothing, so it
+  // closes on the click like Info; so does Nodes (a toggle, p5 mousedown: its handler has run by the click).
+  const MOUSEDOWN_WIRED = ['btn-clear', 'btn-paste-pattern', 'btn-save'];
+  const CLICK_CLOSES = ['btn-info', 'btn-face-colors-reset', 'btn-toggle-nodes'];
   const moreRow = $('#more-rail .more-row'), nameEl = $('#more-name'), morePanel = $('#more-rail');
   const nameState = nameEl && nameEl.querySelector('.more-name-state'), nameLabel = nameEl && nameEl.querySelector('.more-name-label');
   let last = null;
@@ -86,7 +91,7 @@
     // focus the pressed button - in a closed sheet, i.e. nowhere - so it is cancelled, and the focus goes to the Mehr button unless a dialog that just opened has taken it (UI.dialog does). Info opens its own card
     // on the click (UI.overlay: one overlay at a time) and the catalog link needs its click to navigate: they close the sheet on the click.
     morePanel.addEventListener('mousedown', function (e) {
-      const b = e.target.closest && e.target.closest('.more-extra button:not(#btn-info)');
+      const b = e.target.closest && e.target.closest(MOUSEDOWN_WIRED.map(function (id) { return '.more-extra #' + id; }).join(', '));
       if (!b || !moreRail || !moreRail.isOpen) return;
       e.preventDefault();
       moreRail.close(false);
@@ -94,7 +99,7 @@
       if ((!a || a === document.body || morePanel.contains(a)) && moreBtn) moreBtn.focus();
     });
     morePanel.addEventListener('click', function (e) {
-      const b = e.target.closest && e.target.closest('.more-extra a, #btn-info');
+      const b = e.target.closest && e.target.closest('.more-extra a, ' + CLICK_CLOSES.map(function (id) { return '#' + id; }).join(', '));
       if (b && moreRail && moreRail.isOpen) moreRail.close(true);
     });
   }

@@ -36,8 +36,8 @@ function makeEl(id, extra) {
     return el;
 }
 
-function build() {
-    const ids = ['btn-toggle-nodes', 'btn-toggle-curve', 'btn-toggle-faces', 'btn-toggle-free', 'btn-toggle-free-endpoints', 'btn-alternative-net', 'btn-restart', 'btn-undo', 'btn-info', 'btn-save', 'btn-clear', 'btn-paste-pattern', 'btn-gallery'];
+function build(farbe) {
+    const ids = ['btn-toggle-nodes', 'btn-toggle-curve', 'btn-toggle-faces', 'btn-toggle-free', 'btn-toggle-free-endpoints', 'btn-alternative-net', 'btn-restart', 'btn-undo', 'btn-info', 'btn-save', 'btn-clear', 'btn-paste-pattern', 'btn-gallery', 'btn-face-colors-reset'];
     const B = {};
     ids.forEach(id => { B[id] = makeEl(id); });
     B['btn-toggle-nodes'].classList.add('active');
@@ -45,7 +45,7 @@ function build() {
     Object.keys(names).forEach(id => B[id].setAttribute('aria-label', names[id]));
     const inRow = new Set(['btn-toggle-curve', 'btn-toggle-free', 'btn-toggle-free-endpoints', 'btn-alternative-net', 'btn-restart']);
     // the phone layout (ui-phone.js) adds a second icon row, .more-extra, with the former rail buttons
-    const inExtra = new Set(['btn-gallery', 'btn-paste-pattern', 'btn-info', 'btn-save', 'btn-clear']);
+    const inExtra = new Set(['btn-gallery', 'btn-paste-pattern', 'btn-info', 'btn-save', 'btn-clear'].concat(farbe ? ['btn-face-colors-reset', 'btn-toggle-nodes'] : []));   // Farbe (phone layout, commit 2) adds Reset Color and Nodes
     const more = makeEl('btn-more-rail'), panel = makeEl('more-rail', { hidden: true }), row = makeEl('more-row'), extraRow = makeEl('more-extra');
     row.contains = n => inRow.has(n.id);
     extraRow.contains = n => inExtra.has(n.id);
@@ -60,7 +60,9 @@ function build() {
         if (part === '.more-extra a') return ex && tag === 'a';
         if (part === '.more-extra button') return ex && tag === 'button';
         if (part === '.more-extra button:not(#btn-info)') return ex && tag === 'button' && id !== 'btn-info';
-        if (part === '#btn-info') return id === 'btn-info';
+        let m;
+        if ((m = /^\.more-extra #([\w-]+)$/.exec(part))) return ex && id === m[1];
+        if ((m = /^#([\w-]+)$/.exec(part))) return id === m[1];
         throw new Error('fake closest: unknown selector part ' + part);
     };
     ids.forEach(id => { B[id].closest = sel => (sel.split(',').map(x => x.trim()).some(p => matches(id, p)) ? (sel === '.more-row' ? row : B[id]) : null); });
@@ -193,6 +195,17 @@ T('extra', () => {
     o.more.dispatch('click'); lastFocus = null;
     o.fire('click', 'btn-gallery');
     check('the catalog link: its click closes the sheet and the focus goes back to the Mehr button (a link needs its click to navigate)', o.panel.hidden === true && lastFocus === o.more);
+    // Farbe (phone layout, commit 2): Reset Color and Nodes are in the second row. Reset Color is wired on the CLICK (sketch.js), so a mousedown must not close the sheet (the click would never come and the
+    // button would do nothing); it closes on the click, like Info. Nodes (a toggle, p5 mousedown) closes on the click too.
+    const fb = build(true);
+    for (const id of ['btn-face-colors-reset', 'btn-toggle-nodes']) {
+        const o = fb;
+        if (o.panel.hidden) o.more.dispatch('click');
+        let pdx = 0; o.fire('mousedown', id, { preventDefault() { pdx++; } });
+        check(`a mousedown on ${id} (Farbe's second row) neither closes the sheet nor cancels the default: its click must arrive`, o.panel.hidden === false && pdx === 0);
+        lastFocus = null; o.fire('click', id);
+        check(`the click on ${id} closes the sheet and the focus goes back to the Mehr button`, o.panel.hidden === true && lastFocus === o.more);
+    }
     // the dot rule is about the toggles in the first row only: nothing in the second row can set or clear it
     const d = build(); d.set('btn-toggle-curve', true); d.sync(); d.fire('click', 'btn-save'); d.sync();
     check('the state dot covers the toggles; using a second-row action does not touch it', d.more.classList.contains('has-state'));

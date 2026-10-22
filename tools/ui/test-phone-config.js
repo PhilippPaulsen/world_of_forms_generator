@@ -29,7 +29,7 @@ const idSet = new Set(ids);
 const controlsOf = (cfg, tab) => {
     const t = cfg.tabs[tab], out = [];
     const tr = cfg.toolRows[t.toolRow]; if (tr) { tr.groups.forEach(g => g.forEach(id => out.push(id))); tr.end.forEach(id => out.push(id)); if (tr.sheet) tr.sheet.items.forEach(id => out.push(id)); }
-    t.subtabs.forEach(s => { const st = cfg.subtabs[s]; if (st && st.rows) st.rows.forEach(r => r.items.forEach(it => out.push(it.id))); });
+    t.subtabs.forEach(s => { const st = cfg.subtabs[s]; if (st && st.rows) st.rows.forEach(r => r.items.forEach(it => { if (it.id) out.push(it.id); (it.also || []).forEach(x => out.push(x)); })); });
     return out;
 };
 
@@ -38,11 +38,11 @@ T('real', () => {
     const problems = validate(config, { ids: idSet });
     check('validate(config, the ids of index.html) finds nothing', problems.length === 0, problems.join(' ; ') || 'no problems');
     check('the query is the phone query (max-width: 767px) - the one ui.js calls SHEET_QUERY', config.query === '(max-width: 767px)' && /SHEET_QUERY = '\(max-width: 767px\)'/.test(read('UI_JS', 'ui.js')));
-    check('three tabs: form, farbe, netz; ONLY Form is covered (1a and 1b), Farbe and Netz release to their original places', Object.keys(config.tabs).join() === 'form,farbe,netz' && config.tabs.form.covered === true && config.tabs.farbe.covered === false && config.tabs.netz.covered === false);
+    check('three tabs: form, farbe, netz; Form (1a, 1b) and Farbe (commit 2) are covered, Netz is not: it releases to its original places', Object.keys(config.tabs).join() === 'form,farbe,netz' && config.tabs.form.covered === true && config.tabs.farbe.covered === true && config.tabs.netz.covered === false);
     const labels = tab => config.tabs[tab].subtabs.map(s => config.subtabs[s].label).join(' | ');
     check('the sub-tabs of each tab (the targets): Form: Raster | Ebenen | Zeit; Farbe: Harmonie | Spuren | Ebenen | Zeit; Netz: Art | Achsen | Ebenen | Zeit', labels('form') === 'Raster | Ebenen | Zeit' && labels('farbe') === 'Harmonie | Spuren | Ebenen | Zeit' && labels('netz') === 'Art | Achsen | Ebenen | Zeit', labels('form') + ' / ' + labels('farbe') + ' / ' + labels('netz'));
     check('"ebenen" and "zeit" are defined ONCE (one entry each) and listed by every tab', ['ebenen', 'zeit'].every(s => Object.keys(config.subtabs).filter(k => k === s).length === 1 && Object.keys(config.tabs).every(t => config.tabs[t].subtabs.includes(s))));
-    check('the sub-tabs of Farbe and Netz that are not shared are STUBS (no rows); Form\'s three have rows', ['harmonie', 'spuren', 'art', 'achsen'].every(s => config.subtabs[s].stub === true && !config.subtabs[s].rows) && ['raster', 'ebenen', 'zeit'].every(s => !config.subtabs[s].stub && config.subtabs[s].rows.length >= 1));
+    check('the sub-tabs of Netz that are not shared are STUBS (no rows); the ones of Form and Farbe have rows', ['art', 'achsen'].every(s => config.subtabs[s].stub === true && !config.subtabs[s].rows) && ['raster', 'harmonie', 'spuren', 'ebenen', 'zeit'].every(s => !config.subtabs[s].stub && config.subtabs[s].rows.length >= 1));
     check('the panel is 104px: two rows of 48 and an 8px gap; the stack chrome is 40 + 8 + 64 + 44 + 8 + 104 = 268', config.tabs.form.panelH === 104 && chromeH(config, 'form') === 268, String(chromeH(config, 'form')));
     const f = controlsOf(config, 'form');
     check('Form: the tool row is Undo, Redo, Random | Nodes, Fill | More; the sheet gets the Formorgel link, Paste Pattern, Info, Download, Clear', JSON.stringify(config.toolRows.form.groups) === '[["btn-undo","btn-redo","btn-random"],["btn-toggle-nodes","btn-toggle-faces"]]' && config.toolRows.form.end.join() === 'btn-more-rail' && config.toolRows.form.sheet.items.join() === 'btn-gallery,btn-paste-pattern,btn-info,btn-save,btn-clear' && config.toolRows.form.sheet.id === 'more-rail');
@@ -75,7 +75,7 @@ T('mutants', () => {
     mut('a sub-tab listed twice in a tab', c => { c.tabs.form.subtabs.push('zeit'); }, /zeit is listed twice/);
     mut('an uncovered tab with content in a sub-tab of its own', c => { c.subtabs.art = { label: 'Art', rows: [{ items: [{ id: 'btn-undo', w: 48 }] }] }; }, /not covered, but sub-tab art has content/);
     mut('an uncovered tab with a tool row', c => { c.tabs.netz.toolRow = 'form'; }, /not covered, but has a tool row/);
-    mut('a stub with rows', c => { c.subtabs.harmonie.rows = [{ items: [{ id: 'btn-undo', w: 48 }] }]; }, /a stub has no rows/);
+    mut('a stub with rows', c => { c.subtabs.art.rows = [{ items: [{ id: 'btn-undo', w: 48 }] }]; }, /a stub has no rows/);
     mut('a default sub-tab that the tab does not list', c => { c.tabs.form.defaultSubtab = 'art'; }, /defaultSubtab/);
     mut('a panel height that is not two rows', c => { c.tabs.form.panelH = 120; }, /panelH 120/);
     mut('a tool row too wide (a seventh icon: 6 x 48 + ... + 48 > 343)', c => { c.toolRows.form.end.push('btn-sym-none'); c.toolRows.form.groups[1].push('btn-help'); }, /the tool row is \d+px wide/);
@@ -152,7 +152,7 @@ T('scale', () => {
 console.log('\n== the sheets (commit 1b) ==');
 T('sheets', () => {
     const LAYERS = read('UI_LAYERS_JS', 'ui-layers.js'), TIMELINE = read('UI_TIMELINE_JS', 'ui-timeline.js');
-    check('two sheets, "layer" and "timeline", and Form lists both (Farbe and Netz list none: they stay inline)', Object.keys(config.sheets).join() === 'layer,timeline' && config.tabs.form.sheets.join() === 'layer,timeline' && !config.tabs.farbe.sheets && !config.tabs.netz.sheets);
+    check('two sheets, "layer" and "timeline", and Form and Farbe list both (Netz lists none: it stays inline)', Object.keys(config.sheets).join() === 'layer,timeline' && config.tabs.form.sheets.join() === 'layer,timeline' && config.tabs.farbe.sheets.join() === 'layer,timeline' && !config.tabs.netz.sheets);
     const L = config.sheets.layer, M = config.sheets.timeline;
     check('the layer sheet hosts #layer-more-panel, opened by the .lt-more button of #layer-strip, open = the block is not hidden; the timeline sheet hosts #timeline-group, opened by .ts-more of #timeline-strip, open = class ts-open', L.content === 'layer-more-panel' && L.trigger.within === 'layer-strip' && L.trigger.selector === '.lt-more' && L.open.notHidden === true && M.content === 'timeline-group' && M.trigger.within === 'timeline-strip' && M.trigger.selector === '.ts-more' && M.open.hasClass === 'ts-open');
     check('the contents and trigger containers exist once in index.html; the host ids do not (a script makes the hosts)', [L.content, M.content, L.trigger.within, M.trigger.within].every(id => ids.filter(x => x === id).length === 1) && !idSet.has(L.host) && !idSet.has(M.host) && L.host !== M.host);
@@ -185,8 +185,41 @@ T('sheet-mutants', () => {
     mut('a sheet that does not say how to read its state', c => { c.sheets.timeline.open = {}; }, /open must be/);
     mut('a contextual group of the rail\'s sheet that is nowhere', c => { c.toolRows.form.sheet.settings.push('nope-group'); }, /nope-group is neither in index\.html/);
     mut('a contextual group listed twice (also in a row)', c => { c.subtabs.zeit.rows.push({ items: [{ id: 'curve-fold-group', w: 48 }] }); }, /curve-fold-group is listed twice/);
-    mut('a sheet that no tab lists (never built, never checked)', c => { c.tabs.form.sheets = ['layer']; }, /sheet timeline is defined but no tab lists it/);
+    mut('a sheet that no tab lists (never built, never checked)', c => { c.tabs.form.sheets = ['layer']; c.tabs.farbe.sheets = ['layer']; }, /sheet timeline is defined but no tab lists it/);
     mut('one block claimed by two sheets (the timeline sheet hosts the layer block as well)', c => { c.sheets.timeline.content = 'layer-more-panel'; }, /layer-more-panel is listed twice/);
+});
+
+console.log('\n== the Farbe tab (commit 2) ==');
+T('farbe', () => {
+    const F = config.tabs.farbe, tr = config.toolRows.farbe, H = config.subtabs.harmonie, SP = config.subtabs.spuren;
+    check('Farbe: covered, a 104px panel, the sub-tabs Harmonie | Spuren | Ebenen | Zeit, Harmonie first, the same two sheets as Form; the stack chrome is the same 268', F.covered === true && F.panelH === 104 && F.subtabs.join() === 'harmonie,spuren,ebenen,zeit' && F.defaultSubtab === 'harmonie' && F.toolRow === 'farbe' && chromeH(config, 'farbe') === 268);
+    check('the tool row: Fill | the strategy radiogroup (ONE wrapper of four icons) | More at the end; 334px of the 343 (6 icons, 4px gaps in the group, two hairlines)', JSON.stringify(tr.groups) === '[["btn-toggle-faces"],["farbe-strategy-group"]]' && tr.icons['farbe-strategy-group'] === 4 && JSON.stringify(tr.end) === '["btn-more-rail"]' && (6 * 48 + 3 * 4 + 2 * 17) === 334);
+    check('the More sheet gets Reset Color, Nodes, the Farborgel link, Info and Download (what the Farbe rail showed besides Fill and the strategies); the opener has a Farbe name with a data-i18n key', JSON.stringify(tr.sheet.items) === '["btn-face-colors-reset","btn-toggle-nodes","btn-farborgel","btn-info","btn-save"]' && tr.sheet.id === 'more-rail' && tr.sheet.opener === 'btn-more-rail' && /^Mehr: /.test(tr.sheet.openerLabel.text) && /^more\./.test(tr.sheet.openerLabel.i18n) && !tr.sheet.settings);
+    check('Undo, Redo, Random, Clear and the Formorgel link are NOT in Farbe\'s config (they are hidden in Farbe today: style.css hides their groups for html[data-tab=farbe])', ['btn-undo', 'btn-redo', 'btn-random', 'btn-clear', 'btn-gallery', 'btn-paste-pattern'].every(id => !controlsOf(config, 'farbe').includes(id)) && /html\[data-tab="farbe"\] #rail-group-a,[\s\S]*?#rail-group-e,[\s\S]*?#rail-group-more,[\s\S]*?#btn-gallery \{ display: none; \}/.test(CSS));
+    const row = r => r.items.reduce((a, i) => a + (i.w || 0), 0) + 8 * (r.items.length - 1), rowMin = r => r.items.reduce((a, i) => a + (i.wMin || i.w || 0), 0) + 8 * (r.items.length - 1);
+    check('Harmonie row 1 = Kreis + Dreieck (104), a hairline, ONE slot for the two harmony clusters (216, four buttons: the circle\'s three share it): 337px, scrolls from 340px down; row 2 = the two steppers and the 48px swatch: 298px, 282 with the narrow widths', H.rows.length === 2 && H.rows[0].items.map(i => i.id || 'sep').join() === 'nav-anchor-views,sep,farbe-family-triangle' && H.rows[0].items[2].also.join() === 'farbe-family-circle' && row(H.rows[0]) === 337 && H.rows[0].scroll === true && H.rows[1].items.map(i => i.id).join() === 'farbe-anchor-hue-stepper,farbe-anchor-register-stepper,farbe-anchor-preview' && row(H.rows[1]) === 298 && rowMin(H.rows[1]) === 282 && !H.rows[1].scroll);
+    check('Spuren: two fluid rows, the chips and the stepper of the selected trail; both ids are made by ui-phone-chips.js (createdByScript)', SP.rows.length === 2 && SP.rows[0].items[0].id === 'ph-trail-chips' && SP.rows[0].items[0].fluid && SP.rows[1].items[0].id === 'ph-trail-stepper' && SP.rows[1].items[0].fluid && config.createdByScript['ph-trail-chips'] === 'ui-phone-chips.js' && config.createdByScript['ph-trail-stepper'] === 'ui-phone-chips.js' && config.afterShow['ph-trail-chips'].join() === 'uiPhoneChips,refresh');
+    check('every control of Farbe is listed once (' + controlsOf(config, 'farbe').length + ' ids) and every one of them that index.html holds is there exactly once', (() => { const f = controlsOf(config, 'farbe'); return new Set(f).size === f.length && f.filter(id => !config.createdByScript[id]).every(id => ids.filter(x => x === id).length === 1); })());
+    check('the wrapper #nav-anchor-views is in index.html once, holds the two anchor views (Kreis, Dreieck) and no other listed control', ids.filter(x => x === 'nav-anchor-views').length === 1 && /id="nav-anchor-views"[^>]*>\s*<button id="btn-open-kreis"[\s\S]*?<button id="btn-open-dreieck"/.test(htmlNoComments));
+    check('the Farbe strategy radiogroup keeps its radio semantics: role radiogroup on the wrapper, four role=radio buttons (moved whole, not button by button)', /<div id="farbe-strategy-group"[^>]*role="radiogroup"/.test(htmlNoComments) && (htmlNoComments.match(/id="btn-strategy-[a-z]+"[^>]*role="radio"/g) || []).length === 4);
+    check('the strategy wrapper also appears in the tool row only: no strategy button is listed on its own', !controlsOf(config, 'farbe').some(id => /^btn-strategy-/.test(id)));
+});
+T('farbe-mutants', () => {
+    const env = { ids: idSet };
+    const mut = (name, fn, re) => { const c = clone(config); fn(c); const p = validate(c, env); check(`validate rejects (Farbe): ${name}`, p.some(m => re.test(m)), p.join(' ; ') || 'no problem found'); };
+    mut('a control listed twice (Info also in the harmony panel)', c => { c.subtabs.harmonie.rows[1].items.push({ id: 'btn-info', w: 48 }); }, /btn-info is listed twice/);
+    mut('a control of the sheet also in the tool row (Nodes)', c => { c.toolRows.farbe.groups[0].push('btn-toggle-nodes'); }, /btn-toggle-nodes is listed twice/);
+    mut('a row over 343px (the anchor views widened by 8)', c => { c.subtabs.harmonie.rows[0].items[0].w = 112; }, /row 1 is 345px wide, more than the 343px/);
+    mut('a row that does not fit 288px with no scroll flag (the harmony row)', c => { delete c.subtabs.harmonie.rows[0].scroll; }, /even with its narrow widths/);
+    mut('a scroll flag on a row that fits (the steppers row)', c => { c.subtabs.harmonie.rows[1].scroll = true; }, /marked scroll but fits/);
+    mut('the second harmony cluster forgotten (the circle cluster not in `also`: it stays behind in the Farbe row)', c => { c.subtabs.harmonie.rows[0].items[2].also = ['farbe-family-nowhere']; }, /farbe-family-nowhere is neither in index\.html/);
+    mut('a separator with an id', c => { c.subtabs.harmonie.rows[0].items[1].id = 'btn-info'; }, /a separator has a width and no id/);
+    mut('a separator without a width', c => { delete c.subtabs.harmonie.rows[0].items[1].w; }, /a separator has a width and no id/);
+    mut('a fluid chip container that shares its row', c => { c.subtabs.spuren.rows[0].items.push({ id: 'btn-info', w: 48 }); }, /ph-trail-chips is fluid but has a width or shares its row/);
+    mut('a chip container that no script makes (createdByScript lost)', c => { delete c.createdByScript['ph-trail-chips']; }, /ph-trail-chips is neither in index\.html nor created by a named script/);
+    mut('the tool row too wide: the strategy wrapper counted as 5 icons and a fourth group icon', c => { c.toolRows.farbe.icons['farbe-strategy-group'] = 5; c.toolRows.farbe.groups[0].push('btn-toggle-nodes'); c.toolRows.farbe.sheet.items = c.toolRows.farbe.sheet.items.filter(i => i !== 'btn-toggle-nodes'); }, /the tool row is \d+px wide/);
+    mut('the Farbe tab with a stub sub-tab', c => { c.subtabs.harmonie = { label: 'Harmonie', stub: true }; }, /covered, but sub-tab harmonie is a stub/);
+    mut('Farbe without a default sub-tab it lists', c => { c.tabs.farbe.defaultSubtab = 'art'; }, /defaultSubtab/);
 });
 
 console.log('\n== the script tags ==');
@@ -196,6 +229,7 @@ T('tags', () => {
     const ver = n => (tags[at(n)] || '').split('?v=')[1];
     check('ui-phone-config.js and ui-phone.js are loaded, config first', at('ui-phone-config.js') >= 0 && at('ui-phone.js') === at('ui-phone-config.js') + 1);
     check('both come after ui-layers.js, ui-timeline.js and ui-rail.js (the strips are filled, the handlers bound) - and after nav.js', ['ui-layers.js', 'ui-timeline.js', 'ui-rail.js', 'nav.js'].every(n => at(n) >= 0 && at(n) < at('ui-phone-config.js')));
+    check('ui-phone-chips.js is loaded after ui-farbe.js (UI.onSync order: the model rows are rebuilt before the view reads them) and before ui-phone-config.js, with the page\'s ?v=', at('ui-phone-chips.js') > at('ui-farbe.js') && at('ui-phone-chips.js') < at('ui-phone-config.js') && ver('ui-phone-chips.js') === ver('sketch.js'), at('ui-farbe.js') + ' < ' + at('ui-phone-chips.js') + ' < ' + at('ui-phone-config.js'));
     check('they carry the same ?v= as sketch.js (one version string for the page)', ver('ui-phone-config.js') && ver('ui-phone-config.js') === ver('sketch.js') && ver('ui-phone.js') === ver('sketch.js'), ver('ui-phone.js') + ' / ' + ver('sketch.js'));
     check('the engine listens to nav.js\'s own signal: the tabchange event, whose detail is { tab } (nav.js dispatches it)', /addEventListener\('tabchange'/.test(ENGINE) && /new CustomEvent\('tabchange', \{ detail: \{ tab: tab \} \}\)/.test(read('NAV_JS', 'nav.js')));
     check('nothing was added to nav.js: it still has no reference to the phone layout', !/phone|\bph\b|uiPhone/i.test(read('NAV_JS', 'nav.js')));
@@ -253,8 +287,16 @@ T('css', () => {
     const sheetCss = rules(CSS.slice(0, marker)).filter(r => r.sel === '.overlay.sheet');
     check('the sheets scroll: UI.overlay\'s `.overlay.sheet` (above the block, shared with every overlay) has max-height 80dvh (80vh before it) and overflow auto', sheetCss.length === 1 && /max-height:\s*80vh;[\s\S]*max-height:\s*80dvh/.test(sheetCss[0].body) && /overflow:\s*auto/.test(sheetCss[0].body));
     const shs = rs.filter(r => /\.ph-sheet|#more-rail/.test(r.sel));
-    check('the sheet rules of the block (.ph-sheet, #more-rail .more-settings) all start with html.ph and sit in the phone media query (' + shs.length + ' rules)', shs.length >= 3 && shs.every(r => r.sel.split(',').every(x => /^\s*html\.ph\s/.test(x)) && r.at[0] === '@media (max-width: 767px)'), shs.map(r => r.sel).join(' ; '));
+    check('the sheet rules of the block (.ph-sheet, #more-rail .more-settings) all start with html.ph and sit in the phone media query (' + shs.length + ' rules)', shs.length >= 3 && shs.every(r => r.sel.split(',').every(x => /^\s*html\.ph(\s|\[)/.test(x)) && r.at[0] === '@media (max-width: 767px)'), shs.map(r => r.sel).join(' ; '));
     check('the sheet host is laid out as rows that wrap, on the scale: html.ph .ph-sheet { flex-direction: row; flex-wrap: wrap; gap: var(--sp-3) }', shs.some(r => r.sel === 'html.ph .ph-sheet' && /flex-direction:\s*row/.test(r.body) && /flex-wrap:\s*wrap/.test(r.body) && /gap:\s*var\(--sp-3\)/.test(r.body)));
+    // ---- commit 2 ----
+    const stab = rs.filter(r => r.sel === 'html.ph .ph-subtabs');
+    check('the sub-tab row\'s gap is 24px = calc(var(--sp-3) + var(--sp-2)) in every tab (the header tabs keep 32); no narrower gap below 340px - the row scrolls instead (overflow-x: auto)', stab.length === 1 && /gap:\s*calc\(var\(--sp-3\) \+ var\(--sp-2\)\)/.test(stab[0].body) && /overflow-x:\s*auto/.test(stab[0].body) && !rs.some(r => r.sel === 'html.ph .ph-subtabs' && r.at.length > 1) && !/var\(--sp-4\)/.test(stab[0].body));
+    check('a sub-tab button has no side padding (the labels are 24px apart, the first starts at the gutter) and keeps its hit area through an ::after of half the gap on each side', rs.some(r => r.sel === 'html.ph .ph-subtab' && /padding:\s*0;/.test(r.body)) && rs.some(r => r.sel === 'html.ph .ph-subtab::after' && /left:\s*calc\(-1 \* \(var\(--sp-2\) \+ var\(--sp-1\)\)\)/.test(r.body)));
+    const chipCss = rs.filter(r => /\.ph-chip\b/.test(r.sel));
+    check('the chip rules are all html.ph in the phone media query: a 48px square (var(--target)), the selected chip black, a 4px colour bar at the bottom edge (' + chipCss.length + ' rules)', chipCss.length >= 3 && chipCss.every(r => /^html\.ph /.test(r.sel) && r.at[0] === '@media (max-width: 767px)') && rs.some(r => r.sel === 'html.ph .ph-chip' && /width:\s*var\(--target\)/.test(r.body) && /height:\s*var\(--target\)/.test(r.body)) && rs.some(r => r.sel === 'html.ph .ph-chip.active' && /background:\s*var\(--color-text\)/.test(r.body)) && rs.some(r => r.sel === 'html.ph .ph-chip-bar' && /height:\s*4px/.test(r.body) && /bottom:\s*0/.test(r.body)));
+    check('the rail\'s sheet in Farbe hides Form\'s first row (Curve ... Neu anfangen) only for html.ph[data-tab="farbe"]: the Form sheet keeps it', rs.some(r => r.sel === 'html.ph[data-tab="farbe"] #more-rail > .more-row:not(.more-extra)' && /display:\s*none/.test(r.body)));
+    check('the chip holder needs no CSS of its own and nothing above the phone block names a chip: it is hidden by its attribute outside the layout', !/ph-chip|ph-trail/.test(CSS.slice(0, marker)));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
