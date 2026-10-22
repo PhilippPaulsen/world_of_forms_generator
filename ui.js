@@ -462,6 +462,7 @@
    * panel can follow it. opts.toggleOnClick === false: the trigger's click is NOT bound here (the owner opens and closes the panel itself - the
    * phone layout's sheets follow a state some other handler of the same button flips). A resize does not close the panel while a text field inside
    * it has the focus: the soft keyboard of a phone resizes the window, and closing the sheet then would throw away what the person is typing in.
+   * A tap inside a modal dialog (aria-modal="true", made by UI.dialog) does not count as a tap outside: a dialog opened from the panel leaves it open.
    */
   const SHEET_QUERY = '(max-width: 767px)';
   let openOverlay = null;
@@ -528,7 +529,8 @@
     });
     if (scrim) scrim.addEventListener('click', function () { if (api.isOpen) close(false); });
     document.addEventListener('pointerdown', function (e) {
-      if (api.isOpen && !panel.contains(e.target) && !trigger.contains(e.target) && e.target !== scrim) close(false);
+      // a confirmation dialog (UI.dialog: aria-modal) opened from this panel lies outside it: a tap on its buttons or its backdrop is not "outside" - the panel stays, and the dialog's own focus return finds its opener
+      if (api.isOpen && !panel.contains(e.target) && !trigger.contains(e.target) && e.target !== scrim && !(e.target && e.target.closest && e.target.closest('[aria-modal="true"]'))) close(false);
     }, true);
     const typing = function () { const a = document.activeElement; return !!a && panel.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName || '') && !/^(button|checkbox|radio|range|submit|reset)$/.test(a.type || ''); };
     window.addEventListener('resize', function () { if (api.isOpen && !typing()) close(false); });

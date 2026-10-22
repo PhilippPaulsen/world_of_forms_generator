@@ -1476,4 +1476,5 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   /* a dialog never gets taller than the screen, and scrolls inside (the Download, Neu anfangen, remove and timeline dialogs had no maximum) */
   html.ph .dialog-content { box-sizing: border-box; max-height: calc(var(--ph-h) - 2 * var(--sp-3)); overflow-y: auto; }
+  html.ph .dialog-content button { min-height: var(--target); }   /* a mouse at a phone width gets the same 48px buttons the coarse rule gives a finger */
 }

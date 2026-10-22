@@ -42,6 +42,8 @@ class Node_ {
     removeChild(n) { if (n.parentNode !== this) throw new Error('removeChild: not a child'); n._detach(); return n; }
     focus() { if (!this.doc.reachable(this)) return; this.doc.activeElement = this; }
     click() { this.dispatch('click'); }
+    closest(sel) { for (let e = this; e && e.nodeType === 1; e = e.parentNode) if (e.matches(sel)) return e; return null; }
+    matches(sel) { return sel.split(',').map(x => x.trim()).some(p => { let m; if ((m = /^([a-z]+):not\(\[disabled\]\)$/.exec(p))) return this.tagName === m[1].toUpperCase() && !this.hasAttribute('disabled'); if ((m = /^\[([a-z-]+)="([^"]*)"\]$/.exec(p))) return this.getAttribute(m[1]) === m[2]; if ((m = /^([a-z]+)\[([a-z-]+)\]$/.exec(p))) return this.tagName === m[1].toUpperCase() && this.hasAttribute(m[2]); if ((m = /^\.([\w-]+)$/.exec(p))) return this.classList.contains(m[1]); if ((m = /^#([\w-]+)$/.exec(p))) return this.id === m[1]; return /^[a-z]+$/.test(p) && this.tagName === p.toUpperCase(); }); }
     get tabIndex() { if (this._tabIndex !== undefined) return this._tabIndex; return /^(BUTTON|INPUT|SELECT|TEXTAREA)$/.test(this.tagName) || (this.tagName === 'A' && this.hasAttribute('href')) ? 0 : (this.hasAttribute('tabindex') ? Number(this.getAttribute('tabindex')) : -1); } set tabIndex(v) { this._tabIndex = v; }
     querySelector(sel) { return this.doc.find(this, sel); }
     // the selectors the code under test asks: a list of  tag | tag:not([disabled]) | [attr="v"] | .class | #id
@@ -55,7 +57,7 @@ function makeDoc() {
     doc.activeElement = doc.body;
     doc.all = (root, out) => { out = out || []; (root || doc.documentElement).childNodes.forEach(n => { if (n.nodeType === 1) { out.push(n); doc.all(n, out); } }); return out; };
     doc.getElementById = id => doc.all().find(n => n.id === id) || null;
-    doc.find = (root, sel) => { const m = /^([.#])([\w-]+)$/.exec(sel); if (!m) throw new Error('fake DOM: selector ' + sel); return doc.all(root).find(n => m[1] === '#' ? n.id === m[2] : n.classList.contains(m[2])) || null; };
+    doc.find = (root, sel) => { const t = /^[a-z]+$/.exec(sel); if (t) return doc.all(root).find(n => n.tagName === sel.toUpperCase()) || null; const m = /^([.#])([\w-]+)$/.exec(sel); if (!m) throw new Error('fake DOM: selector ' + sel); return doc.all(root).find(n => m[1] === '#' ? n.id === m[2] : n.classList.contains(m[2])) || null; };
     doc.querySelector = sel => doc.find(doc.documentElement, sel);
     doc.addEventListener = (t, fn) => { (doc.handlers[t] = doc.handlers[t] || []).push(fn); };
     doc.dispatch = (t, ev) => (doc.handlers[t] || []).slice().forEach(h => h(Object.assign({ type: t }, ev || {})));
@@ -112,7 +114,7 @@ function buildPage(opts) {
     // opts.ui: the REAL ui.js (UI.overlay, UI.onSync) in this window; without it the engine finds no UI.overlay and leaves the sheet blocks where they are
     if (opts.ui) {
         vm.createContext(win);
-        Object.assign(win, { window: win, document: doc, console, MutationObserver: class { observe() { } }, performance: { now: () => 0 }, setTimeout, clearTimeout });
+        Object.assign(win, { window: win, document: doc, console, MutationObserver: class { constructor(cb) { (win.observers = win.observers || []).push(cb); } observe() { } }, performance: { now: () => 0 }, setTimeout, clearTimeout });
         vm.runInContext(fs.readFileSync(process.env.UI_JS || path.join(ROOT, 'ui.js'), 'utf8'), win, { filename: 'ui.js' });
     }
     return { doc, win, mq, calls, scrim, layerModel, layerPanel, tlGroup };
@@ -350,6 +352,58 @@ T('sheet-inline', () => {
     check('a sheet whose "..." button is missing is reported (state().missing) and its block stays inline; the other sheet still works', ec.state().missing.includes('timeline') && !!c.doc.getElementById('ph-sheet-layer') && !c.doc.getElementById('ph-sheet-timeline') && c.tlGroup.parentNode.className === 'controls-container');
 });
 
+T('sheet-dialogs', () => {
+    // a confirmation dialog (the real UI.dialog, as ui-timeline.js / ui-layers.js / ui-rail.js make them) opened from a sheet, from the tool row, and the sheet's own scrim
+    const mkDialog = (p, opener, extraOpen) => {
+        const el = (tag, attrs, kids) => { const n = p.doc.createElement(tag); Object.keys(attrs || {}).forEach(k => n.setAttribute(k, attrs[k])); (kids || []).forEach(k => n.appendChild(k)); return n; };
+        const cancel = el('button', { id: 'dlg-cancel', type: 'button' }), confirm = el('button', { id: 'dlg-confirm', type: 'button' });
+        const strong = el('strong'), content = el('div', { class: 'dialog-content' }, [el('p', {}, [strong]), el('div', { class: 'restart-actions' }, [cancel, confirm])]);
+        const overlay = el('div', { id: 'dlg', class: 'dialog-overlay hidden' }, [content]); p.doc.body.appendChild(overlay);
+        const fire = () => (p.win.observers || []).slice().forEach(cb => cb());
+        opener.addEventListener('click', () => { overlay.classList.remove('hidden'); fire(); });
+        const close = () => { overlay.classList.add('hidden'); fire(); };
+        cancel.addEventListener('click', close);
+        confirm.addEventListener('click', close);
+        p.win.UI.dialog(overlay, opener, cancel);
+        return { overlay, cancel, confirm, open: () => opener.dispatch('click'), isOpen: () => !overlay.classList.contains('hidden') };
+    };
+    const tap = (p, target) => { p.doc.dispatch('pointerdown', { target }); target.focus(); target.dispatch('click'); };   // a tap: pointerdown, the focus a click gives, the click
+    // 1. from the timeline sheet (the opener "Zeitleiste entfernen" is IN the sheet)
+    {
+        const { p, eng, tl, ts } = sheetPage('zeit'); const clear = p.doc.getElementById('btn-clear-timeline');
+        const d = mkDialog(p, clear);
+        ts.dispatch('click'); clear.focus(); d.open();
+        check('a dialog opened from a sheet: the focus moves into the dialog (Abbrechen first) and the sheet is still open', d.isOpen() && p.doc.activeElement === d.cancel && !tl.hidden && !p.scrim.hidden, p.doc.activeElement.id);
+        p.doc.dispatch('pointerdown', { target: d.cancel });
+        check('a pointerdown on the dialog\'s button leaves the sheet open (the tap is not "outside")', !tl.hidden && p.tlGroup.classList.contains('ts-open') && !p.scrim.hidden);
+        d.cancel.focus(); d.cancel.dispatch('click');
+        check('Abbrechen: the dialog closes, the SHEET is still open and the focus is back on the opener inside it', !d.isOpen() && !tl.hidden && p.doc.activeElement === clear, p.doc.activeElement.id || p.doc.activeElement.tagName);
+        d.open(); let stopped = 0; d.overlay.dispatch('keydown', { key: 'Escape', preventDefault() { }, stopPropagation() { stopped++; } });
+        check('Escape in the dialog is the same path (UI.dialog clicks Abbrechen): dialog closed, sheet open, the focus on the opener', !d.isOpen() && !tl.hidden && p.doc.activeElement === clear && stopped === 1);
+        d.open(); p.doc.dispatch('pointerdown', { target: d.overlay }); d.overlay.dispatch('click');
+        check('a pointerdown on the dialog\'s backdrop (the overlay element) does not close the sheet either', !tl.hidden);
+        d.confirm.focus(); d.confirm.dispatch('click');
+        check('confirm closes the dialog and keeps the sheet open (it follows the block; whoever confirms changes the block, the engine does not close it)', !d.isOpen() && !tl.hidden);
+        p.doc.dispatch('pointerdown', { target: p.scrim });
+        p.scrim.dispatch('click');
+        check('the sheet\'s OWN scrim still closes the sheet (and its state)', tl.hidden && p.scrim.hidden && !p.tlGroup.classList.contains('ts-open'));
+        ts.dispatch('click'); p.doc.dispatch('pointerdown', { target: p.doc.getElementById('canvas-container') });
+        check('a tap outside (not in a dialog) still closes it', tl.hidden && !p.tlGroup.classList.contains('ts-open'));
+    }
+    // 2. a dialog opened from the tool row while NO sheet is open: nothing to keep or close
+    {
+        const { p, tl, host } = sheetPage('zeit'); const undo = p.doc.getElementById('btn-undo');
+        const d = mkDialog(p, undo); d.open(); tap(p, d.cancel);
+        check('a dialog from the tool row (no sheet open): the tap on Abbrechen closes it, the focus returns to the opener, no sheet appears or is disturbed', !d.isOpen() && p.doc.activeElement === undo && tl.hidden && host.hidden && p.scrim.hidden, p.doc.activeElement.id);
+    }
+    // 3. the keyboard and the pointer path end in the same state
+    {
+        const a = sheetPage('zeit'), b = sheetPage('zeit');
+        const run = (page, viaPointer) => { const clear = page.p.doc.getElementById('btn-clear-timeline'), d = mkDialog(page.p, clear); page.ts.dispatch('click'); clear.focus(); d.open(); if (viaPointer) tap(page.p, d.cancel); else d.overlay.dispatch('keydown', { key: 'Escape', preventDefault() { }, stopPropagation() { } }); return [d.isOpen(), !page.tl.hidden, page.p.doc.activeElement.id, page.p.tlGroup.classList.contains('ts-open')].join(); };
+        const rp = run(a, true), rk = run(b, false);
+        check('pointer path and keyboard path give the same state (dialog closed, sheet open, focus on the opener, block open)', rp === rk && rp === 'false,true,btn-clear-timeline,true', rp + ' / ' + rk);
+    }
+});
 T('overlay-options', () => {
     // the two options and the resize rule added to UI.overlay in 1b, on a plain trigger / panel pair (nothing of the phone engine)
     const p = buildPage({ ui: true }), UI = p.win.UI, mk = (tag, id) => { const n = p.doc.createElement(tag); n.setAttribute('id', id); p.doc.body.appendChild(n); return n; };
