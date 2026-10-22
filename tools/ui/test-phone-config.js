@@ -149,6 +149,46 @@ T('scale', () => {
     check('the tool row is 64px = padding var(--sp-2) + 48 + var(--sp-2), its hairline an inset shadow (it takes no room)', !!tr && /height:\s*var\(--ph-toolrow-h\)/.test(tr.body) && /padding:\s*var\(--sp-2\) var\(--sp-3\)/.test(tr.body) && /box-shadow:\s*inset 0 -1px 0 var\(--color-hairline\)/.test(tr.body) && !/border-bottom/.test(tr.body));
 });
 
+console.log('\n== the sheets (commit 1b) ==');
+T('sheets', () => {
+    const LAYERS = read('UI_LAYERS_JS', 'ui-layers.js'), TIMELINE = read('UI_TIMELINE_JS', 'ui-timeline.js');
+    check('two sheets, "layer" and "timeline", and Form lists both (Farbe and Netz list none: they stay inline)', Object.keys(config.sheets).join() === 'layer,timeline' && config.tabs.form.sheets.join() === 'layer,timeline' && !config.tabs.farbe.sheets && !config.tabs.netz.sheets);
+    const L = config.sheets.layer, M = config.sheets.timeline;
+    check('the layer sheet hosts #layer-more-panel, opened by the .lt-more button of #layer-strip, open = the block is not hidden; the timeline sheet hosts #timeline-group, opened by .ts-more of #timeline-strip, open = class ts-open', L.content === 'layer-more-panel' && L.trigger.within === 'layer-strip' && L.trigger.selector === '.lt-more' && L.open.notHidden === true && M.content === 'timeline-group' && M.trigger.within === 'timeline-strip' && M.trigger.selector === '.ts-more' && M.open.hasClass === 'ts-open');
+    check('the contents and trigger containers exist once in index.html; the host ids do not (a script makes the hosts)', [L.content, M.content, L.trigger.within, M.trigger.within].every(id => ids.filter(x => x === id).length === 1) && !idSet.has(L.host) && !idSet.has(M.host) && L.host !== M.host);
+    check('the labels (the dialogs\' names) are German and not empty: "Ebenen-Einstellungen", "Zeitleiste: Mehr"', L.label === 'Ebenen-Einstellungen' && M.label === 'Zeitleiste: Mehr');
+    check('the triggers exist in the scripts that make them: ui-layers.js makes the strip\'s button with the classes "lt-more lr-more" (its click runs layerApi.toggleMore, which flips #layer-more-panel\'s hidden), ui-timeline.js makes "ts-more nav-more" and toggles ts-open on #timeline-group', /cell\('lt-more lr-more'/.test(LAYERS) && /toggleMore\(\)/.test(LAYERS) && /btn\('ts-more nav-more'/.test(TIMELINE) && /group\.classList\.toggle\('ts-open'/.test(TIMELINE));
+    check('#layer-more-panel starts hidden in index.html (the state the sheet follows)', /<div id="layer-more-panel" hidden>/.test(htmlNoComments));
+    // a block that contains the strip or a listed control would be moved with it
+    const span = id => { const m = new RegExp('<([a-z0-9]+)\\b[^>]*\\bid="' + id + '"[^>]*>').exec(htmlNoComments); if (!m) return ''; const tag = m[1], re = new RegExp('<(/?)' + tag + '\\b[^>]*>', 'g'); re.lastIndex = m.index + m[0].length; let depth = 1, r; while ((r = re.exec(htmlNoComments))) { depth += r[1] ? -1 : 1; if (!depth) return htmlNoComments.slice(m.index, re.lastIndex); } return ''; };
+    const listed = new Set(controlsOf(config, 'form'));
+    const inside = []; [L.content, M.content].forEach(c => listed.forEach(id => { if (new RegExp('\\bid="' + id + '"').test(span(c))) inside.push(id + ' in ' + c); }));
+    check('no listed control (strip, tool row, panel) sits INSIDE a sheet\'s block: moving the block would take it along', inside.length === 0, inside.join(', ') || 'none');
+    check('the four contextual groups the rail\'s sheet takes along are in index.html once and claimed by the tool row\'s sheet (settings)', JSON.stringify(config.toolRows.form.sheet.settings) === '["curve-fold-group","curve-strength-group","free-roughness-group","free-controls-group"]' && config.toolRows.form.sheet.settings.every(id => ids.filter(x => x === id).length === 1));
+});
+T('keyboard', () => {
+    const tag = id => { const m = new RegExp('<input\\b[^>]*\\bid="' + id + '"[^>]*>').exec(htmlNoComments); return m ? m[0] : ''; };
+    check('the pairing filter (a non-negative decimal, "max Σd²") asks for the decimal pad: inputmode="decimal"', /inputmode="decimal"/.test(tag('timeline-pairing-filter')) && /min="0"/.test(tag('timeline-pairing-filter')));
+    check('the layer offsets and the rotation can be NEGATIVE, and the numeric / decimal pads of iOS have no minus sign: they carry no inputmode (the full keyboard is the default of type=number); a future inputmode here would lose the function', ['layer-offset-x-input', 'layer-offset-y-input', 'layer-rotation-input'].every(id => tag(id) && !/inputmode=/.test(tag(id))));
+    check('the node and size inputs keep inputmode="none" (steppers are the input; no keyboard)', /inputmode="none"/.test(tag('node-count-input')) && /inputmode="none"/.test(tag('shape-size-input')) && /inputmode="none"/.test(tag('layer-node-count-input')) && /inputmode="none"/.test(tag('layer-shape-size-input')));
+});
+T('sheet-mutants', () => {
+    const env = { ids: idSet };
+    const mut = (name, fn, re) => { const c = clone(config); fn(c); const p = validate(c, env); check(`validate rejects: ${name}`, p.some(m => re.test(m)), p.join(' ; ') || 'no problem found'); };
+    mut('a tab that lists a sheet nobody defines', c => { c.tabs.form.sheets.push('nirgends'); }, /sheet nirgends is not defined/);
+    mut('a sheet whose block is also a row item (the layer block in Zeit)', c => { c.subtabs.zeit.rows.push({ items: [{ id: 'layer-more-panel', w: 48 }] }); }, /layer-more-panel is listed twice/);
+    mut('a sheet whose content is not in index.html', c => { c.sheets.layer.content = 'layer-gone'; }, /layer-gone is neither in index\.html/);
+    mut('a host id that index.html already has (the script would make a second element with it)', c => { c.sheets.layer.host = 'canvas-container'; }, /its host id canvas-container is in index\.html/);
+    mut('a sheet without a label', c => { c.sheets.timeline.label = ''; }, /sheet timeline: no label/);
+    mut('a sheet without a trigger selector', c => { delete c.sheets.layer.trigger.selector; }, /sheet layer: no trigger/);
+    mut('a trigger container that is nowhere', c => { c.sheets.layer.trigger.within = 'no-strip'; }, /trigger container no-strip is unknown/);
+    mut('a sheet that does not say how to read its state', c => { c.sheets.timeline.open = {}; }, /open must be/);
+    mut('a contextual group of the rail\'s sheet that is nowhere', c => { c.toolRows.form.sheet.settings.push('nope-group'); }, /nope-group is neither in index\.html/);
+    mut('a contextual group listed twice (also in a row)', c => { c.subtabs.zeit.rows.push({ items: [{ id: 'curve-fold-group', w: 48 }] }); }, /curve-fold-group is listed twice/);
+    mut('a sheet that no tab lists (never built, never checked)', c => { c.tabs.form.sheets = ['layer']; }, /sheet timeline is defined but no tab lists it/);
+    mut('one block claimed by two sheets (the timeline sheet hosts the layer block as well)', c => { c.sheets.timeline.content = 'layer-more-panel'; }, /layer-more-panel is listed twice/);
+});
+
 console.log('\n== the script tags ==');
 T('tags', () => {
     const tags = []; htmlNoComments.replace(/<script\b[^>]*\bsrc="([^"]+)"[^>]*>/g, (m, s) => { tags.push(s); return m; });
@@ -197,6 +237,21 @@ T('css', () => {
     check('the Form nav row and the rail are display: none while the layout is on (their controls are in the panel)', rs.some(r => /html\.ph \.nav-rows/.test(r.sel) && /html\.ph \.rail-left/.test(r.sel) && /display: none/.test(r.body)));
     const hid = rs.filter(r => /\.ph-park/.test(r.sel));
     check('the parking container is display: none (hidden: out of the Tab order and the accessibility tree)', hid.length === 1 && /display: none/.test(hid[0].body) && /\[hidden\]/.test(hid[0].sel) && /b\.park\.hidden = true/.test(ENGINE));
+    // ---- commit 1b ----
+    const above = rules(CSS.slice(0, marker));
+    const clips = above.filter(r => r.sel.split(',').some(x => /^\s*(html|body)\s*$/.test(x)) && /overflow(-y)?:\s*hidden/.test(r.body));
+    check('NOTHING above the phone block clips the page: no rule on html or body sets overflow hidden (Farbe, Netz and the widths from 768 scroll as before)', clips.length === 0, clips.map(r => r.sel).join(' ; ') || 'none');
+    const clip = rs.filter(r => /overflow(-y)?:\s*hidden/.test(r.body) && r.sel.split(',').some(x => /^\s*html\.ph(\s+body)?\s*$/.test(x)));
+    check('the page is clipped only by `html.ph, html.ph body { height: var(--ph-h); min-height: 0; overflow: hidden }` inside the phone media query: the viewport height, no page scroll, and only while the layout is on', clip.length === 1 && clip[0].sel.replace(/\s+/g, ' ') === 'html.ph, html.ph body' && clip[0].at.join() === '@media (max-width: 767px)' && /height:\s*var\(--ph-h\)/.test(clip[0].body) && /min-height:\s*0/.test(clip[0].body), clip.map(r => r.sel + ' @ ' + r.at.join()).join(' ; '));
+    check('every `overflow: hidden` of the phone block sits on a selector with html.ph (a stray one in a sheet or a dialog rule would clip content)', rs.filter(r => /overflow(-x|-y)?:\s*hidden/.test(r.body)).every(r => r.sel.split(',').every(x => /^\s*html\.ph/.test(x))));
+    check('the leftover controls container takes no room while the layout is on: html.ph .main-container { display: none }', rs.some(r => r.sel === 'html.ph .main-container' && /display:\s*none/.test(r.body)));
+    const dlg = rs.filter(r => r.sel === 'html.ph .dialog-content');
+    check('a dialog never gets taller than the screen and scrolls inside: html.ph .dialog-content { max-height: calc(var(--ph-h) - 2 x var(--sp-3)); overflow-y: auto } - once, in the phone media query', dlg.length === 1 && dlg[0].at.join() === '@media (max-width: 767px)' && /max-height:\s*calc\(var\(--ph-h\) - 2 \* var\(--sp-3\)\)/.test(dlg[0].body) && /overflow-y:\s*auto/.test(dlg[0].body) && /box-sizing:\s*border-box/.test(dlg[0].body), dlg.map(r => r.body.trim()).join(' | '));
+    const sheetCss = rules(CSS.slice(0, marker)).filter(r => r.sel === '.overlay.sheet');
+    check('the sheets scroll: UI.overlay\'s `.overlay.sheet` (above the block, shared with every overlay) has max-height 80dvh (80vh before it) and overflow auto', sheetCss.length === 1 && /max-height:\s*80vh;[\s\S]*max-height:\s*80dvh/.test(sheetCss[0].body) && /overflow:\s*auto/.test(sheetCss[0].body));
+    const shs = rs.filter(r => /\.ph-sheet|#more-rail/.test(r.sel));
+    check('the sheet rules of the block (.ph-sheet, #more-rail .more-settings) all start with html.ph and sit in the phone media query (' + shs.length + ' rules)', shs.length >= 3 && shs.every(r => r.sel.split(',').every(x => /^\s*html\.ph\s/.test(x)) && r.at[0] === '@media (max-width: 767px)'), shs.map(r => r.sel).join(' ; '));
+    check('the sheet host is laid out as rows that wrap, on the scale: html.ph .ph-sheet { flex-direction: row; flex-wrap: wrap; gap: var(--sp-3) }', shs.some(r => r.sel === 'html.ph .ph-sheet' && /flex-direction:\s*row/.test(r.body) && /flex-wrap:\s*wrap/.test(r.body) && /gap:\s*var\(--sp-3\)/.test(r.body)));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

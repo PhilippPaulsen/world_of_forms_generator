@@ -458,6 +458,10 @@
    * (with a scrim) on the phone (< 768px). One at a time. Escape, a tap outside, the trigger again, scrolling or
    * resizing closes it; focus moves in on open and back to the trigger on Escape/close. opts.onOpen() runs first,
    * so the content can be synced before it shows.
+   * opts.onClose(returnFocus) runs after EVERY close (Escape, the scrim, a tap outside, a resize, close()), so an owner of the state behind the
+   * panel can follow it. opts.toggleOnClick === false: the trigger's click is NOT bound here (the owner opens and closes the panel itself - the
+   * phone layout's sheets follow a state some other handler of the same button flips). A resize does not close the panel while a text field inside
+   * it has the focus: the soft keyboard of a phone resizes the window, and closing the sheet then would throw away what the person is typing in.
    */
   const SHEET_QUERY = '(max-width: 767px)';
   let openOverlay = null;
@@ -508,13 +512,15 @@
       api.isOpen = false; if (openOverlay === api) openOverlay = null;
       trigger.setAttribute('aria-expanded', 'false');
       if (returnFocus) trigger.focus();
+      if (opts && opts.onClose) opts.onClose(!!returnFocus);
     }
     function toggle() { if (api.isOpen) close(true); else open(); }
-    trigger.addEventListener('click', toggle);
+    if (!opts || opts.toggleOnClick !== false) trigger.addEventListener('click', toggle);
     panel.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') { e.stopPropagation(); close(true); return; }
       if (e.key !== 'Tab') return;
-      const items = Array.prototype.slice.call(panel.querySelectorAll('button, [tabindex="0"]')).filter(function (n) { return n.tabIndex >= 0; });
+      // every control the Tab key can reach: a number field after the last button used to fall outside the loop (Tab skipped it), and a hidden button as the "last" one broke the wrap
+      const items = Array.prototype.slice.call(panel.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex="0"]')).filter(function (n) { return n.tabIndex >= 0 && n.offsetParent !== null; });
       if (!items.length) return;
       const first = items[0], last = items[items.length - 1];
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
@@ -524,7 +530,8 @@
     document.addEventListener('pointerdown', function (e) {
       if (api.isOpen && !panel.contains(e.target) && !trigger.contains(e.target) && e.target !== scrim) close(false);
     }, true);
-    window.addEventListener('resize', function () { if (api.isOpen) close(false); });
+    const typing = function () { const a = document.activeElement; return !!a && panel.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName || '') && !/^(button|checkbox|radio|range|submit|reset)$/.test(a.type || ''); };
+    window.addEventListener('resize', function () { if (api.isOpen && !typing()) close(false); });
     window.addEventListener('scroll', function () { if (api.isOpen && !window.matchMedia(SHEET_QUERY).matches) close(false); }, { passive: true });
     panel.hidden = true;
     if (!panel.hasAttribute('tabindex')) panel.tabIndex = -1;

@@ -12,6 +12,8 @@
  *              (the two strips: flex 0 0 100%) and has no width of its own to add up.
  *   toolRows   name -> { groups: [[ids]], end: [ids], sheet }: the groups sit in a row that scrolls sideways when it does not fit, `end` stays fixed at the end; `sheet` = former rail buttons the rail's "Mehr" sheet receives
  *              (before: the element the new row goes in front of; opener: the button that opens the sheet - it takes the focus when one of these buttons, hidden in the closed sheet, is asked to).
+ *   sheets     id -> { host, label, content, trigger: { within, selector }, open }: a block that becomes a bottom sheet (UI.overlay) while the layout is on; tabs.<tab>.sheets lists them. toolRows.<name>.sheet.settings = the
+ *              contextual groups the rail's sheet takes along. See the comment at `sheets` below.
  *   afterShow  id -> [global, method]: called (when it exists) after the element moved into the visible panel - a moved element loses its scroll position.
  */
 (function (root) {
@@ -28,7 +30,7 @@
     // the ids that no HTML file holds because a script creates them: id -> the script. (None yet; the layer and timeline strips are containers in index.html that ui-layers.js / ui-timeline.js fill.)
     createdByScript: {},
     tabs: {
-      form: { covered: true, panelH: 104, subtabs: ['raster', 'ebenen', 'zeit'], defaultSubtab: 'raster', toolRow: 'form' },
+      form: { covered: true, panelH: 104, subtabs: ['raster', 'ebenen', 'zeit'], defaultSubtab: 'raster', toolRow: 'form', sheets: ['layer', 'timeline'] },
       farbe: { covered: false, subtabs: ['harmonie', 'spuren', 'ebenen', 'zeit'] },
       netz: { covered: false, subtabs: ['art', 'achsen', 'ebenen', 'zeit'] }
     },
@@ -37,7 +39,9 @@
         groups: [['btn-undo', 'btn-redo', 'btn-random'], ['btn-toggle-nodes', 'btn-toggle-faces']],
         end: ['btn-more-rail'],
         // the rail's other buttons: the rail's "Mehr" sheet (#more-rail) receives them as a second icon row, above its name line
-        sheet: { id: 'more-rail', before: 'more-name', opener: 'btn-more-rail', items: ['btn-gallery', 'btn-paste-pattern', 'btn-info', 'btn-save', 'btn-clear'] }
+        sheet: { id: 'more-rail', before: 'more-name', opener: 'btn-more-rail', items: ['btn-gallery', 'btn-paste-pattern', 'btn-info', 'btn-save', 'btn-clear'],
+          // the contextual groups that sketch.js shows under the page while Curve or Free is on (the strength slider, the roughness, ...): they follow their toggles into this sheet and stay hidden until sketch.js shows them
+          settings: ['curve-fold-group', 'curve-strength-group', 'free-roughness-group', 'free-controls-group'] }
       }
     },
     subtabs: {
@@ -55,6 +59,13 @@
       spuren: { label: 'Spuren', stub: true },
       art: { label: 'Art', stub: true },
       achsen: { label: 'Achsen', stub: true }
+    },
+    // Bottom sheets (1b): a block that stays inline above 768px and in the tabs that are not covered moves into a sheet (UI.overlay) while the layout is on. The sheet FOLLOWS the block's own open state - the
+    // "..." button's existing handler flips it, nothing here toggles it - and closing the sheet (Escape, the scrim, a tap outside, a resize) closes that state by clicking the button once more.
+    //   content: the block; trigger: { within: an element of the panel, selector } the "..." button; open: how to read the state ({ notHidden: true } or { hasClass }); label: the dialog's name (the button's own).
+    sheets: {
+      layer: { host: 'ph-sheet-layer', label: 'Ebenen-Einstellungen', content: 'layer-more-panel', trigger: { within: 'layer-strip', selector: '.lt-more' }, open: { notHidden: true } },
+      timeline: { host: 'ph-sheet-timeline', label: 'Zeitleiste: Mehr', content: 'timeline-group', trigger: { within: 'timeline-strip', selector: '.ts-more' }, open: { hasClass: 'ts-open' } }
     },
     afterShow: { 'layer-strip': ['layerTable', 'revealActive'] }
   };
@@ -74,6 +85,9 @@
       if (!st.label || typeof st.label !== 'string') bad.push('subtab ' + sid + ': no label');
       if (st.stub && st.rows) bad.push('subtab ' + sid + ': a stub has no rows');
       if (!st.stub && !Array.isArray(st.rows)) bad.push('subtab ' + sid + ': no rows');
+    });
+    Object.keys(cfg.sheets || {}).forEach(function (sid) {   // a sheet no tab lists would never be built, and never validated below
+      if (!Object.keys(cfg.tabs).some(function (tab) { return (cfg.tabs[tab].sheets || []).indexOf(sid) >= 0; })) bad.push('sheet ' + sid + ' is defined but no tab lists it');
     });
     Object.keys(cfg.tabs).forEach(function (tab) {
       const t = cfg.tabs[tab], used = new Map(), seenSub = new Set();
@@ -95,12 +109,22 @@
         if (used.has(id)) bad.push(tab + ': ' + where + ': control ' + id + ' is listed twice (also in ' + used.get(id) + ')');
         else used.set(id, where);
       };
+      (t.sheets || []).forEach(function (sid) {
+        const sh = (cfg.sheets || {})[sid];
+        if (!sh) { bad.push(tab + ': sheet ' + sid + ' is not defined'); return; }
+        claim(sh.content, 'sheet ' + sid);
+        if (htmlIds.has(sh.host)) bad.push(tab + ': sheet ' + sid + ': its host id ' + sh.host + ' is in index.html (a script makes the host)');
+        if (!sh.label || typeof sh.label !== 'string') bad.push(tab + ': sheet ' + sid + ': no label');
+        if (!sh.trigger || !sh.trigger.within || !sh.trigger.selector) bad.push(tab + ': sheet ' + sid + ': no trigger');
+        else if (!known(sh.trigger.within)) bad.push(tab + ': sheet ' + sid + ': trigger container ' + sh.trigger.within + ' is unknown');
+        if (!sh.open || !(sh.open.notHidden === true || typeof sh.open.hasClass === 'string')) bad.push(tab + ': sheet ' + sid + ': open must be { notHidden: true } or { hasClass }');
+      });
       const tr = cfg.toolRows[t.toolRow];
       if (!tr) bad.push(tab + ': tool row ' + t.toolRow + ' is not defined');
       else {
         const ids = [].concat.apply([], tr.groups).concat(tr.end);
         ids.forEach(function (id) { claim(id, 'tool row'); });
-        if (tr.sheet) { if (!known(tr.sheet.id)) bad.push(tab + ': sheet ' + tr.sheet.id + ' is not in index.html'); tr.sheet.items.forEach(function (id) { claim(id, 'sheet'); }); }
+        if (tr.sheet) { if (!known(tr.sheet.id)) bad.push(tab + ': sheet ' + tr.sheet.id + ' is not in index.html'); tr.sheet.items.concat(tr.sheet.settings || []).forEach(function (id) { claim(id, 'sheet'); }); }
         // the tool row at 375: n icons of --target, 4px inside a group, a 1px hairline with 8px margins between groups (and before the fixed end); 4px margins from 366px down
         const n = ids.length, gaps = tr.groups.reduce((a, g) => a + (g.length - 1), 0), seps = tr.groups.length;   // seps: between the groups + before the end = groups.length
         const w = n * S.target + gaps * 4 + seps * (1 + 2 * 8);

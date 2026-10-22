@@ -9,6 +9,7 @@
 // that is not covered (and any width from 768px) releases, the tabchange event and the media query drive it, a missing id is tolerated and reported, the focus survives a move.
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
 const { createPhone } = require(process.env.UI_PHONE_JS || path.join(ROOT, 'ui-phone.js'));
 const { config } = require(process.env.PHONE_CONFIG_JS || path.join(ROOT, 'ui-phone-config.js'));
@@ -40,7 +41,11 @@ class Node_ {
     insertBefore(n, ref) { if (!ref) return this.appendChild(n); if (n === ref) return n; n._detach(); const i = this.childNodes.indexOf(ref); if (i < 0) throw new Error('insertBefore: the reference node is not a child'); n.parentNode = this; this.childNodes.splice(i, 0, n); return n; }
     removeChild(n) { if (n.parentNode !== this) throw new Error('removeChild: not a child'); n._detach(); return n; }
     focus() { if (!this.doc.reachable(this)) return; this.doc.activeElement = this; }
+    click() { this.dispatch('click'); }
+    get tabIndex() { if (this._tabIndex !== undefined) return this._tabIndex; return /^(BUTTON|INPUT|SELECT|TEXTAREA)$/.test(this.tagName) || (this.tagName === 'A' && this.hasAttribute('href')) ? 0 : (this.hasAttribute('tabindex') ? Number(this.getAttribute('tabindex')) : -1); } set tabIndex(v) { this._tabIndex = v; }
     querySelector(sel) { return this.doc.find(this, sel); }
+    // the selectors the code under test asks: a list of  tag | tag:not([disabled]) | [attr="v"] | .class | #id
+    querySelectorAll(sel) { const parts = sel.split(',').map(x => x.trim()); return this.doc.all(this).filter(n => parts.some(p => { let m; if ((m = /^([a-z]+):not\(\[disabled\]\)$/.exec(p))) return n.tagName === m[1].toUpperCase() && !n.hasAttribute('disabled'); if ((m = /^\[([a-z-]+)="([^"]*)"\]$/.exec(p))) return n.getAttribute(m[1]) === m[2]; if ((m = /^([a-z]+)\[([a-z-]+)\]$/.exec(p))) return n.tagName === m[1].toUpperCase() && n.hasAttribute(m[2]); if ((m = /^\.([\w-]+)$/.exec(p))) return n.classList.contains(m[1]); if ((m = /^#([\w-]+)$/.exec(p))) return n.id === m[1]; return /^[a-z]+$/.test(p) && n.tagName === p.toUpperCase(); })); }
 }
 function makeDoc() {
     const doc = { readyState: 'interactive', handlers: {}, mutations: 0 };   // mutations: every detach / attach of a node, to see that an idempotent call does no work
@@ -80,14 +85,23 @@ function buildPage(opts) {
         el('div', { id: 'nav-netz', class: 'nav-row nav-netz' }, [btn('btn-kind-sin')])]));
     body.appendChild(el('div', { class: 'canvas-row' }, [
         el('div', { id: 'canvas-container' }),
-        el('div', { id: 'timeline-strip', class: 'timeline-strip' }, [btn('ts-play', 'icon-btn ts-btn'), el('input', { id: 'ts-range', type: 'range' }), btn('ts-net', 'icon-btn ts-btn'), btn('ts-more', 'icon-btn ts-btn')]),
-        el('div', { id: 'layer-strip', class: 'layer-strip' }, [btn('ls-base', 'lt-cell'), btn('ls-add', 'lt-cell'), btn('ls-eye', 'lt-cell'), btn('ls-more', 'lt-cell')]),
+        el('div', { id: 'timeline-strip', class: 'timeline-strip' }, [btn('ts-play', 'icon-btn ts-btn'), el('input', { id: 'ts-range', type: 'range' }), btn('ts-net', 'icon-btn ts-btn'), btn('ts-more', 'icon-btn ts-btn ts-more')]),
+        el('div', { id: 'layer-strip', class: 'layer-strip' }, [btn('ls-base', 'lt-cell'), btn('ls-add', 'lt-cell'), btn('ls-eye', 'lt-cell'), btn('ls-more', 'lt-cell lt-more')]),
         el('div', { class: 'rail-left' }, [
             el('div', { class: 'rail-top' }, [el('div', { id: 'rail-group-a', class: 'rail-group' }, [btn('btn-undo'), btn('btn-redo'), btn('btn-random')]),
                 el('div', { class: 'rail-bm' }, [el('div', { id: 'rail-group-b', class: 'rail-group' }, [btn('btn-toggle-nodes'), btn('btn-toggle-faces')]), el('div', { id: 'rail-group-more', class: 'rail-group' }, [btn('btn-more-rail', 'icon-btn nav-more')])])]),
             el('div', { class: 'rail-bottom' }, [el('div', { id: 'rail-group-c', class: 'rail-group' }, [el('a', { id: 'btn-gallery', class: 'icon-btn', href: 'gallery.html' }, [], true), btn('btn-paste-pattern', 'icon-btn rail-form-only')]),
                 el('div', { id: 'rail-group-d', class: 'rail-group' }, [btn('btn-info'), btn('btn-save')]), el('div', { id: 'rail-group-e', class: 'rail-group' }, [btn('btn-clear')])])])]));
-    body.appendChild(el('div', { class: 'main-container' }, [el('div', { class: 'controls-container' }, [btn('btn-leftover', 'layer-btn')])]));
+    // the leftover containers: the layer "Mehr" wrapper (hidden unless its state is open), the timeline group (a class ts-open when open) and the contextual groups sketch.js shows for Curve / Free
+    const layerPanel = el('div', { id: 'layer-more-panel' }, [btn('layer-align', 'layer-btn'), el('input', { id: 'layer-offset-x-input', type: 'number' })]); layerPanel.hidden = true;
+    const tlGroup = el('div', { id: 'timeline-group', class: 'control-group' }, [btn('btn-clear-timeline', 'layer-btn'), el('input', { id: 'timeline-pairing-filter', type: 'number' })]);
+    const settings = ['curve-fold-group', 'curve-strength-group', 'free-roughness-group', 'free-controls-group'].map(id => { const g = el('div', { id, class: 'control-group' }, [el('input', { type: 'range' })]); g.hidden = true; return g; });
+    body.appendChild(el('div', { class: 'main-container' }, [el('div', { class: 'controls-container' }, [btn('btn-leftover', 'layer-btn')].concat(settings, [tlGroup, layerPanel]))]));
+    const scrim = el('div', { id: 'overlay-scrim', class: 'overlay-scrim' }); scrim.hidden = true; body.appendChild(scrim);
+    // what ui-layers.js and ui-timeline.js do on the "..." click (the existing handlers, bound BEFORE the engine starts, as on the page): flip the block's own state
+    const layerModel = { open: false };
+    doc.getElementById('ls-more').addEventListener('click', () => { layerModel.open = !layerModel.open; layerPanel.hidden = !layerModel.open; });
+    doc.getElementById('ts-more').addEventListener('click', () => { if (tlGroup.classList.contains('ts-open')) tlGroup.classList.remove('ts-open'); else tlGroup.classList.add('ts-open'); });
     const more = el('div', { id: 'more-rail', class: 'overlay' }, [el('div', { class: 'more-row' }, [btn('btn-toggle-curve'), btn('btn-restart')]), el('p', { id: 'more-name' })]); more.hidden = true;
     body.appendChild(more);
     if (opts.without) opts.without.forEach(id => { const n = doc.getElementById(id); n._detach(); });
@@ -95,7 +109,13 @@ function buildPage(opts) {
     const mq = { matches: true, handlers: [], addEventListener(t, fn) { if (t === 'change') mq.handlers.push(fn); }, set(v) { mq.matches = v; mq.handlers.slice().forEach(h => h({ matches: v })); } };
     win.matchMedia = q => { if (q !== config.query) throw new Error('unexpected media query ' + q); return mq; };
     const calls = { reveal: 0 }; win.layerTable = { revealActive() { calls.reveal++; } };
-    return { doc, win, mq, calls };
+    // opts.ui: the REAL ui.js (UI.overlay, UI.onSync) in this window; without it the engine finds no UI.overlay and leaves the sheet blocks where they are
+    if (opts.ui) {
+        vm.createContext(win);
+        Object.assign(win, { window: win, document: doc, console, MutationObserver: class { observe() { } }, performance: { now: () => 0 }, setTimeout, clearTimeout });
+        vm.runInContext(fs.readFileSync(process.env.UI_JS || path.join(ROOT, 'ui.js'), 'utf8'), win, { filename: 'ui.js' });
+    }
+    return { doc, win, mq, calls, scrim, layerModel, layerPanel, tlGroup };
 }
 const ph = (page, cfg) => createPhone(page.doc, page.win, cfg || config);
 // a structure string of the whole tree (tag, id, class, kids; comments by text): equal before apply and after release
@@ -121,12 +141,13 @@ T('apply', () => {
     check('the slot shows the Raster pane: row 1 = shapes, symmetry; row 2 = node stepper, size stepper, More', slot.children.length === 1 && pane.getAttribute('data-subtab') === 'raster' && pane.children.map(r => r.children.map(c => c.id).join('+')).join(' / ') === 'nav-shapes+nav-symmetry / nav-node-stepper+nav-size-stepper+btn-more-form', pane.children.map(r => r.children.map(c => c.id).join('+')).join(' / '));
     check('the other panes (Ebenen, Zeit) are in the parking container, which is hidden', park.hidden === true && park.children.map(c => c.getAttribute('data-subtab')).join() === 'ebenen,zeit' && park.children[0].children[0].children[0].id === 'layer-strip' && park.children[1].children[0].children[0].id === 'timeline-strip');
     const sheet = p.doc.getElementById('more-rail');
-    check('the rail\'s sheet got a second icon row (.more-extra) with the five former rail buttons, between its first row and the name line', sheet.children.map(c => c.id || c.className).join() === 'more-row,more-row more-extra,more-name', sheet.children.map(c => c.id || c.className).join());
+    check('the rail\'s sheet got a second icon row (.more-extra) with the five former rail buttons, then the contextual groups (.more-settings), all between its first row and the name line', sheet.children.map(c => c.id || c.className).join() === 'more-row,more-row more-extra,more-settings,more-name', sheet.children.map(c => c.id || c.className).join());
+    check('...the .more-settings wrapper holds the four Curve / Free groups, still hidden (sketch.js shows them)', sheet.children[2].children.map(c => c.id + (c.hidden ? '[h]' : '')).join() === 'curve-fold-group[h],curve-strength-group[h],free-roughness-group[h],free-controls-group[h]');
     check('...holding Formorgel, Paste Pattern, Info, Download, Clear in that order', sheet.children[1].children.map(c => c.id).join() === 'btn-gallery,btn-paste-pattern,btn-info,btn-save,btn-clear');
     check('every listed control is the SAME node object as before (no clone) and there is exactly one element per id', ids.every(id => p.doc.getElementById(id) === orig[id] && p.doc.all().filter(n => n.id === id).length === 1));
     const allIds = p.doc.all().map(n => n.id).filter(Boolean);
     check('no id appears twice anywhere in the document while the layout is on', new Set(allIds).size === allIds.length, allIds.length + ' ids');
-    check('a comment marker stands where each moved element was (one per element, none for an element that did not move)', (function count(n) { return n.childNodes.reduce((a, c) => a + (c.nodeType === 8 && /^ph:/.test(c.text) ? 1 : 0) + (c.nodeType === 1 ? count(c) : 0), 0); })(p.doc.documentElement) === ids.length);
+    check('a comment marker stands where each moved element was (one per element, none for an element that did not move)', (function count(n) { return n.childNodes.reduce((a, c) => a + (c.nodeType === 8 && /^ph:/.test(c.text) ? 1 : 0) + (c.nodeType === 1 ? count(c) : 0), 0); })(p.doc.documentElement) === ids.length + 4);
     check('apply is idempotent: a second apply(form) does no work at all (not one node is moved or made) and leaves the very same containers', (() => { const d1 = dump(p.doc.documentElement), m0 = p.doc.mutations, s0 = p.doc.getElementById('ph-stack'), sl0 = p.doc.getElementById('ph-slot'); eng.apply('form'); eng.apply('form'); return dump(p.doc.documentElement) === d1 && p.doc.mutations === m0 && p.doc.getElementById('ph-stack') === s0 && p.doc.getElementById('ph-slot') === sl0 && p.doc.all().filter(n => n.id === 'ph-stack').length === 1; })(), 'mutations ' + p.doc.mutations);
     check('the tree before apply differs from the tree during (the layout really moved things)', before !== dump(p.doc.documentElement));
 });
@@ -229,6 +250,130 @@ T('missing', () => {
     check('an id the page does not have does not throw; state().missing names it', !threw && eng.state().missing.includes('btn-random') && eng.state().missing.includes('timeline-strip'), threw ? String(threw) : eng.state().missing.join(','));
     eng.release();
     check('release still restores the rest (the tree equals the one without those elements before)', dump(p.doc.documentElement) === before);
+});
+
+console.log('\n== the sheets (commit 1b): the layer "Mehr" block and the timeline "Mehr" group, with the REAL ui.js ==');
+// a phone page with the real UI.overlay, the layer strip (Ebenen) in the slot so its "..." button can take the focus
+const sheetPage = sub => { const p = buildPage({ ui: true }), eng = ph(p); eng.start(); eng.show(sub || 'ebenen'); return { p, eng, host: p.doc.getElementById('ph-sheet-layer'), tl: p.doc.getElementById('ph-sheet-timeline'), lt: p.doc.getElementById('ls-more'), ts: p.doc.getElementById('ts-more') }; };
+const esc = host => { let stopped = 0; host.dispatch('keydown', { key: 'Escape', stopPropagation() { stopped++; } }); return stopped; };
+T('sheet-build', () => {
+    const { p, host, tl, lt, ts } = sheetPage();
+    check('apply makes two sheet hosts inside the stack, hidden, role dialog, named: ph-sheet-layer "Ebenen-Einstellungen" and ph-sheet-timeline "Zeitleiste: Mehr", class overlay ph-sheet', !!host && !!tl && host.parentNode.id === 'ph-stack' && tl.parentNode.id === 'ph-stack' && host.hidden && tl.hidden && host.getAttribute('role') === 'dialog' && tl.getAttribute('role') === 'dialog' && host.getAttribute('aria-label') === 'Ebenen-Einstellungen' && tl.getAttribute('aria-label') === 'Zeitleiste: Mehr' && host.className === 'overlay ph-sheet' && tl.className === 'overlay ph-sheet', host && host.className);
+    check('the hosts hold the very blocks (#layer-more-panel, #timeline-group), moved, not copied; the leftover container no longer holds them', host.children[0] === p.layerPanel && tl.children[0] === p.tlGroup && p.doc.all().filter(n => n.id === 'layer-more-panel' || n.id === 'timeline-group').length === 2);
+    check('the "..." buttons are the sheets\' openers: aria-haspopup dialog, aria-expanded false', lt.getAttribute('aria-haspopup') === 'dialog' && ts.getAttribute('aria-haspopup') === 'dialog' && lt.getAttribute('aria-expanded') === 'false' && ts.getAttribute('aria-expanded') === 'false');
+    check('closed: the scrim is hidden and the layer block keeps its own state (hidden), as before', p.scrim.hidden === true && p.layerPanel.hidden === true && p.layerModel.open === false);
+});
+T('sheet-open-close', () => {
+    const { p, host, lt } = sheetPage();
+    lt.dispatch('click');
+    check('a tap on the layer "..." flips the block\'s own state (the existing handler) AND opens the sheet: host visible, scrim visible, aria-expanded true, class sheet', p.layerModel.open === true && p.layerPanel.hidden === false && host.hidden === false && host.classList.contains('sheet') && p.scrim.hidden === false && lt.getAttribute('aria-expanded') === 'true');
+    check('focus moved into the sheet (its first reachable button)', host.contains(p.doc.activeElement), p.doc.activeElement.id || p.doc.activeElement.tagName);
+    const stopped = esc(host);
+    check('Escape closes the sheet: host and scrim hidden, aria-expanded false; Escape does not bubble further', host.hidden && p.scrim.hidden && lt.getAttribute('aria-expanded') === 'false' && stopped === 1);
+    check('...and the block\'s own state closes with it (the "..." button was clicked once more): model closed, #layer-more-panel hidden', p.layerModel.open === false && p.layerPanel.hidden === true);
+    check('...and the focus is back on the "..." button', p.doc.activeElement === lt, p.doc.activeElement.id || p.doc.activeElement.tagName);
+    lt.dispatch('click'); lt.dispatch('click');
+    check('a second tap on "..." closes it again (the trigger toggles; the sheet follows the state)', host.hidden && p.scrim.hidden && p.layerModel.open === false);
+    lt.dispatch('click'); p.doc.dispatch('pointerdown', { target: p.doc.getElementById('canvas-container') });
+    check('a tap outside (pointerdown anywhere else) closes it and closes the state; the focus is NOT pulled back to the "..." button (the person tapped elsewhere)', host.hidden && p.scrim.hidden && p.layerModel.open === false && p.doc.activeElement !== lt);
+    lt.dispatch('click'); p.doc.dispatch('pointerdown', { target: p.layerPanel.children[0] });
+    check('a pointerdown INSIDE the sheet leaves it open', !host.hidden && p.layerModel.open === true);
+    p.scrim.dispatch('click');
+    check('a tap on the scrim closes the sheet and the state', host.hidden && p.scrim.hidden && p.layerModel.open === false);
+    // the click count: every close is ONE click on the button (a loop would show here)
+    const before = lt.clicks; lt.dispatch('click'); esc(host);
+    check('a sheet-originated close clicks the "..." button exactly once (open click + one close click = 2 handler runs, no loop)', lt.clicks - before === 2, String(lt.clicks - before));
+});
+T('sheet-sync', () => {
+    const { p, host, lt } = sheetPage();
+    p.layerModel.open = true; p.layerPanel.hidden = false; p.win.uiSync();
+    check('UI.onSync: a block that is open by some other path (a restore, the page\'s own code) opens the sheet at the next sync', !host.hidden && !p.scrim.hidden);
+    p.layerModel.open = false; p.layerPanel.hidden = true; p.win.uiSync();
+    check('...and a block that is closed by some other path closes the sheet at the next sync (no stuck scrim)', host.hidden && p.scrim.hidden && lt.getAttribute('aria-expanded') === 'false');
+    lt.dispatch('click'); p.doc.getElementById('layer-align').focus(); p.layerModel.open = false; p.layerPanel.hidden = true; p.win.uiSync();
+    check('a block that closes by itself while the focus is inside the sheet (a button of the block removes what it shows): the sheet closes and the focus goes to the "..." button, not into the void', host.hidden && p.doc.activeElement === lt, p.doc.activeElement.id || p.doc.activeElement.tagName);
+    p.win.uiSync(); p.win.uiSync();
+    check('a sync with nothing to do changes nothing (no flicker: the host and the scrim keep their state)', host.hidden && p.scrim.hidden);
+});
+T('sheet-timeline', () => {
+    const { p, eng, tl, ts, host, lt } = sheetPage('zeit');
+    ts.dispatch('click');
+    check('the timeline "..." (ts-open class on #timeline-group) opens the timeline sheet', p.tlGroup.classList.contains('ts-open') && !tl.hidden && !p.scrim.hidden && ts.getAttribute('aria-expanded') === 'true' && tl.contains(p.doc.activeElement));
+    esc(tl);
+    check('Escape closes it, removes ts-open, returns the focus to the timeline "..." button', tl.hidden && p.scrim.hidden && !p.tlGroup.classList.contains('ts-open') && p.doc.activeElement === ts, p.doc.activeElement.id || p.doc.activeElement.tagName);
+    // only one sheet at a time: opening one closes the other AND the other's state
+    eng.show('ebenen'); lt.dispatch('click'); eng.show('zeit'); ts.dispatch('click');
+    check('only ONE sheet is open at a time: opening the timeline sheet closes the layer sheet and the layer block\'s own state', !tl.hidden && host.hidden && p.layerModel.open === false && p.layerPanel.hidden === true && lt.getAttribute('aria-expanded') === 'false');
+    check('...with a single scrim', p.scrim.hidden === false);
+});
+T('sheet-lifecycle', () => {
+    const { p, eng, host, tl, lt } = sheetPage(); const d0 = (() => { const q = buildPage(); return dump(q.doc.documentElement); })();
+    lt.dispatch('click');
+    p.mq.set(false);
+    check('a width change to 768+ with a sheet open: the sheet closes cleanly, the block goes back into the controls container with its state closed, scrim hidden, nothing inert, the whole tree is the one before', dump(p.doc.documentElement) === d0 && p.scrim.hidden && p.layerModel.open === false && p.layerPanel.hidden === true && lt.getAttribute('aria-expanded') === 'false' && !p.doc.getElementById('ph-sheet-layer'));
+    p.mq.set(true); eng.show('ebenen'); lt.dispatch('click');
+    p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
+    check('a tab change to Netz (not covered) with a sheet open: closes cleanly, state closed, scrim hidden, tree equal to the original', dump(p.doc.documentElement) === d0 && p.scrim.hidden && p.layerModel.open === false);
+    p.doc.documentElement.setAttribute('data-tab', 'form'); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
+    const host2 = p.doc.getElementById('ph-sheet-layer');
+    check('back in Form the SAME host element is reused (made once: UI.overlay cannot unbind its listeners) and the sheet works again', host2 === host && p.layerPanel.parentNode === host && (() => { eng.show('ebenen'); lt.dispatch('click'); const o = !host.hidden; esc(host); return o && host.hidden; })());
+    // handlers: the opener has its own click handler + the engine's sync listener, however many round trips
+    for (let i = 0; i < 4; i++) { p.mq.set(false); p.mq.set(true); }
+    const n0 = buildPage().doc.getElementById('ls-more').handlers.click.length;   // the page's own listeners on the button (the click counter and the model handler of the fake page)
+    check('after 4 round trips the "..." button has the page\'s own click listeners plus exactly ONE of the engine (the sync) and the host exactly 1 keydown listener (UI.overlay\'s): no growth', lt.handlers.click.length === n0 + 1 && host.handlers.keydown.length === 1, lt.handlers.click.length + ' (page ' + n0 + ') / ' + host.handlers.keydown.length);
+    eng.show('ebenen'); const c0 = lt.clicks; lt.dispatch('click');
+    check('...and a tap still runs the existing handler once', lt.clicks - c0 === 1 && p.layerModel.open === true);
+    lt.dispatch('click'); eng.release();
+    check('release with the block closed leaves no host, no stuck scrim', !p.doc.getElementById('ph-sheet-layer') && !p.doc.getElementById('ph-sheet-timeline') && p.scrim.hidden);
+});
+T('sheet-open-at-apply', () => {
+    const p = buildPage({ ui: true }); p.layerModel.open = true; p.layerPanel.hidden = false;
+    const eng = ph(p); eng.start();
+    check('a block that is already open when the layout turns on (the window got narrower while it was open inline) opens its sheet at once, without waiting for the next sync', !p.doc.getElementById('ph-sheet-layer').hidden && !p.scrim.hidden);
+});
+T('sheet-resize-typing', () => {
+    const { p, host, lt } = sheetPage();
+    lt.dispatch('click');
+    const field = p.doc.getElementById('layer-offset-x-input'); field.focus();
+    p.win.innerHeight = 420; p.win.dispatch('resize');
+    check('a resize (the soft keyboard) while a text/number field IN the sheet has the focus keeps the sheet open', p.doc.activeElement === field && !host.hidden && p.layerModel.open === true);
+    p.doc.getElementById('layer-align').focus(); p.win.dispatch('resize');
+    check('a resize with the focus on a button of the sheet closes it, like every UI.overlay (and the state)', host.hidden && p.layerModel.open === false && p.scrim.hidden);
+});
+T('sheet-inline', () => {
+    const a = buildPage(), ea = ph(a); ea.start();
+    check('WITHOUT UI.overlay (no ui.js) the blocks stay where they are: no host, the layer block in the controls container, hidden by its own state', !a.doc.getElementById('ph-sheet-layer') && !a.doc.getElementById('ph-sheet-timeline') && a.layerPanel.parentNode.className === 'controls-container');
+    const b = buildPage({ ui: true }); b.mq.matches = false; const eb = ph(b), d = dump(b.doc.documentElement); eb.start();
+    b.doc.getElementById('ls-more').dispatch('click');
+    check('WITHOUT html.ph (768+ or a tab not covered): no host, nothing moved, a tap on "..." only flips the block\'s own state (inline, as today), no scrim', !b.doc.getElementById('ph-sheet-layer') && b.layerModel.open === true && b.layerPanel.hidden === false && b.scrim.hidden && b.doc.getElementById('ls-more').handlers.click.length === buildPage().doc.getElementById('ls-more').handlers.click.length && b.layerPanel.parentNode.className === 'controls-container');
+    const c = buildPage({ ui: true, without: ['timeline-strip'] }), ec = ph(c); ec.start();
+    check('a sheet whose "..." button is missing is reported (state().missing) and its block stays inline; the other sheet still works', ec.state().missing.includes('timeline') && !!c.doc.getElementById('ph-sheet-layer') && !c.doc.getElementById('ph-sheet-timeline') && c.tlGroup.parentNode.className === 'controls-container');
+});
+
+T('overlay-options', () => {
+    // the two options and the resize rule added to UI.overlay in 1b, on a plain trigger / panel pair (nothing of the phone engine)
+    const p = buildPage({ ui: true }), UI = p.win.UI, mk = (tag, id) => { const n = p.doc.createElement(tag); n.setAttribute('id', id); p.doc.body.appendChild(n); return n; };
+    const t1 = mk('button', 't1'), p1 = mk('div', 'p1'), b1 = p1.appendChild(p.doc.createElement('button')), calls = [];
+    const o1 = UI.overlay(t1, p1, { onClose: rf => calls.push(rf) });
+    t1.dispatch('click');
+    check('default: a click on the trigger opens (toggleOnClick not given = as before 1b), and opens again closes', o1.isOpen === true && (t1.dispatch('click'), o1.isOpen === false));
+    check('onClose(returnFocus) runs after every close: true for Escape / the trigger, false for a tap outside and for close(false)', (() => { calls.length = 0; o1.open(); esc(p1); o1.open(); p.doc.dispatch('pointerdown', { target: p.doc.body }); o1.open(); o1.close(false); return calls.join() === 'true,false,false'; })(), calls.join());
+    const t2 = mk('button', 't2'), p2 = mk('div', 'p2'), o2 = UI.overlay(t2, p2, { toggleOnClick: false });
+    t2.dispatch('click');
+    check('toggleOnClick: false - the trigger\'s click does not open it (the owner does), open() and close() still work', o2.isOpen === false && (o2.open(), o2.isOpen === true) && (o2.close(false), o2.isOpen === false));
+    // the Tab loop: every control Tab can reach is in it (a number field after the last button too), hidden ones are not, and only the ends wrap
+    const t4 = mk('button', 't4'), p4 = mk('div', 'p4'), mkIn = (tag, id, type) => { const n = p.doc.createElement(tag); if (id) n.setAttribute('id', id); if (type) n.setAttribute('type', type); p4.appendChild(n); return n; };
+    const a4 = mkIn('button', 'a4'), n4 = mkIn('input', 'n4', 'number'), b4 = mkIn('button', 'b4'), c4 = mkIn('input', 'c4', 'number'), z4 = mkIn('button', 'z4'); z4.hidden = true;
+    const o4 = UI.overlay(t4, p4); o4.open();
+    const tab = (from, shift) => { from.focus(); let prevented = 0; p4.dispatch('keydown', { key: 'Tab', shiftKey: !!shift, preventDefault() { prevented++; } }); return { prevented, active: p.doc.activeElement }; };
+    const r1 = tab(c4), r2 = tab(a4, true), r3 = tab(b4), r4 = tab(n4, true);
+    check('Tab on the LAST control of the panel wraps to the first, Shift+Tab on the first wraps to the last: here the last is a number field after the last button, and a hidden button after it is ignored', r1.prevented === 1 && r1.active === a4 && r2.prevented === 1 && r2.active === c4, r1.active.id + ' / ' + r2.active.id);
+    check('...and a Tab in the middle is left to the browser (not prevented), also from a number field', r3.prevented === 0 && r4.prevented === 0);
+    const t3 = mk('button', 't3'), p3 = mk('div', 'p3'), f3 = p3.appendChild(p.doc.createElement('input')), b3 = p3.appendChild(p.doc.createElement('button')), o3 = UI.overlay(t3, p3);
+    o3.open(); f3.focus(); p.win.dispatch('resize');
+    check('a resize with the focus in a text field of the panel keeps it open; with the focus on a button it closes', o3.isOpen === true && (b3.focus(), p.win.dispatch('resize'), o3.isOpen === false));
+    const cb = p3.appendChild(p.doc.createElement('input')); cb.setAttribute('type', 'checkbox'); cb.type = 'checkbox'; o3.open(); cb.focus(); p.win.dispatch('resize');
+    check('...a checkbox or range is not "typing": a resize closes it then as well', o3.isOpen === false);
 });
 
 console.log('\n== the engine knows no control ==');
