@@ -8,6 +8,7 @@
  *   apply(tab)     idempotent: nothing to do when that tab is already applied; another tab releases first. Does nothing (and releases) at >= 768px or for a tab that is not covered.
  *   release()      idempotent: moves every element back to its marker and removes what apply() made.
  *   show(subtab)   the sub-tab's pane goes into the slot, the other panes into the parking container (hidden: display none - out of the Tab order and the accessibility tree, and no hit testing).
+ *   sheets         config.sheets: blocks that become bottom sheets (UI.overlay) while the layout is on; see buildSheets().
  *   start()        listens: 'tabchange' on document (nav.js), the media query, resize / orientationchange; applies for the current tab.
  *
  * Sub-tab buttons follow the header tabs' model (nav.js): all of them are in the Tab order, Enter / Space activates one, aria-current marks the active one. The choice is remembered per tab.
@@ -114,6 +115,12 @@
           host.insertBefore(b.sheetRow, before && before.parentNode === host ? before : null);
           tr.sheet.items.forEach(function (id) { take(id, b.sheetRow); });
           b.sheetHost = host;
+          // the groups sketch.js shows while Curve or Free is on: they stay hidden until it shows them, and then they are in this sheet, under the toggles that make them appear
+          if (tr.sheet.settings && tr.sheet.settings.length) {
+            b.settingsRow = el('div', 'more-settings');
+            host.insertBefore(b.settingsRow, before && before.parentNode === host ? before : null);
+            tr.sheet.settings.forEach(function (id) { take(id, b.settingsRow); });
+          }
           // A button in the closed sheet cannot take the focus back (UI.overlay and UI.dialog call trigger.focus() when Info or the Download dialog closes): while the layout is on, its focus() hands the
           // focus to the sheet's opener (in the tool row) when the button itself is not visible.
           const opener = tr.sheet.opener ? doc.getElementById(tr.sheet.opener) : null;
@@ -128,7 +135,51 @@
           });
         } else if (missing.indexOf(tr.sheet.id) < 0) missing.push(tr.sheet.id);
       }
+      buildSheets(t, b);
       return b;
+    }
+
+    // ---- bottom sheets ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    // A block with a "..." button (the layer "Mehr", the timeline "Mehr") that is inline elsewhere becomes a bottom sheet (UI.overlay) while the layout is on. The block keeps its own open state and its own button
+    // handler (which flips that state); the sheet FOLLOWS the state (syncSheets: on the button's click, which comes after the existing handler, and on every UI tick), and a close that comes from the sheet
+    // (Escape, the scrim, a tap outside, a resize) clicks the button once more so the state closes too. The host and its UI.overlay are made once per sheet and reused: UI.overlay binds document and window
+    // listeners that cannot be taken off again.
+    const sheetCache = {};            // sheet id -> { def, trigger, el, overlay }
+    function sheetOpen(def) {
+      const c = doc.getElementById(def.content);
+      if (!c) return false;
+      if (def.open.notHidden) return !c.hidden;
+      return !!(c.classList && c.classList.contains(def.open.hasClass));
+    }
+    function syncSheets() {
+      if (!built || !built.sheets) return;
+      built.sheets.forEach(function (h) {
+        const want = sheetOpen(h.def);
+        if (want && !h.overlay.isOpen) h.overlay.open();
+        else if (!want && h.overlay.isOpen) h.overlay.close(!!(doc.activeElement && h.el.contains(doc.activeElement)));
+      });
+    }
+    function buildSheets(t, b) {
+      b.sheets = [];
+      const UI = win.UI;
+      if (!(t.sheets && t.sheets.length)) return;
+      // without UI.overlay a block stays where it is (inline) - a sheet nobody can open would hide it
+      if (!UI || typeof UI.overlay !== 'function') return;
+      t.sheets.forEach(function (sid) {
+        const def = config.sheets[sid], within = doc.getElementById(def.trigger.within), trigger = within && within.querySelector(def.trigger.selector);
+        if (!trigger || !doc.getElementById(def.content)) { if (missing.indexOf(sid) < 0) missing.push(sid); return; }
+        let h = sheetCache[sid];
+        if (!h || h.trigger !== trigger) {
+          h = { def: def, trigger: trigger, el: el('div', 'overlay ph-sheet', { id: def.host, role: 'dialog', 'aria-label': def.label }) };
+          h.el.hidden = true;
+          h.overlay = UI.overlay(trigger, h.el, { toggleOnClick: false, onClose: function () { if (sheetOpen(def)) trigger.click(); } });
+          trigger.addEventListener('click', syncSheets);
+          sheetCache[sid] = h;
+        }
+        b.stack.appendChild(h.el);
+        take(def.content, h.el);
+        b.sheets.push(h);
+      });
     }
 
     function apply(tab) {
@@ -145,6 +196,7 @@
         html.style.setProperty('--panel-h', t.panelH + 'px');
         setInnerHeight();
         show(remembered[tab] || t.defaultSubtab);
+        syncSheets();
       });
       return applied === tab;
     }
@@ -152,9 +204,12 @@
     function release() {
       if (!applied && !built && !moved.size) return false;
       keepFocus(function () {
+        // an open sheet closes first (its close also closes the block's own state), then the blocks go back
+        if (built && built.sheets) built.sheets.forEach(function (h) { if (h.overlay.isOpen) h.overlay.close(false); });
         restoreAll();
         if (built) {
           built.proxied.forEach(function (node) { delete node.focus; });
+          if (built.settingsRow && built.settingsRow.parentNode) built.settingsRow.parentNode.removeChild(built.settingsRow);
           if (built.sheetRow && built.sheetRow.parentNode) built.sheetRow.parentNode.removeChild(built.sheetRow);
           if (built.stack.parentNode) built.stack.parentNode.removeChild(built.stack);
         }
@@ -207,6 +262,7 @@
       const onMq = function () { sync(); };
       if (mq.addEventListener) mq.addEventListener('change', onMq); else if (mq.addListener) mq.addListener(onMq);
       if (win.addEventListener) { win.addEventListener('resize', onMq); win.addEventListener('orientationchange', onMq); }
+      if (win.UI && typeof win.UI.onSync === 'function') win.UI.onSync(syncSheets);
       if (currentTab()) sync();
     }
 

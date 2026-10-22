@@ -1459,4 +1459,21 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   @media (max-width: 339px) {
     html.ph .ph-slot .stepper > input[type="number"] { width: 40px; min-width: 40px; }
   }
+
+  /* ---- commit 1b: sheets, no scrolling ------------------------------------------------------------------------------------------------------------------------------------------------------ */
+  /* The page does not scroll: html and body are exactly the viewport (--ph-h is 100svh, or window.innerHeight where svh does not exist) and clip. The leftover containers (the controls container, whose
+     two big blocks are sheets now and whose contextual groups moved into the rail's sheet) take no room. What still scrolls: the sheets (.overlay.sheet: max-height 80dvh, overflow auto), the info card, the
+     dialogs (below), the strips of chips and the tool row (sideways). */
+  html.ph, html.ph body { height: var(--ph-h); min-height: 0; overflow: hidden; }
+  html.ph .main-container { display: none; }
+
+  /* the layer "Mehr" and timeline "Mehr" blocks in their sheets (ui-phone.js makes the host, UI.overlay opens it): the groups flow like they did in the controls container */
+  html.ph .ph-sheet { flex-direction: row; flex-wrap: wrap; align-items: flex-start; justify-content: center; gap: var(--sp-3); }
+  html.ph .ph-sheet .control-group { max-width: 100%; }
+
+  /* the rail's sheet: the contextual groups (Curve / Free settings) sit under the second icon row; the wrapper takes no room of its own, so a hidden group leaves no gap */
+  html.ph #more-rail .more-settings { display: contents; }
+
+  /* a dialog never gets taller than the screen, and scrolls inside (the Download, Neu anfangen, remove and timeline dialogs had no maximum) */
+  html.ph .dialog-content { box-sizing: border-box; max-height: calc(var(--ph-h) - 2 * var(--sp-3)); overflow-y: auto; }
 }
