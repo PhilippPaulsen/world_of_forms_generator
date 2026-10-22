@@ -94,7 +94,11 @@ function buildPage(opts) {
             el('div', { id: 'farbe-anchor-register-stepper', class: 'stepper' }, [el('span', { id: 'farbe-anchor-register-display', class: 'stepper-display' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')]),
             el('span', { id: 'farbe-anchor-preview', class: 'fc-swatch' }),
             el('select', { id: 'face-colors-rule' })]),
-        el('div', { id: 'nav-netz', class: 'nav-row nav-netz' }, [btn('btn-kind-sin')])]));
+        el('div', { id: 'nav-netz', class: 'nav-row nav-netz' }, [
+            el('div', { id: 'nav-kinds', class: 'nav-cluster nav-kinds', role: 'radiogroup' }, ['regular', 'sinus', 'tangens', 'geometric'].map(k => { const b = btn(null, 'icon-btn net-kind-btn'); b.setAttribute('data-kind', k); b.setAttribute('role', 'radio'); return b; })),
+            el('span', { class: 'nav-divider nav-divider-a' }),
+            el('div', { id: 'net-strength-stepper', class: 'stepper' }, [el('span', { id: 'net-strength-value', class: 'stepper-display' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')]),
+            btn('btn-more-netz', 'icon-btn nav-more')])]));
     body.appendChild(el('div', { class: 'canvas-row' }, [
         el('div', { id: 'canvas-container' }),
         el('div', { id: 'timeline-strip', class: 'timeline-strip' }, [btn('ts-play', 'icon-btn ts-btn'), el('input', { id: 'ts-range', type: 'range' }), btn('ts-net', 'icon-btn ts-btn'), btn('ts-more', 'icon-btn ts-btn ts-more')]),
@@ -112,6 +116,13 @@ function buildPage(opts) {
     const settings = ['curve-fold-group', 'curve-strength-group', 'free-roughness-group', 'free-controls-group'].map(id => { const g = el('div', { id, class: 'control-group' }, [el('input', { type: 'range' })]); g.hidden = true; return g; });
     const faceList = el('div', { id: 'face-colors-list' }), faceGroup = el('div', { id: 'face-colors-group', class: 'control-group' }, [faceList]); faceGroup.hidden = true;
     body.appendChild(el('div', { class: 'main-container' }, [el('div', { class: 'controls-container' }, [btn('btn-leftover', 'layer-btn')].concat(settings, [tlGroup, layerPanel, faceGroup]))]));
+    // the Netz sheet (#more-netz): the net group sketch.js shows for the square on the base. The axes row, the Fokus stepper (inside #net-focus-row, which sketch.js shows for Sin and Tan), Net lines and Reverse
+    // (inside #net-geo-row) are the pieces the phone layout moves out; the exact field stays
+    const focusRow = el('div', { id: 'net-focus-row' }, [el('h3', {}, []), el('div', {}, [el('div', { id: 'net-focus-stepper', class: 'stepper' }, [el('span', { id: 'net-focus-value', class: 'stepper-display' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')]), el('input', { id: 'net-focus-exact', type: 'number' })])]); focusRow.hidden = true;
+    const geoRow = el('div', { id: 'net-geo-row', class: 'icon-row' }, [btn('net-reverse-btn', 'layer-btn'), btn('net-alternate-btn', 'layer-btn')]); geoRow.hidden = true;
+    const axes = el('div', { id: 'net-axes-row', class: 'icon-row' }, ['both', 'x', 'y'].map(k => { const b = btn(null, 'layer-btn net-axes-btn'); b.setAttribute('data-axes', k); return b; }));
+    const netGroup = el('div', { id: 'net-group', class: 'control-group' }, [axes, focusRow, el('div', { class: 'icon-row' }, [btn('net-lines-btn', 'layer-btn')]), geoRow]);
+    const moreNetz = el('div', { id: 'more-netz', class: 'overlay overlay-wide' }, [el('input', { id: 'net-strength-exact', type: 'number' }), netGroup]); moreNetz.hidden = true; body.appendChild(moreNetz);
     const scrim = el('div', { id: 'overlay-scrim', class: 'overlay-scrim' }); scrim.hidden = true; body.appendChild(scrim);
     // what ui-layers.js and ui-timeline.js do on the "..." click (the existing handlers, bound BEFORE the engine starts, as on the page): flip the block's own state
     const layerModel = { open: false };
@@ -130,7 +141,7 @@ function buildPage(opts) {
         Object.assign(win, { window: win, document: doc, console, MutationObserver: class { constructor(cb) { (win.observers = win.observers || []).push(cb); } observe() { } }, performance: { now: () => 0 }, setTimeout, clearTimeout });
         vm.runInContext(fs.readFileSync(process.env.UI_JS || path.join(ROOT, 'ui.js'), 'utf8'), win, { filename: 'ui.js' });
     }
-    return { doc, win, mq, calls, scrim, layerModel, layerPanel, tlGroup, faceList, faceGroup };
+    return { doc, win, mq, calls, scrim, layerModel, layerPanel, tlGroup, faceList, faceGroup, focusRow, geoRow, moreNetz };
 }
 const ph = (page, cfg) => createPhone(page.doc, page.win, cfg || config);
 // a structure string of the whole tree (tag, id, class, kids; comments by text): equal before apply and after release
@@ -219,8 +230,8 @@ T('subtabs', () => {
     check('only ONE pane is ever in the slot (never two)', slot().children.length === 1);
     check('show() of an unknown sub-tab changes nothing and returns false', (() => { const d = dump(p.doc.documentElement); const r = eng.show('nirgends'); return r === false && dump(p.doc.documentElement) === d; })());
     // remembered per tab: leave the tab (Netz is not covered: released), come back
-    p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
-    check('Netz is not covered: the tabchange releases (class gone, controls back in the Form row and the rail)', !p.doc.documentElement.classList.contains('ph') && orig['btn-undo'].parentNode.id === 'rail-group-a' && orig['nav-shapes'].parentNode.id === 'nav-form' && p.doc.getElementById('ph-stack') === null);
+    p.doc.documentElement.setAttribute('data-tab', 'nirgends'); p.doc.dispatch('tabchange', { detail: { tab: 'nirgends' } });
+    check('A tab the config does not cover (here an unknown one: every real tab is covered from commit 3): the tabchange releases (class gone, controls back in the Form row and the rail)', !p.doc.documentElement.classList.contains('ph') && orig['btn-undo'].parentNode.id === 'rail-group-a' && orig['nav-shapes'].parentNode.id === 'nav-form' && p.doc.getElementById('ph-stack') === null);
     p.doc.documentElement.setAttribute('data-tab', 'form'); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
     check('back to Form: the layout is on again and shows the sub-tab it had (Zeit), remembered per tab', p.doc.documentElement.classList.contains('ph') && p.doc.getElementById('ph-slot').children[0].getAttribute('data-subtab') === 'zeit' && p.doc.getElementById('ph-subtab-zeit').getAttribute('aria-current') === 'true' && eng.state().remembered.form === 'zeit');
     // the focus
@@ -249,12 +260,12 @@ T('events', () => {
     // no data-tab yet (nav.js has not run): nothing applies until the first tabchange
     const r = buildPage(); r.doc.documentElement.removeAttribute('data-tab'); const e3 = ph(r), d0 = dump(r.doc.documentElement); e3.start();
     check('before nav.js has said which tab it is (no html[data-tab]) the engine waits: nothing moved', dump(r.doc.documentElement) === d0 && e3.state().applied === null);
-    r.doc.documentElement.setAttribute('data-tab', 'netz'); r.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
-    check('the first tabchange (Netz: not covered) leaves it alone', dump(r.doc.documentElement) === d0);
+    r.doc.documentElement.setAttribute('data-tab', 'nirgends'); r.doc.dispatch('tabchange', { detail: { tab: 'nirgends' } });
+    check('the first tabchange (an uncovered tab) leaves it alone', dump(r.doc.documentElement) === d0);
     r.doc.documentElement.setAttribute('data-tab', 'form'); r.doc.dispatch('tabchange', { detail: { tab: 'form' } });
     check('the first tabchange for Form applies, and the document was still "interactive" then (before the load event, when p5 runs setup)', r.doc.documentElement.classList.contains('ph') && e3.state().firstApplyState === 'interactive');
-    ['netz'].forEach(t => { r.doc.documentElement.setAttribute('data-tab', t); r.doc.dispatch('tabchange', { detail: { tab: t } }); });
-    check('every not covered tab releases (Netz, from commit 2 the only one): all controls where they were', dump(r.doc.documentElement) === d0);
+    ['nirgends'].forEach(t => { r.doc.documentElement.setAttribute('data-tab', t); r.doc.dispatch('tabchange', { detail: { tab: t } }); });
+    check('every not covered tab releases (an unknown one): all controls where they were', dump(r.doc.documentElement) === d0);
     check('an unknown tab (a hash nav.js would not produce) is treated as not covered', ph(buildPage()).apply('nirgends') === false);
 });
 
@@ -327,8 +338,8 @@ T('sheet-lifecycle', () => {
     p.mq.set(false);
     check('a width change to 768+ with a sheet open: the sheet closes cleanly, the block goes back into the controls container with its state closed, scrim hidden, nothing inert, the whole tree is the one before', dump(p.doc.documentElement) === d0 && p.scrim.hidden && p.layerModel.open === false && p.layerPanel.hidden === true && lt.getAttribute('aria-expanded') === 'false' && !p.doc.getElementById('ph-sheet-layer'));
     p.mq.set(true); eng.show('ebenen'); lt.dispatch('click');
-    p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
-    check('a tab change to Netz (not covered) with a sheet open: closes cleanly, state closed, scrim hidden, tree equal to the original', dump(p.doc.documentElement) === d0 && p.scrim.hidden && p.layerModel.open === false);
+    p.doc.documentElement.setAttribute('data-tab', 'nirgends'); p.doc.dispatch('tabchange', { detail: { tab: 'nirgends' } });
+    check('a tab change to an uncovered tab with a sheet open: closes cleanly, state closed, scrim hidden, tree equal to the original', dump(p.doc.documentElement) === d0 && p.scrim.hidden && p.layerModel.open === false);
     p.doc.documentElement.setAttribute('data-tab', 'form'); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
     const host2 = p.doc.getElementById('ph-sheet-layer');
     check('back in Form the SAME host element is reused (made once: UI.overlay cannot unbind its listeners) and the sheet works again', host2 === host && p.layerPanel.parentNode === host && (() => { eng.show('ebenen'); lt.dispatch('click'); const o = !host.hidden; esc(host); return o && host.hidden; })());
@@ -444,13 +455,13 @@ T('farbe-apply', () => {
     check('every listed control is the SAME node as before, one element per id, no id twice in the document', farbeIds().every(id => p.doc.getElementById(id) === orig[id] && p.doc.all().filter(n => n.id === id).length === 1) && (() => { const ids2 = p.doc.all().map(n => n.id).filter(Boolean); return new Set(ids2).size === ids2.length; })());
     check('the chip containers left their holder for the panel: the holder (hidden) is empty', p.doc.getElementById('ph-chip-home').hidden === true && p.doc.getElementById('ph-chip-home').children.length === 0);
     // Form <-> Farbe <-> Netz
-    p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
-    check('Farbe -> Netz (not covered) releases: the tree is the tree before apply, the opener has its own label, title and data-i18n again, the chip containers are back in their holder', dump(p.doc.documentElement) === before2 && opener.getAttribute('aria-label') === 'Mehr: Kurve, Frei' && opener.getAttribute('title') === 'Mehr: Kurve, Frei' && opener.getAttribute('data-i18n') === 'more.rail.button' && p.doc.getElementById('ph-chip-home').children.length === 2);
+    p.doc.documentElement.setAttribute('data-tab', 'nirgends'); p.doc.dispatch('tabchange', { detail: { tab: 'nirgends' } });
+    check('Farbe -> an uncovered tab releases: the tree is the tree before apply, the opener has its own label, title and data-i18n again, the chip containers are back in their holder', dump(p.doc.documentElement) === before2 && opener.getAttribute('aria-label') === 'Mehr: Kurve, Frei' && opener.getAttribute('title') === 'Mehr: Kurve, Frei' && opener.getAttribute('data-i18n') === 'more.rail.button' && p.doc.getElementById('ph-chip-home').children.length === 2);
     p.doc.documentElement.setAttribute('data-tab', 'form'); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
-    check('Netz -> Form applies Form (Raster, remembered per tab: Farbe\'s own sub-tab is not Form\'s) and the opener has no Farbe label', eng.state().applied === 'form' && eng.state().sub === 'raster' && opener.getAttribute('aria-label') === 'Mehr: Kurve, Frei' && p.doc.getElementById('more-rail').children.map(c => c.id || c.className).join() === 'more-row,more-row more-extra,more-settings,more-name');
+    check('uncovered -> Form applies Form (Raster, remembered per tab: Farbe\'s own sub-tab is not Form\'s) and the opener has no Farbe label', eng.state().applied === 'form' && eng.state().sub === 'raster' && opener.getAttribute('aria-label') === 'Mehr: Kurve, Frei' && p.doc.getElementById('more-rail').children.map(c => c.id || c.className).join() === 'more-row,more-row more-extra,more-settings,more-name');
     eng.show('zeit');
     p.doc.documentElement.setAttribute('data-tab', 'farbe'); p.doc.dispatch('tabchange', { detail: { tab: 'farbe' } });
-    check('Form -> Farbe directly (no Netz between): Form is released first, Farbe applied, its first sub-tab Harmonie, and Form\'s sub-tab (Zeit) is remembered for its return', eng.state().applied === 'farbe' && eng.state().sub === 'harmonie' && eng.state().remembered.form === 'zeit');
+    check('Form -> Farbe directly (no other tab between): Form is released first, Farbe applied, its first sub-tab Harmonie, and Form\'s sub-tab (Zeit) is remembered for its return', eng.state().applied === 'farbe' && eng.state().sub === 'harmonie' && eng.state().remembered.form === 'zeit');
     eng.show('spuren'); eng.release();
     check('release from Farbe with Spuren shown: the whole tree is the one before (every marker removed, the opener restored)', dump(p.doc.documentElement) === before2 && !p.doc.documentElement.classList.contains('ph'));
     const k = farbePage(), ek = ph(k); ek.start(); ek.release(); ek.apply('farbe'); ek.release(); ek.apply('farbe'); ek.release();
@@ -482,7 +493,7 @@ T('farbe-chips', () => {
     clicks = mkRows([{ key: 'k0', color: 'rgb(9, 9, 9)', faces: 2, n: 1 }, { key: 'k1', color: 'rgb(1, 1, 1)', faces: 6, n: 1 }, { key: 'k2', color: 'rgb(2, 2, 2)', faces: 1, n: 2 }]);
     ch.refresh();
     check('a trail inserted before the selected one: the selection stays on the same trail (by key)', ch.selectedTrail().key === 'k2' && ch.selectedTrail().index === 2);
-    const mark = p.doc.documentElement; mark.setAttribute('data-tab', 'netz'); const d1 = p.doc.mutations; clicks = mkRows([{ key: 'z', color: 'red', faces: 1, n: 1 }]); const d2 = p.doc.mutations; ch.sync();
+    const mark = p.doc.documentElement; mark.setAttribute('data-tab', 'nirgends'); const d1 = p.doc.mutations; clicks = mkRows([{ key: 'z', color: 'red', faces: 1, n: 1 }]); const d2 = p.doc.mutations; ch.sync();
     check('outside the Farbe phone layout the view does no work on a sync (it is not on screen)', p.doc.mutations === d2); mark.setAttribute('data-tab', 'farbe');
     mkRows([]); ch.refresh();
     check('no trails: ONE muted line "Keine Flächen" replaces the chips (data-i18n), the stepper shows nothing and its buttons are disabled with a reason', N.chips.children.length === 1 && N.chips.children[0].textContent === 'Keine Flächen' && N.chips.children[0].getAttribute('data-i18n') === 'trails.none' && N.count.textContent === '' && N.label.textContent === '' && N.prev.getAttribute('aria-disabled') === 'true' && N.next.getAttribute('aria-disabled') === 'true' && !!N.prev.dataset.reason && ch.selectedTrail() === null, N.prev.dataset.reason);
@@ -497,6 +508,47 @@ T('farbe-chips', () => {
     const nm0 = p.doc.all().filter(n => n.id === 'ph-trail-chips').length;
     eng.release(); eng.apply('farbe'); eng.release();
     check('through release and apply the chip view keeps its single listener set (one container each, no duplicated ids)', p.doc.all().filter(n => n.id === 'ph-trail-chips').length === nm0 && p.doc.all().filter(n => n.id === 'ph-trail-stepper').length === 1);
+});
+console.log('\n== the Netz tab (commit 3) ==');
+const netzPage = () => { const p = buildPage({ ui: true }); p.doc.documentElement.setAttribute('data-tab', 'netz'); return p; };
+const netzIds = () => { const t = config.tabs.netz, tr = config.toolRows[t.toolRow], out = [].concat.apply([], tr.groups).concat(tr.end, tr.sheet.items, tr.sheet.settings || []); t.subtabs.forEach(s => config.subtabs[s].rows.forEach(r => r.items.forEach(i => { if (i.id) out.push(i.id); (i.also || []).forEach(x => out.push(x)); }))); return out; };
+T('netz-apply', () => {
+    const p = netzPage(), eng = ph(p), before = dump(p.doc.documentElement), orig = {}; netzIds().forEach(id => { orig[id] = p.doc.getElementById(id); });
+    eng.start();
+    check('every tab the config lists is covered and applies: Form, Farbe and Netz each set html.ph (so the header is the one 40px rule of the phone CSS in every tab)', Object.keys(config.tabs).every(t => config.tabs[t].covered === true) && ['form', 'farbe', 'netz'].every(t => { const q = buildPage({ ui: true }), e = ph(q); CHIPS.createChips(q.doc, q.win); q.doc.documentElement.setAttribute('data-tab', t); e.apply(t); return q.doc.documentElement.classList.contains('ph') && e.state().applied === t && e.state().missing.length === 0; }));
+    check('Netz applies from html[data-tab=netz]: class ph, the first sub-tab Art, nothing missing', p.doc.documentElement.classList.contains('ph') && eng.state().applied === 'netz' && eng.state().sub === 'art' && eng.state().missing.length === 0, eng.state().missing.join());
+    check('every listed control exists once and is the SAME node as before', netzIds().every(id => orig[id] && p.doc.getElementById(id) === orig[id] && p.doc.all().filter(n => n.id === id).length === 1), netzIds().filter(id => !orig[id]).join());
+    const toolRow = p.doc.getElementById('ph-toolrow'), tools = toolRow.children[0];
+    check('the tool row: [ Undo Redo | Nodes Net lines Fill ] scrolling part, a separator, then More at the end (Random, the catalog link, Info, Download and Clear are in the sheet)', tools.children.map(g => g.className.split(' ')[0]).join() === 'ph-toolgroup,ph-sep,ph-toolgroup' && tools.children[0].children.map(c => c.id).join() === 'btn-undo,btn-redo' && tools.children[2].children.map(c => c.id).join() === 'btn-toggle-nodes,net-lines-btn,btn-toggle-faces' && toolRow.children.map(c => c.id || c.className.split(' ')[0]).join() === 'ph-tools,ph-sep,btn-more-rail');
+    const pane = id => p.doc.getElementById('ph-slot').children[0].getAttribute('data-subtab') === id ? p.doc.getElementById('ph-slot').children[0] : p.doc.getElementById('ph-park').children.find(c => c.getAttribute('data-subtab') === id);
+    const rowsOf = pn => pn.children.map(r => r.children.map(c => c.id || c.className.split(' ')[0]).join('+')).join(' / ');
+    check('the sub-tab row: Art, Achsen, Ebenen, Zeit; Art is current', p.doc.getElementById('ph-subtabs').children.map(b => b.textContent).join() === 'Art,Achsen,Ebenen,Zeit' && p.doc.getElementById('ph-subtab-art').getAttribute('aria-current') === 'true');
+    check('Art: row 1 = the four kind buttons (the radiogroup wrapper, moved whole); row 2 = the strength stepper, Reverse, the panel\'s own More', rowsOf(pane('art')) === 'nav-kinds / net-strength-stepper+net-reverse-btn+btn-more-netz' && orig['nav-kinds'].children.length === 4 && orig['nav-kinds'].children.every(b => b.getAttribute('role') === 'radio'), rowsOf(pane('art')));
+    check('Achsen: row 1 = Both / X / Y (the axes row), row 2 = the Fokus stepper alone; the exact field and the title stay in the Netz sheet', rowsOf(pane('achsen')) === 'net-axes-row / net-focus-stepper' && p.doc.getElementById('net-focus-exact').parentNode.parentNode === p.doc.getElementById('net-focus-row') && p.doc.getElementById('net-strength-exact').parentNode === p.moreNetz && p.doc.getElementById('net-geo-row').children.map(c => c.id).join() === 'net-alternate-btn');
+    const sheet = p.doc.getElementById('more-rail');
+    check('the rail\'s sheet keeps its first row (Curve ... Neu anfangen) and gets the second: Random, the catalog link, Info, Download, Clear, then the Curve / Free settings groups; More keeps its own name', sheet.children.map(c => c.id || c.className).join() === 'more-row,more-row more-extra,more-settings,more-name' && sheet.children[1].children.map(c => c.id).join() === 'btn-random,btn-gallery,btn-info,btn-save,btn-clear' && !config.toolRows.netz.sheet.openerLabel);
+    // follow: the Fokus stepper copies the hidden state of its row
+    const fs = p.doc.getElementById('net-focus-stepper');
+    check('the Fokus stepper is hidden while sketch.js hides #net-focus-row (Aus, Geo) - it follows it at apply', fs.hidden === true);
+    p.focusRow.hidden = false; p.win.uiSync();
+    check('...and shows when sketch.js shows the row (Sin, Tan): on the next UI tick', fs.hidden === false);
+    p.focusRow.hidden = true; p.win.uiSync();
+    check('...and hides again with it', fs.hidden === true);
+    p.focusRow.hidden = true; eng.release();
+    check('release shows the follower again (it is not hidden by the layout\'s rule any more) and restores the whole tree', fs.hidden === false && dump(p.doc.documentElement) === before);
+    check('after release the stepper is inside #net-focus-row again and a UI tick does nothing to it', fs.parentNode.parentNode === p.focusRow && (p.win.uiSync(), fs.hidden === false));
+    // round trips
+    const q = netzPage(), eq = ph(q); CHIPS.createChips(q.doc, q.win); const d0 = (() => { const z = netzPage(); CHIPS.createChips(z.doc, z.win); return dump(z.doc.documentElement); })(); eq.start();
+    ['form', 'farbe', 'netz', 'form', 'netz', 'farbe'].forEach(t => { q.doc.documentElement.setAttribute('data-tab', t); q.doc.dispatch('tabchange', { detail: { tab: t } }); });
+    check('Netz -> Form -> Farbe -> Netz round trips: every tab applies in turn, one element per id and no id twice', eq.state().applied === 'farbe' && (() => { const ids2 = q.doc.all().map(n => n.id).filter(Boolean); return new Set(ids2).size === ids2.length; })());
+    eq.release();
+    check('...and a release at the end leaves the tree as it was (no marker, no container, no hidden follower)', dump(q.doc.documentElement) === d0);
+});
+T('netz-wide', () => {
+    const p = netzPage(); p.mq.matches = false; const eng = ph(p), d = dump(p.doc.documentElement); eng.start();
+    check('at 768px and up (the media query does not match) the Netz tab is NOT converted: the tree is untouched, no class ph', dump(p.doc.documentElement) === d && !p.doc.documentElement.classList.contains('ph') && eng.state().applied === null);
+    p.mq.set(true);
+    check('...and turning narrow applies it; widening again releases every control', p.doc.documentElement.classList.contains('ph') && (p.mq.set(false), dump(p.doc.documentElement) === d));
 });
 T('overlay-options', () => {
     // the two options and the resize rule added to UI.overlay in 1b, on a plain trigger / panel pair (nothing of the phone engine)
@@ -519,7 +571,7 @@ T('overlay-options', () => {
     check('...and a Tab in the middle is left to the browser (not prevented), also from a number field', r3.prevented === 0 && r4.prevented === 0);
     // a tab change (the Back button, a hash edit: no tap) closes the open overlay and its onClose runs: no stuck scrim over the next tab
     const t5 = mk('button', 't5'), p5 = mk('div', 'p5'), cl5 = []; const o5 = UI.overlay(t5, p5, { onClose: rf => cl5.push(rf) });
-    o5.open(); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
+    o5.open(); p.doc.dispatch('tabchange', { detail: { tab: 'nirgends' } });
     check('a tabchange (nav.js) closes the open overlay (scrim hidden, onClose(false)); with none open it does nothing', o5.isOpen === false && p.scrim.hidden === true && cl5.join() === 'false' && (p.doc.dispatch('tabchange', {}), cl5.length === 1));
     const t3 = mk('button', 't3'), p3 = mk('div', 'p3'), f3 = p3.appendChild(p.doc.createElement('input')), b3 = p3.appendChild(p.doc.createElement('button')), o3 = UI.overlay(t3, p3);
     o3.open(); f3.focus(); p.win.dispatch('resize');

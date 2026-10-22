@@ -192,6 +192,15 @@
       });
     }
 
+    // config.follow: an element that moved out of a block copies the `hidden` of the block it left (sketch.js still shows and hides the block). Only while the layout is on; release() shows the follower again.
+    function syncFollows() {
+      if (!applied || !config.follow) return;
+      Object.keys(config.follow).forEach(function (id) {
+        const node = doc.getElementById(id), src = doc.getElementById(config.follow[id]);
+        if (node && src && moved.has(id) && node.hidden !== src.hidden) node.hidden = src.hidden;
+      });
+    }
+
     function apply(tab) {
       const t = config.tabs[tab];
       if (!mq.matches || !t || !t.covered) { release(); return false; }
@@ -207,6 +216,7 @@
         setInnerHeight();
         show(remembered[tab] || t.defaultSubtab);
         syncSheets();
+        syncFollows();
       });
       return applied === tab;
     }
@@ -216,6 +226,7 @@
       keepFocus(function () {
         // an open sheet closes first (its close also closes the block's own state), then the blocks go back
         if (built && built.sheets) built.sheets.forEach(function (h) { if (h.overlay.isOpen) h.overlay.close(false); });
+        if (config.follow) Object.keys(config.follow).forEach(function (id) { const n = moved.has(id) ? doc.getElementById(id) : null; if (n && n.hidden) n.hidden = false; });
         restoreAll();
         if (built) {
           built.proxied.forEach(function (node) { delete node.focus; });
@@ -276,7 +287,7 @@
       const onMq = function () { sync(); };
       if (mq.addEventListener) mq.addEventListener('change', onMq); else if (mq.addListener) mq.addListener(onMq);
       if (win.addEventListener) { win.addEventListener('resize', onMq); win.addEventListener('orientationchange', onMq); }
-      if (win.UI && typeof win.UI.onSync === 'function') win.UI.onSync(syncSheets);
+      if (win.UI && typeof win.UI.onSync === 'function') win.UI.onSync(function () { syncSheets(); syncFollows(); });
       if (currentTab()) sync();
     }
 

@@ -57,7 +57,7 @@
   // come: close on the mousedown. Reset Color (Farbe) is wired on the CLICK (sketch.js addEventListener('click')): closing the sheet on its mousedown would cancel the click and the button would do nothing, so it
   // closes on the click like Info; so does Nodes (a toggle, p5 mousedown: its handler has run by the click).
   const MOUSEDOWN_WIRED = ['btn-clear', 'btn-paste-pattern', 'btn-save'];
-  const CLICK_CLOSES = ['btn-info', 'btn-face-colors-reset', 'btn-toggle-nodes'];
+  const CLICK_CLOSES = ['btn-info', 'btn-face-colors-reset', 'btn-toggle-nodes', 'btn-random'];
   const moreRow = $('#more-rail .more-row'), nameEl = $('#more-name'), morePanel = $('#more-rail');
   const nameState = nameEl && nameEl.querySelector('.more-name-state'), nameLabel = nameEl && nameEl.querySelector('.more-name-label');
   let last = null;
