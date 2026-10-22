@@ -5,7 +5,7 @@
  * control goes where. Widths are the DESIGN widths in px (measured in the pane at a coarse pointer, --target 48) - validate() adds them up against the phone width; the pane run compares them with the real boxes.
  *
  *   anchor     a selector: the containers are inserted right after that element.
- *   tabs       tab -> { covered, panelH, subtabs: [ids], defaultSubtab, toolRow }.  covered: false = the tab keeps today's phone layout (the engine releases everything); in 1a/1b only Form is covered, from commit 2 Farbe as well.
+ *   tabs       tab -> { covered, panelH, subtabs: [ids], defaultSubtab, toolRow }.  covered: false = the tab keeps today's phone layout (the engine releases everything); in 1a/1b only Form is covered, from commit 2 Farbe as well, from commit 3 Netz: every tab is covered.
  *   subtabs    sub-tab id -> { label, rows } (a STUB - { label, stub: true } - has no rows: its tab is not covered yet). A sub-tab is defined ONCE and may be listed by several tabs ("ebenen", "zeit").
  *   rows       [{ items: [{ id, w, wMin?, h?, fluid? }] }]: one row of the panel (48px high; the panel is two rows); an item is one existing element (a control or the wrapper around a few). h: 104 = a block that
  *              fills both rows (the layer strip is itself two rows). wMin: the width after the narrowest-phone CSS (below 340px), when it is smaller than w. also: [ids] more elements that share the item's slot (two of them are never visible together: the item's w is the widest). sep: true = a hairline the engine makes (w: 1, no id). row.scroll: the row scrolls sideways
@@ -33,7 +33,7 @@
     tabs: {
       form: { covered: true, panelH: 104, subtabs: ['raster', 'ebenen', 'zeit'], defaultSubtab: 'raster', toolRow: 'form', sheets: ['layer', 'timeline'] },
       farbe: { covered: true, panelH: 104, subtabs: ['harmonie', 'spuren', 'ebenen', 'zeit'], defaultSubtab: 'harmonie', toolRow: 'farbe', sheets: ['layer', 'timeline'] },
-      netz: { covered: false, subtabs: ['art', 'achsen', 'ebenen', 'zeit'] }
+      netz: { covered: true, panelH: 104, subtabs: ['art', 'achsen', 'ebenen', 'zeit'], defaultSubtab: 'art', toolRow: 'netz', sheets: ['layer', 'timeline'] }
     },
     toolRows: {
       form: {
@@ -53,8 +53,19 @@
         end: ['btn-more-rail'],
         sheet: { id: 'more-rail', before: 'more-name', opener: 'btn-more-rail', items: ['btn-face-colors-reset', 'btn-toggle-nodes', 'btn-farborgel', 'btn-info', 'btn-save'],
           openerLabel: { text: 'Mehr: Farben zurücksetzen, Knoten, Farborgel, Info, Download', i18n: 'more.farbe.button' } }
+      },
+      // Netz (commit 3): Undo, Redo | Nodes, Net lines, Fill | More. Net lines is a text button in #more-netz at 768px and up; the phone CSS draws it as an icon in this row. Random, the Formorgel link, Info,
+      // Download and Clear go to the rail's sheet, which keeps its own first row (Curve, Free, Free Endpoints, Alternative Net, Neu anfangen) as it has in Form (they are in the Netz rail's More today).
+      netz: {
+        groups: [['btn-undo', 'btn-redo'], ['btn-toggle-nodes', 'net-lines-btn', 'btn-toggle-faces']],
+        end: ['btn-more-rail'],
+        sheet: { id: 'more-rail', before: 'more-name', opener: 'btn-more-rail', items: ['btn-random', 'btn-gallery', 'btn-info', 'btn-save', 'btn-clear'],
+          settings: ['curve-fold-group', 'curve-strength-group', 'free-roughness-group', 'free-controls-group'] }
       }
     },
+    // follow: follower id -> the id whose `hidden` it copies (on apply and on every UI tick; release() un-hides the follower). For an element that moved out of a block sketch.js shows and hides as a whole: the Fokus
+    // stepper left #net-focus-row (which keeps the title and the exact field in the Netz sheet), and sketch.js still shows that row only for Sin and Tan.
+    follow: { 'net-focus-stepper': 'net-focus-row' },
     subtabs: {
       raster: {
         label: 'Raster',
@@ -76,9 +87,10 @@
       },
       // the chip view of the trails (ui-phone-chips.js makes both containers; the model is the hidden #face-colors-list)
       spuren: { label: 'Spuren', rows: [{ items: [{ id: 'ph-trail-chips', fluid: true }] }, { items: [{ id: 'ph-trail-stepper', fluid: true }] }] },
-      // stubs: the sub-tabs of the tabs that are not covered yet
-      art: { label: 'Art', stub: true },
-      achsen: { label: 'Achsen', stub: true }
+      // Netz (commit 3). Art: row 1 = the four kinds (Aus, Sin, Tan, Geo: 4 x 60 + 3 gaps = 264), row 2 = the strength stepper, Reverse (sketch.js shows it for Geo only) and the panel's own More (#more-netz: the domain, Macro,
+      // the exact fields, Alternate and the hints stay in it). Achsen: row 1 = Both / X / Y, row 2 = the Fokus stepper (sketch.js shows its row for Sin and Tan only: the row is empty otherwise, see `follow`).
+      art: { label: 'Art', rows: [{ items: [{ id: 'nav-kinds', w: 264 }] }, { items: [{ id: 'net-strength-stepper', w: 117, wMin: 109 }, { id: 'net-reverse-btn', w: 74 }, { id: 'btn-more-netz', w: 48 }] }] },
+      achsen: { label: 'Achsen', rows: [{ items: [{ id: 'net-axes-row', w: 158 }] }, { items: [{ id: 'net-focus-stepper', w: 117, wMin: 109 }] }] }
     },
     // Bottom sheets (1b): a block that stays inline above 768px and in the tabs that are not covered moves into a sheet (UI.overlay) while the layout is on. The sheet FOLLOWS the block's own open state - the
     // "..." button's existing handler flips it, nothing here toggles it - and closing the sheet (Escape, the scrim, a tap outside, a resize) closes that state by clicking the button once more.
@@ -192,6 +204,7 @@
       });
     });
     Object.keys(cfg.afterShow || {}).forEach(function (id) { if (!known(id)) bad.push('afterShow: id ' + id + ' is unknown'); });
+    Object.keys(cfg.follow || {}).forEach(function (id) { if (!known(id) || !known(cfg.follow[id])) bad.push('follow: ' + id + ' or ' + cfg.follow[id] + ' is unknown'); else if (id === cfg.follow[id]) bad.push('follow: ' + id + ' follows itself'); });
     return bad;
   }
 

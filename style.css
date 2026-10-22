@@ -1350,9 +1350,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   outline-offset: 2px;
 }
 
-/* === Phone layout (phone layout, commits 1a to 2; ui-phone.js builds it, ui-phone-config.js says what goes where) =====================================================
-   Every rule here sits inside @media (max-width: 767px) AND starts with `html.ph`: the class is set only by ui-phone.js, only while a covered tab (today: Form) is applied below 768px, and removed
-   by release(). Without the script, at 768px and up, and in the Farbe and Netz tabs nothing below matches, so those keep the layout they had. Nothing above this block was changed.
+/* === Phone layout (phone layout, commits 1a to 3; ui-phone.js builds it, ui-phone-config.js says what goes where) =====================================================
+   Every rule here sits inside @media (max-width: 767px) AND starts with `html.ph`: the class is set only by ui-phone.js, only while a covered tab (Form, Farbe, Netz: all of them since commit 3) is applied below
+   768px, and removed by release(). Without the script and at 768px and up nothing below matches, so those keep the layout they had. Nothing above this block was changed.
    SPACING (1a2): four values only - --sp-1 4px (inside a group of buttons, separator margins), --sp-2 8px (between zones and rows), --sp-3 16px (the gutter, the canvas margins), --sp-4 32px (between the
    text tabs). Every padding, margin and gap below is one of them, 0, or a calc of them (tools/ui/test-phone-config.js lists a violation with its selector). 48, 44, 40 are control and bar sizes, not spacing.
    Stack (px): header 40 | 8 | the canvas | tool row 64 (8 + 48 + 8, its hairline inside) | sub-tab row 44 (hairline inside) | 8 | panel 104 (two rows of 48 with an 8px gap). --chrome-h is everything but the
@@ -1508,4 +1508,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   html.ph .ph-trail-stepper { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
   html.ph .ph-trail-count { min-width: var(--target); text-align: center; font-variant-numeric: tabular-nums; }
   html.ph .ph-trail-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-secondary); font-size: var(--size-secondary); }
+  /* ---- commit 3: the Netz tab ---------------------------------------------------------------------------------------------------------------------------------------------------------------- */
+  /* Art: the four kind buttons are 60px wide ("Aus" / "Sin" / "Tan" / "Geo", as in the Netz row); the text buttons of the panel (Both / X / Y, Reverse) are --target high */
+  /* an element sketch.js hides (Reverse, the Fokus stepper) stays hidden whatever display its class gives it */
+  html.ph .ph-slot [hidden] { display: none; }
+  html.ph .ph-slot .net-kind-btn { width: 60px; }
+  html.ph .ph-slot .layer-btn { box-sizing: border-box; min-height: var(--target); }
+  /* Net lines: the text button of the Netz sheet (#more-netz) becomes an icon in the tool row - two wavy lines drawn with a mask, so the button, its text (the accessible name), its title and its active state
+     are the ones it has; the text is visually emptied, not removed */
+  html.ph .ph-toolrow #net-lines-btn { position: relative; box-sizing: border-box; flex: none; width: var(--target); height: var(--target); min-width: var(--target); padding: 0; border-radius: var(--radius); font-size: 0; line-height: 0; touch-action: manipulation; }
+  html.ph .ph-toolrow #net-lines-btn::before { content: ""; position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); background-color: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 8 C6 4 9 4 12 8 S18 12 21 8'/%3E%3Cpath d='M3 16 C6 12 9 12 12 16 S18 20 21 16'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 8 C6 4 9 4 12 8 S18 12 21 8'/%3E%3Cpath d='M3 16 C6 12 9 12 12 16 S18 20 21 16'/%3E%3C/svg%3E") center / contain no-repeat; }
 }

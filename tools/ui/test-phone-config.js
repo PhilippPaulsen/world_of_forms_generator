@@ -38,11 +38,11 @@ T('real', () => {
     const problems = validate(config, { ids: idSet });
     check('validate(config, the ids of index.html) finds nothing', problems.length === 0, problems.join(' ; ') || 'no problems');
     check('the query is the phone query (max-width: 767px) - the one ui.js calls SHEET_QUERY', config.query === '(max-width: 767px)' && /SHEET_QUERY = '\(max-width: 767px\)'/.test(read('UI_JS', 'ui.js')));
-    check('three tabs: form, farbe, netz; Form (1a, 1b) and Farbe (commit 2) are covered, Netz is not: it releases to its original places', Object.keys(config.tabs).join() === 'form,farbe,netz' && config.tabs.form.covered === true && config.tabs.farbe.covered === true && config.tabs.netz.covered === false);
+    check('three tabs: form, farbe, netz, ALL covered (Form 1a / 1b, Farbe commit 2, Netz commit 3)', Object.keys(config.tabs).join() === 'form,farbe,netz' && Object.keys(config.tabs).every(t => config.tabs[t].covered === true));
     const labels = tab => config.tabs[tab].subtabs.map(s => config.subtabs[s].label).join(' | ');
     check('the sub-tabs of each tab (the targets): Form: Raster | Ebenen | Zeit; Farbe: Harmonie | Spuren | Ebenen | Zeit; Netz: Art | Achsen | Ebenen | Zeit', labels('form') === 'Raster | Ebenen | Zeit' && labels('farbe') === 'Harmonie | Spuren | Ebenen | Zeit' && labels('netz') === 'Art | Achsen | Ebenen | Zeit', labels('form') + ' / ' + labels('farbe') + ' / ' + labels('netz'));
     check('"ebenen" and "zeit" are defined ONCE (one entry each) and listed by every tab', ['ebenen', 'zeit'].every(s => Object.keys(config.subtabs).filter(k => k === s).length === 1 && Object.keys(config.tabs).every(t => config.tabs[t].subtabs.includes(s))));
-    check('the sub-tabs of Netz that are not shared are STUBS (no rows); the ones of Form and Farbe have rows', ['art', 'achsen'].every(s => config.subtabs[s].stub === true && !config.subtabs[s].rows) && ['raster', 'harmonie', 'spuren', 'ebenen', 'zeit'].every(s => !config.subtabs[s].stub && config.subtabs[s].rows.length >= 1));
+    check('every sub-tab has rows now (no stub is left: all tabs are covered)', Object.keys(config.subtabs).every(s => !config.subtabs[s].stub && config.subtabs[s].rows.length >= 1) && Object.keys(config.subtabs).join() === 'raster,ebenen,zeit,harmonie,spuren,art,achsen');
     check('the panel is 104px: two rows of 48 and an 8px gap; the stack chrome is 40 + 8 + 64 + 44 + 8 + 104 = 268', config.tabs.form.panelH === 104 && chromeH(config, 'form') === 268, String(chromeH(config, 'form')));
     const f = controlsOf(config, 'form');
     check('Form: the tool row is Undo, Redo, Random | Nodes, Fill | More; the sheet gets the Formorgel link, Paste Pattern, Info, Download, Clear', JSON.stringify(config.toolRows.form.groups) === '[["btn-undo","btn-redo","btn-random"],["btn-toggle-nodes","btn-toggle-faces"]]' && config.toolRows.form.end.join() === 'btn-more-rail' && config.toolRows.form.sheet.items.join() === 'btn-gallery,btn-paste-pattern,btn-info,btn-save,btn-clear' && config.toolRows.form.sheet.id === 'more-rail');
@@ -70,12 +70,12 @@ T('mutants', () => {
     mut('three rows in a sub-tab', c => { c.subtabs.raster.rows.push({ items: [{ id: 'btn-sym-none', w: 48 }] }); }, /3 rows, the panel holds two|rows are .*high/);
     mut('a block 160px high', c => { c.subtabs.ebenen.rows[0].items[0].h = 160; }, /rows are 160px high|rows, the panel holds two/);
     mut('an id that is nowhere (neither in index.html nor created by a named script)', c => { c.subtabs.raster.rows[0].items.push({ id: 'btn-does-not-exist', w: 10 }); }, /neither in index\.html nor created/);
-    mut('a covered tab with a stub sub-tab', c => { c.tabs.form.subtabs.push('art'); }, /covered, but sub-tab art is a stub/);
+    mut('a covered tab with a stub sub-tab', c => { c.subtabs.stubby = { label: 'S', stub: true }; c.tabs.form.subtabs.push('stubby'); }, /covered, but sub-tab stubby is a stub/);
     mut('a sub-tab that is not defined', c => { c.tabs.form.subtabs.push('nirgends'); }, /nirgends is not defined/);
     mut('a sub-tab listed twice in a tab', c => { c.tabs.form.subtabs.push('zeit'); }, /zeit is listed twice/);
-    mut('an uncovered tab with content in a sub-tab of its own', c => { c.subtabs.art = { label: 'Art', rows: [{ items: [{ id: 'btn-undo', w: 48 }] }] }; }, /not covered, but sub-tab art has content/);
-    mut('an uncovered tab with a tool row', c => { c.tabs.netz.toolRow = 'form'; }, /not covered, but has a tool row/);
-    mut('a stub with rows', c => { c.subtabs.art.rows = [{ items: [{ id: 'btn-undo', w: 48 }] }]; }, /a stub has no rows/);
+    mut('an uncovered tab with content in a sub-tab of its own', c => { c.subtabs.other = { label: 'O', rows: [{ items: [{ id: 'btn-undo', w: 48 }] }] }; c.tabs.netz = { covered: false, subtabs: ['other'] }; }, /not covered, but sub-tab other has content/);
+    mut('an uncovered tab with a tool row', c => { c.tabs.netz.covered = false; }, /not covered, but has a tool row/);
+    mut('a stub with rows', c => { c.subtabs.stubby = { label: 'S', stub: true, rows: [{ items: [{ id: 'btn-undo', w: 48 }] }] }; }, /a stub has no rows/);
     mut('a default sub-tab that the tab does not list', c => { c.tabs.form.defaultSubtab = 'art'; }, /defaultSubtab/);
     mut('a panel height that is not two rows', c => { c.tabs.form.panelH = 120; }, /panelH 120/);
     mut('a tool row too wide (a seventh icon: 6 x 48 + ... + 48 > 343)', c => { c.toolRows.form.end.push('btn-sym-none'); c.toolRows.form.groups[1].push('btn-help'); }, /the tool row is \d+px wide/);
@@ -152,7 +152,7 @@ T('scale', () => {
 console.log('\n== the sheets (commit 1b) ==');
 T('sheets', () => {
     const LAYERS = read('UI_LAYERS_JS', 'ui-layers.js'), TIMELINE = read('UI_TIMELINE_JS', 'ui-timeline.js');
-    check('two sheets, "layer" and "timeline", and Form and Farbe list both (Netz lists none: it stays inline)', Object.keys(config.sheets).join() === 'layer,timeline' && config.tabs.form.sheets.join() === 'layer,timeline' && config.tabs.farbe.sheets.join() === 'layer,timeline' && !config.tabs.netz.sheets);
+    check('two sheets, "layer" and "timeline", and every tab lists both', Object.keys(config.sheets).join() === 'layer,timeline' && ['form', 'farbe', 'netz'].every(t => config.tabs[t].sheets.join() === 'layer,timeline'));
     const L = config.sheets.layer, M = config.sheets.timeline;
     check('the layer sheet hosts #layer-more-panel, opened by the .lt-more button of #layer-strip, open = the block is not hidden; the timeline sheet hosts #timeline-group, opened by .ts-more of #timeline-strip, open = class ts-open', L.content === 'layer-more-panel' && L.trigger.within === 'layer-strip' && L.trigger.selector === '.lt-more' && L.open.notHidden === true && M.content === 'timeline-group' && M.trigger.within === 'timeline-strip' && M.trigger.selector === '.ts-more' && M.open.hasClass === 'ts-open');
     check('the contents and trigger containers exist once in index.html; the host ids do not (a script makes the hosts)', [L.content, M.content, L.trigger.within, M.trigger.within].every(id => ids.filter(x => x === id).length === 1) && !idSet.has(L.host) && !idSet.has(M.host) && L.host !== M.host);
@@ -185,7 +185,7 @@ T('sheet-mutants', () => {
     mut('a sheet that does not say how to read its state', c => { c.sheets.timeline.open = {}; }, /open must be/);
     mut('a contextual group of the rail\'s sheet that is nowhere', c => { c.toolRows.form.sheet.settings.push('nope-group'); }, /nope-group is neither in index\.html/);
     mut('a contextual group listed twice (also in a row)', c => { c.subtabs.zeit.rows.push({ items: [{ id: 'curve-fold-group', w: 48 }] }); }, /curve-fold-group is listed twice/);
-    mut('a sheet that no tab lists (never built, never checked)', c => { c.tabs.form.sheets = ['layer']; c.tabs.farbe.sheets = ['layer']; }, /sheet timeline is defined but no tab lists it/);
+    mut('a sheet that no tab lists (never built, never checked)', c => { c.tabs.form.sheets = ['layer']; c.tabs.farbe.sheets = ['layer']; c.tabs.netz.sheets = ['layer']; }, /sheet timeline is defined but no tab lists it/);
     mut('one block claimed by two sheets (the timeline sheet hosts the layer block as well)', c => { c.sheets.timeline.content = 'layer-more-panel'; }, /layer-more-panel is listed twice/);
 });
 
@@ -220,6 +220,46 @@ T('farbe-mutants', () => {
     mut('the tool row too wide: the strategy wrapper counted as 5 icons and a fourth group icon', c => { c.toolRows.farbe.icons['farbe-strategy-group'] = 5; c.toolRows.farbe.groups[0].push('btn-toggle-nodes'); c.toolRows.farbe.sheet.items = c.toolRows.farbe.sheet.items.filter(i => i !== 'btn-toggle-nodes'); }, /the tool row is \d+px wide/);
     mut('the Farbe tab with a stub sub-tab', c => { c.subtabs.harmonie = { label: 'Harmonie', stub: true }; }, /covered, but sub-tab harmonie is a stub/);
     mut('Farbe without a default sub-tab it lists', c => { c.tabs.farbe.defaultSubtab = 'art'; }, /defaultSubtab/);
+});
+
+console.log('\n== the Netz tab (commit 3) ==');
+T('netz', () => {
+    const N = config.tabs.netz, tr = config.toolRows.netz, A = config.subtabs.art, X = config.subtabs.achsen;
+    check('Netz: covered, a 104px panel, the sub-tabs Art | Achsen | Ebenen | Zeit (no "Feld": the domain and Macro stay in #more-netz), Art first, the same two sheets; the chrome is the same 268', N.covered === true && N.panelH === 104 && N.subtabs.join() === 'art,achsen,ebenen,zeit' && N.defaultSubtab === 'art' && N.toolRow === 'netz' && chromeH(config, 'netz') === 268);
+    check('the tool row: Undo, Redo | Nodes, Net lines, Fill | More at the end: 6 icons, 4px inside a group, two hairlines = 334px of the 343', JSON.stringify(tr.groups) === '[["btn-undo","btn-redo"],["btn-toggle-nodes","net-lines-btn","btn-toggle-faces"]]' && JSON.stringify(tr.end) === '["btn-more-rail"]' && (6 * 48 + 3 * 4 + 2 * 17) === 334 && !tr.icons);
+    check('the rail\'s sheet gets Random, the catalog link, Info, Download and Clear (Paste Pattern is Form only), plus the Curve / Free settings groups like Form\'s; More keeps its own name (no openerLabel)', JSON.stringify(tr.sheet.items) === '["btn-random","btn-gallery","btn-info","btn-save","btn-clear"]' && JSON.stringify(tr.sheet.settings) === JSON.stringify(config.toolRows.form.sheet.settings) && tr.sheet.opener === 'btn-more-rail' && !tr.sheet.openerLabel);
+    const w = r => r.items.reduce((a, i) => a + (i.w || 0), 0) + 8 * (r.items.length - 1), wMin = r => r.items.reduce((a, i) => a + (i.wMin || i.w || 0), 0) + 8 * (r.items.length - 1);
+    check('Art: row 1 = the four kinds (4 x 60 + 3 gaps = 264), row 2 = the strength stepper (117), Reverse (74, sketch.js shows it for Geo only) and the panel\'s own More (48): 255px, 247 with the narrow stepper; both fit 288 - nothing scrolls', A.rows.length === 2 && A.rows[0].items.map(i => i.id + ':' + i.w).join() === 'nav-kinds:264' && A.rows[1].items.map(i => i.id).join() === 'net-strength-stepper,net-reverse-btn,btn-more-netz' && w(A.rows[0]) === 264 && w(A.rows[1]) === 255 && wMin(A.rows[1]) === 247 && !A.rows.some(r => r.scroll));
+    check('Achsen: row 1 = Both / X / Y (158px measured at a coarse pointer: 52 + 48 + 48 + 2 gaps), row 2 = the Fokus stepper (117); no row scrolls', X.rows.length === 2 && X.rows[0].items[0].id === 'net-axes-row' && X.rows[0].items[0].w === 158 && X.rows[1].items.map(i => i.id).join() === 'net-focus-stepper' && X.rows[1].items[0].w === 117 && !X.rows.some(r => r.scroll));
+    check('follow: the Fokus stepper copies the hidden state of #net-focus-row (sketch.js shows that row for Sin and Tan only)', JSON.stringify(config.follow) === '{"net-focus-stepper":"net-focus-row"}');
+    const f = controlsOf(config, 'netz');
+    check('every control of Netz is listed once (' + f.length + ' ids) and each is in index.html exactly once', new Set(f).size === f.length && f.every(id => ids.filter(x => x === id).length === 1), f.filter(id => ids.filter(x => x === id).length !== 1).join());
+    const span = id => { const m = new RegExp('<([a-z0-9]+)\\b[^>]*\\bid="' + id + '"[^>]*>').exec(htmlNoComments); if (!m) return ''; const tag = m[1], re = new RegExp('<(/?)' + tag + '\\b[^>]*>', 'g'); re.lastIndex = m.index + m[0].length; let depth = 1, r; while ((r = re.exec(htmlNoComments))) { depth += r[1] ? -1 : 1; if (!depth) return htmlNoComments.slice(m.index, re.lastIndex); } return ''; };
+    check('#nav-kinds is the radiogroup of the four kind buttons (role=radiogroup, four .net-kind-btn with role=radio: Aus, Sin, Tan, Geo); #net-strength-stepper holds #net-strength-value and the two chevrons', /id="nav-kinds"[^>]*role="radiogroup"/.test(htmlNoComments) && ['regular', 'sinus', 'tangens', 'geometric'].every(k => new RegExp('net-kind-btn[^>]*data-kind="' + k + '"[^>]*role="radio"').test(span('nav-kinds'))) && /id="net-strength-value"/.test(span('net-strength-stepper')) && (span('net-strength-stepper').match(/class="stepper-btn"/g) || []).length === 2);
+    check('the Fokus stepper sits INSIDE #net-focus-row (the block sketch.js shows and hides) next to the exact field, which does NOT move; #net-geo-row keeps Reverse and Alternate in the markup (only Reverse is moved at run time: it has its own hidden in sketch.js)', /id="net-focus-stepper"/.test(span('net-focus-row')) && /id="net-focus-exact"/.test(span('net-focus-row')) && !new RegExp('id="net-focus-exact"').test(span('net-focus-stepper')) && /id="net-reverse-btn"/.test(span('net-geo-row')) && /id="net-alternate-btn"/.test(span('net-geo-row')));
+    check('Net lines keeps what it has: id net-lines-btn, the title, the text "Net lines" (its accessible name; the phone CSS empties it visually, not in the DOM), in #net-group where it is at 768px and up', /<button class="layer-btn" id="net-lines-btn" title="Draw the net's own grid lines[^"]*">Net lines<\/button>/.test(htmlNoComments) && /id="net-lines-btn"/.test(span('net-group')));
+    check('the wrapper ids added to index.html exist once: nav-kinds, net-strength-stepper, net-focus-stepper', ['nav-kinds', 'net-strength-stepper', 'net-focus-stepper'].every(id => ids.filter(x => x === id).length === 1));
+});
+T('netz-mutants', () => {
+    const env = { ids: idSet };
+    const mut = (name, fn, re) => { const c = clone(config); fn(c); const p = validate(c, env); check(`validate rejects (Netz): ${name}`, p.some(m => re.test(m)), p.join(' ; ') || 'no problem found'); };
+    mut('a control listed twice (Undo again in the Achsen panel)', c => { c.subtabs.achsen.rows[1].items.push({ id: 'btn-undo', w: 48 }); }, /btn-undo is listed twice/);
+    mut('a control of the sheet also in the tool row (Random)', c => { c.toolRows.netz.groups[0].push('btn-random'); }, /btn-random is listed twice/);
+    mut('a row over 343px (the four kinds 80px wide each: 344 would not fit, 352 does not)', c => { c.subtabs.art.rows[0].items[0].w = 352; }, /row 1 is 352px wide, more than the 343px/);
+    mut('the strength row over 343px (Reverse 200px)', c => { c.subtabs.art.rows[1].items[1].w = 200; }, /row 2 is \d+px wide, more than the 343px/);
+    mut('the tool row too wide (a seventh icon)', c => { c.toolRows.netz.groups[1].push('btn-help'); }, /the tool row is \d+px wide/);
+    mut('a third row in a Netz panel', c => { c.subtabs.achsen.rows.push({ items: [{ id: 'btn-info', w: 48 }] }); }, /3 rows, the panel holds two|rows are .*high/);
+    mut('a kind button / id that index.html does not have (the wrapper id lost)', c => { c.subtabs.art.rows[0].items[0].id = 'nav-kinds-gone'; }, /nav-kinds-gone is neither in index\.html/);
+    mut('a follower whose source is nowhere', c => { c.follow['net-focus-stepper'] = 'net-focus-nowhere'; }, /follow: .* is unknown/);
+    mut('a follower that follows itself', c => { c.follow['net-focus-stepper'] = 'net-focus-stepper'; }, /follows itself/);
+    mut('the Netz tab without a tool row', c => { delete c.tabs.netz.toolRow; }, /tool row undefined is not defined/);
+    mut('the Netz tab not covered but with content', c => { c.tabs.netz.covered = false; }, /not covered, but/);
+});
+T('netz-sources', () => {
+    const SK = read('SKETCH_JS', 'sketch.js'), NET = read('UI_NET_JS', 'ui-net.js');
+    const sk = SK.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    check('sketch.js (UNCHANGED by commit 3) still provides what the Netz panel relies on: the group shown for the square on the base, Reverse hidden unless Geo, the Fokus row hidden unless Sin / Tan, Net lines a toggle of netLinesOn on its own id, the kinds / axes handlers on the classes', /group\.elt\.hidden = !\(currentShape === 'square' && activeLayer === 'base'\)/.test(sk) && /reverseBtn\.elt\.hidden = !geo/.test(sk) && /focusRow\.elt\.hidden = !trig/.test(sk) && /select\('#net-lines-btn'\)/.test(sk) && /linesBtn\.mousePressed\(\(\) => \{ netLinesOn = !netLinesOn; linesBtn\.elt\.classList\.toggle\('active', netLinesOn\)/.test(sk) && /selectAll\('\.net-kind-btn'\), axesBtns = selectAll\('\.net-axes-btn'\)/.test(sk) && /select\('#net-reverse-btn'\)/.test(sk) && /select\('#net-focus-row'\)/.test(sk));
+    check('ui-net.js: the guard of a disabled net control sits on the DOCUMENT (the kind buttons, the axes buttons and Reverse live in the phone panel, outside #nav-netz) and covers all three; the sync disables axes and Reverse with the reason', /document\.addEventListener\('mousedown'[\s\S]*?GUARDED[\s\S]*?\}, true\)/.test(NET) && /const GUARDED = '\.net-kind-btn\[aria-disabled="true"\], \.net-axes-btn\[aria-disabled="true"\], #net-reverse-btn\[aria-disabled="true"\]'/.test(NET) && /document\.addEventListener\('click'[\s\S]*?UI\.showReason/.test(NET) && !/row\.addEventListener\('(mousedown|click)'/.test(NET) && /axesBtns\.forEach\(function \(b\) \{ UI\.setDisabled\(b, all\); \}\)/.test(NET) && /UI\.setDisabled\(reverseBtn, all\)/.test(NET));
 });
 
 console.log('\n== the script tags ==');
@@ -297,6 +337,15 @@ T('css', () => {
     check('the chip rules are all html.ph in the phone media query: a 48px square (var(--target)), the selected chip black, a 4px colour bar at the bottom edge (' + chipCss.length + ' rules)', chipCss.length >= 3 && chipCss.every(r => /^html\.ph /.test(r.sel) && r.at[0] === '@media (max-width: 767px)') && rs.some(r => r.sel === 'html.ph .ph-chip' && /width:\s*var\(--target\)/.test(r.body) && /height:\s*var\(--target\)/.test(r.body)) && rs.some(r => r.sel === 'html.ph .ph-chip.active' && /background:\s*var\(--color-text\)/.test(r.body)) && rs.some(r => r.sel === 'html.ph .ph-chip-bar' && /height:\s*4px/.test(r.body) && /bottom:\s*0/.test(r.body)));
     check('the rail\'s sheet in Farbe hides Form\'s first row (Curve ... Neu anfangen) only for html.ph[data-tab="farbe"]: the Form sheet keeps it', rs.some(r => r.sel === 'html.ph[data-tab="farbe"] #more-rail > .more-row:not(.more-extra)' && /display:\s*none/.test(r.body)));
     check('the chip holder needs no CSS of its own and nothing above the phone block names a chip: it is hidden by its attribute outside the layout', !/ph-chip|ph-trail/.test(CSS.slice(0, marker)));
+    // ---- commit 3 ----
+    const hdr = rs.filter(r => /app-header/.test(r.sel));
+    check('the header is the 40px rule in EVERY tab: the html.ph .app-header rules carry no [data-tab] (Form, Farbe and Netz are all covered), so the 72px of the coarse Farbe / Netz header is gone under html.ph', hdr.length >= 2 && hdr.every(r => !/data-tab/.test(r.sel)) && hdr.some(r => /height:\s*var\(--ph-header-h\)/.test(r.body)) && !rs.some(r => /data-tab="netz"/.test(r.sel) && /height|overflow|display: none/.test(r.body)));
+    check('the page clip (overflow hidden, the viewport height) has no [data-tab] either: no tab scrolls under html.ph', rs.filter(r => /overflow(-y)?:\s*hidden/.test(r.body) && /^html\.ph/.test(r.sel) && /body/.test(r.sel)).every(r => !/data-tab/.test(r.sel)) && rs.some(r => r.sel.replace(/\s+/g, ' ') === 'html.ph, html.ph body'));
+    const lines = rs.filter(r => /net-lines-btn/.test(r.sel));
+    check('Net lines as an icon: ONLY in the tool row (html.ph .ph-toolrow #net-lines-btn), 48 x 48, its text emptied with font-size 0, the icon a ::before drawn with a mask of an inline SVG data URI (two wavy lines in currentColor, so the active state inverts it); all inside the phone media query (' + lines.length + ' rules)', lines.length === 2 && lines.every(r => /^html\.ph \.ph-toolrow #net-lines-btn(::before)?$/.test(r.sel) && r.at[0] === '@media (max-width: 767px)') && lines.some(r => r.sel === 'html.ph .ph-toolrow #net-lines-btn' && /font-size:\s*0/.test(r.body) && /width:\s*var\(--target\)/.test(r.body) && /height:\s*var\(--target\)/.test(r.body)) && lines.some(r => /::before$/.test(r.sel) && /background-color:\s*currentColor/.test(r.body) && /mask:\s*url\("data:image\/svg\+xml/.test(r.body) && /-webkit-mask:\s*url\("data:image\/svg\+xml/.test(r.body)));
+    check('nothing above the phone block touches #net-lines-btn\'s look except its old rules: no ::before, no font-size 0 (768px and up keep the text button)', !/net-lines-btn[^{]*::before|#net-lines-btn[^{]*\{[^}]*font-size:\s*0/.test(CSS.slice(0, marker)));
+    check('an element sketch.js hides (Reverse, the Fokus stepper) stays hidden in the panel whatever display its class gives it: html.ph .ph-slot [hidden] { display: none }', rs.some(r => r.sel === 'html.ph .ph-slot [hidden]' && /display:\s*none/.test(r.body)));
+    check('the kind buttons are 60px wide in the panel and the text buttons (Both / X / Y, Reverse) are --target high: html.ph .ph-slot .net-kind-btn { width: 60px }, html.ph .ph-slot .layer-btn { min-height: var(--target) }', rs.some(r => r.sel === 'html.ph .ph-slot .net-kind-btn' && /width:\s*60px/.test(r.body)) && rs.some(r => r.sel === 'html.ph .ph-slot .layer-btn' && /min-height:\s*var\(--target\)/.test(r.body)));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

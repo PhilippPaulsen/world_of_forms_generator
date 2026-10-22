@@ -15,7 +15,7 @@
  *              plus exact two-decimal fields for strength and focus, in a popover (bottom sheet on the phone).
  *
  * The net applies to the SQUARE on the BASE sheet only. Everywhere else the whole row stays visible and is
- * aria-disabled with the reason (a tap shows it); it is never hidden. Aus disables the strength (it has no effect
+ * aria-disabled with the reason (a tap shows it); it is never hidden. The same goes for the axes buttons and Reverse (phone layout, commit 3: they are visible in its panel). Aus disables the strength (it has no effect
  * then); strength 0 is NOT off - the stepper stays enabled there.
  *
  * The German texts below are the reasons for now; the dictionary (data-i18n keys) comes in a later phase.
@@ -52,15 +52,18 @@
   // ---- kinds: a radiogroup whose state sketch.js owns ------------------------------------------------------------
   kindBtns.forEach(function (b) { UI.checkedFromActive(b); });
 
-  // A disabled kind must not reach sketch.js's p5 handler (a 'mousedown' listener): stop it on the way down.
-  row.addEventListener('mousedown', function (e) {
-    const b = e.target.closest && e.target.closest('.net-kind-btn[aria-disabled="true"]');
+  // A disabled net control must not reach sketch.js's p5 handler (a 'mousedown' listener): stop it on the way down. The listeners sit on the document, not on the row: the phone layout (ui-phone.js) moves the kind
+  // buttons, the axes buttons and Reverse into its panel, outside #nav-netz and #more-netz.
+  const GUARDED = '.net-kind-btn[aria-disabled="true"], .net-axes-btn[aria-disabled="true"], #net-reverse-btn[aria-disabled="true"]';
+  document.addEventListener('mousedown', function (e) {
+    const b = e.target.closest && e.target.closest(GUARDED);
     if (b) e.stopPropagation();
   }, true);
-  row.addEventListener('click', function (e) {
-    const b = e.target.closest && e.target.closest('.net-kind-btn[aria-disabled="true"]');
+  document.addEventListener('click', function (e) {
+    const b = e.target.closest && e.target.closest(GUARDED);
     if (b) UI.showReason(b);
   });
+  const axesBtns = Array.prototype.slice.call(document.querySelectorAll('.net-axes-btn')), reverseBtn = $('#net-reverse-btn');
   // Arrow keys move AND choose, like native radios (the choice itself is sketch.js's p5 handler: a 'mousedown').
   kindBtns.forEach(function (b, i) {
     b.addEventListener('keydown', function (e) {
@@ -129,6 +132,8 @@
   function sync() {
     const all = reasonAll();
     kindBtns.forEach(function (b) { UI.setDisabled(b, all); });
+    axesBtns.forEach(function (b) { UI.setDisabled(b, all); });   // hidden with #net-group elsewhere; in the phone layout's panel they stay visible, so they say why
+    UI.setDisabled(reverseBtn, all);
     UI.setDisabled(moreBtn, all);
     if (all && overlay.isOpen) overlay.close(false);
     strengthStepper.refresh();
