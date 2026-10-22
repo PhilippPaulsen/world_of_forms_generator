@@ -56,16 +56,20 @@
       },
       // Netz (commit 3): Undo, Redo | Nodes, Net lines, Fill | More. Net lines is a text button in #more-netz at 768px and up; the phone CSS draws it as an icon in this row. Random, the Formorgel link, Info,
       // Download and Clear go to the rail's sheet, which keeps its own first row (Curve, Free, Free Endpoints, Alternative Net, Neu anfangen) as it has in Form (they are in the Netz rail's More today).
+      // labels (commit 3b): id -> the name the control has while this tool row is on (aria-label and title, data-i18n). Net lines is an icon here: its text, which is its name at 768px and up, is emptied visually.
       netz: {
+        labels: { 'net-lines-btn': { text: 'Netzlinien zeigen', i18n: 'netz.lines.button' } },
         groups: [['btn-undo', 'btn-redo'], ['btn-toggle-nodes', 'net-lines-btn', 'btn-toggle-faces']],
         end: ['btn-more-rail'],
         sheet: { id: 'more-rail', before: 'more-name', opener: 'btn-more-rail', items: ['btn-random', 'btn-gallery', 'btn-info', 'btn-save', 'btn-clear'],
           settings: ['curve-fold-group', 'curve-strength-group', 'free-roughness-group', 'free-controls-group'] }
       }
     },
-    // follow: follower id -> the id whose `hidden` it copies (on apply and on every UI tick; release() un-hides the follower). For an element that moved out of a block sketch.js shows and hides as a whole: the Fokus
-    // stepper left #net-focus-row (which keeps the title and the exact field in the Netz sheet), and sketch.js still shows that row only for Sin and Tan.
-    follow: { 'net-focus-stepper': 'net-focus-row' },
+    // follow: follower id -> the id of the block it left (sketch.js still shows and hides that block as a whole), on apply and on every UI tick, only while the layout is on. A string copies the block's `hidden`
+    // (release() shows the follower again). An object { of, mode: 'disable', reason } keeps the follower SHOWN and marks it aria-disabled with the reason (UI.setDisabled) while the block is hidden:
+    // release() enables it again. The Fokus stepper left #net-focus-row (which keeps the title and the exact field in the Netz sheet); sketch.js shows that row only for Sin and Tan, so for Aus and Geo
+    // the stepper is there but disabled and says why, instead of an empty row.
+    follow: { 'net-focus-stepper': { of: 'net-focus-row', mode: 'disable', reason: 'Fokus gilt für Sin und Tan' } },
     subtabs: {
       raster: {
         label: 'Raster',
@@ -87,9 +91,9 @@
       },
       // the chip view of the trails (ui-phone-chips.js makes both containers; the model is the hidden #face-colors-list)
       spuren: { label: 'Spuren', rows: [{ items: [{ id: 'ph-trail-chips', fluid: true }] }, { items: [{ id: 'ph-trail-stepper', fluid: true }] }] },
-      // Netz (commit 3). Art: row 1 = the four kinds (Aus, Sin, Tan, Geo: 4 x 60 + 3 gaps = 264), row 2 = the strength stepper, Reverse (sketch.js shows it for Geo only) and the panel's own More (#more-netz: the domain, Macro,
-      // the exact fields, Alternate and the hints stay in it). Achsen: row 1 = Both / X / Y, row 2 = the Fokus stepper (sketch.js shows its row for Sin and Tan only: the row is empty otherwise, see `follow`).
-      art: { label: 'Art', rows: [{ items: [{ id: 'nav-kinds', w: 264 }] }, { items: [{ id: 'net-strength-stepper', w: 117, wMin: 109 }, { id: 'net-reverse-btn', w: 74 }, { id: 'btn-more-netz', w: 48 }] }] },
+      // Netz (commit 3). Art: row 1 = the four kinds (Aus, Sin, Tan, Geo: 4 x 60 + 3 gaps = 264), row 2 = the strength stepper, the panel's own More (#more-netz: the domain, Macro, the exact fields, Alternate and the
+      // hints stay in it) and Reverse LAST (sketch.js shows it for Geo only: More keeps its place whether or not Reverse is there; 117 + 8 + 48 + 8 + 74 = 255). Achsen: row 1 = Both / X / Y, row 2 = the Fokus stepper (sketch.js shows its row for Sin and Tan only: disabled with a reason otherwise, see `follow`).
+      art: { label: 'Art', rows: [{ items: [{ id: 'nav-kinds', w: 264 }] }, { items: [{ id: 'net-strength-stepper', w: 117, wMin: 109 }, { id: 'btn-more-netz', w: 48 }, { id: 'net-reverse-btn', w: 74 }] }] },
       achsen: { label: 'Achsen', rows: [{ items: [{ id: 'net-axes-row', w: 158 }] }, { items: [{ id: 'net-focus-stepper', w: 117, wMin: 109 }] }] }
     },
     // Bottom sheets (1b): a block that stays inline above 768px and in the tabs that are not covered moves into a sheet (UI.overlay) while the layout is on. The sheet FOLLOWS the block's own open state - the
@@ -102,6 +106,8 @@
     afterShow: { 'layer-strip': ['layerTable', 'revealActive'], 'ph-trail-chips': ['uiPhoneChips', 'refresh'] }
   };
 
+  // a follow entry is a string (the id of the block; mode 'hide') or { of, mode, reason }
+  const followSpec = v => (typeof v === 'string' ? { of: v, mode: 'hide' } : v);
   const sharesRow = row => row.items.length > 1;   // a fluid element fills its row: nothing else may share it
 
   // ---- validate(config, env) -> [problem strings]; [] = fine. env = { ids: Set|Array of the ids the HTML holds } -------------------------------------------------------------------------------------
@@ -204,11 +210,26 @@
       });
     });
     Object.keys(cfg.afterShow || {}).forEach(function (id) { if (!known(id)) bad.push('afterShow: id ' + id + ' is unknown'); });
-    Object.keys(cfg.follow || {}).forEach(function (id) { if (!known(id) || !known(cfg.follow[id])) bad.push('follow: ' + id + ' or ' + cfg.follow[id] + ' is unknown'); else if (id === cfg.follow[id]) bad.push('follow: ' + id + ' follows itself'); });
+    Object.keys(cfg.follow || {}).forEach(function (id) {
+      const f = followSpec(cfg.follow[id]);
+      if (!known(id) || !known(f.of)) bad.push('follow: ' + id + ' or ' + f.of + ' is unknown');
+      else if (id === f.of) bad.push('follow: ' + id + ' follows itself');
+      if (f.mode !== 'hide' && f.mode !== 'disable') bad.push('follow: ' + id + ' has the unknown mode ' + f.mode);
+      if (f.mode === 'disable' && !(typeof f.reason === 'string' && f.reason.trim())) bad.push('follow: ' + id + ' is disabled but has no reason');
+    });
+    Object.keys(cfg.toolRows).forEach(function (name) {   // labels: the name a control has while the tool row is on; the control must be in that row
+      const tr = cfg.toolRows[name], inRow = [].concat.apply([], tr.groups).concat(tr.end);
+      Object.keys(tr.labels || {}).forEach(function (id) {
+        const l = tr.labels[id];
+        if (inRow.indexOf(id) < 0) bad.push('toolRows.' + name + '.labels: ' + id + ' is not in that tool row');
+        if (!l || typeof l.text !== 'string' || !l.text.trim()) bad.push('toolRows.' + name + '.labels: ' + id + ' has no text');
+        if (!l || typeof l.i18n !== 'string' || !l.i18n) bad.push('toolRows.' + name + '.labels: ' + id + ' has no data-i18n key');
+      });
+    });
     return bad;
   }
 
-  const api = { config: config, validate: validate, chromeH: function (cfg, tab) { const S = cfg.sizes; return S.header + S.gap + S.toolRow + S.subtabs + S.gap + cfg.tabs[tab].panelH; } };
+  const api = { config: config, validate: validate, followSpec: followSpec, chromeH: function (cfg, tab) { const S = cfg.sizes; return S.header + S.gap + S.toolRow + S.subtabs + S.gap + cfg.tabs[tab].panelH; } };
   root.PHONE_CONFIG = config;
   root.PHONE_CONFIG_API = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

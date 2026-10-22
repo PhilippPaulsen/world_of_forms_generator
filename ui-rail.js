@@ -55,9 +55,10 @@
   const T = { 'more.state.on': 'an', 'more.state.off': 'aus', 'more.hint': 'Symbol antippen' };
   // Which buttons of the second row close the sheet on the mousedown and which on the click. Clear, Paste Pattern and Download are wired by p5 on the mousedown (their handlers run on it), so a click may never
   // come: close on the mousedown. Reset Color (Farbe) is wired on the CLICK (sketch.js addEventListener('click')): closing the sheet on its mousedown would cancel the click and the button would do nothing, so it
-  // closes on the click like Info; so does Nodes (a toggle, p5 mousedown: its handler has run by the click).
-  const MOUSEDOWN_WIRED = ['btn-clear', 'btn-paste-pattern', 'btn-save'];
-  const CLICK_CLOSES = ['btn-info', 'btn-face-colors-reset', 'btn-toggle-nodes', 'btn-random'];
+  // closes on the click like Info. Nodes is wired on the mousedown too (p5) and its handler REPLACES the button's svg (nodeBtn.html(...) in updateNodeToggleIcon): the element the mousedown hit is gone when the finger
+  // comes up, so the browser sends NO click (measured with real taps, commit 3b: pointerdown, mousedown, pointerup, mouseup, no click, the sheet stayed open). It closes on the mousedown like Clear.
+  const MOUSEDOWN_WIRED = ['btn-clear', 'btn-paste-pattern', 'btn-save', 'btn-toggle-nodes'];
+  const CLICK_CLOSES = ['btn-info', 'btn-face-colors-reset', 'btn-random'];
   const moreRow = $('#more-rail .more-row'), nameEl = $('#more-name'), morePanel = $('#more-rail');
   const nameState = nameEl && nameEl.querySelector('.more-name-state'), nameLabel = nameEl && nameEl.querySelector('.more-name-label');
   let last = null;
@@ -90,8 +91,16 @@
     // click never reaches it: the sheet closes on the mousedown, after the button's own handler has run (the bridge in ui.js sends a mousedown for a keyboard activation too). The browser's mousedown default would
     // focus the pressed button - in a closed sheet, i.e. nowhere - so it is cancelled, and the focus goes to the Mehr button unless a dialog that just opened has taken it (UI.dialog does). Info opens its own card
     // on the click (UI.overlay: one overlay at a time) and the catalog link needs its click to navigate: they close the sheet on the click.
+    // The button the mousedown hit, found through the event's PATH: the p5 handler of Nodes has already replaced the button's svg when this listener runs, so the target (the old svg) is detached and its closest() finds nothing.
+    function hitBy(e, sel) {
+      const t = e.target, own = t && t.closest && t.closest(sel);
+      if (own) return own;
+      const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+      for (let i = 0; i < path.length; i++) { const m = path[i] && path[i].closest && path[i].closest(sel); if (m) return m; }
+      return null;
+    }
     morePanel.addEventListener('mousedown', function (e) {
-      const b = e.target.closest && e.target.closest(MOUSEDOWN_WIRED.map(function (id) { return '.more-extra #' + id; }).join(', '));
+      const b = hitBy(e, MOUSEDOWN_WIRED.map(function (id) { return '.more-extra #' + id; }).join(', '));
       if (!b || !moreRail || !moreRail.isOpen) return;
       e.preventDefault();
       moreRail.close(false);

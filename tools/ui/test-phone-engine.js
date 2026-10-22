@@ -523,20 +523,39 @@ T('netz-apply', () => {
     const pane = id => p.doc.getElementById('ph-slot').children[0].getAttribute('data-subtab') === id ? p.doc.getElementById('ph-slot').children[0] : p.doc.getElementById('ph-park').children.find(c => c.getAttribute('data-subtab') === id);
     const rowsOf = pn => pn.children.map(r => r.children.map(c => c.id || c.className.split(' ')[0]).join('+')).join(' / ');
     check('the sub-tab row: Art, Achsen, Ebenen, Zeit; Art is current', p.doc.getElementById('ph-subtabs').children.map(b => b.textContent).join() === 'Art,Achsen,Ebenen,Zeit' && p.doc.getElementById('ph-subtab-art').getAttribute('aria-current') === 'true');
-    check('Art: row 1 = the four kind buttons (the radiogroup wrapper, moved whole); row 2 = the strength stepper, Reverse, the panel\'s own More', rowsOf(pane('art')) === 'nav-kinds / net-strength-stepper+net-reverse-btn+btn-more-netz' && orig['nav-kinds'].children.length === 4 && orig['nav-kinds'].children.every(b => b.getAttribute('role') === 'radio'), rowsOf(pane('art')));
+    check('Art: row 1 = the four kind buttons (the radiogroup wrapper, moved whole); row 2 = the strength stepper, the panel\'s own More, Reverse LAST (More keeps its place whether or not sketch.js shows Reverse)', rowsOf(pane('art')) === 'nav-kinds / net-strength-stepper+btn-more-netz+net-reverse-btn' && orig['nav-kinds'].children.length === 4 && orig['nav-kinds'].children.every(b => b.getAttribute('role') === 'radio'), rowsOf(pane('art')));
     check('Achsen: row 1 = Both / X / Y (the axes row), row 2 = the Fokus stepper alone; the exact field and the title stay in the Netz sheet', rowsOf(pane('achsen')) === 'net-axes-row / net-focus-stepper' && p.doc.getElementById('net-focus-exact').parentNode.parentNode === p.doc.getElementById('net-focus-row') && p.doc.getElementById('net-strength-exact').parentNode === p.moreNetz && p.doc.getElementById('net-geo-row').children.map(c => c.id).join() === 'net-alternate-btn');
     const sheet = p.doc.getElementById('more-rail');
     check('the rail\'s sheet keeps its first row (Curve ... Neu anfangen) and gets the second: Random, the catalog link, Info, Download, Clear, then the Curve / Free settings groups; More keeps its own name', sheet.children.map(c => c.id || c.className).join() === 'more-row,more-row more-extra,more-settings,more-name' && sheet.children[1].children.map(c => c.id).join() === 'btn-random,btn-gallery,btn-info,btn-save,btn-clear' && !config.toolRows.netz.sheet.openerLabel);
-    // follow: the Fokus stepper copies the hidden state of its row
-    const fs = p.doc.getElementById('net-focus-stepper');
-    check('the Fokus stepper is hidden while sketch.js hides #net-focus-row (Aus, Geo) - it follows it at apply', fs.hidden === true);
+    // follow (mode 'disable'): the Fokus stepper stays SHOWN and is aria-disabled with the reason while sketch.js hides #net-focus-row (Aus, Geo)
+    const fs = p.doc.getElementById('net-focus-stepper'), REASON = 'Fokus gilt für Sin und Tan';
+    check('the Fokus stepper is shown (not hidden) and disabled with the reason while sketch.js hides #net-focus-row (Aus, Geo): aria-disabled, data-reason and title say it - at apply', fs.hidden === false && fs.getAttribute('aria-disabled') === 'true' && fs.dataset.reason === REASON && fs.getAttribute('title') === REASON, fs.getAttribute('aria-disabled') + ' / ' + fs.dataset.reason);
     p.focusRow.hidden = false; p.win.uiSync();
-    check('...and shows when sketch.js shows the row (Sin, Tan): on the next UI tick', fs.hidden === false);
+    check('...and enabled again when sketch.js shows the row (Sin, Tan): on the next UI tick no aria-disabled, no reason, no title left', fs.hidden === false && fs.getAttribute('aria-disabled') === null && fs.dataset.reason === undefined && fs.getAttribute('title') === null);
     p.focusRow.hidden = true; p.win.uiSync();
-    check('...and hides again with it', fs.hidden === true);
+    check('...and disabled again with it', fs.getAttribute('aria-disabled') === 'true' && fs.dataset.reason === REASON && fs.hidden === false);
+    p.win.uiSync(); p.win.uiSync();
+    check('a UI tick with nothing changed does nothing more (the same state, one title)', fs.getAttribute('aria-disabled') === 'true' && fs.getAttribute('title') === REASON);
+    // labels: Net lines is an icon in the tool row, its name comes from the config
+    const nl = p.doc.getElementById('net-lines-btn'), LAB = config.toolRows.netz.labels['net-lines-btn'];
+    check('Net lines has the name "Netzlinien zeigen" (aria-label and title, data-i18n key) while the Netz tool row is on - the config\'s label, nothing hard-coded', LAB.text === 'Netzlinien zeigen' && nl.getAttribute('aria-label') === LAB.text && nl.getAttribute('title') === LAB.text && nl.getAttribute('data-i18n') === LAB.i18n);
     p.focusRow.hidden = true; eng.release();
-    check('release shows the follower again (it is not hidden by the layout\'s rule any more) and restores the whole tree', fs.hidden === false && dump(p.doc.documentElement) === before);
-    check('after release the stepper is inside #net-focus-row again and a UI tick does nothing to it', fs.parentNode.parentNode === p.focusRow && (p.win.uiSync(), fs.hidden === false));
+    check('release enables the follower again and restores the whole tree', fs.hidden === false && fs.getAttribute('aria-disabled') === null && dump(p.doc.documentElement) === before);
+    check('...the stepper has no title, no reason and no aria-disabled left (it had none), and Net lines has no aria-label, no title and no data-i18n (it had none)', fs.getAttribute('title') === null && fs.dataset.reason === undefined && nl.getAttribute('aria-label') === null && nl.getAttribute('title') === null && nl.getAttribute('data-i18n') === null);
+    check('after release the stepper is inside #net-focus-row again and a UI tick does nothing to it', fs.parentNode.parentNode === p.focusRow && (p.win.uiSync(), fs.hidden === false && fs.getAttribute('aria-disabled') === null));
+    // the name and title a control HAD are put back, not just removed
+    const r = netzPage(), er = ph(r), nr = r.doc.getElementById('net-lines-btn'), fr = r.doc.getElementById('net-focus-stepper');
+    nr.setAttribute('title', 'Draw the net\'s own grid lines'); nr.setAttribute('aria-label', 'Net lines'); nr.setAttribute('data-i18n', 'netz.lines.old'); fr.setAttribute('title', 'Fokus');
+    er.start();
+    check('a control that already had a name / a title: the layout\'s label replaces them while it is on; the stepper\'s own title is kept for later', nr.getAttribute('title') === 'Netzlinien zeigen' && nr.getAttribute('aria-label') === 'Netzlinien zeigen' && fr.dataset.baseTitle === 'Fokus' && fr.getAttribute('title') === REASON);
+    er.release();
+    check('...release puts back the original title, aria-label and data-i18n of Net lines and the stepper\'s own title', nr.getAttribute('title') === 'Draw the net\'s own grid lines' && nr.getAttribute('aria-label') === 'Net lines' && nr.getAttribute('data-i18n') === 'netz.lines.old' && fr.getAttribute('title') === 'Fokus' && fr.getAttribute('aria-disabled') === null);
+    // the other follow mode (a string = 'hide') still copies the hidden state
+    const h = netzPage(), cfgH = JSON.parse(JSON.stringify(config)); cfgH.follow = { 'net-focus-stepper': 'net-focus-row' };
+    const eh = ph(h, cfgH), fh = h.doc.getElementById('net-focus-stepper'); eh.start();
+    check('mode "hide" (a plain string) is unchanged: the follower is hidden with its block, shown with it, and not disabled', fh.hidden === true && fh.getAttribute('aria-disabled') === null && (h.focusRow.hidden = false, h.win.uiSync(), fh.hidden === false) && (h.focusRow.hidden = true, h.win.uiSync(), fh.hidden === true));
+    eh.release();
+    check('...and release shows it again', fh.hidden === false);
     // round trips
     const q = netzPage(), eq = ph(q); CHIPS.createChips(q.doc, q.win); const d0 = (() => { const z = netzPage(); CHIPS.createChips(z.doc, z.win); return dump(z.doc.documentElement); })(); eq.start();
     ['form', 'farbe', 'netz', 'form', 'netz', 'farbe'].forEach(t => { q.doc.documentElement.setAttribute('data-tab', t); q.doc.dispatch('tabchange', { detail: { tab: t } }); });
@@ -549,6 +568,16 @@ T('netz-wide', () => {
     check('at 768px and up (the media query does not match) the Netz tab is NOT converted: the tree is untouched, no class ph', dump(p.doc.documentElement) === d && !p.doc.documentElement.classList.contains('ph') && eng.state().applied === null);
     p.mq.set(true);
     check('...and turning narrow applies it; widening again releases every control', p.doc.documentElement.classList.contains('ph') && (p.mq.set(false), dump(p.doc.documentElement) === d));
+    // commit 3b: at 768px and up nothing of the follow mode or the label is applied: the Fokus stepper is not disabled (its block is hidden, nothing marks it), Net lines keeps its own text as its name
+    const q = netzPage(); q.mq.matches = false; const eq = ph(q); eq.start();
+    const fq = q.doc.getElementById('net-focus-stepper'), nq = q.doc.getElementById('net-lines-btn');
+    q.win.uiSync(); q.win.uiSync();
+    check('at 768px and up the Fokus stepper is never disabled (not even with its row hidden, and across UI ticks) and Net lines gets no aria-label, title or data-i18n from the layout', fq.getAttribute('aria-disabled') === null && fq.getAttribute('title') === null && fq.dataset.reason === undefined && fq.hidden === false && nq.getAttribute('aria-label') === null && nq.getAttribute('title') === null && nq.getAttribute('data-i18n') === null);
+    q.mq.set(true); q.mq.set(false); q.win.uiSync();
+    check('...also after a narrow phase and back: nothing is left behind', fq.getAttribute('aria-disabled') === null && fq.getAttribute('title') === null && nq.getAttribute('aria-label') === null && nq.getAttribute('title') === null && nq.getAttribute('data-i18n') === null);
+    // another tab (Form) while the config has the follow / label: the Fokus stepper is not moved and not touched
+    const f2 = buildPage({ ui: true }), e2 = ph(f2); e2.start(); f2.win.uiSync();
+    check('in the Form tab (nothing of Netz is moved) the Fokus stepper and Net lines are untouched', f2.doc.getElementById('net-focus-stepper').getAttribute('aria-disabled') === null && f2.doc.getElementById('net-lines-btn').getAttribute('aria-label') === null);
 });
 T('overlay-options', () => {
     // the two options and the resize rule added to UI.overlay in 1b, on a plain trigger / panel pair (nothing of the phone engine)

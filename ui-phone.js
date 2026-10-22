@@ -145,6 +145,15 @@
           });
         } else if (missing.indexOf(tr.sheet.id) < 0) missing.push(tr.sheet.id);
       }
+      // labels: the name a control has while this tool row is on (an icon-only Net lines button: its text is emptied visually, its name is the label); put back by release()
+      b.labelsSaved = [];
+      Object.keys(tr.labels || {}).forEach(function (id) {
+        const node = doc.getElementById(id), l = tr.labels[id];
+        if (!node) { if (missing.indexOf(id) < 0) missing.push(id); return; }
+        b.labelsSaved.push({ node: node, label: node.getAttribute('aria-label'), title: node.getAttribute('title'), i18n: node.getAttribute('data-i18n') });
+        node.setAttribute('aria-label', l.text); node.setAttribute('title', l.text);
+        if (l.i18n) node.setAttribute('data-i18n', l.i18n);
+      });
       buildSheets(t, b);
       return b;
     }
@@ -192,13 +201,31 @@
       });
     }
 
-    // config.follow: an element that moved out of a block copies the `hidden` of the block it left (sketch.js still shows and hides the block). Only while the layout is on; release() shows the follower again.
+    // config.follow: an element that moved out of a block follows the `hidden` of the block it left (sketch.js still shows and hides the block). Only while the layout is on; release() puts the follower back.
+    //   'hide'    (a string entry, or mode 'hide'): the follower is hidden when the block is.
+    //   'disable' ({ of, mode: 'disable', reason }): the follower stays shown and is aria-disabled with the reason (UI.setDisabled) while the block is hidden. UI.stepper does nothing while its root is disabled.
+    const disabledFollowers = new Map();   // id -> the title attribute it had before the engine disabled it (null = none)
+    function followSpec(v) { return typeof v === 'string' ? { of: v, mode: 'hide' } : v; }
     function syncFollows() {
       if (!applied || !config.follow) return;
       Object.keys(config.follow).forEach(function (id) {
-        const node = doc.getElementById(id), src = doc.getElementById(config.follow[id]);
-        if (node && src && moved.has(id) && node.hidden !== src.hidden) node.hidden = src.hidden;
+        const f = followSpec(config.follow[id]), node = doc.getElementById(id), src = doc.getElementById(f.of);
+        if (!(node && src && moved.has(id))) return;
+        if (f.mode === 'disable') {
+          const UI = win.UI;
+          if (!UI || typeof UI.setDisabled !== 'function') return;
+          if (src.hidden) {
+            if (!disabledFollowers.has(id)) disabledFollowers.set(id, node.getAttribute('title'));
+            UI.setDisabled(node, f.reason);
+          } else if (disabledFollowers.has(id)) unfollowDisable(id, node);
+        } else if (node.hidden !== src.hidden) node.hidden = src.hidden;
       });
+    }
+    function unfollowDisable(id, node) {
+      const UI = win.UI, title = disabledFollowers.get(id);
+      disabledFollowers.delete(id);
+      if (UI && typeof UI.setDisabled === 'function') UI.setDisabled(node, null);
+      if (title === null) node.removeAttribute('title'); else node.setAttribute('title', title);   // setDisabled leaves an empty title where there was none
     }
 
     function apply(tab) {
@@ -226,7 +253,14 @@
       keepFocus(function () {
         // an open sheet closes first (its close also closes the block's own state), then the blocks go back
         if (built && built.sheets) built.sheets.forEach(function (h) { if (h.overlay.isOpen) h.overlay.close(false); });
-        if (config.follow) Object.keys(config.follow).forEach(function (id) { const n = moved.has(id) ? doc.getElementById(id) : null; if (n && n.hidden) n.hidden = false; });
+        if (config.follow) Object.keys(config.follow).forEach(function (id) {
+          const n = moved.has(id) ? doc.getElementById(id) : null;
+          if (!n) return;
+          if (disabledFollowers.has(id)) unfollowDisable(id, n); else if (followSpec(config.follow[id]).mode !== 'disable' && n.hidden) n.hidden = false;
+        });
+        if (built && built.labelsSaved) built.labelsSaved.forEach(function (o) {
+          [['aria-label', o.label], ['title', o.title], ['data-i18n', o.i18n]].forEach(function (a) { if (a[1] === null) o.node.removeAttribute(a[0]); else o.node.setAttribute(a[0], a[1]); });
+        });
         restoreAll();
         if (built) {
           built.proxied.forEach(function (node) { delete node.focus; });

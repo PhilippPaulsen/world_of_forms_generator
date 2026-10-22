@@ -199,7 +199,7 @@
     else if (el.getAttribute('title') !== text) el.setAttribute('title', text);
     if (el.getAttribute('aria-label') !== text) el.setAttribute('aria-label', text);
   }
-  function showReason(el) { toast(el.dataset.reason || '', 5000); }
+  function showReason(el, from) { toast(el.dataset.reason || (from && from.dataset.reason) || '', 5000); }   // from: the element whose reason stands in when el has none yet (a stepper's root)
 
   function attachReason(el) {
     if (el.dataset.reasonBound) return;
@@ -237,6 +237,8 @@
    *            display otherwise)
    *   Hold a button: it repeats after 600 ms (every 150 ms, every 70 ms after 1.8 s of repeating - see holdRepeat). Arrow keys on the input step too.
    *   refresh() re-reads compute() for both directions and updates the buttons; call it after any state change.
+   *   A stepper whose ROOT is aria-disabled (UI.setDisabled(root, reason); the phone layout does it for a stepper whose block is hidden) does nothing: compute() is not asked, a step is refused with the
+   *   root's reason (a toast, no change), the chevrons are disabled with it, and a typed value is put back.
    */
   // Hold-to-repeat of a stepper chevron (Phase 2, track A, commit C). A SELF-RESCHEDULING timeout, not a setInterval: a setInterval keeps firing while the step
   // (the handler: setValue -> input/change events -> sketch.js rebuilds the grid and redraw()s, all synchronous) takes longer than the interval, and the queued
@@ -273,6 +275,7 @@
 
   function stepper(root, opts) {
     const input = opts.input, buttons = Array.prototype.slice.call(root.querySelectorAll('.stepper-btn'));
+    const compute = function (dir) { return isDisabled(root) ? { to: null, reason: root.dataset.reason || '' } : opts.compute(dir); };
     let last = parseInt(input.value, 10); // the last valid value, for restoring an emptied field
     function setValue(v) {
       input.value = String(v);
@@ -286,6 +289,7 @@
     // reads it.
     if (!opts.noTyping) {
       input.addEventListener('input', function (e) {
+        if (isDisabled(root)) { input.value = String(last); e.stopImmediatePropagation(); return; }
         const v = parseInt(input.value, 10);
         if (input.value === '' || isNaN(v)) { e.stopImmediatePropagation(); return; }
         const rg = opts.range ? opts.range() : null;
@@ -305,7 +309,7 @@
       input.addEventListener('blur', normalise);
     }
     function step(dir) {
-      const r = opts.compute(dir);
+      const r = compute(dir);
       if (r.to === null || r.to === undefined) { toast(r.reason, 4000); return false; }
       setValue(r.to);
       if (r.note) toast(r.note, 4000);
@@ -316,7 +320,7 @@
       const cur = parseInt(input.value, 10);
       if (!isNaN(cur) && document.activeElement !== input) last = cur; // follows programmatic changes (catalog, shape switch)
       buttons.forEach(function (b) {
-        const r = opts.compute(parseInt(b.dataset.dir, 10));
+        const r = compute(parseInt(b.dataset.dir, 10));
         setDisabled(b, r.to === null || r.to === undefined ? r.reason : null);
       });
     }
@@ -330,7 +334,7 @@
       let downDisabled = false; // was the button disabled when the press began? (the step itself may disable it)
       b.addEventListener('pointerdown', function (e) {
         if (e.button !== undefined && e.button !== 0) return;
-        downDisabled = isDisabled(b);
+        downDisabled = isDisabled(b) || isDisabled(root);
         if (downDisabled) return; // the click shows the reason
         step(dir);
         hold.start();
@@ -340,8 +344,8 @@
       // click: a mouse/touch click (event.detail >= 1) was already handled on pointerdown; a keyboard activation
       // (Enter/Space, or a scripted .click()) has detail 0 and steps here. Either way a disabled button shows its reason.
       b.addEventListener('click', function (e) {
-        if (e.detail > 0) { if (downDisabled) showReason(b); return; }
-        if (isDisabled(b)) { showReason(b); return; }
+        if (e.detail > 0) { if (downDisabled) showReason(b, root); return; }
+        if (isDisabled(b) || isDisabled(root)) { showReason(b, root); return; }
         step(dir);
       });
       b.style.touchAction = 'manipulation';
@@ -352,6 +356,8 @@
       if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); step(1); }
       else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
     });
+    // a root that is (un)disabled from outside (the phone layout, in the middle of a UI tick that already refreshed this stepper) brings the chevrons up to date at once, not on the next redraw
+    if (typeof MutationObserver === 'function') new MutationObserver(function () { refresh(); }).observe(root, { attributes: true, attributeFilter: ['aria-disabled'] });
     return { refresh: refresh, step: step };
   }
 

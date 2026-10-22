@@ -61,7 +61,7 @@ function build(o) {
     const docHandlers = {}, observers = [];
     const nodeInput = Object.assign(makeEl(), { value: String(o.node === undefined ? 3 : o.node), dispatchEvent(ev) { return nodeInput.dispatch(ev.type, ev), true; } });
     const sizeInput = Object.assign(makeEl(), { value: String(o.size === undefined ? 5 : o.size), dispatchEvent(ev) { return sizeInput.dispatch(ev.type, ev), true; } });
-    const mkRoot = input => { const up = makeEl({ dataset: { dir: '1' } }), down = makeEl({ dataset: { dir: '-1' } }); const root = { up, down, querySelectorAll: () => [up, down] }; input.closest = () => root; return root; };
+    const mkRoot = input => { const up = makeEl({ dataset: { dir: '1' } }), down = makeEl({ dataset: { dir: '-1' } }); const root = { up, down, querySelectorAll: () => [up, down], getAttribute: () => null, dataset: {} }; input.closest = () => root; return root; };
     const nodeRoot = mkRoot(nodeInput), sizeRoot = mkRoot(sizeInput);
     const shapeBtns = ['triangle', 'square', 'hex'].map(s => makeEl({ dataset: { shape: s } })), foldBtns = ['3', '6'].map(f => makeEl({ dataset: { fold: f } }));
     const byId = { '#layer-node-count-input': nodeInput, '#layer-shape-size-input': sizeInput };
