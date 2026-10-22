@@ -5,7 +5,7 @@
  *   UI.notify(text, opts)           the ONE notification component: a fixed-position message in the always-rendered live region #ui-notices (it never moves the
  *                                   layout). opts { key, kind: 'info' | 'warn' | 'error', ttl, sticky }. With a key a showing notice is updated in place; once it was
  *                                   dismissed or has expired the same key is NOT shown again until UI.notifyClear(key) (once per condition). At most two are visible
- *                                   (a third replaces the oldest). The duration is clamp(3000 + 50 x length, 4000, 9000) ms unless ttl is given; the timer is
+ *                                   (a third replaces the oldest); under the phone layout (html.ph) ONE (a new one replaces the showing one). The duration is clamp(3000 + 50 x length, 4000, 9000) ms unless ttl is given; the timer is
  *                                   stopped while the pointer is over a notice or the focus is inside it and restarts on leave. A text of 60 or more characters,
  *                                   or a sticky notice, has a close button; Escape closes the newest; a press outside notices closes the non-sticky ones. A notice that holds
  *                                   the focus and is closed by the person (its close button, Escape) gives the focus back to the element that had it before, else to the
@@ -33,7 +33,7 @@
 
 // ---- the notification model: PURE (no DOM), exported as window.noticeModel and tested in a vm without a document ------------------------------------
 (function (root) {
-  const TTL_BASE = 3000, TTL_PER_CHAR = 50, TTL_MIN = 4000, TTL_MAX = 9000, MAX_VISIBLE = 2, CLOSE_AT = 60;
+  const TTL_BASE = 3000, TTL_PER_CHAR = 50, TTL_MIN = 4000, TTL_MAX = 9000, MAX_VISIBLE = 2, PHONE_MAX_VISIBLE = 1, CLOSE_AT = 60;
   const KINDS = ['info', 'warn', 'error'];
   // how long a notice stays: an explicit ttl wins; otherwise clamp(3000 + 50 x the text length, 4000, 9000)
   function noticeTtl(text, ttl) {
@@ -43,6 +43,8 @@
   // a long text or a sticky notice cannot be left to a timer alone: it gets a close button
   function noticeNeedsClose(text, sticky) { return !!sticky || String(text == null ? '' : text).length >= CLOSE_AT; }
   function noticeKind(kind) { return KINDS.indexOf(kind) >= 0 ? kind : 'info'; }
+  // how many notices may show at once: two, and ONE under the phone layout (a new one replaces the showing one); the caller chooses at every call: matchMedia plus html.ph
+  function noticeLimit(phone) { return phone ? PHONE_MAX_VISIBLE : MAX_VISIBLE; }
   // how many of the visible notices make room for one more (the oldest go first)
   function noticeEvictions(visible, max) { return Math.max(0, visible + 1 - (max || MAX_VISIBLE)); }
   // "once per condition": a keyed notice that is showing is UPDATED, one that was dismissed or expired is SKIPPED until clear(key), anything else is SHOWN; no key always shows
@@ -56,7 +58,7 @@
       state: function (key) { return st.get(key) || 'none'; },
     };
   }
-  root.noticeModel = { noticeTtl: noticeTtl, noticeNeedsClose: noticeNeedsClose, noticeKind: noticeKind, noticeEvictions: noticeEvictions, createKeyState: createKeyState, MAX_VISIBLE: MAX_VISIBLE, CLOSE_AT: CLOSE_AT, TTL_MIN: TTL_MIN, TTL_MAX: TTL_MAX };
+  root.noticeModel = { noticeLimit: noticeLimit, PHONE_MAX_VISIBLE: PHONE_MAX_VISIBLE, noticeTtl: noticeTtl, noticeNeedsClose: noticeNeedsClose, noticeKind: noticeKind, noticeEvictions: noticeEvictions, createKeyState: createKeyState, MAX_VISIBLE: MAX_VISIBLE, CLOSE_AT: CLOSE_AT, TTL_MIN: TTL_MIN, TTL_MAX: TTL_MAX };
 })(typeof window !== 'undefined' ? window : globalThis);
 
 (function () {
@@ -72,6 +74,11 @@
   const keys = M.createKeyState();
   const notices = [];   // oldest first; { el, textEl, closeBtn, key, sticky, ttl, timer, hover, focus }
   function noticesEl() { return document.getElementById('ui-notices'); }
+  // the phone layout: html.ph (set by ui-phone.js only, at 767px and below) AND the narrow media query; chosen at every call, so a resize or a tab change is followed
+  function phoneNow() {
+    const h = document.documentElement;
+    return !!(h && h.classList && h.classList.contains('ph')) && (typeof window.matchMedia !== 'function' || window.matchMedia('(max-width: 767px)').matches);
+  }
   function stopTimer(n) { if (n.timer !== null) { clearTimeout(n.timer); n.timer = null; } }
   function startTimer(n) {
     stopTimer(n);
@@ -143,7 +150,7 @@
     let n = null;
     if (verdict === 'update') for (let i = 0; i < notices.length; i++) if (notices[i].key === key) n = notices[i];
     if (!n) {
-      for (let k = M.noticeEvictions(notices.length); k > 0; k--) removeNotice(notices[0]);   // at most two: the oldest make room
+      for (let k = M.noticeEvictions(notices.length, M.noticeLimit(phoneNow())); k > 0; k--) removeNotice(notices[0]);   // at most two (one under the phone layout): the oldest make room
       n = buildNotice();
       n.key = key;
       host.appendChild(n.el);
@@ -171,6 +178,12 @@
   document.addEventListener('pointerdown', function (e) {
     if (notices.length && !(e.target && e.target.closest && e.target.closest('.notice'))) hideToast();
   }, true);
+  // A press on a notice must not reach the sketch: p5 listens for a mousedown on the WINDOW and sketch.js's mousePressed() acts on the pointer position, so a notice over the canvas (the phone layout anchors
+  // it there) would draw or select a node under the finger (measured: with free endpoints on, a tap on a notice added a node). The listener is on the document in the bubble phase: it runs before the
+  // window's and stops the event there; the notice's own controls (its close button: a click) are not affected, and nothing in the capture phase is.
+  document.addEventListener('mousedown', function (e) {
+    if (e.target && e.target.closest && e.target.closest('.notice')) e.stopPropagation();
+  });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
       if (notices.length) removeNotice(notices[notices.length - 1], true);   // the newest
@@ -480,11 +493,17 @@
    * panel can follow it. opts.toggleOnClick === false: the trigger's click is NOT bound here (the owner opens and closes the panel itself - the
    * phone layout's sheets follow a state some other handler of the same button flips). A resize does not close the panel while a text field inside
    * it has the focus: the soft keyboard of a phone resizes the window, and closing the sheet then would throw away what the person is typing in.
-   * A tap inside a modal dialog (aria-modal="true", made by UI.dialog) does not count as a tap outside: a dialog opened from the panel leaves it open.
+   * A tap inside a modal dialog (aria-modal="true", made by UI.dialog) does not count as a tap outside: a dialog opened from the panel leaves it open. The same for a tap on a notice (.notice).
    * A 'tabchange' (nav.js) closes the open overlay (the Back button and a hash edit change the tab without a tap).
    */
   const SHEET_QUERY = '(max-width: 767px)';
   let openOverlay = null;
+  // html.overlay-open while an overlay (a "More" sheet, the info card) is open: the phone layout anchors the notices under the header then (style.css), because a bottom sheet covers the canvas's lower half
+  // and the notice would lie over the very field being edited. One overlay is open at a time (openOverlay), so a flag is enough; it is only a class: nothing outside the phone layout reads it.
+  function markOverlayOpen(on) {
+    const cl = document.documentElement && document.documentElement.classList;
+    if (cl && typeof cl[on ? 'add' : 'remove'] === 'function') cl[on ? 'add' : 'remove']('overlay-open');
+  }
   function overlay(trigger, panel, opts) {
     const scrim = document.getElementById('overlay-scrim');
     const api = { isOpen: false, open: open, close: close, toggle: toggle };
@@ -506,7 +525,7 @@
       if (openOverlay && openOverlay !== api) openOverlay.close();
       if (opts && opts.onOpen) opts.onOpen();
       panel.hidden = false;
-      api.isOpen = true; openOverlay = api;
+      api.isOpen = true; openOverlay = api; markOverlayOpen(true);
       trigger.setAttribute('aria-expanded', 'true');
       place();
       // querySelector alone would also match a button inside a `hidden` ancestor (e.g. #more-farbe's Spread
@@ -529,7 +548,7 @@
       if (!api.isOpen) return;
       panel.hidden = true;
       if (scrim) scrim.hidden = true;
-      api.isOpen = false; if (openOverlay === api) openOverlay = null;
+      api.isOpen = false; if (openOverlay === api) { openOverlay = null; markOverlayOpen(false); }
       trigger.setAttribute('aria-expanded', 'false');
       if (returnFocus) trigger.focus();
       if (opts && opts.onClose) opts.onClose(!!returnFocus);
@@ -549,7 +568,8 @@
     if (scrim) scrim.addEventListener('click', function () { if (api.isOpen) close(false); });
     document.addEventListener('pointerdown', function (e) {
       // a confirmation dialog (UI.dialog: aria-modal) opened from this panel lies outside it: a tap on its buttons or its backdrop is not "outside" - the panel stays, and the dialog's own focus return finds its opener
-      if (api.isOpen && !panel.contains(e.target) && !trigger.contains(e.target) && e.target !== scrim && !(e.target && e.target.closest && e.target.closest('[aria-modal="true"]'))) close(false);
+      // a notice (UI.notify) lies outside the panel too, and over it under the phone layout (z-index 60 against 40): a tap on its close button or its text is not "outside" either - it dismisses the notice, the panel stays
+      if (api.isOpen && !panel.contains(e.target) && !trigger.contains(e.target) && e.target !== scrim && !(e.target && e.target.closest && e.target.closest('[aria-modal="true"], .notice'))) close(false);
     }, true);
     const typing = function () { const a = document.activeElement; return !!a && panel.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName || '') && !/^(button|checkbox|radio|range|submit|reset)$/.test(a.type || ''); };
     window.addEventListener('resize', function () { if (api.isOpen && !typing()) close(false); });

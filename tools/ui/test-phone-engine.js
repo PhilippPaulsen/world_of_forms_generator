@@ -602,6 +602,23 @@ T('overlay-options', () => {
     const t5 = mk('button', 't5'), p5 = mk('div', 'p5'), cl5 = []; const o5 = UI.overlay(t5, p5, { onClose: rf => cl5.push(rf) });
     o5.open(); p.doc.dispatch('tabchange', { detail: { tab: 'nirgends' } });
     check('a tabchange (nav.js) closes the open overlay (scrim hidden, onClose(false)); with none open it does nothing', o5.isOpen === false && p.scrim.hidden === true && cl5.join() === 'false' && (p.doc.dispatch('tabchange', {}), cl5.length === 1));
+    // commit 4: a notice lies over an open sheet under the phone layout; a tap on it (its close button, its text) is not a tap outside the sheet
+    const t6 = mk('button', 't6'), p6 = mk('div', 'p6'), o6 = UI.overlay(t6, p6, {}), noticeBox = p.doc.createElement('div'), noticeBtn = noticeBox.appendChild(p.doc.createElement('button')), elsewhere = mk('div', 'elsewhere');
+    noticeBox.className = 'notice notice-warn'; p.doc.body.appendChild(noticeBox);
+    o6.open(); p.doc.dispatch('pointerdown', { target: noticeBtn });
+    const keptByNotice = o6.isOpen;
+    p.doc.dispatch('pointerdown', { target: noticeBox });
+    const keptByText = o6.isOpen;
+    p.doc.dispatch('pointerdown', { target: elsewhere });
+    check('a pointerdown on a notice (its close button or its text) does NOT close an open overlay; one on any other element outside still does', keptByNotice === true && keptByText === true && o6.isOpen === false);
+    // commit 4: html.overlay-open while an overlay is open (the phone CSS moves the notices to the top of the canvas then)
+    const root = p.doc.documentElement, t7 = mk('button', 't7'), p7 = mk('div', 'p7'), t8 = mk('button', 't8'), p8 = mk('div', 'p8'), o7 = UI.overlay(t7, p7, {}), o8 = UI.overlay(t8, p8, {});
+    const had = root.classList.contains('overlay-open');
+    o7.open(); const onOpen = root.classList.contains('overlay-open');
+    o8.open(); const onSwitch = root.classList.contains('overlay-open');   // one overlay replaces the other: still open
+    o8.close(false); const afterClose = root.classList.contains('overlay-open');
+    o7.open(); p.doc.dispatch('tabchange', { detail: { tab: 'nirgends' } }); const afterTab = root.classList.contains('overlay-open');
+    check('UI.overlay puts the class overlay-open on <html> while an overlay is open: on at open, still on when another overlay replaces it, off when it closes (also through a tab change); never on while none is open', had === false && onOpen === true && onSwitch === true && afterClose === false && afterTab === false);
     const t3 = mk('button', 't3'), p3 = mk('div', 'p3'), f3 = p3.appendChild(p.doc.createElement('input')), b3 = p3.appendChild(p.doc.createElement('button')), o3 = UI.overlay(t3, p3);
     o3.open(); f3.focus(); p.win.dispatch('resize');
     check('a resize with the focus in a text field of the panel keeps it open; with the focus on a button it closes', o3.isOpen === true && (b3.focus(), p.win.dispatch('resize'), o3.isOpen === false));
