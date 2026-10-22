@@ -47,6 +47,8 @@
     return b ? b.dataset.kind : 'regular';
   }
   function reasonAll() { return applies() ? null : T['reason.net.notApplicable']; }
+  // the phone layout disables the Fokus stepper (aria-disabled on its root, with the reason) while sketch.js hides the Fokus row (Aus, Geo); the exact field says the same and is locked
+  function reasonFocus() { return reasonAll() || (UI.isDisabled(focusRoot) ? focusRoot.dataset.reason || '' : null); }
   function reasonStrength() { return reasonAll() || (kind() === 'regular' ? T['reason.net.needsKind'] : null); }
 
   // ---- kinds: a radiogroup whose state sketch.js owns ------------------------------------------------------------
@@ -118,7 +120,7 @@
     return show;
   }
   const showStrengthExact = bindExact(strengthExact, strengthInput, 0, 1, T['reason.strength.exact'], reasonStrength);
-  const showFocusExact = bindExact(focusExact, focusInput, -1, 1, T['reason.focus.exact'], reasonAll);
+  const showFocusExact = bindExact(focusExact, focusInput, -1, 1, T['reason.focus.exact'], reasonFocus);
 
   function setLocked(field, why) {
     if (field.readOnly !== !!why) field.readOnly = !!why;
@@ -148,7 +150,9 @@
     if (document.activeElement !== strengthExact) showStrengthExact();
     if (document.activeElement !== focusExact) showFocusExact();
     setLocked(strengthExact, reasonStrength());
-    setLocked(focusExact, all);
+    setLocked(focusExact, reasonFocus());
   }
+  // the Fokus stepper's root is (un)disabled by the phone layout during a UI tick, after this sync ran: the exact field and the chevrons follow at once
+  if (typeof MutationObserver === 'function') new MutationObserver(sync).observe(focusRoot, { attributes: true, attributeFilter: ['aria-disabled'] });
   UI.onSync(sync);
 })();

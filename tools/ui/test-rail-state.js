@@ -196,15 +196,33 @@ T('extra', () => {
     o.fire('click', 'btn-gallery');
     check('the catalog link: its click closes the sheet and the focus goes back to the Mehr button (a link needs its click to navigate)', o.panel.hidden === true && lastFocus === o.more);
     // Farbe (phone layout, commit 2): Reset Color and Nodes are in the second row. Reset Color is wired on the CLICK (sketch.js), so a mousedown must not close the sheet (the click would never come and the
-    // button would do nothing); it closes on the click, like Info. Nodes (a toggle, p5 mousedown) closes on the click too.
+    // button would do nothing); it closes on the click, like Info. Nodes (p5 mousedown) REPLACES its svg in its handler, so the browser sends no click after a real tap (commit 3b: measured): it closes on the mousedown.
     const fb = build(true);
-    for (const id of ['btn-face-colors-reset', 'btn-toggle-nodes']) {
-        const o = fb;
+    {
+        const o = fb, id = 'btn-face-colors-reset';
         if (o.panel.hidden) o.more.dispatch('click');
         let pdx = 0; o.fire('mousedown', id, { preventDefault() { pdx++; } });
         check(`a mousedown on ${id} (Farbe's second row) neither closes the sheet nor cancels the default: its click must arrive`, o.panel.hidden === false && pdx === 0);
         lastFocus = null; o.fire('click', id);
         check(`the click on ${id} closes the sheet and the focus goes back to the Mehr button`, o.panel.hidden === true && lastFocus === o.more);
+    }
+    {
+        const o = fb, id = 'btn-toggle-nodes';
+        if (o.panel.hidden) o.more.dispatch('click');
+        lastFocus = null; o.document.activeElement = o.B[id];
+        // the p5 handler of Nodes replaced the button's svg before the sheet's listener runs: the event's target is a DETACHED child (closest() finds nothing), its path still holds the button
+        const gone = { closest: () => null }, path = [gone, o.B[id], o.panel];
+        let pdn = 0; o.fire('mousedown', id, { target: gone, composedPath: () => path, preventDefault() { pdn++; } });
+        check('a mousedown on Nodes (Farbe\'s second row: a real tap sends pointerdown, mousedown, pointerup, mouseup and NO click) closes the sheet, cancels the focus default and puts the focus on the Mehr button', o.panel.hidden === true && pdn === 1 && lastFocus === o.more);
+        o.more.dispatch('click'); o.fire('click', id);
+        check('...a click alone on Nodes closes nothing (a keyboard Enter / Space is bridged by ui.js to a mousedown first, which closes the sheet: the click then finds it closed)', o.panel.hidden === false);
+        o.panel.hidden = true;
+    }
+    {
+        const RAIL = require('fs').readFileSync(process.env.UI_RAIL_JS || require('path').join(__dirname, '..', '..', 'ui-rail.js'), 'utf8').replace(/\/\/[^\n]*/g, ''), SK = require('fs').readFileSync(process.env.SKETCH_JS || require('path').join(__dirname, '..', '..', 'sketch.js'), 'utf8');
+        const list = name => ((new RegExp('const ' + name + " = \\[([^\\]]*)\\]").exec(RAIL) || [, ''])[1].match(/btn-[\w-]+/g) || []).join();
+        check('ui-rail.js: Nodes is in MOUSEDOWN_WIRED and NOT in CLICK_CLOSES (a list of buttons whose click never comes), Reset Color / Info / Random are click-driven', list('MOUSEDOWN_WIRED') === 'btn-clear,btn-paste-pattern,btn-save,btn-toggle-nodes' && list('CLICK_CLOSES') === 'btn-info,btn-face-colors-reset,btn-random', list('MOUSEDOWN_WIRED') + ' / ' + list('CLICK_CLOSES'));
+        check('the cause stays true (sketch.js, unchanged): the Nodes handler is a p5 mousePressed (mousedown) that calls updateNodeToggleIcon(), which REPLACES the button\'s html - so no click follows a real tap', /nodeBtn\.mousePressed\(\(\) => \{\s*showNodes = !showNodes;\s*updateNodeToggleIcon\(\);/.test(SK) && /function updateNodeToggleIcon\(\) \{[\s\S]*?nodeBtn\.html\(/.test(SK));
     }
     // the dot rule is about the toggles in the first row only: nothing in the second row can set or clear it
     const d = build(); d.set('btn-toggle-curve', true); d.sync(); d.fire('click', 'btn-save'); d.sync();
