@@ -108,7 +108,7 @@
   function bindExact(field, carrier, lo, hi, msg, reasonFn) {
     field.addEventListener('change', function () {
       const why = reasonFn();
-      let v = parseFloat(String(field.value).replace(',', '.'));
+      let v = parseFloat(UI.normalizeNumber(field.value));   // the German decimal pad types a comma; the field is type=text so the typed text reaches here (a number input gives '' for it on iOS)
       if (why || isNaN(v)) { show(); if (why) UI.toast(why, 4000); return; }
       if (v < lo || v > hi) { v = v < lo ? lo : hi; UI.toast(msg, 4000); }
       carrier.value = String(Math.round(v * 100));

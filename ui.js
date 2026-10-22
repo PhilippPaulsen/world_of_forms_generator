@@ -16,6 +16,9 @@
  *                                   tappable); a tap, Enter/Space or a long press shows the reason as a toast,
  *                                   and the reason is the title (desktop hover). reason = null enables it again.
  *   UI.guard(el, onActivate)        runs onActivate on a click unless the control is aria-disabled (then: the reason)
+ *   UI.normalizeNumber(text)        a typed number as a string the existing parse (parseFloat) can read: trimmed; ONE comma and no dot becomes a dot (the German decimal pad types
+ *                                   "0,35"); a dot stays; any other mix of separators ("1,2,3", "1.2,3", "1.234,5", "1.2.3") gives '' (invalid: the field falls back to its
+ *                                   previous value, as for any text that is not a number); the minus and everything else stay. "1," -> "1." (parseFloat 1), ",5" -> ".5" (0.5).
  *   UI.stepper(root, opts)          number + stacked up/down chevrons around an existing number input (see below)
  *   UI.radiogroup(container, fn)    an exclusive choice: role="radio" options, aria-checked, arrow keys
  *   UI.overlay(trigger, panel)      a popover / bottom sheet ("More") opened by a button
@@ -189,6 +192,15 @@
     }
   }
   function isDisabled(el) { return el.getAttribute('aria-disabled') === 'true'; }
+
+  // ---- a typed number (decimal comma) --------------------------------------
+  // The German iOS decimal pad types a comma. Only the separators are looked at: the text is not validated further (parseFloat reads "0.35abc" as 0.35 as it always did).
+  function normalizeNumber(text) {
+    const s = String(text === null || text === undefined ? '' : text).trim();
+    const seps = s.match(/[.,]/g) || [];
+    if (seps.length > 1) return '';                  // two separators: a thousands separator or a typo
+    return seps.length === 1 && seps[0] === ',' ? s.replace(',', '.') : s;
+  }
 
   // ---- a control's name ----------------------------------------------------
   // setDisabled swaps the title for the reason and keeps the name in dataset.baseTitle; a name set while a reason is showing goes there, so the reason stays on
@@ -605,5 +617,5 @@
   window.uiSync = function () { for (let i = 0; i < syncFns.length; i++) syncFns[i](); };
   function onSync(fn) { syncFns.push(fn); }
 
-  window.UI = { onSync: onSync, notify: notify, notifyClear: notifyClear, toast: toast, hideToast: hideToast, setDisabled: setDisabled, name: name, guard: guard, stepper: stepper, pressed: pressed, isDisabled: isDisabled, dialog: dialog, radiogroup: radiogroup, overlay: overlay, checkedFromActive: checkedFromActive, showReason: showReason };
+  window.UI = { normalizeNumber: normalizeNumber, onSync: onSync, notify: notify, notifyClear: notifyClear, toast: toast, hideToast: hideToast, setDisabled: setDisabled, name: name, guard: guard, stepper: stepper, pressed: pressed, isDisabled: isDisabled, dialog: dialog, radiogroup: radiogroup, overlay: overlay, checkedFromActive: checkedFromActive, showReason: showReason };
 })();
