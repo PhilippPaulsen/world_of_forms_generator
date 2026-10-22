@@ -320,6 +320,8 @@
     return (typeof faceFillsUnavailableReason === 'function' && faceFillsUnavailableReason()) || null;
   }
 
+  window.farbeReason = reason;   // read-only export (phone layout, commit 2): ui-phone-chips.js shows this reason on the per-trail stepper while the panel is unavailable
+
   // ---- harmony rail + dropdown (Group D Phase B4): the first real consumer of the anchor - calls the
   // REAL Farborgel engine (core/farborgel-selection.mjs's buildHarmonySelection(), which calls the real,
   // unmodified reduceComposition()/createHarmonySelection()) and writes the result through Phase A's

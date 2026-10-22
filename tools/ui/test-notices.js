@@ -36,6 +36,7 @@ T('model', () => {
     check('noticeNeedsClose: 59 characters no, 60 yes (the threshold), sticky yes at any length, an empty text no', M.noticeNeedsClose(x(59)) === false && M.noticeNeedsClose(x(60)) === true && M.noticeNeedsClose(x(1), true) === true && M.noticeNeedsClose('') === false && M.noticeNeedsClose(null) === false && M.CLOSE_AT === 60);
     check('noticeKind: info, warn, error; anything else is info', ['info', 'warn', 'error'].every(k => M.noticeKind(k) === k) && M.noticeKind('danger') === 'info' && M.noticeKind(undefined) === 'info' && M.noticeKind(null) === 'info');
     check('noticeEvictions: at most two are visible - with 0 or 1 showing none make room, with 2 showing one goes (the oldest), with 3 two', M.noticeEvictions(0) === 0 && M.noticeEvictions(1) === 0 && M.noticeEvictions(2) === 1 && M.noticeEvictions(3) === 2 && M.MAX_VISIBLE === 2);
+    check('noticeLimit (commit 4): two notices at most, ONE under the phone layout; the model takes the flag as a parameter (the caller chooses it at every call); noticeEvictions with that limit: with 1 showing the one goes (a new one replaces it), with 2 showing two go', typeof M.noticeLimit === 'function' && M.noticeLimit(false) === 2 && M.noticeLimit() === 2 && M.noticeLimit(true) === 1 && M.PHONE_MAX_VISIBLE === 1 && M.noticeEvictions(0, M.noticeLimit(true)) === 0 && M.noticeEvictions(1, M.noticeLimit(true)) === 1 && M.noticeEvictions(2, M.noticeLimit(true)) === 2 && M.noticeEvictions(1, M.noticeLimit(false)) === 0 && M.noticeEvictions(2, M.noticeLimit(false)) === 1);
     const ks = M.createKeyState();
     check('keys: no key always shows; a new key shows; while it is showing a second call UPDATES; after it is gone it is SKIPPED; clear(key) lets it show again', ks.decide(null) === 'show' && ks.decide(undefined) === 'show' && ks.decide('a') === 'show' && (ks.showing('a'), ks.decide('a') === 'update') && (ks.gone('a'), ks.decide('a') === 'skip' && ks.state('a') === 'done') && (ks.clear('a'), ks.decide('a') === 'show' && ks.state('a') === 'none'));
     const k2 = M.createKeyState();
@@ -63,8 +64,9 @@ class El {
 }
 function build(o) {
     o = o || {};
+    o.state = o.state || { phone: !!o.phone };   // state.phone: html.ph is on (the test may flip it between two calls)
     const byId = {}, docH = {}, timers = [], clock = { t: 0, id: 0 };
-    const doc = { activeElement: null, visibilityState: 'visible', documentElement: {}, body: null, legacy: [], createElement: tag => { const e = new El(tag); e.ownerDoc = doc; return e; }, getElementById: id => byId[id] || null,
+    const doc = { activeElement: null, visibilityState: 'visible', documentElement: { classList: { contains: c => !!o.state.phone && c === 'ph' } }, body: null, legacy: [], createElement: tag => { const e = new El(tag); e.ownerDoc = doc; return e; }, getElementById: id => byId[id] || null,
         addEventListener(t, fn) { (docH[t] = docH[t] || []).push(fn); }, querySelector: () => null, querySelectorAll(sel) { return /\.toast/.test(sel) ? doc.legacy.filter(n => !n.hidden) : []; } };
     doc.root = doc.createElement('div'); doc.fireDoc = (type, ev) => { (docH[type] || []).forEach(h => h(Object.assign({ type, preventDefault() { }, stopPropagation() { } }, ev))); };
     const host = o.noHost ? null : doc.createElement('div'); if (host) { host.id = 'ui-notices'; host.className = 'notices'; byId['ui-notices'] = host; doc.root.appendChild(host); }
@@ -72,14 +74,58 @@ function build(o) {
     const ctx = vm.createContext({ document: doc, console, MutationObserver: class { observe() { } }, performance: { now: () => clock.t },
         setTimeout: (fn, ms) => { const id = ++clock.id; timers.push({ id, fn, at: clock.t + (ms || 0), ms: ms || 0 }); return id; },
         clearTimeout: id => { const i = timers.findIndex(t => t.id === id); if (i >= 0) timers.splice(i, 1); } });
-    ctx.window = ctx; ctx.matchMedia = () => ({ matches: false }); ctx.addEventListener = () => { };
+    ctx.window = ctx; ctx.matchMedia = q => ({ matches: !!o.state.phone && /max-width: 767px/.test(q) }); ctx.addEventListener = () => { };
     vm.runInContext(UI_SRC, ctx, { filename: 'ui.js' });
     const advance = ms => { const end = clock.t + ms; for (;;) { const due = timers.filter(t => t.at <= end).sort((a, b) => a.at - b.at || a.id - b.id)[0]; if (!due) break; clock.t = due.at; timers.splice(timers.indexOf(due), 1); due.fn(); } clock.t = end; };
     const fire = (type, ev) => { const e = Object.assign({ type, target: ev && ev.target || null, preventDefault() { }, stopPropagation() { }, key: undefined }, ev || {}); (docH[type] || []).forEach(h => h(e)); return e; };
     const texts = () => (host ? host.children.map(n => n.children[0].textContent) : []);
     const legacy = (hidden) => { const n = doc.createElement('div'); n.className = 'limit-note toast'; n.hidden = !!hidden; doc.legacy.push(n); return n; };
-    return { UI: ctx.UI, ctx, doc, host, timers, advance, fire, texts, legacy, clock, docH, outside };
+    return { UI: ctx.UI, ctx, doc, host, timers, advance, fire, texts, legacy, clock, docH, outside, state: o.state };
 }
+
+T('phone cap', () => {
+    // the cap under the phone layout: ONE notice, a new one replaces the showing one; the rest of the component is as at 768px and up
+    let e = build({ phone: true });
+    e.UI.notify('one'); e.UI.notify('two');
+    check('html.ph and the narrow media query: a second notice REPLACES the first (one at a time)', J(e.texts()) === J(['two']));
+    e.UI.notify('three');
+    check('...and so on: the newest is the only one', J(e.texts()) === J(['three']));
+    e = build({ phone: false }); e.UI.notify('one'); e.UI.notify('two'); e.UI.notify('three');
+    check('without html.ph: two at most, as before (the third replaces the oldest)', J(e.texts()) === J(['two', 'three']));
+    e = build({ state: { phone: false } }); e.state.phone = true; e.UI.notify('a'); e.UI.notify('b');
+    check('the flag is read at every call, not once: two notices shown wide, the phone layout turning on, the next notice leaves ONE', (() => { const q = build({ state: { phone: false } }); q.UI.notify('a'); q.UI.notify('b'); q.state.phone = true; q.UI.notify('c'); return J(q.texts()) === J(['c']); })() && J(e.texts()) === J(['b']));
+    check('...and back: the phone layout off, a new notice is added next to the showing one again', (() => { const q = build({ state: { phone: true } }); q.UI.notify('a'); q.state.phone = false; q.UI.notify('b'); return J(q.texts()) === J(['a', 'b']); })());
+    // html.ph alone or the media query alone is not the phone layout
+    const onlyClass = build({ state: { phone: true } }); onlyClass.ctx.matchMedia = () => ({ matches: false }); onlyClass.UI.notify('a'); onlyClass.UI.notify('b');
+    check('html.ph without the narrow media query (a stale class at a wide width) is NOT the phone layout: two notices', J(onlyClass.texts()) === J(['a', 'b']));
+    const onlyMq = build({ state: { phone: true } }); onlyMq.doc.documentElement.classList.contains = () => false; onlyMq.UI.notify('a'); onlyMq.UI.notify('b');
+    check('the narrow media query without html.ph (a tab the engine did not convert, or before it ran) is NOT the phone layout: two notices', J(onlyMq.texts()) === J(['a', 'b']));
+    // a press on a notice must not reach p5 (window-level mousedown): the document's bubble listener stops it
+    e = build({ phone: true }); const nn = e.UI.notify(x(80)); let stopped = 0;
+    e.fire('mousedown', { target: nn.children[1], stopPropagation() { stopped++; } });
+    e.fire('mousedown', { target: nn.children[0], stopPropagation() { stopped++; } });
+    const out2 = e.outside('div'); let stoppedOut = 0; e.fire('mousedown', { target: out2, stopPropagation() { stoppedOut++; } });
+    check('a mousedown on a notice (its text or its close button) is stopped before it reaches the window (p5 acts on every mousedown by the pointer position: a tap on a notice over the canvas drew a node); one anywhere else is not touched', stopped === 2 && stoppedOut === 0 && e.host.children.length === 1);
+    // key semantics unchanged
+    e = build({ phone: true });
+    e.UI.notify('keyed', { key: 'k' }); e.UI.notify('keyed again', { key: 'k' });
+    check('a keyed notice that is showing is still UPDATED in place (no replacement, no second notice)', J(e.texts()) === J(['keyed again']) && e.host.children.length === 1);
+    e.UI.notify('other');
+    check('a notice replaced by another counts as gone: its key is skipped until notifyClear(key), as for any notice that leaves', J(e.texts()) === J(['other']) && e.UI.notify('keyed back', { key: 'k' }) === null && J(e.texts()) === J(['other']));
+    e.UI.notifyClear('k'); e.UI.notify('keyed back', { key: 'k' });
+    check('...and shows again after notifyClear(key)', J(e.texts()) === J(['keyed back']));
+    // durations, the close button, the pause: unchanged
+    e = build({ phone: true }); const n59 = e.UI.notify(x(59)), n60 = e.UI.notify(x(60));
+    check('the close button threshold is still 60 characters (a 59-character notice has none, the next, 60, has one and replaced it)', n59.children.length === 1 && n60.children.length === 2 && e.host.children.length === 1);
+    e.advance(5999); const alive = e.host.children.length; e.advance(1);
+    check('the duration is unchanged (60 characters: 6000 ms)', alive === 1 && e.host.children.length === 0);
+    e = build({ phone: true }); const nh = e.UI.notify(x(20)); nh.dispatch('pointerenter', {}, false); e.advance(30000);
+    check('the pause while the pointer is over it is unchanged', e.host.children.length === 1);
+    e = build({ phone: true }); e.UI.notify('x'); e.fire('pointerdown', { target: e.outside('div') });
+    check('a press outside a notice still closes it (non-sticky)', e.host.children.length === 0);
+    e = build({ phone: true }); e.UI.notify('sticky', { sticky: true }); e.UI.notify('next');
+    check('a sticky notice is replaced by the next one too (one at a time: the sheet or dialog that needs a lasting message uses the same slot)', J(e.texts()) === J(['next']));
+});
 
 T('dom', () => {
     let e = build();

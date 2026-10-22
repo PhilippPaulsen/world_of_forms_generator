@@ -492,6 +492,8 @@
     refreshName();
   }
   UI.onSync(sync);
-  if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('resize', function () { Object.keys(views).forEach(function (n) { revealActive(views[n]); }); revealActive(tableView); });   // a view may have been hidden when the active chip changed
+  function revealAllActive() { Object.keys(views).forEach(function (n) { revealActive(views[n]); }); revealActive(tableView); }   // a view may have been hidden when the active chip changed
+  root.layerTable.revealActive = revealAllActive;   // ui-phone.js: the strip lost its scroll position when it moved into the panel
+  if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('resize', revealAllActive);
   sync();
 })(typeof window !== 'undefined' ? window : globalThis);

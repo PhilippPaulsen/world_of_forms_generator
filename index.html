@@ -8,7 +8,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260929cf">
+  <link rel="stylesheet" href="style.css?v=20260929cq">
   <!-- Cache-busting for the ES-module graph behind core/farborgel-selection.mjs (below). The <script src> tags in
        this file carry ?v= by hand-bump (CLAUDE.md), but a module's own `import ... from './x.mjs'` cannot: this
        import map is the one place that gives every module in that graph the same ?v= as everything else (bump it
@@ -19,11 +19,11 @@
   <script type="importmap">
     {
     "imports": {
-      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929cf",
-      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929cf",
-      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929cf",
-      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929cf",
-      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929cf"
+      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20260929cq",
+      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20260929cq",
+      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20260929cq",
+      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20260929cq",
+      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20260929cq"
     }
     }
   </script>
@@ -352,7 +352,8 @@
 
     /* Small number inputs (Shape Size, Node Count) - matches die-welt-der-formen.de:
        60x40, 4px radius, solid black border, flat white fill. */
-    .control-group input[type="number"] {
+    .control-group input[type="number"],
+    .control-group input.exact-field {   /* the exact fields are type=text (a comma must reach the script) but keep the look they had as number fields */
       font-size: 16px;
       color: var(--text);
       background: var(--background);
@@ -472,9 +473,11 @@
          here for now).
          Symmetry is ONE exclusive choice with two options: rotation, or
          rotation + mirror (the default). "None" and "mirror only" (and the
-         hexagon's 3-/6-fold) are under More (#more-form). -->
+         hexagon's 3-/6-fold) are under More (#more-form).
+         Phone layout (commit 1a): below 768px ui-phone.js moves the four wrappers below (#nav-shapes, #nav-node-stepper, #nav-size-stepper, #nav-symmetry; their ids are for
+         ui-phone-config.js) and #btn-more-form into the panel under the canvas and puts them back above 768px; nothing in them changes. -->
     <div id="nav-form" class="nav-row nav-form" role="group" aria-labelledby="tab-form">
-      <div class="nav-cluster nav-shapes" role="group" aria-label="Form" data-i18n="group.shape">
+      <div id="nav-shapes" class="nav-cluster nav-shapes" role="group" aria-label="Form" data-i18n="group.shape">
         <button class="shape-icon-btn icon-btn active" data-shape="triangle" type="button" title="Dreieck" aria-label="Dreieck" aria-pressed="true" data-i18n="shape.triangle">
           <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5 L21 19.5 H3 Z"/></svg>
         </button>
@@ -486,7 +489,7 @@
         </button>
       </div>
       <span class="nav-divider nav-divider-a" aria-hidden="true"></span>
-      <div class="stepper" role="group" aria-label="Knoten" data-i18n="node.group">
+      <div id="nav-node-stepper" class="stepper" role="group" aria-label="Knoten" data-i18n="node.group">
         <svg class="ico stepper-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor" stroke="none"><circle cx="6" cy="6" r="1.5"/><circle cx="6" cy="12" r="1.5"/><circle cx="6" cy="18" r="1.5"/><circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="18" r="1.5"/><circle cx="18" cy="6" r="1.5"/><circle cx="18" cy="12" r="1.5"/><circle cx="18" cy="18" r="1.5"/></g></svg>
         <!-- max is the universal default (triangle/hex); sketch.js sets it per shape (square 13) - core/forms.js NODE_COUNT_MAX -->
         <input type="number" id="node-count-input" min="1" max="7" value="3" inputmode="none" aria-label="Knoten" data-i18n="node.input">
@@ -495,7 +498,7 @@
           <button class="stepper-btn" type="button" data-dir="-1" title="Knoten weniger" aria-label="Knoten weniger" data-i18n="node.less"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9 L12 15 L18 9"/></svg></button>
         </div>
       </div>
-      <div class="stepper" role="group" aria-label="Größe" data-i18n="size.group">
+      <div id="nav-size-stepper" class="stepper" role="group" aria-label="Größe" data-i18n="size.group">
         <svg class="ico stepper-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9 V4 H9 M15 4 H20 V9 M20 15 V20 H15 M9 20 H4 V15"/></svg>
         <input type="number" id="shape-size-input" min="1" max="9" value="5" inputmode="none" aria-label="Größe" data-i18n="size.input">
         <div class="stepper-chevrons">
@@ -504,7 +507,7 @@
         </div>
       </div>
       <span class="nav-divider nav-divider-b" aria-hidden="true"></span>
-      <div class="nav-cluster nav-symmetry" role="radiogroup" aria-label="Symmetrie" data-i18n="group.symmetry">
+      <div id="nav-symmetry" class="nav-cluster nav-symmetry" role="radiogroup" aria-label="Symmetrie" data-i18n="group.symmetry">
         <button id="btn-sym-rotation" class="icon-btn sym-radio" type="button" role="radio" aria-checked="false" title="Drehung" aria-label="Drehung" data-i18n="sym.rotation">
           <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12 A7.5 7.5 0 1 1 17.3 6.7"/><path d="M19.5 4.5 V8.7 H15.3"/></svg>
         </button>
@@ -542,7 +545,7 @@
          anchor preview swatch sits last - Farborgel's own calibrated display color
          (window.farborgelAnchorDisplayColor()), not core/color.js's resolveColor(). -->
     <div id="nav-farbe" class="nav-row nav-farbe" role="group" aria-labelledby="tab-farbe" hidden>
-      <div class="nav-cluster nav-anchor-views" role="group" aria-label="Anker-Ansicht">
+      <div id="nav-anchor-views" class="nav-cluster nav-anchor-views" role="group" aria-label="Anker-Ansicht">
         <button id="btn-open-kreis" class="icon-btn active" type="button" aria-haspopup="dialog" aria-controls="overlay-kreis" title="Kreis: Gegenfarben, Dreier, Vierer (erneut tippen: Farbton wählen)" aria-label="Kreis: Gegenfarben, Dreier, Vierer (erneut tippen: Farbton wählen)">
           <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9" /></svg>
         </button>
@@ -601,14 +604,14 @@
          exact values) is under More (#more-netz). The elements are the existing ones (.net-kind-btn, #net-strength-input,
          #net-strength-value): sketch.js's initNetControls() still owns them. -->
     <div id="nav-netz" class="nav-row nav-netz" role="group" aria-labelledby="tab-netz" hidden>
-      <div class="nav-cluster nav-kinds" role="radiogroup" aria-label="Netzart" data-i18n="group.netKind">
+      <div id="nav-kinds" class="nav-cluster nav-kinds" role="radiogroup" aria-label="Netzart" data-i18n="group.netKind">
         <button class="icon-btn net-kind-btn active" data-kind="regular" type="button" role="radio" aria-checked="true" title="Aus, regelmäßiges Netz" aria-label="Aus, regelmäßiges Netz" data-i18n="net.kind.off">Aus</button>
         <button class="icon-btn net-kind-btn" data-kind="sinus" type="button" role="radio" aria-checked="false" title="Sinus" aria-label="Sinus" data-i18n="net.kind.sinus">Sin</button>
         <button class="icon-btn net-kind-btn" data-kind="tangens" type="button" role="radio" aria-checked="false" title="Tangens" aria-label="Tangens" data-i18n="net.kind.tangens">Tan</button>
         <button class="icon-btn net-kind-btn" data-kind="geometric" type="button" role="radio" aria-checked="false" title="Geometrisch" aria-label="Geometrisch" data-i18n="net.kind.geometric">Geo</button>
       </div>
       <span class="nav-divider nav-divider-a" aria-hidden="true"></span>
-      <div class="stepper" role="group" aria-label="Stärke" data-i18n="net.strength.group">
+      <div id="net-strength-stepper" class="stepper" role="group" aria-label="Stärke" data-i18n="net.strength.group">
         <svg class="ico stepper-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12 C5 3 9 3 12 12 S19 21 22 12"/></svg>
         <!-- display + spinbutton: shows 0.5 (or x3.2 for Geo); the hidden range input below carries the value (percent) exactly as the old slider did -->
         <span id="net-strength-value" class="stepper-display" role="spinbutton" tabindex="0" aria-label="Stärke" aria-valuemin="0" aria-valuemax="1" data-i18n="net.strength.value">0.50</span>
@@ -1007,7 +1010,7 @@
                 <option value="asc">Σd² ascending</option>
                 <option value="desc">Σd² descending</option>
               </select>
-              <input type="number" id="timeline-pairing-filter" min="0" step="any" placeholder="max Σd²" title="Only list pairings with Σd² at most this value" aria-label="Only list pairings with Σd² at most this value">
+              <input type="number" id="timeline-pairing-filter" inputmode="decimal" min="0" step="any" placeholder="max Σd²" title="Only list pairings with Σd² at most this value" aria-label="Only list pairings with Σd² at most this value">
             </div>
             <div id="timeline-pairing-browser-count"></div>
             <div id="timeline-pairing-browser-list"></div>
@@ -1364,7 +1367,7 @@
   <div id="more-netz" class="overlay overlay-wide" role="dialog" aria-label="Mehr" data-i18n="more.netz" hidden>
     <div class="overlay-section">
       <h3 class="overlay-title" data-i18n="net.strength">Stärke</h3>
-      <input type="number" id="net-strength-exact" class="exact-field" min="0" max="1" step="0.01" value="0.50" inputmode="decimal" aria-label="Stärke, genau" data-i18n="net.strength.exact">
+      <input type="text" id="net-strength-exact" class="exact-field" value="0.50" inputmode="decimal" aria-label="Stärke, genau" data-i18n="net.strength.exact">
     </div>
       <!-- Roadmap 1.6 / Group E phase 2: net transform (Netzart 1, Hinterreiter's Quadratnetz with
            non-uniform spacing). BASE sheet and SQUARE shape only - shown/hidden by sketch.js's
@@ -1386,7 +1389,7 @@
           <div class="overlay-section">
             <h3 class="overlay-title" title="Where the widest (sinus) / narrowest (tangens) mesh sits in the tile: -1 = left edge, 0 = centre, +1 = right edge" data-i18n="net.focus">Fokus</h3>
             <div class="overlay-opts">
-              <div class="stepper" role="group" aria-label="Fokus" data-i18n="net.focus.group">
+              <div id="net-focus-stepper" class="stepper" role="group" aria-label="Fokus" data-i18n="net.focus.group">
                 <svg class="ico stepper-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 V21 M3 12 H21"/><circle cx="12" cy="12" r="4"/></svg>
                 <span id="net-focus-value" class="stepper-display" role="spinbutton" tabindex="0" aria-label="Fokus" aria-valuemin="-1" aria-valuemax="1" data-i18n="net.focus.value">0.00</span>
                 <input type="range" id="net-focus-input" min="-100" max="100" step="1" value="0" hidden tabindex="-1" aria-hidden="true">
@@ -1395,7 +1398,7 @@
                   <button class="stepper-btn" type="button" data-dir="-1" title="Fokus weniger" aria-label="Fokus weniger" data-i18n="net.focus.less"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9 L12 15 L18 9"/></svg></button>
                 </div>
               </div>
-              <input type="number" id="net-focus-exact" class="exact-field" min="-1" max="1" step="0.01" value="0.00" inputmode="decimal" aria-label="Fokus, genau" data-i18n="net.focus.exact">
+              <input type="text" id="net-focus-exact" class="exact-field" value="0.00" inputmode="decimal" aria-label="Fokus, genau" data-i18n="net.focus.exact">
             </div>
           </div>
         </div>
@@ -1520,39 +1523,46 @@
   <div id="ui-notices" class="notices" role="status" aria-live="polite"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20260929cf"></script>
-  <script src="core/state.js?v=20260929cf"></script>
-  <script src="core/symmetry.js?v=20260929cf"></script>
-  <script src="core/curves.js?v=20260929cf"></script>
-  <script src="core/netwarp.js?v=20260929cf"></script>
-  <script src="core/tiling.js?v=20260929cf"></script>
-  <script src="core/faces.js?v=20260929cf"></script>
-  <script src="core/orbits.js?v=20260929cf"></script>
-  <script src="core/color.js?v=20260929cf"></script>
-  <script src="core/facecolor.js?v=20260929cf"></script>
-  <script src="core/farborgel-bridge.js?v=20260929cf"></script>
-  <script src="core/export.js?v=20260929cf"></script>
-  <script src="core/symmetry-toggles.js?v=20260929cf"></script>
-  <script src="core/session.js?v=20260929cf"></script>
-  <script src="core/session-apply.js?v=20260929cf"></script>
-  <script src="core/session-store.js?v=20260929cf"></script>
-  <script src="core/session-writer.js?v=20260929cf"></script>
-  <script src="core/pointer-tap.js?v=20260929cf"></script>
-  <script src="core/pick-node.js?v=20260929cf"></script>
-  <script src="sketch.js?v=20260929cf"></script>
-  <script src="nav.js?v=20260929cf"></script>
-  <script src="ui.js?v=20260929cf"></script>
-  <script src="ui-form.js?v=20260929cf"></script>
-  <script src="ui-layer.js?v=20260929cf"></script>
-  <script src="ui-timeline.js?v=20260929cf"></script>
-  <script src="ui-layers.js?v=20260929cf"></script>
-  <script src="ui-net.js?v=20260929cf"></script>
-  <script src="ui-farbe.js?v=20260929cf"></script>
-  <script src="ui-rail.js?v=20260929cf"></script>
+  <script src="core/forms.js?v=20260929cq"></script>
+  <script src="core/state.js?v=20260929cq"></script>
+  <script src="core/symmetry.js?v=20260929cq"></script>
+  <script src="core/curves.js?v=20260929cq"></script>
+  <script src="core/netwarp.js?v=20260929cq"></script>
+  <script src="core/tiling.js?v=20260929cq"></script>
+  <script src="core/faces.js?v=20260929cq"></script>
+  <script src="core/orbits.js?v=20260929cq"></script>
+  <script src="core/color.js?v=20260929cq"></script>
+  <script src="core/facecolor.js?v=20260929cq"></script>
+  <script src="core/farborgel-bridge.js?v=20260929cq"></script>
+  <script src="core/export.js?v=20260929cq"></script>
+  <script src="core/symmetry-toggles.js?v=20260929cq"></script>
+  <script src="core/session.js?v=20260929cq"></script>
+  <script src="core/session-apply.js?v=20260929cq"></script>
+  <script src="core/session-store.js?v=20260929cq"></script>
+  <script src="core/session-writer.js?v=20260929cq"></script>
+  <script src="core/pointer-tap.js?v=20260929cq"></script>
+  <script src="core/pick-node.js?v=20260929cq"></script>
+  <script src="sketch.js?v=20260929cq"></script>
+  <script src="nav.js?v=20260929cq"></script>
+  <script src="ui.js?v=20260929cq"></script>
+  <script src="ui-form.js?v=20260929cq"></script>
+  <script src="ui-layer.js?v=20260929cq"></script>
+  <script src="ui-timeline.js?v=20260929cq"></script>
+  <script src="ui-layers.js?v=20260929cq"></script>
+  <script src="ui-net.js?v=20260929cq"></script>
+  <script src="ui-farbe.js?v=20260929cq"></script>
+  <script src="ui-rail.js?v=20260929cq"></script>
+  <!-- The phone layout (phone layout, commit 1a): the DATA, then the ENGINE. Both load after every ui-*.js (the strips are built, the handlers are bound) and before the window load event, which is when p5 runs setup().
+       The engine applies on the first 'tabchange' (nav.js, on DOMContentLoaded) and re-parents existing controls below 768px; see ui-phone.js. -->
+  <!-- Commit 2 (the Farbe tab): the chip view of the face trails (the "Spuren" sub-tab). It reads the hidden model #face-colors-list and makes #ph-trail-chips / #ph-trail-stepper in a hidden holder; the engine moves them
+       into the panel. It must load after ui-farbe.js (UI.onSync order: the model rows are rebuilt first) and before ui-phone-config.js. -->
+  <script src="ui-phone-chips.js?v=20260929cq"></script>
+  <script src="ui-phone-config.js?v=20260929cq"></script>
+  <script src="ui-phone.js?v=20260929cq"></script>
   <!-- Group D Phase B4: exposes window.farborgelBuildHarmonySelection (core/farborgel-selection.mjs)
        for ui-farbe.js/sketch.js (classic scripts) to call - a module script coexists fine with the
        classic p5-bootstrap scripts above (real-browser verified, no conflicts). -->
-  <script type="module" src="core/farborgel-selection.mjs?v=20260929cf"></script>
+  <script type="module" src="core/farborgel-selection.mjs?v=20260929cq"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

@@ -15,7 +15,7 @@
  *              plus exact two-decimal fields for strength and focus, in a popover (bottom sheet on the phone).
  *
  * The net applies to the SQUARE on the BASE sheet only. Everywhere else the whole row stays visible and is
- * aria-disabled with the reason (a tap shows it); it is never hidden. Aus disables the strength (it has no effect
+ * aria-disabled with the reason (a tap shows it); it is never hidden. The same goes for the axes buttons and Reverse (phone layout, commit 3: they are visible in its panel). Aus disables the strength (it has no effect
  * then); strength 0 is NOT off - the stepper stays enabled there.
  *
  * The German texts below are the reasons for now; the dictionary (data-i18n keys) comes in a later phase.
@@ -47,20 +47,25 @@
     return b ? b.dataset.kind : 'regular';
   }
   function reasonAll() { return applies() ? null : T['reason.net.notApplicable']; }
+  // the phone layout disables the Fokus stepper (aria-disabled on its root, with the reason) while sketch.js hides the Fokus row (Aus, Geo); the exact field says the same and is locked
+  function reasonFocus() { return reasonAll() || (UI.isDisabled(focusRoot) ? focusRoot.dataset.reason || '' : null); }
   function reasonStrength() { return reasonAll() || (kind() === 'regular' ? T['reason.net.needsKind'] : null); }
 
   // ---- kinds: a radiogroup whose state sketch.js owns ------------------------------------------------------------
   kindBtns.forEach(function (b) { UI.checkedFromActive(b); });
 
-  // A disabled kind must not reach sketch.js's p5 handler (a 'mousedown' listener): stop it on the way down.
-  row.addEventListener('mousedown', function (e) {
-    const b = e.target.closest && e.target.closest('.net-kind-btn[aria-disabled="true"]');
+  // A disabled net control must not reach sketch.js's p5 handler (a 'mousedown' listener): stop it on the way down. The listeners sit on the document, not on the row: the phone layout (ui-phone.js) moves the kind
+  // buttons, the axes buttons and Reverse into its panel, outside #nav-netz and #more-netz.
+  const GUARDED = '.net-kind-btn[aria-disabled="true"], .net-axes-btn[aria-disabled="true"], #net-reverse-btn[aria-disabled="true"]';
+  document.addEventListener('mousedown', function (e) {
+    const b = e.target.closest && e.target.closest(GUARDED);
     if (b) e.stopPropagation();
   }, true);
-  row.addEventListener('click', function (e) {
-    const b = e.target.closest && e.target.closest('.net-kind-btn[aria-disabled="true"]');
+  document.addEventListener('click', function (e) {
+    const b = e.target.closest && e.target.closest(GUARDED);
     if (b) UI.showReason(b);
   });
+  const axesBtns = Array.prototype.slice.call(document.querySelectorAll('.net-axes-btn')), reverseBtn = $('#net-reverse-btn');
   // Arrow keys move AND choose, like native radios (the choice itself is sketch.js's p5 handler: a 'mousedown').
   kindBtns.forEach(function (b, i) {
     b.addEventListener('keydown', function (e) {
@@ -103,7 +108,7 @@
   function bindExact(field, carrier, lo, hi, msg, reasonFn) {
     field.addEventListener('change', function () {
       const why = reasonFn();
-      let v = parseFloat(String(field.value).replace(',', '.'));
+      let v = parseFloat(UI.normalizeNumber(field.value));   // the German decimal pad types a comma; the field is type=text so the typed text reaches here (a number input gives '' for it on iOS)
       if (why || isNaN(v)) { show(); if (why) UI.toast(why, 4000); return; }
       if (v < lo || v > hi) { v = v < lo ? lo : hi; UI.toast(msg, 4000); }
       carrier.value = String(Math.round(v * 100));
@@ -115,7 +120,7 @@
     return show;
   }
   const showStrengthExact = bindExact(strengthExact, strengthInput, 0, 1, T['reason.strength.exact'], reasonStrength);
-  const showFocusExact = bindExact(focusExact, focusInput, -1, 1, T['reason.focus.exact'], reasonAll);
+  const showFocusExact = bindExact(focusExact, focusInput, -1, 1, T['reason.focus.exact'], reasonFocus);
 
   function setLocked(field, why) {
     if (field.readOnly !== !!why) field.readOnly = !!why;
@@ -129,6 +134,8 @@
   function sync() {
     const all = reasonAll();
     kindBtns.forEach(function (b) { UI.setDisabled(b, all); });
+    axesBtns.forEach(function (b) { UI.setDisabled(b, all); });   // hidden with #net-group elsewhere; in the phone layout's panel they stay visible, so they say why
+    UI.setDisabled(reverseBtn, all);
     UI.setDisabled(moreBtn, all);
     if (all && overlay.isOpen) overlay.close(false);
     strengthStepper.refresh();
@@ -143,7 +150,9 @@
     if (document.activeElement !== strengthExact) showStrengthExact();
     if (document.activeElement !== focusExact) showFocusExact();
     setLocked(strengthExact, reasonStrength());
-    setLocked(focusExact, all);
+    setLocked(focusExact, reasonFocus());
   }
+  // the Fokus stepper's root is (un)disabled by the phone layout during a UI tick, after this sync ran: the exact field and the chevrons follow at once
+  if (typeof MutationObserver === 'function') new MutationObserver(sync).observe(focusRoot, { attributes: true, attributeFilter: ['aria-disabled'] });
   UI.onSync(sync);
 })();

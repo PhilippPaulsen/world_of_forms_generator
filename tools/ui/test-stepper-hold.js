@@ -77,7 +77,7 @@ function build(o) {
     const input = Object.assign(makeEl(), { value: String(o.start || 0), dispatchEvent(ev) { (input.handlers[ev.type] || []).forEach(h => h(ev)); return true; } });
     input.addEventListener('change', () => { steps.push(clock.now()); clock.spend(typeof o.costAt === 'function' ? o.costAt(clock.now()) : (o.cost || 0)); });
     const up = makeEl({ dataset: { dir: '1' } }), down = makeEl({ dataset: { dir: '-1' } });
-    const root = { querySelectorAll: () => [up, down] };
+    const root = { querySelectorAll: () => [up, down], getAttribute: () => null, dataset: {} };   // a real root has attributes (UI.stepper asks whether it is disabled: commit 3b)
     const max = o.max === undefined ? 100000 : o.max;
     const api = ctx.UI.stepper(root, { input, noTyping: true, compute: dir => { const v = parseInt(input.value, 10) + dir; return (v > max || v < -100000) ? { to: null, reason: 'limit' } : { to: v }; } });
     const doc = { fire(type, patch) { Object.assign(document, patch || {}); (docHandlers[type] || []).forEach(h => h({ type })); } };
