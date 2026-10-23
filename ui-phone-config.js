@@ -18,6 +18,8 @@
  *   sheets.<id>.blocks  (optional) [[row]]: the content of the sheet in blocks of rows (commit 3a of the sheets redesign): a block is a list of rows, a row { items: [{ id, w, wMin? }], wrap? }, an item one existing element
  *              (a .control-group: sketch.js keeps showing and hiding it; it moves whole, the engine knows no control). Rows are 48px high with 8px gaps, blocks are 16px apart, the sheet has 16px padding. A row whose items are
  *              ALL hidden is hidden (no empty row, no gap), a block whose rows are all hidden too. wrap: the row wraps into two lines below 340px (it does not fit 288px there; validate() requires it exactly then).
+ *   sheets.<id>.steppers  (optional) inputId -> { icon, step, round?, min?, max?, wrap?, noTyping?, name, more, less }: an existing input that the engine wraps into a stepper (UI.stepper) while the layout is on and unwraps at
+ *              release() (commit 3b). icons: key -> [stroke paths], the icons of those steppers and the two chevrons (chevron-up, chevron-down).
  *   afterShow  id -> [global, method]: called (when it exists) after the element moved into the visible panel - a moved element loses its scroll position.
  */
 (function (root) {
@@ -103,12 +105,28 @@
     // Bottom sheets (1b): a block that stays inline above 768px and in the tabs that are not covered moves into a sheet (UI.overlay) while the layout is on. The sheet FOLLOWS the block's own open state - the
     // "..." button's existing handler flips it, nothing here toggles it - and closing the sheet (Escape, the scrim, a tap outside, a resize) closes that state by clicking the button once more.
     //   content: the block; trigger: { within: an element of the panel, selector } the "..." button; open: how to read the state ({ notHidden: true } or { hasClass }); label: the dialog's name (the button's own).
+    // the stroke paths (viewBox 24, 18px, the UI's icon style) of the icons the steppers of a sheet use, and the two chevrons every stepper has
+    icons: {
+      'arrow-right': ['M4 12 H20', 'M14 6 L20 12 L14 18'],
+      'arrow-down': ['M12 4 V20', 'M6 14 L12 20 L18 14'],
+      'rotate': ['M4 12 a8 8 0 1 0 2.7 -6', 'M4 4 v6 h6'],
+      'chevron-up': ['M6 15 L12 9 L18 15'],
+      'chevron-down': ['M6 9 L12 15 L18 9']
+    },
     sheets: {
       // The layer sheet (3a): no group headings, no visible labels (the labels stay as the names of the controls). Block 1 = what the layer IS: row 1 the three shapes and the three symmetry modes (6 x 48 + gaps = 328: wraps
       // below 340px), row 2 the node count and size steppers, row 3 the fold buttons (sketch.js shows them for a hexagon layer only: the row collapses otherwise). Block 2 = where it SITS: row 1 offset X, offset Y
-      // (the typed fields for now: 60px) and Align to base, row 2 the two mesh presets and the rotation field. Every item is the layer's own .control-group, so sketch.js's show / hide of a group still decides.
+      // (the typed inputs, wrapped into 117px steppers by the engine: see `steppers`) and Align to base, row 2 the two mesh presets and the rotation field. Every item is the layer's own .control-group, so sketch.js's show / hide of a group still decides.
       layer: {
         host: 'ph-sheet-layer', label: 'Ebenen-Einstellungen', content: 'layer-more-panel', trigger: { within: 'layer-strip', selector: '.lt-more' }, open: { notHidden: true },
+        // steppers (3b): an existing typed input that becomes a stepper (the same markup as the Form row's, built by the engine around the input) while the layout is on, and is plain again after release():
+        // step / round / min / max / wrap / noTyping are the options of UI.stepper (commit 2); `icon` is a key of `icons`; name / more / less = { i18n (dictionary key), text (German fallback) } of the
+        // group, the up chevron and the down chevron. The item that holds the input is 117px wide (109 at 320).
+        steppers: {
+          'layer-offset-x-input': { icon: 'arrow-right', step: 10, round: 0, noTyping: true, name: { i18n: 'layer.shiftX', text: 'Versatz X' }, more: { i18n: 'layer.shiftX.more', text: 'Versatz X mehr' }, less: { i18n: 'layer.shiftX.less', text: 'Versatz X weniger' } },
+          'layer-offset-y-input': { icon: 'arrow-down', step: 10, round: 0, noTyping: true, name: { i18n: 'layer.shiftY', text: 'Versatz Y' }, more: { i18n: 'layer.shiftY.more', text: 'Versatz Y mehr' }, less: { i18n: 'layer.shiftY.less', text: 'Versatz Y weniger' } },
+          'layer-rotation-input': { icon: 'rotate', step: 15, min: 0, max: 360, wrap: true, round: 0, noTyping: true, name: { i18n: 'layer.rotation', text: 'Drehung' }, more: { i18n: 'layer.rotation.more', text: 'Drehung mehr' }, less: { i18n: 'layer.rotation.less', text: 'Drehung weniger' } }
+        },
         blocks: [
           [
             { wrap: true, items: [{ id: 'layer-shape-group', w: 160 }, { id: 'layer-mode-group', w: 160 }] },
@@ -116,8 +134,8 @@
             { items: [{ id: 'layer-fold-group', w: 104 }] }
           ],
           [
-            { items: [{ id: 'layer-offset-x-group', w: 60 }, { id: 'layer-offset-y-group', w: 60 }, { id: 'layer-align-group', w: 48 }] },
-            { items: [{ id: 'layer-mesh-preset-group', w: 104 }, { id: 'layer-rotation-group', w: 60 }] }
+            { items: [{ id: 'layer-offset-x-group', w: 117, wMin: 109 }, { id: 'layer-offset-y-group', w: 117, wMin: 109 }, { id: 'layer-align-group', w: 48 }] },
+            { items: [{ id: 'layer-mesh-preset-group', w: 104 }, { id: 'layer-rotation-group', w: 117, wMin: 109 }] }
           ]
         ]
       },
@@ -176,6 +194,22 @@
         if (!sh.trigger || !sh.trigger.within || !sh.trigger.selector) bad.push(tab + ': sheet ' + sid + ': no trigger');
         else if (!known(sh.trigger.within)) bad.push(tab + ': sheet ' + sid + ': trigger container ' + sh.trigger.within + ' is unknown');
         if (!sh.open || !(sh.open.notHidden === true || typeof sh.open.hasClass === 'string')) bad.push(tab + ': sheet ' + sid + ': open must be { notHidden: true } or { hasClass }');
+        // the steppers of a sheet: the input exists in index.html (and is not itself a row item), the icons exist, the options are the ones UI.stepper takes, every name has a dictionary key and a German text
+        if (sh.steppers !== undefined) {
+          const icons = cfg.icons || {};
+          const rowIds = [].concat.apply([], (Array.isArray(sh.blocks) ? sh.blocks : []).map(function (rows) { return [].concat.apply([], (Array.isArray(rows) ? rows : []).map(function (r) { return (r.items || []).map(function (i) { return i.id; }); })); }));
+          ['chevron-up', 'chevron-down'].forEach(function (k) { if (!Array.isArray(icons[k]) || !icons[k].length) bad.push('icons: ' + k + ' is missing'); });
+          Object.keys(sh.steppers).forEach(function (iid) {
+            const sp = sh.steppers[iid], where = tab + ': sheet ' + sid + ' stepper ' + iid;
+            if (!known(iid)) bad.push(where + ': the input is not in index.html');
+            if (rowIds.indexOf(iid) >= 0) bad.push(where + ': the input is also a row item');
+            if (!(typeof sp.step === 'number' && sp.step > 0 && isFinite(sp.step))) bad.push(where + ': step must be a positive number');
+            if (sp.round !== undefined && !(Number.isInteger(sp.round) && sp.round >= 0)) bad.push(where + ': round must be a whole number of decimals');
+            if (sp.wrap && !(typeof sp.min === 'number' && typeof sp.max === 'number' && sp.max > sp.min)) bad.push(where + ': wrap needs min and max');
+            if (!Array.isArray(icons[sp.icon]) || !icons[sp.icon].length) bad.push(where + ': the icon ' + sp.icon + ' is not defined in icons');
+            ['name', 'more', 'less'].forEach(function (k) { const n = sp[k]; if (!n || typeof n.i18n !== 'string' || !n.i18n || typeof n.text !== 'string' || !n.text.trim()) bad.push(where + ': ' + k + ' needs an i18n key and a German text'); });
+          });
+        }
         // the rows of a sheet (blocks): every id exists and is used once in the tab, a row fits 343px and, unless it wraps, 288px with its narrow widths
         if (sh.blocks !== undefined) {
           const sw = S.designWidth - 2 * S.gutter, swNarrow = S.narrowWidth - 2 * S.gutter;

@@ -20,7 +20,7 @@ const T = (name, fn) => { try { fn(); } catch (e) { check(name, false, 'threw: '
 
 // ---- a small fake DOM -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 class Node_ {
-    constructor(doc, type, tag) { this.doc = doc; this.nodeType = type; this.tagName = tag ? tag.toUpperCase() : ''; this.childNodes = []; this.parentNode = null; this.attrs = {}; this.handlers = {}; this.hidden = false; this.text = ''; this.clicks = 0; this.dataset = {}; }
+    constructor(doc, type, tag) { this.doc = doc; this.nodeType = type; this.tagName = tag ? tag.toUpperCase() : ''; this.childNodes = []; this.parentNode = null; this.attrs = {}; this.handlers = {}; this.hidden = false; this.readOnly = false; this.text = ''; this.clicks = 0; this.dataset = {}; }
     get children() { return this.childNodes.filter(n => n.nodeType === 1); }
     get id() { return this.attrs.id || ''; }
     get className() { return this.attrs.class || ''; } set className(v) { this.attrs.class = String(v); }
@@ -32,8 +32,9 @@ class Node_ {
     get nextSibling() { const p = this.parentNode; if (!p) return null; const i = p.childNodes.indexOf(this); return p.childNodes[i + 1] || null; }
     get previousSibling() { const p = this.parentNode; if (!p) return null; const i = p.childNodes.indexOf(this); return i > 0 ? p.childNodes[i - 1] : null; }
     get textContent() { return this.text; } set textContent(v) { this.text = String(v); }
-    setAttribute(k, v) { this.attrs[k] = String(v); } getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; } removeAttribute(k) { delete this.attrs[k]; } hasAttribute(k) { return k in this.attrs; }
+    setAttribute(k, v) { this.attrs[k] = String(v); if (/^data-/.test(k)) this.dataset[k.slice(5).replace(/-([a-z])/g, (m, c) => c.toUpperCase())] = String(v); } getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; } removeAttribute(k) { delete this.attrs[k]; } hasAttribute(k) { return k in this.attrs; }
     addEventListener(t, fn) { (this.handlers[t] = this.handlers[t] || []).push(fn); }
+    dispatchEvent(e) { this.dispatch(e.type, e); return true; }
     dispatch(t, ev) { (this.handlers[t] || []).slice().forEach(h => h(Object.assign({ type: t, target: this, preventDefault() { }, stopPropagation() { } }, ev || {}))); }
     contains(n) { for (let e = n; e; e = e.parentNode) if (e === this) return true; return false; }
     cloneNode(deep) { const c = new Node_(this.doc, this.nodeType, this.tagName); c.attrs = Object.assign({}, this.attrs); c.text = this.text; c.hidden = this.hidden; if (deep) this.childNodes.forEach(k => c.appendChild(k.cloneNode(true))); return c; }   // a clone has the attributes (so the same id) and NO listeners, as in the DOM
@@ -111,7 +112,7 @@ function buildPage(opts) {
                 el('div', { id: 'farbe-strategy-group', class: 'rail-group rail-farbe-only', role: 'radiogroup' }, ['cyclic', 'area', 'symmetry', 'rings'].map(k => btn('btn-strategy-' + k))),
                 el('div', { id: 'rail-group-reset', class: 'rail-group rail-farbe-only' }, [btn('btn-face-colors-reset')])])])]));
     // the leftover containers: the layer "Mehr" wrapper (hidden unless its state is open), the timeline group (a class ts-open when open) and the contextual groups sketch.js shows for Curve / Free
-    const layerPanel = el('div', { id: 'layer-more-panel' }, [btn('layer-align', 'layer-btn'), el('input', { id: 'layer-offset-x-input', type: 'number' })]); layerPanel.hidden = true;
+    const layerPanel = el('div', { id: 'layer-more-panel' }, [btn('layer-align', 'layer-btn'), el('input', { id: 'layer-loose-field', type: 'number' })]); layerPanel.hidden = true;
     // the ten control groups of the layer block (the real ids; every group starts hidden like on the page until sketch.js shows it for a layer); each holds a label (display: none on the page) and its control
     const lg = (id, kids) => { const g = el('div', { id, class: 'control-group' }, [el('label', {}, [])].concat(kids)); g.hidden = true; return g; };
     const layerGroups = [lg('layer-shape-group', [el('div', { class: 'icon-row' }, ['triangle', 'square', 'hex'].map(k => { const b2 = btn(null, 'layer-shape-icon-btn icon-btn'); b2.setAttribute('data-shape', k); return b2; }))]),
@@ -120,7 +121,7 @@ function buildPage(opts) {
         lg('layer-mode-group', [el('div', { class: 'icon-row' }, ['none', 'spiegeling', 'drehling'].map(k => { const b2 = btn(null, 'layer-mode-btn icon-btn'); b2.setAttribute('data-mode', k); return b2; }))]),
         lg('layer-fold-group', [el('div', { class: 'icon-row' }, [btn(null, 'layer-fold-btn layer-btn icon-btn'), btn(null, 'layer-fold-btn layer-btn icon-btn')])]),
         lg('layer-align-group', [btn('btn-align-to-base', 'layer-btn icon-btn')]),
-        lg('layer-offset-x-group', [el('input', { id: 'layer-offset-x-input2', type: 'number' })]),
+        lg('layer-offset-x-group', [el('input', { id: 'layer-offset-x-input', type: 'number' })]),
         lg('layer-offset-y-group', [el('input', { id: 'layer-offset-y-input', type: 'number' })]),
         lg('layer-mesh-preset-group', [el('div', { class: 'icon-row' }, [btn('btn-mesh-preset-x', 'layer-btn icon-btn'), btn('btn-mesh-preset-y', 'layer-btn icon-btn')])]),
         lg('layer-rotation-group', [el('input', { id: 'layer-rotation-input', type: 'number' })])];
@@ -151,7 +152,7 @@ function buildPage(opts) {
     // opts.ui: the REAL ui.js (UI.overlay, UI.onSync) in this window; without it the engine finds no UI.overlay and leaves the sheet blocks where they are
     if (opts.ui) {
         vm.createContext(win);
-        Object.assign(win, { window: win, document: doc, console, MutationObserver: class { constructor(cb) { (win.observers = win.observers || []).push(cb); } observe() { } disconnect() { win.disconnected = (win.disconnected || 0) + 1; } }, performance: { now: () => 0 }, setTimeout, clearTimeout });
+        Object.assign(win, { window: win, document: doc, console, Event: class { constructor(t, o) { this.type = t; this.bubbles = !!(o && o.bubbles); } }, MutationObserver: class { constructor(cb) { (win.observers = win.observers || []).push(cb); } observe() { } disconnect() { win.disconnected = (win.disconnected || 0) + 1; } }, performance: { now: () => 0 }, setTimeout, clearTimeout });
         vm.runInContext(fs.readFileSync(process.env.UI_JS || path.join(ROOT, 'ui.js'), 'utf8'), win, { filename: 'ui.js' });
     }
     return { doc, win, mq, calls, scrim, layerModel, layerPanel, tlGroup, faceList, faceGroup, focusRow, geoRow, moreNetz };
@@ -373,7 +374,7 @@ T('sheet-open-at-apply', () => {
 T('sheet-resize-typing', () => {
     const { p, host, lt } = sheetPage();
     lt.dispatch('click');
-    const field = p.doc.getElementById('layer-offset-x-input'); field.focus();
+    const field = p.doc.getElementById('layer-loose-field'); field.focus();
     p.win.innerHeight = 420; p.win.dispatch('resize');
     check('a resize (the soft keyboard) while a text/number field IN the sheet has the focus keeps the sheet open', p.doc.activeElement === field && !host.hidden && p.layerModel.open === true);
     p.doc.getElementById('layer-align').focus(); p.win.dispatch('resize');
@@ -712,6 +713,78 @@ T('rows-release', () => {
     check('apply after release builds the rows again (two blocks, five rows) and every group is once in the document', JSON.stringify(rowsOf(p.doc.getElementById('ph-sheet-layer'))) === JSON.stringify(blockIds) && allGroupIds.every(id => p.doc.all().filter(n => n.id === id).length === 1));
     check('...and a second apply(form) while it is on does no work', (() => { const m = p.doc.mutations; eng.apply('form'); return p.doc.mutations === m; })());
     eng.release();
+});
+
+
+console.log('\n== the layer sheet steppers (sheets redesign, commit 3b): config.sheets.layer.steppers, with the REAL ui.js ==');
+const SPEC = config.sheets.layer.steppers;
+const SIDS = ['layer-offset-x-input', 'layer-offset-y-input', 'layer-rotation-input'];
+// the handler counts of an element: what a plain input must have again after release
+const hcount = n => Object.keys(n.handlers).sort().map(k => k + ':' + n.handlers[k].length).join(',');
+const click0 = b => b.dispatch('click', { detail: 0 });   // a keyboard activation: steps once
+const chev = (p, id, dir) => p.doc.getElementById(id).parentNode.querySelectorAll('.stepper-btn').find(b => b.getAttribute('data-dir') === String(dir));
+T('steppers-decorate', () => {
+    const p0 = buildPage({ ui: true }), orig = {}, before = {}; SIDS.forEach(id => { orig[id] = p0.doc.getElementById(id); before[id] = [orig[id].parentNode, orig[id].previousSibling, orig[id].nextSibling, hcount(orig[id]), orig[id].readOnly, orig[id].getAttribute('inputmode'), dump(orig[id])]; });
+    const eng = ph(p0); eng.start(); eng.show('ebenen');
+    check('the three inputs are the SAME node objects, each in a .stepper (role group, named in German) inside its own control group; one element per id, no id twice', SIDS.every(id => { const n = p0.doc.getElementById(id); return n === orig[id] && n.parentNode.className === 'stepper' && n.parentNode.getAttribute('role') === 'group' && /^layer-(offset-[xy]|rotation)-group$/.test(n.parentNode.parentNode.id) && p0.doc.all().filter(x => x.id === id).length === 1; }) && (() => { const ids2 = p0.doc.all().map(n => n.id).filter(Boolean); return new Set(ids2).size === ids2.length; })());
+    check('the stepper is the Form row\'s markup: an icon (svg, aria-hidden), the input, then .stepper-chevrons with an up (data-dir 1) and a down (data-dir -1) button, each with an svg; the names are German: Versatz X (mehr / weniger), Versatz Y, Drehung', SIDS.every(id => { const r = p0.doc.getElementById(id).parentNode, k = r.children; return k.length === 3 && k[0].tagName.toLowerCase() === 'svg' && k[0].getAttribute('aria-hidden') === 'true' && k[1] === orig[id] && k[2].className === 'stepper-chevrons' && k[2].children.map(b => b.getAttribute('data-dir')).join() === '1,-1' && k[2].children.every(b => b.children[0].tagName.toLowerCase() === 'svg' && b.getAttribute('title') === b.getAttribute('aria-label')); }) && p0.doc.getElementById('layer-offset-x-input').parentNode.getAttribute('aria-label') === 'Versatz X' && chev(p0, 'layer-offset-y-input', 1).getAttribute('aria-label') === 'Versatz Y mehr' && chev(p0, 'layer-rotation-input', -1).getAttribute('aria-label') === 'Drehung weniger');
+    check('no typing: every input is readOnly with inputmode="none" while the layout is on (no soft keyboard, the field is the display)', SIDS.every(id => orig[id].readOnly === true && orig[id].getAttribute('inputmode') === 'none'));
+    check('the icons are the config\'s: arrow right (X), arrow down (Y), rotate (rotation), as stroke paths', SIDS.every(id => { const svg = orig[id].parentNode.children[0]; const d = svg.children.map(x => x.getAttribute('d')); return JSON.stringify(d) === JSON.stringify(config.icons[SPEC[id].icon]); }));
+    eng.release();
+    check('release UNDOES it: every input is back with the same parent and neighbours, no .stepper wrapper is left in the document, no duplicated id', SIDS.every(id => orig[id].parentNode === before[id][0] && orig[id].previousSibling === before[id][1] && orig[id].nextSibling === before[id][2]) && p0.doc.all().filter(n => n.className === 'stepper' && SIDS.some(id => n.querySelector('#' + id))).length === 0);
+    check('...readOnly and inputmode are what they were (not readonly, no inputmode), and the input carries exactly the listeners it had before (none were left on it)', SIDS.every(id => orig[id].readOnly === before[id][4] && orig[id].getAttribute('inputmode') === before[id][5] && hcount(orig[id]) === before[id][3]), SIDS.map(id => hcount(orig[id]) + ' / ' + before[id][3]).join(' | '));
+    check('...the input node is as it was (same tree, same attributes)', SIDS.every(id => dump(orig[id]) === before[id][6]));
+});
+T('steppers-steps', () => {
+    const p = buildPage({ ui: true }); const eng = ph(p); eng.start(); eng.show('ebenen');
+    const log = []; const inp = id => p.doc.getElementById(id);
+    SIDS.forEach(id => ['input', 'change'].forEach(t => inp(id).addEventListener(t, e => log.push(id.replace(/^layer-(offset-)?/, '')[0] + ':' + t + ':' + (e.bubbles ? 'b' : 'n')))));
+    const upX = chev(p, 'layer-offset-x-input', 1), dnX = chev(p, 'layer-offset-x-input', -1);
+    inp('layer-offset-x-input').value = '0'; click0(upX);
+    check('offset X: one step up = +10 ("0" -> "10"); the input event and then the change event, both bubbling, on the existing input', inp('layer-offset-x-input').value === '10' && log.join() === 'x:input:b,x:change:b', inp('layer-offset-x-input').value + ' ' + log.join());
+    click0(dnX); click0(dnX); click0(dnX);
+    check('offset X goes negative without a limit (10 - 30 = -20)', inp('layer-offset-x-input').value === '-20');
+    inp('layer-offset-y-input').value = '0'; click0(chev(p, 'layer-offset-y-input', 1)); click0(chev(p, 'layer-offset-y-input', 1)); click0(chev(p, 'layer-offset-y-input', -1));
+    check('offset Y: +10, +10, -10 = 10', inp('layer-offset-y-input').value === '10');
+    inp('layer-offset-x-input').value = '103.92304845413264'; click0(upX);
+    check('an offset the mesh preset wrote (103.923...) steps to the next whole number (113.92 -> round 0 = 114)', inp('layer-offset-x-input').value === '114', inp('layer-offset-x-input').value);
+    const upR = chev(p, 'layer-rotation-input', 1), dnR = chev(p, 'layer-rotation-input', -1);
+    inp('layer-rotation-input').value = '345'; click0(upR);
+    check('rotation wraps: 345 + 15 = 0 (360 is not a value)', inp('layer-rotation-input').value === '0');
+    click0(dnR);
+    check('rotation wraps down: 0 - 15 = 345', inp('layer-rotation-input').value === '345');
+    inp('layer-rotation-input').value = '350'; click0(upR);
+    check('an off-grid rotation wraps by the remainder (350 + 15 = 5)', inp('layer-rotation-input').value === '5');
+    check('the chevrons are never disabled (no bound, a wrap): the up and down buttons of the three steppers have no aria-disabled', SIDS.every(id => [1, -1].every(d => chev(p, id, d).getAttribute('aria-disabled') === null)));
+    inp('layer-offset-x-input').value = '0'; log.length = 0;
+    inp('layer-offset-x-input').parentNode.dispatch('keydown', { key: 'ArrowUp', preventDefault() { } });
+    check('a key on the stepper (ArrowUp) steps too, from the wrapper (the key handler is on the wrapper, not on the input)', inp('layer-offset-x-input').value === '10' && !inp('layer-offset-x-input').handlers.keydown, inp('layer-offset-x-input').value);
+    // a pointer press steps once at once (and starts the hold); the release stops it
+    const before = inp('layer-offset-y-input').value; upX.dispatch('pointerdown', { button: 0 }); upX.dispatch('pointerup', {});
+    check('a pointer press on a chevron steps at once (once), and the release ends the hold', inp('layer-offset-x-input').value === '20');
+    eng.release();
+});
+T('steppers-cycles', () => {
+    const p = buildPage({ ui: true }); const eng = ph(p); eng.start(); eng.show('ebenen');
+    const vis0 = (p.doc.handlers.visibilitychange || []).length, root0 = p.doc.getElementById('layer-offset-x-input').parentNode;
+    for (let i = 0; i < 3; i++) { eng.release(); eng.apply('form'); eng.show('ebenen'); }
+    const inp = p.doc.getElementById('layer-offset-x-input');
+    check('after three release / apply cycles the stepper is the SAME made wrapper (made once: UI.stepper cannot unbind its listeners), the document has no more visibilitychange listeners than after the first apply (' + vis0 + ')', inp.parentNode === root0 && (p.doc.handlers.visibilitychange || []).length === vis0, (p.doc.handlers.visibilitychange || []).length + ' / ' + vis0);
+    inp.value = '0'; click0(chev(p, 'layer-offset-x-input', 1));
+    check('...and one tap still steps once (no handler was added by a cycle): 0 -> 10', inp.value === '10');
+    check('...the input is readonly again after the re-apply (the engine sets it at every apply)', inp.readOnly === true && inp.getAttribute('inputmode') === 'none');
+    eng.release(); eng.release();
+    check('release twice is harmless (nothing moves the second time) and the plain input is back', (() => { const m = p.doc.mutations; eng.release(); return p.doc.mutations === m; })() && inp.parentNode.id === 'layer-offset-x-group' && inp.readOnly === false);
+    // a tab change with the sheet open: the layout is released for a tab that is not covered... every tab is covered, so a width change is the release
+    eng.apply('form'); eng.show('ebenen'); p.mq.set(false);
+    check('a width change to 768+ (the media query) releases the steppers: plain inputs again', !p.doc.documentElement.classList.contains('ph') && inp.parentNode.id === 'layer-offset-x-group' && inp.readOnly === false && !inp.getAttribute('inputmode'));
+    p.mq.set(true);
+    check('...and back to a phone width decorates them again', p.doc.documentElement.classList.contains('ph') && inp.parentNode.className === 'stepper' && inp.readOnly === true);
+});
+T('steppers-no-ui', () => {
+    const p = buildPage({ ui: true }); delete p.win.UI.stepper;
+    const eng = ph(p); eng.start(); eng.show('ebenen');
+    check('WITHOUT UI.stepper the inputs stay plain and typable (the rows still work): no wrapper, not readonly', SIDS.every(id => { const n = p.doc.getElementById(id); return n.parentNode.id.endsWith('-group') && n.readOnly === false; }));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
