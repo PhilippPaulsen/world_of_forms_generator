@@ -213,6 +213,9 @@ label { touch-action: manipulation; }
   display: none;
 }
 
+/* The readout line of the Netz sheet (ui-net.js writes it): only the phone layout shows it (html.ph #net-readout, at the end of the file). */
+.net-readout { display: none; }
+
 /* Layer "Mehr" (5d, step 1): the wrapper around the rarely used layer controls. display: contents keeps every group inside it a flex item of #controls-container, exactly
    where it was before the wrapper existed; [hidden] must be restated because display: contents would win over the attribute. */
 #layer-more-panel { display: contents; }
@@ -1546,4 +1549,31 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     html.ph .ph-sheet-row-wrap { flex-wrap: wrap; }
     html.ph #layer-more-panel .stepper > input[type="number"] { width: 40px; min-width: 40px; }
   }
+
+  /* ---- sheets redesign, commit 4a: the Netz sheet (ui-phone.js buildOverlays(), ui-phone-config.js overlays.netz) -------------------------------------------------------------------------------- */
+  /* #more-netz is an overlay of its own (a bottom sheet here): the same blocks and rows as the layer sheet. The leftover containers (the strength section, #net-group with the hints and whatever sketch.js still shows in
+     it) take no room - every control that matters is in a row - and the hints, the macro title and the headings are parked hidden: the readout line says what they said, shortly. */
+  html.ph .overlay.ph-sheet-rows { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; gap: var(--sp-3); }
+  html.ph #more-netz.ph-sheet-rows > .overlay-section, html.ph #more-netz.ph-sheet-rows > #net-group { display: none; }
+  html.ph #net-focus-hint, html.ph #net-macro-hint, html.ph #net-field-hint, html.ph #net-field-info, html.ph #net-size-hint, html.ph .ph-sheet-row #net-macro-row > label { display: none; }
+  /* the exact fields in block 1: typed fields 60 x --target (commit 4b makes them steppers) */
+  html.ph .ph-sheet-row > input.exact-field { box-sizing: border-box; flex: none; width: 60px; min-width: 0; height: var(--target); margin: 0; text-align: center; }
+  html.ph .ph-sheet-row > input.exact-field[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
+  html.ph .ph-sheet-row #net-domain-row, html.ph .ph-sheet-row #net-geo-row { flex: none; flex-wrap: nowrap; justify-content: flex-start; gap: var(--sp-2); margin: 0; padding: 0; }
+  html.ph .ph-sheet-row #net-macro-row { display: block; margin: 0; }
+  html.ph .ph-sheet-row #net-macro-row[hidden], html.ph .ph-sheet-row #net-geo-row[hidden] { display: none; }
+  html.ph .ph-sheet-row #net-macro-buttons { justify-content: flex-start; flex-wrap: wrap; gap: var(--sp-2); }
+  html.ph .ph-sheet-row #net-macro-buttons .layer-btn { box-sizing: border-box; flex: none; min-height: var(--target); touch-action: manipulation; }
+  /* the three domains and Alternate are icons: the same buttons, their text (the accessible name, German) emptied visually and an icon drawn with a mask, like Net lines in the tool row (it inverts with the active state) */
+  html.ph .ph-sheet-row .net-domain-btn, html.ph .ph-sheet-row #net-alternate-btn { position: relative; box-sizing: border-box; flex: none; width: var(--target); height: var(--target); min-width: var(--target); padding: 0; border-radius: var(--radius); font-size: 0; line-height: 0; touch-action: manipulation; }
+  html.ph .ph-sheet-row .net-domain-btn[hidden], html.ph .ph-sheet-row #net-alternate-btn[hidden] { display: none; }
+  html.ph .ph-sheet-row .net-domain-btn::before, html.ph .ph-sheet-row #net-alternate-btn::before { content: ""; position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); background-color: currentColor; }
+  html.ph .ph-sheet-row .net-domain-btn:disabled { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
+  html.ph .ph-sheet-row #net-domain-single::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='5'%20y='5'%20width='14'%20height='14'%20rx='1'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='5'%20y='5'%20width='14'%20height='14'%20rx='1'/%3E%3C/svg%3E") center / contain no-repeat; }
+  html.ph .ph-sheet-row #net-domain-tiled::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='4'%20y='4'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='13'%20y='4'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='4'%20y='13'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='13'%20y='13'%20width='7'%20height='7'%20rx='1'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='4'%20y='4'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='13'%20y='4'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='4'%20y='13'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='13'%20y='13'%20width='7'%20height='7'%20rx='1'/%3E%3C/svg%3E") center / contain no-repeat; }
+  html.ph .ph-sheet-row #net-field-btn::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='4'%20y='4'%20width='16'%20height='16'%20rx='1'/%3E%3Cpath%20d='M4%209.3%20H20%20M4%2014.7%20H20%20M9.3%204%20V20%20M14.7%204%20V20'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='4'%20y='4'%20width='16'%20height='16'%20rx='1'/%3E%3Cpath%20d='M4%209.3%20H20%20M4%2014.7%20H20%20M9.3%204%20V20%20M14.7%204%20V20'/%3E%3C/svg%3E") center / contain no-repeat; }
+  html.ph .ph-sheet-row #net-alternate-btn::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M12%204%20V20'%20stroke-dasharray='2%202'/%3E%3Cpath%20d='M4%207%20L10%2012%20L4%2017%20Z'/%3E%3Cpath%20d='M20%207%20L14%2012%20L20%2017%20Z'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M12%204%20V20'%20stroke-dasharray='2%202'/%3E%3Cpath%20d='M4%207%20L10%2012%20L4%2017%20Z'/%3E%3Cpath%20d='M20%207%20L14%2012%20L20%2017%20Z'/%3E%3C/svg%3E") center / contain no-repeat; }
+  /* the readout: ONE line of 20px, muted, 14px; nothing else of the sheet's former explanations is shown. Above 768px the element is not shown at all (the rule is not in the phone block). */
+  html.ph #net-readout { display: block; box-sizing: border-box; height: 20px; margin: 0; padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; color: var(--color-secondary); }
+
 }

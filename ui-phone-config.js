@@ -18,6 +18,8 @@
  *   sheets.<id>.blocks  (optional) [[row]]: the content of the sheet in blocks of rows (commit 3a of the sheets redesign): a block is a list of rows, a row { items: [{ id, w, wMin? }], wrap? }, an item one existing element
  *              (a .control-group: sketch.js keeps showing and hiding it; it moves whole, the engine knows no control). Rows are 48px high with 8px gaps, blocks are 16px apart, the sheet has 16px padding. A row whose items are
  *              ALL hidden is hidden (no empty row, no gap), a block whose rows are all hidden too. wrap: the row wraps into two lines below 340px (it does not fit 288px there; validate() requires it exactly then).
+ *   overlays   id -> { content, blocks, steppers? }: an overlay that already exists with its own UI.overlay (ui-net.js's #more-netz) and gets the same rows as a sheet's content (commit 4a); tabs.<tab>.overlays lists them. A row may have
+ *              `h` (its height when it is not --target: the 20px readout line) and an item may be `fluid` (the row's width, alone in its row).
  *   sheets.<id>.steppers  (optional) inputId -> { icon, step, round?, min?, max?, wrap?, noTyping?, name, more, less }: an existing input that the engine wraps into a stepper (UI.stepper) while the layout is on and unwraps at
  *              release() (commit 3b). icons: key -> [stroke paths], the icons of those steppers and the two chevrons (chevron-up, chevron-down).
  *   afterShow  id -> [global, method]: called (when it exists) after the element moved into the visible panel - a moved element loses its scroll position.
@@ -38,7 +40,7 @@
     tabs: {
       form: { covered: true, panelH: 104, subtabs: ['raster', 'ebenen', 'zeit'], defaultSubtab: 'raster', toolRow: 'form', sheets: ['layer', 'timeline'] },
       farbe: { covered: true, panelH: 104, subtabs: ['harmonie', 'spuren', 'ebenen', 'zeit'], defaultSubtab: 'harmonie', toolRow: 'farbe', sheets: ['layer', 'timeline'] },
-      netz: { covered: true, panelH: 104, subtabs: ['art', 'achsen', 'ebenen', 'zeit'], defaultSubtab: 'art', toolRow: 'netz', sheets: ['layer', 'timeline'] }
+      netz: { covered: true, panelH: 104, subtabs: ['art', 'achsen', 'ebenen', 'zeit'], defaultSubtab: 'art', toolRow: 'netz', sheets: ['layer', 'timeline'], overlays: ['netz'] }
     },
     toolRows: {
       form: {
@@ -141,6 +143,26 @@
       },
       timeline: { host: 'ph-sheet-timeline', label: 'Zeitleiste: Mehr', content: 'timeline-group', trigger: { within: 'timeline-strip', selector: '.ts-more' }, open: { hasClass: 'ts-open' } }
     },
+    // The Netz sheet (commit 4a): #more-netz is an overlay of its own (ui-net.js opens it from the "..." of the Art panel), so it has no host here: its content is the overlay itself. No headings, no visible labels. Block 1 =
+    // the exact strength and focus fields (typed fields for now: 60px; commit 4b makes them steppers), block 2 = the domain (Einzeln / Gekachelt / Feld as icons: 3 x 48 + gaps), the macro cells (only while sketch.js shows
+    // them: 3 x 58.5 + gaps, more buttons wrap), Alternate as an icon (sketch.js shows it for Tiled with a geometric law or a focus; its wrapper #net-geo-row stays when Reverse moved to the panel) and ONE readout line of
+    // 20px (ui-net.js writes it: "Feld: 5 x 5 Kacheln"). The hints, the headings and the leftover groups are parked hidden by the CSS.
+    overlays: {
+      netz: {
+        content: 'more-netz',
+        blocks: [
+          [
+            { items: [{ id: 'net-strength-exact', w: 60 }, { id: 'net-focus-exact', w: 60 }] }
+          ],
+          [
+            { items: [{ id: 'net-domain-row', w: 160 }] },
+            { items: [{ id: 'net-macro-row', w: 192 }] },
+            { items: [{ id: 'net-geo-row', w: 48 }] },
+            { h: 20, items: [{ id: 'net-readout', fluid: true }] }
+          ]
+        ]
+      }
+    },
     afterShow: { 'layer-strip': ['layerTable', 'revealActive'], 'ph-trail-chips': ['uiPhoneChips', 'refresh'] }
   };
 
@@ -165,6 +187,9 @@
     Object.keys(cfg.sheets || {}).forEach(function (sid) {   // a sheet no tab lists would never be built, and never validated below
       if (!Object.keys(cfg.tabs).some(function (tab) { return (cfg.tabs[tab].sheets || []).indexOf(sid) >= 0; })) bad.push('sheet ' + sid + ' is defined but no tab lists it');
     });
+    Object.keys(cfg.overlays || {}).forEach(function (oid) {
+      if (!Object.keys(cfg.tabs).some(function (tab) { return (cfg.tabs[tab].overlays || []).indexOf(oid) >= 0; })) bad.push('overlay ' + oid + ' is defined but no tab lists it');
+    });
     Object.keys(cfg.tabs).forEach(function (tab) {
       const t = cfg.tabs[tab], used = new Map(), seenSub = new Set();
       if (!Array.isArray(t.subtabs) || !t.subtabs.length) { bad.push(tab + ': no sub-tabs'); return; }
@@ -184,6 +209,33 @@
         if (!known(id)) bad.push(tab + ': ' + where + ': id ' + id + ' is neither in index.html nor created by a named script');
         if (used.has(id)) bad.push(tab + ': ' + where + ': control ' + id + ' is listed twice (also in ' + used.get(id) + ')');
         else used.set(id, where);
+      };
+      // the rows of a sheet or an overlay (blocks): every id exists and is used once in the tab, a row fits 343px and, unless it wraps, 288px with its narrow widths; a row may have its own height `h`, an item may be `fluid`
+      // (the row's width, alone in its row)
+      const checkBlocks = function (def, label) {
+        if (def.blocks === undefined) return;
+        const sw = S.designWidth - 2 * S.gutter, swNarrow = S.narrowWidth - 2 * S.gutter;
+        if (!Array.isArray(def.blocks) || !def.blocks.length) { bad.push(tab + ': ' + label + ': blocks must be a non-empty list'); return; }
+        def.blocks.forEach(function (rows, bi) {
+          if (!Array.isArray(rows) || !rows.length) { bad.push(tab + ': ' + label + ': block ' + (bi + 1) + ' has no rows'); return; }
+          rows.forEach(function (row, ri) {
+            const where = label + ' block ' + (bi + 1) + ' row ' + (ri + 1);
+            if (!row || !Array.isArray(row.items) || !row.items.length) { bad.push(tab + ': ' + where + ' is empty'); return; }
+            if (row.h !== undefined && !(row.h > 0)) bad.push(tab + ': ' + where + ' has a bad height');
+            row.items.forEach(function (it) {
+              claim(it.id, where);
+              if (it.fluid) { if (it.w !== undefined || row.items.length > 1) bad.push(tab + ': ' + where + ': ' + it.id + ' is fluid but has a width or shares its row'); return; }
+              if (!(it.w > 0)) bad.push(tab + ': ' + where + ': ' + it.id + ' has no width');
+              if (it.wMin !== undefined && !(it.wMin > 0 && it.wMin <= it.w)) bad.push(tab + ': ' + where + ': ' + it.id + ' has a wMin above its w');
+            });
+            if (rowW(row.items) > sw) bad.push(tab + ': ' + where + ' is ' + rowW(row.items) + 'px wide, more than the ' + sw + 'px of a ' + S.designWidth + 'px phone');
+            const fitsNarrow = rowW(row.items, 'min') <= swNarrow;
+            if (row.wrap) {
+              if (fitsNarrow) bad.push(tab + ': ' + where + ' is marked wrap but fits ' + swNarrow + 'px');
+              if (row.items.some(function (it) { return (it.wMin || it.w) > swNarrow; })) bad.push(tab + ': ' + where + ' has an item wider than ' + swNarrow + 'px: wrapping cannot help');
+            } else if (!fitsNarrow) bad.push(tab + ': ' + where + ' is ' + rowW(row.items, 'min') + 'px wide even with its narrow widths, more than the ' + swNarrow + 'px of a ' + S.narrowWidth + 'px phone, and does not wrap');
+          });
+        });
       };
       (t.sheets || []).forEach(function (sid) {
         const sh = (cfg.sheets || {})[sid];
@@ -210,29 +262,14 @@
             ['name', 'more', 'less'].forEach(function (k) { const n = sp[k]; if (!n || typeof n.i18n !== 'string' || !n.i18n || typeof n.text !== 'string' || !n.text.trim()) bad.push(where + ': ' + k + ' needs an i18n key and a German text'); });
           });
         }
-        // the rows of a sheet (blocks): every id exists and is used once in the tab, a row fits 343px and, unless it wraps, 288px with its narrow widths
-        if (sh.blocks !== undefined) {
-          const sw = S.designWidth - 2 * S.gutter, swNarrow = S.narrowWidth - 2 * S.gutter;
-          if (!Array.isArray(sh.blocks) || !sh.blocks.length) bad.push(tab + ': sheet ' + sid + ': blocks must be a non-empty list');
-          else sh.blocks.forEach(function (rows, bi) {
-            if (!Array.isArray(rows) || !rows.length) { bad.push(tab + ': sheet ' + sid + ': block ' + (bi + 1) + ' has no rows'); return; }
-            rows.forEach(function (row, ri) {
-              const where = 'sheet ' + sid + ' block ' + (bi + 1) + ' row ' + (ri + 1);
-              if (!row || !Array.isArray(row.items) || !row.items.length) { bad.push(tab + ': ' + where + ' is empty'); return; }
-              row.items.forEach(function (it) {
-                claim(it.id, where);
-                if (!(it.w > 0)) bad.push(tab + ': ' + where + ': ' + it.id + ' has no width');
-                if (it.wMin !== undefined && !(it.wMin > 0 && it.wMin <= it.w)) bad.push(tab + ': ' + where + ': ' + it.id + ' has a wMin above its w');
-              });
-              if (rowW(row.items) > sw) bad.push(tab + ': ' + where + ' is ' + rowW(row.items) + 'px wide, more than the ' + sw + 'px of a ' + S.designWidth + 'px phone');
-              const fitsNarrow = rowW(row.items, 'min') <= swNarrow;
-              if (row.wrap) {
-                if (fitsNarrow) bad.push(tab + ': ' + where + ' is marked wrap but fits ' + swNarrow + 'px');
-                if (row.items.some(function (it) { return (it.wMin || it.w) > swNarrow; })) bad.push(tab + ': ' + where + ' has an item wider than ' + swNarrow + 'px: wrapping cannot help');
-              } else if (!fitsNarrow) bad.push(tab + ': ' + where + ' is ' + rowW(row.items, 'min') + 'px wide even with its narrow widths, more than the ' + swNarrow + 'px of a ' + S.narrowWidth + 'px phone, and does not wrap');
-            });
-          });
-        }
+        checkBlocks(sh, 'sheet ' + sid);
+      });
+      (t.overlays || []).forEach(function (oid) {
+        const ov = (cfg.overlays || {})[oid];
+        if (!ov) { bad.push(tab + ': overlay ' + oid + ' is not defined'); return; }
+        claim(ov.content, 'overlay ' + oid);
+        if (ov.blocks === undefined) bad.push(tab + ': overlay ' + oid + ': no blocks');
+        checkBlocks(ov, 'overlay ' + oid);
       });
       const tr = cfg.toolRows[t.toolRow];
       if (!tr) bad.push(tab + ': tool row ' + t.toolRow + ' is not defined');
@@ -309,7 +346,7 @@
   // The height of a sheet made of blocks (padding 16 + the blocks 16 apart + 16 padding), by the design widths: rows of --target with 8px gaps, a row whose items are all in `hide` (ids) is gone, a block with no row too;
   // narrow: the 320px phone (narrow widths, a wrap row breaks into lines). Returns null for a sheet without blocks.
   function sheetHeight(cfg, sid, opts) {
-    const sh = (cfg.sheets || {})[sid], S = cfg.sizes, hide = (opts && opts.hide) || [], narrow = !!(opts && opts.narrow);
+    const sh = (cfg.sheets || {})[sid] || (cfg.overlays || {})[sid], S = cfg.sizes, hide = (opts && opts.hide) || [], narrow = !!(opts && opts.narrow);
     if (!sh || !sh.blocks) return null;
     const avail = (narrow ? S.narrowWidth : S.designWidth) - 2 * S.gutter;
     const blockH = sh.blocks.map(function (rows) {
@@ -317,7 +354,7 @@
         const items = row.items.filter(function (it) { return hide.indexOf(it.id) < 0; });
         let lines = 1, x = 0;
         if (narrow && row.wrap) { items.forEach(function (it, i) { const w = it.wMin || it.w; if (i && x + S.rowGap + w > avail) { lines++; x = w; } else x += (i ? S.rowGap : 0) + w; }); }
-        return lines * S.target + (lines - 1) * S.rowGap;
+        return lines * (row.h || S.target) + (lines - 1) * S.rowGap;
       });
       return hs.length ? hs.reduce(function (a, h) { return a + h; }, 0) + (hs.length - 1) * S.rowGap : 0;
     }).filter(function (h) { return h > 0; });

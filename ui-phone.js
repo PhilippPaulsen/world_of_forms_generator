@@ -158,6 +158,7 @@
         if (l.i18n) node.setAttribute('data-i18n', l.i18n);
       });
       buildSheets(t, b);
+      buildOverlays(t, b);
       return b;
     }
 
@@ -187,10 +188,12 @@
     // elements back (restoreAll) and removes the containers; a MutationObserver (where there is one) and every UI tick re-read the `hidden` attributes.
     function buildBlocks(def, host, content, b) {
       host.classList.add('ph-sheet-rows');
+      b.rowHosts.push(host);
       def.blocks.forEach(function (rows) {
         const blk = el('div', 'ph-sheet-block'), rowEls = [];
         rows.forEach(function (row) {
           const r = el('div', row.wrap ? 'ph-sheet-row ph-sheet-row-wrap' : 'ph-sheet-row');
+          if (row.h) r.setAttribute('data-h', String(row.h));
           row.items.forEach(function (it) { take(it.id, r); });
           blk.appendChild(r);
           rowEls.push({ el: r, ids: row.items.map(function (it) { return it.id; }) });
@@ -200,7 +203,7 @@
       });
       if (typeof win.MutationObserver === 'function') {
         b.rowObserver = new win.MutationObserver(function () { syncRows(); });
-        b.sheetBlocks.forEach(function (blk) { blk.rows.forEach(function (r) { r.ids.forEach(function (id) { const n = doc.getElementById(id); if (n) b.rowObserver.observe(n, { attributes: true, attributeFilter: ['hidden'] }); }); }); });
+        b.sheetBlocks.forEach(function (blk) { blk.rows.forEach(function (r) { r.ids.forEach(function (id) { const n = doc.getElementById(id); if (n) b.rowObserver.observe(n, { attributes: true, attributeFilter: ['hidden'], subtree: true }); }); }); });
       }
     }
     // config.sheets.<id>.steppers: an existing input (a plain typed field above 768px) is wrapped into a stepper - the markup of the Form row's steppers, made here from config data - while the layout is on, and
@@ -263,12 +266,27 @@
       });
       b.decorated = [];
     }
+    // an item is hidden when it is, or when it holds element children and every one of them is (a wrapper whose only child sketch.js hides: the Alternate button in #net-geo-row)
+    function itemHidden(n) {
+      if (n.hidden) return true;
+      const kids = n.children ? Array.prototype.slice.call(n.children) : [];
+      return kids.length > 0 && kids.every(function (k) { return k.hidden; });
+    }
+    // config.overlays: an overlay that exists with its own UI.overlay (ui-net.js's #more-netz) gets the same rows as a sheet's content; its open state is its own
+    function buildOverlays(t, b) {
+      (t.overlays || []).forEach(function (oid) {
+        const def = (config.overlays || {})[oid], content = def && doc.getElementById(def.content);
+        if (!content) { if (def && missing.indexOf(def.content) < 0) missing.push(def.content); return; }
+        if (def.blocks) buildBlocks(def, content, content, b);
+        if (def.steppers) decorateSteppers(def, b);
+      });
+    }
     function syncRows() {
       if (!built || !built.sheetBlocks) return;
       built.sheetBlocks.forEach(function (blk) {
         let any = false;
         blk.rows.forEach(function (r) {
-          const shown = r.ids.some(function (id) { const n = doc.getElementById(id); return !!n && !n.hidden; });
+          const shown = r.ids.some(function (id) { const n = doc.getElementById(id); return !!n && !itemHidden(n); });
           if (r.el.hidden === shown) r.el.hidden = !shown;
           if (shown) any = true;
         });
@@ -278,6 +296,7 @@
     function buildSheets(t, b) {
       b.sheets = [];
       b.sheetBlocks = [];
+      b.rowHosts = [];
       b.decorated = [];
       const UI = win.UI;
       if (!(t.sheets && t.sheets.length)) return;
@@ -370,7 +389,7 @@
         if (built) {
           undecorateSteppers(built);
           (built.sheetBlocks || []).forEach(function (blk) { if (blk.el.parentNode) blk.el.parentNode.removeChild(blk.el); });
-          (built.sheets || []).forEach(function (h) { h.el.classList.remove('ph-sheet-rows'); });
+          (built.rowHosts || []).forEach(function (h) { h.classList.remove('ph-sheet-rows'); });
           built.proxied.forEach(function (node) { delete node.focus; });
           if (built.openerSaved) {
             const o = built.openerSaved;

@@ -135,8 +135,10 @@ function buildPage(opts) {
     const focusRow = el('div', { id: 'net-focus-row' }, [el('h3', {}, []), el('div', {}, [el('div', { id: 'net-focus-stepper', class: 'stepper' }, [el('span', { id: 'net-focus-value', class: 'stepper-display' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')]), el('input', { id: 'net-focus-exact', type: 'number' })])]); focusRow.hidden = true;
     const geoRow = el('div', { id: 'net-geo-row', class: 'icon-row' }, [btn('net-reverse-btn', 'layer-btn'), btn('net-alternate-btn', 'layer-btn')]); geoRow.hidden = true;
     const axes = el('div', { id: 'net-axes-row', class: 'icon-row' }, ['both', 'x', 'y'].map(k => { const b = btn(null, 'layer-btn net-axes-btn'); b.setAttribute('data-axes', k); return b; }));
-    const netGroup = el('div', { id: 'net-group', class: 'control-group' }, [axes, focusRow, el('div', { class: 'icon-row' }, [btn('net-lines-btn', 'layer-btn')]), geoRow]);
-    const moreNetz = el('div', { id: 'more-netz', class: 'overlay overlay-wide' }, [el('input', { id: 'net-strength-exact', type: 'number' }), netGroup]); moreNetz.hidden = true; body.appendChild(moreNetz);
+    const domainRow = el('div', { id: 'net-domain-row', class: 'icon-row' }, [['net-domain-single', 'single'], ['net-domain-tiled', 'tiled'], ['net-field-btn', 'field']].map(x => { const b = btn(x[0], 'layer-btn net-domain-btn'); b.setAttribute('data-domain', x[1]); return b; }));
+    const macroRow = el('div', { id: 'net-macro-row' }, [el('label', {}, []), el('div', { id: 'net-macro-buttons', class: 'icon-row' }, [])]); macroRow.hidden = true;
+    const netGroup = el('div', { id: 'net-group', class: 'control-group' }, [axes, focusRow, el('div', { id: 'net-focus-hint' }, []), macroRow, domainRow, el('div', { class: 'icon-row' }, [btn('net-lines-btn', 'layer-btn')]), geoRow]);
+    const moreNetz = el('div', { id: 'more-netz', class: 'overlay overlay-wide' }, [el('input', { id: 'net-strength-exact', type: 'number' }), netGroup, el('p', { id: 'net-readout', class: 'net-readout' }, [])]); moreNetz.hidden = true; body.appendChild(moreNetz);
     const scrim = el('div', { id: 'overlay-scrim', class: 'overlay-scrim' }); scrim.hidden = true; body.appendChild(scrim);
     // what ui-layers.js and ui-timeline.js do on the "..." click (the existing handlers, bound BEFORE the engine starts, as on the page): flip the block's own state
     const layerModel = { open: false };
@@ -155,7 +157,7 @@ function buildPage(opts) {
         Object.assign(win, { window: win, document: doc, console, Event: class { constructor(t, o) { this.type = t; this.bubbles = !!(o && o.bubbles); } }, MutationObserver: class { constructor(cb) { (win.observers = win.observers || []).push(cb); } observe() { } disconnect() { win.disconnected = (win.disconnected || 0) + 1; } }, performance: { now: () => 0 }, setTimeout, clearTimeout });
         vm.runInContext(fs.readFileSync(process.env.UI_JS || path.join(ROOT, 'ui.js'), 'utf8'), win, { filename: 'ui.js' });
     }
-    return { doc, win, mq, calls, scrim, layerModel, layerPanel, tlGroup, faceList, faceGroup, focusRow, geoRow, moreNetz };
+    return { doc, win, mq, calls, scrim, layerModel, layerPanel, tlGroup, faceList, faceGroup, focusRow, geoRow, moreNetz, macroRow, domainRow };
 }
 const ph = (page, cfg) => createPhone(page.doc, page.win, cfg || config);
 // a structure string of the whole tree (tag, id, class, kids; comments by text): equal before apply and after release
@@ -538,7 +540,7 @@ T('netz-apply', () => {
     const rowsOf = pn => pn.children.map(r => r.children.map(c => c.id || c.className.split(' ')[0]).join('+')).join(' / ');
     check('the sub-tab row: Art, Achsen, Ebenen, Zeit; Art is current', p.doc.getElementById('ph-subtabs').children.map(b => b.textContent).join() === 'Art,Achsen,Ebenen,Zeit' && p.doc.getElementById('ph-subtab-art').getAttribute('aria-current') === 'true');
     check('Art: row 1 = the four kind buttons (the radiogroup wrapper, moved whole); row 2 = the strength stepper, the panel\'s own More, Reverse LAST (More keeps its place whether or not sketch.js shows Reverse)', rowsOf(pane('art')) === 'nav-kinds / net-strength-stepper+btn-more-netz+net-reverse-btn' && orig['nav-kinds'].children.length === 4 && orig['nav-kinds'].children.every(b => b.getAttribute('role') === 'radio'), rowsOf(pane('art')));
-    check('Achsen: row 1 = Both / X / Y (the axes row), row 2 = the Fokus stepper alone; the exact field and the title stay in the Netz sheet', rowsOf(pane('achsen')) === 'net-axes-row / net-focus-stepper' && p.doc.getElementById('net-focus-exact').parentNode.parentNode === p.doc.getElementById('net-focus-row') && p.doc.getElementById('net-strength-exact').parentNode === p.moreNetz && p.doc.getElementById('net-geo-row').children.map(c => c.id).join() === 'net-alternate-btn');
+    check('Achsen: row 1 = Both / X / Y (the axes row), row 2 = the Fokus stepper alone; the exact fields are in the Netz sheet (its first row, commit 4a)', rowsOf(pane('achsen')) === 'net-axes-row / net-focus-stepper' && p.doc.getElementById('net-focus-exact').parentNode.className === 'ph-sheet-row' && p.doc.getElementById('net-strength-exact').parentNode === p.doc.getElementById('net-focus-exact').parentNode && p.moreNetz.contains(p.doc.getElementById('net-strength-exact')) && p.doc.getElementById('net-geo-row').children.map(c => c.id).join() === 'net-alternate-btn');
     const sheet = p.doc.getElementById('more-rail');
     check('the rail\'s sheet keeps its first row (Curve ... Neu anfangen) and gets the second: Random, the catalog link, Info, Download, Clear, then the Curve / Free settings groups; More keeps its own name', sheet.children.map(c => c.id || c.className).join() === 'more-row,more-row more-extra,more-settings,more-name' && sheet.children[1].children.map(c => c.id).join() === 'btn-random,btn-gallery,btn-info,btn-save,btn-clear' && !config.toolRows.netz.sheet.openerLabel);
     // follow (mode 'disable'): the Fokus stepper stays SHOWN and is aria-disabled with the reason while sketch.js hides #net-focus-row (Aus, Geo)
@@ -785,6 +787,54 @@ T('steppers-no-ui', () => {
     const p = buildPage({ ui: true }); delete p.win.UI.stepper;
     const eng = ph(p); eng.start(); eng.show('ebenen');
     check('WITHOUT UI.stepper the inputs stay plain and typable (the rows still work): no wrapper, not readonly', SIDS.every(id => { const n = p.doc.getElementById(id); return n.parentNode.id.endsWith('-group') && n.readOnly === false; }));
+});
+
+
+console.log('\n== the Netz sheet in rows (sheets redesign, commit 4a): config.overlays.netz, an overlay with its own UI.overlay ==');
+const NZ = config.overlays.netz, nzIds = [].concat.apply([], [].concat.apply([], NZ.blocks).map(r => r.items.map(i => i.id)));
+const nzRows = p => p.moreNetz.children.filter(c => c.className === 'ph-sheet-block').map(b => b.children.map(r => r.children.map(g => g.id).join('+')).join(' / '));
+T('netz-rows-build', () => {
+    const p = netzPage(), orig = {}; nzIds.forEach(id => { orig[id] = p.doc.getElementById(id); });
+    const eng = ph(p); eng.start();
+    check('the config lists the Netz overlay for the Netz tab only: two blocks, block 1 = the two exact fields, block 2 = the domain row, the macro row, the Alternate wrapper, the readout (ids ' + nzIds.join(', ') + ')', JSON.stringify(config.tabs.netz.overlays) === '["netz"]' && !config.tabs.form.overlays && !config.tabs.farbe.overlays && NZ.content === 'more-netz' && nzIds.join() === 'net-strength-exact,net-focus-exact,net-domain-row,net-macro-row,net-geo-row,net-readout');
+    check('apply puts two blocks into #more-netz itself (the overlay is the host: no new host), rows in the config order, and the overlay gets the class ph-sheet-rows', JSON.stringify(nzRows(p)) === JSON.stringify(['net-strength-exact+net-focus-exact', 'net-domain-row / net-macro-row / net-geo-row / net-readout']) && p.moreNetz.classList.contains('ph-sheet-rows') && !p.doc.getElementById('ph-sheet-netz'), JSON.stringify(nzRows(p)));
+    check('the items are the SAME node objects (moved, not cloned), one element per id, no id twice; the readout row has its height (data-h 20)', nzIds.every(id => p.doc.getElementById(id) === orig[id] && p.doc.all().filter(n => n.id === id).length === 1) && p.doc.getElementById('net-readout').parentNode.getAttribute('data-h') === '20' && (() => { const x = p.doc.all().map(n => n.id).filter(Boolean); return new Set(x).size === x.length; })());
+    check('the overlay\'s own state is not the engine\'s: #more-netz stays hidden and nothing opened it (its UI.overlay belongs to ui-net.js)', p.moreNetz.hidden === true && p.scrim.hidden === true);
+    check('collapse at the start (sketch.js shows neither the macro row nor the Alternate wrapper): their rows are hidden, the exact fields, the domain row and the readout show; both blocks show', (() => { const rows = p.moreNetz.querySelectorAll('.ph-sheet-row'); return rows.map(r => r.hidden ? 'h' : 's').join('') === 'sshhs' && p.moreNetz.querySelectorAll('.ph-sheet-block').every(b => !b.hidden); })());
+    const pf = buildPage({ ui: true }), ef = ph(pf); ef.start();
+    check('in the Form tab #more-netz is untouched (the sheet is not reachable there): no block, no class on it, the exact fields where they were', pf.moreNetz.querySelectorAll('.ph-sheet-block').length === 0 && !pf.moreNetz.classList.contains('ph-sheet-rows') && pf.doc.getElementById('net-strength-exact').parentNode === pf.moreNetz);
+});
+T('netz-rows-collapse', () => {
+    const p = netzPage(), eng = ph(p); eng.start();
+    const rows = () => p.moreNetz.querySelectorAll('.ph-sheet-row').map(r => r.hidden ? 'h' : 's').join('');
+    const alt = p.doc.getElementById('net-alternate-btn'), geo = p.doc.getElementById('net-geo-row');
+    p.macroRow.hidden = false; p.win.uiSync();
+    check('sketch.js shows the macro row (a geometric law with a nested net): its row appears', rows() === 'ssshs', rows());
+    p.macroRow.hidden = true; geo.hidden = false; alt.hidden = true; p.win.uiSync();
+    check('the Alternate wrapper shown with its button hidden (a geometric net in Single: Reverse is in the panel, Alternate is for Tiled) leaves NO empty row: a wrapper whose children are all hidden counts as hidden', rows() === 'sshhs', rows());
+    alt.hidden = false; p.win.uiSync();
+    check('the Alternate button shown (Tiled): its row appears', rows() === 'sshss', rows());
+    geo.hidden = true; p.win.uiSync();
+    check('the wrapper hidden by sketch.js (a trig law without a focus): the row collapses again', rows() === 'sshhs', rows());
+    p.macroRow.hidden = false; geo.hidden = false; p.win.uiSync();
+    check('everything shown: five rows, none hidden; the sheet keeps its blocks', rows() === 'sssss', rows());
+    (p.win.observers || []).forEach(cb => cb());
+});
+T('netz-rows-release', () => {
+    const p = netzPage(), before = dump(p.doc.documentElement), orig = {}; nzIds.forEach(id => { orig[id] = p.doc.getElementById(id); });
+    const nb = {}; nzIds.forEach(id => { nb[id] = [orig[id].parentNode, orig[id].previousSibling, orig[id].nextSibling]; });
+    const eng = ph(p); eng.start(); p.macroRow.hidden = false; p.win.uiSync();
+    eng.release();
+    check('release puts every item back with the same parent and neighbours; no block, no row, no marker, no ph-sheet-rows class is left on the overlay', nzIds.every(id => orig[id].parentNode === nb[id][0] && orig[id].previousSibling === nb[id][1] && orig[id].nextSibling === nb[id][2]) && p.doc.all().filter(n => /ph-sheet-(block|row)/.test(n.className)).length === 0 && !p.moreNetz.classList.contains('ph-sheet-rows') && (function none(n) { return n.childNodes.every(c => (c.nodeType !== 8 || !/^ph:/.test(c.text)) && (c.nodeType !== 1 || none(c))); })(p.doc.documentElement));
+    check('...every item keeps the hidden state sketch.js gave it (the engine never sets hidden on an item)', orig['net-macro-row'].hidden === false && orig['net-geo-row'].hidden === true && orig['net-readout'].hidden === false);
+    p.macroRow.hidden = true;
+    check('...and the tree is the one before apply', dump(p.doc.documentElement).replace(/\[hidden\]/g, '') === before.replace(/\[hidden\]/g, ''));
+    check('release is idempotent', (() => { const m = p.doc.mutations; eng.release(); return p.doc.mutations === m; })());
+    eng.apply('netz');
+    check('apply again after a release rebuilds the same rows and every id is once in the document', JSON.stringify(nzRows(p)) === JSON.stringify(['net-strength-exact+net-focus-exact', 'net-domain-row / net-macro-row / net-geo-row / net-readout']) && nzIds.every(id => p.doc.all().filter(n => n.id === id).length === 1));
+    check('...and a second apply does no work', (() => { const m = p.doc.mutations; eng.apply('netz'); return p.doc.mutations === m; })());
+    p.mq.set(false);
+    check('a width change to 768+ releases it (the overlay keeps its layout and typed fields above 768px)', nzIds.every(id => orig[id].parentNode === nb[id][0]) && p.moreNetz.querySelectorAll('.ph-sheet-block').length === 0);
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
