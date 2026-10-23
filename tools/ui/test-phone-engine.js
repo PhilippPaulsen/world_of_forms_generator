@@ -540,7 +540,7 @@ T('netz-apply', () => {
     const rowsOf = pn => pn.children.map(r => r.children.map(c => c.id || c.className.split(' ')[0]).join('+')).join(' / ');
     check('the sub-tab row: Art, Achsen, Ebenen, Zeit; Art is current', p.doc.getElementById('ph-subtabs').children.map(b => b.textContent).join() === 'Art,Achsen,Ebenen,Zeit' && p.doc.getElementById('ph-subtab-art').getAttribute('aria-current') === 'true');
     check('Art: row 1 = the four kind buttons (the radiogroup wrapper, moved whole); row 2 = the strength stepper, the panel\'s own More, Reverse LAST (More keeps its place whether or not sketch.js shows Reverse)', rowsOf(pane('art')) === 'nav-kinds / net-strength-stepper+btn-more-netz+net-reverse-btn' && orig['nav-kinds'].children.length === 4 && orig['nav-kinds'].children.every(b => b.getAttribute('role') === 'radio'), rowsOf(pane('art')));
-    check('Achsen: row 1 = Both / X / Y (the axes row), row 2 = the Fokus stepper alone; the exact fields are in the Netz sheet (its first row, commit 4a)', rowsOf(pane('achsen')) === 'net-axes-row / net-focus-stepper' && p.doc.getElementById('net-focus-exact').parentNode.className === 'ph-sheet-row' && p.doc.getElementById('net-strength-exact').parentNode === p.doc.getElementById('net-focus-exact').parentNode && p.moreNetz.contains(p.doc.getElementById('net-strength-exact')) && p.doc.getElementById('net-geo-row').children.map(c => c.id).join() === 'net-alternate-btn');
+    check('Achsen: row 1 = Both / X / Y (the axes row), row 2 = the Fokus stepper alone; the exact fields are in the Netz sheet (its first row, wrapped into steppers since 4b)', rowsOf(pane('achsen')) === 'net-axes-row / net-focus-stepper' && p.doc.getElementById('net-focus-exact').parentNode.parentNode.className === 'ph-sheet-row' && p.doc.getElementById('net-strength-exact').parentNode.parentNode === p.doc.getElementById('net-focus-exact').parentNode.parentNode && p.moreNetz.contains(p.doc.getElementById('net-strength-exact')) && p.doc.getElementById('net-geo-row').children.map(c => c.id).join() === 'net-alternate-btn');
     const sheet = p.doc.getElementById('more-rail');
     check('the rail\'s sheet keeps its first row (Curve ... Neu anfangen) and gets the second: Random, the catalog link, Info, Download, Clear, then the Curve / Free settings groups; More keeps its own name', sheet.children.map(c => c.id || c.className).join() === 'more-row,more-row more-extra,more-settings,more-name' && sheet.children[1].children.map(c => c.id).join() === 'btn-random,btn-gallery,btn-info,btn-save,btn-clear' && !config.toolRows.netz.sheet.openerLabel);
     // follow (mode 'disable'): the Fokus stepper stays SHOWN and is aria-disabled with the reason while sketch.js hides #net-focus-row (Aus, Geo)
@@ -792,7 +792,7 @@ T('steppers-no-ui', () => {
 
 console.log('\n== the Netz sheet in rows (sheets redesign, commit 4a): config.overlays.netz, an overlay with its own UI.overlay ==');
 const NZ = config.overlays.netz, nzIds = [].concat.apply([], [].concat.apply([], NZ.blocks).map(r => r.items.map(i => i.id)));
-const nzRows = p => p.moreNetz.children.filter(c => c.className === 'ph-sheet-block').map(b => b.children.map(r => r.children.map(g => g.id).join('+')).join(' / '));
+const nzRows = p => p.moreNetz.children.filter(c => c.className === 'ph-sheet-block').map(b => b.children.map(r => r.children.map(g => g.id || (g.querySelector('input') || {}).id).join('+')).join(' / '));   // a wrapped field is named by its input
 T('netz-rows-build', () => {
     const p = netzPage(), orig = {}; nzIds.forEach(id => { orig[id] = p.doc.getElementById(id); });
     const eng = ph(p); eng.start();
@@ -835,6 +835,96 @@ T('netz-rows-release', () => {
     check('...and a second apply does no work', (() => { const m = p.doc.mutations; eng.apply('netz'); return p.doc.mutations === m; })());
     p.mq.set(false);
     check('a width change to 768+ releases it (the overlay keeps its layout and typed fields above 768px)', nzIds.every(id => orig[id].parentNode === nb[id][0]) && p.moreNetz.querySelectorAll('.ph-sheet-block').length === 0);
+});
+
+
+console.log('\n== the fine steppers of the Netz sheet and the offset display (sheets redesign, commit 4b), with the REAL ui.js and the REAL bindExact / setLocked of ui-net.js ==');
+const NET_SRC = fs.readFileSync(process.env.UI_NET_JS || path.join(ROOT, 'ui-net.js'), 'utf8');
+const exFn = (src, head) => { const i = src.indexOf(head); if (i < 0) return ''; let d = 0; for (let k = src.indexOf('{', i); k < src.length; k++) { if (src[k] === '{') d++; else if (src[k] === '}' && --d === 0) return src.slice(i, k + 1); } return ''; };
+const BIND_SRC = exFn(NET_SRC, 'function bindExact('), LOCK_SRC = exFn(NET_SRC, 'function setLocked(');
+// the page's own ui.js (UI) plus a toast that records; bindExact and setLocked of ui-net.js, extracted and run against the page's fields
+const netFine = () => {
+    const p = netzPage(), toasts = [], eng = ph(p), UI = p.win.UI;
+    const U2 = Object.assign({}, UI, { toast: m => { toasts.push(m); } });
+    const fn = new Function('UI', 'Event', BIND_SRC + '\n' + LOCK_SRC + '\nreturn { bindExact: bindExact, setLocked: setLocked };')(U2, p.win.Event);
+    const mkCarrier = pct => ({ value: String(pct), events: [], dispatchEvent(ev) { this.events.push(ev.type); return true; } });
+    const sF = p.doc.getElementById('net-strength-exact'), fF = p.doc.getElementById('net-focus-exact');
+    const sC = mkCarrier(50), fC = mkCarrier(0), lock = { s: null, f: null };
+    const showS = fn.bindExact(sF, sC, 0, 1, 'MSG-S', () => lock.s), showF = fn.bindExact(fF, fC, -1, 1, 'MSG-F', () => lock.f);
+    showS(); showF();
+    return { p, eng, UI, fn, toasts, sF, fF, sC, fC, lock, showS, showF, before: { sh: hcount(sF), fh: hcount(fF), sd: dump(sF), fd: dump(fF), sp: sF.parentNode, fp: fF.parentNode } };
+};
+T('netz-fine-decorate', () => {
+    const n = netFine(), { p, eng, sF, fF } = n;
+    eng.start();
+    const rowOf = x => x.parentNode.parentNode;
+    check('under the phone layout the two exact fields are the SAME nodes, each inside a .stepper (role group) that is a child of the first row of block 1; one element per id', rowOf(sF).className === 'ph-sheet-row' && rowOf(fF) === rowOf(sF) && sF.parentNode.className === 'stepper' && fF.parentNode.className === 'stepper' && sF.parentNode.getAttribute('role') === 'group' && p.doc.all().filter(x => x.id === 'net-strength-exact' || x.id === 'net-focus-exact').length === 2 && rowOf(sF).children.length === 2);
+    check('the stepper is the Form row\'s markup (icon, the field, up and down chevrons) with the German names Stärke fein / Fokus fein (+ mehr / weniger) and the icons sliders / target', [[sF, 'Stärke fein', 'sliders'], [fF, 'Fokus fein', 'target']].every(a => { const r = a[0].parentNode, k = r.children; return k.length === 3 && k[0].tagName.toLowerCase() === 'svg' && k[1] === a[0] && k[2].children.map(b => b.getAttribute('data-dir')).join() === '1,-1' && r.getAttribute('aria-label') === a[1] && k[2].children[0].getAttribute('aria-label') === a[1] + ' mehr' && k[2].children[1].getAttribute('aria-label') === a[1] + ' weniger' && JSON.stringify(k[0].children.map(x => x.getAttribute('d'))) === JSON.stringify(config.icons[a[2]]); }));
+    check('no keyboard: both fields are readOnly with inputmode="none" and carry data-stepper (the mark ui-net.js\'s setLocked looks for)', [sF, fF].every(x => x.readOnly === true && x.getAttribute('inputmode') === 'none' && x.hasAttribute('data-stepper')));
+    eng.release();
+    check('release UNDOES it: the fields are back in their sections (same parents, same tree, not readonly, no inputmode, no data-stepper), no wrapper is left, and they carry exactly the listeners they had (the stepper bound none on them)', sF.parentNode === n.before.sp && fF.parentNode === n.before.fp && dump(sF) === n.before.sd && dump(fF) === n.before.fd && !sF.readOnly && !fF.readOnly && !sF.hasAttribute('data-stepper') && hcount(sF) === n.before.sh && hcount(fF) === n.before.fh && p.doc.all().filter(x => x.className === 'stepper' && x.querySelector('#net-strength-exact')).length === 0);
+});
+T('netz-fine-steps', () => {
+    const n = netFine(), { p, eng, sF, fF, sC, fC, toasts, UI } = n; eng.start();
+    const btn = (f, dir) => f.parentNode.querySelectorAll('.stepper-btn').find(b => b.getAttribute('data-dir') === String(dir));
+    const log = []; ['input', 'change'].forEach(t => sF.addEventListener(t, e => log.push(t + ':' + (e.bubbles ? 'b' : 'n'))));
+    click0(btn(sF, 1));
+    check('strength 0.50 -> 0.51 with ONE tap: the stepper writes "0.51" (two decimals), dispatches input then change (both bubbling) on the field, and bindExact turns that into the carrier (51 percent): the SAME path as a typed value', sF.value === '0.51' && sC.value === '51' && log.join() === 'input:b,change:b' && sC.events.join() === 'input,change' && toasts.length === 0, sF.value + ' ' + sC.value + ' ' + log.join());
+    for (let i = 0; i < 4; i++) click0(btn(sF, 1));
+    check('0.55 after five taps up; seven taps down give 0.48, thirteen more 0.43 (0.01 each, no float drift)', sF.value === '0.55' && sC.value === '55');
+    for (let i = 0; i < 12; i++) click0(btn(sF, -1));
+    check('...and 0.43 after twelve taps down', sF.value === '0.43' && sC.value === '43', sF.value);
+    sC.value = '99'; n.showS(); click0(btn(sF, 1));
+    check('strength reaches 1.00 (carrier 100), and the next tap up does nothing: the chevron is disabled with the reason "Größter Wert erreicht." (the stepper\'s own message)', sF.value === '1.00' && sC.value === '100' && btn(sF, 1).getAttribute('aria-disabled') === 'true' && btn(sF, 1).dataset.reason === 'Größter Wert erreicht.', btn(sF, 1).dataset.reason);
+    sF.value = '7'; sF.dispatch('change', { type: 'change' });
+    check('bindExact is the same as before: a value above the range is clamped to 1.00 with its notice (MSG-S)', sF.value === '1.00' && sC.value === '100' && toasts.indexOf('MSG-S') >= 0, toasts.join());
+    sF.value = 'abc'; sF.dispatch('change', { type: 'change' });
+    check('...an invalid text is restored to the current value', sF.value === '1.00');
+    // focus: -1 .. 1
+    fC.value = '-99'; n.showF(); click0(btn(fF, -1));
+    check('focus runs from -1.00 to 1.00 in steps of 0.01 (-0.99 -> -1.00), the carrier -100, and stops there', fF.value === '-1.00' && fC.value === '-100' && btn(fF, -1).getAttribute('aria-disabled') === 'true');
+    click0(btn(fF, 1)); click0(btn(fF, 1));
+    check('...focus -0.98 after two taps up (the carrier -98): the net transform follows through the carrier', fF.value === '-0.98' && fC.value === '-98' && fC.events.length >= 4);
+    eng.release();
+});
+T('netz-fine-lock', () => {
+    const n = netFine(), { p, eng, sF, fF, sC, fC, fn, lock, UI } = n; eng.start();
+    const up = f => f.parentNode.querySelectorAll('.stepper-btn')[0];
+    const tick = () => { fn.setLocked(sF, lock.s); fn.setLocked(fF, lock.f); p.win.uiSync(); };
+    tick();
+    check('ticks while decorated and UNLOCKED leave the fields readonly (setLocked sets readOnly = false on a plain field; the data-stepper mark makes it leave it alone)', sF.readOnly === true && fF.readOnly === true && sF.getAttribute('aria-disabled') === null);
+    lock.f = 'Fokus gilt für Sin und Tan'; tick();
+    check('the focus field LOCKED (Aus or Geo): its field keeps readonly, carries aria-disabled with the reason, and the STEPPER mirrors it: root aria-disabled with the same reason (UI.stepper then does nothing; its chevrons follow through its own MutationObserver, which the pane proves)', fF.readOnly === true && fF.getAttribute('aria-disabled') === 'true' && fF.dataset.reason === lock.f && fF.parentNode.getAttribute('aria-disabled') === 'true' && fF.parentNode.dataset.reason === lock.f, String(fF.parentNode.dataset.reason));
+    const v0 = fF.value; click0(up(fF));
+    check('a tap on a chevron of the locked stepper changes nothing: no value, no carrier event', fF.value === v0 && fC.events.length === 0, fF.value);
+    check('...while the strength stepper (not locked) still works', (() => { const s0 = sF.value; click0(up(sF)); return sF.value !== s0; })());
+    lock.f = null; tick();
+    check('unlocked again: aria-disabled and the reason are gone from the field and the stepper root, readonly stays, the chevron steps', fF.getAttribute('aria-disabled') === null && fF.parentNode.getAttribute('aria-disabled') === null && fF.readOnly === true && (() => { const f0 = fF.value; click0(up(fF)); return fF.value !== f0; })());
+    for (let i = 0; i < 5; i++) { lock.s = i % 2 ? null : 'Die Stärke gilt für Sin, Tan und Geo.'; tick(); }
+    check('five more ticks locking and unlocking the strength: the field is readonly after every one (the tick never undoes it)', sF.readOnly === true);
+    lock.s = null; tick(); let ticks = 0; p.win.UI.onSync(() => { ticks++; }); eng.release();
+    check('release asks for one UI tick at once (window.uiSync), so ui-net.js re-reads the lock of the plain fields without waiting for the next redraw', ticks >= 1, String(ticks));
+    lock.s = 'reason'; lock.f = null; fn.setLocked(sF, lock.s); fn.setLocked(fF, lock.f);
+    check('after release the plain fields obey setLocked again: locked = readOnly, unlocked = not (the engine called a tick, ui-net.js owns them)', sF.readOnly === true && fF.readOnly === false && !sF.hasAttribute('data-stepper'));
+});
+T('netz-display', () => {
+    const p = buildPage({ ui: true }), eng = ph(p); eng.start(); eng.show('ebenen');
+    const x = p.doc.getElementById('layer-offset-x-input'), y = p.doc.getElementById('layer-offset-y-input'), r = p.doc.getElementById('layer-rotation-input');
+    const seen = []; x.addEventListener('input', () => seen.push(x.value)); x.addEventListener('change', () => seen.push(x.value));
+    x.value = '103.92304845413264';
+    check('the layer steppers DISPLAY at most one decimal: the shown text of 103.92304845413264 is 103.9, and what everything else reads (the sketch\'s .value(), the events) is the full value, unchanged', x.__shown === '103.9' && x.value === '103.92304845413264', x.__shown + ' / ' + x.value);
+    x.value = '60'; y.value = '0.04'; r.value = '345';
+    check('whole numbers and short values show as they are (60, 0, 345): no padding, no trailing zero; a negative value rounds toward the nearest tenth (-0.04 -> -0)', x.__shown === '60' && y.__shown === '0' && r.__shown === '345' && (() => { y.value = '-12.34'; return y.__shown === '-12.3'; })());
+    x.value = '103.92304845413264'; seen.length = 0;
+    const upX = x.parentNode.querySelectorAll('.stepper-btn')[0]; click0(upX);
+    check('a tap from the displayed 103.9: the stepper adds 10 to the STORED value and rounds to a whole number (step 10, round 0): 113.923... -> 114; the hidden decimals are dropped by the first tap; the events carry 114 (not 113.9)', x.value === '114' && x.__shown === '114' && seen.join() === '114,114', x.value + ' ' + seen.join());
+    x.value = '103.92304845413264'; click0(x.parentNode.querySelectorAll('.stepper-btn')[1]);
+    check('...and a tap down: 93.923... -> 94', x.value === '94');
+    x.value = '103.92304845413264'; const before = x.value; eng.release();
+    check('release deletes the display layer: the input has its plain value again (the full text 103.92304845413264 is what it holds), no own accessor, no shown text left', x.value === before && Object.getOwnPropertyDescriptor(x, 'value') && Object.getOwnPropertyDescriptor(x, 'value').value === before && x.__shown === undefined, JSON.stringify(Object.getOwnPropertyDescriptor(x, 'value')));
+    eng.apply('form'); eng.show('ebenen');
+    check('apply again puts the display layer back (once: no accessor chain)', x.__shown === '103.9' && x.value === before);
+    eng.release();
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

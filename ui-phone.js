@@ -182,6 +182,7 @@
         else if (!want && h.overlay.isOpen) h.overlay.close(!!(doc.activeElement && h.el.contains(doc.activeElement)));
       });
       syncRows();
+      syncLocks();
     }
     // A sheet with `blocks` (config.sheets.<id>.blocks): the existing elements go into row containers inside blocks inside the sheet's content, in the order the config says. They move whole (nothing is cloned or
     // rewritten) and sketch.js keeps showing and hiding them; a row whose elements are ALL hidden is hidden itself, a block whose rows are all hidden too, so no empty row and no gap is left. release() puts the
@@ -235,6 +236,24 @@
       c.root.setAttribute('aria-label', nameOf(sp.name)); if (sp.name.i18n) c.root.setAttribute('data-i18n', sp.name.i18n);
       c.btns.forEach(function (x) { const t = nameOf(x[1]); x[0].setAttribute('aria-label', t); x[0].setAttribute('title', t); if (x[1].i18n) x[0].setAttribute('data-i18n', x[1].i18n); });
     }
+    // The display layer (commit 4b): the input DISPLAYS its value with at most `decimals` decimals (103.9) while the value everything else reads - the sketch's p5 .value(), the events, the stepper - stays the full one.
+    // The instance gets its own `value` accessor: the setter keeps the full text and puts the rounded text into the element's native value; the getter returns the full text. release() deletes the accessor and puts
+    // the full text back into the native value. Without the DOM's own accessor (a fake DOM) the shown text is kept in input.__shown.
+    function displayOf(raw, decimals) {
+      const t = String(raw), n = parseFloat(t);
+      if (t.trim() === '' || !isFinite(n)) return t;
+      const f = Math.pow(10, decimals);
+      return String(Math.round(n * f) / f);
+    }
+    function showRounded(input, decimals) {
+      const proto = win.HTMLInputElement && win.HTMLInputElement.prototype, desc = proto && Object.getOwnPropertyDescriptor(proto, 'value');
+      const nativeGet = desc ? function () { return desc.get.call(input); } : function () { return input.value; };
+      const nativeSet = desc ? function (v) { desc.set.call(input, v); } : function (v) { input.__shown = v; };
+      let raw = String(nativeGet() === undefined ? '' : nativeGet());
+      Object.defineProperty(input, 'value', { configurable: true, enumerable: true, get: function () { return raw; }, set: function (v) { raw = v === null || v === undefined ? '' : String(v); nativeSet(displayOf(raw, decimals)); } });
+      nativeSet(displayOf(raw, decimals));
+      return function undo() { const keep = raw; delete input.value; if (desc) nativeSet(keep); else { input.value = keep; delete input.__shown; } };
+    }
     function decorateSteppers(def, b) {
       const UI = win.UI;
       if (!def.steppers || !UI || typeof UI.stepper !== 'function') return;
@@ -245,26 +264,52 @@
         if (!c || c.input !== input) { c = buildStepper(sp, input); stepperCache[iid] = c; }
         nameStepper(c, sp);
         const saved = { readOnly: input.readOnly, inputmode: input.getAttribute('inputmode') };
+        // the wrapper takes the input's place (the input may sit in a group or be a row item itself), then the input moves into it
+        const home = input.parentNode, ref = input.nextSibling;
         take(iid, c.root, c.chevrons);
-        const marker = moved.get(iid).marker;
-        marker.parentNode.insertBefore(c.root, marker);
-        if (sp.noTyping) { input.readOnly = true; input.setAttribute('inputmode', 'none'); }
+        home.insertBefore(c.root, ref);
+        if (sp.noTyping) { input.readOnly = true; input.setAttribute('inputmode', 'none'); input.setAttribute('data-stepper', ''); }
+        const d = { id: iid, input: input, root: c.root, saved: saved, undoDisplay: null };
+        if (sp.display && sp.display.decimals >= 0) d.undoDisplay = showRounded(input, sp.display.decimals);
         if (!c.made) {
           const o = { input: input, keyEl: c.root, step: sp.step, noTyping: !!sp.noTyping, readonly: false };
-          ['min', 'max', 'wrap', 'round', 'format'].forEach(function (k) { if (sp[k] !== undefined) o[k] = sp[k]; });
+          ['min', 'max', 'wrap', 'round'].forEach(function (k) { if (sp[k] !== undefined) o[k] = sp[k]; });
+          if (sp.fixed >= 0) o.format = function (v) { return Number(v).toFixed(sp.fixed); };
           UI.stepper(c.root, o);
           c.made = true;
         }
-        b.decorated.push({ id: iid, input: input, root: c.root, saved: saved });
+        b.decorated.push(d);
+      });
+      if (typeof win.MutationObserver === 'function' && b.decorated.length) {
+        b.lockObserver = new win.MutationObserver(function () { syncLocks(); });
+        b.decorated.forEach(function (d) { b.lockObserver.observe(d.input, { attributes: true, attributeFilter: ['aria-disabled', 'data-reason'] }); });
+      }
+      syncLocks();
+    }
+    // A decorated input that its owner locks (UI.setDisabled on the INPUT: aria-disabled and the reason, ui-net.js's exact fields) disables its stepper with the same reason: UI.stepper does nothing while its root is
+    // disabled, and a tap on a chevron shows the reason. ui-net.js's setLocked() leaves readOnly alone while the input carries data-stepper (this engine owns it then).
+    function syncLocks() {
+      const UI = win.UI;
+      if (!built || !built.decorated || !UI || typeof UI.setDisabled !== 'function') return;
+      built.decorated.forEach(function (d) {
+        const locked = d.input.getAttribute('aria-disabled') === 'true';
+        UI.setDisabled(d.root, locked ? (d.input.dataset.reason || d.input.getAttribute('title') || '-') : null);
       });
     }
     function undecorateSteppers(b) {
+      if (b.lockObserver) b.lockObserver.disconnect();
       (b.decorated || []).forEach(function (d) {
+        if (d.undoDisplay) d.undoDisplay();
         if (d.root.parentNode) d.root.parentNode.removeChild(d.root);
+        if (win.UI && typeof win.UI.setDisabled === 'function') win.UI.setDisabled(d.root, null);
+        d.input.removeAttribute('data-stepper');
         d.input.readOnly = d.saved.readOnly;
         if (d.saved.inputmode === null) d.input.removeAttribute('inputmode'); else d.input.setAttribute('inputmode', d.saved.inputmode);
       });
+      const had = (b.decorated || []).length > 0;
       b.decorated = [];
+      // the owner of a lock (ui-net.js) re-reads its state on its next tick; ask for that tick now so the plain fields are right at once
+      if (had && typeof win.uiSync === 'function') win.uiSync();
     }
     // an item is hidden when it is, or when it holds element children and every one of them is (a wrapper whose only child sketch.js hides: the Alternate button in #net-geo-row)
     function itemHidden(n) {
