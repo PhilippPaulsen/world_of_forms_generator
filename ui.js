@@ -12,6 +12,8 @@
  *                                   newest remaining notice's close button; an expiry never moves the focus, and a notice never takes it when it appears.
  *   UI.notifyClear(key)             the condition ended: closes that notice if it is showing and forgets the key (it may show again)
  *   UI.toast(text, ms)              a thin wrapper: UI.notify(text, { ttl: ms }); every older call site keeps working
+ *   UI.t(key, params)               a string of the bilingual dictionary (ui-i18n.js) in the current language; UI.lang is 'de' or 'en' (?lang=en in the URL, nothing saved), UI.setLang(l) switches,
+ *                                   UI.applyI18n(root) writes the dictionary strings into the elements that carry data-i18n / data-i18n-label / data-i18n-title
  *   UI.setDisabled(el, reason)      "disabled, not hidden": aria-disabled (the control stays focusable and
  *                                   tappable); a tap, Enter/Space or a long press shows the reason as a toast,
  *                                   and the reason is the title (desktop hover). reason = null enables it again.
@@ -64,6 +66,10 @@
 (function () {
   if (typeof document === 'undefined') return;   // the model above is all a page without a document needs
   const LONG_PRESS_MS = 500;
+  // the bilingual dictionary (ui-i18n.js, loaded before this file): a string of the dictionary in the current language, else the German text this file has always carried (a page without ui-i18n.js
+  // behaves as before)
+  const I18N = window.uiI18n || null;
+  function tr(key, fallback) { return I18N && I18N.has(key) ? I18N.t(key) : fallback; }
 
   // ---- notifications ---------------------------------------------------------
   // The container #ui-notices is ALWAYS rendered (a live region that is toggled with `hidden` is announced unreliably): notices are inserted into it and removed from
@@ -119,7 +125,7 @@
       b.className = 'icon-btn notice-close';
       b.setAttribute('data-i18n', 'notice.close');
       b.innerHTML = NOTICE_X;
-      name(b, NOTICE_TEXT['notice.close']);
+      name(b, tr('notice.close', NOTICE_TEXT['notice.close']));
       b.addEventListener('click', function () { removeNotice(n, true); });
       n.el.appendChild(b);
       n.closeBtn = b;
@@ -638,4 +644,9 @@
   function onSync(fn) { syncFns.push(fn); }
 
   window.UI = { normalizeNumber: normalizeNumber, onSync: onSync, notify: notify, notifyClear: notifyClear, toast: toast, hideToast: hideToast, setDisabled: setDisabled, name: name, guard: guard, stepper: stepper, pressed: pressed, isDisabled: isDisabled, dialog: dialog, radiogroup: radiogroup, overlay: overlay, checkedFromActive: checkedFromActive, showReason: showReason };
+  // the dictionary on UI: UI.t(key, params), UI.lang (the current language: 'de' or 'en'), UI.setLang(l), UI.applyI18n(root); without ui-i18n.js t returns the key
+  window.UI.t = I18N ? I18N.t : function (key) { return String(key); };
+  window.UI.setLang = I18N ? I18N.setLang : function () { return 'de'; };
+  window.UI.applyI18n = I18N ? I18N.applyI18n : function () { return 0; };
+  Object.defineProperty(window.UI, 'lang', { enumerable: true, get: function () { return I18N ? I18N.lang : 'de'; } });
 })();

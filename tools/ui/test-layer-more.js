@@ -138,7 +138,7 @@ console.log('\n== 1b-1: the layer controls reuse the Form row\'s patterns ==');
     const fg = group('layer-fold-group');
     const foldBtns = [...fg.matchAll(/<button class="layer-fold-btn layer-btn icon-btn"[^>]*>[^<]*<\/button>/g)].map(m => m[0]);
     check('fold: two .layer-fold-btn buttons (now also .icon-btn, the numeral buttons of the Farbe row) with data-fold 3 / 6, aria-pressed, an aria-label that contains the visible numeral, title and data-i18n',
-        foldBtns.length === 2 && ['3', '6'].every((n, i) => foldBtns[i].includes('data-fold="' + n + '"') && new RegExp('aria-label="[^"]*' + n + '[^"]*"').test(foldBtns[i]) && new RegExp('>\\s*' + n + '\\s*<').test(foldBtns[i]) && /aria-pressed="false"/.test(foldBtns[i]) && /data-i18n="[^"]+"/.test(foldBtns[i])));
+        foldBtns.length === 2 && ['3', '6'].every((n, i) => foldBtns[i].includes('data-fold="' + n + '"') && new RegExp('aria-label="[^"]*' + n + '[^"]*"').test(foldBtns[i]) && new RegExp('>\\s*' + n + '\\s*<').test(foldBtns[i]) && /aria-pressed="false"/.test(foldBtns[i]) && /data-i18n(-label)?="[^"]+"/.test(foldBtns[i])));   // commit 1 of the sheets redesign: a button with its own text AND a different name carries data-i18n-label
     const iconOnly = id => { const m = new RegExp('<button id="' + id + '"[^>]*>[\\s\\S]*?</button>').exec(panel); return m ? m[0] : ''; };
     for (const id of ['btn-align-to-base', 'btn-mesh-preset-x', 'btn-mesh-preset-y']) {
         const b = iconOnly(id);

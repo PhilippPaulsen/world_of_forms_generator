@@ -131,7 +131,8 @@
           // the opener's name while this tool row is on (its own describes Form's sheet): put back by release()
           if (opener && tr.sheet.openerLabel) {
             b.openerSaved = { node: opener, label: opener.getAttribute('aria-label'), title: opener.getAttribute('title'), i18n: opener.getAttribute('data-i18n') };
-            opener.setAttribute('aria-label', tr.sheet.openerLabel.text); opener.setAttribute('title', tr.sheet.openerLabel.text);
+            const openerText = say(tr.sheet.openerLabel.i18n, tr.sheet.openerLabel.text);
+            opener.setAttribute('aria-label', openerText); opener.setAttribute('title', openerText);
             if (tr.sheet.openerLabel.i18n) opener.setAttribute('data-i18n', tr.sheet.openerLabel.i18n);
           }
           if (opener) tr.sheet.items.forEach(function (id) {
@@ -151,7 +152,8 @@
         const node = doc.getElementById(id), l = tr.labels[id];
         if (!node) { if (missing.indexOf(id) < 0) missing.push(id); return; }
         b.labelsSaved.push({ node: node, label: node.getAttribute('aria-label'), title: node.getAttribute('title'), i18n: node.getAttribute('data-i18n') });
-        node.setAttribute('aria-label', l.text); node.setAttribute('title', l.text);
+        const labelText = say(l.i18n, l.text);
+        node.setAttribute('aria-label', labelText); node.setAttribute('title', labelText);
         if (l.i18n) node.setAttribute('data-i18n', l.i18n);
       });
       buildSheets(t, b);
@@ -205,6 +207,8 @@
     //   'hide'    (a string entry, or mode 'hide'): the follower is hidden when the block is.
     //   'disable' ({ of, mode: 'disable', reason }): the follower stays shown and is aria-disabled with the reason (UI.setDisabled) while the block is hidden. UI.stepper does nothing while its root is disabled.
     const disabledFollowers = new Map();   // id -> the title attribute it had before the engine disabled it (null = none)
+    // a string of the bilingual dictionary (ui-i18n.js) in the current language, else the German text the config carries
+    function say(key, fallback) { const i = win.uiI18n; return key && i && i.has(key) ? i.t(key) : fallback; }
     function followSpec(v) { return typeof v === 'string' ? { of: v, mode: 'hide' } : v; }
     function syncFollows() {
       if (!applied || !config.follow) return;
@@ -216,7 +220,7 @@
           if (!UI || typeof UI.setDisabled !== 'function') return;
           if (src.hidden) {
             if (!disabledFollowers.has(id)) disabledFollowers.set(id, node.getAttribute('title'));
-            UI.setDisabled(node, f.reason);
+            UI.setDisabled(node, say(f.i18n, f.reason));
           } else if (disabledFollowers.has(id)) unfollowDisable(id, node);
         } else if (node.hidden !== src.hidden) node.hidden = src.hidden;
       });
