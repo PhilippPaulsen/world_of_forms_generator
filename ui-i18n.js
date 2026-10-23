@@ -134,6 +134,12 @@
     'layer.meshX': { de: 'Eine Masche in X', en: 'One mesh width in X' },
     'layer.meshY': { de: 'Eine Masche in Y', en: 'One mesh width in Y' },
     'layer.rotation': { de: 'Drehung', en: 'Rotation' },
+    'layer.shiftX.more': { de: 'Versatz X mehr', en: 'Shift X more' },
+    'layer.shiftX.less': { de: 'Versatz X weniger', en: 'Shift X less' },
+    'layer.shiftY.more': { de: 'Versatz Y mehr', en: 'Shift Y more' },
+    'layer.shiftY.less': { de: 'Versatz Y weniger', en: 'Shift Y less' },
+    'layer.rotation.more': { de: 'Drehung mehr', en: 'Rotation more' },
+    'layer.rotation.less': { de: 'Drehung weniger', en: 'Rotation less' },
 
     // ---- the timeline sheet ----
     'timeline.recaptureNet': { de: 'Netz der gewählten Ebene neu aufnehmen', en: 'Recapture the net of the selected layer' },

@@ -8,7 +8,8 @@
  *   apply(tab)     idempotent: nothing to do when that tab is already applied; another tab releases first. Does nothing (and releases) at >= 768px or for a tab that is not covered.
  *   release()      idempotent: moves every element back to its marker and removes what apply() made.
  *   show(subtab)   the sub-tab's pane goes into the slot, the other panes into the parking container (hidden: display none - out of the Tab order and the accessibility tree, and no hit testing).
- *   sheets         config.sheets: blocks that become bottom sheets (UI.overlay) while the layout is on; see buildSheets(). A sheet may have `blocks` (rows of existing elements, see buildBlocks()).
+ *   sheets         config.sheets: blocks that become bottom sheets (UI.overlay) while the layout is on; see buildSheets(). A sheet may have `blocks` (rows of existing elements, see buildBlocks()) and `steppers`
+ *                  (existing inputs wrapped into UI.stepper while the layout is on, see decorateSteppers()).
  *   start()        listens: 'tabchange' on document (nav.js), the media query, resize / orientationchange; applies for the current tab.
  *
  * Sub-tab buttons follow the header tabs' model (nav.js): all of them are in the Tab order, Enter / Space activates one, aria-current marks the active one. The choice is remembered per tab.
@@ -202,6 +203,66 @@
         b.sheetBlocks.forEach(function (blk) { blk.rows.forEach(function (r) { r.ids.forEach(function (id) { const n = doc.getElementById(id); if (n) b.rowObserver.observe(n, { attributes: true, attributeFilter: ['hidden'] }); }); }); });
       }
     }
+    // config.sheets.<id>.steppers: an existing input (a plain typed field above 768px) is wrapped into a stepper - the markup of the Form row's steppers, made here from config data - while the layout is on, and
+    // is the plain input again after release(). The input itself is MOVED (take()), never cloned: its id, its handlers and the sketch's own listeners stay. The stepper is UI.stepper with the options of the
+    // config (step, min, max, wrap, round); the typing is switched off here (readOnly and inputmode none: no soft keyboard) and put back at release(). UI.stepper binds its listeners once, on the made wrapper (its
+    // key handler on the wrapper too, not on the input) and on the document (visibilitychange: stops a held chevron), and cannot unbind them: the wrapper and its stepper are made ONCE per input (stepperCache)
+    // and reused, so nothing grows with every apply, and no listener is ever left on the plain input.
+    const stepperCache = {};          // input id -> { input, root, chevrons, names }
+    function svgIcon(paths) {
+      const ns = 'http://www.w3.org/2000/svg', mk = typeof doc.createElementNS === 'function' ? function (t) { return doc.createElementNS(ns, t); } : function (t) { return doc.createElement(t); };
+      const svg = mk('svg');
+      [['class', 'ico stepper-icon'], ['width', '18'], ['height', '18'], ['viewBox', '0 0 24 24'], ['aria-hidden', 'true']].forEach(function (a) { svg.setAttribute(a[0], a[1]); });
+      paths.forEach(function (d) { const p = mk('path'); p.setAttribute('d', d); svg.appendChild(p); });
+      return svg;
+    }
+    function nameOf(n) { return say(n.i18n, n.text); }
+    function buildStepper(sp, input) {
+      const icons = config.icons || {}, root = el('div', 'stepper', { role: 'group' }), chevrons = el('div', 'stepper-chevrons'), btns = [];
+      root.appendChild(svgIcon(icons[sp.icon] || []));
+      root.appendChild(chevrons);
+      [['1', 'chevron-up', 'more'], ['-1', 'chevron-down', 'less']].forEach(function (d) {
+        const b = el('button', 'stepper-btn', { type: 'button', 'data-dir': d[0] }), ic = svgIcon(icons[d[1]] || []);
+        ic.setAttribute('class', 'ico');
+        b.appendChild(ic); chevrons.appendChild(b); btns.push([b, sp[d[2]]]);
+      });
+      return { input: input, root: root, chevrons: chevrons, btns: btns, made: false };
+    }
+    function nameStepper(c, sp) {
+      c.root.setAttribute('aria-label', nameOf(sp.name)); if (sp.name.i18n) c.root.setAttribute('data-i18n', sp.name.i18n);
+      c.btns.forEach(function (x) { const t = nameOf(x[1]); x[0].setAttribute('aria-label', t); x[0].setAttribute('title', t); if (x[1].i18n) x[0].setAttribute('data-i18n', x[1].i18n); });
+    }
+    function decorateSteppers(def, b) {
+      const UI = win.UI;
+      if (!def.steppers || !UI || typeof UI.stepper !== 'function') return;
+      Object.keys(def.steppers).forEach(function (iid) {
+        const sp = def.steppers[iid], input = doc.getElementById(iid);
+        if (!input || !input.parentNode) { if (missing.indexOf(iid) < 0) missing.push(iid); return; }
+        let c = stepperCache[iid];
+        if (!c || c.input !== input) { c = buildStepper(sp, input); stepperCache[iid] = c; }
+        nameStepper(c, sp);
+        const saved = { readOnly: input.readOnly, inputmode: input.getAttribute('inputmode') };
+        take(iid, c.root, c.chevrons);
+        const marker = moved.get(iid).marker;
+        marker.parentNode.insertBefore(c.root, marker);
+        if (sp.noTyping) { input.readOnly = true; input.setAttribute('inputmode', 'none'); }
+        if (!c.made) {
+          const o = { input: input, keyEl: c.root, step: sp.step, noTyping: !!sp.noTyping, readonly: false };
+          ['min', 'max', 'wrap', 'round', 'format'].forEach(function (k) { if (sp[k] !== undefined) o[k] = sp[k]; });
+          UI.stepper(c.root, o);
+          c.made = true;
+        }
+        b.decorated.push({ id: iid, input: input, root: c.root, saved: saved });
+      });
+    }
+    function undecorateSteppers(b) {
+      (b.decorated || []).forEach(function (d) {
+        if (d.root.parentNode) d.root.parentNode.removeChild(d.root);
+        d.input.readOnly = d.saved.readOnly;
+        if (d.saved.inputmode === null) d.input.removeAttribute('inputmode'); else d.input.setAttribute('inputmode', d.saved.inputmode);
+      });
+      b.decorated = [];
+    }
     function syncRows() {
       if (!built || !built.sheetBlocks) return;
       built.sheetBlocks.forEach(function (blk) {
@@ -217,6 +278,7 @@
     function buildSheets(t, b) {
       b.sheets = [];
       b.sheetBlocks = [];
+      b.decorated = [];
       const UI = win.UI;
       if (!(t.sheets && t.sheets.length)) return;
       // without UI.overlay a block stays where it is (inline) - a sheet nobody can open would hide it
@@ -235,6 +297,7 @@
         b.stack.appendChild(h.el);
         const content = take(def.content, h.el);
         if (def.blocks && content) buildBlocks(def, h.el, content, b);
+        if (def.steppers && content) decorateSteppers(def, b);
         b.sheets.push(h);
       });
     }
@@ -305,6 +368,7 @@
         if (built && built.rowObserver) built.rowObserver.disconnect();
         restoreAll();
         if (built) {
+          undecorateSteppers(built);
           (built.sheetBlocks || []).forEach(function (blk) { if (blk.el.parentNode) blk.el.parentNode.removeChild(blk.el); });
           (built.sheets || []).forEach(function (h) { h.el.classList.remove('ph-sheet-rows'); });
           built.proxied.forEach(function (node) { delete node.focus; });
