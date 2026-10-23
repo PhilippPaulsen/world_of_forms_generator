@@ -38,14 +38,11 @@
     'layer.fold.6': { de: '6-zählig', en: '6-fold' },
     'layer.fold.group': { de: 'Ebene: Zähligkeit', en: 'Layer: fold' },
     'layer.mesh.group': { de: 'Ebene: Versatz um eine Masche', en: 'Layer: shift by one mesh width' },
-    'layer.mesh.x': { de: 'Eine Masche in X', en: 'Shift X by one mesh-width' },
-    'layer.mesh.y': { de: 'Eine Masche in Y', en: 'Shift Y by one mesh-width' },
     'layer.node.group': { de: 'Ebene: Knoten', en: 'Layer: nodes' },
     'layer.node.input': { de: 'Ebene: Knoten', en: 'Layer: nodes' },
     'layer.node.less': { de: 'Ebene: Knoten weniger', en: 'Layer: fewer nodes' },
     'layer.node.more': { de: 'Ebene: Knoten mehr', en: 'Layer: more nodes' },
     'layer.shape.group': { de: 'Ebene: Form', en: 'Layer: shape' },
-    'layer.shape.hex': { de: 'Sechseck', en: 'Hexagon' },
     'layer.shape.square': { de: 'Quadrat', en: 'Square' },
     'layer.shape.triangle': { de: 'Dreieck', en: 'Triangle' },
     'layer.size.group': { de: 'Ebene: Größe', en: 'Layer: size' },
@@ -126,6 +123,7 @@
 
     // ---- the sheets redesign: the layer sheet ----
     'layer.shape.hexagon': { de: 'Sechseck', en: 'Hexagon' },
+    'layer.sym.group': { de: 'Ebene: Symmetrie', en: 'Layer: symmetry' },
     'layer.sym.none': { de: 'Keine Symmetrie', en: 'No symmetry' },
     'layer.sym.mirror': { de: 'Spiegelung', en: 'Mirror' },
     'layer.sym.rotational': { de: 'Drehsymmetrie', en: 'Rotational symmetry' },

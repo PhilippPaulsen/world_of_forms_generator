@@ -147,9 +147,9 @@ T('use', () => {
 });
 
 console.log('\n== German is unchanged ==');
-// markup: for a key on an element, the string the dictionary would write (own text, else the name) against what is authored. The English-only markup of the layer sheet is the documented exception
-// (the sheets redesign rewrites it in German with the sheet commits; until then German mode does not rewrite the markup).
-const ENGLISH_MARKUP = ['layer.align', 'layer.fold.3', 'layer.fold.6', 'layer.mesh.x', 'layer.mesh.y', 'layer.shape.hex', 'layer.shape.square', 'layer.shape.triangle', 'rail.paste'];
+// markup: for a key on an element, the string the dictionary would write (own text, else the name) against what is authored. ALLOWED EXCEPTIONS (English markup with a key; the sheets redesign rewrites it in German with the sheet
+// commits, until then German mode does not rewrite the markup): rail.paste only. The layer sheet is German since commit 3a; the list is empty when the last sheet is done.
+const ENGLISH_MARKUP = ['rail.paste'];
 function elements(html) {
     const out = [];
     const re = /<([a-zA-Z0-9]+)\b([^>]*\bdata-i18n(?:-label|-title)?="[^"]*"[^>]*)>([^<]*)/g;
@@ -175,8 +175,21 @@ T('german', () => {
         if (e.label && e.title !== null && e.aria !== null && e.title !== e.aria) bad.push(e.label + ': title and aria-label differ');
         if (e.titleKey && I.DICT[e.titleKey] && e.title !== null && I.DICT[e.titleKey].de !== e.title) bad.push(e.titleKey + ': title "' + e.title + '" / dictionary "' + I.DICT[e.titleKey].de + '"');
     });
-    check('every key of index.html: the German of the dictionary is the German authored in the markup (' + els.length + ' elements), except the nine keys whose markup is still English (' + ENGLISH_MARKUP.join(', ') + ')', bad.length === 0 && els.length >= 90, bad.join(' ; '));
-    check('those nine keys: the markup IS English and the dictionary English equals it (so ?lang=en changes nothing there)', ENGLISH_MARKUP.every(k => { const e = els.find(x => x.key === k || x.label === k); const authored = e && (e.text !== '' && !(e.label === k) ? e.text : (e.aria !== null ? e.aria : e.title)); return e && (authored === I.DICT[k].en || k === 'layer.mesh.x' || k === 'layer.mesh.y' ? authored === I.DICT[k].en : false); }));
+    check('every key of index.html: the German of the dictionary is the German authored in the markup (' + els.length + ' elements), except the keys whose markup is still English (' + ENGLISH_MARKUP.join(', ') + ')', bad.length === 0 && els.length >= 90, bad.join(' ; '));
+    check('the remaining exception key (rail.paste): the markup IS English and the dictionary English equals it (so ?lang=en changes nothing there)', ENGLISH_MARKUP.every(k => { const e = els.find(x => x.key === k || x.label === k); const authored = e && (e.text !== '' && !(e.label === k) ? e.text : (e.aria !== null ? e.aria : e.title)); return e && (authored === I.DICT[k].en || k === 'layer.mesh.x' || k === 'layer.mesh.y' ? authored === I.DICT[k].en : false); }));
+    // the layer sheet (sheets redesign, commit 3a): every control, group and label of #layer-more-panel carries a key, its authored text is the dictionary German, and no English name is left
+    const lb = HTML.indexOf('<div id="layer-more-panel"'), le = HTML.indexOf('<!-- /#layer-more-panel -->');
+    const panel = lb >= 0 && le > lb ? HTML.slice(lb, le).replace(/<!--[\s\S]*?-->/g, '') : '';
+    const pel = elements(panel);
+    const named = (panel.match(/<(button|label|input|div)\b[^>]*\b(title|aria-label)="[^"]*"[^>]*>|<label\b[^>]*>[^<]+/g) || []);
+    const unkeyed = named.filter(t => !/data-i18n(-label)?="/.test(t) && !/^<(div) /.test(t));
+    const english = (panel.match(/\b(title|aria-label)="[^"]*"|<label\b[^>]*>[^<]+/g) || []).filter(t => /\b(Layer|Triangle|Square|Hexagon|fold\b|Align|mesh-width|symmetry|Mirror|Shift)\b/.test(t));
+    check('the layer sheet (#layer-more-panel) is German: ' + pel.length + ' keyed elements, every name / label of it carries a data-i18n key, and no English name or label is left in it', pel.length >= 24 && unkeyed.length === 0 && english.length === 0 && ENGLISH_MARKUP.every(k => !panel.includes('"' + k + '"')), 'unkeyed: ' + unkeyed.join(' | ') + ' english: ' + english.join(' | '));
+    // a control must carry its OWN name (the label rule hides every <label> of a .control-group with display: none): every input and button of the sheet has aria-label and title, and a key
+    const ctl = (panel.match(/<(button|input)\b[^>]*>/g) || []);
+    const ok = t => /aria-label="[^"]+"/.test(t) && /data-i18n(-label)?="/.test(t) && (!/^<button/.test(t) || /title="[^"]+"/.test(t)) && (!/id="layer-(offset|rotation)/.test(t) || /title="[^"]+"/.test(t));
+    check('every button and input of the layer sheet (' + ctl.length + ') has its own aria-label in German with a key, and a title (a button and the offset / rotation fields) (an input\'s name must not rest on a label that is display: none)', ctl.length >= 18 && ctl.every(ok), ctl.filter(t => !ok(t)).join(' | '));
+    check('the exception list is what the brief says: only rail.paste is left (the rail sheet), none of the layer sheet\'s keys', ENGLISH_MARKUP.length === 1 && ENGLISH_MARKUP[0] === 'rail.paste');
     check('the elements with their own text AND a different name use data-i18n-label (Geo / Sin / Tan / Aus, 3 / 6, the two spinbutton displays), and the two buttons of "Andere Symmetrie" carry the key on their text span', els.filter(e => /^net\.kind\./.test(e.label || '')).length === 4 && els.some(e => e.label === 'fold.3') && els.some(e => e.label === 'net.strength.value') && els.some(e => e.label === 'net.focus.value') && els.some(e => e.tag === 'span' && e.key === 'sym.none' && e.text === 'Keine') && els.some(e => e.tag === 'span' && e.key === 'sym.mirrorOnly' && e.text === 'Nur Spiegelung'));
 });
 T('routed', () => {

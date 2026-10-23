@@ -369,6 +369,55 @@ T('css', () => {
     check('above the block the stack keeps its bottom anchor for 768px and up (and for every tab the layout does not apply to): `.notices { bottom: calc(16px + env(safe-area-inset-bottom, 0px)) }`, z-index 60', base.length === 1 && /bottom:\s*calc\(16px \+ env\(safe-area-inset-bottom, 0px\)\)/.test(base[0].body) && /z-index:\s*60/.test(base[0].body) && base[0].at.length === 0);
 });
 
+
+console.log('\n== the layer sheet in rows (sheets redesign, commit 3a) ==');
+T('layer-rows', () => {
+    const sh = config.sheets.layer, rowsFlat = [].concat.apply([], sh.blocks);
+    const rowW = (row, key) => row.items.reduce((a, i) => a + (key === 'min' && i.wMin ? i.wMin : i.w), 0) + 8 * (row.items.length - 1);
+    check('the layer sheet is data: two blocks (5 rows: 3 + 2), the ten .control-group wrappers of #layer-more-panel, each once, every id in index.html once', sh.blocks.length === 2 && sh.blocks[0].length === 3 && sh.blocks[1].length === 2 && rowsFlat.reduce((a, r) => a + r.items.length, 0) === 10 && rowsFlat.every(r => r.items.every(i => ids.filter(x => x === i.id).length === 1 && /^layer-.*-group$/.test(i.id))));
+    check('the rows at 375 (343 available): 328 (3 shapes + 3 modes), 242 (node + size steppers), 104 (fold), 184 (offset X, offset Y, align: the typed fields are 60px until commit 3b), 172 (mesh x2 + rotation field)', rowsFlat.map(r => rowW(r)).join() === '328,242,104,184,172', rowsFlat.map(r => rowW(r)).join());
+    check('at 320 (288 available) only the first row does not fit (328): it is the one row with wrap; the steppers have wMin 109 (242 -> 226) and everything else fits as it is', rowsFlat.filter(r => rowW(r, 'min') > 288).length === 1 && rowsFlat.filter(r => r.wrap).length === 1 && rowsFlat[0].wrap === true && rowW(rowsFlat[1], 'min') === 226);
+    const API2 = API, H = (o) => API2.sheetHeight(config, 'layer', o);
+    check('the expected height of the sheet at 375: 16 + 104 + 16 + 104 + 16 = 256 (the fold row collapsed), 312 with the fold row (hexagon layer); at 320 the wrap row adds 56: 312 / 368', H({ hide: ['layer-fold-group'] }) === 256 && H() === 312 && H({ narrow: true, hide: ['layer-fold-group'] }) === 312 && H({ narrow: true }) === 368, [H({ hide: ['layer-fold-group'] }), H(), H({ narrow: true, hide: ['layer-fold-group'] }), H({ narrow: true })].join());
+    check('the base active: every group hidden = no rows and no blocks left: the height is only the padding (32)', H({ hide: [].concat.apply([], sh.blocks.map(b => [].concat.apply([], b.map(r => r.items.map(i => i.id))))) }) === 32);
+    check('the engine knows no layer control: ui-phone.js names none of the ten group ids (the rows are data)', !/layer-[a-z-]*-group|layer-more-panel|btn-align|btn-mesh/.test(ENGINE.replace(/\/\/.*$/gm, '')) , (ENGINE.match(/layer-[a-z-]*-group/g) || []).join());
+    check('the engine moves the groups whole with take() and does not clone them: buildBlocks() has no cloneNode and no innerHTML', (() => { const b = /function buildBlocks[\s\S]*?\n    }\n/.exec(ENGINE); return !!b && !/cloneNode|innerHTML/.test(b[0]) && /take\(it\.id, r\)/.test(b[0]); })());
+    check('sketch.js still decides what shows: it shows and hides each of the ten groups through the `hidden` attribute (elt.hidden) the rows follow (and the fold group by the layer\'s own shape)', ['offsetXGroup', 'offsetYGroup', 'meshPresetGroup', 'shapeGroup', 'modeGroup', 'foldGroup', 'alignGroup', 'nodeCountGroup', 'shapeSizeGroup', 'rotationGroup'].every(v => new RegExp(v + '\\.elt\\.hidden = ').test(read('SKETCH_JS', 'sketch.js'))) && /foldGroup\.elt\.hidden = layer\.shape !== 'hex'/.test(read('SKETCH_JS', 'sketch.js')));
+});
+T('layer-rows-mutants', () => {
+    const env = { ids: idSet };
+    const mut = (name, fn, re) => { const c = clone(config); fn(c); const p = validate(c, env); check(`validate rejects: ${name}`, p.some(m => re.test(m)), p.join(' ; ') || 'no problem found'); };
+    mut('a control listed twice in the layer sheet (the align group again in row 2 of block 2)', c => { c.sheets.layer.blocks[1][1].items.push({ id: 'layer-align-group', w: 48 }); }, /layer-align-group is listed twice/);
+    mut('a control of the sheet also in a panel row of the tab (the rotation group in Raster)', c => { c.subtabs.raster.rows[0].items.push({ id: 'layer-rotation-group', w: 48 }); }, /layer-rotation-group is listed twice/);
+    mut('a row 344px wide (the shape group widened by 16)', c => { c.sheets.layer.blocks[0][0].items[0].w = 176; }, /344px wide|more than the 343px/);
+    mut('a row that does not fit 320px and does not wrap (the wrap flag removed from row 1)', c => { delete c.sheets.layer.blocks[0][0].wrap; }, /even with its narrow widths/);
+    mut('a row marked wrap that fits 320px anyway (the fold row)', c => { c.sheets.layer.blocks[0][2].wrap = true; }, /is marked wrap but fits/);
+    mut('the offset row with steppers 117px wide and no narrow width (117 + 117 + 48 + 16 = 298 > 288 at 320px)', c => { c.sheets.layer.blocks[1][0].items = [{ id: 'layer-offset-x-group', w: 117 }, { id: 'layer-offset-y-group', w: 117 }, { id: 'layer-align-group', w: 48 }]; }, /even with its narrow widths|and does not wrap/);
+    mut('an id that is not in index.html', c => { c.sheets.layer.blocks[1][1].items.push({ id: 'layer-nirgends-group', w: 10 }); }, /neither in index\.html nor created/);
+    mut('an empty row', c => { c.sheets.layer.blocks[0].push({ items: [] }); }, /is empty/);
+    mut('an empty block', c => { c.sheets.layer.blocks.push([]); }, /has no rows/);
+    mut('an item without a width', c => { delete c.sheets.layer.blocks[1][1].items[1].w; }, /has no width/);
+    mut('a wMin above its w', c => { c.sheets.layer.blocks[0][1].items[0].wMin = 200; }, /wMin above its w/);
+    mut('blocks that is not a list', c => { c.sheets.layer.blocks = 'rows'; }, /blocks must be a non-empty list/);
+});
+T('layer-rows-css', () => {
+    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker), rs = rules(block.slice(block.indexOf('*/') + 2));
+    const find = sel => rs.filter(r => r.sel.replace(/\s+/g, ' ') === sel);
+    const inPhone = r => r.at[0] === '@media (max-width: 767px)';
+    const sheetRules = rs.filter(r => /\.ph-sheet-(rows|block|row)/.test(r.sel) || /#layer-more-panel/.test(r.sel));
+    check('the rows\' rules (' + sheetRules.length + ') all start with html.ph and sit in the phone media query; nothing above the block names a row, a block or the sheet\'s wrap class', sheetRules.length >= 8 && sheetRules.every(r => inPhone(r) && r.sel.split(',').every(x => /^\s*html\.ph[\s\[.]/.test(x))) && !/ph-sheet-(rows|block|row)/.test(CSS.slice(0, marker)));
+    check('the sheet is a column of blocks 16px apart: html.ph .ph-sheet.ph-sheet-rows { flex-direction: column; gap: var(--sp-3) } (the timeline sheet, which has no blocks, keeps its wrapping row)', find('html.ph .ph-sheet.ph-sheet-rows').length === 1 && /flex-direction:\s*column/.test(find('html.ph .ph-sheet.ph-sheet-rows')[0].body) && /gap:\s*var\(--sp-3\)/.test(find('html.ph .ph-sheet.ph-sheet-rows')[0].body));
+    check('a block is a column of rows 8px apart (gap: var(--sp-2)), a row a flex row, left aligned, 8px between its items', /flex-direction:\s*column/.test(find('html.ph .ph-sheet-block')[0].body) && /gap:\s*var\(--sp-2\)/.test(find('html.ph .ph-sheet-block')[0].body) && /flex-direction:\s*row/.test(find('html.ph .ph-sheet-row')[0].body) && /justify-content:\s*flex-start/.test(find('html.ph .ph-sheet-row')[0].body) && /gap:\s*var\(--sp-2\)/.test(find('html.ph .ph-sheet-row')[0].body));
+    check('a collapsed row and block take no room: html.ph .ph-sheet-block[hidden], html.ph .ph-sheet-row[hidden] { display: none } (the gap goes with them)', rs.some(r => /\.ph-sheet-block\[hidden\]/.test(r.sel) && /\.ph-sheet-row\[hidden\]/.test(r.sel) && /display:\s*none/.test(r.body)));
+    check('a group in a row stays hidden when sketch.js hides it: html.ph .ph-sheet-row .control-group[hidden] { display: none } beats the row rule', find('html.ph .ph-sheet-row .control-group[hidden]').length === 1 && /display:\s*none/.test(find('html.ph .ph-sheet-row .control-group[hidden]')[0].body));
+    check('a group in a row is a flex row of its own (the label is display: none by the label rule), left aligned, no margin or padding', /flex-direction:\s*row/.test(find('html.ph .ph-sheet-row .control-group')[0].body) && /margin:\s*0/.test(find('html.ph .ph-sheet-row .control-group')[0].body) && /padding:\s*0/.test(find('html.ph .ph-sheet-row .control-group')[0].body) && /label[^{]*\{\s*display:\s*none/.test(CSS.slice(0, marker)));
+    check('the typed fields are 60 x --target (48px at a coarse pointer): html.ph .ph-sheet-row .control-group > input[type="number"]', find('html.ph .ph-sheet-row .control-group > input[type="number"]').length === 1 && /width:\s*60px/.test(find('html.ph .ph-sheet-row .control-group > input[type="number"]')[0].body) && /height:\s*var\(--target\)/.test(find('html.ph .ph-sheet-row .control-group > input[type="number"]')[0].body));
+    const wrap = rs.filter(r => /\.ph-sheet-row-wrap/.test(r.sel)), nar = rs.filter(r => r.at.length > 1 && /max-width: 339px/.test(r.at[1]) && /#layer-more-panel \.stepper/.test(r.sel));
+    check('below 340px the wrap row wraps (flex-wrap: wrap, in a nested @media (max-width: 339px) only) and the sheet\'s steppers give up 8px (40px field)', wrap.length === 1 && wrap[0].at[1] === '@media (max-width: 339px)' && /flex-wrap:\s*wrap/.test(wrap[0].body) && nar.length === 1 && /width:\s*40px/.test(nar[0].body));
+    check('the steppers of the sheet are as wide as the Form row\'s: the field is --target wide (html.ph #layer-more-panel .stepper > input[type="number"]: an id rule of the layer block would win over a class)', rs.some(r => r.sel === 'html.ph #layer-more-panel .stepper > input[type="number"]' && /width:\s*var\(--target\)/.test(r.body) && r.at.length === 1));
+    check('every length in those rules is on the scale (0, var(--sp-N), --target, 60px, 40px): no other px value in a gap, margin or padding', sheetRules.every(r => { const m = r.body.match(/\b(gap|margin|padding)[a-z-]*:\s*[^;]+/g) || []; return m.every(d => !/\d+px/.test(d)); }));
+});
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 console.log(failures ? 'FAIL' : 'PASS');
 process.exit(failures ? 1 : 0);
