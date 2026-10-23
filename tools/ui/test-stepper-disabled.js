@@ -138,7 +138,7 @@ console.log('\n== the source ==');
 T('source', () => {
     const src = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
     const body = src.slice(src.indexOf('function stepper(root, opts)'), src.indexOf('// ---- aria-pressed'));
-    check('UI.stepper asks compute() only through a wrapper that refuses while the root is disabled; no other use of opts.compute', /const compute = function \(dir\) \{ return isDisabled\(root\)/.test(body) && (body.match(/opts\.compute\(/g) || []).length === 1);
+    check('UI.stepper asks compute() only through a wrapper that refuses while the root is disabled; no other use of opts.compute', /const compute = function \(dir\) \{ return isDisabled\(root\)[^;]*: userCompute\(dir\)/.test(body) && (body.match(/userCompute\(/g) || []).length === 1 && !/opts\.compute\(/.test(body));   // commit 2 of the sheets redesign: the user's compute() or the step rule is `userCompute`
     check('the stepper watches its root\'s aria-disabled (a MutationObserver calling refresh)', /new MutationObserver\(function \(\) \{ refresh\(\); \}\)\.observe\(root, \{ attributes: true, attributeFilter: \['aria-disabled'\] \}\)/.test(body));
     check('the typed-value listener, the pointerdown and the click handler each check the root', /input', function \(e\) \{\s*if \(isDisabled\(root\)\)/.test(body) && /downDisabled = isDisabled\(b\) \|\| isDisabled\(root\)/.test(body) && /isDisabled\(b\) \|\| isDisabled\(root\)\) \{ showReason\(b, root\)/.test(body));
 });

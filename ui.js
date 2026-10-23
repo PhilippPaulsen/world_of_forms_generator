@@ -268,6 +268,19 @@
    *            display otherwise)
    *   Hold a button: it repeats after 600 ms (every 150 ms, every 70 ms after 1.8 s of repeating - see holdRepeat). Arrow keys on the input step too.
    *   refresh() re-reads compute() for both directions and updates the buttons; call it after any state change.
+   *
+   *   THE STEP OPTIONS (sheets redesign, commit 2; all optional, a stepper without them is exactly as before): instead of a compute() a stepper can be given a rule and reads / writes the input by itself:
+   *   step     the size of one step (a positive number). The stepper READS the current value from the input (UI.normalizeNumber, then parseFloat; an empty or invalid field counts as `min`, else 0) and
+   *            WRITES the next one by setting input.value and dispatching 'input' and then 'change' (both bubbling): the handlers that already listen (p5's .input(), bindExact in ui-net.js,
+   *            ui-layer.js) keep running, and the stepper never touches sketch state itself. With `step` and no compute the typed-value handling is off (noTyping) and a text or number input becomes
+   *            readonly with inputmode="none" (the keyboard never opens; the field is the display). `noTyping: false` / `readonly: false` give that back.
+   *   min, max the bounds (numbers). At a bound the chevron of that direction is disabled with a reason ("Kleinster / Größter Wert erreicht."); a step that would pass the bound stops on it.
+   *   wrap     true: with min AND max the value wraps instead of stopping (rotation: min 0, max 360, so 345 + 15 = 0 and 0 - 15 = 345; the stepper wraps itself because setActiveLayerRotation
+   *            wraps but does not write the value back); max itself is not a value.
+   *   round    the number of decimals the next value is rounded to (no 0.1 + 0.2 = 0.30000000000000004).
+   *   format   format(value) -> the string written into the input (default String(value)). The readers parse it, so it must stay a plain number ("0.35", not "0.35 px").
+   *   `readonly: true` also makes the input of a stepper that has a compute() readonly (the layer sheet's number fields will use it). The existing steppers that pass noTyping with a compute() (the
+   *   Netz and Farbe ones) are NOT made readonly: the Farbe hue field has always been typable at a mouse.
    *   A stepper whose ROOT is aria-disabled (UI.setDisabled(root, reason); the phone layout does it for a stepper whose block is hidden) does nothing: compute() is not asked, a step is refused with the
    *   root's reason (a toast, no change), the chevrons are disabled with it, and a typed value is put back.
    */
@@ -304,12 +317,42 @@
     return { start: start, stop: stop, cost: function () { return lastCost; } };
   }
 
+  // the rule of a stepper that has `step` and no compute(): read the input, add one step, round, wrap or stop at the bounds
+  function stepRule(opts, input) {
+    const hasLo = typeof opts.min === 'number', hasHi = typeof opts.max === 'number', lo = opts.min, hi = opts.max;
+    const rnd = function (v) { if (typeof opts.round !== 'number') return v; const f = Math.pow(10, opts.round); return Math.round(v * f) / f; };
+    return function (dir) {
+      let cur = parseFloat(normalizeNumber(input.value));
+      if (isNaN(cur)) cur = hasLo ? lo : 0;
+      if (opts.wrap && hasLo && hasHi && hi > lo) {
+        const span = hi - lo;
+        let v = rnd(cur + dir * opts.step);
+        v = rnd(((v - lo) % span + span) % span + lo);
+        if (v >= hi) v = lo;
+        return { to: v };
+      }
+      if (dir > 0 && hasHi && cur >= hi) return { to: null, reason: tr('common.atMax', 'Größter Wert erreicht.') };
+      if (dir < 0 && hasLo && cur <= lo) return { to: null, reason: tr('common.atMin', 'Kleinster Wert erreicht.') };
+      let v = rnd(cur + dir * opts.step);
+      if (hasHi && v > hi) v = hi;
+      if (hasLo && v < lo) v = lo;
+      return { to: v };
+    };
+  }
   function stepper(root, opts) {
     const input = opts.input, buttons = Array.prototype.slice.call(root.querySelectorAll('.stepper-btn'));
-    const compute = function (dir) { return isDisabled(root) ? { to: null, reason: root.dataset.reason || '' } : opts.compute(dir); };
+    const ruleMode = typeof opts.compute !== 'function';
+    if (ruleMode && !(typeof opts.step === 'number' && opts.step > 0 && isFinite(opts.step))) throw new Error('UI.stepper needs a compute() or a positive step');
+    const userCompute = ruleMode ? stepRule(opts, input) : opts.compute;
+    const noTyping = opts.noTyping !== undefined ? !!opts.noTyping : ruleMode;
+    // readonly + inputmode="none" (no keyboard, the field is the display): the step rule's default, or readonly: true; never on a range or hidden carrier
+    const readonly = opts.readonly !== undefined ? !!opts.readonly : (ruleMode && noTyping);
+    if (readonly && (input.type === undefined || /^(text|number|tel|search|)$/.test(input.type))) { input.readOnly = true; input.setAttribute('inputmode', 'none'); }
+    const fmt = typeof opts.format === 'function' ? opts.format : String;
+    const compute = function (dir) { return isDisabled(root) ? { to: null, reason: root.dataset.reason || '' } : userCompute(dir); };
     let last = parseInt(input.value, 10); // the last valid value, for restoring an emptied field
     function setValue(v) {
-      input.value = String(v);
+      input.value = fmt(v);
       last = v;
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -318,7 +361,7 @@
     // sketch.js's own (ui-form.js runs before setup()), so it sees the event first: an emptied/NaN field is
     // mid-typing and never reaches the sketch; an out-of-range number is clamped, with a toast, BEFORE the sketch
     // reads it.
-    if (!opts.noTyping) {
+    if (!noTyping) {
       input.addEventListener('input', function (e) {
         if (isDisabled(root)) { input.value = String(last); e.stopImmediatePropagation(); return; }
         const v = parseInt(input.value, 10);

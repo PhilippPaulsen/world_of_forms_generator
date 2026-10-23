@@ -169,6 +169,8 @@
     'net.reason.focus': { de: 'Fokus gilt für Sin und Tan', en: 'Focus applies to Sin and Tan' },
 
     // ---- common ----
+    'common.atMin': { de: 'Kleinster Wert erreicht.', en: 'Smallest value reached.' },
+    'common.atMax': { de: 'Größter Wert erreicht.', en: 'Largest value reached.' },
     // the German keeps the full stop the two scripts that say it have always written (ui-layer.js, ui-layers.js)
     'common.noLayer': { de: 'Keine Ebene aktiv.', en: 'No layer active.' }
   };
