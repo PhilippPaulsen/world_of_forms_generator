@@ -40,6 +40,7 @@
   const focusRoot = panel.querySelector('#net-focus-row .stepper');
   const focusInput = $('#net-focus-input'), focusDisplay = $('#net-focus-value');
   const strengthExact = $('#net-strength-exact'), focusExact = $('#net-focus-exact');
+  const readoutEl = $('#net-readout');
 
   function applies() { return currentShape === 'square' && activeLayer === 'base'; }
   function kind() {
@@ -151,6 +152,11 @@
     if (document.activeElement !== focusExact) showFocusExact();
     setLocked(strengthExact, reasonStrength());
     setLocked(focusExact, reasonFocus());
+    // the readout line of the phone layout's Netz sheet: the active domain and the shape size (core/state.js), in the current language
+    if (readoutEl && window.netReadout) {
+      const d = $('.net-domain-btn.active'), text = window.netReadout.readoutText(d ? d.dataset.domain : 'single', shapeSizeFactor, UI.t);
+      if (readoutEl.textContent !== text) readoutEl.textContent = text;
+    }
   }
   // the Fokus stepper's root is (un)disabled by the phone layout during a UI tick, after this sync ran: the exact field and the chevrons follow at once
   if (typeof MutationObserver === 'function') new MutationObserver(sync).observe(focusRoot, { attributes: true, attributeFilter: ['aria-disabled'] });

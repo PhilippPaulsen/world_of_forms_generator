@@ -451,6 +451,57 @@ T('layer-steppers-mutants', () => {
     mut('the stepper items too wide at 320 (117 with no narrow width in the offset row)', c => { delete c.sheets.layer.blocks[1][0].items[0].wMin; delete c.sheets.layer.blocks[1][0].items[1].wMin; }, /even with its narrow widths/);
 });
 
+
+console.log('\n== the Netz sheet in rows (sheets redesign, commit 4a) ==');
+T('netz-overlay', () => {
+    const ov = config.overlays.netz, rows = [].concat.apply([], ov.blocks), item = id => { for (const r of rows) for (const i of r.items) if (i.id === id) return i; };
+    const rowW = (row, key) => row.items.reduce((a, i) => a + (i.fluid ? 0 : key === 'min' && i.wMin ? i.wMin : i.w), 0) + 8 * (row.items.length - 1);
+    check('the Netz overlay is data: #more-netz itself is the content (it has its own UI.overlay in ui-net.js), listed by the Netz tab only; two blocks of 1 and 4 rows, six items, each once, every id in index.html once', ov.content === 'more-netz' && JSON.stringify(config.tabs.netz.overlays) === '["netz"]' && config.tabs.form.overlays === undefined && config.tabs.farbe.overlays === undefined && ov.blocks.length === 2 && ov.blocks[0].length === 1 && ov.blocks[1].length === 4 && rows.reduce((a, r) => a + r.items.length, 0) === 6 && rows.every(r => r.items.every(i => ids.filter(x => x === i.id).length === 1)) && ids.filter(x => x === 'more-netz').length === 1);
+    check('block 1 = the strength and focus exact fields (60 + 8 + 60 = 128 until commit 4b); block 2 = the domain row 160 (3 x 48 + 2 x 8), the macro row 192 (3 x 58.5 + 16), the Alternate wrapper 48, the readout (fluid, 20px high)', JSON.stringify(ov.blocks[0][0].items.map(i => i.id)) === '["net-strength-exact","net-focus-exact"]' && rowW(ov.blocks[0][0]) === 128 && item('net-domain-row').w === 160 && item('net-macro-row').w === 192 && item('net-geo-row').w === 48 && item('net-readout').fluid === true && item('net-readout').w === undefined && ov.blocks[1][3].h === 20 && ov.blocks[1].slice(0, 3).every(r => r.h === undefined));
+    const H = o => API.sheetHeight(config, 'netz', o);
+    check('the expected height at 375: 16 + 48 + 16 + 48 + 8 + 20 + 16 = 172 for the common case (Field: no macro row, no Alternate); 228 with the macro row, 228 with Alternate, 284 with both; the sheet keeps max-height 80dvh and scrolls', H({ hide: ['net-macro-row', 'net-geo-row'] }) === 172 && H({ hide: ['net-geo-row'] }) === 228 && H({ hide: ['net-macro-row'] }) === 228 && H() === 284, [H({ hide: ['net-macro-row', 'net-geo-row'] }), H({ hide: ['net-geo-row'] }), H({ hide: ['net-macro-row'] }), H()].join());
+    check('at 320 (288 available) every row of the overlay fits as it is (no wrap row): the widest is the macro row (192)', rows.every(r => rowW(r, 'min') <= 288) && rows.every(r => !r.wrap));
+    check('the elements the sheet needs have ids: the three domain buttons (net-domain-single, net-domain-tiled, net-field-btn), the readout, the exact fields; the domain row and the macro row wrap the buttons', ['net-domain-single', 'net-domain-tiled', 'net-field-btn', 'net-readout', 'net-strength-exact', 'net-focus-exact', 'net-macro-row', 'net-geo-row', 'net-domain-row'].every(id => ids.includes(id)) && /id="net-domain-row"[\s\S]{0,900}id="net-domain-single"[\s\S]{0,700}id="net-domain-tiled"[\s\S]{0,700}id="net-field-btn"/.test(htmlNoComments));
+    check('sketch.js keeps the hooks the rows follow: it shows and hides the macro row, the Alternate wrapper and the Alternate button with the `hidden` attribute, and the Field button is natively disabled (no reason can reach the user: a native disabled button fires no click - ROADMAP)', /macroRow\.elt\.hidden = /.test(read('SKETCH_JS', 'sketch.js')) && /geoRow\.elt\.hidden = /.test(read('SKETCH_JS', 'sketch.js')) && /alternateBtn\.elt\.hidden = /.test(read('SKETCH_JS', 'sketch.js')) && /fieldBtn\.elt\.disabled = !fieldOk/.test(read('SKETCH_JS', 'sketch.js')));
+    const eng = ENGINE.replace(/\/\/.*$/gm, '');
+    check('the engine is control-agnostic here too: buildOverlays() names no id and reads config.overlays; an item is hidden when it is, or when all its element children are (itemHidden)', (() => { const m = /function buildOverlays[\s\S]*?\n    }\n/.exec(eng); return !!m && !/net-|more-netz|layer-/.test(m[0]) && /config\.overlays/.test(m[0]) && /function itemHidden/.test(eng) && /buildOverlays\(t, b\)/.test(eng); })());
+});
+T('netz-overlay-mutants', () => {
+    const env = { ids: idSet };
+    const mut = (name, fn, re) => { const c = clone(config); fn(c); const p = validate(c, env); check(`validate rejects: ${name}`, p.some(m => re.test(m)), p.join(' ; ') || 'no problem found'); };
+    mut('a control twice in the Netz overlay (the domain row again in block 1)', c => { c.overlays.netz.blocks[0][0].items.push({ id: 'net-domain-row', w: 160 }); }, /net-domain-row is listed twice/);
+    mut('a control of the overlay also in a panel row (the readout in Achsen)', c => { c.subtabs.achsen.rows[0].items.push({ id: 'net-readout', w: 20 }); }, /net-readout is listed twice/);
+    mut('a row wider than 343 (the macro row 340 + the Alternate wrapper)', c => { c.overlays.netz.blocks[1][1].items[0].w = 340; c.overlays.netz.blocks[1][1].items.push({ id: 'net-geo-row', w: 48 }); c.overlays.netz.blocks[1].splice(2, 1); }, /wide, more than the 343px|more than the 343px/);
+    mut('an id that is not in index.html', c => { c.overlays.netz.blocks[0][0].items.push({ id: 'net-nirgends', w: 10 }); }, /neither in index\.html nor created/);
+    mut('an overlay whose content id is not in index.html', c => { c.overlays.netz.content = 'more-nirgends'; }, /more-nirgends/);
+    mut('an overlay no tab lists', c => { c.tabs.netz.overlays = []; }, /overlay netz is defined but no tab lists it/);
+    mut('a tab that lists an overlay that is not defined', c => { c.tabs.farbe.overlays = ['nirgends']; }, /overlay nirgends is not defined/);
+    mut('the readout with a width (a fluid item must have none)', c => { c.overlays.netz.blocks[1][3].items[0].w = 100; }, /fluid but has a width or shares its row/);
+    mut('the readout sharing its row', c => { c.overlays.netz.blocks[1][3].items.push({ id: 'net-geo-row', w: 48 }); c.overlays.netz.blocks[1].splice(2, 1); }, /fluid but has a width or shares its row/);
+    mut('a bad row height', c => { c.overlays.netz.blocks[1][3].h = -4; }, /bad height/);
+    mut('an empty block list', c => { c.overlays.netz.blocks = []; }, /blocks must be a non-empty list/);
+    mut('an overlay without blocks', c => { delete c.overlays.netz.blocks; }, /no blocks/);
+});
+T('netz-overlay-css', () => {
+    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker), rs = rules(block.slice(block.indexOf('*/') + 2));
+    const one = sel => rs.filter(r => r.sel.replace(/\s+/g, ' ') === sel);
+    const mine = rs.filter(r => /#more-netz|\.ph-sheet-row (#net|\.net|>)|#net-(readout|focus-hint|macro-hint|field-hint|field-info|size-hint)|\.overlay\.ph-sheet-rows/.test(r.sel));
+    check('the Netz sheet\'s rules (' + mine.length + ') all start with html.ph and sit in the phone media query, none above the block', mine.length >= 14 && mine.every(r => r.at[0] === '@media (max-width: 767px)' && r.sel.split(',').every(x => /^\s*html\.ph[\s\[.#]/.test(x))));
+    check('the overlay is a column 16px apart (gap: var(--sp-3)); the leftover strength section and #net-group take no room (display: none) so no empty container adds a gap', /flex-direction:\s*column/.test(one('html.ph .overlay.ph-sheet-rows')[0].body) && /gap:\s*var\(--sp-3\)/.test(one('html.ph .overlay.ph-sheet-rows')[0].body) && rs.some(r => /#more-netz\.ph-sheet-rows > \.overlay-section/.test(r.sel) && /#more-netz\.ph-sheet-rows > #net-group/.test(r.sel) && /display:\s*none/.test(r.body)));
+    const hintRule = rs.find(r => /#net-focus-hint/.test(r.sel));
+    check('the five hints and the macro title are parked hidden (display: none): #net-focus-hint, #net-macro-hint, #net-field-hint, #net-field-info, #net-size-hint, and the macro row\'s label', !!hintRule && ['#net-focus-hint', '#net-macro-hint', '#net-field-hint', '#net-field-info', '#net-size-hint', '#net-macro-row > label'].every(x => hintRule.sel.includes(x)) && /display:\s*none/.test(hintRule.body));
+    const dom = one('html.ph .ph-sheet-row .net-domain-btn, html.ph .ph-sheet-row #net-alternate-btn');
+    check('the three domain buttons and Alternate are 48 x 48 icon buttons: the text is emptied visually (font-size 0, it stays the accessible name), width and height --target', dom.length === 1 && /width:\s*var\(--target\)/.test(dom[0].body) && /height:\s*var\(--target\)/.test(dom[0].body) && /font-size:\s*0/.test(dom[0].body) && /position:\s*relative/.test(dom[0].body));
+    const icons = ['#net-domain-single', '#net-domain-tiled', '#net-field-btn', '#net-alternate-btn'].map(id => rs.find(r => r.sel === 'html.ph .ph-sheet-row ' + id + '::before'));
+    check('each of the four has its own mask icon (a data-URI SVG in currentColor, like Net lines in the tool row): single tile, separated tiles, continuous grid, mirrored tiles; four different drawings', icons.every(r => r && /mask:\s*url\("data:image\/svg\+xml,/.test(r.body) && /-webkit-mask:/.test(r.body)) && new Set(icons.map(r => r.body)).size === 4);
+    check('...and in each rule the prefixed and the standard mask are the SAME drawing (a browser reads one of them)', icons.every(r => { const m = /-webkit-mask:\s*(url\("[^"]+"\))/.exec(r.body), n = /[^-]mask:\s*(url\("[^"]+"\))/.exec(r.body); return !!m && !!n && m[1] === n[1]; }));
+    const before = one('html.ph .ph-sheet-row .net-domain-btn::before, html.ph .ph-sheet-row #net-alternate-btn::before');
+    check('the icon box is 20px and centred and takes the text colour (so the active button inverts it)', before.length === 1 && /width:\s*20px/.test(before[0].body) && /background-color:\s*currentColor/.test(before[0].body) && /translate\(-50%, -50%\)/.test(before[0].body));
+    check('a hidden button or row stays hidden whatever display its class gives it: the macro row, the Alternate wrapper and button, the domain buttons carry [hidden] rules', rs.some(r => /#net-macro-row\[hidden\]/.test(r.sel) && /#net-geo-row\[hidden\]/.test(r.sel) && /display:\s*none/.test(r.body)) && rs.some(r => /#net-alternate-btn\[hidden\]/.test(r.sel) && /display:\s*none/.test(r.body)));
+    check('the exact fields in block 1 are 60px wide and --target high (typed fields until 4b), a locked one looks disabled (aria-disabled: the reason is the lock\'s)', one('html.ph .ph-sheet-row > input.exact-field').length === 1 && /width:\s*60px/.test(one('html.ph .ph-sheet-row > input.exact-field')[0].body) && /height:\s*var\(--target\)/.test(one('html.ph .ph-sheet-row > input.exact-field')[0].body) && rs.some(r => /input\.exact-field\[aria-disabled="true"\]/.test(r.sel)));
+    check('every gap, margin and padding in them is on the scale (var(--sp-N) or 0)', mine.every(r => (r.body.match(/\b(gap|margin|padding)[a-z-]*:\s*[^;]+/g) || []).every(d => !/\d+px/.test(d))));
+});
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 console.log(failures ? 'FAIL' : 'PASS');
 process.exit(failures ? 1 : 0);
