@@ -54,7 +54,7 @@
     'layers.more': 'Ebenen-Einstellungen',
     'layers.more.open': 'offen',
     'layers.more.closed': 'geschlossen',
-    'layers.more.none': 'Keine Ebene aktiv.',
+    get 'layers.more.none'() { const i = root.uiI18n; return i && i.has('common.noLayer') ? i.t('common.noLayer') : 'Keine Ebene aktiv.'; },
     'layers.hint': 'Symbol antippen',
     'layers.remove.title': function (n) { return 'Ebene ' + n + ' entfernen?'; },
     'layers.remove.lines': function (k) { return (k === 1 ? 'Die eine Linie dieser Ebene geht' : 'Die ' + k + ' Linien dieser Ebene gehen') + ' verloren. Das lässt sich nicht rückgängig machen.'; },

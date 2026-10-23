@@ -67,9 +67,10 @@
     },
     // follow: follower id -> the id of the block it left (sketch.js still shows and hides that block as a whole), on apply and on every UI tick, only while the layout is on. A string copies the block's `hidden`
     // (release() shows the follower again). An object { of, mode: 'disable', reason } keeps the follower SHOWN and marks it aria-disabled with the reason (UI.setDisabled) while the block is hidden:
-    // release() enables it again. The Fokus stepper left #net-focus-row (which keeps the title and the exact field in the Netz sheet); sketch.js shows that row only for Sin and Tan, so for Aus and Geo
+    // release() enables it again. `i18n` (optional) is the dictionary key (ui-i18n.js) of the reason: the engine writes the text of the current language, `reason` is the German text it falls back to.
+    // The Fokus stepper left #net-focus-row (which keeps the title and the exact field in the Netz sheet); sketch.js shows that row only for Sin and Tan, so for Aus and Geo
     // the stepper is there but disabled and says why, instead of an empty row.
-    follow: { 'net-focus-stepper': { of: 'net-focus-row', mode: 'disable', reason: 'Fokus gilt für Sin und Tan' } },
+    follow: { 'net-focus-stepper': { of: 'net-focus-row', mode: 'disable', reason: 'Fokus gilt für Sin und Tan', i18n: 'net.reason.focus' } },
     subtabs: {
       raster: {
         label: 'Raster',
