@@ -20,6 +20,7 @@
  *              ALL hidden is hidden (no empty row, no gap), a block whose rows are all hidden too. wrap: the row wraps into two lines below 340px (it does not fit 288px there; validate() requires it exactly then).
  *   overlays   id -> { content, blocks, steppers? } (an overlay's steppers wrap inputs that are row items themselves): an overlay that already exists with its own UI.overlay (ui-net.js's #more-netz) and gets the same rows as a sheet's content (commit 4a); tabs.<tab>.overlays lists them. A row may have
  *              `h` (its height when it is not --target: the 20px readout line) and an item may be `fluid` (the row's width, alone in its row).
+ *   items      an item of a sheet's or overlay's row may carry `gate: 'class'`: it counts as hidden unless the sheet's content has that class (the timeline sheet's pairing editor: the toggle of ui-phone-timeline.js).
  *   sheets.<id>.steppers  (optional) inputId -> { icon, step, round?, min?, max?, wrap?, noTyping?, name, more, less }: an existing input that the engine wraps into a stepper (UI.stepper) while the layout is on and unwraps at
  *              release() (commit 3b). icons: key -> [stroke paths], the icons of those steppers and the two chevrons (chevron-up, chevron-down).
  *   afterShow  id -> [global, method]: called (when it exists) after the element moved into the visible panel - a moved element loses its scroll position.
@@ -36,7 +37,7 @@
     sizes: { header: 40, toolRow: 64, subtabs: 44, gap: 8, target: 48, rowGap: 8, gutter: 16, designWidth: 375, narrowWidth: 320 },
     scale: [4, 8, 16, 32],
     // the ids that no HTML file holds because a script creates them: id -> the script. (None yet; the layer and timeline strips are containers in index.html that ui-layers.js / ui-timeline.js fill.)
-    createdByScript: { 'ph-trail-chips': 'ui-phone-chips.js', 'ph-trail-stepper': 'ui-phone-chips.js' },
+    createdByScript: { 'ph-trail-chips': 'ui-phone-chips.js', 'ph-trail-stepper': 'ui-phone-chips.js', 'ph-tl-icons': 'ui-phone-timeline.js', 'ph-tl-readout': 'ui-phone-timeline.js' },
     tabs: {
       form: { covered: true, panelH: 104, subtabs: ['raster', 'ebenen', 'zeit'], defaultSubtab: 'raster', toolRow: 'form', sheets: ['layer', 'timeline'] },
       farbe: { covered: true, panelH: 104, subtabs: ['harmonie', 'spuren', 'ebenen', 'zeit'], defaultSubtab: 'harmonie', toolRow: 'farbe', sheets: ['layer', 'timeline'] },
@@ -143,7 +144,21 @@
           ]
         ]
       },
-      timeline: { host: 'ph-sheet-timeline', label: 'Zeitleiste: Mehr', content: 'timeline-group', trigger: { within: 'timeline-strip', selector: '.ts-more' }, open: { hasClass: 'ts-open' } }
+      // The timeline sheet (5a): block 1 = the icon row (netrec | pairing toggle | trash: three 48px buttons and two 1px hairlines with 4px side margins = 162px; ui-phone-timeline.js makes it and forwards the clicks to the
+      // hidden model controls) and ONE readout line of 20px; block 2 = the line-pairing editor, an item with a GATE: its row shows only while the sheet's content (#timeline-group) has the class ph-tl-editor-open (the
+      // pairing toggle puts it there), and sketch.js still hides the editor itself while there is no segment. The old keyframe list, net box, status span and the text button are parked hidden by the CSS.
+      timeline: {
+        host: 'ph-sheet-timeline', label: 'Zeitleiste: Mehr', content: 'timeline-group', trigger: { within: 'timeline-strip', selector: '.ts-more' }, open: { hasClass: 'ts-open' },
+        blocks: [
+          [
+            { items: [{ id: 'ph-tl-icons', w: 162 }] },
+            { h: 20, items: [{ id: 'ph-tl-readout', fluid: true }] }
+          ],
+          [
+            { items: [{ id: 'timeline-pairing', fluid: true, gate: 'ph-tl-editor-open' }] }
+          ]
+        ]
+      }
     },
     // The Netz sheet (commit 4a): #more-netz is an overlay of its own (ui-net.js opens it from the "..." of the Art panel), so it has no host here: its content is the overlay itself. No headings, no visible labels. Block 1 =
     // the exact strength and focus fields (typed fields for now: 60px; commit 4b makes them steppers), block 2 = the domain (Einzeln / Gekachelt / Feld as icons: 3 x 48 + gaps), the macro cells (only while sketch.js shows
@@ -253,6 +268,7 @@
             if (row.h !== undefined && !(row.h > 0)) bad.push(tab + ': ' + where + ' has a bad height');
             row.items.forEach(function (it) {
               claim(it.id, where);
+              if (it.gate !== undefined && !(typeof it.gate === 'string' && /^[a-z][a-z0-9-]*$/.test(it.gate))) bad.push(tab + ': ' + where + ': ' + it.id + ' has a bad gate (a class name)');
               if (it.fluid) { if (it.w !== undefined || row.items.length > 1) bad.push(tab + ': ' + where + ': ' + it.id + ' is fluid but has a width or shares its row'); return; }
               if (!(it.w > 0)) bad.push(tab + ': ' + where + ': ' + it.id + ' has no width');
               if (it.wMin !== undefined && !(it.wMin > 0 && it.wMin <= it.w)) bad.push(tab + ': ' + where + ': ' + it.id + ' has a wMin above its w');
@@ -361,12 +377,13 @@
   // The height of a sheet made of blocks (padding 16 + the blocks 16 apart + 16 padding), by the design widths: rows of --target with 8px gaps, a row whose items are all in `hide` (ids) is gone, a block with no row too;
   // narrow: the 320px phone (narrow widths, a wrap row breaks into lines). Returns null for a sheet without blocks.
   function sheetHeight(cfg, sid, opts) {
-    const sh = (cfg.sheets || {})[sid] || (cfg.overlays || {})[sid], S = cfg.sizes, hide = (opts && opts.hide) || [], narrow = !!(opts && opts.narrow);
+    const sh = (cfg.sheets || {})[sid] || (cfg.overlays || {})[sid], S = cfg.sizes, hide = (opts && opts.hide) || [], narrow = !!(opts && opts.narrow), gates = (opts && opts.gates) || [];
+    const off = function (it) { return hide.indexOf(it.id) >= 0 || (it.gate !== undefined && gates.indexOf(it.gate) < 0); };   // hidden by the caller, or behind a gate that is not open
     if (!sh || !sh.blocks) return null;
     const avail = (narrow ? S.narrowWidth : S.designWidth) - 2 * S.gutter;
     const blockH = sh.blocks.map(function (rows) {
-      const hs = rows.filter(function (row) { return row.items.some(function (it) { return hide.indexOf(it.id) < 0; }); }).map(function (row) {
-        const items = row.items.filter(function (it) { return hide.indexOf(it.id) < 0; });
+      const hs = rows.filter(function (row) { return row.items.some(function (it) { return !off(it); }); }).map(function (row) {
+        const items = row.items.filter(function (it) { return !off(it); });
         let lines = 1, x = 0;
         if (narrow && row.wrap) { items.forEach(function (it, i) { const w = it.wMin || it.w; if (i && x + S.rowGap + w > avail) { lines++; x = w; } else x += (i ? S.rowGap : 0) + w; }); }
         return lines * (row.h || S.target) + (lines - 1) * S.rowGap;

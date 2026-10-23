@@ -218,7 +218,7 @@
       root.timelineConfirm({
         title: T['timeline.clear.title'], text: T['timeline.clear.text'], confirmLabel: (root.uiI18n && root.uiI18n.has('timeline.remove')) ? root.uiI18n.t('timeline.remove') : T['timeline.clear'],
         onConfirm: function () { if (api()) api().clearTimeline(); sync(); },
-        returnFocus: function () { if (typeof clearBtn.focus === 'function' && !clearBtn.hidden) clearBtn.focus(); else moreBtn.focus(); },
+        returnFocus: function () { if (typeof clearBtn.focus === 'function' && !clearBtn.hidden && clearBtn.offsetParent !== null) clearBtn.focus(); else moreBtn.focus(); },   // offsetParent: under the phone layout the text button is parked (display: none) and the focus goes to the "..." of the strip
       });
     });
   }

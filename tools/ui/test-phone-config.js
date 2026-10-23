@@ -548,6 +548,49 @@ T('netz-fine-mutants', () => {
     mut('the two steppers too wide at 320 (117 without the narrow width)', c => { delete c.overlays.netz.blocks[0][0].items[0].wMin; delete c.overlays.netz.blocks[0][0].items[1].wMin; c.overlays.netz.blocks[0][0].items.push({ id: 'net-domain-row', w: 160 }); c.overlays.netz.blocks[1].shift(); }, /even with its narrow widths|more than the/);
 });
 
+
+console.log('\n== the timeline sheet (sheets redesign, commit 5a) ==');
+T('timeline-sheet', () => {
+    const sh = config.sheets.timeline, rows = [].concat.apply([], sh.blocks);
+    const rowW = (row, key) => row.items.reduce((a, i) => a + (i.fluid ? 0 : key === 'min' && i.wMin ? i.wMin : i.w), 0) + 8 * (row.items.length - 1);
+    check('the timeline sheet is data: two blocks; block 1 = the icon row (162px) and the readout (fluid, 20px high); block 2 = the pairing editor, an item behind the gate ph-tl-editor-open; the two elements ui-phone-timeline.js makes are named in createdByScript', sh.blocks.length === 2 && sh.blocks[0].length === 2 && sh.blocks[1].length === 1 && sh.blocks[0][0].items[0].id === 'ph-tl-icons' && sh.blocks[0][1].h === 20 && sh.blocks[0][1].items[0].id === 'ph-tl-readout' && sh.blocks[0][1].items[0].fluid === true && sh.blocks[1][0].items[0].id === 'timeline-pairing' && sh.blocks[1][0].items[0].gate === 'ph-tl-editor-open' && sh.blocks[1][0].items[0].fluid === true && config.createdByScript['ph-tl-icons'] === 'ui-phone-timeline.js' && config.createdByScript['ph-tl-readout'] === 'ui-phone-timeline.js' && ids.filter(x => x === 'timeline-pairing').length === 1);
+    check('the icon row is 3 x 48 + 2 x (1px hairline + 2 x 4px margin) = 162px: it fits 343 and 288 (no wrap row)', sh.blocks[0][0].items[0].w === 3 * 48 + 2 * (1 + 2 * 4) && rows.every(r => rowW(r, 'min') <= 288 && !r.wrap));
+    const H = o => API.sheetHeight(config, 'timeline', o);
+    check('the CLOSED height at 375 (and at 320, 430): 16 + 48 + 8 + 20 + 16 = 108px; with the gate open the editor adds a 16px gap and a row (the config counts 48; the real editor is about 225px: the sheet scrolls at 80dvh until commit 5b)', H() === 108 && H({ narrow: true }) === 108 && H({ gates: ['ph-tl-editor-open'] }) === 172);
+    check('the timeline sheet is listed by all three tabs, the old keys of the sheet (host, label, trigger, open) are as they were in 1b', ['form', 'farbe', 'netz'].every(t => config.tabs[t].sheets.includes('timeline')) && sh.host === 'ph-sheet-timeline' && sh.label === 'Zeitleiste: Mehr' && sh.content === 'timeline-group' && sh.trigger.selector === '.ts-more' && sh.open.hasClass === 'ts-open');
+    const eng = ENGINE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    check('the engine knows the GATE as a generic rule (an item counts as hidden unless the content has the class) and names no timeline id', /gates\[it\.id\] = it\.gate/.test(eng) && /r\.content\.classList\.contains\(r\.gates\[id\]\)/.test(eng) && !/timeline|ph-tl-/.test(eng));
+    check('the parked old pieces keep their ids in index.html (the icon buttons forward to two of them): #timeline-keyframe-list, #timeline-net-state, #timeline-status, #btn-clear-timeline', ['timeline-keyframe-list', 'timeline-net-state', 'timeline-status', 'btn-clear-timeline'].every(id => ids.filter(x => x === id).length === 1));
+});
+T('timeline-sheet-mutants', () => {
+    const env = { ids: idSet };
+    const mut = (name, fn, re) => { const c = clone(config); fn(c); const p = validate(c, env); check(`validate rejects: ${name}`, p.some(m => re.test(m)), p.join(' ; ') || 'no problem found'); };
+    mut('a control twice in the timeline sheet (the editor again in block 1)', c => { c.sheets.timeline.blocks[0].push({ items: [{ id: 'timeline-pairing', fluid: true }] }); }, /timeline-pairing is listed twice/);
+    mut('an element no script makes (createdByScript lost for the icon row)', c => { delete c.createdByScript['ph-tl-icons']; }, /ph-tl-icons is neither in index\.html nor created by a named script/);
+    mut('the icon row wider than 343', c => { c.sheets.timeline.blocks[0][0].items[0].w = 350; }, /wide, more than the 343px|more than the 343px/);
+    mut('the icon row wider than 288 without a wrap (the narrow phone)', c => { c.sheets.timeline.blocks[0][0].items[0].w = 300; }, /even with its narrow widths/);
+    mut('the readout given a width', c => { c.sheets.timeline.blocks[0][1].items[0].w = 100; }, /fluid but has a width or shares its row/);
+    mut('a bad gate (not a class name)', c => { c.sheets.timeline.blocks[1][0].items[0].gate = 'Not A Class!'; }, /bad gate/);
+    mut('a gate that is a number', c => { c.sheets.timeline.blocks[1][0].items[0].gate = 5; }, /bad gate/);
+    mut('the sheet\'s content id unknown', c => { c.sheets.timeline.content = 'timeline-nirgends'; }, /timeline-nirgends/);
+    mut('an id that is nowhere (the readout misspelled)', c => { c.sheets.timeline.blocks[0][1].items[0].id = 'ph-tl-readot'; }, /ph-tl-readot is neither in index\.html nor created/);
+});
+T('timeline-sheet-css', () => {
+    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker), rs = rules(block.slice(block.indexOf('*/') + 2));
+    const one = sel => rs.filter(r => r.sel.replace(/\s+/g, ' ') === sel);
+    const mine = rs.filter(r => /#timeline-group|ph-tl-|#ph-tl-|#timeline-pairing/.test(r.sel));
+    check('the timeline sheet\'s rules (' + mine.length + ') all start with html.ph and sit in the phone media query, none above the block', mine.length >= 8 && mine.every(r => r.at[0] === '@media (max-width: 767px)' && r.sel.split(',').every(x => /^\s*html\.ph[\s\[.#:]/.test(x))));
+    const park = rs.find(r => /#timeline-keyframe-list/.test(r.sel) && /#timeline-net-state/.test(r.sel));
+    check('the keyframe list, the net box, the status span and the text button\'s row are PARKED hidden (display: none, not removed): html.ph #timeline-group > .icon-row, > #timeline-keyframe-list, > #timeline-net-state, > #timeline-status', !!park && ['> .icon-row', '> #timeline-keyframe-list', '> #timeline-net-state', '> #timeline-status'].every(x => park.sel.includes(x)) && /display:\s*none/.test(park.body));
+    check('#timeline-group takes no box of its own while the layout is on (display: contents, also without ts-open: the inline rule hides it, the sheet host does not need that)', one('html.ph #timeline-group, html.ph #timeline-group:not(.ts-open)').length === 1 && /display:\s*contents/.test(one('html.ph #timeline-group, html.ph #timeline-group:not(.ts-open)')[0].body));
+    const sep = one('html.ph .ph-tl-sep')[0], btn = one('html.ph .ph-tl-btn')[0], icons = one('html.ph #ph-tl-icons')[0];
+    check('the hairline is 1px wide, 32px high with 4px side margins (var(--sp-1)) and the hairline colour; the buttons are --target x --target; the row is a flex row left aligned with no gap of its own', !!sep && /width:\s*1px/.test(sep.body) && /height:\s*32px/.test(sep.body) && /margin:\s*0 var\(--sp-1\)/.test(sep.body) && /background:\s*var\(--color-hairline\)/.test(sep.body) && !!btn && /width:\s*var\(--target\)/.test(btn.body) && /height:\s*var\(--target\)/.test(btn.body) && !!icons && /display:\s*flex/.test(icons.body) && /justify-content:\s*flex-start/.test(icons.body) && /gap:\s*0/.test(icons.body));
+    check('the trash is the danger colour (var(--danger), the token of the dialogs) and a disabled icon is grey (it wins over the danger colour: the rule comes after, with the attribute)', /color:\s*var\(--danger\)/.test(one('html.ph .ph-tl-trash')[0].body) && one('html.ph .ph-tl-btn[aria-disabled="true"]').length === 1 && rs.indexOf(one('html.ph .ph-tl-btn[aria-disabled="true"]')[0]) > rs.indexOf(one('html.ph .ph-tl-trash')[0]) && /--danger:/.test(HTML));
+    const ro = one('html.ph #ph-tl-readout')[0];
+    check('the readout is ONE line of 20px, 14px type, muted, no wrapping (the same look as the Netz readout)', !!ro && /(^|[;\s])height:\s*20px/.test(ro.body) && /font-size:\s*14px/.test(ro.body) && /line-height:\s*20px/.test(ro.body) && /color:\s*var\(--color-secondary\)/.test(ro.body) && /white-space:\s*nowrap/.test(ro.body));
+    check('every gap, margin and padding of these rules is on the scale (var(--sp-N), 0)', mine.every(r => (r.body.match(/\b(gap|margin|padding)[a-z-]*:\s*[^;]+/g) || []).every(d => !/\d+px/.test(d))));
+});
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 console.log(failures ? 'FAIL' : 'PASS');
 process.exit(failures ? 1 : 0);
