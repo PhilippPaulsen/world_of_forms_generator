@@ -112,6 +112,19 @@ function buildPage(opts) {
                 el('div', { id: 'rail-group-reset', class: 'rail-group rail-farbe-only' }, [btn('btn-face-colors-reset')])])])]));
     // the leftover containers: the layer "Mehr" wrapper (hidden unless its state is open), the timeline group (a class ts-open when open) and the contextual groups sketch.js shows for Curve / Free
     const layerPanel = el('div', { id: 'layer-more-panel' }, [btn('layer-align', 'layer-btn'), el('input', { id: 'layer-offset-x-input', type: 'number' })]); layerPanel.hidden = true;
+    // the ten control groups of the layer block (the real ids; every group starts hidden like on the page until sketch.js shows it for a layer); each holds a label (display: none on the page) and its control
+    const lg = (id, kids) => { const g = el('div', { id, class: 'control-group' }, [el('label', {}, [])].concat(kids)); g.hidden = true; return g; };
+    const layerGroups = [lg('layer-shape-group', [el('div', { class: 'icon-row' }, ['triangle', 'square', 'hex'].map(k => { const b2 = btn(null, 'layer-shape-icon-btn icon-btn'); b2.setAttribute('data-shape', k); return b2; }))]),
+        lg('layer-node-count-group', [el('div', { class: 'stepper' }, [el('input', { id: 'layer-node-count-input', type: 'number' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')])]),
+        lg('layer-shape-size-group', [el('div', { class: 'stepper' }, [el('input', { id: 'layer-shape-size-input', type: 'number' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')])]),
+        lg('layer-mode-group', [el('div', { class: 'icon-row' }, ['none', 'spiegeling', 'drehling'].map(k => { const b2 = btn(null, 'layer-mode-btn icon-btn'); b2.setAttribute('data-mode', k); return b2; }))]),
+        lg('layer-fold-group', [el('div', { class: 'icon-row' }, [btn(null, 'layer-fold-btn layer-btn icon-btn'), btn(null, 'layer-fold-btn layer-btn icon-btn')])]),
+        lg('layer-align-group', [btn('btn-align-to-base', 'layer-btn icon-btn')]),
+        lg('layer-offset-x-group', [el('input', { id: 'layer-offset-x-input2', type: 'number' })]),
+        lg('layer-offset-y-group', [el('input', { id: 'layer-offset-y-input', type: 'number' })]),
+        lg('layer-mesh-preset-group', [el('div', { class: 'icon-row' }, [btn('btn-mesh-preset-x', 'layer-btn icon-btn'), btn('btn-mesh-preset-y', 'layer-btn icon-btn')])]),
+        lg('layer-rotation-group', [el('input', { id: 'layer-rotation-input', type: 'number' })])];
+    layerGroups.forEach(g => layerPanel.appendChild(g));
     const tlGroup = el('div', { id: 'timeline-group', class: 'control-group' }, [btn('btn-clear-timeline', 'layer-btn'), el('input', { id: 'timeline-pairing-filter', type: 'number' })]);
     const settings = ['curve-fold-group', 'curve-strength-group', 'free-roughness-group', 'free-controls-group'].map(id => { const g = el('div', { id, class: 'control-group' }, [el('input', { type: 'range' })]); g.hidden = true; return g; });
     const faceList = el('div', { id: 'face-colors-list' }), faceGroup = el('div', { id: 'face-colors-group', class: 'control-group' }, [faceList]); faceGroup.hidden = true;
@@ -138,7 +151,7 @@ function buildPage(opts) {
     // opts.ui: the REAL ui.js (UI.overlay, UI.onSync) in this window; without it the engine finds no UI.overlay and leaves the sheet blocks where they are
     if (opts.ui) {
         vm.createContext(win);
-        Object.assign(win, { window: win, document: doc, console, MutationObserver: class { constructor(cb) { (win.observers = win.observers || []).push(cb); } observe() { } }, performance: { now: () => 0 }, setTimeout, clearTimeout });
+        Object.assign(win, { window: win, document: doc, console, MutationObserver: class { constructor(cb) { (win.observers = win.observers || []).push(cb); } observe() { } disconnect() { win.disconnected = (win.disconnected || 0) + 1; } }, performance: { now: () => 0 }, setTimeout, clearTimeout });
         vm.runInContext(fs.readFileSync(process.env.UI_JS || path.join(ROOT, 'ui.js'), 'utf8'), win, { filename: 'ui.js' });
     }
     return { doc, win, mq, calls, scrim, layerModel, layerPanel, tlGroup, faceList, faceGroup, focusRow, geoRow, moreNetz };
@@ -284,7 +297,7 @@ const sheetPage = sub => { const p = buildPage({ ui: true }), eng = ph(p); eng.s
 const esc = host => { let stopped = 0; host.dispatch('keydown', { key: 'Escape', stopPropagation() { stopped++; } }); return stopped; };
 T('sheet-build', () => {
     const { p, host, tl, lt, ts } = sheetPage();
-    check('apply makes two sheet hosts inside the stack, hidden, role dialog, named: ph-sheet-layer "Ebenen-Einstellungen" and ph-sheet-timeline "Zeitleiste: Mehr", class overlay ph-sheet', !!host && !!tl && host.parentNode.id === 'ph-stack' && tl.parentNode.id === 'ph-stack' && host.hidden && tl.hidden && host.getAttribute('role') === 'dialog' && tl.getAttribute('role') === 'dialog' && host.getAttribute('aria-label') === 'Ebenen-Einstellungen' && tl.getAttribute('aria-label') === 'Zeitleiste: Mehr' && host.className === 'overlay ph-sheet' && tl.className === 'overlay ph-sheet', host && host.className);
+    check('apply makes two sheet hosts inside the stack, hidden, role dialog, named: ph-sheet-layer "Ebenen-Einstellungen" and ph-sheet-timeline "Zeitleiste: Mehr", class overlay ph-sheet (the layer sheet also ph-sheet-rows: it has blocks)', !!host && !!tl && host.parentNode.id === 'ph-stack' && tl.parentNode.id === 'ph-stack' && host.hidden && tl.hidden && host.getAttribute('role') === 'dialog' && tl.getAttribute('role') === 'dialog' && host.getAttribute('aria-label') === 'Ebenen-Einstellungen' && tl.getAttribute('aria-label') === 'Zeitleiste: Mehr' && host.className === 'overlay ph-sheet ph-sheet-rows' && tl.className === 'overlay ph-sheet', host && host.className);
     check('the hosts hold the very blocks (#layer-more-panel, #timeline-group), moved, not copied; the leftover container no longer holds them', host.children[0] === p.layerPanel && tl.children[0] === p.tlGroup && p.doc.all().filter(n => n.id === 'layer-more-panel' || n.id === 'timeline-group').length === 2);
     check('the "..." buttons are the sheets\' openers: aria-haspopup dialog, aria-expanded false', lt.getAttribute('aria-haspopup') === 'dialog' && ts.getAttribute('aria-haspopup') === 'dialog' && lt.getAttribute('aria-expanded') === 'false' && ts.getAttribute('aria-expanded') === 'false');
     check('closed: the scrim is hidden and the layer block keeps its own state (hidden), as before', p.scrim.hidden === true && p.layerPanel.hidden === true && p.layerModel.open === false);
@@ -635,6 +648,70 @@ T('source', () => {
     check('ui-phone.js names no id of index.html (only its own ph- ids); every control comes from the config', named.length === 0, named.join(', ') || 'none');
     check('it never clones: no cloneNode, innerHTML, outerHTML or insertAdjacentHTML', !/cloneNode|innerHTML|outerHTML|insertAdjacentHTML/.test(src));
     check('it never builds markup from strings: nodes come from createElement and createComment', /createElement/.test(src) && /createComment/.test(src));
+});
+
+
+console.log('\n== the layer sheet in rows (sheets redesign, commit 3a): config.sheets.layer.blocks, with the REAL ui.js ==');
+const LAYER_BLOCKS = config.sheets.layer.blocks;
+const blockIds = LAYER_BLOCKS.map(rows => rows.map(r => r.items.map(i => i.id)));
+const rowsOf = host => host.querySelectorAll('.ph-sheet-block').map(b => b.children.map(r => r.children.map(g => g.id)));
+const showGroups = (p, ids, on) => { ids.forEach(id => { p.doc.getElementById(id).hidden = !on; }); p.win.uiSync(); };
+const allGroupIds = [].concat.apply([], [].concat.apply([], blockIds));
+T('rows-build', () => {
+    const { p, host } = sheetPage();
+    const orig = {}; allGroupIds.forEach(id => { orig[id] = p.doc.getElementById(id); });
+    check('the config has two blocks: block 1 = shape + mode, node + size, fold; block 2 = offset X + offset Y + align, mesh + rotation (ten groups, each once)', blockIds.length === 2 && JSON.stringify(blockIds) === JSON.stringify([[['layer-shape-group', 'layer-mode-group'], ['layer-node-count-group', 'layer-shape-size-group'], ['layer-fold-group']], [['layer-offset-x-group', 'layer-offset-y-group', 'layer-align-group'], ['layer-mesh-preset-group', 'layer-rotation-group']]]) && new Set(allGroupIds).size === 10);
+    check('the sheet host gets the class ph-sheet-rows; the content wrapper (#layer-more-panel) holds exactly two .ph-sheet-block, each holding its .ph-sheet-row elements, in the config order', host.classList.contains('ph-sheet-rows') && JSON.stringify(rowsOf(host)) === JSON.stringify(blockIds) && p.layerPanel.children.filter(c => c.className === 'ph-sheet-block').length === 2, JSON.stringify(rowsOf(host)));
+    check('the groups are the SAME node objects (moved, not cloned), one element per id, no id twice in the document', allGroupIds.every(id => p.doc.getElementById(id) === orig[id] && p.doc.all().filter(n => n.id === id).length === 1) && (() => { const ids2 = p.doc.all().map(n => n.id).filter(Boolean); return new Set(ids2).size === ids2.length; })());
+    check('the first row of block 1 is the wrap row (class ph-sheet-row-wrap); no other row is', p.doc.all().filter(n => /\bph-sheet-row-wrap\b/.test(n.className)).length === 1 && host.querySelectorAll('.ph-sheet-row')[0].className === 'ph-sheet-row ph-sheet-row-wrap');
+    check('the leftover wrapper holds no group any more but the rows (the groups are in rows: the old wrapper keeps only its first two original children and the blocks)', p.layerPanel.children.every(c => c.className === 'ph-sheet-block' || !/^layer-.*-group$/.test(c.id)));
+    check('the groups\' own hidden state is untouched by the engine (still hidden: sketch.js shows them for a layer)', allGroupIds.every(id => orig[id].hidden === true));
+    check('with every group hidden every row and every block is hidden: no empty row, no gap (the base is active)', host.querySelectorAll('.ph-sheet-row').every(r => r.hidden === true) && host.querySelectorAll('.ph-sheet-block').every(b => b.hidden === true));
+});
+T('rows-collapse', () => {
+    const { p, host } = sheetPage();
+    const rows = () => host.querySelectorAll('.ph-sheet-row'), blocks = () => host.querySelectorAll('.ph-sheet-block');
+    const state = () => rows().map(r => r.hidden ? 'h' : 's').join('') + '/' + blocks().map(b => b.hidden ? 'h' : 's').join('');
+    // a layer is active: sketch.js shows every group but the fold group (a hexagon layer shows it)
+    showGroups(p, allGroupIds.filter(id => id !== 'layer-fold-group'), true);
+    check('a layer (not a hexagon): every row shows but the fold row (row 3 of block 1 collapses), both blocks show', state() === 'sshss/ss', state());
+    showGroups(p, ['layer-fold-group'], true);
+    check('a hexagon layer: the fold row shows too', state() === 'sssss/ss', state());
+    showGroups(p, ['layer-fold-group'], false);
+    check('...and collapses again when sketch.js hides the fold group', state() === 'sshss/ss', state());
+    showGroups(p, ['layer-offset-x-group', 'layer-offset-y-group'], false);
+    check('a row with some groups hidden stays (offset X / Y hidden, Align still shown: row 1 of block 2 shows)', rows()[3].hidden === false && blocks()[1].hidden === false, state());
+    showGroups(p, ['layer-align-group'], false);
+    check('a row whose groups are ALL hidden is hidden (row 1 of block 2), its block stays while another row shows', rows()[3].hidden === true && rows()[4].hidden === false && blocks()[1].hidden === false, state());
+    showGroups(p, allGroupIds, false);
+    check('the base becomes active (sketch.js hides every group): every row and both blocks are hidden at once', rows().every(r => r.hidden) && blocks().every(b => b.hidden), state());
+    // the MutationObserver path: where the page has one, a change of `hidden` re-reads the rows without a UI tick
+    p.doc.getElementById('layer-shape-group').hidden = false; (p.win.observers || []).forEach(cb => cb());
+    check('a MutationObserver callback re-reads the rows without a UI tick', rows()[0].hidden === false && blocks()[0].hidden === false);
+});
+T('rows-release', () => {
+    const p0 = buildPage({ ui: true }), before = dump(p0.doc.documentElement);
+    const p = buildPage({ ui: true }), orig = {}; allGroupIds.forEach(id => { orig[id] = p.doc.getElementById(id); });
+    const nb = {}; allGroupIds.forEach(id => { nb[id] = [orig[id].parentNode, orig[id].previousSibling, orig[id].nextSibling]; });
+    const eng = ph(p); eng.start(); eng.show('ebenen');
+    const host0 = p.doc.getElementById('ph-sheet-layer');
+    showGroups(p, allGroupIds, true);
+    p.doc.getElementById('ls-more').dispatch('click');   // the sheet is open
+    eng.release();
+    check('release (the sheet open): every group is back with the same parent and the same neighbours', allGroupIds.every(id => orig[id].parentNode === nb[id][0] && orig[id].previousSibling === nb[id][1] && orig[id].nextSibling === nb[id][2]));
+    check('...no .ph-sheet-block and no .ph-sheet-row is left, no marker comment, no host', p.doc.all().filter(n => /ph-sheet-(block|row)/.test(n.className)).length === 0 && !p.doc.getElementById('ph-sheet-layer') && (function none(n) { return n.childNodes.every(c => (c.nodeType !== 8 || !/^ph:/.test(c.text)) && (c.nodeType !== 1 || none(c))); })(p.doc.documentElement));
+    check('...the sheet host (kept for the next apply) no longer has the class ph-sheet-rows', !host0.classList.contains('ph-sheet-rows'));
+    check('...the row observer is disconnected (nothing watches the groups any more)', (p.win.disconnected || 0) >= 1, String(p.win.disconnected));
+    check('...every group keeps the hidden state sketch.js gave it (shown), none is hidden by the engine', allGroupIds.every(id => orig[id].hidden === false));
+    showGroups(p, allGroupIds, false);
+    check('and the page is the tree it was (groups hidden again as at the start)', dump(p.doc.documentElement).replace(/\[hidden\]/g, '') === before.replace(/\[hidden\]/g, '') && allGroupIds.every(id => p.doc.all().filter(n => n.id === id).length === 1));
+    eng.release();
+    check('release is idempotent (a second release does nothing)', (() => { const m = p.doc.mutations; eng.release(); return p.doc.mutations === m; })());
+    // apply again after a release: the same rows are rebuilt, the handlers still fire once
+    eng.apply('form'); eng.show('ebenen');
+    check('apply after release builds the rows again (two blocks, five rows) and every group is once in the document', JSON.stringify(rowsOf(p.doc.getElementById('ph-sheet-layer'))) === JSON.stringify(blockIds) && allGroupIds.every(id => p.doc.all().filter(n => n.id === id).length === 1));
+    check('...and a second apply(form) while it is on does no work', (() => { const m = p.doc.mutations; eng.apply('form'); return p.doc.mutations === m; })());
+    eng.release();
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

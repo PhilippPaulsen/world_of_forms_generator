@@ -8,7 +8,7 @@
  *   apply(tab)     idempotent: nothing to do when that tab is already applied; another tab releases first. Does nothing (and releases) at >= 768px or for a tab that is not covered.
  *   release()      idempotent: moves every element back to its marker and removes what apply() made.
  *   show(subtab)   the sub-tab's pane goes into the slot, the other panes into the parking container (hidden: display none - out of the Tab order and the accessibility tree, and no hit testing).
- *   sheets         config.sheets: blocks that become bottom sheets (UI.overlay) while the layout is on; see buildSheets().
+ *   sheets         config.sheets: blocks that become bottom sheets (UI.overlay) while the layout is on; see buildSheets(). A sheet may have `blocks` (rows of existing elements, see buildBlocks()).
  *   start()        listens: 'tabchange' on document (nav.js), the media query, resize / orientationchange; applies for the current tab.
  *
  * Sub-tab buttons follow the header tabs' model (nav.js): all of them are in the Tab order, Enter / Space activates one, aria-current marks the active one. The choice is remembered per tab.
@@ -179,9 +179,44 @@
         if (want && !h.overlay.isOpen) h.overlay.open();
         else if (!want && h.overlay.isOpen) h.overlay.close(!!(doc.activeElement && h.el.contains(doc.activeElement)));
       });
+      syncRows();
+    }
+    // A sheet with `blocks` (config.sheets.<id>.blocks): the existing elements go into row containers inside blocks inside the sheet's content, in the order the config says. They move whole (nothing is cloned or
+    // rewritten) and sketch.js keeps showing and hiding them; a row whose elements are ALL hidden is hidden itself, a block whose rows are all hidden too, so no empty row and no gap is left. release() puts the
+    // elements back (restoreAll) and removes the containers; a MutationObserver (where there is one) and every UI tick re-read the `hidden` attributes.
+    function buildBlocks(def, host, content, b) {
+      host.classList.add('ph-sheet-rows');
+      def.blocks.forEach(function (rows) {
+        const blk = el('div', 'ph-sheet-block'), rowEls = [];
+        rows.forEach(function (row) {
+          const r = el('div', row.wrap ? 'ph-sheet-row ph-sheet-row-wrap' : 'ph-sheet-row');
+          row.items.forEach(function (it) { take(it.id, r); });
+          blk.appendChild(r);
+          rowEls.push({ el: r, ids: row.items.map(function (it) { return it.id; }) });
+        });
+        content.appendChild(blk);
+        b.sheetBlocks.push({ el: blk, rows: rowEls });
+      });
+      if (typeof win.MutationObserver === 'function') {
+        b.rowObserver = new win.MutationObserver(function () { syncRows(); });
+        b.sheetBlocks.forEach(function (blk) { blk.rows.forEach(function (r) { r.ids.forEach(function (id) { const n = doc.getElementById(id); if (n) b.rowObserver.observe(n, { attributes: true, attributeFilter: ['hidden'] }); }); }); });
+      }
+    }
+    function syncRows() {
+      if (!built || !built.sheetBlocks) return;
+      built.sheetBlocks.forEach(function (blk) {
+        let any = false;
+        blk.rows.forEach(function (r) {
+          const shown = r.ids.some(function (id) { const n = doc.getElementById(id); return !!n && !n.hidden; });
+          if (r.el.hidden === shown) r.el.hidden = !shown;
+          if (shown) any = true;
+        });
+        if (blk.el.hidden === any) blk.el.hidden = !any;
+      });
     }
     function buildSheets(t, b) {
       b.sheets = [];
+      b.sheetBlocks = [];
       const UI = win.UI;
       if (!(t.sheets && t.sheets.length)) return;
       // without UI.overlay a block stays where it is (inline) - a sheet nobody can open would hide it
@@ -198,7 +233,8 @@
           sheetCache[sid] = h;
         }
         b.stack.appendChild(h.el);
-        take(def.content, h.el);
+        const content = take(def.content, h.el);
+        if (def.blocks && content) buildBlocks(def, h.el, content, b);
         b.sheets.push(h);
       });
     }
@@ -248,6 +284,7 @@
         show(remembered[tab] || t.defaultSubtab);
         syncSheets();
         syncFollows();
+        syncRows();
       });
       return applied === tab;
     }
@@ -265,8 +302,11 @@
         if (built && built.labelsSaved) built.labelsSaved.forEach(function (o) {
           [['aria-label', o.label], ['title', o.title], ['data-i18n', o.i18n]].forEach(function (a) { if (a[1] === null) o.node.removeAttribute(a[0]); else o.node.setAttribute(a[0], a[1]); });
         });
+        if (built && built.rowObserver) built.rowObserver.disconnect();
         restoreAll();
         if (built) {
+          (built.sheetBlocks || []).forEach(function (blk) { if (blk.el.parentNode) blk.el.parentNode.removeChild(blk.el); });
+          (built.sheets || []).forEach(function (h) { h.el.classList.remove('ph-sheet-rows'); });
           built.proxied.forEach(function (node) { delete node.focus; });
           if (built.openerSaved) {
             const o = built.openerSaved;

@@ -1527,4 +1527,23 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   /* While an overlay is open (ui.js: UI.overlay puts the class overlay-open on html) a bottom sheet covers the lower part of the canvas and would lie under the notice, which sits above it (z-index 60 against 40)
      and would hide the field being edited: the stack goes to the TOP of the canvas then, 8px under the header, growing downward. */
   html.ph.overlay-open .notices { top: calc(var(--ph-header-h) + var(--sp-2)); transform: none; }
+
+  /* ---- sheets redesign, commit 3a: the layer sheet in rows (ui-phone.js buildBlocks(), ui-phone-config.js sheets.layer.blocks) ------------------------------------------------------------------- */
+  /* The sheet is a column of blocks 16px apart (the sheet's own 16px padding all round); a block is a column of rows 8px apart; a row is 48px high, left aligned, 8px between its items. The items are the layer's
+     own .control-group wrappers (moved whole; their labels are display: none by the label rule above). A row or block the engine hides (all its items hidden) takes no room and no gap. */
+  html.ph .ph-sheet.ph-sheet-rows { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; gap: var(--sp-3); }
+  html.ph .ph-sheet-block { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); min-width: 0; }
+  html.ph .ph-sheet-row { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--sp-2); min-width: 0; max-width: 100%; }
+  html.ph .ph-sheet-block[hidden], html.ph .ph-sheet-row[hidden] { display: none; }
+  html.ph .ph-sheet-row .control-group { flex: none; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--sp-2); width: auto; max-width: none; margin: 0; padding: 0; text-align: left; }
+  html.ph .ph-sheet-row .control-group[hidden] { display: none; }
+  /* the typed fields of the offsets and the rotation (until the steppers of commit 3b): 60 x --target */
+  html.ph .ph-sheet-row .control-group > input[type="number"] { box-sizing: border-box; flex: none; width: 60px; min-width: 0; height: var(--target); margin: 0; }
+  /* the node count and size steppers are as wide as the Form row's (117px): the number field is --target wide (the layer block's own rule for the inline block gives it 2.4ch, and an id wins over a class) */
+  html.ph #layer-more-panel .stepper > input[type="number"] { width: var(--target); min-width: var(--target); }
+  /* 320px: the first row (three shapes + three symmetry modes: 328px) wraps into two lines, and the number fields of the steppers give up 8px */
+  @media (max-width: 339px) {
+    html.ph .ph-sheet-row-wrap { flex-wrap: wrap; }
+    html.ph #layer-more-panel .stepper > input[type="number"] { width: 40px; min-width: 40px; }
+  }
 }
