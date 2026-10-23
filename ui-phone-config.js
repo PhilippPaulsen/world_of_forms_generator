@@ -18,7 +18,7 @@
  *   sheets.<id>.blocks  (optional) [[row]]: the content of the sheet in blocks of rows (commit 3a of the sheets redesign): a block is a list of rows, a row { items: [{ id, w, wMin? }], wrap? }, an item one existing element
  *              (a .control-group: sketch.js keeps showing and hiding it; it moves whole, the engine knows no control). Rows are 48px high with 8px gaps, blocks are 16px apart, the sheet has 16px padding. A row whose items are
  *              ALL hidden is hidden (no empty row, no gap), a block whose rows are all hidden too. wrap: the row wraps into two lines below 340px (it does not fit 288px there; validate() requires it exactly then).
- *   overlays   id -> { content, blocks, steppers? }: an overlay that already exists with its own UI.overlay (ui-net.js's #more-netz) and gets the same rows as a sheet's content (commit 4a); tabs.<tab>.overlays lists them. A row may have
+ *   overlays   id -> { content, blocks, steppers? } (an overlay's steppers wrap inputs that are row items themselves): an overlay that already exists with its own UI.overlay (ui-net.js's #more-netz) and gets the same rows as a sheet's content (commit 4a); tabs.<tab>.overlays lists them. A row may have
  *              `h` (its height when it is not --target: the 20px readout line) and an item may be `fluid` (the row's width, alone in its row).
  *   sheets.<id>.steppers  (optional) inputId -> { icon, step, round?, min?, max?, wrap?, noTyping?, name, more, less }: an existing input that the engine wraps into a stepper (UI.stepper) while the layout is on and unwraps at
  *              release() (commit 3b). icons: key -> [stroke paths], the icons of those steppers and the two chevrons (chevron-up, chevron-down).
@@ -112,6 +112,8 @@
       'arrow-right': ['M4 12 H20', 'M14 6 L20 12 L14 18'],
       'arrow-down': ['M12 4 V20', 'M6 14 L12 20 L18 14'],
       'rotate': ['M4 12 a8 8 0 1 0 2.7 -6', 'M4 4 v6 h6'],
+      'sliders': ['M4 8 H20', 'M4 16 H20', 'M9 5 V11', 'M15 13 V19'],
+      'target': ['M12 3 V7', 'M12 17 V21', 'M3 12 H7', 'M17 12 H21', 'M16 12 a4 4 0 1 1 -8 0 a4 4 0 1 1 8 0'],
       'chevron-up': ['M6 15 L12 9 L18 15'],
       'chevron-down': ['M6 9 L12 15 L18 9']
     },
@@ -125,9 +127,9 @@
         // step / round / min / max / wrap / noTyping are the options of UI.stepper (commit 2); `icon` is a key of `icons`; name / more / less = { i18n (dictionary key), text (German fallback) } of the
         // group, the up chevron and the down chevron. The item that holds the input is 117px wide (109 at 320).
         steppers: {
-          'layer-offset-x-input': { icon: 'arrow-right', step: 10, round: 0, noTyping: true, name: { i18n: 'layer.shiftX', text: 'Versatz X' }, more: { i18n: 'layer.shiftX.more', text: 'Versatz X mehr' }, less: { i18n: 'layer.shiftX.less', text: 'Versatz X weniger' } },
-          'layer-offset-y-input': { icon: 'arrow-down', step: 10, round: 0, noTyping: true, name: { i18n: 'layer.shiftY', text: 'Versatz Y' }, more: { i18n: 'layer.shiftY.more', text: 'Versatz Y mehr' }, less: { i18n: 'layer.shiftY.less', text: 'Versatz Y weniger' } },
-          'layer-rotation-input': { icon: 'rotate', step: 15, min: 0, max: 360, wrap: true, round: 0, noTyping: true, name: { i18n: 'layer.rotation', text: 'Drehung' }, more: { i18n: 'layer.rotation.more', text: 'Drehung mehr' }, less: { i18n: 'layer.rotation.less', text: 'Drehung weniger' } }
+          'layer-offset-x-input': { icon: 'arrow-right', step: 10, round: 0, noTyping: true, display: { decimals: 1 }, name: { i18n: 'layer.shiftX', text: 'Versatz X' }, more: { i18n: 'layer.shiftX.more', text: 'Versatz X mehr' }, less: { i18n: 'layer.shiftX.less', text: 'Versatz X weniger' } },
+          'layer-offset-y-input': { icon: 'arrow-down', step: 10, round: 0, noTyping: true, display: { decimals: 1 }, name: { i18n: 'layer.shiftY', text: 'Versatz Y' }, more: { i18n: 'layer.shiftY.more', text: 'Versatz Y mehr' }, less: { i18n: 'layer.shiftY.less', text: 'Versatz Y weniger' } },
+          'layer-rotation-input': { icon: 'rotate', step: 15, min: 0, max: 360, wrap: true, round: 0, noTyping: true, display: { decimals: 1 }, name: { i18n: 'layer.rotation', text: 'Drehung' }, more: { i18n: 'layer.rotation.more', text: 'Drehung mehr' }, less: { i18n: 'layer.rotation.less', text: 'Drehung weniger' } }
         },
         blocks: [
           [
@@ -150,9 +152,15 @@
     overlays: {
       netz: {
         content: 'more-netz',
+        // the exact fields become steppers (4b): step 0.01, two decimals, the limits of bindExact (ui-net.js: strength 0..1, focus -1..1); the stepper writes the field and dispatches input and change, which bindExact
+        // handles as it handles a typed value (clamp, notice, restore). The field is its own row item: the wrapper takes its place in the row. `fixed`: the number of decimals written.
+        steppers: {
+          'net-strength-exact': { icon: 'sliders', step: 0.01, round: 2, min: 0, max: 1, fixed: 2, noTyping: true, name: { i18n: 'net.strengthFine', text: 'Stärke fein' }, more: { i18n: 'net.strengthFine.more', text: 'Stärke fein mehr' }, less: { i18n: 'net.strengthFine.less', text: 'Stärke fein weniger' } },
+          'net-focus-exact': { icon: 'target', step: 0.01, round: 2, min: -1, max: 1, fixed: 2, noTyping: true, name: { i18n: 'net.focusFine', text: 'Fokus fein' }, more: { i18n: 'net.focusFine.more', text: 'Fokus fein mehr' }, less: { i18n: 'net.focusFine.less', text: 'Fokus fein weniger' } }
+        },
         blocks: [
           [
-            { items: [{ id: 'net-strength-exact', w: 60 }, { id: 'net-focus-exact', w: 60 }] }
+            { items: [{ id: 'net-strength-exact', w: 117, wMin: 109 }, { id: 'net-focus-exact', w: 117, wMin: 109 }] }
           ],
           [
             { items: [{ id: 'net-domain-row', w: 160 }] },
@@ -210,6 +218,27 @@
         if (used.has(id)) bad.push(tab + ': ' + where + ': control ' + id + ' is listed twice (also in ' + used.get(id) + ')');
         else used.set(id, where);
       };
+      // the steppers of a sheet or an overlay: the input exists in index.html (a sheet's input is NOT a row item, its group is; an overlay's input IS one: the wrapper takes its place), the icons exist, the options are the
+      // ones UI.stepper takes (and `fixed` the decimals written, `display.decimals` the decimals shown), every name has a dictionary key and a German text
+      const checkSteppers = function (def, label, isRowItem) {
+        if (def.steppers === undefined) return;
+        const icons = cfg.icons || {};
+        const rowIds = [].concat.apply([], (Array.isArray(def.blocks) ? def.blocks : []).map(function (rows) { return [].concat.apply([], (Array.isArray(rows) ? rows : []).map(function (r) { return (r.items || []).map(function (i) { return i.id; }); })); }));
+        ['chevron-up', 'chevron-down'].forEach(function (k) { if (!Array.isArray(icons[k]) || !icons[k].length) bad.push('icons: ' + k + ' is missing'); });
+        Object.keys(def.steppers).forEach(function (iid) {
+          const sp = def.steppers[iid], where = tab + ': ' + label + ' stepper ' + iid;
+          if (!known(iid)) bad.push(where + ': the input is not in index.html');
+          if (isRowItem ? rowIds.indexOf(iid) < 0 : rowIds.indexOf(iid) >= 0) bad.push(where + (isRowItem ? ': the input must be a row item of the overlay (the wrapper takes its place)' : ': the input is also a row item'));
+          if (!(typeof sp.step === 'number' && sp.step > 0 && isFinite(sp.step))) bad.push(where + ': step must be a positive number');
+          if (sp.round !== undefined && !(Number.isInteger(sp.round) && sp.round >= 0)) bad.push(where + ': round must be a whole number of decimals');
+          if (sp.fixed !== undefined && !(Number.isInteger(sp.fixed) && sp.fixed >= 0)) bad.push(where + ': fixed must be a whole number of decimals');
+          if (sp.display !== undefined && !(sp.display && Number.isInteger(sp.display.decimals) && sp.display.decimals >= 0)) bad.push(where + ': display needs a whole number of decimals');
+          if (typeof sp.min === 'number' && typeof sp.max === 'number' && !(sp.max > sp.min)) bad.push(where + ': max must be above min');
+          if (sp.wrap && !(typeof sp.min === 'number' && typeof sp.max === 'number' && sp.max > sp.min)) bad.push(where + ': wrap needs min and max');
+          if (!Array.isArray(icons[sp.icon]) || !icons[sp.icon].length) bad.push(where + ': the icon ' + sp.icon + ' is not defined in icons');
+          ['name', 'more', 'less'].forEach(function (k) { const n = sp[k]; if (!n || typeof n.i18n !== 'string' || !n.i18n || typeof n.text !== 'string' || !n.text.trim()) bad.push(where + ': ' + k + ' needs an i18n key and a German text'); });
+        });
+      };
       // the rows of a sheet or an overlay (blocks): every id exists and is used once in the tab, a row fits 343px and, unless it wraps, 288px with its narrow widths; a row may have its own height `h`, an item may be `fluid`
       // (the row's width, alone in its row)
       const checkBlocks = function (def, label) {
@@ -246,22 +275,7 @@
         if (!sh.trigger || !sh.trigger.within || !sh.trigger.selector) bad.push(tab + ': sheet ' + sid + ': no trigger');
         else if (!known(sh.trigger.within)) bad.push(tab + ': sheet ' + sid + ': trigger container ' + sh.trigger.within + ' is unknown');
         if (!sh.open || !(sh.open.notHidden === true || typeof sh.open.hasClass === 'string')) bad.push(tab + ': sheet ' + sid + ': open must be { notHidden: true } or { hasClass }');
-        // the steppers of a sheet: the input exists in index.html (and is not itself a row item), the icons exist, the options are the ones UI.stepper takes, every name has a dictionary key and a German text
-        if (sh.steppers !== undefined) {
-          const icons = cfg.icons || {};
-          const rowIds = [].concat.apply([], (Array.isArray(sh.blocks) ? sh.blocks : []).map(function (rows) { return [].concat.apply([], (Array.isArray(rows) ? rows : []).map(function (r) { return (r.items || []).map(function (i) { return i.id; }); })); }));
-          ['chevron-up', 'chevron-down'].forEach(function (k) { if (!Array.isArray(icons[k]) || !icons[k].length) bad.push('icons: ' + k + ' is missing'); });
-          Object.keys(sh.steppers).forEach(function (iid) {
-            const sp = sh.steppers[iid], where = tab + ': sheet ' + sid + ' stepper ' + iid;
-            if (!known(iid)) bad.push(where + ': the input is not in index.html');
-            if (rowIds.indexOf(iid) >= 0) bad.push(where + ': the input is also a row item');
-            if (!(typeof sp.step === 'number' && sp.step > 0 && isFinite(sp.step))) bad.push(where + ': step must be a positive number');
-            if (sp.round !== undefined && !(Number.isInteger(sp.round) && sp.round >= 0)) bad.push(where + ': round must be a whole number of decimals');
-            if (sp.wrap && !(typeof sp.min === 'number' && typeof sp.max === 'number' && sp.max > sp.min)) bad.push(where + ': wrap needs min and max');
-            if (!Array.isArray(icons[sp.icon]) || !icons[sp.icon].length) bad.push(where + ': the icon ' + sp.icon + ' is not defined in icons');
-            ['name', 'more', 'less'].forEach(function (k) { const n = sp[k]; if (!n || typeof n.i18n !== 'string' || !n.i18n || typeof n.text !== 'string' || !n.text.trim()) bad.push(where + ': ' + k + ' needs an i18n key and a German text'); });
-          });
-        }
+        checkSteppers(sh, 'sheet ' + sid, false);
         checkBlocks(sh, 'sheet ' + sid);
       });
       (t.overlays || []).forEach(function (oid) {
@@ -270,6 +284,7 @@
         claim(ov.content, 'overlay ' + oid);
         if (ov.blocks === undefined) bad.push(tab + ': overlay ' + oid + ': no blocks');
         checkBlocks(ov, 'overlay ' + oid);
+        checkSteppers(ov, 'overlay ' + oid, true);
       });
       const tr = cfg.toolRows[t.toolRow];
       if (!tr) bad.push(tab + ': tool row ' + t.toolRow + ' is not defined');

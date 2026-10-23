@@ -164,6 +164,10 @@
     // ---- the Netz sheet ----
     'net.strengthFine': { de: 'Stärke fein', en: 'Strength (fine)' },
     'net.focusFine': { de: 'Fokus fein', en: 'Focus (fine)' },
+    'net.strengthFine.more': { de: 'Stärke fein mehr', en: 'Strength (fine) more' },
+    'net.strengthFine.less': { de: 'Stärke fein weniger', en: 'Strength (fine) less' },
+    'net.focusFine.more': { de: 'Fokus fein mehr', en: 'Focus (fine) more' },
+    'net.focusFine.less': { de: 'Fokus fein weniger', en: 'Focus (fine) less' },
     'net.domain.single': { de: 'Einzeln', en: 'Single' },
     'net.domain.tiled': { de: 'Gekachelt', en: 'Tiled' },
     'net.domain.field': { de: 'Feld', en: 'Field' },

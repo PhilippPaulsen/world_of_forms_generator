@@ -123,8 +123,10 @@
   const showStrengthExact = bindExact(strengthExact, strengthInput, 0, 1, T['reason.strength.exact'], reasonStrength);
   const showFocusExact = bindExact(focusExact, focusInput, -1, 1, T['reason.focus.exact'], reasonFocus);
 
+  // A field the phone layout wrapped into a stepper (ui-phone.js: data-stepper, readonly with no keyboard) keeps the readOnly that layout gave it: this tick must not undo it. The lock (aria-disabled and the reason)
+  // is still set here; the layout mirrors it onto the stepper.
   function setLocked(field, why) {
-    if (field.readOnly !== !!why) field.readOnly = !!why;
+    if (!field.hasAttribute('data-stepper') && field.readOnly !== !!why) field.readOnly = !!why;
     UI.setDisabled(field, why);
   }
 
