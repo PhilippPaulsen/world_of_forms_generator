@@ -46,7 +46,7 @@ T('wiring', () => {
     const marker = CSS.indexOf('=== Phone layout (');
     check('above 768px the line is not shown: `.net-readout { display: none }` sits above the phone block', /\n\.net-readout \{ display: none; \}/.test(CSS.slice(0, marker)));
     const rule = /html\.ph #net-readout \{([^}]*)\}/.exec(CSS.slice(marker));
-    check('under html.ph it is ONE line of 20px, 14px type, muted (color-secondary), no wrapping: html.ph #net-readout in the phone block', !!rule && /display:\s*block/.test(rule[1]) && /height:\s*20px/.test(rule[1]) && /font-size:\s*14px/.test(rule[1]) && /line-height:\s*20px/.test(rule[1]) && /color:\s*var\(--color-secondary\)/.test(rule[1]) && /white-space:\s*nowrap/.test(rule[1]));
+    check('under html.ph it is ONE line of 20px, 14px type, muted (color-secondary), no wrapping: html.ph #net-readout in the phone block', !!rule && /display:\s*block/.test(rule[1]) && /(^|[;\s])height:\s*20px/.test(rule[1]) && /font-size:\s*14px/.test(rule[1]) && /line-height:\s*20px/.test(rule[1]) && /color:\s*var\(--color-secondary\)/.test(rule[1]) && /white-space:\s*nowrap/.test(rule[1]));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

@@ -142,6 +142,9 @@
     'layer.rotation.less': { de: 'Drehung weniger', en: 'Rotation less' },
 
     // ---- the timeline sheet ----
+    'timeline.notKeyframe': { de: 'Gewählte Ebene ist kein Keyframe', en: 'The selected layer is not a keyframe' },
+    'timeline.noKeyframes': { de: 'Noch keine Keyframes', en: 'No keyframes yet' },
+    'timeline.need2': { de: 'Mindestens zwei Keyframes nötig', en: 'At least two keyframes needed' },
     'timeline.recaptureNet': { de: 'Netz der gewählten Ebene neu aufnehmen', en: 'Recapture the net of the selected layer' },
     'timeline.pairing': { de: 'Linienzuordnung', en: 'Line pairing' },
     'timeline.remove': { de: 'Zeitleiste entfernen', en: 'Remove timeline' },

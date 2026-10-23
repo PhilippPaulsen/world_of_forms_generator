@@ -1579,6 +1579,20 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   @media (max-width: 339px) {
     html.ph #more-netz .stepper > input.exact-field { width: 40px; min-width: 40px; }
   }
+  /* ---- sheets redesign, commit 5a: the timeline sheet (ui-phone.js rows, ui-phone-timeline.js icons and readout) ------------------------------------------------------------------------------ */
+  /* #timeline-group is the sheet's content: it takes no box of its own (its blocks are the sheet's flex items) and is not hidden by the inline rule while the sheet is closed (the sheet's host is). The old keyframe
+     list, the net box, the status span and the text button are PARKED hidden (they stay in the DOM: the keyframe list's "Net" buttons and #btn-clear-timeline are what the icon buttons forward their clicks to). */
+  html.ph #timeline-group, html.ph #timeline-group:not(.ts-open) { display: contents; }
+  html.ph #timeline-group > .icon-row, html.ph #timeline-group > #timeline-keyframe-list, html.ph #timeline-group > #timeline-net-state, html.ph #timeline-group > #timeline-status { display: none; }
+  /* the icon row: three 48px buttons and two hairlines (1px wide, 32px high, 4px side margins, like the tool row's) */
+  html.ph #ph-tl-icons { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 0; margin: 0; padding: 0; }
+  html.ph .ph-tl-btn { box-sizing: border-box; flex: none; width: var(--target); height: var(--target); border-radius: var(--radius); touch-action: manipulation; }
+  html.ph .ph-tl-sep { flex: none; width: 1px; height: 32px; margin: 0 var(--sp-1); background: var(--color-hairline); }
+  html.ph .ph-tl-trash { color: var(--danger); }
+  html.ph .ph-tl-btn[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
+  html.ph #ph-tl-readout { display: block; box-sizing: border-box; height: 20px; margin: 0; padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; color: var(--color-secondary); }
+  /* the line-pairing editor below the readout (the existing look, until commit 5b): full width, a 16px gap above comes from the blocks */
+  html.ph .ph-sheet-row #timeline-pairing { margin: 0; width: 100%; min-width: 0; }
   /* the readout: ONE line of 20px, muted, 14px; nothing else of the sheet's former explanations is shown. Above 768px the element is not shown at all (the rule is not in the phone block). */
   html.ph #net-readout { display: block; box-sizing: border-box; height: 20px; margin: 0; padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; color: var(--color-secondary); }
 

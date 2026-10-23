@@ -12,7 +12,8 @@ const path = require('path');
 const vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
 const { createPhone } = require(process.env.UI_PHONE_JS || path.join(ROOT, 'ui-phone.js'));
-const { config } = require(process.env.PHONE_CONFIG_JS || path.join(ROOT, 'ui-phone-config.js'));
+const API = require(process.env.PHONE_CONFIG_JS || path.join(ROOT, 'ui-phone-config.js'));
+const { config } = API;
 
 let failures = 0, checks = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
@@ -126,10 +127,14 @@ function buildPage(opts) {
         lg('layer-mesh-preset-group', [el('div', { class: 'icon-row' }, [btn('btn-mesh-preset-x', 'layer-btn icon-btn'), btn('btn-mesh-preset-y', 'layer-btn icon-btn')])]),
         lg('layer-rotation-group', [el('input', { id: 'layer-rotation-input', type: 'number' })])];
     layerGroups.forEach(g => layerPanel.appendChild(g));
-    const tlGroup = el('div', { id: 'timeline-group', class: 'control-group' }, [btn('btn-clear-timeline', 'layer-btn'), el('input', { id: 'timeline-pairing-filter', type: 'number' })]);
+    const tlPairing = el('div', { id: 'timeline-pairing', class: 'timeline-pairing' }, [el('input', { id: 'timeline-pairing-filter', type: 'number' })]); tlPairing.hidden = true;
+    const tlGroup = el('div', { id: 'timeline-group', class: 'control-group' }, [btn('btn-clear-timeline', 'layer-btn'), el('div', { id: 'timeline-keyframe-list', class: 'icon-row' }, []), el('div', { id: 'timeline-net-state' }, []), tlPairing, el('span', { id: 'timeline-status' }, [])]);
+    // what ui-phone-timeline.js makes at load: the icon row and the readout, in a hidden holder
+    const tlHome = el('div', { id: 'ph-tl-home' }, [el('div', { id: 'ph-tl-icons' }, [btn('ph-tl-netrec', 'icon-btn ph-tl-btn'), btn('ph-tl-pairing', 'icon-btn ph-tl-btn'), btn('ph-tl-trash', 'icon-btn ph-tl-btn')]), el('p', { id: 'ph-tl-readout' }, [])]); tlHome.hidden = true;
     const settings = ['curve-fold-group', 'curve-strength-group', 'free-roughness-group', 'free-controls-group'].map(id => { const g = el('div', { id, class: 'control-group' }, [el('input', { type: 'range' })]); g.hidden = true; return g; });
     const faceList = el('div', { id: 'face-colors-list' }), faceGroup = el('div', { id: 'face-colors-group', class: 'control-group' }, [faceList]); faceGroup.hidden = true;
     body.appendChild(el('div', { class: 'main-container' }, [el('div', { class: 'controls-container' }, [btn('btn-leftover', 'layer-btn')].concat(settings, [tlGroup, layerPanel, faceGroup]))]));
+    body.appendChild(tlHome);
     // the Netz sheet (#more-netz): the net group sketch.js shows for the square on the base. The axes row, the Fokus stepper (inside #net-focus-row, which sketch.js shows for Sin and Tan), Net lines and Reverse
     // (inside #net-geo-row) are the pieces the phone layout moves out; the exact field stays
     const focusRow = el('div', { id: 'net-focus-row' }, [el('h3', {}, []), el('div', {}, [el('div', { id: 'net-focus-stepper', class: 'stepper' }, [el('span', { id: 'net-focus-value', class: 'stepper-display' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')]), el('input', { id: 'net-focus-exact', type: 'number' })])]); focusRow.hidden = true;
@@ -154,10 +159,10 @@ function buildPage(opts) {
     // opts.ui: the REAL ui.js (UI.overlay, UI.onSync) in this window; without it the engine finds no UI.overlay and leaves the sheet blocks where they are
     if (opts.ui) {
         vm.createContext(win);
-        Object.assign(win, { window: win, document: doc, console, Event: class { constructor(t, o) { this.type = t; this.bubbles = !!(o && o.bubbles); } }, MutationObserver: class { constructor(cb) { (win.observers = win.observers || []).push(cb); } observe() { } disconnect() { win.disconnected = (win.disconnected || 0) + 1; } }, performance: { now: () => 0 }, setTimeout, clearTimeout });
+        Object.assign(win, { window: win, document: doc, console, Event: class { constructor(t, o) { this.type = t; this.bubbles = !!(o && o.bubbles); } }, MutationObserver: class { constructor(cb) { (win.observers = win.observers || []).push(cb); } observe(el, o) { (win.observed = win.observed || []).push({ el, o }); } disconnect() { win.disconnected = (win.disconnected || 0) + 1; } }, performance: { now: () => 0 }, setTimeout, clearTimeout });
         vm.runInContext(fs.readFileSync(process.env.UI_JS || path.join(ROOT, 'ui.js'), 'utf8'), win, { filename: 'ui.js' });
     }
-    return { doc, win, mq, calls, scrim, layerModel, layerPanel, tlGroup, faceList, faceGroup, focusRow, geoRow, moreNetz, macroRow, domainRow };
+    return { doc, win, mq, calls, scrim, layerModel, layerPanel, tlGroup, tlPairing, tlHome, faceList, faceGroup, focusRow, geoRow, moreNetz, macroRow, domainRow };
 }
 const ph = (page, cfg) => createPhone(page.doc, page.win, cfg || config);
 // a structure string of the whole tree (tag, id, class, kids; comments by text): equal before apply and after release
@@ -300,7 +305,7 @@ const sheetPage = sub => { const p = buildPage({ ui: true }), eng = ph(p); eng.s
 const esc = host => { let stopped = 0; host.dispatch('keydown', { key: 'Escape', stopPropagation() { stopped++; } }); return stopped; };
 T('sheet-build', () => {
     const { p, host, tl, lt, ts } = sheetPage();
-    check('apply makes two sheet hosts inside the stack, hidden, role dialog, named: ph-sheet-layer "Ebenen-Einstellungen" and ph-sheet-timeline "Zeitleiste: Mehr", class overlay ph-sheet (the layer sheet also ph-sheet-rows: it has blocks)', !!host && !!tl && host.parentNode.id === 'ph-stack' && tl.parentNode.id === 'ph-stack' && host.hidden && tl.hidden && host.getAttribute('role') === 'dialog' && tl.getAttribute('role') === 'dialog' && host.getAttribute('aria-label') === 'Ebenen-Einstellungen' && tl.getAttribute('aria-label') === 'Zeitleiste: Mehr' && host.className === 'overlay ph-sheet ph-sheet-rows' && tl.className === 'overlay ph-sheet', host && host.className);
+    check('apply makes two sheet hosts inside the stack, hidden, role dialog, named: ph-sheet-layer "Ebenen-Einstellungen" and ph-sheet-timeline "Zeitleiste: Mehr", class overlay ph-sheet (the layer sheet also ph-sheet-rows: it has blocks)', !!host && !!tl && host.parentNode.id === 'ph-stack' && tl.parentNode.id === 'ph-stack' && host.hidden && tl.hidden && host.getAttribute('role') === 'dialog' && tl.getAttribute('role') === 'dialog' && host.getAttribute('aria-label') === 'Ebenen-Einstellungen' && tl.getAttribute('aria-label') === 'Zeitleiste: Mehr' && host.className === 'overlay ph-sheet ph-sheet-rows' && tl.className === 'overlay ph-sheet ph-sheet-rows', host && host.className);
     check('the hosts hold the very blocks (#layer-more-panel, #timeline-group), moved, not copied; the leftover container no longer holds them', host.children[0] === p.layerPanel && tl.children[0] === p.tlGroup && p.doc.all().filter(n => n.id === 'layer-more-panel' || n.id === 'timeline-group').length === 2);
     check('the "..." buttons are the sheets\' openers: aria-haspopup dialog, aria-expanded false', lt.getAttribute('aria-haspopup') === 'dialog' && ts.getAttribute('aria-haspopup') === 'dialog' && lt.getAttribute('aria-expanded') === 'false' && ts.getAttribute('aria-expanded') === 'false');
     check('closed: the scrim is hidden and the layer block keeps its own state (hidden), as before', p.scrim.hidden === true && p.layerPanel.hidden === true && p.layerModel.open === false);
@@ -925,6 +930,90 @@ T('netz-display', () => {
     eng.apply('form'); eng.show('ebenen');
     check('apply again puts the display layer back (once: no accessor chain)', x.__shown === '103.9' && x.value === before);
     eng.release();
+});
+
+
+console.log('\n== the timeline sheet (sheets redesign, commit 5a): the rows, the gate and the view (ui-phone-timeline.js), with the REAL ui.js ==');
+const TLV = require(process.env.UI_PHONE_TIMELINE_JS || path.join(ROOT, 'ui-phone-timeline.js'));
+const TLS = config.sheets.timeline;
+const tlSheet = () => { const p = buildPage({ ui: true }), eng = ph(p); eng.start(); eng.show('zeit'); return { p, eng, host: p.doc.getElementById('ph-sheet-timeline') }; };
+const tlRows = host => host.querySelectorAll('.ph-sheet-block').map(b => b.children.map(r => (r.hidden ? '(h)' : '') + r.children.map(g => g.id).join('+')).join(' / '));
+T('timeline-rows', () => {
+    const { p, eng, host } = tlSheet();
+    check('the timeline sheet is data: block 1 = the icon row (162px: 3 x 48 + 2 hairlines of 9px) and the readout (fluid, 20px), block 2 = the pairing editor behind the gate ph-tl-editor-open', JSON.stringify(TLS.blocks.map(b => b.map(r => r.items.map(i => i.id + (i.gate ? '@' + i.gate : '') + (i.w ? ':' + i.w : '') + (r.h ? ':h' + r.h : '')).join('+')))) === JSON.stringify([['ph-tl-icons:162', 'ph-tl-readout:h20'], ['timeline-pairing@ph-tl-editor-open']]) && config.createdByScript['ph-tl-icons'] === 'ui-phone-timeline.js' && config.createdByScript['ph-tl-readout'] === 'ui-phone-timeline.js');
+    check('apply moves the icon row, the readout and the editor into rows INSIDE #timeline-group (the content: no new host), the sheet host gets ph-sheet-rows; the editor row is hidden (gate closed), so the closed sheet has two rows and ONE block', JSON.stringify(tlRows(host)) === JSON.stringify(['ph-tl-icons / ph-tl-readout', '(h)timeline-pairing']) && host.classList.contains('ph-sheet-rows') && p.tlGroup.children.filter(c => c.className === 'ph-sheet-block').length === 2 && host.querySelectorAll('.ph-sheet-block')[1].hidden === true && host.querySelectorAll('.ph-sheet-block')[0].hidden === false, JSON.stringify(tlRows(host)));
+    check('the closed height at 375 by the config: 16 + 48 + 8 + 20 + 16 = 108; with the gate open the editor row adds 16 + its own height (the config counts a row of 48 for it)', API.sheetHeight(config, 'timeline') === 108 && API.sheetHeight(config, 'timeline', { gates: ['ph-tl-editor-open'] }) === 172 && API.sheetHeight(config, 'timeline', { narrow: true }) === 108);
+    // the gate: the class on the content opens the row; sketch.js's own hidden still decides
+    check('the engine WATCHES the content\'s class (a MutationObserver on #timeline-group, attributeFilter class), so the gate follows the toggle at once, not only on the next UI tick', (p.win.observed || []).some(x => x.el === p.tlGroup && x.o && x.o.attributeFilter && x.o.attributeFilter.indexOf('class') >= 0));
+    p.tlPairing.hidden = false; p.tlGroup.classList.add('ph-tl-editor-open'); p.win.uiSync();
+    check('with the class ph-tl-editor-open on #timeline-group the editor row and its block show', tlRows(host)[1] === 'timeline-pairing' && host.querySelectorAll('.ph-sheet-block')[1].hidden === false, JSON.stringify(tlRows(host)));
+    p.tlPairing.hidden = true; p.win.uiSync();
+    check('...but sketch.js hiding the editor itself (no segment) hides the row again: the gate does not override its own hidden', tlRows(host)[1] === '(h)timeline-pairing');
+    p.tlPairing.hidden = false; p.tlGroup.classList.remove('ph-tl-editor-open'); p.win.uiSync();
+    check('...and closing the gate hides it, whatever sketch.js says', tlRows(host)[1] === '(h)timeline-pairing');
+    check('the old pieces are PARKED, not removed: the keyframe list, the net box, the status span and the text button are all still in the document (the CSS hides them; the icon buttons forward to two of them)', ['timeline-keyframe-list', 'timeline-net-state', 'timeline-status', 'btn-clear-timeline'].every(id => !!p.doc.getElementById(id) && p.doc.all().filter(n => n.id === id).length === 1));
+    eng.release();
+    check('release puts the editor back into the group and the two made elements back into their holder; no block, no row, no marker left; the host class and the gate class are no longer on anything', p.tlPairing.parentNode === p.tlGroup && p.tlHome.children.map(c => c.id).join() === 'ph-tl-icons,ph-tl-readout' && p.doc.all().filter(n => /ph-sheet-(block|row)/.test(n.className)).length === 0 && !p.doc.getElementById('ph-sheet-timeline'));
+    check('release and apply again are idempotent: the same two blocks, every id once', (() => { const m = p.doc.mutations; eng.release(); const same = p.doc.mutations === m; eng.apply('form'); eng.show('zeit'); const h2 = p.doc.getElementById('ph-sheet-timeline'); return same && JSON.stringify(tlRows(h2)) === JSON.stringify(['ph-tl-icons / ph-tl-readout', '(h)timeline-pairing']) && ['ph-tl-icons', 'ph-tl-readout', 'timeline-pairing'].every(id => p.doc.all().filter(n => n.id === id).length === 1); })());
+});
+// a view on a page of its own (the engine is not started: the view works on its elements wherever they are)
+const tlView = (o) => {
+    const p = buildPage({ ui: true }); p.tlHome._detach();
+    const state = Object.assign({ tl: null, summary: null, active: 'base' }, o || {});
+    const kf = p.doc.getElementById('timeline-keyframe-list'), clicks = [], clr = p.doc.getElementById('btn-clear-timeline');
+    clr.addEventListener('click', () => clicks.push('clear'));
+    const mkKf = n => { kf.childNodes.slice().forEach(c => c._detach()); for (let i = 0; i < n; i++) { const tab = p.doc.createElement('span'); const nb = p.doc.createElement('button'), xb = p.doc.createElement('button'); nb.addEventListener('click', () => clicks.push('net' + i)); xb.addEventListener('click', () => clicks.push('remove' + i)); tab.appendChild(nb); tab.appendChild(xb); kf.appendChild(tab); } };
+    p.doc.documentElement.classList.add('ph');
+    const view = TLV.createTimelineView(p.doc, p.win, { read: { timelineState: () => state.tl, timelineSummary: () => state.summary, activeLayerNow: () => state.active } });
+    const tlo = (ids, nets) => ({ keyframeLayerIds: ids, netStates: nets || ids.map(() => ({ x: {} })), segmentDurationsMs: ids.slice(1).map(() => 2000) });
+    const set = (patch) => { Object.assign(state, patch); if (patch.tl) mkKf(patch.tl.keyframeLayerIds.length); p.win.uiSync(); };
+    return { p, view, state, clicks, set, tlo, mkKf, nodes: view.nodes };
+};
+const dis = b => b.getAttribute('aria-disabled') === 'true';
+T('timeline-view', () => {
+    const v = tlView(), n = v.nodes;
+    check('the view makes two elements in a hidden holder (not yet in the sheet): #ph-tl-icons (a group named Zeitleiste with data-i18n) with the three buttons and two 1px hairlines, #ph-tl-readout (a polite live region)', n.holder.hidden === true && n.icons.id === 'ph-tl-icons' && n.icons.getAttribute('role') === 'group' && n.icons.getAttribute('data-i18n') === 'timeline.strip' && n.icons.children.map(c => c.tagName.toLowerCase() === 'span' ? 'sep' : c.className.split(' ').pop()).join() === 'ph-tl-netrec,sep,ph-tl-pairing,sep,ph-tl-trash' && n.readout.getAttribute('aria-live') === 'polite');
+    check('every button has a German name from the dictionary key (aria-label = title, data-i18n): Netz der gewählten Ebene neu aufnehmen / Linienzuordnung / Zeitleiste entfernen; the pairing toggle has aria-pressed', [[n.netrec, 'Netz der gewählten Ebene neu aufnehmen', 'timeline.recaptureNet'], [n.pairing, 'Linienzuordnung', 'timeline.pairing'], [n.trash, 'Zeitleiste entfernen', 'timeline.remove']].every(a => a[0].getAttribute('data-i18n') === a[2] && a[0].getAttribute('aria-label') === a[1] || (dis(a[0]) && a[0].dataset.baseTitle === a[1])) && n.pairing.getAttribute('aria-pressed') === 'false');
+    check('with no timeline: all three are disabled with their reasons - netrec and trash "Noch keine Keyframes", the toggle "Mindestens zwei Keyframes nötig" - and the readout is empty', dis(n.netrec) && dis(n.pairing) && dis(n.trash) && n.netrec.dataset.reason === 'Noch keine Keyframes' && n.trash.dataset.reason === 'Noch keine Keyframes' && n.pairing.dataset.reason === 'Mindestens zwei Keyframes nötig' && n.readout.textContent === '');
+});
+T('timeline-forward', () => {
+    const v = tlView(), n = v.nodes;
+    v.set({ tl: v.tlo([2, 0, 5]), summary: { state: 'animated' }, active: 0 });
+    check('three keyframes (layers 2, 0, 5), layer 0 selected: netrec is enabled; a tap forwards to the "Net" button of keyframe 2 (position 1) and to NO other button', !dis(n.netrec) && (n.netrec.dispatch('click', { detail: 1 }), v.clicks.join() === 'net1'), v.clicks.join());
+    v.clicks.length = 0; v.set({ active: 5 }); n.netrec.dispatch('click', { detail: 1 });
+    check('...layer 5 (the third keyframe): the third "Net" button only', v.clicks.join() === 'net2');
+    v.clicks.length = 0; v.set({ active: 2 }); n.netrec.dispatch('click', { detail: 1 });
+    check('...layer 2 (the first): the first one', v.clicks.join() === 'net0');
+    v.clicks.length = 0; v.set({ active: 'base' });
+    check('the BASE selected: netrec is disabled with "Gewählte Ebene ist kein Keyframe", and a tap forwards nothing', dis(n.netrec) && n.netrec.dataset.reason === 'Gewählte Ebene ist kein Keyframe' && (n.netrec.dispatch('click', { detail: 1 }), v.clicks.length === 0));
+    v.set({ active: 7 });
+    check('a layer that is no keyframe (7): the same reason, nothing forwarded', dis(n.netrec) && n.netrec.dataset.reason === 'Gewählte Ebene ist kein Keyframe' && (n.netrec.dispatch('click', { detail: 1 }), v.clicks.length === 0));
+    v.clicks.length = 0; n.trash.dispatch('click', { detail: 1 });
+    check('the trash forwards ONE click to #btn-clear-timeline (whose handler asks first: ui-timeline.js, test-timeline-strip.js) and does nothing else', !dis(n.trash) && v.clicks.join() === 'clear');
+    v.clicks.length = 0; v.set({ tl: null, summary: null, active: 'base' }); n.trash.dispatch('click', { detail: 1 });
+    check('without a timeline the trash is disabled ("Noch keine Keyframes") and forwards nothing', dis(n.trash) && n.trash.dataset.reason === 'Noch keine Keyframes' && v.clicks.length === 0);
+    check('the "x" buttons of the keyframe list are never forwarded to (only the first button of a keyframe)', (() => { v.set({ tl: v.tlo([0, 1]), summary: { state: 'animated' }, active: 1 }); v.clicks.length = 0; n.netrec.dispatch('click', { detail: 1 }); return v.clicks.join() === 'net1' && v.clicks.indexOf('remove1') < 0; })());
+});
+T('timeline-toggle', () => {
+    const v = tlView(), n = v.nodes, g = v.p.tlGroup;
+    v.set({ tl: v.tlo([0]), summary: { state: 'pending' }, active: 0 });
+    check('with ONE keyframe the toggle is disabled with "Mindestens zwei Keyframes nötig" and a tap does nothing (no class, aria-pressed false)', dis(n.pairing) && n.pairing.dataset.reason === 'Mindestens zwei Keyframes nötig' && (n.pairing.dispatch('click', { detail: 1 }), !g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'false'));
+    g.classList.add('ts-open'); v.set({ tl: v.tlo([0, 1]), summary: { state: 'animated' } });
+    check('with two keyframes it is enabled; a tap puts ph-tl-editor-open on #timeline-group and aria-pressed true (and the button looks active)', !dis(n.pairing) && (n.pairing.dispatch('click', { detail: 1 }), g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'true' && /\bactive\b/.test(n.pairing.className)));
+    n.pairing.dispatch('click', { detail: 1 });
+    check('...a second tap closes it again', !g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'false' && !/\bactive\b/.test(n.pairing.className));
+    n.pairing.dispatch('click', { detail: 1 }); g.classList.remove('ts-open'); v.p.win.uiSync();
+    check('it is UI state, closed again whenever the sheet closes (#timeline-group loses ts-open): the class and the pressed state go on the next tick', !g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'false');
+    g.classList.add('ts-open'); n.pairing.dispatch('click', { detail: 1 }); v.set({ tl: v.tlo([0]) });
+    check('...and when the timeline drops below two keyframes while the editor is open', !g.classList.contains('ph-tl-editor-open') && dis(n.pairing));
+    v.p.doc.documentElement.classList.remove('ph'); g.classList.add('ts-open'); v.set({ tl: v.tlo([0, 1]) }); n.pairing.dispatch('click', { detail: 1 }); v.p.win.uiSync();
+    check('outside the phone layout the view does nothing on a tick (no class left on the group)', !g.classList.contains('ph-tl-editor-open'));
+});
+T('timeline-readout', () => {
+    const v = tlView(), n = v.nodes;
+    const say = (tl, st) => { v.set({ tl: tl, summary: st ? { state: st } : null }); return n.readout.textContent; };
+    check('the six states in German from the summary: none, partial (the missing keyframe numbers: 2), pending, incompatible, constant, animated (the keyframe count: 3)', say(v.tlo([0, 1], [null, null]), 'none') === 'Netz: nicht animiert' && say(v.tlo([0, 1], [{ x: 1 }, null]), 'partial') === 'Netz: Keyframe 2 ohne Netz' && say(v.tlo([0], [{ x: 1 }]), 'pending') === 'Netz: zweiten Keyframe hinzufügen' && say(v.tlo([0, 1]), 'incompatible') === 'Netz: nicht animierbar' && say(v.tlo([0, 1]), 'constant') === 'Netz: gleich in allen Keyframes' && say(v.tlo([0, 1, 2]), 'animated') === 'Netz: animiert (3 Keyframes)');
+    check('partial with several keyframes without a net: "1, 3"; and without a summary or a timeline the line is empty (it keeps its 20px)', say(v.tlo([0, 1, 2], [null, { x: 1 }, null]), 'partial') === 'Netz: Keyframe 1, 3 ohne Netz' && say(null, null) === '' && say(v.tlo([0, 1]), 'zzz') === '');
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

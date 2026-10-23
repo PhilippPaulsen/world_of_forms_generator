@@ -197,13 +197,15 @@
           if (row.h) r.setAttribute('data-h', String(row.h));
           row.items.forEach(function (it) { take(it.id, r); });
           blk.appendChild(r);
-          rowEls.push({ el: r, ids: row.items.map(function (it) { return it.id; }) });
+          const gates = {}; row.items.forEach(function (it) { if (it.gate) gates[it.id] = it.gate; });   // an item behind a gate is hidden unless the content has that class
+          rowEls.push({ el: r, ids: row.items.map(function (it) { return it.id; }), gates: gates, content: content });
         });
         content.appendChild(blk);
         b.sheetBlocks.push({ el: blk, rows: rowEls });
       });
       if (typeof win.MutationObserver === 'function') {
         b.rowObserver = new win.MutationObserver(function () { syncRows(); });
+        b.rowObserver.observe(content, { attributes: true, attributeFilter: ['class'] });   // a gate opens and closes with a class of the content
         b.sheetBlocks.forEach(function (blk) { blk.rows.forEach(function (r) { r.ids.forEach(function (id) { const n = doc.getElementById(id); if (n) b.rowObserver.observe(n, { attributes: true, attributeFilter: ['hidden'], subtree: true }); }); }); });
       }
     }
@@ -331,7 +333,7 @@
       built.sheetBlocks.forEach(function (blk) {
         let any = false;
         blk.rows.forEach(function (r) {
-          const shown = r.ids.some(function (id) { const n = doc.getElementById(id); return !!n && !itemHidden(n); });
+          const shown = r.ids.some(function (id) { const n = doc.getElementById(id); return !!n && !itemHidden(n) && (!r.gates[id] || (!!r.content.classList && r.content.classList.contains(r.gates[id]))); });
           if (r.el.hidden === shown) r.el.hidden = !shown;
           if (shown) any = true;
         });
