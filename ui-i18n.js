@@ -157,6 +157,7 @@
     'timeline.variantNext': { de: 'Nächste Variante', en: 'Next variant' },
     'timeline.listAll': { de: 'Alle Zuordnungen', en: 'All pairings' },
     'timeline.resetPairing': { de: 'Zuordnung zurücksetzen', en: 'Reset pairing' },
+    'timeline.pairingDefault': { de: 'Zuordnung ist Standard', en: 'Pairing is the default' },
     'timeline.net.none': { de: 'Netz: nicht animiert', en: 'Net: not animated' },
     'timeline.net.partial': { de: 'Netz: Keyframe {n} ohne Netz', en: 'Net: keyframe {n} without a net' },
     'timeline.net.pending': { de: 'Netz: zweiten Keyframe hinzufügen', en: 'Net: add a second keyframe' },

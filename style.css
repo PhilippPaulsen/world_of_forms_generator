@@ -1544,9 +1544,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   html.ph .ph-sheet-row .control-group > input[type="number"] { box-sizing: border-box; flex: none; width: 60px; min-width: 0; height: var(--target); margin: 0; }
   /* the node count and size steppers are as wide as the Form row's (117px): the number field is --target wide (the layer block's own rule for the inline block gives it 2.4ch, and an id wins over a class) */
   html.ph #layer-more-panel .stepper > input[type="number"] { width: var(--target); min-width: var(--target); }
-  /* 320px: the first row (three shapes + three symmetry modes: 328px) wraps into two lines, and the number fields of the steppers give up 8px */
+  /* a row marked `wrap` wraps into lines when it does not fit (the layer sheet's first row: 328px; the timeline's pairing row: 323px); before commit 5b this was inside the 339px media query, which left 340 to 359px
+     phones with a row that overflowed by up to 20px */
+  html.ph .ph-sheet-row-wrap { flex-wrap: wrap; }
+  /* 320px: the number fields of the steppers give up 8px */
   @media (max-width: 339px) {
-    html.ph .ph-sheet-row-wrap { flex-wrap: wrap; }
     html.ph #layer-more-panel .stepper > input[type="number"] { width: 40px; min-width: 40px; }
   }
 
@@ -1584,15 +1586,28 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
      list, the net box, the status span and the text button are PARKED hidden (they stay in the DOM: the keyframe list's "Net" buttons and #btn-clear-timeline are what the icon buttons forward their clicks to). */
   html.ph #timeline-group, html.ph #timeline-group:not(.ts-open) { display: contents; }
   html.ph #timeline-group > .icon-row, html.ph #timeline-group > #timeline-keyframe-list, html.ph #timeline-group > #timeline-net-state, html.ph #timeline-group > #timeline-status { display: none; }
-  /* the icon row: three 48px buttons and two hairlines (1px wide, 32px high, 4px side margins, like the tool row's) */
-  html.ph #ph-tl-icons { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 0; margin: 0; padding: 0; }
+  /* the icon row (commit 5b: 8px gaps as in the mock): netrec | pairing toggle + the segment select | trash, the hairlines 1px wide, 32px high, 4px side margins: 48 + 8 + 9 + 8 + 48 + 8 + 84 + 8 + 9 + 8 + 48 = 286px */
+  html.ph #ph-tl-icons { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--sp-2); margin: 0; padding: 0; }
   html.ph .ph-tl-btn { box-sizing: border-box; flex: none; width: var(--target); height: var(--target); border-radius: var(--radius); touch-action: manipulation; }
   html.ph .ph-tl-sep { flex: none; width: 1px; height: 32px; margin: 0 var(--sp-1); background: var(--color-hairline); }
   html.ph .ph-tl-trash { color: var(--danger); }
   html.ph .ph-tl-btn[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
   html.ph #ph-tl-readout { display: block; box-sizing: border-box; height: 20px; margin: 0; padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; color: var(--color-secondary); }
-  /* the line-pairing editor below the readout (the existing look, until commit 5b): full width, a 16px gap above comes from the blocks */
-  html.ph .ph-sheet-row #timeline-pairing { margin: 0; width: 100%; min-width: 0; }
+  /* commit 5b: the line-pairing editor (#timeline-pairing and what sketch.js renders into it) is the MODEL of ui-phone-pairing.js and is PARKED hidden: it stays in the document (the view's buttons forward to its own) */
+  html.ph #timeline-pairing { display: none; }
+  /* the pairing view: row 1 = one 48px chip per line (the selected one black), scrolling sideways; row 2 = [end up, end down, reverse] | [variant back, k/c, variant forward]; row 3 = reset */
+  html.ph .ph-tl-segment { box-sizing: border-box; flex: none; width: 84px; height: var(--target); margin: 0; padding: 0 var(--sp-4) 0 var(--sp-2); border: 1px solid var(--color-text); border-radius: var(--radius); background-color: var(--color-bg); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9 L12 15 L18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right var(--sp-2) center; background-size: 18px 18px; -webkit-appearance: none; appearance: none; color: var(--color-text); font: inherit; font-size: 16px; touch-action: manipulation; }
+  html.ph .ph-tl-segment[hidden] { display: none; }
+  html.ph .ph-tl-chips { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); flex: 1 1 0; min-width: 0; padding: var(--sp-1); margin: calc(-1 * var(--sp-1)); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }   /* room for the focus ring of an edge chip */
+  html.ph .ph-tl-chips::-webkit-scrollbar { display: none; }
+  html.ph .ph-tl-chip { font: inherit; font-size: 16px; font-variant-numeric: tabular-nums; }
+  html.ph .ph-tl-moves, html.ph .ph-tl-variant { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); flex: none; margin: 0; padding: 0; }
+  html.ph .ph-tl-variant .ph-tl-sep { margin: 0; }
+  html.ph .ph-tl-vcount { flex: none; width: 34px; text-align: center; font-variant-numeric: tabular-nums; }
+  /* below 355px the pairing row (323px) wraps and the variant group starts the second line: no hairline in front of it */
+  @media (max-width: 354px) {
+    html.ph .ph-tl-variant .ph-tl-sep { display: none; }
+  }
   /* the readout: ONE line of 20px, muted, 14px; nothing else of the sheet's former explanations is shown. Above 768px the element is not shown at all (the rule is not in the phone block). */
   html.ph #net-readout { display: block; box-sizing: border-box; height: 20px; margin: 0; padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; color: var(--color-secondary); }
 

@@ -37,7 +37,7 @@
     sizes: { header: 40, toolRow: 64, subtabs: 44, gap: 8, target: 48, rowGap: 8, gutter: 16, designWidth: 375, narrowWidth: 320 },
     scale: [4, 8, 16, 32],
     // the ids that no HTML file holds because a script creates them: id -> the script. (None yet; the layer and timeline strips are containers in index.html that ui-layers.js / ui-timeline.js fill.)
-    createdByScript: { 'ph-trail-chips': 'ui-phone-chips.js', 'ph-trail-stepper': 'ui-phone-chips.js', 'ph-tl-icons': 'ui-phone-timeline.js', 'ph-tl-readout': 'ui-phone-timeline.js' },
+    createdByScript: { 'ph-trail-chips': 'ui-phone-chips.js', 'ph-trail-stepper': 'ui-phone-chips.js', 'ph-tl-icons': 'ui-phone-timeline.js', 'ph-tl-readout': 'ui-phone-timeline.js', 'ph-tl-chips': 'ui-phone-pairing.js', 'ph-tl-moves': 'ui-phone-pairing.js', 'ph-tl-variant': 'ui-phone-pairing.js', 'ph-tl-reset': 'ui-phone-pairing.js' },
     tabs: {
       form: { covered: true, panelH: 104, subtabs: ['raster', 'ebenen', 'zeit'], defaultSubtab: 'raster', toolRow: 'form', sheets: ['layer', 'timeline'] },
       farbe: { covered: true, panelH: 104, subtabs: ['harmonie', 'spuren', 'ebenen', 'zeit'], defaultSubtab: 'harmonie', toolRow: 'farbe', sheets: ['layer', 'timeline'] },
@@ -144,18 +144,22 @@
           ]
         ]
       },
-      // The timeline sheet (5a): block 1 = the icon row (netrec | pairing toggle | trash: three 48px buttons and two 1px hairlines with 4px side margins = 162px; ui-phone-timeline.js makes it and forwards the clicks to the
-      // hidden model controls) and ONE readout line of 20px; block 2 = the line-pairing editor, an item with a GATE: its row shows only while the sheet's content (#timeline-group) has the class ph-tl-editor-open (the
-      // pairing toggle puts it there), and sketch.js still hides the editor itself while there is no segment. The old keyframe list, net box, status span and the text button are parked hidden by the CSS.
+      // The timeline sheet (5a, 5b): block 1 = the icon row (netrec | pairing toggle + the segment select | trash: five elements of 48px and 84px, two 1px hairlines with 4px side margins, 8px gaps = 286px; ui-phone-timeline.js
+      // makes it and forwards the clicks to the hidden model controls, ui-phone-pairing.js puts the select into it) and ONE readout line of 20px; block 2 = the line-pairing view of ui-phone-pairing.js, every item behind
+      // a GATE: the rows show only while the sheet's content (#timeline-group) has the class ph-tl-editor-open (the pairing toggle puts it there): row 1 = the line chips (fluid, they scroll), row 2 = [end up, end down,
+      // reverse] 160 + [hairline, variant back, k/c, variant forward] 155 = 323px (wraps below 355px, `wrap`), row 3 = reset. The old editor (#timeline-pairing) is the model and is parked hidden by the CSS, with the keyframe
+      // list, the net box, the status span and the text button.
       timeline: {
         host: 'ph-sheet-timeline', label: 'Zeitleiste: Mehr', content: 'timeline-group', trigger: { within: 'timeline-strip', selector: '.ts-more' }, open: { hasClass: 'ts-open' },
         blocks: [
           [
-            { items: [{ id: 'ph-tl-icons', w: 162 }] },
+            { items: [{ id: 'ph-tl-icons', w: 286 }] },
             { h: 20, items: [{ id: 'ph-tl-readout', fluid: true }] }
           ],
           [
-            { items: [{ id: 'timeline-pairing', fluid: true, gate: 'ph-tl-editor-open' }] }
+            { items: [{ id: 'ph-tl-chips', fluid: true, gate: 'ph-tl-editor-open' }] },
+            { wrap: true, items: [{ id: 'ph-tl-moves', w: 160, gate: 'ph-tl-editor-open' }, { id: 'ph-tl-variant', w: 155, gate: 'ph-tl-editor-open' }] },
+            { items: [{ id: 'ph-tl-reset', w: 48, gate: 'ph-tl-editor-open' }] }
           ]
         ]
       }
