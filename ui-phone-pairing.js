@@ -22,7 +22,18 @@
  *   modelSignature(vm, lang)                  a string: the view is rebuilt only when it changed (UI.onSync ticks; no MutationObserver)
  *   createPairingView(doc, win, opts)         the DOM part
  *
- * The texts are the dictionary's (ui-i18n.js): timeline.line {n}, endUp, endDown, reverse, variantPrev, variantNext, resetPairing, segment, pairing, pairingDefault.
+ * THE LIST (commit 5c). Row 3 gets a list icon [list][reset] "Alle Zuordnungen", shown only while the model offers browsing (its Browse all button exists and is not hidden: 1 <= n <= PAIRING_BROWSE_MAX_N lines).
+ * A tap replaces the editor block by the list (a state of the same sheet: the class ph-tl-list-show on #timeline-group instead of ph-tl-editor-show): a header [back][N von M Zuordnungen] and one 48px button per
+ * pairing, sorted ascending by the displacement sum, the current one black, the default marked, scrolled into view. The view OPENS the model's own list (a click on its Browse all button: sketch.js then renders
+ * #timeline-pairing-browser-list), reads its rows afresh and closes it again (a second click) whenever the list view is left, so the model is never left open; the model's sort select (ascending) and filter (empty)
+ * are never touched. A row forwards ONE click to the model's row button found by its key (the permutation, at n = 1 the flip and the member), after which the view is back in the editor with the first line selected.
+ * Escape (captured before UI.overlay sees it) and the back arrow go back to the editor; closing the sheet, switching the toggle off and removing a keyframe leave the list; a segment change keeps it open and follows
+ * the new segment (it leaves it when that segment is not browsable).
+ *
+ *   phoneListModel({ rows, shown, total, lang })  PURE. rows = what readList() reads of the model's list: [{ key, idx, perm | null, text, sum, current, isDefault }] -> { shown, total, rows: [{ key, order, sumText, sum, current, isDefault }] } sorted ascending
+ *   formatSum(value, lang)                        PURE: thousands grouping, "14 400" (a no-break space) in German, "14,400" in English
+ *
+ * The texts are the dictionary's (ui-i18n.js): timeline.line {n}, endUp, endDown, reverse, variantPrev, variantNext, resetPairing, segment, pairing, pairingDefault, listAll, listBack, pairingCount, pairingRow, default.
  */
 (function (root) {
   'use strict';
@@ -39,6 +50,11 @@
     'timeline.variantNext': 'Nächste Variante',
     'timeline.resetPairing': 'Zuordnung zurücksetzen',
     'timeline.pairingDefault': 'Zuordnung ist Standard',
+    'timeline.listAll': 'Alle Zuordnungen',
+    'timeline.listBack': 'Zurück zur Zuordnung',
+    'timeline.pairingCount': '{shown} von {total} Zuordnungen',
+    'timeline.pairingRow': 'Zuordnung {order}, Σd² {value} px²',
+    'timeline.default': 'Standard',
   };
 
   // ---- the pure model -------------------------------------------------------------------------------------------------------------------------------
@@ -51,6 +67,7 @@
     const v = row && row.variant ? row.variant : null;
     return {
       open: !!inp.open,
+      list: { offered: !!inp.offered, open: !!inp.listOpen },
       count: n,
       selected: sel,
       segment: { shown: segCount >= 2, value: String(clamp(m.segValue | 0, 0, Math.max(0, segCount - 1))), options: options },
@@ -73,8 +90,25 @@
     return clamp(selected + (action === 'up' ? -1 : 1), 0, Math.max(0, count - 1));
   }
   function modelSignature(vm, lang) {
-    return JSON.stringify([lang || '', vm.open, vm.count, vm.selected, vm.segment, vm.up, vm.down, vm.flip, vm.variant, vm.reset]);
+    return JSON.stringify([lang || '', vm.open, vm.list, vm.count, vm.selected, vm.segment, vm.up, vm.down, vm.flip, vm.variant, vm.reset]);
   }
+
+  // ---- the list: the pure part ----
+  function formatSum(value, lang) {
+    const v = Math.round(+value || 0), sep = lang === 'en' ? ',' : '\u00A0';
+    return (v < 0 ? '-' : '') + String(Math.abs(v)).replace(/\B(?=(\d{3})+(?!\d))/g, sep);
+  }
+  // the model's rows in, the view's rows out: sorted ASCENDING by the sum (the model's own order breaks a tie: a stable sort), the order as text ("2 1 3": the End line of Start 1, 2, 3), the figure formatted in the language
+  function phoneListModel(input) {
+    const inp = input || {}, rows = Array.isArray(inp.rows) ? inp.rows : [], lang = inp.lang || 'de';
+    const sorted = rows.map(function (r, i) { return { r: r, i: r.idx === undefined ? i : r.idx }; }).sort(function (a, b) { return (a.r.sum - b.r.sum) || (a.i - b.i); }).map(function (x) { return x.r; });
+    return {
+      shown: inp.shown === undefined ? rows.length : inp.shown,
+      total: inp.total === undefined ? rows.length : inp.total,
+      rows: sorted.map(function (r) { return { key: r.key, order: Array.isArray(r.perm) ? r.perm.map(function (j) { return j + 1; }).join(' ') : String(r.text || ''), sum: r.sum, sumText: formatSum(r.sum, lang), current: !!r.current, isDefault: !!r.isDefault }; }),
+    };
+  }
+  function listSignature(lv, lang) { return JSON.stringify([lang || '', lv.shown, lv.total, lv.rows]); }
 
   // ---- the DOM part ---------------------------------------------------------------------------------------------------------------------------------
   const ICON = {
@@ -84,12 +118,13 @@
     left: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 7 L9 12 L14 17"/></svg>',
     right: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 7 L15 12 L10 17"/></svg>',
     reset: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8 A7 7 0 1 1 5 12"/><path d="M6 4 V8 H10"/></svg>',
+    list: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7 H20 M4 12 H20 M4 17 H20"/></svg>',
   };
 
   function createPairingView(doc, win, opts) {
     opts = opts || {};
     const html = doc.documentElement, UI = win.UI;
-    let selected = 0, signature = null, vm = phonePairingModel({}), lastCount = -1, lastLang = null, optionsKey = null;
+    let selected = 0, signature = null, vm = phonePairingModel({}), lastCount = -1, lastLang = null, optionsKey = null, listOpen = false, listSig = null, listVm = null, busy = false, offeredNow = false, weOpened = false;
 
     function el(tag, cls, attrs) { const e = doc.createElement(tag); if (cls) e.className = cls; if (attrs) Object.keys(attrs).forEach(function (k) { e.setAttribute(k, attrs[k]); }); return e; }
     function text(key, params) {
@@ -152,7 +187,15 @@
     const seg = el('select', 'ph-tl-segment', { 'data-i18n-label': 'timeline.segment' });
     name(seg, 'timeline.segment');
     seg.hidden = true;
-    [chips, moves, variant, resetBtn].forEach(function (n) { home.appendChild(n); });
+    const listBtn = iconButton('ph-tl-listbtn', 'ph-tl-listicon', 'timeline.listAll', ICON.list);
+    listBtn.hidden = true;
+    const listHead = el('div', 'ph-tl-listhead', { id: 'ph-tl-listhead' });
+    const backBtn = iconButton(null, 'ph-tl-back', 'timeline.listBack', ICON.left);
+    const countEl = el('span', 'ph-tl-listcount', { 'aria-live': 'polite' });
+    listHead.appendChild(backBtn); listHead.appendChild(countEl);
+    const listEl = el('div', 'ph-tl-list', { id: 'ph-tl-list', role: 'group', 'data-i18n': 'timeline.listAll' });
+    name(listEl, 'timeline.listAll');
+    [chips, moves, variant, listBtn, resetBtn, listHead, listEl].forEach(function (n) { home.appendChild(n); });
     const icons = doc.getElementById('ph-tl-icons'), toggle = icons && kids(icons).filter(function (c) { return /\bph-tl-pairing\b/.test(c.className || ''); })[0];
     if (icons && toggle) icons.insertBefore(seg, toggle.nextSibling); else home.appendChild(seg);
 
@@ -196,6 +239,61 @@
     guard(resetBtn, forwardReset);
     seg.addEventListener('change', chooseSegment);
 
+    // ---- the list: the model's own list is opened with a click on its Browse all button and read afresh; it is closed again whenever the list view is left ----
+    function later(fn) { if (typeof Promise === 'function') Promise.resolve().then(fn); else fn(); }
+    function browseBtn() { return doc.getElementById('btn-timeline-pairing-browse'); }
+    function modelBrowser() { return doc.getElementById('timeline-pairing-browser'); }
+    function modelBrowserOpen() { const b = modelBrowser(); return !!b && !b.hidden; }
+    function offered() { const b = browseBtn(), p = doc.getElementById('timeline-pairing'); return !!b && !b.hidden && !(p && p.hidden); }
+    function modelListRows() { return kids(doc.getElementById('timeline-pairing-browser-list')).filter(function (r) { return /\bpairing-browse-row\b/.test(r.className || ''); }); }
+    function rowKey(b) { const d = b.dataset || {}; return String(d.perm || '') + (d.flip !== undefined ? '|' + d.flip + '|' + d.member : ''); }
+    function readList() {
+      const cnt = doc.getElementById('timeline-pairing-browser-count'), mt = /(\d+)\s+of\s+(\d+)/.exec(cnt ? String(cnt.textContent) : '');
+      const rows = modelListRows().map(function (b, idx) {
+        const d = b.dataset || {}, parts = kids(b), orient = d.flip !== undefined, perm = orient ? null : String(d.perm || '').split('').map(Number);
+        return { key: rowKey(b), idx: idx, perm: perm, text: orient ? String(parts[0] ? parts[0].textContent : '').replace(/\s*\(as clicked\)\s*$/, '') : '', sum: parseInt(String(parts[1] ? parts[1].textContent : '').replace(/\D/g, ''), 10) || 0, current: /\bcurrent\b/.test(b.className || ''), isDefault: orient ? (d.flip === '0' && d.member === '0') : perm.every(function (j, i) { return j === i; }) };
+      });
+      return { rows: rows, shown: mt ? +mt[1] : rows.length, total: mt ? +mt[2] : rows.length };
+    }
+    function clickModel(b) { busy = true; try { b.click(); } finally { busy = false; } }
+    function enterList() {
+      if (listOpen || !openNow() || !offered()) return false;
+      listOpen = true; listSig = null;
+      weOpened = !modelBrowserOpen();   // the model's list is closed afterwards only when this view opened it (what was there stays as it was)
+      if (weOpened) clickModel(browseBtn());
+      refresh(true);
+      later(function () { scrollCurrent(); if (backBtn.focus) backBtn.focus(); });
+      return true;
+    }
+    // the list view is left: the model's list is closed again (the model is never left open)
+    function dropList() {
+      if (!listOpen) return false;
+      listOpen = false; listSig = null; listVm = null;
+      kids(listEl).forEach(function (c) { listEl.removeChild(c); });   // no rows kept behind a hidden list
+      const b = browseBtn();
+      // not by the DOM: when the segment became non-browsable the model hid its list but kept its own open flag (a hidden button still takes a click)
+      if (b && weOpened) clickModel(b);
+      weOpened = false;
+      return true;
+    }
+    function backFromList() { if (!dropList()) return false; refresh(true); later(function () { if (!listBtn.hidden && listBtn.focus) listBtn.focus(); }); return true; }
+    function chooseRow(key) {
+      const b = modelListRows().filter(function (r) { return rowKey(r) === key; })[0];
+      if (!b) return false;
+      clickModel(b);   // sketch.js commits that pairing (setTimelinePairing / commitTimelineSegmentPairing) and re-renders the editor
+      dropList(); selected = 0;
+      refresh(true);
+      later(function () { if (!listBtn.hidden && listBtn.focus) listBtn.focus(); });
+      return true;
+    }
+    function scrollCurrent() {
+      const cur = kids(listEl).filter(function (b) { return b.getAttribute('aria-current') === 'true'; })[0];
+      if (cur && typeof cur.offsetTop === 'number' && typeof listEl.clientHeight === 'number') listEl.scrollTop = Math.max(0, cur.offsetTop - Math.round((listEl.clientHeight - (cur.offsetHeight || 0)) / 2));
+    }
+    guard(listBtn, enterList);
+    guard(backBtn, backFromList);
+    if (doc.addEventListener) doc.addEventListener('keydown', function (e) { if (e && e.key === 'Escape' && listOpen) { if (e.stopPropagation) e.stopPropagation(); if (e.preventDefault) e.preventDefault(); backFromList(); } }, true);   // before UI.overlay's own Escape: the list first, then the sheet
+
     // ---- rendering ----
     // aria-disabled without a reason (the model's own buttons have none: a boundary) or with one (UI.setDisabled: the title and what a tap says)
     function setOff(b, off, reasonKey) {
@@ -233,7 +331,31 @@
       }
       if (seg.value !== vm.segment.value) seg.value = vm.segment.value;
     }
+    function renderList() {
+      const lang = win.UI && win.UI.lang, rd = readList(), lv = phoneListModel({ rows: rd.rows, shown: rd.shown, total: rd.total, lang: lang }), lsig = listSignature(lv, lang);
+      if (lsig === listSig) return false;
+      listSig = lsig; listVm = lv;
+      const t = text('timeline.pairingCount', { shown: lv.shown, total: lv.total });
+      if (countEl.textContent !== t) countEl.textContent = t;
+      kids(listEl).forEach(function (c) { listEl.removeChild(c); });
+      lv.rows.forEach(function (r) {
+        const b = el('button', 'ph-tl-lrow' + (r.current ? ' active' : ''), { type: 'button' }), left = el('span', 'ph-tl-lleft'), arrow = el('span', 'ph-tl-larrow', { 'aria-hidden': 'true' }), ord = el('span', 'ph-tl-lorder'), sum = el('span', 'ph-tl-lsum');
+        arrow.textContent = '\u2192'; ord.textContent = r.order; sum.textContent = r.sumText;
+        left.appendChild(arrow); left.appendChild(ord);
+        if (r.isDefault) { const d = el('span', 'ph-tl-ldef'); d.textContent = text('timeline.default'); left.appendChild(d); }
+        b.appendChild(left); b.appendChild(sum);
+        name(b, 'timeline.pairingRow', { order: r.order, value: r.sumText });
+        if (r.isDefault) { const nm = b.getAttribute('aria-label') + ' (' + text('timeline.default') + ')'; b.setAttribute('aria-label', nm); b.setAttribute('title', nm); }
+        if (r.current) b.setAttribute('aria-current', 'true');
+        const key = r.key;
+        guard(b, function () { chooseRow(key); });
+        listEl.appendChild(b);
+      });
+      return true;
+    }
+    function setGroupClass(c, on) { const g = group(); if (!g || !g.classList) return; if (on) { if (!g.classList.contains(c)) g.classList.add(c); } else if (g.classList.contains(c)) g.classList.remove(c); }
     function render() {
+      listBtn.hidden = !vm.list.offered;
       renderSegment();
       renderChips();
       setOff(upBtn, !vm.up.enabled); setOff(downBtn, !vm.down.enabled); setOff(flipBtn, !vm.flip.enabled);
@@ -243,26 +365,38 @@
     }
     // sync(): on every UI.onSync tick and after every click on the document (a cheap signature compare); refresh(force): after a tap of this view
     function refresh(force) {
-      const open = openNow(), m = readModel(open);
-      vm = phonePairingModel({ m: m, selected: selected, open: open });
+      if (busy) return false;
+      const open = openNow();
+      offeredNow = open && offered();
+      if (listOpen && !offeredNow) dropList();   // the toggle went off, the sheet closed, the keyframes dropped or the segment is not browsable: the list is left, the model's list closed
+      const m = readModel(open);
+      vm = phonePairingModel({ m: m, selected: selected, open: open, offered: offeredNow, listOpen: listOpen });
       if (vm.selected >= 0) selected = vm.selected;
+      setGroupClass('ph-tl-editor-show', open && !listOpen);
+      setGroupClass('ph-tl-list-show', open && listOpen);
+      const listChanged = listOpen ? renderList() : false;
       const sig = modelSignature(vm, win.UI && win.UI.lang);
-      if (!force && sig === signature) return false;
+      if (!force && sig === signature) return listChanged;
       signature = sig;
       render();
       return true;
     }
     function sync() {
-      if (!html.classList.contains('ph')) return false;   // nothing to keep up to date outside the phone layout
+      if (!html.classList.contains('ph')) {   // nothing to keep up to date outside the phone layout: the gate classes go, the model's list is closed again
+        if (listOpen) dropList();
+        setGroupClass('ph-tl-editor-show', false); setGroupClass('ph-tl-list-show', false);
+        return false;
+      }
       return refresh(false);
     }
+    if (win.addEventListener) win.addEventListener('resize', function () { sync(); });
     if (UI && UI.onSync) UI.onSync(sync);
     if (doc.addEventListener) doc.addEventListener('click', function () { sync(); });
     refresh(true);
-    return { sync: sync, refresh: function () { return refresh(true); }, model: function () { return vm; }, selected: function () { return selected; }, forward: forward, nodes: { home: home, chips: chips, moves: moves, up: upBtn, down: downBtn, flip: flipBtn, variant: variant, prev: prevBtn, next: nextBtn, count: count, reset: resetBtn, segment: seg } };
+    return { sync: sync, refresh: function () { return refresh(true); }, model: function () { return vm; }, selected: function () { return selected; }, forward: forward, list: { open: function () { return listOpen; }, enter: enterList, back: backFromList, vm: function () { return listVm; } }, nodes: { listBtn: listBtn, listHead: listHead, back: backBtn, listCount: countEl, list: listEl, home: home, chips: chips, moves: moves, up: upBtn, down: downBtn, flip: flipBtn, variant: variant, prev: prevBtn, next: nextBtn, count: count, reset: resetBtn, segment: seg } };
   }
 
-  const api = { phonePairingModel: phonePairingModel, followSelection: followSelection, modelSignature: modelSignature, createPairingView: createPairingView, T: T };
+  const api = { phonePairingModel: phonePairingModel, followSelection: followSelection, modelSignature: modelSignature, phoneListModel: phoneListModel, formatSum: formatSum, listSignature: listSignature, createPairingView: createPairingView, T: T };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof document !== 'undefined' && typeof window !== 'undefined' && document.body) {
     // read-only access to the page's own state: the permutation of a segment (timelineSegmentInfo(), a global function of sketch.js)

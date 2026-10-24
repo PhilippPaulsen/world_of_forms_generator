@@ -1537,6 +1537,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   html.ph .ph-sheet.ph-sheet-rows { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; gap: var(--sp-3); }
   html.ph .ph-sheet-block { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); min-width: 0; }
   html.ph .ph-sheet-row { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--sp-2); min-width: 0; max-width: 100%; }
+  html.ph .ph-sheet-block > .ph-sheet-row { align-self: stretch; }   /* a row is as wide as its block (commit 5c: the pairing list rows are 343px wide; every other row keeps its items at the left) */
   html.ph .ph-sheet-block[hidden], html.ph .ph-sheet-row[hidden] { display: none; }
   html.ph .ph-sheet-row .control-group { flex: none; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--sp-2); width: auto; max-width: none; margin: 0; padding: 0; text-align: left; }
   html.ph .ph-sheet-row .control-group[hidden] { display: none; }
@@ -1604,6 +1605,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   html.ph .ph-tl-moves, html.ph .ph-tl-variant { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); flex: none; margin: 0; padding: 0; }
   html.ph .ph-tl-variant .ph-tl-sep { margin: 0; }
   html.ph .ph-tl-vcount { flex: none; width: 34px; text-align: center; font-variant-numeric: tabular-nums; }
+  /* commit 5c: the pairing list (a state of the same sheet): a header row [back][N von M Zuordnungen] and one 48px button per pairing, the current one black; the list scrolls inside the sheet (80dvh minus what stays above it:
+     16 + 48 + 8 + 20 + 16 + 48 + 8 + 16 = 180px, and 2px for the sheet's border and rounding) */
+  html.ph .ph-tl-listicon[hidden] { display: none; }
+  html.ph .ph-tl-listhead { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); flex: 1 1 0; min-width: 0; margin: 0; padding: 0; }
+  html.ph .ph-tl-listcount { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; color: var(--color-secondary); }
+  html.ph .ph-tl-list { position: relative; display: flex; flex-direction: column; gap: var(--sp-2); flex: 1 1 0; min-width: 0; max-height: calc(80dvh - 182px); padding: var(--sp-1); margin: calc(-1 * var(--sp-1)); overflow-x: hidden; overflow-y: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  html.ph .ph-tl-list::-webkit-scrollbar { display: none; }
+  html.ph .ph-tl-lrow { box-sizing: border-box; flex: none; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: var(--sp-2); width: 100%; height: var(--target); margin: 0; padding: 0 var(--sp-3); border: 1px solid var(--color-text); border-radius: var(--radius); background: var(--color-bg); color: var(--color-text); font: inherit; font-size: 16px; font-variant-numeric: tabular-nums; text-align: left; cursor: pointer; touch-action: manipulation; }
+  html.ph .ph-tl-lrow.active { background: var(--color-text); color: var(--color-bg); }
+  html.ph .ph-tl-lleft { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); min-width: 0; }
+  html.ph .ph-tl-ldef { font-size: 14px; opacity: 0.7; }
+  html.ph .ph-tl-lsum { flex: none; text-align: right; white-space: nowrap; }
   /* below 355px the pairing row (323px) wraps and the variant group starts the second line: no hairline in front of it */
   @media (max-width: 354px) {
     html.ph .ph-tl-variant .ph-tl-sep { display: none; }

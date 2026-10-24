@@ -37,7 +37,7 @@
     sizes: { header: 40, toolRow: 64, subtabs: 44, gap: 8, target: 48, rowGap: 8, gutter: 16, designWidth: 375, narrowWidth: 320 },
     scale: [4, 8, 16, 32],
     // the ids that no HTML file holds because a script creates them: id -> the script. (None yet; the layer and timeline strips are containers in index.html that ui-layers.js / ui-timeline.js fill.)
-    createdByScript: { 'ph-trail-chips': 'ui-phone-chips.js', 'ph-trail-stepper': 'ui-phone-chips.js', 'ph-tl-icons': 'ui-phone-timeline.js', 'ph-tl-readout': 'ui-phone-timeline.js', 'ph-tl-chips': 'ui-phone-pairing.js', 'ph-tl-moves': 'ui-phone-pairing.js', 'ph-tl-variant': 'ui-phone-pairing.js', 'ph-tl-reset': 'ui-phone-pairing.js' },
+    createdByScript: { 'ph-trail-chips': 'ui-phone-chips.js', 'ph-trail-stepper': 'ui-phone-chips.js', 'ph-tl-icons': 'ui-phone-timeline.js', 'ph-tl-readout': 'ui-phone-timeline.js', 'ph-tl-chips': 'ui-phone-pairing.js', 'ph-tl-moves': 'ui-phone-pairing.js', 'ph-tl-variant': 'ui-phone-pairing.js', 'ph-tl-reset': 'ui-phone-pairing.js', 'ph-tl-listbtn': 'ui-phone-pairing.js', 'ph-tl-listhead': 'ui-phone-pairing.js', 'ph-tl-list': 'ui-phone-pairing.js' },
     tabs: {
       form: { covered: true, panelH: 104, subtabs: ['raster', 'ebenen', 'zeit'], defaultSubtab: 'raster', toolRow: 'form', sheets: ['layer', 'timeline'] },
       farbe: { covered: true, panelH: 104, subtabs: ['harmonie', 'spuren', 'ebenen', 'zeit'], defaultSubtab: 'harmonie', toolRow: 'farbe', sheets: ['layer', 'timeline'] },
@@ -144,11 +144,12 @@
           ]
         ]
       },
-      // The timeline sheet (5a, 5b): block 1 = the icon row (netrec | pairing toggle + the segment select | trash: five elements of 48px and 84px, two 1px hairlines with 4px side margins, 8px gaps = 286px; ui-phone-timeline.js
-      // makes it and forwards the clicks to the hidden model controls, ui-phone-pairing.js puts the select into it) and ONE readout line of 20px; block 2 = the line-pairing view of ui-phone-pairing.js, every item behind
-      // a GATE: the rows show only while the sheet's content (#timeline-group) has the class ph-tl-editor-open (the pairing toggle puts it there): row 1 = the line chips (fluid, they scroll), row 2 = [end up, end down,
-      // reverse] 160 + [hairline, variant back, k/c, variant forward] 155 = 323px (wraps below 355px, `wrap`), row 3 = reset. The old editor (#timeline-pairing) is the model and is parked hidden by the CSS, with the keyframe
-      // list, the net box, the status span and the text button.
+      // The timeline sheet (5a, 5b, 5c): block 1 = the icon row (netrec | pairing toggle + the segment select | trash: five elements of 48px and 84px, two 1px hairlines with 4px side margins, 8px gaps = 286px;
+      // ui-phone-timeline.js makes it and forwards the clicks to the hidden model controls, ui-phone-pairing.js puts the select into it) and ONE readout line of 20px. Block 2 = the line-pairing view of
+      // ui-phone-pairing.js, every item behind a GATE: the rows show only while the sheet's content (#timeline-group) has the class ph-tl-editor-show (the view puts it there while the pairing toggle is on and the list is
+      // not): row 1 = the line chips (fluid, they scroll), row 2 = [end up, end down, reverse] 160 + [hairline, variant back, k/c, variant forward] 155 = 323px (wraps below 355px, `wrap`), row 3 = [list][reset] (the list
+      // icon is hidden while the model offers no list). Block 3 (5c) = the pairing list, behind ph-tl-list-show: a header row [back][count] and the list (fluid; the config counts ONE list row, the real list is as long as
+      // the model's and scrolls inside the sheet). The old editor (#timeline-pairing) is the model and is parked hidden by the CSS, with the keyframe list, the net box, the status span and the text button.
       timeline: {
         host: 'ph-sheet-timeline', label: 'Zeitleiste: Mehr', content: 'timeline-group', trigger: { within: 'timeline-strip', selector: '.ts-more' }, open: { hasClass: 'ts-open' },
         blocks: [
@@ -157,9 +158,13 @@
             { h: 20, items: [{ id: 'ph-tl-readout', fluid: true }] }
           ],
           [
-            { items: [{ id: 'ph-tl-chips', fluid: true, gate: 'ph-tl-editor-open' }] },
-            { wrap: true, items: [{ id: 'ph-tl-moves', w: 160, gate: 'ph-tl-editor-open' }, { id: 'ph-tl-variant', w: 155, gate: 'ph-tl-editor-open' }] },
-            { items: [{ id: 'ph-tl-reset', w: 48, gate: 'ph-tl-editor-open' }] }
+            { items: [{ id: 'ph-tl-chips', fluid: true, gate: 'ph-tl-editor-show' }] },
+            { wrap: true, items: [{ id: 'ph-tl-moves', w: 160, gate: 'ph-tl-editor-show' }, { id: 'ph-tl-variant', w: 155, gate: 'ph-tl-editor-show' }] },
+            { items: [{ id: 'ph-tl-listbtn', w: 48, gate: 'ph-tl-editor-show' }, { id: 'ph-tl-reset', w: 48, gate: 'ph-tl-editor-show' }] }
+          ],
+          [
+            { items: [{ id: 'ph-tl-listhead', fluid: true, gate: 'ph-tl-list-show' }] },
+            { items: [{ id: 'ph-tl-list', fluid: true, gate: 'ph-tl-list-show' }] }
           ]
         ]
       }
