@@ -354,12 +354,13 @@
         if (!trigger || !doc.getElementById(def.content)) { if (missing.indexOf(sid) < 0) missing.push(sid); return; }
         let h = sheetCache[sid];
         if (!h || h.trigger !== trigger) {
-          h = { def: def, trigger: trigger, el: el('div', 'overlay ph-sheet', { id: def.host, role: 'dialog', 'aria-label': def.label }) };
+          h = { def: def, trigger: trigger, popup: trigger.getAttribute('aria-haspopup'), el: el('div', 'overlay ph-sheet', { id: def.host, role: 'dialog', 'aria-label': def.label }) };   // popup: what the trigger had BEFORE UI.overlay marked it
           h.el.hidden = true;
           h.overlay = UI.overlay(trigger, h.el, { toggleOnClick: false, onClose: function () { if (sheetOpen(def)) trigger.click(); } });
           trigger.addEventListener('click', syncSheets);
           sheetCache[sid] = h;
         }
+        h.trigger.setAttribute('aria-haspopup', 'dialog');   // UI.overlay set it when the host was made; release() took it away again (the trigger opens an inline block above 768px, not a dialog)
         b.stack.appendChild(h.el);
         const content = take(def.content, h.el);
         if (def.blocks && content) buildBlocks(def, h.el, content, b);
@@ -446,6 +447,8 @@
           if (built.sheetRow && built.sheetRow.parentNode) built.sheetRow.parentNode.removeChild(built.sheetRow);
           if (built.stack.parentNode) built.stack.parentNode.removeChild(built.stack);
         }
+        // UI.overlay marked every sheet's trigger aria-haspopup="dialog" and cannot undo it: above 768px the trigger opens the inline block again, so the attribute goes (or the value it had before comes back)
+        Object.keys(sheetCache).forEach(function (sid) { const h = sheetCache[sid]; if (h.popup === null || h.popup === undefined) h.trigger.removeAttribute('aria-haspopup'); else h.trigger.setAttribute('aria-haspopup', h.popup); });
         built = null;
         applied = null;
         html.classList.remove('ph');
