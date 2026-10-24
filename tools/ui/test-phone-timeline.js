@@ -30,7 +30,7 @@ T('readout', () => {
     const R = (t, st) => M.phoneTimelineModel({ tl: t, summary: st ? { state: st } : null, active: 'base' }).readout;
     const cases = [
         ['none', tl([0, 1], [null, null]), 'timeline.net.none', {}, 'Netz: nicht animiert', 'Net: not animated'],
-        ['partial', tl([0, 1, 2], [{ x: 1 }, null, { x: 1 }]), 'timeline.net.partial', { n: '2' }, 'Netz: Keyframe 2 ohne Netz', 'Net: keyframe 2 has no net'],
+        ['partial', tl([0, 1, 2], [{ x: 1 }, null, { x: 1 }]), 'timeline.net.partial', { n: '2' }, 'Netz: Keyframe 2 ohne Netz', 'Net: keyframe 2 without a net'],
         ['pending', tl([0], [{ x: 1 }]), 'timeline.net.pending', {}, 'Netz: zweiten Keyframe hinzufügen', 'Net: add a second keyframe'],
         ['incompatible', tl([0, 1]), 'timeline.net.incompatible', {}, 'Netz: nicht animierbar', 'Net: cannot be animated'],
         ['constant', tl([0, 1]), 'timeline.net.constant', {}, 'Netz: gleich in allen Keyframes', 'Net: same in all keyframes'],

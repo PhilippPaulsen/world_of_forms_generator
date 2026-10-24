@@ -177,6 +177,9 @@
       return refresh(false);
     }
     if (UI && UI.onSync) UI.onSync(sync);
+    // UI.onSync ticks only when the sketch redraws, and closing and reopening the sheet redraws nothing: without a tick in between, the group would have ts-open again when the next tick looks and the toggle would still be on.
+    // Every close of the sheet (the "..." button, Escape, the scrim, a tap outside, a width change) is a click on the strip's "..." (ui-phone.js onClose), and a click bubbles to the document after ui-timeline.js has flipped ts-open
+    if (doc.addEventListener) doc.addEventListener('click', function () { sync(); });
     refresh(true);
     return { sync: sync, refresh: function () { return refresh(true); }, model: function () { return model; }, forwardNetrec: forwardNetrec, forwardTrash: forwardTrash, togglePairing: togglePairing, nodes: { holder: holder, icons: icons, netrec: netrecBtn, pairing: pairingBtn, trash: trashBtn, readout: readoutEl } };
   }

@@ -1004,6 +1004,10 @@ T('timeline-toggle', () => {
     check('...a second tap closes it again', !g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'false' && !/\bactive\b/.test(n.pairing.className));
     n.pairing.dispatch('click', { detail: 1 }); g.classList.remove('ts-open'); v.p.win.uiSync();
     check('it is UI state, closed again whenever the sheet closes (#timeline-group loses ts-open): the class and the pressed state go on the next tick', !g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'false');
+    // 5a2: the sketch draws nothing while a sheet closes and opens again, so NO UI tick comes in between (found in the pane: the toggle was still on after close and reopen)
+    g.classList.add('ts-open'); v.p.win.uiSync(); n.pairing.dispatch('click', { detail: 1 });
+    g.classList.remove('ts-open'); v.p.doc.dispatch('click', { target: v.p.doc.getElementById('ts-more') }); g.classList.add('ts-open');
+    check('close and reopen WITHOUT a tick in between (the click that closes the sheet bubbles to the document): the toggle is off, the class is gone, the editor stays hidden when the sheet is open again', !g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'false' && !/\bactive\b/.test(n.pairing.className) && (v.p.win.uiSync(), !g.classList.contains('ph-tl-editor-open')));
     g.classList.add('ts-open'); n.pairing.dispatch('click', { detail: 1 }); v.set({ tl: v.tlo([0]) });
     check('...and when the timeline drops below two keyframes while the editor is open', !g.classList.contains('ph-tl-editor-open') && dis(n.pairing));
     v.p.doc.documentElement.classList.remove('ph'); g.classList.add('ts-open'); v.set({ tl: v.tlo([0, 1]) }); n.pairing.dispatch('click', { detail: 1 }); v.p.win.uiSync();
