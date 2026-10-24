@@ -127,10 +127,10 @@ function buildPage(opts) {
         lg('layer-mesh-preset-group', [el('div', { class: 'icon-row' }, [btn('btn-mesh-preset-x', 'layer-btn icon-btn'), btn('btn-mesh-preset-y', 'layer-btn icon-btn')])]),
         lg('layer-rotation-group', [el('input', { id: 'layer-rotation-input', type: 'number' })])];
     layerGroups.forEach(g => layerPanel.appendChild(g));
-    const tlPairing = el('div', { id: 'timeline-pairing', class: 'timeline-pairing' }, [el('select', { id: 'timeline-pairing-segment' }, []), el('div', { id: 'timeline-pairing-list' }, []), btn('btn-timeline-pairing-reset', 'layer-btn'), el('input', { id: 'timeline-pairing-filter', type: 'number' })]); tlPairing.hidden = true;
+    const tlPairing = el('div', { id: 'timeline-pairing', class: 'timeline-pairing' }, [el('select', { id: 'timeline-pairing-segment' }, []), el('div', { id: 'timeline-pairing-list' }, []), btn('btn-timeline-pairing-reset', 'layer-btn'), btn('btn-timeline-pairing-browse', 'layer-btn'), el('div', { id: 'timeline-pairing-browser' }, [el('select', { id: 'timeline-pairing-sort' }, []), el('input', { id: 'timeline-pairing-filter', type: 'number' }), el('div', { id: 'timeline-pairing-browser-count' }, []), el('div', { id: 'timeline-pairing-browser-list' }, [])])]); tlPairing.hidden = true;
     const tlGroup = el('div', { id: 'timeline-group', class: 'control-group' }, [btn('btn-clear-timeline', 'layer-btn'), el('div', { id: 'timeline-keyframe-list', class: 'icon-row' }, []), el('div', { id: 'timeline-net-state' }, []), tlPairing, el('span', { id: 'timeline-status' }, [])]);
     // what ui-phone-timeline.js and ui-phone-pairing.js make at load: the icon row, the readout and the pairing view's four containers, in a hidden holder
-    const tlHome = el('div', { id: 'ph-tl-home' }, [el('div', { id: 'ph-tl-icons' }, [btn('ph-tl-netrec', 'icon-btn ph-tl-btn'), btn('ph-tl-pairing', 'icon-btn ph-tl-btn'), btn('ph-tl-trash', 'icon-btn ph-tl-btn')]), el('p', { id: 'ph-tl-readout' }, []), el('div', { id: 'ph-tl-chips' }, []), el('div', { id: 'ph-tl-moves' }, []), el('div', { id: 'ph-tl-variant' }, []), btn('ph-tl-reset', 'icon-btn ph-tl-btn')]); tlHome.hidden = true;
+    const tlHome = el('div', { id: 'ph-tl-home' }, [el('div', { id: 'ph-tl-icons' }, [btn('ph-tl-netrec', 'icon-btn ph-tl-btn'), btn('ph-tl-pairing', 'icon-btn ph-tl-btn'), btn('ph-tl-trash', 'icon-btn ph-tl-btn')]), el('p', { id: 'ph-tl-readout' }, []), el('div', { id: 'ph-tl-chips' }, []), el('div', { id: 'ph-tl-moves' }, []), el('div', { id: 'ph-tl-variant' }, []), btn('ph-tl-listbtn', 'icon-btn ph-tl-btn'), btn('ph-tl-reset', 'icon-btn ph-tl-btn'), el('div', { id: 'ph-tl-listhead' }, []), el('div', { id: 'ph-tl-list' }, [])]); tlHome.hidden = true;
     const settings = ['curve-fold-group', 'curve-strength-group', 'free-roughness-group', 'free-controls-group'].map(id => { const g = el('div', { id, class: 'control-group' }, [el('input', { type: 'range' })]); g.hidden = true; return g; });
     const faceList = el('div', { id: 'face-colors-list' }), faceGroup = el('div', { id: 'face-colors-group', class: 'control-group' }, [faceList]); faceGroup.hidden = true;
     body.appendChild(el('div', { class: 'main-container' }, [el('div', { class: 'controls-container' }, [btn('btn-leftover', 'layer-btn')].concat(settings, [tlGroup, layerPanel, faceGroup]))]));
@@ -940,20 +940,22 @@ const tlSheet = () => { const p = buildPage({ ui: true }), eng = ph(p); eng.star
 const tlRows = host => host.querySelectorAll('.ph-sheet-block').map(b => b.children.map(r => (r.hidden ? '(h)' : '') + r.children.map(g => g.id).join('+')).join(' / '));
 T('timeline-rows', () => {
     const { p, eng, host } = tlSheet();
-    check('the timeline sheet is data: block 1 = the icon row (286px: 48 + 8 + 9 + 8 + 48 + 8 + the 84px select + 8 + 9 + 8 + 48) and the readout (fluid, 20px), block 2 = the pairing view behind the gate ph-tl-editor-open: the chips (fluid), the moves 160 + the variant group 155 (a wrap row), the reset icon', JSON.stringify(TLS.blocks.map(b => b.map(r => r.items.map(i => i.id + (i.gate ? '@' + i.gate : '') + (i.w ? ':' + i.w : '') + (r.h ? ':h' + r.h : '')).join('+')))) === JSON.stringify([['ph-tl-icons:286', 'ph-tl-readout:h20'], ['ph-tl-chips@ph-tl-editor-open', 'ph-tl-moves@ph-tl-editor-open:160+ph-tl-variant@ph-tl-editor-open:155', 'ph-tl-reset@ph-tl-editor-open:48']]) && TLS.blocks[1][1].wrap === true && ['ph-tl-icons', 'ph-tl-readout'].every(id => config.createdByScript[id] === 'ui-phone-timeline.js') && ['ph-tl-chips', 'ph-tl-moves', 'ph-tl-variant', 'ph-tl-reset'].every(id => config.createdByScript[id] === 'ui-phone-pairing.js'));
-    check('apply moves the icon row, the readout and the pairing view\'s containers into rows INSIDE #timeline-group (the content: no new host), the sheet host gets ph-sheet-rows; every row of block 2 is hidden (gate closed), so the closed sheet shows ONE block', JSON.stringify(tlRows(host)) === JSON.stringify(['ph-tl-icons / ph-tl-readout', '(h)ph-tl-chips / (h)ph-tl-moves+ph-tl-variant / (h)ph-tl-reset']) && host.classList.contains('ph-sheet-rows') && p.tlGroup.children.filter(c => c.className === 'ph-sheet-block').length === 2 && host.querySelectorAll('.ph-sheet-block')[1].hidden === true && host.querySelectorAll('.ph-sheet-block')[0].hidden === false, JSON.stringify(tlRows(host)));
-    check('the heights by the config: closed 16 + 48 + 8 + 20 + 16 = 108; open 108 - 16 + 16 + (48 + 8 + 48 + 8 + 48) + 16 = 284; open at 320 (the pairing row wraps into two lines) 284 + 56 = 340; closed at 320 108', API.sheetHeight(config, 'timeline') === 108 && API.sheetHeight(config, 'timeline', { gates: ['ph-tl-editor-open'] }) === 284 && API.sheetHeight(config, 'timeline', { gates: ['ph-tl-editor-open'], narrow: true }) === 340 && API.sheetHeight(config, 'timeline', { narrow: true }) === 108);
+    check('the timeline sheet is data: block 1 = the icon row (286px: 48 + 8 + 9 + 8 + 48 + 8 + the 84px select + 8 + 9 + 8 + 48) and the readout (fluid, 20px), block 2 = the pairing view behind the gate ph-tl-editor-show: the chips (fluid), the moves 160 + the variant group 155 (a wrap row), [list][reset]; block 3 = the list behind ph-tl-list-show', JSON.stringify(TLS.blocks.map(b => b.map(r => r.items.map(i => i.id + (i.gate ? '@' + i.gate : '') + (i.w ? ':' + i.w : '') + (r.h ? ':h' + r.h : '')).join('+')))) === JSON.stringify([['ph-tl-icons:286', 'ph-tl-readout:h20'], ['ph-tl-chips@ph-tl-editor-show', 'ph-tl-moves@ph-tl-editor-show:160+ph-tl-variant@ph-tl-editor-show:155', 'ph-tl-listbtn@ph-tl-editor-show:48+ph-tl-reset@ph-tl-editor-show:48'], ['ph-tl-listhead@ph-tl-list-show', 'ph-tl-list@ph-tl-list-show']]) && TLS.blocks[1][1].wrap === true && ['ph-tl-icons', 'ph-tl-readout'].every(id => config.createdByScript[id] === 'ui-phone-timeline.js') && ['ph-tl-chips', 'ph-tl-moves', 'ph-tl-variant', 'ph-tl-reset', 'ph-tl-listbtn', 'ph-tl-listhead', 'ph-tl-list'].every(id => config.createdByScript[id] === 'ui-phone-pairing.js'));
+    check('apply moves the icon row, the readout and the pairing view\'s containers into rows INSIDE #timeline-group (the content: no new host), the sheet host gets ph-sheet-rows; every row of blocks 2 and 3 is hidden (gate closed), so the closed sheet shows ONE block', JSON.stringify(tlRows(host)) === JSON.stringify(['ph-tl-icons / ph-tl-readout', '(h)ph-tl-chips / (h)ph-tl-moves+ph-tl-variant / (h)ph-tl-listbtn+ph-tl-reset', '(h)ph-tl-listhead / (h)ph-tl-list']) && host.classList.contains('ph-sheet-rows') && p.tlGroup.children.filter(c => c.className === 'ph-sheet-block').length === 3 && host.querySelectorAll('.ph-sheet-block')[1].hidden === true && host.querySelectorAll('.ph-sheet-block')[2].hidden === true && host.querySelectorAll('.ph-sheet-block')[0].hidden === false, JSON.stringify(tlRows(host)));
+    check('the heights by the config: closed 16 + 48 + 8 + 20 + 16 = 108; open 108 - 16 + 16 + (48 + 8 + 48 + 8 + 48) + 16 = 284; open at 320 (the pairing row wraps into two lines) 284 + 56 = 340; closed at 320 108; the list state (header, ONE list row counted) 16 + 48 + 8 + 20 + 16 + 48 + 8 + 48 + 16 = 228', API.sheetHeight(config, 'timeline') === 108 && API.sheetHeight(config, 'timeline', { gates: ['ph-tl-editor-show'] }) === 284 && API.sheetHeight(config, 'timeline', { gates: ['ph-tl-editor-show'], narrow: true }) === 340 && API.sheetHeight(config, 'timeline', { gates: ['ph-tl-list-show'] }) === 228 && API.sheetHeight(config, 'timeline', { narrow: true }) === 108);
     // the gate: the class on the content opens the row; sketch.js's own hidden still decides
     check('the engine WATCHES the content\'s class (a MutationObserver on #timeline-group, attributeFilter class), so the gate follows the toggle at once, not only on the next UI tick', (p.win.observed || []).some(x => x.el === p.tlGroup && x.o && x.o.attributeFilter && x.o.attributeFilter.indexOf('class') >= 0));
-    p.tlGroup.classList.add('ph-tl-editor-open'); p.win.uiSync();
-    check('with the class ph-tl-editor-open on #timeline-group the three rows of block 2 and the block show', tlRows(host)[1] === 'ph-tl-chips / ph-tl-moves+ph-tl-variant / ph-tl-reset' && host.querySelectorAll('.ph-sheet-block')[1].hidden === false, JSON.stringify(tlRows(host)));
-    p.tlGroup.classList.remove('ph-tl-editor-open'); p.win.uiSync();
-    check('...and removing the class hides them again', tlRows(host)[1] === '(h)ph-tl-chips / (h)ph-tl-moves+ph-tl-variant / (h)ph-tl-reset' && host.querySelectorAll('.ph-sheet-block')[1].hidden === true);
+    p.tlGroup.classList.add('ph-tl-editor-show'); p.win.uiSync();
+    check('with the class ph-tl-editor-show on #timeline-group the three rows of block 2 and the block show', tlRows(host)[1] === 'ph-tl-chips / ph-tl-moves+ph-tl-variant / ph-tl-listbtn+ph-tl-reset' && host.querySelectorAll('.ph-sheet-block')[1].hidden === false, JSON.stringify(tlRows(host)));
+    p.tlGroup.classList.remove('ph-tl-editor-show'); p.tlGroup.classList.add('ph-tl-list-show'); p.win.uiSync();
+    check('the class ph-tl-list-show shows block 3 (the header and the list) and hides block 2: the list REPLACES the editor', tlRows(host)[2] === 'ph-tl-listhead / ph-tl-list' && host.querySelectorAll('.ph-sheet-block')[2].hidden === false && host.querySelectorAll('.ph-sheet-block')[1].hidden === true);
+    p.tlGroup.classList.remove('ph-tl-list-show'); p.win.uiSync();
+    check('...and removing the class hides them again', tlRows(host)[1] === '(h)ph-tl-chips / (h)ph-tl-moves+ph-tl-variant / (h)ph-tl-listbtn+ph-tl-reset' && host.querySelectorAll('.ph-sheet-block')[1].hidden === true && host.querySelectorAll('.ph-sheet-block')[2].hidden === true);
     check('the old editor #timeline-pairing is the MODEL of the pairing view: it stays where it is (a child of #timeline-group, in no row), parked hidden by the CSS, with its own hidden attribute untouched', p.tlPairing.parentNode === p.tlGroup && p.tlPairing.hidden === true && !p.doc.all().some(n => /(^| )ph-sheet-row( |$)/.test(n.className) && n.contains(p.tlPairing)));
     check('the old pieces are PARKED, not removed: the keyframe list, the net box, the status span and the text button are all still in the document (the CSS hides them; the icon buttons forward to two of them)', ['timeline-keyframe-list', 'timeline-net-state', 'timeline-status', 'btn-clear-timeline'].every(id => !!p.doc.getElementById(id) && p.doc.all().filter(n => n.id === id).length === 1));
     eng.release();
-    check('release puts the editor back into the group and the two made elements back into their holder; no block, no row, no marker left; the host class and the gate class are no longer on anything', p.tlPairing.parentNode === p.tlGroup && p.tlHome.children.map(c => c.id).join() === 'ph-tl-icons,ph-tl-readout,ph-tl-chips,ph-tl-moves,ph-tl-variant,ph-tl-reset' && p.doc.all().filter(n => /ph-sheet-(block|row)/.test(n.className)).length === 0 && !p.doc.getElementById('ph-sheet-timeline'));
-    check('release and apply again are idempotent: the same two blocks, every id once', (() => { const m = p.doc.mutations; eng.release(); const same = p.doc.mutations === m; eng.apply('form'); eng.show('zeit'); const h2 = p.doc.getElementById('ph-sheet-timeline'); return same && JSON.stringify(tlRows(h2)) === JSON.stringify(['ph-tl-icons / ph-tl-readout', '(h)ph-tl-chips / (h)ph-tl-moves+ph-tl-variant / (h)ph-tl-reset']) && ['ph-tl-icons', 'ph-tl-readout', 'timeline-pairing', 'ph-tl-chips', 'ph-tl-moves', 'ph-tl-variant', 'ph-tl-reset'].every(id => p.doc.all().filter(n => n.id === id).length === 1); })());
+    check('release puts the editor back into the group and the two made elements back into their holder; no block, no row, no marker left; the host class and the gate class are no longer on anything', p.tlPairing.parentNode === p.tlGroup && p.tlHome.children.map(c => c.id).join() === 'ph-tl-icons,ph-tl-readout,ph-tl-chips,ph-tl-moves,ph-tl-variant,ph-tl-listbtn,ph-tl-reset,ph-tl-listhead,ph-tl-list' && p.doc.all().filter(n => /ph-sheet-(block|row)/.test(n.className)).length === 0 && !p.doc.getElementById('ph-sheet-timeline'));
+    check('release and apply again are idempotent: the same two blocks, every id once', (() => { const m = p.doc.mutations; eng.release(); const same = p.doc.mutations === m; eng.apply('form'); eng.show('zeit'); const h2 = p.doc.getElementById('ph-sheet-timeline'); return same && JSON.stringify(tlRows(h2)) === JSON.stringify(['ph-tl-icons / ph-tl-readout', '(h)ph-tl-chips / (h)ph-tl-moves+ph-tl-variant / (h)ph-tl-listbtn+ph-tl-reset', '(h)ph-tl-listhead / (h)ph-tl-list']) && ['ph-tl-icons', 'ph-tl-readout', 'timeline-pairing', 'ph-tl-chips', 'ph-tl-moves', 'ph-tl-variant', 'ph-tl-reset', 'ph-tl-listbtn', 'ph-tl-listhead', 'ph-tl-list'].every(id => p.doc.all().filter(n => n.id === id).length === 1); })());
 });
 // a view on a page of its own (the engine is not started: the view works on its elements wherever they are)
 const tlView = (o) => {
@@ -1052,7 +1054,30 @@ const pairModel = (p, init) => {
             list.appendChild(row);
         });
         reset.hidden = isDefault();
+        renderBrowse();
     };
+    // the model's list (renderTimelinePairingBrowser): offered for 1 <= n <= 5; the flag survives a segment that is not browsable (sketch.js keeps timelinePairingBrowseOpen); rows sorted by the sum, ties by the permutation
+    const bbtn = doc.getElementById('btn-timeline-pairing-browse'), browser = doc.getElementById('timeline-pairing-browser'), blist = doc.getElementById('timeline-pairing-browser-list'), bcount = doc.getElementById('timeline-pairing-browser-count');
+    const perms = n => n <= 1 ? [[0]] : [].concat.apply([], perms(n - 1).map(q => Array.from({ length: n }, (_, k) => { const r = q.slice(); r.splice(k, 0, n - 1); return r; }))).sort((a, b) => { for (let i = 0; i < n; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; });
+    const disp = q => q.reduce((a, j, i) => a + (i - j) * (i - j) * 1200 + (j === 0 ? 0 : 17), 0);
+    function renderBrowse() {
+        const n = st.perm.length, cand = st.segCount > 0 && n >= 1 && n <= 5;
+        bbtn.hidden = !cand; bbtn.textContent = st.browseOpen ? 'Hide list' : 'Browse all';
+        const open = cand && !!st.browseOpen; browser.hidden = !open;
+        blist.childNodes.slice().forEach(c => c._detach());
+        if (!open) return;
+        const items = (n === 1 ? [[0, false], [0, true]] : perms(n)).map(x => n === 1 ? { perm: [0], flip: x[1], sum: x[1] ? 0 : 0 } : { perm: x, sum: disp(x) });
+        items.sort((a, b) => a.sum - b.sum || (a.perm.join('') < b.perm.join('') ? -1 : 1));
+        bcount.textContent = 'Showing ' + (st.filterMax ? items.filter(i => i.sum <= st.filterMax).length : items.length) + ' of ' + items.length + (n === 1 ? ' variants (Start 1 \u2192 End 1, distinct pictures only)' : ' pairings (Start 1..' + n + ' \u2192 End ...)');
+        items.filter(i => !st.filterMax || i.sum <= st.filterMax).forEach(it => {
+            const b = mk('button', 'pairing-browse-row' + (n === 1 ? (it.flip === !!st.flips[0] ? ' current' : '') : (it.perm.join('') === st.perm.join('') ? ' current' : '')));
+            b.setAttribute('data-perm', it.perm.join('')); if (n === 1) { b.setAttribute('data-flip', it.flip ? '1' : '0'); b.setAttribute('data-member', '0'); }
+            b.appendChild(mk('span', '', n === 1 ? '2\u20135' + (it.flip ? ' \u21C4' : ' (as clicked)') : it.perm.map(j => j + 1).join(' '))); b.appendChild(mk('span', '', Math.round(it.sum).toLocaleString('en-US') + ' px\u00B2'));
+            const segR = st.seg; b.addEventListener('click', () => { log.push('row:' + it.perm.join('') + (n === 1 ? '|' + (it.flip ? 1 : 0) : '')); (st.rowSegs = st.rowSegs || []).push(segR); if (n === 1) st.flips[0] = it.flip; else st.perm = it.perm.slice(); render(); });
+            blist.appendChild(b);
+        });
+    }
+    bbtn.addEventListener('click', () => { log.push('browse'); st.browseOpen = !st.browseOpen; render(); });
     sel.addEventListener('change', () => { log.push('seg' + sel.value); st.seg = parseInt(sel.value, 10) || 0; render(); });
     reset.addEventListener('click', () => { log.push('reset'); st.perm = st.perm.map((_, i) => i); st.flips = st.flips.map(() => false); st.vk = st.vk.map(() => 1); render(); });
     render();
@@ -1169,6 +1194,124 @@ T('pairing-view-outside-phone', () => {
     check('without html.ph the view does nothing on a tick', x.n.chips.children.length === before && chipsOf(x).length === 4);
 });
 
+
+// ---- the pairing list (sheets redesign, commit 5c): the model's own list is opened with its Browse all button, read afresh, forwarded to and closed again ----
+console.log('\n== the pairing list (sheets redesign, commit 5c) ==');
+const lst = x => x.n.list.children, lrows = x => lst(x).map(b => b.children[0].children.filter(c => /ph-tl-lorder/.test(c.className)).map(c => c.textContent).join() + '|' + b.children[1].textContent);
+const inList = x => x.g.classList.contains('ph-tl-list-show'), inEditor = x => x.g.classList.contains('ph-tl-editor-show');
+const modelFlags = x => ({ sort: x.v.p.doc.getElementById('timeline-pairing-sort').value, filter: x.v.p.doc.getElementById('timeline-pairing-filter').value, open: x.model.st.browseOpen });
+const goList = x => { open(x); x.n.listBtn.dispatch('click', { detail: 1 }); };
+T('pairing-list-icon', () => {
+    const x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] });
+    check('with the toggle off nothing of the list is shown (no class, no model list opened)', !inList(x) && !inEditor(x) && x.model.st.browseOpen === undefined);
+    open(x);
+    check('n = 3: the list icon is shown in row 3 next to reset ([list][reset]), named "Alle Zuordnungen", enabled; the editor class is set', x.n.listBtn.hidden === false && x.n.listBtn.getAttribute('aria-label') === 'Alle Zuordnungen' && !dis(x.n.listBtn) && inEditor(x) && !inList(x));
+    [1, 2, 4, 5].forEach(n => { x.model.st.perm = Array.from({ length: n }, (_, i) => i); x.model.st.flips = x.model.st.perm.map(() => false); x.model.st.vk = x.model.st.perm.map(() => 1); x.model.st.vc = x.model.st.perm.map(() => 1); x.model.render(); x.v.p.win.uiSync(); x['hidden' + n] = x.n.listBtn.hidden; });
+    check('the list icon is there for n = 1, 2, 4 and 5 lines', [1, 2, 4, 5].every(n => x['hidden' + n] === false));
+    x.model.st.perm = [0, 1, 2, 3, 4, 5]; x.model.st.flips = x.model.st.perm.map(() => false); x.model.st.vk = x.model.st.perm.map(() => 1); x.model.st.vc = x.model.st.perm.map(() => 1); x.model.render(); x.v.p.win.uiSync();
+    check('n = 6 (PAIRING_BROWSE_MAX_N = 5: the model hides its Browse all button): the list icon is NOT in the row (hidden, no dead control) and a tap on where it was does nothing', x.n.listBtn.hidden === true && (x.n.listBtn.dispatch('click', { detail: 1 }), !inList(x) && x.model.log.length === 0));
+});
+T('pairing-list-open', () => {
+    const x = pairPage({ perm: [0, 2, 1], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1], browseOpen: false });
+    x.v.p.doc.getElementById('timeline-pairing-sort').value = 'asc'; x.v.p.doc.getElementById('timeline-pairing-filter').value = '';
+    goList(x);
+    check('a tap on the list icon opens the MODEL\'s list with one click on its Browse all button (logged once) and shows the list view: the editor class is replaced by the list class', x.model.log.join() === 'browse' && x.model.st.browseOpen === true && inList(x) && !inEditor(x));
+    const L = x.pview.list.vm();
+    check('six pairings (3 lines): the rows are the model\'s, SORTED ASCENDING by the sum, the sums are the model\'s own numbers (0 + 17 x ..., 2 x 1200 + ..., ...)', lst(x).length === 6 && L.rows.every((r, i, a) => !i || a[i - 1].sum <= r.sum) && L.rows[0].order === '1 2 3' && L.rows[0].sum === 34);
+    check('the figures in German with a no-break space (the model\'s "4,834 px²" is read as 4834 and shown "4 834")', lrows(x).some(r => /\d \d{3}$/.test(r)) && lrows(x)[0].endsWith('|34'), lrows(x).join(' / '));
+    const cur = lst(x).filter(b => b.getAttribute('aria-current') === 'true');
+    check('the CURRENT pairing (1 3 2) is marked: black (class active) and aria-current, exactly one row', cur.length === 1 && /\bactive\b/.test(cur[0].className) && cur[0].children[0].children.filter(c => /ph-tl-lorder/.test(c.className))[0].textContent === '1 3 2');
+    const def = lst(x).filter(b => b.children[0].children.some(c => /ph-tl-ldef/.test(c.className)));
+    check('the DEFAULT pairing (1 2 3) is marked with the small text "Standard" (and named so: the row\'s accessible name ends with "(Standard)"), no other row', def.length === 1 && def[0].children[0].children.filter(c => /ph-tl-lorder/.test(c.className))[0].textContent === '1 2 3' && def[0].children[0].children.filter(c => /ph-tl-ldef/.test(c.className))[0].textContent === 'Standard' && /\(Standard\)$/.test(def[0].getAttribute('aria-label')));
+    check('every row has the accessible name "Zuordnung <order>, Σd² <value> px²" (aria-label and title)', lst(x).every(b => /^Zuordnung \d( \d)*, Σd² [\d ]+ px²/.test(b.getAttribute('aria-label')) && b.getAttribute('title') === b.getAttribute('aria-label')), lst(x)[1].getAttribute('aria-label'));
+    check('the header: the count from the model "6 von 6 Zuordnungen", a back arrow named "Zurück zur Zuordnung"', x.n.listCount.textContent === '6 von 6 Zuordnungen' && x.n.back.getAttribute('aria-label') === 'Zurück zur Zuordnung');
+    check('the model\'s sort (ascending) and filter (empty) were not touched, and its list is open (the view opened it)', JSON.stringify(modelFlags(x)) === JSON.stringify({ sort: 'asc', filter: '', open: true }));
+    check('nothing else was clicked: the model log is exactly the one Browse all click', x.model.log.join() === 'browse');
+});
+T('pairing-list-pick', () => {
+    const x = pairPage({ perm: [0, 2, 1], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] });
+    open(x); chipsOf(x)[2].dispatch('click', { detail: 1 }); x.n.listBtn.dispatch('click', { detail: 1 });
+    const selBefore = selOf(x); const pick = key => lst(x).filter(b => b.getAttribute('aria-label').indexOf('Zuordnung ' + key) === 0)[0];
+    pick('3 1 2').dispatch('click', { detail: 1 });
+    check('the third line was selected before the list was opened: after the pick the selection is on line 1 again', selBefore === 2 && selOf(x) === 0);
+    check('a tap on the row "3 1 2" forwards ONE click to the MODEL\'s row button with that permutation (row:201 logged once) and the model applied it (perm 2,0,1); the model\'s list is closed again (a second Browse all click: the view had opened it) and the view is back in the EDITOR with the first line selected, the rows gone', x.model.log.join() === 'browse,row:201,browse' && x.model.st.perm.join() === '2,0,1' && x.model.st.browseOpen === false && inEditor(x) && !inList(x) && selOf(x) === 0 && lst(x).length === 0);
+    check('the editor shows the new state (chips for 3 lines, the variant text of row 1, reset enabled: not the default)', chipsOf(x).length === 3 && !dis(x.n.reset));
+    x.n.listBtn.dispatch('click', { detail: 1 });
+    const cur = lst(x).filter(b => b.getAttribute('aria-current') === 'true')[0];
+    check('the list opened again marks the NEW current pairing (3 1 2)', !!cur && cur.getAttribute('aria-label').indexOf('Zuordnung 3 1 2') === 0 && lst(x).filter(b => b.getAttribute('aria-current') === 'true').length === 1);
+    check('the model\'s sort and filter are untouched (the view never writes them)', modelFlags(x).sort === undefined && modelFlags(x).filter === undefined);
+});
+T('pairing-list-leave', () => {
+    // back arrow
+    let x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] }); goList(x);
+    x.n.back.dispatch('click', { detail: 1 });
+    check('the back arrow returns to the editor and closes the model\'s list (browse, browse); nothing else was clicked', inEditor(x) && !inList(x) && x.model.log.join() === 'browse,browse' && x.model.st.browseOpen === false);
+    // Escape
+    x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] }); goList(x);
+    let stopped = 0; x.v.p.doc.dispatch('keydown', { key: 'Escape', stopPropagation() { stopped++; }, preventDefault() { } });
+    check('Escape with the list open goes BACK to the editor and is STOPPED (UI.overlay does not see it: the sheet stays open); the model\'s list is closed again', inEditor(x) && !inList(x) && stopped === 1 && x.model.st.browseOpen === false);
+    x.v.p.doc.dispatch('keydown', { key: 'Escape', stopPropagation() { stopped++; }, preventDefault() { } });
+    check('Escape from the editor is NOT touched by the view (it goes on to UI.overlay, which closes the sheet)', stopped === 1);
+    x.v.p.doc.dispatch('keydown', { key: 'a', stopPropagation() { stopped++; } });
+    check('another key with the list open is not touched either', stopped === 1);
+    // the sheet closes
+    x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] }); goList(x);
+    x.g.classList.remove('ts-open'); x.v.p.doc.dispatch('click', { target: x.v.p.doc.getElementById('ts-more') });
+    check('the sheet closes (a click on its "..." with ts-open gone): the list is left, both classes are gone, the model\'s list is closed again - the next opening starts closed', !inList(x) && !inEditor(x) && x.model.st.browseOpen === false && !x.g.classList.contains('ph-tl-editor-open'));
+    // keyframe removal
+    x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] }); goList(x);
+    x.g.classList.add('ts-open'); x.v.set({ tl: x.v.tlo([0]) });
+    check('a keyframe is removed (one left): the toggle goes off and with it the list; the model\'s list is closed', !inList(x) && !inEditor(x) && x.model.st.browseOpen === false);
+    // the toggle off
+    x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] }); goList(x);
+    x.v.nodes.pairing.dispatch('click', { detail: 1 }); x.v.p.doc.dispatch('click', { target: x.v.nodes.pairing });
+    check('the pairing toggle tapped off while the list is open: the list is left', !inList(x) && x.model.st.browseOpen === false);
+    // a model that had its list open already is left as it was
+    x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1], browseOpen: true }); goList(x);
+    const before = x.model.log.join(); x.n.back.dispatch('click', { detail: 1 });
+    check('the model\'s list was open before (the desktop left it so): the view does not click Browse all to open it and does not close it on leaving: it stays as found', before === '' && x.model.log.join() === '' && x.model.st.browseOpen === true);
+    // outside the phone layout
+    x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] }); goList(x);
+    x.v.p.doc.documentElement.classList.remove('ph'); x.v.p.win.uiSync();
+    check('the phone layout ends (768px) with the list open: the gate classes go and the model\'s list is closed (the page is as at 768px)', !inList(x) && !inEditor(x) && x.model.st.browseOpen === false);
+});
+T('pairing-list-segments', () => {
+    const x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1], segCount: 2 }); goList(x);
+    check('two segments, the list open on segment 1', lst(x).length === 6 && x.n.segment.hidden === false);
+    x.n.segment.value = '1'; x.n.segment.dispatch('change');
+    check('a segment change with the list open: the list FOLLOWS (the model re-renders its list for the new segment: still six rows, the count line re-read), the view stays in the list', inList(x) && lst(x).length === 6 && x.n.listCount.textContent === '6 von 6 Zuordnungen');
+    x.model.st.perm = [0, 1, 2, 3, 4, 5]; x.model.st.flips = x.model.st.perm.map(() => false); x.model.st.vk = x.model.st.perm.map(() => 1); x.model.st.vc = x.model.st.perm.map(() => 1); x.model.render(); x.v.p.win.uiSync();
+    check('the other segment has 6 lines (not browsable: the model hides its list): the view LEAVES the list (back in the editor, no list icon), and the model\'s open flag is reset by a click on its hidden Browse all button', !inList(x) && inEditor(x) && x.n.listBtn.hidden === true && x.model.st.browseOpen === false);
+    x.model.st.perm = [0, 1, 2]; x.model.st.flips = x.model.st.perm.map(() => false); x.model.st.vk = x.model.st.perm.map(() => 1); x.model.st.vc = x.model.st.perm.map(() => 1); x.model.render(); x.v.p.win.uiSync();
+    check('...so when a browsable segment is back the model\'s list is NOT open by itself (the page is as it was)', x.model.st.browseOpen === false && lst(x).length === 0 && x.v.p.doc.getElementById('timeline-pairing-browser').hidden === true);
+});
+T('pairing-list-stale-segment', () => {
+    // a row button of the list of segment 1 keeps closing over segment 1: only a FRESH lookup after the segment change reaches the row of segment 2
+    const x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1], segCount: 2 }); goList(x);
+    const pick = key => lst(x).filter(b => b.getAttribute('aria-label').indexOf('Zuordnung ' + key) === 0)[0];
+    pick('1 3 2').dispatch('click', { detail: 1 }); x.n.listBtn.dispatch('click', { detail: 1 });
+    x.n.segment.value = '1'; x.n.segment.dispatch('change');
+    pick('2 1 3').dispatch('click', { detail: 1 });
+    check('a pick in the list of segment 2 reaches the model row rendered for segment 2 (the first pick was rendered for segment 1: rowSegs 0, 1) - never a row button kept from the first look', JSON.stringify(x.model.st.rowSegs) === JSON.stringify([0, 1]), JSON.stringify(x.model.st.rowSegs));
+});
+T('pairing-list-orientations', () => {
+    const x = pairPage({ perm: [0], flips: [false], vk: [1], vc: [1] }); goList(x);
+    check('n = 1 (the two orientations): the list shows the model\'s two variants ("2–5 ⇄", "2–5"), the as-clicked one is the default and the current one', lst(x).length === 2 && lrows(x).map(r => r.split('|')[0]).sort().join() === '2–5,2–5 ⇄'.split(',').sort().join() && x.pview.list.vm().rows.find(r => r.isDefault).order === '2–5' && x.pview.list.vm().rows.find(r => r.current).order === '2–5');
+    lst(x).filter(b => /⇄/.test(b.children[0].children.filter(c => /ph-tl-lorder/.test(c.className))[0].textContent))[0].dispatch('click', { detail: 1 });
+    check('a tap on the reversed variant forwards to the model\'s row with data-flip 1 (row:0|1 once), the model applies it, the view is back in the editor with line 1', x.model.log.join() === 'browse,row:0|1,browse' && x.model.st.flips[0] === true && inEditor(x) && selOf(x) === 0);
+});
+T('pairing-list-no-stale', () => {
+    const x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] }); goList(x);
+    const first = lst(x)[0];
+    x.v.p.win.uiSync(); x.v.p.doc.dispatch('click', { target: x.v.p.doc.getElementById('ts-more') });
+    check('the list is rendered ONCE per change: a tick and a document click without a change leave the very same row elements (light: nothing is rebuilt)', lst(x)[0] === first && lst(x).length === 6);
+    x.model.st.perm = [2, 0, 1]; x.model.render(); x.v.p.win.uiSync();
+    check('when the model changes (another current pairing) the rows are rebuilt from the model\'s new rows and the mark moves', lst(x)[0] !== first && lst(x).filter(b => b.getAttribute('aria-current') === 'true')[0].getAttribute('aria-label').indexOf('Zuordnung 3 1 2') === 0);
+    // two picks in a row, the model rebuilding every time: the second pick must find the model's NEW row button
+    const pick = key => lst(x).filter(b => b.getAttribute('aria-label').indexOf('Zuordnung ' + key) === 0)[0];
+    pick('2 1 3').dispatch('click', { detail: 1 }); x.n.listBtn.dispatch('click', { detail: 1 }); pick('1 3 2').dispatch('click', { detail: 1 });
+    check('two picks in a row with the model rebuilt after each: each reaches the model\'s row of the moment (row:102 then row:021), once', x.model.log.filter(l => /^row:/.test(l)).join() === 'row:102,row:021' && x.model.st.perm.join() === '0,2,1');
+});
 console.log('\n== release removes the aria-haspopup that UI.overlay put on the sheets\' triggers (sheets redesign, commit 5b) ==');
 T('haspopup-release', () => {
     const p = buildPage({ ui: true }), ls = p.doc.getElementById('ls-more'), ts = p.doc.getElementById('ts-more');
