@@ -9,6 +9,8 @@
 // one (the engine moves a listed element with everything in it). (4) The numbers of the config are the numbers of the CSS tokens (--ph-header-h ... --panel-h, --chrome-h) and the canvas formula is the one the
 // plan fixed. (5) The two scripts are loaded in index.html after ui-layers.js, ui-timeline.js and ui-rail.js, config before engine, with the page's ?v=. (6) The phone CSS: from the marker comment to the end
 // of style.css every rule is inside @media (max-width: 767px) and every selector starts with `html.ph`; nothing above the marker mentions `html.ph` or a `.ph-` class.
+// (7) Since patterns commit C0a the phone block is ORDERED by what its rules serve (a reordering only): ONE media query holding seven banner-delimited blocks, PAGE LAYOUT, SHARED, OTHER SURFACES, TRAILS,
+// NETZ, LAYER SHEET, TIMELINE; no rule appears twice; a surface's class names only occur in its own block; a `[hidden]` rule or a narrower-width variant comes after the rule it modifies.
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..', '..');
@@ -614,6 +616,61 @@ T('label-keys', () => {
     check('the names are keyed too: `names: { tools: { text, i18n }, subtabs: { text, i18n } }` in the source', /names: \{ tools: \{ text: '[^']+', i18n: 'phone\.tools' \}, subtabs: \{ text: '[^']+', i18n: 'phone\.subtabs' \} \}/.test(src));
     const eng = ENGINE.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
     check('the engine writes the sub-tab text, the group names and the host label through say(key, German text), and holds no German label of its own', /say\(config\.subtabs\[sid\]\.i18n, config\.subtabs\[sid\]\.label\)/.test(eng) && /say\(config\.names\.tools\.i18n, config\.names\.tools\.text\)/.test(eng) && /say\(config\.names\.subtabs\.i18n, config\.names\.subtabs\.text\)/.test(eng) && /'aria-label': say\(def\.i18n, def\.label\)/.test(eng) && !/'Werkzeuge'|'Unterbereiche'|textContent = config\.subtabs\[sid\]\.label/.test(eng));
+});
+
+T('structure', () => {
+    const marker = CSS.indexOf('=== Phone layout (');
+    const block = CSS.slice(marker);
+    const NAMES = ['PAGE LAYOUT (patterns C0a', 'SHARED (patterns C0a', 'OTHER SURFACES (patterns C0a', 'SURFACE: TRAILS (patterns C0a', 'SURFACE: NETZ (patterns C0a', 'SURFACE: LAYER SHEET (patterns C0a', 'SURFACE: TIMELINE (patterns C0a'];
+    const pos = NAMES.map(n => block.indexOf(n));
+    check('the phone block has its seven banner-delimited blocks, each once and in this order: PAGE LAYOUT, SHARED, OTHER SURFACES, TRAILS, NETZ, LAYER SHEET, TIMELINE', pos.every((x, i) => x > 0 && block.indexOf(NAMES[i], x + 1) < 0 && (i === 0 || x > pos[i - 1])), pos.join());
+    const gate = block.indexOf('@media (max-width: 767px) {');
+    check('the blocks sit inside the ONE phone media query: it opens before the first banner and no other top-level @media (max-width: 767px) follows the marker', gate > 0 && gate < pos[0] && block.indexOf('@media (max-width: 767px) {', gate + 1) < 0);
+    // the rules of each block: a banner starts a block and the next banner ends it (the last one ends before the media query's closing brace)
+    const cut = (a, b) => block.slice(block.lastIndexOf('/*', a), b < 0 ? block.lastIndexOf('}') : block.lastIndexOf('/*', b));
+    const seg = NAMES.map((n, i) => rules(cut(pos[i], i + 1 < pos.length ? pos[i + 1] : -1).replace(/^\s*\/\*[\s\S]*?\*\//, '')));
+    const all = rules(block.slice(block.indexOf('*/') + 2));
+    check('the seven blocks hold every rule of the phone block exactly once (' + seg.map(x => x.length).join(' + ') + ' = ' + all.length + ')', seg.reduce((n, x) => n + x.length, 0) === all.length && all.length > 100 && seg.every(x => x.length >= 3));
+    check('the blocks hold 39 / 11 / 5 / 9 / 26 / 3 / 28 rules: a dropped or an added rule changes a count (change the numbers with the rule, and say in which block it belongs)', seg.map(x => x.length).join(' / ') === '39 / 11 / 5 / 9 / 26 / 3 / 28', seg.map(x => x.length).join(' / '));
+    // no rule twice (the same media chain, selector and body)
+    const keys = all.map(r => r.at.join('>') + '|' + r.sel.replace(/\s+/g, ' ') + '|' + r.body.replace(/\s+/g, ' ').trim());
+    const dup = keys.filter((k, i) => keys.indexOf(k) !== i);
+    check('no rule appears twice in the phone block (same media chain, selector and declarations)', dup.length === 0, dup.map(k => k.split('|')[1]).slice(0, 4).join(' ; ') || all.length + ' rules, all different');
+    const selTwice = keys.map(k => k.split('|').slice(0, 2).join('|')).filter((k, i, a) => a.indexOf(k) !== i);
+    check('no selector is restated in the same media chain (a second rule for one selector would be a cascade you cannot see in the block)', selTwice.length === 0, selTwice.map(k => k.split('|')[1]).slice(0, 4).join(' ; ') || 'none');
+    // a surface's class names only occur in its own block
+    const SURF = [
+        ['TRAILS', /\.ph-chip|\.ph-trail/, 3], ['TIMELINE', /\.ph-tl-|#ph-tl-|#timeline-|ts-open/, 6], ['LAYER SHEET', /#layer-more-panel/, 5],
+        ['NETZ', /#more-netz|#net-|\.net-kind-btn|\.net-domain-btn|exact-field/, 4]];
+    SURF.forEach(([name, re, bi]) => {
+        const where = seg.map((x, i) => x.filter(r => re.test(r.sel)).length);
+        check(name + ': every rule that names its classes sits in its own block (' + where.join('/') + ' per block, all in block ' + (bi + 1) + ')', where.every((n, i) => i === bi || n === 0) && where[bi] > 0, where.join());
+    });
+    const pageSel = seg[0].map(r => r.sel).join(' ; ');
+    check('PAGE LAYOUT names no surface: no chip, trail, timeline, Netz or layer-sheet selector in it', !/\.ph-chip|\.ph-trail|\.ph-tl-|#timeline-|#more-netz|#net-|#layer-more-panel|\.ph-sheet/.test(pageSel));
+    const shared = seg[1].map(r => r.sel).join(' ; ');
+    check('SHARED holds only the sheet host, the rows and blocks of the sheets in rows, the wrapping row and the panel slot\'s [hidden] rule', seg[1].every(r => /^html\.ph \.ph-sheet|^html\.ph \.ph-slot \[hidden\]/.test(r.sel.split(',')[0].trim())) && /\.ph-sheet-row-wrap/.test(shared));
+    // order: the rule a [hidden] variant or a narrower-width variant modifies comes first
+    const order = [], parts = r => r.sel.split(',').map(x => x.trim());
+    all.forEach((r, i) => {
+        parts(r).filter(x => /\[hidden\]/.test(x)).forEach(x => {
+            const base = x.replace(/\[hidden\]/g, '');
+            const j = all.findIndex(q => q.at.join() === r.at.join() && parts(q).includes(base));
+            if (j >= 0 && j > i) order.push(x + ' before ' + base);
+        });
+        if (r.at.length > 1) {
+            const j = all.findIndex(q => q.at.length === 1 && q.sel === r.sel);
+            if (j > i) order.push(r.sel + ' (narrow) before its base rule');
+        }
+    });
+    check('every [hidden] variant and every narrower-width variant comes AFTER the rule it modifies (the cascade of equal specificity is the source order)', order.length === 0, order.join(' ; ') || 'all in order');
+    const pairs = [['html.ph .ph-sep', 'html.ph .ph-row > .ph-sep'], ['html.ph .ph-sheet', 'html.ph .ph-sheet.ph-sheet-rows'], ['html.ph .ph-sheet-block', 'html.ph .ph-sheet-block > .ph-sheet-row'], ['html.ph .ph-tl-sep', 'html.ph .ph-tl-variant .ph-tl-sep'], ['html.ph .ph-tl-chips', 'html.ph .ph-tl-chip']];
+    check('the pairs of rules that style one element in layers keep the base first (' + pairs.map(p => p[1].split(' ').pop()).join(', ') + ')', pairs.every(p => { const a = all.findIndex(r => r.sel === p[0] && r.at.length === 1), b = all.findIndex(r => r.sel === p[1] && r.at.length === 1); return a >= 0 && b >= 0 && a < b; }));
+    const sepAt = ['', '@media (max-width: 365px)', '@media (max-width: 349px)', '@media (max-width: 339px)'].map(a => all.findIndex(r => r.sel === 'html.ph .ph-sep' && (r.at[1] || '') === a));
+    check('the separator margin: the base rule, then the 365, 349 and 339px variants in THIS order (equal specificity: the narrowest, later one wins)', sepAt.every((x, i) => x >= 0 && (i === 0 || x > sepAt[i - 1])), sepAt.join());
+    // every rule is still gated: media query + html.ph
+    check('EVERY rule of the seven blocks is inside @media (max-width: 767px) and EVERY selector starts with html.ph (the media query is the one opened before the first banner, checked above)', all.length > 100 && all.every(r => r.at[0] === '@media (max-width: 767px)' && r.sel.split(',').every(s => /^\s*html\.ph(\s|$|\[|\.|:)/.test(s))));
+    check('the legacy narrow-width rules (not html.ph: the old wrapped rows) stay ABOVE the marker, untouched by the reorganization: the six other @media (max-width: 767px) blocks of style.css', (CSS.slice(0, marker).match(/@media \(max-width: 767px\)/g) || []).length === 6);
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
