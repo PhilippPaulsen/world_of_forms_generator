@@ -59,7 +59,8 @@
  *
  *   node tools/ui/compare-baseline.js tools/ui/baseline-phone-2.json <the new file>              (compare-baseline.js reads the phone files unchanged; --widths 375x610 and --tabs netz filter)
  *
- * baseline-phone-2.json (sheets redesign, commit 7) is the PHONE REFERENCE from now on: the 27 cells of baseline-phone-1.json (kept untouched: the phone layout before the sheets redesign) plus the states of the
+ * baseline-phone-3.json (patterns commit 9, after the Form row's two symmetry toggles) is the PHONE REFERENCE from now on and baseline-cleanup-4.json the one for widths >= 768 (cleanup-3 and phone-2 stay untouched; compare a later run with the new files).
+ * baseline-phone-2.json (sheets redesign, commit 7) was the PHONE REFERENCE before that: the 27 cells of baseline-phone-1.json (kept untouched: the phone layout before the sheets redesign) plus the states of the
  * sheets block (the list is in the header of tools/ui/measure-phone.js: netz_sheet_geo, timeline_sheet_2kf, pairing_editor_2kf, pairing_list_2kf, pairing_editor_3kf, layer_sheet_hex, info_card,
  * netz_sheet_tiled_macro_alt). One call records one width (9 cells, about 230 s: start it and poll window.__r; keep the pane visible and check document.visibilityState first, a hidden page throttles timers):
  *

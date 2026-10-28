@@ -59,6 +59,8 @@
     '#btn-add-layer',
     '#btn-save',
     '#btn-help',
+    // the Form row's symmetry toggles and the Mehr button next to them (patterns commit 9: first tracked here; cleanup-3 does not have them)
+    '#nav-symmetry', '#btn-sym-rotation', '#btn-sym-mirror', '#btn-more-form', '#more-form',
     // the canvas rail (rail rearrangement, commits 1 to 3): one element of each group, the links, the Mehr trigger and its popover
     '#btn-undo',
     '#btn-random',
