@@ -9,12 +9,13 @@
  *   steppers   number + stacked chevrons around the existing #node-count-input / #shape-size-input: the chevrons
  *              set the value and dispatch 'input' and 'change' (ui.js), so sketch.js reacts exactly as to typing.
  *              The fields stay typable; an out-of-range number is clamped with a toast.
- *   symmetry   ONE exclusive choice with two options - rotation, or rotation + mirror (the default) - derived from
- *              sketch.js's symmetryCategory (window.symmetryUi) through the pure mapping in
- *              core/symmetry-toggles.js. "None" and "mirror only" are under More ("Andere Symmetrie"): while one
- *              of them is current, neither main option is checked and the More button shows a dot.
- *   fold       the hexagon's 3-/6-fold choice, under More. Default 6 (sketch.js: symmetryFold = 6); a catalog
- *              back-link that sets 3-fold is respected (sketch.js bestEffortCategoryFold).
+ *   symmetry   TWO independent toggles, Drehung (rotation) and Spiegelung (mirror), both on by default (= Spiegeling).
+ *              Their state is read from sketch.js's symmetryCategory (window.symmetryUi): a click flips ONE half through
+ *              the pure symmetryToggle() of core/symmetry-toggles.js and hands the category to symmetryUi.setCategory,
+ *              the only writer of the raw mode. Both off is "none", only the mirror on is "reflection_only" (both valid).
+ *   fold       the hexagon's 3-/6-fold choice, under More (now the only thing there). Default 6 (sketch.js:
+ *              symmetryFold = 6); a catalog back-link that sets 3-fold is respected (sketch.js bestEffortCategoryFold).
+ *              The More button's dot means "the fold is 3" (hexagon with Drehung).
  *
  * The sync function (registered with UI.onSync) re-reads the state; ui.js calls it on every redraw (sketch.js draw())
  * and after symmetry changes; it only writes an attribute when the value actually changed. Nothing here is ever hidden: a control that is not available
@@ -36,8 +37,7 @@
     'reason.fold.hex': 'Die Zähligkeit (3 oder 6) gilt nur beim Sechseck.',
     'reason.fold.rotation': 'Die Zähligkeit gilt nur mit Drehung.',
     'more.label': 'Mehr',
-    'more.label.none': 'Mehr – aktive Symmetrie: keine',
-    'more.label.mirror': 'Mehr – aktive Symmetrie: nur Spiegelung',
+    'more.label.fold3': 'Mehr – aktive Zähligkeit: 3',
   };
 
   const $ = function (s) { return document.querySelector(s); };
@@ -103,25 +103,27 @@
     steppers.push(UI.stepper(root, { input: input, compute: isNode ? nodeCompute : sizeCompute, range: isNode ? nodeRange : sizeRange }));
   });
 
-  // ---- symmetry: one exclusive choice + "Andere Symmetrie" + fold, under More ------------------------------------
-  const rotBtn = $('#btn-sym-rotation'), rotMirBtn = $('#btn-sym-rotation-mirror');
-  const noneBtn = $('#btn-sym-none'), mirrorOnlyBtn = $('#btn-sym-mirror-only');
+  // ---- symmetry: two independent toggles (Drehung, Spiegelung) + the hexagon's fold under More ------------------
+  const rotBtn = $('#btn-sym-rotation'), mirBtn = $('#btn-sym-mirror');
   const fold3 = $('#btn-fold-opt-3'), fold6 = $('#btn-fold-opt-6'), foldHint = $('#ov-fold-hint');
   const moreBtn = $('#btn-more-form');
 
-  const mainGroup = UI.radiogroup($('.nav-symmetry'), function (r) {
-    symmetryUi.setCategory(symmetryCategoryForVisible(r === rotBtn ? 'rotation' : 'rotation+mirror'));
+  // Native buttons: UI.guard runs the click once (Enter and Space on a focused button are a click; the keyboard bridge in ui.js adds a mousedown that nothing here listens to).
+  [[rotBtn, 'rotation'], [mirBtn, 'mirror']].forEach(function (p) {
+    UI.guard(p[0], function () { symmetryUi.setCategory(symmetryToggle(symmetryUi.category(), p[1])); });
   });
-  const otherGroup = UI.radiogroup($('#ov-sym-other'), function (r) {
-    symmetryUi.setCategory(r === noneBtn ? 'none' : 'mirror');
-  });
+  function setToggle(btn, on) {
+    const v = on ? 'true' : 'false';
+    if (btn.getAttribute('aria-pressed') !== v) btn.setAttribute('aria-pressed', v);
+    if (btn.classList.contains('active') !== on) btn.classList.toggle('active', on);
+  }
   const foldGroup = UI.radiogroup($('#ov-fold'), function (r) { symmetryUi.setFold(r === fold3 ? 3 : 6); });
 
   function syncSymmetry() {
     if (!window.symmetryUi) return;
-    const cat = symmetryUi.category(), fold = symmetryUi.fold(), vis = symmetryVisibleState(cat);
-    mainGroup.set(vis === 'rotation' ? rotBtn : vis === 'rotation+mirror' ? rotMirBtn : null);
-    otherGroup.set(cat === 'none' ? noneBtn : cat === 'mirror' ? mirrorOnlyBtn : null);
+    const cat = symmetryUi.category(), fold = symmetryUi.fold();
+    setToggle(rotBtn, symmetryHasRotation(cat));
+    setToggle(mirBtn, symmetryHasMirror(cat));
     // fold: the option matching the stored fold is checked; the group is aria-disabled unless the hexagon has rotation
     const applies = symmetryFoldApplies(cat, currentShape);
     const reason = applies ? null : (currentShape !== 'hex' ? T['reason.fold.hex'] : T['reason.fold.rotation']);
@@ -130,10 +132,10 @@
     foldGroup.set(fold === 3 ? fold3 : fold6);
     if (foldHint.hidden !== applies) foldHint.hidden = applies;
     if (!applies && foldHint.textContent !== reason) foldHint.textContent = reason;
-    // the More button says when a symmetry it holds is active (until the info card names the mode)
-    const other = vis === 'other';
-    if (moreBtn.classList.contains('has-state') !== other) moreBtn.classList.toggle('has-state', other);
-    const label = T[other ? (cat === 'none' ? 'more.label.none' : 'more.label.mirror') : 'more.label'];
+    // the More button says when the fold it holds is not the default (3, hexagon with Drehung)
+    const three = applies && fold === 3;
+    if (moreBtn.classList.contains('has-state') !== three) moreBtn.classList.toggle('has-state', three);
+    const label = T[three ? 'more.label.fold3' : 'more.label'];
     if (moreBtn.getAttribute('aria-label') !== label) { moreBtn.setAttribute('aria-label', label); moreBtn.setAttribute('title', label); }
   }
 

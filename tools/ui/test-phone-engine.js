@@ -84,7 +84,7 @@ function buildPage(opts) {
             el('div', { id: 'nav-node-stepper', class: 'stepper' }, [el('input', { id: 'node-count-input', type: 'number' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')]),
             el('div', { id: 'nav-size-stepper', class: 'stepper' }, [el('input', { id: 'shape-size-input', type: 'number' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')]),
             el('span', { class: 'nav-divider' }),
-            el('div', { id: 'nav-symmetry', class: 'nav-cluster nav-symmetry' }, [btn('btn-sym-rotation'), btn('btn-sym-rotation-mirror')]),
+            el('div', { id: 'nav-symmetry', class: 'nav-cluster nav-symmetry' }, [btn('btn-sym-rotation'), btn('btn-sym-mirror')]),
             btn('btn-more-form', 'icon-btn nav-more'), el('span', { class: 'nav-break' })]),
         el('div', { id: 'nav-farbe', class: 'nav-row nav-farbe' }, [
             el('div', { id: 'nav-anchor-views', class: 'nav-cluster nav-anchor-views' }, [btn('btn-open-kreis'), btn('btn-open-dreieck')]),
