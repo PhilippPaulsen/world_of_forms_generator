@@ -1,4 +1,4 @@
-// Guard for the Info card sections (sheets redesign, commit 6b): the markup of #info-card (the pattern-name row and two closed <details>, "Netz" and "Zeitleiste", one <p> per statement, each with its
+// Guard for the Info card sections (sheets redesign, commits 6b and 6c: short lines only): the markup of #info-card (the pattern-name row and two closed <details>, "Netz" with 3 and "Zeitleiste" with 2 <p>, each with its
 // dictionary key), the dictionary texts (German = the markup, English present, the two statements that were left out are NOT there), the CSS of the card (wide variant, scroll, the summary's size and
 // ring, the spacing scale, nothing phone-specific outside the phone block) and the two small changes of ui.js / ui-rail.js (summary in the Tab loop, the `fit` option). Source text and the dictionary
 // module only; the card itself was opened in the browser pane (see the commit message). No browser here.
@@ -18,8 +18,11 @@ const T = (name, fn) => { try { fn(); } catch (e) { check(name, false, 'threw: '
 const strip = s => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 const unesc = s => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 
-const NET = ['info.net.scope', 'info.net.kinds', 'info.net.domain', 'info.net.field', 'info.net.focus', 'info.net.macro', 'info.net.alternate', 'info.net.locks'];
-const TL = ['info.tl.keyframes', 'info.tl.net', 'info.tl.pairing', 'info.tl.remove'];
+const NET = ['info.net.kinds', 'info.net.field', 'info.net.locks'];
+const TL = ['info.tl.keyframes', 'info.tl.net'];
+// the lines of the longer card of commit 6b: 6c replaced them by short ones and removed these keys (and the unverified info.net.size of 6b)
+const REMOVED = ['info.net.scope', 'info.net.domain', 'info.net.focus', 'info.net.macro', 'info.net.alternate', 'info.tl.pairing', 'info.tl.remove', 'info.net.size'];
+const MAX_LEN = 140;
 const ALL = ['info.net.title'].concat(NET, ['info.tl.title'], TL);
 
 const htmlNoComments = HTML.replace(/<!--[\s\S]*?-->/g, '');
@@ -47,13 +50,21 @@ console.log('\n== the dictionary ==');
 T('dictionary', () => {
     check('the ' + ALL.length + ' keys exist with a German and an English text, and the English is not the German', ALL.every(k => I.has(k) && DICT[k].de.trim() && DICT[k].en.trim() && DICT[k].en !== DICT[k].de), ALL.filter(k => !I.has(k)).join());
     const infoKeys = Object.keys(DICT).filter(k => /^info\.(net|tl)\./.test(k));
-    check('no other info.net.* / info.tl.* key exists (info.net.size was left out: it is not verified)', infoKeys.sort().join() === ALL.slice().sort().join(), infoKeys.join());
+    check('no other info.net.* / info.tl.* key exists: exactly the ' + ALL.length + ' of the short card', infoKeys.sort().join() === ALL.slice().sort().join(), infoKeys.join());
+    check('the keys of the long card are gone from the dictionary, from the markup and from every script: ' + REMOVED.join(', '), REMOVED.every(k => !I.has(k) && htmlNoComments.indexOf('"' + k + '"') < 0) && REMOVED.every(k => !new RegExp("'" + k.replace(/\./g, '\\.') + "'").test(fs.readFileSync(path.join(ROOT, 'ui-phone-config.js'), 'utf8') + fs.readFileSync(path.join(ROOT, 'ui-rail.js'), 'utf8'))));
+    check('the card is short: no line (German or English) is longer than ' + MAX_LEN + ' characters, and the longest of each language is ' + Math.max.apply(null, ALL.map(k => DICT[k].de.length)) + ' / ' + Math.max.apply(null, ALL.map(k => DICT[k].en.length)), ALL.every(k => DICT[k].de.length <= MAX_LEN && DICT[k].en.length <= MAX_LEN), ALL.filter(k => DICT[k].de.length > MAX_LEN || DICT[k].en.length > MAX_LEN).join());
     check('the statements have no {placeholders} (the card is static text)', ALL.every(k => !/\{\w+\}/.test(DICT[k].de) && !/\{\w+\}/.test(DICT[k].en)));
-    check('info.net.scope is the shortened sentence, in both languages', DICT['info.net.scope'].de === 'Das Netz stellst du auf der Basis-Ebene (Quadrat) ein. Es verzerrt die Maschenweiten des Rasters.' && DICT['info.net.scope'].en === 'You set the net on the base layer (square). It warps the mesh widths of the grid.');
+    const want = {
+        'info.net.kinds': ['Sinus: Maschen zum Kachelrand hin schmaler. Tangens: breiter. Geometrisch: gleiches Verhältnis.', 'Sine: meshes get narrower towards the tile edge. Tangent: wider. Geometric: same ratio each step.'],
+        'info.net.field': ['Feld: ein Gesetz über alle Kacheln, ungerade Größe von 3 bis 9.', 'Field: one law across all tiles, odd size from 3 to 9.'],
+        'info.net.locks': ['Solange ein Netz aktiv ist, sind Kurve und Frei aus.', 'While a net is active, Curve and Free are off.'],
+        'info.tl.keyframes': ['Ein Keyframe ist eine Ebene mit Raute. Sie muss zum vorigen passen (Form, Knotenzahl, Größe, Symmetrie, Linienzahl).', 'A keyframe is a layer with a diamond. It must match the previous one (shape, node count, size, symmetry, number of lines).'],
+        'info.tl.net': ['Das Netz bewegt sich nur, wenn jeder Keyframe ein Netz hat und je zwei Netze zusammenpassen.', 'The net only moves when every keyframe has a net and each two nets fit together.']
+    };
+    check('the five lines are exactly the maintainer\'s texts, in both languages', Object.keys(want).every(k => DICT[k].de === want[k][0] && DICT[k].en === want[k][1]) && DICT['info.net.title'].de === 'Netz' && DICT['info.tl.title'].de === 'Zeitleiste' && DICT['info.net.title'].en === 'Net' && DICT['info.tl.title'].en === 'Timeline');
     const all = ALL.map(k => DICT[k].de + ' ' + DICT[k].en).join(' ') + ' ' + htmlNoComments;
     check('the left-out claims are not on the page or in the card: the sentence about Hinterreiter\'s figures and the size statement ("kleineres Netz" / "smaller net")', !/Hinterreiter/.test(ALL.map(k => DICT[k].de + ' ' + DICT[k].en).join(' ')) && !/kleineres Netz|smaller net/.test(all));
-    check('the Netz section says what was checked: focus keeps only the main diagonal mirror, Field needs an odd size from 3 to 9, the macro divisor starts at 3 (2 for Geometric), the pairing list sorts by Σd² up to 5 lines', /Hauptdiagonale/.test(DICT['info.net.focus'].de) && /main diagonal/.test(DICT['info.net.focus'].en) && /3 bis 9/.test(DICT['info.net.field'].de) && /3 to 9/.test(DICT['info.net.field'].en) && /ab 3/.test(DICT['info.net.macro'].de) && /from 3/.test(DICT['info.net.macro'].en) && /bis 5 Linien/.test(DICT['info.tl.pairing'].de) && /up to 5 lines/.test(DICT['info.tl.pairing'].en));
-    check('the words the card quotes are the app\'s own: "Aus, regelmäßiges Netz" / "Off, regular net" (net.kind.off), "Kacheln spiegeln" / "mirror alternate tiles" (net.alternate), "Alle Zuordnungen" / "All pairings" (timeline.listAll)', DICT['info.net.locks'].de.indexOf(DICT['net.kind.off'].de) > 0 && DICT['info.net.locks'].en.indexOf(DICT['net.kind.off'].en) > 0 && DICT['info.tl.net'].de.indexOf(DICT['net.alternate'].de) > 0 && DICT['info.tl.net'].en.toLowerCase().indexOf(DICT['net.alternate'].en.toLowerCase()) > 0 && DICT['info.tl.pairing'].de.indexOf(DICT['timeline.listAll'].de) > 0 && DICT['info.tl.pairing'].en.indexOf(DICT['timeline.listAll'].en) > 0);
+    check('the words the card uses are the app\'s own: Sinus / Tangens / Geometrisch and Sine / Tangent / Geometric (net.kind.*), Feld / Field (net.domain.field), Zeitleiste / Timeline (timeline.strip)', DICT['info.net.kinds'].de.indexOf(DICT['net.kind.sinus'].de) >= 0 && DICT['info.net.kinds'].de.indexOf(DICT['net.kind.tangens'].de) >= 0 && DICT['info.net.kinds'].de.indexOf(DICT['net.kind.geometric'].de) >= 0 && DICT['info.net.kinds'].en.indexOf(DICT['net.kind.sinus'].en) >= 0 && DICT['info.net.kinds'].en.indexOf(DICT['net.kind.tangens'].en) >= 0 && DICT['info.net.kinds'].en.indexOf(DICT['net.kind.geometric'].en) >= 0 && DICT['info.net.field'].de.indexOf(DICT['net.domain.field'].de) === 0 && DICT['info.net.field'].en.indexOf(DICT['net.domain.field'].en) === 0 && DICT['info.tl.title'].de === DICT['timeline.strip'].de && DICT['info.tl.title'].en === DICT['timeline.strip'].en);
 });
 
 console.log('\n== the CSS ==');
