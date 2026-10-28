@@ -9,7 +9,12 @@
  *                             by KEY while the trail is still there, else the index clamped into 0..rows-1 (the first trail by default).
  *   trailSignature(rows, sel) a string: the view is rebuilt only when it changed (UI.onSync ticks; no MutationObserver).
  *   createChips(doc, win, opts)  the DOM part: makes #ph-trail-chips and #ph-trail-stepper (put in a hidden holder at once, ui-phone.js moves them into the panel and back), rebuilds on sync()/refresh().
- *   selectedTrail()           { index, key, color, faceCount } or null: for the highlight of a later commit (not built here).
+ *   selectedTrail()           { index, key, color, faceCount } or null.
+ *   highlightFor(ctx)         PURE. The trail to outline on the canvas: { sheet, key } or null. ctx = { phone, tab, shown, rows, selection, sheet }: only while the phone layout is on, the tab is Farbe, the
+ *                             Spuren pane is the one SHOWN (its chips are in the panel slot), and the model has rows (Fill off, a refused or empty sheet give none); the key is the selected trail's (the
+ *                             selection is clamped, so a vanished trail gives the clamped one). The view passes it to window.setFaceSelected(sheet, key | null) (sketch.js: the own slot faceSelected,
+ *                             never faceHover) only when it CHANGED, on every UI tick, after every click that reaches the document (a sub-tab switch redraws nothing) and, deferred, after a resize or a tab
+ *                             change (the engine releases or applies in its own listener). The view holds no reference into the model: the key is read from row.dataset.key.
  *
  * The German texts are keyed (data-i18n): trails.none, trails.label.one / .other, trails.prev, trails.next, trails.group.
  */
@@ -53,6 +58,16 @@
       count: cur && cur.stepper ? (cur.n === null ? '–' : String(cur.n)) + '/' + cur.stepper : '',
       canStep: !!(cur && cur.stepper)
     };
+  }
+
+  function highlightFor(ctx) {
+    const c = ctx || {};
+    if (!c.phone || c.tab !== 'farbe' || !c.shown) return null;
+    const rows = c.rows || [];
+    if (!rows.length) return null;
+    const sel = resolveSelection(rows, c.selection);
+    if (sel.key === null || sel.key === undefined) return null;
+    return { sheet: c.sheet === undefined || c.sheet === null ? 'base' : c.sheet, key: sel.key };
   }
 
   function trailSignature(rows, sel, extra) {
@@ -130,6 +145,21 @@
     }
     function select(i) { const r = currentRows()[i]; if (!r) return; selected = { key: r.key, index: i }; refresh(true); }
 
+    // ---- the outline of the selected trail on the canvas ---------------------------------------------------------------------------------------------------------------------------------
+    // the chips are in the panel slot only while the Spuren pane is the shown one (a parked pane sits in the hidden #ph-park, and after release() they are back in their hidden holder)
+    function shownNow() { for (let n = chips.parentNode; n; n = n.parentNode) { if (n.id === 'ph-slot') return true; } return false; }
+    function sheetNow() { return typeof win.activeLayerNow === 'function' ? win.activeLayerNow() : 'base'; }
+    let outlined = null;   // what this view last passed to setFaceSelected: { sheet, key } or null
+    function syncHighlight() {
+      const phone = html.classList.contains('ph'), tab = html.getAttribute('data-tab'), shown = phone && tab === 'farbe' && shownNow();   // the rows are read only when they can matter
+      const want = highlightFor({ phone: phone, tab: tab, shown: shown, rows: shown ? currentRows() : [], selection: selected, sheet: sheetNow() });
+      const same = want === null ? outlined === null : (outlined !== null && outlined.sheet === want.sheet && outlined.key === want.key);
+      if (same) return false;
+      outlined = want;
+      if (typeof win.setFaceSelected === 'function') win.setFaceSelected(want ? want.sheet : null, want ? want.key : null);
+      return true;
+    }
+
     function render() {
       let activeNode = null;
       while (chips.firstChild) chips.removeChild(chips.firstChild);
@@ -163,14 +193,15 @@
       const rows = currentRows();
       selected = resolveSelection(rows, selected);
       const sig = trailSignature(rows, selected, typeof win.farbeReason === 'function' ? win.farbeReason() : null);
-      if (!force && sig === signature) return false;
+      if (!force && sig === signature) { syncHighlight(); return false; }
       signature = sig;
       model = trailModel(rows, selected);
       render();
+      syncHighlight();
       return true;
     }
     function sync() {
-      if (!html.classList.contains('ph') || html.getAttribute('data-tab') !== 'farbe') return false;   // nothing to keep up to date outside the Farbe phone layout
+      if (!html.classList.contains('ph') || html.getAttribute('data-tab') !== 'farbe') { syncHighlight(); return false; }   // nothing to keep up to date outside the Farbe phone layout (but a stale outline goes)
       return refresh(false);
     }
     function selectedTrail() {
@@ -180,11 +211,16 @@
       return r ? { index: s.index, key: r.key, color: r.color, faceCount: r.faceCount } : null;
     }
     if (UI && UI.onSync) UI.onSync(sync);
+    // a sub-tab switch, a Fill tap or a layer tap redraws nothing, so no tick comes: every click that reaches the document looks again (the engine's own click handler has run by then);
+    // a resize and a tab change are followed by the engine's release / apply, which runs in ITS listener: look again after it (deferred)
+    const defer = opts.defer || function (fn) { setTimeout(fn, 0); };
+    if (doc.addEventListener) { doc.addEventListener('click', function () { syncHighlight(); }); doc.addEventListener('tabchange', function () { defer(syncHighlight); }); }
+    if (win.addEventListener) { win.addEventListener('resize', function () { defer(syncHighlight); }); }
     refresh(true);
-    return { sync: sync, refresh: function () { return refresh(true); }, selectedTrail: selectedTrail, select: select, forward: forward, model: function () { return model; }, nodes: { holder: holder, chips: chips, stepper: stepper, prev: prev, next: next, count: count, label: label } };
+    return { sync: sync, syncHighlight: syncHighlight, outlined: function () { return outlined; }, refresh: function () { return refresh(true); }, selectedTrail: selectedTrail, select: select, forward: forward, model: function () { return model; }, nodes: { holder: holder, chips: chips, stepper: stepper, prev: prev, next: next, count: count, label: label } };
   }
 
-  const api = { trailModel: trailModel, trailSignature: trailSignature, resolveSelection: resolveSelection, readRows: readRows, labelFor: labelFor, createChips: createChips, T: T };
+  const api = { trailModel: trailModel, trailSignature: trailSignature, resolveSelection: resolveSelection, readRows: readRows, labelFor: labelFor, highlightFor: highlightFor, createChips: createChips, T: T };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof document !== 'undefined' && typeof window !== 'undefined' && document.body) {
     root.uiPhoneChips = createChips(document, window);

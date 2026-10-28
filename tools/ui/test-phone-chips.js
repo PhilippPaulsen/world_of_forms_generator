@@ -7,7 +7,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..', '..');
 const FILE = process.env.UI_PHONE_CHIPS_JS || path.join(ROOT, 'ui-phone-chips.js');
 const API = require(FILE);
-const { trailModel, resolveSelection, trailSignature, readRows, labelFor } = API;
+const { trailModel, resolveSelection, trailSignature, readRows, labelFor, highlightFor } = API;
 
 let failures = 0, checks = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
@@ -53,6 +53,25 @@ T('read', () => {
     const rows = readRows(list);
     check('readRows reads the key (data-key), the swatch colour, the face count of the label and the counter (n, N) of each .fc-row', JSON.stringify(rows) === JSON.stringify([{ key: 'k1', color: 'rgb(10, 20, 30)', faceCount: 6, n: 2, stepper: 3 }, { key: 'k2', color: 'rgb(1, 1, 1)', faceCount: 1, n: null, stepper: 3 }, { key: 'k3', color: 'red', faceCount: 4, n: null, stepper: 0 }]), JSON.stringify(rows));
     check('no list, or an empty one, gives no rows', readRows(null).length === 0 && readRows({ children: [] }).length === 0);
+});
+
+console.log('\n== the outline of the selected trail (commit B) ==');
+T('highlight', () => {
+    const rows = [row('a', 'x', 1, 1, 2), row('b', 'y', 2, 1, 2), row('c', 'z', 3, 1, 2)];
+    const ctx = over => Object.assign({ phone: true, tab: 'farbe', shown: true, rows, selection: { key: 'b', index: 1 }, sheet: 'base' }, over || {});
+    const J = JSON.stringify;
+    check('the selected trail of the active sheet: { sheet: base, key: b }', J(highlightFor(ctx())) === J({ sheet: 'base', key: 'b' }));
+    check('the first trail is outlined as soon as the pane shows (no selection yet)', J(highlightFor(ctx({ selection: null }))) === J({ sheet: 'base', key: 'a' }) && J(highlightFor(ctx({ selection: {} }))) === J({ sheet: 'base', key: 'a' }));
+    check('the sheet follows the ACTIVE sheet: a layer index is passed through, a missing sheet is the base', J(highlightFor(ctx({ sheet: 1 }))) === J({ sheet: 1, key: 'b' }) && highlightFor(ctx({ sheet: 0 })).sheet === 0 && highlightFor(ctx({ sheet: undefined })).sheet === 'base' && highlightFor(ctx({ sheet: null })).sheet === 'base');
+    check('CLEARED when the Spuren pane is not the shown panel (another sub-tab, a closed phone panel)', highlightFor(ctx({ shown: false })) === null);
+    check('CLEARED when the tab is not Farbe (Form, Netz, none)', ['form', 'netz', null, undefined, ''].every(t => highlightFor(ctx({ tab: t })) === null));
+    check('CLEARED when the phone layout is off (release: widening to 768px and up)', highlightFor(ctx({ phone: false })) === null && highlightFor(ctx({ phone: undefined })) === null);
+    check('CLEARED when there are no rows: Fill off (the panel is hidden), a refused sheet, no faces', highlightFor(ctx({ rows: [] })) === null && highlightFor(ctx({ rows: null })) === null && highlightFor(ctx({ rows: undefined })) === null);
+    check('a trail that vanished: the CLAMPED trail is outlined (3 trails, c selected, 2 left: b; one left: a)', J(highlightFor(ctx({ rows: rows.slice(0, 2), selection: { key: 'c', index: 2 } }))) === J({ sheet: 'base', key: 'b' }) && highlightFor(ctx({ rows: rows.slice(0, 1), selection: { key: 'c', index: 2 } })).key === 'a');
+    check('the selection survives a reorder BY KEY (a new trail inserted before it)', highlightFor(ctx({ rows: [row('n', 'q', 1, 1, 2)].concat(rows), selection: { key: 'b', index: 1 } })).key === 'b');
+    check('the view holds no reference into the model: the result is a fresh plain object of the key and the sheet only', (() => { const r = highlightFor(ctx()); return Object.keys(r).sort().join() === 'key,sheet' && r !== rows[1]; })());
+    check('no context at all, or a broken one, is simply null (never throws)', highlightFor() === null && highlightFor(null) === null && highlightFor({}) === null);
+    check('the input is not changed (the model is pure)', (() => { const sel = { key: 'c', index: 2 }, rs = rows.slice(0, 2); highlightFor(ctx({ rows: rs, selection: sel })); return sel.key === 'c' && sel.index === 2 && rs.length === 2; })());
 });
 
 console.log('\n== the file ==');

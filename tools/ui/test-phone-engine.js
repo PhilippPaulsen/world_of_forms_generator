@@ -491,6 +491,73 @@ T('farbe-apply', () => {
     const f = farbePage(); f.doc.documentElement.setAttribute('data-tab', 'form'); const ef = ph(f); ef.start();
     check('Form applied while the Farbe pieces are on the page: they stay where they are (the strategy group in the rail, the families in the Farbe row)', f.doc.getElementById('farbe-strategy-group').parentNode.className === 'rail-bottom' && f.doc.getElementById('farbe-family-circle').parentNode.id === 'nav-farbe');
 });
+// the outline of the selected trail (commit B): the chip view passes (sheet, key | null) to window.setFaceSelected ONLY when it changed; every clearing case of the brief
+T('farbe-highlight', () => {
+    const p = farbePage(), eng = ph(p); eng.start();
+    const ch = p.chips, N = ch.nodes, calls = [], deferred = [];
+    p.win.setFaceSelected = (sheet, key) => { calls.push(sheet + ':' + key); };
+    let sheet = 'base'; p.win.activeLayerNow = () => sheet;
+    const last = () => calls.length ? calls[calls.length - 1] : '(none)';
+    const mkRows = specs => { while (p.faceList.firstChild) p.faceList.removeChild(p.faceList.firstChild); specs.forEach((sp, i) => { const row = p.doc.createElement('div'); row.className = 'fc-row'; row.dataset.key = sp; const sw = p.doc.createElement('span'); sw.className = 'fc-swatch'; sw.style.backgroundColor = 'rgb(' + i + ', 0, 0)'; const lab = p.doc.createElement('span'); lab.className = 'fc-label'; lab.textContent = 'Trail ' + (i + 1) + ' · 2 faces'; row.appendChild(sw); row.appendChild(lab); p.faceList.appendChild(row); }); };
+    const tap = id => { p.doc.getElementById(id).dispatch('click'); p.doc.dispatch('click', { target: p.doc.body }); };   // the sub-tab button's own handler, then the click reaching the document
+    p.faceGroup.hidden = false; mkRows(['k1', 'k2', 'k3']); ch.refresh();
+    check('Harmonie is shown (the chips are parked): nothing is outlined, setFaceSelected was never called', calls.length === 0 && ch.outlined() === null);
+    tap('ph-subtab-spuren');
+    check('the Spuren pane shows: the FIRST trail is outlined at once, on the base sheet: setFaceSelected("base", "k1")', last() === 'base:k1' && calls.length === 1, calls.join());
+    N.chips.children[2].dispatch('click');
+    check('a tap on chip 3 moves the outline to ITS key (setFaceSelected("base", "k3")); one call', last() === 'base:k3' && calls.length === 2, calls.join());
+    p.win.uiSync();
+    check('a UI tick with nothing changed calls nothing (no redraw cost per tick)', calls.length === 2, calls.join());
+    tap('ph-subtab-harmonie');
+    check('another sub-tab (Harmonie): the outline is CLEARED (setFaceSelected(null, null)), the selection itself is kept', last() === 'null:null' && ch.outlined() === null && calls.length === 3, calls.join());
+    tap('ph-subtab-spuren');
+    check('back on Spuren: the selected trail (k3) is outlined again', last() === 'base:k3' && calls.length === 4, calls.join());
+    tap('ph-subtab-ebenen'); tap('ph-subtab-zeit');
+    check('Ebenen and Zeit are no Spuren panel either: cleared once, not again', last() === 'null:null' && calls.length === 5, calls.join());
+    tap('ph-subtab-spuren'); sheet = 1; p.doc.dispatch('click', { target: p.doc.body });
+    check('a layer becomes the active sheet: the outline follows the ACTIVE sheet (setFaceSelected(1, "k3")) - one call, no clear in between needed', last() === '1:k3', calls.join());
+    sheet = 'base'; p.doc.dispatch('click', { target: p.doc.body });
+    check('back to the base: the base sheet again', last() === 'base:k3', calls.join());
+    // Fill turned off: the model group is hidden by sketch.js
+    p.faceGroup.hidden = true; p.doc.dispatch('click', { target: p.doc.body });
+    check('Fill off (the panel is hidden): CLEARED', last() === 'null:null' && ch.outlined() === null, calls.join());
+    p.win.uiSync(); p.faceGroup.hidden = false; p.win.uiSync();
+    check('Fill on again with rows (two ticks later): outlined again (the first trail: the selection was lost with the rows)', last() === 'base:k1', calls.join());
+    // the trail list loses the selected trail
+    N.chips.children[2].dispatch('click'); mkRows(['k1', 'k2']); ch.refresh();
+    check('the selected trail vanished (3 -> 2 trails): the CLAMPED trail is outlined (k2), not the dead key', last() === 'base:k2', calls.join());
+    mkRows([]); ch.refresh();
+    check('no trails at all (a refused sheet, no faces): cleared', last() === 'null:null' && ch.outlined() === null, calls.join());
+    mkRows(['k1', 'k2']); ch.refresh();
+    // tab change: Farbe -> Netz (the engine applies Netz; data-tab changes first)
+    const n0 = calls.length;
+    p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
+    check('leaving the Farbe tab: cleared once the engine has switched (the view looks again after the tabchange: one cleared call)', last() === 'null:null' && calls.length === n0 + 1 && ch.outlined() === null, calls.join());
+    p.doc.documentElement.setAttribute('data-tab', 'farbe'); p.doc.dispatch('tabchange', { detail: { tab: 'farbe' } });
+    // release: widening to 768px and up
+    eng.show('spuren'); p.doc.dispatch('click', { target: p.doc.body });
+    check('Farbe applied again with Spuren remembered: outlined', last() === 'base:k1' || last() === 'base:k2', calls.join());
+    const n1 = calls.length; p.mq.set(false); p.doc.dispatch('click', { target: p.doc.body });
+    check('the phone layout ends (release: the chips go back into their hidden holder, html.ph is gone): CLEARED', last() === 'null:null' && calls.length === n1 + 1 && !p.doc.documentElement.classList.contains('ph'), calls.join());
+    p.mq.set(true); eng.apply('farbe'); p.doc.dispatch('click', { target: p.doc.body });
+    check('back in the phone layout the engine shows the REMEMBERED sub-tab (Spuren): outlined again, because the chips are in the slot', eng.state().sub === 'spuren' && last().indexOf('base:') === 0, calls.join());
+    eng.show('harmonie'); p.doc.dispatch('click', { target: p.doc.body });
+    check('and once Harmonie is the shown pane it is cleared', last() === 'null:null', calls.join());
+    // never writes anything else
+    check('the view never touches hover: it calls only window.setFaceSelected (no faceHover, nothing else on the window)', Object.keys(p.win).filter(k => /^faceHover|^setFaceHover/.test(k)).length === 0);
+    // a page without setFaceSelected (a reduced shell, a Node test): the view works and does not throw
+    const q = farbePage(), eq = ph(q); eq.start(); eq.show('spuren'); q.faceGroup.hidden = false; (() => { const row = q.doc.createElement('div'); row.className = 'fc-row'; row.dataset.key = 'z'; q.faceList.appendChild(row); })();
+    let threw = false; try { q.chips.refresh(); q.doc.dispatch('click', { target: q.doc.body }); q.win.uiSync(); } catch (e) { threw = true; }
+    check('without window.setFaceSelected the view does not throw', !threw);
+    // the deferral for resize and tabchange: injected, so the test says exactly when
+    const r = buildPage({ ui: true }); const calls2 = []; r.win.setFaceSelected = (s2, k2) => calls2.push(s2 + ':' + k2);
+    const ch2 = CHIPS.createChips(r.doc, r.win, { defer: fn => deferred.push(fn) }); r.doc.documentElement.setAttribute('data-tab', 'farbe');
+    const er = ph(r); er.start(); er.show('spuren'); r.faceGroup.hidden = false; (() => { const row = r.doc.createElement('div'); row.className = 'fc-row'; row.dataset.key = 'z'; r.faceList.appendChild(row); })();
+    r.win.dispatch('resize'); r.doc.dispatch('tabchange', { detail: { tab: 'farbe' } });
+    check('a resize and a tabchange are looked at AFTER the engine\'s own listener: the view queues the look (defer, twice), it does not act inside the event', deferred.length === 2 && calls2.length === 0, deferred.length + ' / ' + calls2.join());
+    deferred.splice(0).forEach(fn => fn());
+    check('...and the queued look finds the state the engine left (Spuren shown: outlined, once)', calls2.join() === 'base:z' && ch2.outlined().key === 'z', calls2.join());
+});
 T('farbe-chips', () => {
     const p = farbePage(), eng = ph(p); eng.start(); eng.show('spuren');
     const ch = p.chips, N = ch.nodes;
