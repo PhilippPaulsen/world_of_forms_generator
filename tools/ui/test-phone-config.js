@@ -106,7 +106,7 @@ T('wrappers', () => {
     all.forEach(id => { const s = span(id); if (!s) return; all.forEach(o => { if (o !== id && new RegExp('\\bid="' + o + '"').test(s)) nested.push(o + ' in ' + id); }); });
     check('no listed control sits INSIDE another listed one (the engine moves an element with everything in it)', nested.length === 0, nested.join(', ') || 'none');
     const sh = span('nav-shapes') || '';
-    check('#nav-shapes holds the three shape buttons; #nav-symmetry the two symmetry radios (the wrappers are the elements the Form row had)', (sh.match(/data-shape=/g) || []).length === 3 && /btn-sym-rotation"/.test(span('nav-symmetry') || '') && /btn-sym-rotation-mirror"/.test(span('nav-symmetry') || ''));
+    check('#nav-shapes holds the three shape buttons; #nav-symmetry the two symmetry toggles (Drehung, Spiegelung: a group of aria-pressed buttons; the wrappers are the elements the Form row had)', (sh.match(/data-shape=/g) || []).length === 3 && /btn-sym-rotation"/.test(span('nav-symmetry') || '') && /btn-sym-mirror"/.test(span('nav-symmetry') || ''));
     check('#nav-node-stepper holds #node-count-input, #nav-size-stepper #shape-size-input', /id="node-count-input"/.test(span('nav-node-stepper') || '') && /id="shape-size-input"/.test(span('nav-size-stepper') || ''));
 });
 

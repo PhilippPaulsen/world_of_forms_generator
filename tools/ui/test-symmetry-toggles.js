@@ -90,5 +90,36 @@ console.log('\n== 4. hexagon fold ==');
         S.symmetryCategoryFoldFor('rotation3', 6).fold === 3 && S.symmetryCategoryFoldFor('rotation_reflection3', 6).fold === 3);
 }
 
+console.log('\n== 5. the two independent toggles (Drehung, Spiegelung): symmetryCategoryFor / symmetryToggle ==');
+{
+    const F = S.symmetryCategoryFor, X = S.symmetryToggle;
+    check('(rotation, mirror) -> the four states: none, drehling, mirror, spiegeling',
+        F(false, false) === 'none' && F(true, false) === 'drehling' && F(false, true) === 'mirror' && F(true, true) === 'spiegeling');
+    check('the four states are the four categories, each exactly once', eq([F(false, false), F(true, false), F(false, true), F(true, true)].sort(), [...S.SYMMETRY_CATEGORIES].sort()));
+    // all eight transitions: each state x {rotation, mirror}
+    const T8 = [['none', 'rotation', 'drehling'], ['none', 'mirror', 'mirror'], ['drehling', 'rotation', 'none'], ['drehling', 'mirror', 'spiegeling'],
+        ['mirror', 'rotation', 'spiegeling'], ['mirror', 'mirror', 'none'], ['spiegeling', 'rotation', 'mirror'], ['spiegeling', 'mirror', 'drehling']];
+    T8.forEach(t => check('toggle ' + t[0] + ' + ' + t[1] + ' -> ' + t[2], X(t[0], t[1]) === t[2]));
+    check('every toggle flips exactly ONE half (the other half is untouched), and twice is the identity',
+        S.SYMMETRY_CATEGORIES.every(c => ['rotation', 'mirror'].every(w => {
+            const n = X(c, w), r0 = S.symmetryHasRotation(c), m0 = S.symmetryHasMirror(c), r1 = S.symmetryHasRotation(n), m1 = S.symmetryHasMirror(n);
+            return (w === 'rotation' ? (r1 !== r0 && m1 === m0) : (m1 !== m0 && r1 === r0)) && X(n, w) === c;
+        })));
+    check('round trip with symmetryHasRotation / symmetryHasMirror: categoryFor(hasRotation(c), hasMirror(c)) === c for all four',
+        S.SYMMETRY_CATEGORIES.every(c => F(S.symmetryHasRotation(c), S.symmetryHasMirror(c)) === c));
+    check('an unknown half name changes nothing (no accidental third toggle)', S.SYMMETRY_CATEGORIES.every(c => X(c, 'fold') === c && X(c, undefined) === c));
+    check('the default (both on) is spiegeling, the category sketch.js starts with; both off is "none"', F(true, true) === 'spiegeling' && F(false, false) === 'none');
+    check('they return categories only: never a raw mode id, never a fold (the raw mode is written by setCategory / symmetryModeFor alone)',
+        S.SYMMETRY_CATEGORIES.every(c => ['rotation', 'mirror'].every(w => S.SYMMETRY_CATEGORIES.includes(X(c, w)) && !MODES.filter(m => m !== 'none').includes(X(c, w)))));  // 'none' is both a category and a raw id
+    // through the resolution: toggling never needs the fold; the category then picks the raw mode for each shape and fold
+    check('through symmetryModeFor: Drehung off on any shape leaves no rotation mode; Spiegelung off keeps the rotation mode',
+        SHAPES.every(s => FOLDS.every(f => {
+            const offRot = S.symmetryModeFor(s, X('spiegeling', 'rotation'), f), offMir = S.symmetryModeFor(s, X('spiegeling', 'mirror'), f);
+            return offRot === 'reflection_only' && /^rotation[36]$/.test(offMir) && S.symmetryModeFor(s, X('drehling', 'rotation'), f) === 'none';
+        })));
+    check('the exclusive-pair helpers are unchanged and still exported (symmetryVisibleState, symmetryCategoryForVisible, SYMMETRY_OTHER_CATEGORIES)',
+        typeof S.symmetryVisibleState === 'function' && typeof S.symmetryCategoryForVisible === 'function' && eq([...S.SYMMETRY_OTHER_CATEGORIES].sort(), ['mirror', 'none']));
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 process.exit(failures ? 1 : 0);
