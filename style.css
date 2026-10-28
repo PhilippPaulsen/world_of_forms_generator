@@ -893,6 +893,21 @@ body.dark {
 
 /* The net group (#net-group) now sits inside the Netz overlay: its rows read left-aligned, its buttons follow --target. */
 .overlay-wide { max-width: min(92vw, 420px); }
+/* The Info card (sheets redesign, commit 6b): the pattern name, then two native <details> ("Netz", "Zeitleiste"), closed by default. Closed, the card is as wide as its content (width: max-content, as every
+   overlay); an open section widens it up to the 420px of .overlay-wide. As a popover it scrolls inside the viewport (ui.js: the `fit` option sets max-height below its top); as the phone's bottom sheet it
+   scrolls through `.overlay.sheet` (max-height 80dvh). The summary is --target high (36px, 48px under a coarse pointer) with the app's own keyboard ring; the native marker is replaced by a chevron. */
+#info-card { overflow-y: auto; }
+.info-sections { display: flex; flex-direction: column; border-top: 1px solid var(--color-text); }
+.info-section { border-bottom: 1px solid var(--color-text); }
+.info-section:last-child { border-bottom: 0; }
+.info-section > summary { display: flex; align-items: center; gap: 8px; min-height: var(--target); cursor: pointer; list-style: none; font-weight: var(--weight-strong); touch-action: manipulation; }
+.info-section > summary::-webkit-details-marker { display: none; }
+.info-section > summary::before { content: ""; flex: none; width: 6px; height: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); }
+.info-section[open] > summary::before { transform: rotate(45deg); }
+.info-section[open] > summary { margin-bottom: 8px; }
+.info-section > summary:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+.info-section > p { margin: 0 0 8px; font-size: var(--size-secondary); line-height: 1.35; }
+.info-section > p:last-child { margin-bottom: 16px; }
 .overlay .control-group { align-items: stretch; gap: 8px; width: 100%; }
 .overlay .icon-row { justify-content: flex-start; flex-wrap: wrap; gap: var(--gap); }
 .overlay .layer-btn {

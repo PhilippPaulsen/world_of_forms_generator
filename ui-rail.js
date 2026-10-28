@@ -1,7 +1,7 @@
 (function () {
   const $ = function (s) { return document.querySelector(s); };
   const moreRail = UI.overlay($('#btn-more-rail'), $('#more-rail'), {});
-  UI.overlay($('#btn-info'), $('#info-card'), {});
+  UI.overlay($('#btn-info'), $('#info-card'), { fit: true });
   // Help (header) and Download (rail) open modal dialogs that sketch.js shows and hides; this adds their keyboard behaviour.
   UI.dialog($('#help-overlay'), $('#btn-help'), $('#close-help'));
   UI.dialog($('#export-overlay'), $('#btn-save'), $('#close-export'));

@@ -558,13 +558,14 @@
     const api = { isOpen: false, open: open, close: close, toggle: toggle };
     function place() {
       if (window.matchMedia(SHEET_QUERY).matches) {
-        panel.classList.add('sheet'); panel.style.top = ''; panel.style.left = '';
+        panel.classList.add('sheet'); panel.style.top = ''; panel.style.left = ''; panel.style.maxHeight = '';
         if (scrim) scrim.hidden = false;
       } else {
         panel.classList.remove('sheet');
         if (scrim) scrim.hidden = true;
         const r = trigger.getBoundingClientRect();
         panel.style.top = Math.round(r.bottom + 8) + 'px';
+        if (opts && opts.fit) panel.style.maxHeight = Math.max(120, Math.round(window.innerHeight - r.bottom - 16)) + 'px';   // fit: the popover never reaches below the viewport; it scrolls (the Info card: an open section is long)
         const w = panel.offsetWidth;
         panel.style.left = Math.max(8, Math.min(Math.round(r.left), window.innerWidth - w - 8)) + 'px';
       }
@@ -608,7 +609,7 @@
       if (e.key === 'Escape') { e.stopPropagation(); close(true); return; }
       if (e.key !== 'Tab') return;
       // every control the Tab key can reach: a number field after the last button used to fall outside the loop (Tab skipped it), and a hidden button as the "last" one broke the wrap
-      const items = Array.prototype.slice.call(panel.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex="0"]')).filter(function (n) { return n.tabIndex >= 0 && n.offsetParent !== null; });
+      const items = Array.prototype.slice.call(panel.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], summary, [tabindex="0"]')).filter(function (n) { return n.tabIndex >= 0 && n.offsetParent !== null; });
       if (!items.length) return;
       const first = items[0], last = items[items.length - 1];
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
