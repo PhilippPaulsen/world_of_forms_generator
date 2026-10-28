@@ -126,7 +126,7 @@ console.log('\n== 1b-1: the layer controls reuse the Form row\'s patterns ==');
         check(`${kind}: the existing input #${inputId} sits inside the Form row's .stepper wrapper (.stepper-icon, the input with inputmode="none", .stepper-chevrons with two .stepper-btn)`,
             /<div class="stepper"[^>]*role="group"/.test(g) && /class="ico stepper-icon"/.test(g) && new RegExp('<input type="number" id="' + inputId + '"[^>]*inputmode="none"').test(g) && /<div class="stepper-chevrons">/.test(g) && (g.match(/<button class="stepper-btn"/g) || []).length === 2 && /data-dir="1"/.test(g) && /data-dir="-1"/.test(g));
         check(`${kind}: the group, the input and both chevrons have an aria-label, a title and a data-i18n key`, /<div class="stepper"[^>]*aria-label="[^"]+"[^>]*data-i18n="[^"]+"/.test(g) && new RegExp('id="' + inputId + '"[^>]*aria-label="[^"]+"[^>]*data-i18n="[^"]+"').test(g) && [...g.matchAll(/<button class="stepper-btn"[^>]*>/g)].every(m => /title="[^"]+"/.test(m[0]) && /aria-label="[^"]+"/.test(m[0]) && /data-i18n="[^"]+"/.test(m[0])));
-        check(`${kind}: the old <label for="${inputId}"> and the id are still there (nothing renamed or removed)`, new RegExp('<label for="' + inputId + '">').test(g) && g.includes('id="' + inputId + '"'));
+        check(`${kind}: the old <label for="${inputId}"> and the id are still there (nothing renamed or removed)`, new RegExp('<label for="' + inputId + '"( data-i18n="[a-zA-Z.]+")?>').test(g) && g.includes('id="' + inputId + '"'));
     }
     check('the node-count note (#layer-node-count-note) is GONE (it was written by nothing since the notices; the limit goes to a notice)', !group('layer-node-count-group').includes('layer-node-count-note') && !HTML.includes('layer-node-count-note'));
     // the shape icon row
@@ -138,7 +138,7 @@ console.log('\n== 1b-1: the layer controls reuse the Form row\'s patterns ==');
     const fg = group('layer-fold-group');
     const foldBtns = [...fg.matchAll(/<button class="layer-fold-btn layer-btn icon-btn"[^>]*>[^<]*<\/button>/g)].map(m => m[0]);
     check('fold: two .layer-fold-btn buttons (now also .icon-btn, the numeral buttons of the Farbe row) with data-fold 3 / 6, aria-pressed, an aria-label that contains the visible numeral, title and data-i18n',
-        foldBtns.length === 2 && ['3', '6'].every((n, i) => foldBtns[i].includes('data-fold="' + n + '"') && new RegExp('aria-label="[^"]*' + n + '[^"]*"').test(foldBtns[i]) && new RegExp('>\\s*' + n + '\\s*<').test(foldBtns[i]) && /aria-pressed="false"/.test(foldBtns[i]) && /data-i18n="[^"]+"/.test(foldBtns[i])));
+        foldBtns.length === 2 && ['3', '6'].every((n, i) => foldBtns[i].includes('data-fold="' + n + '"') && new RegExp('aria-label="[^"]*' + n + '[^"]*"').test(foldBtns[i]) && new RegExp('>\\s*' + n + '\\s*<').test(foldBtns[i]) && /aria-pressed="false"/.test(foldBtns[i]) && /data-i18n(-label)?="[^"]+"/.test(foldBtns[i])));   // commit 1 of the sheets redesign: a button with its own text AND a different name carries data-i18n-label
     const iconOnly = id => { const m = new RegExp('<button id="' + id + '"[^>]*>[\\s\\S]*?</button>').exec(panel); return m ? m[0] : ''; };
     for (const id of ['btn-align-to-base', 'btn-mesh-preset-x', 'btn-mesh-preset-y']) {
         const b = iconOnly(id);

@@ -29,7 +29,7 @@
     'timeline.net.always': 'Netz aufnehmen: immer',
     'timeline.net.never': 'Netz aufnehmen: nie',
     'timeline.net.still': 'das Netz bewegt sich nicht mit der Zeitleiste',
-    'timeline.more': 'Zeitleiste: Mehr',
+    get 'timeline.more'() { const i = root.uiI18n; return i && i.has('timeline.more') ? i.t('timeline.more') : 'Zeitleiste: Mehr'; },
     'timeline.clear': 'Zeitleiste entfernen',
     'timeline.confirm.cancel': 'Abbrechen',
     'timeline.confirm.remove': 'Entfernen',
@@ -216,9 +216,9 @@
     clearBtn.addEventListener('click', function () {
       if (!root.timelineConfirm) { if (api()) api().clearTimeline(); sync(); return; }
       root.timelineConfirm({
-        title: T['timeline.clear.title'], text: T['timeline.clear.text'], confirmLabel: T['timeline.clear'],
+        title: T['timeline.clear.title'], text: T['timeline.clear.text'], confirmLabel: (root.uiI18n && root.uiI18n.has('timeline.remove')) ? root.uiI18n.t('timeline.remove') : T['timeline.clear'],
         onConfirm: function () { if (api()) api().clearTimeline(); sync(); },
-        returnFocus: function () { if (typeof clearBtn.focus === 'function' && !clearBtn.hidden) clearBtn.focus(); else moreBtn.focus(); },
+        returnFocus: function () { if (typeof clearBtn.focus === 'function' && !clearBtn.hidden && clearBtn.offsetParent !== null) clearBtn.focus(); else moreBtn.focus(); },   // offsetParent: under the phone layout the text button is parked (display: none) and the focus goes to the "..." of the strip
       });
     });
   }

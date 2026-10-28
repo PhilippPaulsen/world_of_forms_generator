@@ -57,7 +57,16 @@
  * The result is { "375x553": { form: { env, states }, farbe: ..., netz: ... }, "375x610": ..., "375x718": ... }; merge the three widths (320, 375, 430) with
  * `node tools/ui/merge-baseline.js out.json a.json b.json c.json` and compare a later run with the file of the same shape:
  *
- *   node tools/ui/compare-baseline.js tools/ui/baseline-phone-1.json <the new file>              (compare-baseline.js reads the phone files unchanged; --widths 375x610 and --tabs netz filter)
+ *   node tools/ui/compare-baseline.js tools/ui/baseline-phone-2.json <the new file>              (compare-baseline.js reads the phone files unchanged; --widths 375x610 and --tabs netz filter)
+ *
+ * baseline-phone-2.json (sheets redesign, commit 7) is the PHONE REFERENCE from now on: the 27 cells of baseline-phone-1.json (kept untouched: the phone layout before the sheets redesign) plus the states of the
+ * sheets block (the list is in the header of tools/ui/measure-phone.js: netz_sheet_geo, timeline_sheet_2kf, pairing_editor_2kf, pairing_list_2kf, pairing_editor_3kf, layer_sheet_hex, info_card,
+ * netz_sheet_tiled_macro_alt). One call records one width (9 cells, about 230 s: start it and poll window.__r; keep the pane visible and check document.visibilityState first, a hidden page throttles timers):
+ *
+ *   window.__r = null; recordPhone({ width: 320, expect: 'coarse', postTo: 'http://127.0.0.1:8885/P320' }).then(() => { window.__r = 'done'; });      // then 375 and 430
+ *   node tools/ui/merge-baseline.js out.json P320.json P375.json P430.json --phase phone-2 --commit <hash> --note "..."
+ *   node tools/ui/compare-baseline.js tools/ui/baseline-phone-2.json out.json                    (0 differences for a tree with no phone layout change)
+ *   node tools/ui/compare-baseline.js tools/ui/baseline-phone-1.json tools/ui/baseline-phone-2.json --shared      (the sheets redesign: only layer_sheet, panel_more of Netz and timeline_sheet differ; its `before` note says so)
  */
 async function recordBaseline(opts) {
   opts = opts || {};

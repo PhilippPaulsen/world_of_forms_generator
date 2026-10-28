@@ -11,6 +11,15 @@
  *     <sheet>              the sheet open (rail_more, panel_more, kreis, dreieck, layer_sheet, timeline_sheet): the sheet, its scrim, and the controls in it that have an id; scalars scrollHeight /
  *                          clientHeight (does it scroll)
  *     notice               a 3-line notice showing (UI.notify): the stack and the notice; notice_in_sheet: the same while the rail's sheet is open (the stack goes under the header)
+ *   Since the sheets redesign (commit 7, tools/ui/baseline-phone-2.json) the states below are appended AFTER everything above (so the older states keep their conditions):
+ *     netz_sheet_geo       (Netz tab) the Netz sheet with Geo and Field (the base net as the steps above left it)
+ *     timeline_sheet_2kf   the timeline sheet (pairing toggle off) with two keyframes of two lines each
+ *     pairing_editor_2kf   the same, the pairing toggle on: the line chips, the moves, the variant stepper, the list and reset icons (one segment: no segment select)
+ *     pairing_list_2kf     the pairing list open (the header with the count, one row per pairing)
+ *     pairing_editor_3kf   three keyframes, the pairing toggle on: the icon row with the segment select
+ *     layer_sheet_hex      the layer sheet of a hexagon layer (the fold row)
+ *     info_card            the Info card opened from the rail's sheet, the Netz section open
+ *     netz_sheet_tiled_macro_alt   (Netz tab, last) Geo + Tiled with seven nodes: the macro row and the Alternate row
  *
  * Every snapshot but the notice ones is taken with NO notice on screen (UI.hideToast first), so the file does not depend on the speed of the recording. The steps use dispatched events (the shape
  * of a mouse click), never the keyboard.
@@ -93,6 +102,78 @@
     return o;
   }
 
+  // ---- the states of the sheets block (commit 7) ---------------------------------------------------------------------------------------------------------------------------------
+  async function addLines(n) {
+    const ids = activeNodes().map((x) => x.id), c = activeConnections(), pairs = [[0, 1], [1, 2], [2, 3], [0, 2], [1, 3], [0, 3]];
+    for (let i = 0; i < n; i++) c.push([ids[pairs[i][0]], ids[pairs[i][1]]]);
+    redraw(); await sleep(350);
+  }
+  function snapOpen(sel) {   // a sheet that is open: its rect, the scrim, scrolling, and every control in it
+    const el = q(sel), o = {};
+    o[sel] = el && !el.hidden ? rect(el) : null; o['#overlay-scrim'] = rect(q('#overlay-scrim')); o.open = o[sel] ? 1 : 0;
+    if (el) { o.scrollHeight = el.scrollHeight; o.clientHeight = el.clientHeight; controls(sel, o, ''); }
+    return Object.assign(o, { htmlClass: document.documentElement.className });
+  }
+  async function esc(sel) { const el = q(sel); if (el) el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await sleep(350); }
+  async function phone2(tab, states) {
+    const rail = q('#btn-more-rail');
+    // Netz: the sheet with Geo and Field (the base net the steps above left)
+    if (tab === 'netz') {
+      layerApi.select('base'); await sleep(300); await sub('art');
+      const b = q('#btn-more-netz'); states.netz_sheet_geo = await sheet('netz_sheet_geo', () => realClick(b), '#more-netz', b);
+    }
+    // two keyframes of two lines: layer 0 (the keyframe of the steps above) gets its lines, a second layer is added
+    layerApi.select(0); await sleep(300); await addLines(2);
+    layerApi.add(); await sleep(500); await addLines(2); layerApi.addToTimeline(); await sleep(600);
+    await sub('zeit');
+    const tm = q('#timeline-strip .ts-more');
+    if (tm) {
+      realClick(tm); await sleep(500);
+      states.timeline_sheet_2kf = snapOpen('#ph-sheet-timeline');
+      const tog = q('#ph-sheet-timeline .ph-tl-pairing'); realClick(tog); await sleep(450);
+      states.pairing_editor_2kf = snapOpen('#ph-sheet-timeline');
+      const lb = q('#ph-tl-listbtn'); if (lb) { realClick(lb); await sleep(450); states.pairing_list_2kf = snapOpen('#ph-sheet-timeline'); const back = q('#ph-sheet-timeline .ph-tl-back'); if (back) { realClick(back); await sleep(400); } }
+      realClick(tog); await sleep(300);
+      await esc('#ph-sheet-timeline'); if (!q('#ph-sheet-timeline').hidden) { realClick(tm); await sleep(300); }
+    }
+    // a third keyframe: the segment select appears
+    await sub('ebenen');
+    layerApi.add(); await sleep(500); await addLines(2); layerApi.addToTimeline(); await sleep(600);
+    await sub('zeit');
+    if (tm) {
+      realClick(tm); await sleep(500);
+      const tog = q('#ph-sheet-timeline .ph-tl-pairing'); realClick(tog); await sleep(450);
+      states.pairing_editor_3kf = snapOpen('#ph-sheet-timeline');
+      realClick(tog); await sleep(300);
+      await esc('#ph-sheet-timeline'); if (!q('#ph-sheet-timeline').hidden) { realClick(tm); await sleep(300); }
+    }
+    // the layer sheet of a hexagon layer (the fold row)
+    await sub('ebenen');
+    layerApi.add(); await sleep(500);
+    const lm = q('#layer-strip .lt-more');
+    if (lm) {
+      realClick(lm); await sleep(500);
+      const hex = q('#layer-more-panel .layer-shape-icon-btn[data-shape="hex"]'); if (hex) { realClick(hex); await sleep(500); }
+      states.layer_sheet_hex = snapOpen('#ph-sheet-layer');
+      await esc('#ph-sheet-layer'); if (!q('#ph-sheet-layer').hidden) { realClick(lm); await sleep(300); }
+    }
+    // the Info card from the rail's sheet, the Netz section open
+    realClick(rail); await sleep(450); realClick(q('#btn-info')); await sleep(450);
+    const card = q('#info-card'), net = q('#info-net > summary');
+    if (net) { realClick(net); await sleep(300); }
+    const ic = { '#info-card': card && !card.hidden ? rect(card) : null, '#info-net > summary': rect(net), '#info-tl > summary': rect(q('#info-tl > summary')), '#overlay-scrim': rect(q('#overlay-scrim')), netOpen: q('#info-net') && q('#info-net').open ? 1 : 0, tlOpen: q('#info-tl') && q('#info-tl').open ? 1 : 0 };
+    if (card) { ic.scrollHeight = card.scrollHeight; ic.clientHeight = card.clientHeight; qa('#info-card p').forEach((p, i) => { ic['#info-card p[' + i + ']'] = rect(p); }); }
+    states.info_card = ic;
+    await esc('#info-card');
+    // Netz, last: Geo and Tiled with seven nodes offer the macro cells and the Alternate row
+    if (tab === 'netz') {
+      layerApi.select('base'); await sleep(300); await sub('art');
+      const ni = q('#node-count-input'); if (ni) { ni.value = '7'; ni.dispatchEvent(new Event('input', { bubbles: true })); await sleep(500); }
+      const tiled = q('#net-domain-tiled'); if (tiled) { realClick(tiled); await sleep(500); }
+      const b = q('#btn-more-netz'); states.netz_sheet_tiled_macro_alt = await sheet('netz_sheet_tiled_macro_alt', () => realClick(b), '#more-netz', b);
+    }
+  }
+
   async function measurePhone() {
     const tab = document.documentElement.getAttribute('data-tab'), states = {};
     const env = { innerWidth: window.innerWidth, innerHeight: window.innerHeight, coarse: matchMedia('(pointer: coarse)').matches, tab: tab, htmlClass: document.documentElement.className, visibility: document.visibilityState };
@@ -149,6 +230,9 @@
     await sub('zeit');
     const tm = q('#timeline-strip .ts-more');
     if (tm) states.timeline_sheet = await sheet('timeline_sheet', () => realClick(tm), '#ph-sheet-timeline', tm);
+    await sub(subs[0]);
+    await settle(300);
+    await phone2(tab, states);
     await sub(subs[0]);
     await settle(300);
     return { env: env, states: states };

@@ -25,9 +25,11 @@
     'trails.group': 'Spuren'
   };
   const fill = (s, k, m) => s.replace('{k}', String(k)).replace('{m}', String(m));
+  // a string of the bilingual dictionary (ui-i18n.js) in the current language; the German table above is the fallback (this file is also loaded without it, in a Node test)
+  function tt(key, params) { const i = root.uiI18n; return i && i.has(key) ? i.t(key, params) : (params ? fill(T[key], params.k, params.m) : T[key]); }
 
   // ---- the pure part ----------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  function labelFor(k, m) { return fill(T[m === 1 ? 'trails.label.one' : 'trails.label.other'], k, m); }
+  function labelFor(k, m) { return tt(m === 1 ? 'trails.label.one' : 'trails.label.other', { k: k, m: m }); }
 
   // state = { key, index }: the selected trail as the view last knew it. Returns the new selection {key, index} (clamped) for the rows.
   function resolveSelection(rows, state) {
@@ -82,7 +84,7 @@
     let model = trailModel([], selected);
 
     function el(tag, cls, attrs) { const e = doc.createElement(tag); if (cls) e.className = cls; if (attrs) Object.keys(attrs).forEach(function (k) { e.setAttribute(k, attrs[k]); }); return e; }
-    function text(key) { return T[key]; }
+    function text(key) { return tt(key); }
     const UI = win.UI;
 
     // the two containers live in a hidden holder until ui-phone.js moves them into the panel (the holder is `hidden`: nothing of them is visible or in the Tab order outside the phone layout)
