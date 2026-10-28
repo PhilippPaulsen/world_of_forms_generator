@@ -79,31 +79,34 @@
     // The Fokus stepper left #net-focus-row (which keeps the title and the exact field in the Netz sheet); sketch.js shows that row only for Sin and Tan, so for Aus and Geo
     // the stepper is there but disabled and says why, instead of an empty row.
     follow: { 'net-focus-stepper': { of: 'net-focus-row', mode: 'disable', reason: 'Fokus gilt für Sin und Tan', i18n: 'net.reason.focus' } },
+    // names: the accessible names of the two groups the engine makes (the tool row, the sub-tab row): { text (the German text, also the fallback), i18n (the dictionary key) }. Every label of this file
+    // (names, subtabs.*.label, sheets.*.label) has an i18n key: validate() requires it, the engine writes the text of the current language (say(key, text)).
+    names: { tools: { text: 'Werkzeuge', i18n: 'phone.tools' }, subtabs: { text: 'Unterbereiche', i18n: 'phone.subtabs' } },
     subtabs: {
       raster: {
-        label: 'Raster',
+        label: 'Raster', i18n: 'subtab.raster',
         rows: [
           { items: [{ id: 'nav-shapes', w: 160 }, { id: 'nav-symmetry', w: 104 }] },
           { items: [{ id: 'nav-node-stepper', w: 117, wMin: 109 }, { id: 'nav-size-stepper', w: 117, wMin: 109 }, { id: 'btn-more-form', w: 48 }] }
         ]
       },
-      ebenen: { label: 'Ebenen', rows: [{ items: [{ id: 'layer-strip', fluid: true, h: 104 }] }] },
-      zeit: { label: 'Zeit', rows: [{ items: [{ id: 'timeline-strip', fluid: true }] }] },
+      ebenen: { label: 'Ebenen', i18n: 'subtab.ebenen', rows: [{ items: [{ id: 'layer-strip', fluid: true, h: 104 }] }] },
+      zeit: { label: 'Zeit', i18n: 'subtab.zeit', rows: [{ items: [{ id: 'timeline-strip', fluid: true }] }] },
       // Farbe (commit 2). Row 1 of Harmonie: Kreis + Dreieck (the wrapper), a hairline (`sep`: the engine makes it), and the harmony cluster of the active view (the two clusters share one slot: `also`, and both reserve
       // four buttons' width). It is 337px wide: from 340px down the row scrolls sideways (`scroll`), a 4-button cluster and two anchor buttons do not fit 288px with 48px targets. Row 2: the two anchor steppers and the swatch.
       harmonie: {
-        label: 'Harmonie',
+        label: 'Harmonie', i18n: 'subtab.harmonie',
         rows: [
           { scroll: true, items: [{ id: 'nav-anchor-views', w: 104 }, { sep: true, w: 1 }, { id: 'farbe-family-triangle', w: 216, also: ['farbe-family-circle'] }] },
           { items: [{ id: 'farbe-anchor-hue-stepper', w: 117, wMin: 109 }, { id: 'farbe-anchor-register-stepper', w: 117, wMin: 109 }, { id: 'farbe-anchor-preview', w: 48 }] }
         ]
       },
       // the chip view of the trails (ui-phone-chips.js makes both containers; the model is the hidden #face-colors-list)
-      spuren: { label: 'Spuren', rows: [{ items: [{ id: 'ph-trail-chips', fluid: true }] }, { items: [{ id: 'ph-trail-stepper', fluid: true }] }] },
+      spuren: { label: 'Spuren', i18n: 'subtab.spuren', rows: [{ items: [{ id: 'ph-trail-chips', fluid: true }] }, { items: [{ id: 'ph-trail-stepper', fluid: true }] }] },
       // Netz (commit 3). Art: row 1 = the four kinds (Aus, Sin, Tan, Geo: 4 x 60 + 3 gaps = 264), row 2 = the strength stepper, the panel's own More (#more-netz: the domain, Macro, the exact fields, Alternate and the
       // hints stay in it) and Reverse LAST (sketch.js shows it for Geo only: More keeps its place whether or not Reverse is there; 117 + 8 + 48 + 8 + 74 = 255). Achsen: row 1 = Both / X / Y, row 2 = the Fokus stepper (sketch.js shows its row for Sin and Tan only: disabled with a reason otherwise, see `follow`).
-      art: { label: 'Art', rows: [{ items: [{ id: 'nav-kinds', w: 264 }] }, { items: [{ id: 'net-strength-stepper', w: 117, wMin: 109 }, { id: 'btn-more-netz', w: 48 }, { id: 'net-reverse-btn', w: 74 }] }] },
-      achsen: { label: 'Achsen', rows: [{ items: [{ id: 'net-axes-row', w: 158 }] }, { items: [{ id: 'net-focus-stepper', w: 117, wMin: 109 }] }] }
+      art: { label: 'Art', i18n: 'subtab.art', rows: [{ items: [{ id: 'nav-kinds', w: 264 }] }, { items: [{ id: 'net-strength-stepper', w: 117, wMin: 109 }, { id: 'btn-more-netz', w: 48 }, { id: 'net-reverse-btn', w: 74 }] }] },
+      achsen: { label: 'Achsen', i18n: 'subtab.achsen', rows: [{ items: [{ id: 'net-axes-row', w: 158 }] }, { items: [{ id: 'net-focus-stepper', w: 117, wMin: 109 }] }] }
     },
     // Bottom sheets (1b): a block that stays inline above 768px and in the tabs that are not covered moves into a sheet (UI.overlay) while the layout is on. The sheet FOLLOWS the block's own open state - the
     // "..." button's existing handler flips it, nothing here toggles it - and closing the sheet (Escape, the scrim, a tap outside, a resize) closes that state by clicking the button once more.
@@ -123,7 +126,7 @@
       // below 340px), row 2 the node count and size steppers, row 3 the fold buttons (sketch.js shows them for a hexagon layer only: the row collapses otherwise). Block 2 = where it SITS: row 1 offset X, offset Y
       // (the typed inputs, wrapped into 117px steppers by the engine: see `steppers`) and Align to base, row 2 the two mesh presets and the rotation field. Every item is the layer's own .control-group, so sketch.js's show / hide of a group still decides.
       layer: {
-        host: 'ph-sheet-layer', label: 'Ebenen-Einstellungen', content: 'layer-more-panel', trigger: { within: 'layer-strip', selector: '.lt-more' }, open: { notHidden: true },
+        host: 'ph-sheet-layer', label: 'Ebenen-Einstellungen', i18n: 'layers.more', content: 'layer-more-panel', trigger: { within: 'layer-strip', selector: '.lt-more' }, open: { notHidden: true },
         // steppers (3b): an existing typed input that becomes a stepper (the same markup as the Form row's, built by the engine around the input) while the layout is on, and is plain again after release():
         // step / round / min / max / wrap / noTyping are the options of UI.stepper (commit 2); `icon` is a key of `icons`; name / more / less = { i18n (dictionary key), text (German fallback) } of the
         // group, the up chevron and the down chevron. The item that holds the input is 117px wide (109 at 320).
@@ -151,7 +154,7 @@
       // icon is hidden while the model offers no list). Block 3 (5c) = the pairing list, behind ph-tl-list-show: a header row [back][count] and the list (fluid; the config counts ONE list row, the real list is as long as
       // the model's and scrolls inside the sheet). The old editor (#timeline-pairing) is the model and is parked hidden by the CSS, with the keyframe list, the net box, the status span and the text button.
       timeline: {
-        host: 'ph-sheet-timeline', label: 'Zeitleiste: Mehr', content: 'timeline-group', trigger: { within: 'timeline-strip', selector: '.ts-more' }, open: { hasClass: 'ts-open' },
+        host: 'ph-sheet-timeline', label: 'Zeitleiste: Mehr', i18n: 'timeline.more', content: 'timeline-group', trigger: { within: 'timeline-strip', selector: '.ts-more' }, open: { hasClass: 'ts-open' },
         blocks: [
           [
             { items: [{ id: 'ph-tl-icons', w: 286 }] },
@@ -210,9 +213,15 @@
     const avail = S.designWidth - 2 * S.gutter, availNarrow = S.narrowWidth - 2 * S.gutter;
     const rowW = (items, key) => items.reduce((a, it) => a + (it.fluid ? 0 : key === 'min' && it.wMin ? it.wMin : it.w), 0) + S.rowGap * Math.max(0, items.length - 1);
     if (!/^\(max-width: 767px\)$/.test(cfg.query || '')) bad.push('query must be (max-width: 767px)');
+    ['tools', 'subtabs'].forEach(function (k) {
+      const n = (cfg.names || {})[k];
+      if (!n || typeof n.text !== 'string' || !n.text.trim()) bad.push('names.' + k + ': no text');
+      if (!n || typeof n.i18n !== 'string' || !n.i18n) bad.push('names.' + k + ': no i18n key');
+    });
     Object.keys(cfg.subtabs).forEach(function (sid) {
       const st = cfg.subtabs[sid];
       if (!st.label || typeof st.label !== 'string') bad.push('subtab ' + sid + ': no label');
+      if (!st.i18n || typeof st.i18n !== 'string') bad.push('subtab ' + sid + ': no i18n key for its label');
       if (st.stub && st.rows) bad.push('subtab ' + sid + ': a stub has no rows');
       if (!st.stub && !Array.isArray(st.rows)) bad.push('subtab ' + sid + ': no rows');
     });
@@ -297,6 +306,7 @@
         claim(sh.content, 'sheet ' + sid);
         if (htmlIds.has(sh.host)) bad.push(tab + ': sheet ' + sid + ': its host id ' + sh.host + ' is in index.html (a script makes the host)');
         if (!sh.label || typeof sh.label !== 'string') bad.push(tab + ': sheet ' + sid + ': no label');
+        if (!sh.i18n || typeof sh.i18n !== 'string') bad.push(tab + ': sheet ' + sid + ': no i18n key for its label');
         if (!sh.trigger || !sh.trigger.within || !sh.trigger.selector) bad.push(tab + ': sheet ' + sid + ': no trigger');
         else if (!known(sh.trigger.within)) bad.push(tab + ': sheet ' + sid + ': trigger container ' + sh.trigger.within + ' is unknown');
         if (!sh.open || !(sh.open.notHidden === true || typeof sh.open.hasClass === 'string')) bad.push(tab + ': sheet ' + sid + ': open must be { notHidden: true } or { hasClass }');

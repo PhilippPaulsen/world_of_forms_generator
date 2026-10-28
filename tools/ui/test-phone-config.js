@@ -595,6 +595,27 @@ T('timeline-sheet-css', () => {
     check('every gap, margin and padding of these rules is on the scale (var(--sp-N), 0)', mine.every(r => (r.body.match(/\b(gap|margin|padding)[a-z-]*:\s*[^;]+/g) || []).every(d => !/\d+px/.test(d))));
 });
 
+// ---- the labels carry a dictionary key (sheets redesign, commit 6a) ----
+T('label-keys', () => {
+    const env = { ids: idSet };
+    const mut = (name, fn, re) => { const c = clone(config); fn(c); const p = validate(c, env); check(`validate rejects (labels): ${name}`, p.some(m => re.test(m)), p.join(' ; ') || 'no problem found'); };
+    mut('a sub-tab without an i18n key', c => { delete c.subtabs.art.i18n; }, /subtab art: no i18n key/);
+    mut('a sub-tab with an empty i18n key', c => { c.subtabs.zeit.i18n = ''; }, /subtab zeit: no i18n key/);
+    mut('a sheet without an i18n key', c => { delete c.sheets.timeline.i18n; }, /sheet timeline: no i18n key/);
+    mut('the tool row\'s name without a key', c => { delete c.names.tools.i18n; }, /names\.tools: no i18n key/);
+    mut('the sub-tab row\'s name missing altogether', c => { delete c.names; }, /names\.subtabs: no text/);
+    check('validate accepts the real config (the new fields are all there)', validate(config, { ids: idSet }).length === 0);
+    const I = require(path.join(ROOT, 'ui-i18n.js'));
+    const entries = [].concat(Object.keys(config.subtabs).map(k => ['subtab ' + k, config.subtabs[k].label, config.subtabs[k].i18n]), Object.keys(config.sheets).map(k => ['sheet ' + k, config.sheets[k].label, config.sheets[k].i18n]), ['tools', 'subtabs'].map(k => ['names.' + k, config.names[k].text, config.names[k].i18n]));
+    check('every label of the config (' + entries.length + ': 7 sub-tabs, 2 sheets, 2 group names) has a key that is in the dictionary with a German and an English text, and the German text written here equals the dictionary German', entries.length === 11 && entries.every(e => I.has(e[2]) && I.DICT[e[2]].de === e[1] && typeof I.DICT[e[2]].en === 'string' && I.DICT[e[2]].en.trim() !== ''), entries.filter(e => !(I.has(e[2]) && I.DICT[e[2]].de === e[1])).map(e => e[0]).join());
+    const src = fs.readFileSync(CFG_PATH, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
+    const labels = src.match(/\blabel: '[^']*'/g) || [], keyed = src.match(/\blabel: '[^']*', i18n: '[a-z][\w.]*'/g) || [];
+    check('source guard: every `label: \'...\'` in ui-phone-config.js (' + labels.length + ': sub-tabs and sheets) is followed by its i18n key (' + keyed.length + '); no label can be added without one', labels.length === 9 && keyed.length === labels.length);
+    check('the names are keyed too: `names: { tools: { text, i18n }, subtabs: { text, i18n } }` in the source', /names: \{ tools: \{ text: '[^']+', i18n: 'phone\.tools' \}, subtabs: \{ text: '[^']+', i18n: 'phone\.subtabs' \} \}/.test(src));
+    const eng = ENGINE.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
+    check('the engine writes the sub-tab text, the group names and the host label through say(key, German text), and holds no German label of its own', /say\(config\.subtabs\[sid\]\.i18n, config\.subtabs\[sid\]\.label\)/.test(eng) && /say\(config\.names\.tools\.i18n, config\.names\.tools\.text\)/.test(eng) && /say\(config\.names\.subtabs\.i18n, config\.names\.subtabs\.text\)/.test(eng) && /'aria-label': say\(def\.i18n, def\.label\)/.test(eng) && !/'Werkzeuge'|'Unterbereiche'|textContent = config\.subtabs\[sid\]\.label/.test(eng));
+});
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 console.log(failures ? 'FAIL' : 'PASS');
 process.exit(failures ? 1 : 0);

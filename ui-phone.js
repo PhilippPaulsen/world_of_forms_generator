@@ -69,7 +69,7 @@
       const b = { buttons: {}, panes: {}, order: t.subtabs.slice(), proxied: [] };
       b.stack = el('div', 'ph-stack', { id: 'ph-stack' });
       // the tool row: the groups scroll sideways when they do not fit, the end (More) stays
-      b.toolRow = el('div', 'ph-toolrow', { id: 'ph-toolrow', role: 'group', 'aria-label': 'Werkzeuge' });
+      b.toolRow = el('div', 'ph-toolrow', { id: 'ph-toolrow', role: 'group', 'aria-label': say(config.names.tools.i18n, config.names.tools.text) });
       b.tools = el('div', 'ph-tools');
       tr.groups.forEach(function (ids, i) {
         if (i) b.tools.appendChild(el('span', 'ph-sep', { 'aria-hidden': 'true' }));
@@ -81,10 +81,10 @@
       b.toolRow.appendChild(el('span', 'ph-sep', { 'aria-hidden': 'true' }));
       tr.end.forEach(function (id) { take(id, b.toolRow); });
       // the sub-tab row
-      b.subtabs = el('nav', 'ph-subtabs', { id: 'ph-subtabs', 'aria-label': 'Unterbereiche' });
+      b.subtabs = el('nav', 'ph-subtabs', { id: 'ph-subtabs', 'aria-label': say(config.names.subtabs.i18n, config.names.subtabs.text) });
       t.subtabs.forEach(function (sid) {
         const btn = el('button', 'ph-subtab', { type: 'button', id: 'ph-subtab-' + sid, 'aria-controls': 'ph-slot' });
-        btn.textContent = config.subtabs[sid].label;
+        btn.textContent = say(config.subtabs[sid].i18n, config.subtabs[sid].label);
         btn.addEventListener('click', function () { show(sid); });
         b.subtabs.appendChild(btn);
         b.buttons[sid] = btn;
@@ -354,7 +354,7 @@
         if (!trigger || !doc.getElementById(def.content)) { if (missing.indexOf(sid) < 0) missing.push(sid); return; }
         let h = sheetCache[sid];
         if (!h || h.trigger !== trigger) {
-          h = { def: def, trigger: trigger, popup: trigger.getAttribute('aria-haspopup'), el: el('div', 'overlay ph-sheet', { id: def.host, role: 'dialog', 'aria-label': def.label }) };   // popup: what the trigger had BEFORE UI.overlay marked it
+          h = { def: def, trigger: trigger, popup: trigger.getAttribute('aria-haspopup'), el: el('div', 'overlay ph-sheet', { id: def.host, role: 'dialog', 'aria-label': say(def.i18n, def.label) }) };   // popup: what the trigger had BEFORE UI.overlay marked it
           h.el.hidden = true;
           h.overlay = UI.overlay(trigger, h.el, { toggleOnClick: false, onClose: function () { if (sheetOpen(def)) trigger.click(); } });
           trigger.addEventListener('click', syncSheets);

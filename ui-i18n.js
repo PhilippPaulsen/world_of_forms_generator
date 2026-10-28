@@ -193,6 +193,20 @@
     'net.reason.fieldOdd': { de: 'Feld braucht eine ungerade Größe', en: 'Field needs an odd shape size' },
     'net.reason.focus': { de: 'Fokus gilt für Sin und Tan', en: 'Focus applies to Sin and Tan' },
 
+    // ---- the phone layout's labels (sheets redesign, commit 6a): the sub-tab names, the sheet hosts (also the names of their "..." buttons), the tool row and sub-tab row groups ----
+    'subtab.raster': { de: 'Raster', en: 'Grid' },
+    'subtab.ebenen': { de: 'Ebenen', en: 'Layers' },
+    'subtab.zeit': { de: 'Zeit', en: 'Time' },
+    'subtab.harmonie': { de: 'Harmonie', en: 'Harmony' },
+    'subtab.spuren': { de: 'Spuren', en: 'Trails' },
+    'subtab.art': { de: 'Art', en: 'Type' },
+    'subtab.achsen': { de: 'Achsen', en: 'Axes' },
+    'phone.tools': { de: 'Werkzeuge', en: 'Tools' },
+    'phone.subtabs': { de: 'Unterbereiche', en: 'Sub-sections' },
+    'farbe.strategy.group': { de: 'Verteilungsstrategie', en: 'Distribution strategy' },
+    'layers.more': { de: 'Ebenen-Einstellungen', en: 'Layer settings' },
+    'timeline.more': { de: 'Zeitleiste: Mehr', en: 'Timeline: more' },
+
     // ---- common ----
     'common.atMin': { de: 'Kleinster Wert erreicht.', en: 'Smallest value reached.' },
     'common.atMax': { de: 'Größter Wert erreicht.', en: 'Largest value reached.' },

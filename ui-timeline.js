@@ -29,7 +29,7 @@
     'timeline.net.always': 'Netz aufnehmen: immer',
     'timeline.net.never': 'Netz aufnehmen: nie',
     'timeline.net.still': 'das Netz bewegt sich nicht mit der Zeitleiste',
-    'timeline.more': 'Zeitleiste: Mehr',
+    get 'timeline.more'() { const i = root.uiI18n; return i && i.has('timeline.more') ? i.t('timeline.more') : 'Zeitleiste: Mehr'; },
     'timeline.clear': 'Zeitleiste entfernen',
     'timeline.confirm.cancel': 'Abbrechen',
     'timeline.confirm.remove': 'Entfernen',
