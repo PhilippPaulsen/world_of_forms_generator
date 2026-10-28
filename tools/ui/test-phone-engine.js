@@ -12,7 +12,8 @@ const path = require('path');
 const vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
 const { createPhone } = require(process.env.UI_PHONE_JS || path.join(ROOT, 'ui-phone.js'));
-const { config } = require(process.env.PHONE_CONFIG_JS || path.join(ROOT, 'ui-phone-config.js'));
+const API = require(process.env.PHONE_CONFIG_JS || path.join(ROOT, 'ui-phone-config.js'));
+const { config } = API;
 
 let failures = 0, checks = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
@@ -20,7 +21,7 @@ const T = (name, fn) => { try { fn(); } catch (e) { check(name, false, 'threw: '
 
 // ---- a small fake DOM -------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 class Node_ {
-    constructor(doc, type, tag) { this.doc = doc; this.nodeType = type; this.tagName = tag ? tag.toUpperCase() : ''; this.childNodes = []; this.parentNode = null; this.attrs = {}; this.handlers = {}; this.hidden = false; this.text = ''; this.clicks = 0; this.dataset = {}; }
+    constructor(doc, type, tag) { this.doc = doc; this.nodeType = type; this.tagName = tag ? tag.toUpperCase() : ''; this.childNodes = []; this.parentNode = null; this.attrs = {}; this.handlers = {}; this.hidden = false; this.readOnly = false; this.text = ''; this.clicks = 0; this.dataset = {}; }
     get children() { return this.childNodes.filter(n => n.nodeType === 1); }
     get id() { return this.attrs.id || ''; }
     get className() { return this.attrs.class || ''; } set className(v) { this.attrs.class = String(v); }
@@ -32,8 +33,9 @@ class Node_ {
     get nextSibling() { const p = this.parentNode; if (!p) return null; const i = p.childNodes.indexOf(this); return p.childNodes[i + 1] || null; }
     get previousSibling() { const p = this.parentNode; if (!p) return null; const i = p.childNodes.indexOf(this); return i > 0 ? p.childNodes[i - 1] : null; }
     get textContent() { return this.text; } set textContent(v) { this.text = String(v); }
-    setAttribute(k, v) { this.attrs[k] = String(v); } getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; } removeAttribute(k) { delete this.attrs[k]; } hasAttribute(k) { return k in this.attrs; }
+    setAttribute(k, v) { this.attrs[k] = String(v); if (/^data-/.test(k)) this.dataset[k.slice(5).replace(/-([a-z])/g, (m, c) => c.toUpperCase())] = String(v); } getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; } removeAttribute(k) { delete this.attrs[k]; } hasAttribute(k) { return k in this.attrs; }
     addEventListener(t, fn) { (this.handlers[t] = this.handlers[t] || []).push(fn); }
+    dispatchEvent(e) { this.dispatch(e.type, e); return true; }
     dispatch(t, ev) { (this.handlers[t] || []).slice().forEach(h => h(Object.assign({ type: t, target: this, preventDefault() { }, stopPropagation() { } }, ev || {}))); }
     contains(n) { for (let e = n; e; e = e.parentNode) if (e === this) return true; return false; }
     cloneNode(deep) { const c = new Node_(this.doc, this.nodeType, this.tagName); c.attrs = Object.assign({}, this.attrs); c.text = this.text; c.hidden = this.hidden; if (deep) this.childNodes.forEach(k => c.appendChild(k.cloneNode(true))); return c; }   // a clone has the attributes (so the same id) and NO listeners, as in the DOM
@@ -45,7 +47,7 @@ class Node_ {
     click() { this.dispatch('click'); }
     closest(sel) { for (let e = this; e && e.nodeType === 1; e = e.parentNode) if (e.matches(sel)) return e; return null; }
     matches(sel) { return sel.split(',').map(x => x.trim()).some(p => { let m; if ((m = /^([a-z]+):not\(\[disabled\]\)$/.exec(p))) return this.tagName === m[1].toUpperCase() && !this.hasAttribute('disabled'); if ((m = /^\[([a-z-]+)="([^"]*)"\]$/.exec(p))) return this.getAttribute(m[1]) === m[2]; if ((m = /^([a-z]+)\[([a-z-]+)\]$/.exec(p))) return this.tagName === m[1].toUpperCase() && this.hasAttribute(m[2]); if ((m = /^\.([\w-]+)$/.exec(p))) return this.classList.contains(m[1]); if ((m = /^#([\w-]+)$/.exec(p))) return this.id === m[1]; return /^[a-z]+$/.test(p) && this.tagName === p.toUpperCase(); }); }
-    get tabIndex() { if (this._tabIndex !== undefined) return this._tabIndex; return /^(BUTTON|INPUT|SELECT|TEXTAREA)$/.test(this.tagName) || (this.tagName === 'A' && this.hasAttribute('href')) ? 0 : (this.hasAttribute('tabindex') ? Number(this.getAttribute('tabindex')) : -1); } set tabIndex(v) { this._tabIndex = v; }
+    get tabIndex() { if (this._tabIndex !== undefined) return this._tabIndex; return /^(BUTTON|INPUT|SELECT|TEXTAREA|SUMMARY)$/.test(this.tagName) || (this.tagName === 'A' && this.hasAttribute('href')) ? 0 : (this.hasAttribute('tabindex') ? Number(this.getAttribute('tabindex')) : -1); } set tabIndex(v) { this._tabIndex = v; }
     querySelector(sel) { return this.doc.find(this, sel); }
     // the selectors the code under test asks: a list of  tag | tag:not([disabled]) | [attr="v"] | .class | #id
     querySelectorAll(sel) { const parts = sel.split(',').map(x => x.trim()); return this.doc.all(this).filter(n => parts.some(p => { let m; if ((m = /^([a-z]+):not\(\[disabled\]\)$/.exec(p))) return n.tagName === m[1].toUpperCase() && !n.hasAttribute('disabled'); if ((m = /^\[([a-z-]+)="([^"]*)"\]$/.exec(p))) return n.getAttribute(m[1]) === m[2]; if ((m = /^([a-z]+)\[([a-z-]+)\]$/.exec(p))) return n.tagName === m[1].toUpperCase() && n.hasAttribute(m[2]); if ((m = /^\.([\w-]+)$/.exec(p))) return n.classList.contains(m[1]); if ((m = /^#([\w-]+)$/.exec(p))) return n.id === m[1]; return /^[a-z]+$/.test(p) && n.tagName === p.toUpperCase(); })); }
@@ -111,18 +113,37 @@ function buildPage(opts) {
                 el('div', { id: 'farbe-strategy-group', class: 'rail-group rail-farbe-only', role: 'radiogroup' }, ['cyclic', 'area', 'symmetry', 'rings'].map(k => btn('btn-strategy-' + k))),
                 el('div', { id: 'rail-group-reset', class: 'rail-group rail-farbe-only' }, [btn('btn-face-colors-reset')])])])]));
     // the leftover containers: the layer "Mehr" wrapper (hidden unless its state is open), the timeline group (a class ts-open when open) and the contextual groups sketch.js shows for Curve / Free
-    const layerPanel = el('div', { id: 'layer-more-panel' }, [btn('layer-align', 'layer-btn'), el('input', { id: 'layer-offset-x-input', type: 'number' })]); layerPanel.hidden = true;
-    const tlGroup = el('div', { id: 'timeline-group', class: 'control-group' }, [btn('btn-clear-timeline', 'layer-btn'), el('input', { id: 'timeline-pairing-filter', type: 'number' })]);
+    const layerPanel = el('div', { id: 'layer-more-panel' }, [btn('layer-align', 'layer-btn'), el('input', { id: 'layer-loose-field', type: 'number' })]); layerPanel.hidden = true;
+    // the ten control groups of the layer block (the real ids; every group starts hidden like on the page until sketch.js shows it for a layer); each holds a label (display: none on the page) and its control
+    const lg = (id, kids) => { const g = el('div', { id, class: 'control-group' }, [el('label', {}, [])].concat(kids)); g.hidden = true; return g; };
+    const layerGroups = [lg('layer-shape-group', [el('div', { class: 'icon-row' }, ['triangle', 'square', 'hex'].map(k => { const b2 = btn(null, 'layer-shape-icon-btn icon-btn'); b2.setAttribute('data-shape', k); return b2; }))]),
+        lg('layer-node-count-group', [el('div', { class: 'stepper' }, [el('input', { id: 'layer-node-count-input', type: 'number' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')])]),
+        lg('layer-shape-size-group', [el('div', { class: 'stepper' }, [el('input', { id: 'layer-shape-size-input', type: 'number' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')])]),
+        lg('layer-mode-group', [el('div', { class: 'icon-row' }, ['none', 'spiegeling', 'drehling'].map(k => { const b2 = btn(null, 'layer-mode-btn icon-btn'); b2.setAttribute('data-mode', k); return b2; }))]),
+        lg('layer-fold-group', [el('div', { class: 'icon-row' }, [btn(null, 'layer-fold-btn layer-btn icon-btn'), btn(null, 'layer-fold-btn layer-btn icon-btn')])]),
+        lg('layer-align-group', [btn('btn-align-to-base', 'layer-btn icon-btn')]),
+        lg('layer-offset-x-group', [el('input', { id: 'layer-offset-x-input', type: 'number' })]),
+        lg('layer-offset-y-group', [el('input', { id: 'layer-offset-y-input', type: 'number' })]),
+        lg('layer-mesh-preset-group', [el('div', { class: 'icon-row' }, [btn('btn-mesh-preset-x', 'layer-btn icon-btn'), btn('btn-mesh-preset-y', 'layer-btn icon-btn')])]),
+        lg('layer-rotation-group', [el('input', { id: 'layer-rotation-input', type: 'number' })])];
+    layerGroups.forEach(g => layerPanel.appendChild(g));
+    const tlPairing = el('div', { id: 'timeline-pairing', class: 'timeline-pairing' }, [el('select', { id: 'timeline-pairing-segment' }, []), el('div', { id: 'timeline-pairing-list' }, []), btn('btn-timeline-pairing-reset', 'layer-btn'), btn('btn-timeline-pairing-browse', 'layer-btn'), el('div', { id: 'timeline-pairing-browser' }, [el('select', { id: 'timeline-pairing-sort' }, []), el('input', { id: 'timeline-pairing-filter', type: 'number' }), el('div', { id: 'timeline-pairing-browser-count' }, []), el('div', { id: 'timeline-pairing-browser-list' }, [])])]); tlPairing.hidden = true;
+    const tlGroup = el('div', { id: 'timeline-group', class: 'control-group' }, [btn('btn-clear-timeline', 'layer-btn'), el('div', { id: 'timeline-keyframe-list', class: 'icon-row' }, []), el('div', { id: 'timeline-net-state' }, []), tlPairing, el('span', { id: 'timeline-status' }, [])]);
+    // what ui-phone-timeline.js and ui-phone-pairing.js make at load: the icon row, the readout and the pairing view's four containers, in a hidden holder
+    const tlHome = el('div', { id: 'ph-tl-home' }, [el('div', { id: 'ph-tl-icons' }, [btn('ph-tl-netrec', 'icon-btn ph-tl-btn'), btn('ph-tl-pairing', 'icon-btn ph-tl-btn'), btn('ph-tl-trash', 'icon-btn ph-tl-btn')]), el('p', { id: 'ph-tl-readout' }, []), el('div', { id: 'ph-tl-chips' }, []), el('div', { id: 'ph-tl-moves' }, []), el('div', { id: 'ph-tl-variant' }, []), btn('ph-tl-listbtn', 'icon-btn ph-tl-btn'), btn('ph-tl-reset', 'icon-btn ph-tl-btn'), el('div', { id: 'ph-tl-listhead' }, []), el('div', { id: 'ph-tl-list' }, [])]); tlHome.hidden = true;
     const settings = ['curve-fold-group', 'curve-strength-group', 'free-roughness-group', 'free-controls-group'].map(id => { const g = el('div', { id, class: 'control-group' }, [el('input', { type: 'range' })]); g.hidden = true; return g; });
     const faceList = el('div', { id: 'face-colors-list' }), faceGroup = el('div', { id: 'face-colors-group', class: 'control-group' }, [faceList]); faceGroup.hidden = true;
     body.appendChild(el('div', { class: 'main-container' }, [el('div', { class: 'controls-container' }, [btn('btn-leftover', 'layer-btn')].concat(settings, [tlGroup, layerPanel, faceGroup]))]));
+    body.appendChild(tlHome);
     // the Netz sheet (#more-netz): the net group sketch.js shows for the square on the base. The axes row, the Fokus stepper (inside #net-focus-row, which sketch.js shows for Sin and Tan), Net lines and Reverse
     // (inside #net-geo-row) are the pieces the phone layout moves out; the exact field stays
     const focusRow = el('div', { id: 'net-focus-row' }, [el('h3', {}, []), el('div', {}, [el('div', { id: 'net-focus-stepper', class: 'stepper' }, [el('span', { id: 'net-focus-value', class: 'stepper-display' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')]), el('input', { id: 'net-focus-exact', type: 'number' })])]); focusRow.hidden = true;
     const geoRow = el('div', { id: 'net-geo-row', class: 'icon-row' }, [btn('net-reverse-btn', 'layer-btn'), btn('net-alternate-btn', 'layer-btn')]); geoRow.hidden = true;
     const axes = el('div', { id: 'net-axes-row', class: 'icon-row' }, ['both', 'x', 'y'].map(k => { const b = btn(null, 'layer-btn net-axes-btn'); b.setAttribute('data-axes', k); return b; }));
-    const netGroup = el('div', { id: 'net-group', class: 'control-group' }, [axes, focusRow, el('div', { class: 'icon-row' }, [btn('net-lines-btn', 'layer-btn')]), geoRow]);
-    const moreNetz = el('div', { id: 'more-netz', class: 'overlay overlay-wide' }, [el('input', { id: 'net-strength-exact', type: 'number' }), netGroup]); moreNetz.hidden = true; body.appendChild(moreNetz);
+    const domainRow = el('div', { id: 'net-domain-row', class: 'icon-row' }, [['net-domain-single', 'single'], ['net-domain-tiled', 'tiled'], ['net-field-btn', 'field']].map(x => { const b = btn(x[0], 'layer-btn net-domain-btn'); b.setAttribute('data-domain', x[1]); return b; }));
+    const macroRow = el('div', { id: 'net-macro-row' }, [el('label', {}, []), el('div', { id: 'net-macro-buttons', class: 'icon-row' }, [])]); macroRow.hidden = true;
+    const netGroup = el('div', { id: 'net-group', class: 'control-group' }, [axes, focusRow, el('div', { id: 'net-focus-hint' }, []), macroRow, domainRow, el('div', { class: 'icon-row' }, [btn('net-lines-btn', 'layer-btn')]), geoRow]);
+    const moreNetz = el('div', { id: 'more-netz', class: 'overlay overlay-wide' }, [el('input', { id: 'net-strength-exact', type: 'number' }), netGroup, el('p', { id: 'net-readout', class: 'net-readout' }, [])]); moreNetz.hidden = true; body.appendChild(moreNetz);
     const scrim = el('div', { id: 'overlay-scrim', class: 'overlay-scrim' }); scrim.hidden = true; body.appendChild(scrim);
     // what ui-layers.js and ui-timeline.js do on the "..." click (the existing handlers, bound BEFORE the engine starts, as on the page): flip the block's own state
     const layerModel = { open: false };
@@ -138,10 +159,10 @@ function buildPage(opts) {
     // opts.ui: the REAL ui.js (UI.overlay, UI.onSync) in this window; without it the engine finds no UI.overlay and leaves the sheet blocks where they are
     if (opts.ui) {
         vm.createContext(win);
-        Object.assign(win, { window: win, document: doc, console, MutationObserver: class { constructor(cb) { (win.observers = win.observers || []).push(cb); } observe() { } }, performance: { now: () => 0 }, setTimeout, clearTimeout });
+        Object.assign(win, { window: win, document: doc, console, Event: class { constructor(t, o) { this.type = t; this.bubbles = !!(o && o.bubbles); } }, MutationObserver: class { constructor(cb) { (win.observers = win.observers || []).push(cb); } observe(el, o) { (win.observed = win.observed || []).push({ el, o }); } disconnect() { win.disconnected = (win.disconnected || 0) + 1; } }, performance: { now: () => 0 }, setTimeout, clearTimeout });
         vm.runInContext(fs.readFileSync(process.env.UI_JS || path.join(ROOT, 'ui.js'), 'utf8'), win, { filename: 'ui.js' });
     }
-    return { doc, win, mq, calls, scrim, layerModel, layerPanel, tlGroup, faceList, faceGroup, focusRow, geoRow, moreNetz };
+    return { doc, win, mq, calls, scrim, layerModel, layerPanel, tlGroup, tlPairing, tlHome, faceList, faceGroup, focusRow, geoRow, moreNetz, macroRow, domainRow };
 }
 const ph = (page, cfg) => createPhone(page.doc, page.win, cfg || config);
 // a structure string of the whole tree (tag, id, class, kids; comments by text): equal before apply and after release
@@ -284,7 +305,7 @@ const sheetPage = sub => { const p = buildPage({ ui: true }), eng = ph(p); eng.s
 const esc = host => { let stopped = 0; host.dispatch('keydown', { key: 'Escape', stopPropagation() { stopped++; } }); return stopped; };
 T('sheet-build', () => {
     const { p, host, tl, lt, ts } = sheetPage();
-    check('apply makes two sheet hosts inside the stack, hidden, role dialog, named: ph-sheet-layer "Ebenen-Einstellungen" and ph-sheet-timeline "Zeitleiste: Mehr", class overlay ph-sheet', !!host && !!tl && host.parentNode.id === 'ph-stack' && tl.parentNode.id === 'ph-stack' && host.hidden && tl.hidden && host.getAttribute('role') === 'dialog' && tl.getAttribute('role') === 'dialog' && host.getAttribute('aria-label') === 'Ebenen-Einstellungen' && tl.getAttribute('aria-label') === 'Zeitleiste: Mehr' && host.className === 'overlay ph-sheet' && tl.className === 'overlay ph-sheet', host && host.className);
+    check('apply makes two sheet hosts inside the stack, hidden, role dialog, named: ph-sheet-layer "Ebenen-Einstellungen" and ph-sheet-timeline "Zeitleiste: Mehr", class overlay ph-sheet (the layer sheet also ph-sheet-rows: it has blocks)', !!host && !!tl && host.parentNode.id === 'ph-stack' && tl.parentNode.id === 'ph-stack' && host.hidden && tl.hidden && host.getAttribute('role') === 'dialog' && tl.getAttribute('role') === 'dialog' && host.getAttribute('aria-label') === 'Ebenen-Einstellungen' && tl.getAttribute('aria-label') === 'Zeitleiste: Mehr' && host.className === 'overlay ph-sheet ph-sheet-rows' && tl.className === 'overlay ph-sheet ph-sheet-rows', host && host.className);
     check('the hosts hold the very blocks (#layer-more-panel, #timeline-group), moved, not copied; the leftover container no longer holds them', host.children[0] === p.layerPanel && tl.children[0] === p.tlGroup && p.doc.all().filter(n => n.id === 'layer-more-panel' || n.id === 'timeline-group').length === 2);
     check('the "..." buttons are the sheets\' openers: aria-haspopup dialog, aria-expanded false', lt.getAttribute('aria-haspopup') === 'dialog' && ts.getAttribute('aria-haspopup') === 'dialog' && lt.getAttribute('aria-expanded') === 'false' && ts.getAttribute('aria-expanded') === 'false');
     check('closed: the scrim is hidden and the layer block keeps its own state (hidden), as before', p.scrim.hidden === true && p.layerPanel.hidden === true && p.layerModel.open === false);
@@ -360,7 +381,7 @@ T('sheet-open-at-apply', () => {
 T('sheet-resize-typing', () => {
     const { p, host, lt } = sheetPage();
     lt.dispatch('click');
-    const field = p.doc.getElementById('layer-offset-x-input'); field.focus();
+    const field = p.doc.getElementById('layer-loose-field'); field.focus();
     p.win.innerHeight = 420; p.win.dispatch('resize');
     check('a resize (the soft keyboard) while a text/number field IN the sheet has the focus keeps the sheet open', p.doc.activeElement === field && !host.hidden && p.layerModel.open === true);
     p.doc.getElementById('layer-align').focus(); p.win.dispatch('resize');
@@ -524,7 +545,7 @@ T('netz-apply', () => {
     const rowsOf = pn => pn.children.map(r => r.children.map(c => c.id || c.className.split(' ')[0]).join('+')).join(' / ');
     check('the sub-tab row: Art, Achsen, Ebenen, Zeit; Art is current', p.doc.getElementById('ph-subtabs').children.map(b => b.textContent).join() === 'Art,Achsen,Ebenen,Zeit' && p.doc.getElementById('ph-subtab-art').getAttribute('aria-current') === 'true');
     check('Art: row 1 = the four kind buttons (the radiogroup wrapper, moved whole); row 2 = the strength stepper, the panel\'s own More, Reverse LAST (More keeps its place whether or not sketch.js shows Reverse)', rowsOf(pane('art')) === 'nav-kinds / net-strength-stepper+btn-more-netz+net-reverse-btn' && orig['nav-kinds'].children.length === 4 && orig['nav-kinds'].children.every(b => b.getAttribute('role') === 'radio'), rowsOf(pane('art')));
-    check('Achsen: row 1 = Both / X / Y (the axes row), row 2 = the Fokus stepper alone; the exact field and the title stay in the Netz sheet', rowsOf(pane('achsen')) === 'net-axes-row / net-focus-stepper' && p.doc.getElementById('net-focus-exact').parentNode.parentNode === p.doc.getElementById('net-focus-row') && p.doc.getElementById('net-strength-exact').parentNode === p.moreNetz && p.doc.getElementById('net-geo-row').children.map(c => c.id).join() === 'net-alternate-btn');
+    check('Achsen: row 1 = Both / X / Y (the axes row), row 2 = the Fokus stepper alone; the exact fields are in the Netz sheet (its first row, wrapped into steppers since 4b)', rowsOf(pane('achsen')) === 'net-axes-row / net-focus-stepper' && p.doc.getElementById('net-focus-exact').parentNode.parentNode.className === 'ph-sheet-row' && p.doc.getElementById('net-strength-exact').parentNode.parentNode === p.doc.getElementById('net-focus-exact').parentNode.parentNode && p.moreNetz.contains(p.doc.getElementById('net-strength-exact')) && p.doc.getElementById('net-geo-row').children.map(c => c.id).join() === 'net-alternate-btn');
     const sheet = p.doc.getElementById('more-rail');
     check('the rail\'s sheet keeps its first row (Curve ... Neu anfangen) and gets the second: Random, the catalog link, Info, Download, Clear, then the Curve / Free settings groups; More keeps its own name', sheet.children.map(c => c.id || c.className).join() === 'more-row,more-row more-extra,more-settings,more-name' && sheet.children[1].children.map(c => c.id).join() === 'btn-random,btn-gallery,btn-info,btn-save,btn-clear' && !config.toolRows.netz.sheet.openerLabel);
     // follow (mode 'disable'): the Fokus stepper stays SHOWN and is aria-disabled with the reason while sketch.js hides #net-focus-row (Aus, Geo)
@@ -598,6 +619,12 @@ T('overlay-options', () => {
     const r1 = tab(c4), r2 = tab(a4, true), r3 = tab(b4), r4 = tab(n4, true);
     check('Tab on the LAST control of the panel wraps to the first, Shift+Tab on the first wraps to the last: here the last is a number field after the last button, and a hidden button after it is ignored', r1.prevented === 1 && r1.active === a4 && r2.prevented === 1 && r2.active === c4, r1.active.id + ' / ' + r2.active.id);
     check('...and a Tab in the middle is left to the browser (not prevented), also from a number field', r3.prevented === 0 && r4.prevented === 0);
+    // commit 6b: the Info card holds only <summary> elements (native <details>): they are in the Tab loop, so Tab wraps inside the card (without them the card had no loop at all)
+    const t9 = mk('button', 't9'), p9 = mk('div', 'p9'), det = n => { const d = p.doc.createElement('details'), sm = p.doc.createElement('summary'); d.appendChild(sm); p9.appendChild(d); return sm; };
+    const s1 = det(), s2 = det(), o9 = UI.overlay(t9, p9); o9.open();
+    const tab9 = (from, shift) => { from.focus(); let prevented = 0; p9.dispatch('keydown', { key: 'Tab', shiftKey: !!shift, preventDefault() { prevented++; } }); return { prevented, active: p.doc.activeElement }; };
+    const q1 = tab9(s2), q2 = tab9(s1, true), q3 = tab9(s1), esc9 = (() => { p9.dispatch('keydown', { key: 'Escape', stopPropagation() { } }); return o9.isOpen; })();
+    check('a card with only <summary> controls: Tab on the last summary wraps to the first, Shift+Tab on the first wraps to the last, a Tab in the middle is left to the browser; Escape from a summary closes the card', q1.prevented === 1 && q1.active === s1 && q2.prevented === 1 && q2.active === s2 && q3.prevented === 0 && esc9 === false);
     // a tab change (the Back button, a hash edit: no tap) closes the open overlay and its onClose runs: no stuck scrim over the next tab
     const t5 = mk('button', 't5'), p5 = mk('div', 'p5'), cl5 = []; const o5 = UI.overlay(t5, p5, { onClose: rf => cl5.push(rf) });
     o5.open(); p.doc.dispatch('tabchange', { detail: { tab: 'nirgends' } });
@@ -635,6 +662,701 @@ T('source', () => {
     check('ui-phone.js names no id of index.html (only its own ph- ids); every control comes from the config', named.length === 0, named.join(', ') || 'none');
     check('it never clones: no cloneNode, innerHTML, outerHTML or insertAdjacentHTML', !/cloneNode|innerHTML|outerHTML|insertAdjacentHTML/.test(src));
     check('it never builds markup from strings: nodes come from createElement and createComment', /createElement/.test(src) && /createComment/.test(src));
+});
+
+
+console.log('\n== the layer sheet in rows (sheets redesign, commit 3a): config.sheets.layer.blocks, with the REAL ui.js ==');
+const LAYER_BLOCKS = config.sheets.layer.blocks;
+const blockIds = LAYER_BLOCKS.map(rows => rows.map(r => r.items.map(i => i.id)));
+const rowsOf = host => host.querySelectorAll('.ph-sheet-block').map(b => b.children.map(r => r.children.map(g => g.id)));
+const showGroups = (p, ids, on) => { ids.forEach(id => { p.doc.getElementById(id).hidden = !on; }); p.win.uiSync(); };
+const allGroupIds = [].concat.apply([], [].concat.apply([], blockIds));
+T('rows-build', () => {
+    const { p, host } = sheetPage();
+    const orig = {}; allGroupIds.forEach(id => { orig[id] = p.doc.getElementById(id); });
+    check('the config has two blocks: block 1 = shape + mode, node + size, fold; block 2 = offset X + offset Y + align, mesh + rotation (ten groups, each once)', blockIds.length === 2 && JSON.stringify(blockIds) === JSON.stringify([[['layer-shape-group', 'layer-mode-group'], ['layer-node-count-group', 'layer-shape-size-group'], ['layer-fold-group']], [['layer-offset-x-group', 'layer-offset-y-group', 'layer-align-group'], ['layer-mesh-preset-group', 'layer-rotation-group']]]) && new Set(allGroupIds).size === 10);
+    check('the sheet host gets the class ph-sheet-rows; the content wrapper (#layer-more-panel) holds exactly two .ph-sheet-block, each holding its .ph-sheet-row elements, in the config order', host.classList.contains('ph-sheet-rows') && JSON.stringify(rowsOf(host)) === JSON.stringify(blockIds) && p.layerPanel.children.filter(c => c.className === 'ph-sheet-block').length === 2, JSON.stringify(rowsOf(host)));
+    check('the groups are the SAME node objects (moved, not cloned), one element per id, no id twice in the document', allGroupIds.every(id => p.doc.getElementById(id) === orig[id] && p.doc.all().filter(n => n.id === id).length === 1) && (() => { const ids2 = p.doc.all().map(n => n.id).filter(Boolean); return new Set(ids2).size === ids2.length; })());
+    check('the first row of block 1 is the layer sheet\'s wrap row (class ph-sheet-row-wrap); the only other wrap row is the timeline sheet\'s pairing row (5b)', p.doc.all().filter(n => /\bph-sheet-row-wrap\b/.test(n.className)).length === 2 && host.querySelectorAll('.ph-sheet-row')[0].className === 'ph-sheet-row ph-sheet-row-wrap' && p.doc.getElementById('ph-sheet-timeline').querySelectorAll('.ph-sheet-row-wrap').length === 1);
+    check('the leftover wrapper holds no group any more but the rows (the groups are in rows: the old wrapper keeps only its first two original children and the blocks)', p.layerPanel.children.every(c => c.className === 'ph-sheet-block' || !/^layer-.*-group$/.test(c.id)));
+    check('the groups\' own hidden state is untouched by the engine (still hidden: sketch.js shows them for a layer)', allGroupIds.every(id => orig[id].hidden === true));
+    check('with every group hidden every row and every block is hidden: no empty row, no gap (the base is active)', host.querySelectorAll('.ph-sheet-row').every(r => r.hidden === true) && host.querySelectorAll('.ph-sheet-block').every(b => b.hidden === true));
+});
+T('rows-collapse', () => {
+    const { p, host } = sheetPage();
+    const rows = () => host.querySelectorAll('.ph-sheet-row'), blocks = () => host.querySelectorAll('.ph-sheet-block');
+    const state = () => rows().map(r => r.hidden ? 'h' : 's').join('') + '/' + blocks().map(b => b.hidden ? 'h' : 's').join('');
+    // a layer is active: sketch.js shows every group but the fold group (a hexagon layer shows it)
+    showGroups(p, allGroupIds.filter(id => id !== 'layer-fold-group'), true);
+    check('a layer (not a hexagon): every row shows but the fold row (row 3 of block 1 collapses), both blocks show', state() === 'sshss/ss', state());
+    showGroups(p, ['layer-fold-group'], true);
+    check('a hexagon layer: the fold row shows too', state() === 'sssss/ss', state());
+    showGroups(p, ['layer-fold-group'], false);
+    check('...and collapses again when sketch.js hides the fold group', state() === 'sshss/ss', state());
+    showGroups(p, ['layer-offset-x-group', 'layer-offset-y-group'], false);
+    check('a row with some groups hidden stays (offset X / Y hidden, Align still shown: row 1 of block 2 shows)', rows()[3].hidden === false && blocks()[1].hidden === false, state());
+    showGroups(p, ['layer-align-group'], false);
+    check('a row whose groups are ALL hidden is hidden (row 1 of block 2), its block stays while another row shows', rows()[3].hidden === true && rows()[4].hidden === false && blocks()[1].hidden === false, state());
+    showGroups(p, allGroupIds, false);
+    check('the base becomes active (sketch.js hides every group): every row and both blocks are hidden at once', rows().every(r => r.hidden) && blocks().every(b => b.hidden), state());
+    // the MutationObserver path: where the page has one, a change of `hidden` re-reads the rows without a UI tick
+    p.doc.getElementById('layer-shape-group').hidden = false; (p.win.observers || []).forEach(cb => cb());
+    check('a MutationObserver callback re-reads the rows without a UI tick', rows()[0].hidden === false && blocks()[0].hidden === false);
+});
+T('rows-release', () => {
+    const p0 = buildPage({ ui: true }), before = dump(p0.doc.documentElement);
+    const p = buildPage({ ui: true }), orig = {}; allGroupIds.forEach(id => { orig[id] = p.doc.getElementById(id); });
+    const nb = {}; allGroupIds.forEach(id => { nb[id] = [orig[id].parentNode, orig[id].previousSibling, orig[id].nextSibling]; });
+    const eng = ph(p); eng.start(); eng.show('ebenen');
+    const host0 = p.doc.getElementById('ph-sheet-layer');
+    showGroups(p, allGroupIds, true);
+    p.doc.getElementById('ls-more').dispatch('click');   // the sheet is open
+    eng.release();
+    check('release (the sheet open): every group is back with the same parent and the same neighbours', allGroupIds.every(id => orig[id].parentNode === nb[id][0] && orig[id].previousSibling === nb[id][1] && orig[id].nextSibling === nb[id][2]));
+    check('...no .ph-sheet-block and no .ph-sheet-row is left, no marker comment, no host', p.doc.all().filter(n => /ph-sheet-(block|row)/.test(n.className)).length === 0 && !p.doc.getElementById('ph-sheet-layer') && (function none(n) { return n.childNodes.every(c => (c.nodeType !== 8 || !/^ph:/.test(c.text)) && (c.nodeType !== 1 || none(c))); })(p.doc.documentElement));
+    check('...the sheet host (kept for the next apply) no longer has the class ph-sheet-rows', !host0.classList.contains('ph-sheet-rows'));
+    check('...the row observer is disconnected (nothing watches the groups any more)', (p.win.disconnected || 0) >= 1, String(p.win.disconnected));
+    check('...every group keeps the hidden state sketch.js gave it (shown), none is hidden by the engine', allGroupIds.every(id => orig[id].hidden === false));
+    showGroups(p, allGroupIds, false);
+    check('and the page is the tree it was (groups hidden again as at the start)', dump(p.doc.documentElement).replace(/\[hidden\]/g, '') === before.replace(/\[hidden\]/g, '') && allGroupIds.every(id => p.doc.all().filter(n => n.id === id).length === 1));
+    eng.release();
+    check('release is idempotent (a second release does nothing)', (() => { const m = p.doc.mutations; eng.release(); return p.doc.mutations === m; })());
+    // apply again after a release: the same rows are rebuilt, the handlers still fire once
+    eng.apply('form'); eng.show('ebenen');
+    check('apply after release builds the rows again (two blocks, five rows) and every group is once in the document', JSON.stringify(rowsOf(p.doc.getElementById('ph-sheet-layer'))) === JSON.stringify(blockIds) && allGroupIds.every(id => p.doc.all().filter(n => n.id === id).length === 1));
+    check('...and a second apply(form) while it is on does no work', (() => { const m = p.doc.mutations; eng.apply('form'); return p.doc.mutations === m; })());
+    eng.release();
+});
+
+
+console.log('\n== the layer sheet steppers (sheets redesign, commit 3b): config.sheets.layer.steppers, with the REAL ui.js ==');
+const SPEC = config.sheets.layer.steppers;
+const SIDS = ['layer-offset-x-input', 'layer-offset-y-input', 'layer-rotation-input'];
+// the handler counts of an element: what a plain input must have again after release
+const hcount = n => Object.keys(n.handlers).sort().map(k => k + ':' + n.handlers[k].length).join(',');
+const click0 = b => b.dispatch('click', { detail: 0 });   // a keyboard activation: steps once
+const chev = (p, id, dir) => p.doc.getElementById(id).parentNode.querySelectorAll('.stepper-btn').find(b => b.getAttribute('data-dir') === String(dir));
+T('steppers-decorate', () => {
+    const p0 = buildPage({ ui: true }), orig = {}, before = {}; SIDS.forEach(id => { orig[id] = p0.doc.getElementById(id); before[id] = [orig[id].parentNode, orig[id].previousSibling, orig[id].nextSibling, hcount(orig[id]), orig[id].readOnly, orig[id].getAttribute('inputmode'), dump(orig[id])]; });
+    const eng = ph(p0); eng.start(); eng.show('ebenen');
+    check('the three inputs are the SAME node objects, each in a .stepper (role group, named in German) inside its own control group; one element per id, no id twice', SIDS.every(id => { const n = p0.doc.getElementById(id); return n === orig[id] && n.parentNode.className === 'stepper' && n.parentNode.getAttribute('role') === 'group' && /^layer-(offset-[xy]|rotation)-group$/.test(n.parentNode.parentNode.id) && p0.doc.all().filter(x => x.id === id).length === 1; }) && (() => { const ids2 = p0.doc.all().map(n => n.id).filter(Boolean); return new Set(ids2).size === ids2.length; })());
+    check('the stepper is the Form row\'s markup: an icon (svg, aria-hidden), the input, then .stepper-chevrons with an up (data-dir 1) and a down (data-dir -1) button, each with an svg; the names are German: Versatz X (mehr / weniger), Versatz Y, Drehung', SIDS.every(id => { const r = p0.doc.getElementById(id).parentNode, k = r.children; return k.length === 3 && k[0].tagName.toLowerCase() === 'svg' && k[0].getAttribute('aria-hidden') === 'true' && k[1] === orig[id] && k[2].className === 'stepper-chevrons' && k[2].children.map(b => b.getAttribute('data-dir')).join() === '1,-1' && k[2].children.every(b => b.children[0].tagName.toLowerCase() === 'svg' && b.getAttribute('title') === b.getAttribute('aria-label')); }) && p0.doc.getElementById('layer-offset-x-input').parentNode.getAttribute('aria-label') === 'Versatz X' && chev(p0, 'layer-offset-y-input', 1).getAttribute('aria-label') === 'Versatz Y mehr' && chev(p0, 'layer-rotation-input', -1).getAttribute('aria-label') === 'Drehung weniger');
+    check('no typing: every input is readOnly with inputmode="none" while the layout is on (no soft keyboard, the field is the display)', SIDS.every(id => orig[id].readOnly === true && orig[id].getAttribute('inputmode') === 'none'));
+    check('the icons are the config\'s: arrow right (X), arrow down (Y), rotate (rotation), as stroke paths', SIDS.every(id => { const svg = orig[id].parentNode.children[0]; const d = svg.children.map(x => x.getAttribute('d')); return JSON.stringify(d) === JSON.stringify(config.icons[SPEC[id].icon]); }));
+    eng.release();
+    check('release UNDOES it: every input is back with the same parent and neighbours, no .stepper wrapper is left in the document, no duplicated id', SIDS.every(id => orig[id].parentNode === before[id][0] && orig[id].previousSibling === before[id][1] && orig[id].nextSibling === before[id][2]) && p0.doc.all().filter(n => n.className === 'stepper' && SIDS.some(id => n.querySelector('#' + id))).length === 0);
+    check('...readOnly and inputmode are what they were (not readonly, no inputmode), and the input carries exactly the listeners it had before (none were left on it)', SIDS.every(id => orig[id].readOnly === before[id][4] && orig[id].getAttribute('inputmode') === before[id][5] && hcount(orig[id]) === before[id][3]), SIDS.map(id => hcount(orig[id]) + ' / ' + before[id][3]).join(' | '));
+    check('...the input node is as it was (same tree, same attributes)', SIDS.every(id => dump(orig[id]) === before[id][6]));
+});
+T('steppers-steps', () => {
+    const p = buildPage({ ui: true }); const eng = ph(p); eng.start(); eng.show('ebenen');
+    const log = []; const inp = id => p.doc.getElementById(id);
+    SIDS.forEach(id => ['input', 'change'].forEach(t => inp(id).addEventListener(t, e => log.push(id.replace(/^layer-(offset-)?/, '')[0] + ':' + t + ':' + (e.bubbles ? 'b' : 'n')))));
+    const upX = chev(p, 'layer-offset-x-input', 1), dnX = chev(p, 'layer-offset-x-input', -1);
+    inp('layer-offset-x-input').value = '0'; click0(upX);
+    check('offset X: one step up = +10 ("0" -> "10"); the input event and then the change event, both bubbling, on the existing input', inp('layer-offset-x-input').value === '10' && log.join() === 'x:input:b,x:change:b', inp('layer-offset-x-input').value + ' ' + log.join());
+    click0(dnX); click0(dnX); click0(dnX);
+    check('offset X goes negative without a limit (10 - 30 = -20)', inp('layer-offset-x-input').value === '-20');
+    inp('layer-offset-y-input').value = '0'; click0(chev(p, 'layer-offset-y-input', 1)); click0(chev(p, 'layer-offset-y-input', 1)); click0(chev(p, 'layer-offset-y-input', -1));
+    check('offset Y: +10, +10, -10 = 10', inp('layer-offset-y-input').value === '10');
+    inp('layer-offset-x-input').value = '103.92304845413264'; click0(upX);
+    check('an offset the mesh preset wrote (103.923...) steps to the next whole number (113.92 -> round 0 = 114)', inp('layer-offset-x-input').value === '114', inp('layer-offset-x-input').value);
+    const upR = chev(p, 'layer-rotation-input', 1), dnR = chev(p, 'layer-rotation-input', -1);
+    inp('layer-rotation-input').value = '345'; click0(upR);
+    check('rotation wraps: 345 + 15 = 0 (360 is not a value)', inp('layer-rotation-input').value === '0');
+    click0(dnR);
+    check('rotation wraps down: 0 - 15 = 345', inp('layer-rotation-input').value === '345');
+    inp('layer-rotation-input').value = '350'; click0(upR);
+    check('an off-grid rotation wraps by the remainder (350 + 15 = 5)', inp('layer-rotation-input').value === '5');
+    check('the chevrons are never disabled (no bound, a wrap): the up and down buttons of the three steppers have no aria-disabled', SIDS.every(id => [1, -1].every(d => chev(p, id, d).getAttribute('aria-disabled') === null)));
+    inp('layer-offset-x-input').value = '0'; log.length = 0;
+    inp('layer-offset-x-input').parentNode.dispatch('keydown', { key: 'ArrowUp', preventDefault() { } });
+    check('a key on the stepper (ArrowUp) steps too, from the wrapper (the key handler is on the wrapper, not on the input)', inp('layer-offset-x-input').value === '10' && !inp('layer-offset-x-input').handlers.keydown, inp('layer-offset-x-input').value);
+    // a pointer press steps once at once (and starts the hold); the release stops it
+    const before = inp('layer-offset-y-input').value; upX.dispatch('pointerdown', { button: 0 }); upX.dispatch('pointerup', {});
+    check('a pointer press on a chevron steps at once (once), and the release ends the hold', inp('layer-offset-x-input').value === '20');
+    eng.release();
+});
+T('steppers-cycles', () => {
+    const p = buildPage({ ui: true }); const eng = ph(p); eng.start(); eng.show('ebenen');
+    const vis0 = (p.doc.handlers.visibilitychange || []).length, root0 = p.doc.getElementById('layer-offset-x-input').parentNode;
+    for (let i = 0; i < 3; i++) { eng.release(); eng.apply('form'); eng.show('ebenen'); }
+    const inp = p.doc.getElementById('layer-offset-x-input');
+    check('after three release / apply cycles the stepper is the SAME made wrapper (made once: UI.stepper cannot unbind its listeners), the document has no more visibilitychange listeners than after the first apply (' + vis0 + ')', inp.parentNode === root0 && (p.doc.handlers.visibilitychange || []).length === vis0, (p.doc.handlers.visibilitychange || []).length + ' / ' + vis0);
+    inp.value = '0'; click0(chev(p, 'layer-offset-x-input', 1));
+    check('...and one tap still steps once (no handler was added by a cycle): 0 -> 10', inp.value === '10');
+    check('...the input is readonly again after the re-apply (the engine sets it at every apply)', inp.readOnly === true && inp.getAttribute('inputmode') === 'none');
+    eng.release(); eng.release();
+    check('release twice is harmless (nothing moves the second time) and the plain input is back', (() => { const m = p.doc.mutations; eng.release(); return p.doc.mutations === m; })() && inp.parentNode.id === 'layer-offset-x-group' && inp.readOnly === false);
+    // a tab change with the sheet open: the layout is released for a tab that is not covered... every tab is covered, so a width change is the release
+    eng.apply('form'); eng.show('ebenen'); p.mq.set(false);
+    check('a width change to 768+ (the media query) releases the steppers: plain inputs again', !p.doc.documentElement.classList.contains('ph') && inp.parentNode.id === 'layer-offset-x-group' && inp.readOnly === false && !inp.getAttribute('inputmode'));
+    p.mq.set(true);
+    check('...and back to a phone width decorates them again', p.doc.documentElement.classList.contains('ph') && inp.parentNode.className === 'stepper' && inp.readOnly === true);
+});
+T('steppers-no-ui', () => {
+    const p = buildPage({ ui: true }); delete p.win.UI.stepper;
+    const eng = ph(p); eng.start(); eng.show('ebenen');
+    check('WITHOUT UI.stepper the inputs stay plain and typable (the rows still work): no wrapper, not readonly', SIDS.every(id => { const n = p.doc.getElementById(id); return n.parentNode.id.endsWith('-group') && n.readOnly === false; }));
+});
+
+
+console.log('\n== the Netz sheet in rows (sheets redesign, commit 4a): config.overlays.netz, an overlay with its own UI.overlay ==');
+const NZ = config.overlays.netz, nzIds = [].concat.apply([], [].concat.apply([], NZ.blocks).map(r => r.items.map(i => i.id)));
+const nzRows = p => p.moreNetz.children.filter(c => c.className === 'ph-sheet-block').map(b => b.children.map(r => r.children.map(g => g.id || (g.querySelector('input') || {}).id).join('+')).join(' / '));   // a wrapped field is named by its input
+T('netz-rows-build', () => {
+    const p = netzPage(), orig = {}; nzIds.forEach(id => { orig[id] = p.doc.getElementById(id); });
+    const eng = ph(p); eng.start();
+    check('the config lists the Netz overlay for the Netz tab only: two blocks, block 1 = the two exact fields, block 2 = the domain row, the macro row, the Alternate wrapper, the readout (ids ' + nzIds.join(', ') + ')', JSON.stringify(config.tabs.netz.overlays) === '["netz"]' && !config.tabs.form.overlays && !config.tabs.farbe.overlays && NZ.content === 'more-netz' && nzIds.join() === 'net-strength-exact,net-focus-exact,net-domain-row,net-macro-row,net-geo-row,net-readout');
+    check('apply puts two blocks into #more-netz itself (the overlay is the host: no new host), rows in the config order, and the overlay gets the class ph-sheet-rows', JSON.stringify(nzRows(p)) === JSON.stringify(['net-strength-exact+net-focus-exact', 'net-domain-row / net-macro-row / net-geo-row / net-readout']) && p.moreNetz.classList.contains('ph-sheet-rows') && !p.doc.getElementById('ph-sheet-netz'), JSON.stringify(nzRows(p)));
+    check('the items are the SAME node objects (moved, not cloned), one element per id, no id twice; the readout row has its height (data-h 20)', nzIds.every(id => p.doc.getElementById(id) === orig[id] && p.doc.all().filter(n => n.id === id).length === 1) && p.doc.getElementById('net-readout').parentNode.getAttribute('data-h') === '20' && (() => { const x = p.doc.all().map(n => n.id).filter(Boolean); return new Set(x).size === x.length; })());
+    check('the overlay\'s own state is not the engine\'s: #more-netz stays hidden and nothing opened it (its UI.overlay belongs to ui-net.js)', p.moreNetz.hidden === true && p.scrim.hidden === true);
+    check('collapse at the start (sketch.js shows neither the macro row nor the Alternate wrapper): their rows are hidden, the exact fields, the domain row and the readout show; both blocks show', (() => { const rows = p.moreNetz.querySelectorAll('.ph-sheet-row'); return rows.map(r => r.hidden ? 'h' : 's').join('') === 'sshhs' && p.moreNetz.querySelectorAll('.ph-sheet-block').every(b => !b.hidden); })());
+    const pf = buildPage({ ui: true }), ef = ph(pf); ef.start();
+    check('in the Form tab #more-netz is untouched (the sheet is not reachable there): no block, no class on it, the exact fields where they were', pf.moreNetz.querySelectorAll('.ph-sheet-block').length === 0 && !pf.moreNetz.classList.contains('ph-sheet-rows') && pf.doc.getElementById('net-strength-exact').parentNode === pf.moreNetz);
+});
+T('netz-rows-collapse', () => {
+    const p = netzPage(), eng = ph(p); eng.start();
+    const rows = () => p.moreNetz.querySelectorAll('.ph-sheet-row').map(r => r.hidden ? 'h' : 's').join('');
+    const alt = p.doc.getElementById('net-alternate-btn'), geo = p.doc.getElementById('net-geo-row');
+    p.macroRow.hidden = false; p.win.uiSync();
+    check('sketch.js shows the macro row (a geometric law with a nested net): its row appears', rows() === 'ssshs', rows());
+    p.macroRow.hidden = true; geo.hidden = false; alt.hidden = true; p.win.uiSync();
+    check('the Alternate wrapper shown with its button hidden (a geometric net in Single: Reverse is in the panel, Alternate is for Tiled) leaves NO empty row: a wrapper whose children are all hidden counts as hidden', rows() === 'sshhs', rows());
+    alt.hidden = false; p.win.uiSync();
+    check('the Alternate button shown (Tiled): its row appears', rows() === 'sshss', rows());
+    geo.hidden = true; p.win.uiSync();
+    check('the wrapper hidden by sketch.js (a trig law without a focus): the row collapses again', rows() === 'sshhs', rows());
+    p.macroRow.hidden = false; geo.hidden = false; p.win.uiSync();
+    check('everything shown: five rows, none hidden; the sheet keeps its blocks', rows() === 'sssss', rows());
+    (p.win.observers || []).forEach(cb => cb());
+});
+T('netz-rows-release', () => {
+    const p = netzPage(), before = dump(p.doc.documentElement), orig = {}; nzIds.forEach(id => { orig[id] = p.doc.getElementById(id); });
+    const nb = {}; nzIds.forEach(id => { nb[id] = [orig[id].parentNode, orig[id].previousSibling, orig[id].nextSibling]; });
+    const eng = ph(p); eng.start(); p.macroRow.hidden = false; p.win.uiSync();
+    eng.release();
+    check('release puts every item back with the same parent and neighbours; no block, no row, no marker, no ph-sheet-rows class is left on the overlay', nzIds.every(id => orig[id].parentNode === nb[id][0] && orig[id].previousSibling === nb[id][1] && orig[id].nextSibling === nb[id][2]) && p.doc.all().filter(n => /ph-sheet-(block|row)/.test(n.className)).length === 0 && !p.moreNetz.classList.contains('ph-sheet-rows') && (function none(n) { return n.childNodes.every(c => (c.nodeType !== 8 || !/^ph:/.test(c.text)) && (c.nodeType !== 1 || none(c))); })(p.doc.documentElement));
+    check('...every item keeps the hidden state sketch.js gave it (the engine never sets hidden on an item)', orig['net-macro-row'].hidden === false && orig['net-geo-row'].hidden === true && orig['net-readout'].hidden === false);
+    p.macroRow.hidden = true;
+    check('...and the tree is the one before apply', dump(p.doc.documentElement).replace(/\[hidden\]/g, '') === before.replace(/\[hidden\]/g, ''));
+    check('release is idempotent', (() => { const m = p.doc.mutations; eng.release(); return p.doc.mutations === m; })());
+    eng.apply('netz');
+    check('apply again after a release rebuilds the same rows and every id is once in the document', JSON.stringify(nzRows(p)) === JSON.stringify(['net-strength-exact+net-focus-exact', 'net-domain-row / net-macro-row / net-geo-row / net-readout']) && nzIds.every(id => p.doc.all().filter(n => n.id === id).length === 1));
+    check('...and a second apply does no work', (() => { const m = p.doc.mutations; eng.apply('netz'); return p.doc.mutations === m; })());
+    p.mq.set(false);
+    check('a width change to 768+ releases it (the overlay keeps its layout and typed fields above 768px)', nzIds.every(id => orig[id].parentNode === nb[id][0]) && p.moreNetz.querySelectorAll('.ph-sheet-block').length === 0);
+});
+
+
+console.log('\n== the fine steppers of the Netz sheet and the offset display (sheets redesign, commit 4b), with the REAL ui.js and the REAL bindExact / setLocked of ui-net.js ==');
+const NET_SRC = fs.readFileSync(process.env.UI_NET_JS || path.join(ROOT, 'ui-net.js'), 'utf8');
+const exFn = (src, head) => { const i = src.indexOf(head); if (i < 0) return ''; let d = 0; for (let k = src.indexOf('{', i); k < src.length; k++) { if (src[k] === '{') d++; else if (src[k] === '}' && --d === 0) return src.slice(i, k + 1); } return ''; };
+const BIND_SRC = exFn(NET_SRC, 'function bindExact('), LOCK_SRC = exFn(NET_SRC, 'function setLocked(');
+// the page's own ui.js (UI) plus a toast that records; bindExact and setLocked of ui-net.js, extracted and run against the page's fields
+const netFine = () => {
+    const p = netzPage(), toasts = [], eng = ph(p), UI = p.win.UI;
+    const U2 = Object.assign({}, UI, { toast: m => { toasts.push(m); } });
+    const fn = new Function('UI', 'Event', BIND_SRC + '\n' + LOCK_SRC + '\nreturn { bindExact: bindExact, setLocked: setLocked };')(U2, p.win.Event);
+    const mkCarrier = pct => ({ value: String(pct), events: [], dispatchEvent(ev) { this.events.push(ev.type); return true; } });
+    const sF = p.doc.getElementById('net-strength-exact'), fF = p.doc.getElementById('net-focus-exact');
+    const sC = mkCarrier(50), fC = mkCarrier(0), lock = { s: null, f: null };
+    const showS = fn.bindExact(sF, sC, 0, 1, 'MSG-S', () => lock.s), showF = fn.bindExact(fF, fC, -1, 1, 'MSG-F', () => lock.f);
+    showS(); showF();
+    return { p, eng, UI, fn, toasts, sF, fF, sC, fC, lock, showS, showF, before: { sh: hcount(sF), fh: hcount(fF), sd: dump(sF), fd: dump(fF), sp: sF.parentNode, fp: fF.parentNode } };
+};
+T('netz-fine-decorate', () => {
+    const n = netFine(), { p, eng, sF, fF } = n;
+    eng.start();
+    const rowOf = x => x.parentNode.parentNode;
+    check('under the phone layout the two exact fields are the SAME nodes, each inside a .stepper (role group) that is a child of the first row of block 1; one element per id', rowOf(sF).className === 'ph-sheet-row' && rowOf(fF) === rowOf(sF) && sF.parentNode.className === 'stepper' && fF.parentNode.className === 'stepper' && sF.parentNode.getAttribute('role') === 'group' && p.doc.all().filter(x => x.id === 'net-strength-exact' || x.id === 'net-focus-exact').length === 2 && rowOf(sF).children.length === 2);
+    check('the stepper is the Form row\'s markup (icon, the field, up and down chevrons) with the German names Stärke fein / Fokus fein (+ mehr / weniger) and the icons sliders / target', [[sF, 'Stärke fein', 'sliders'], [fF, 'Fokus fein', 'target']].every(a => { const r = a[0].parentNode, k = r.children; return k.length === 3 && k[0].tagName.toLowerCase() === 'svg' && k[1] === a[0] && k[2].children.map(b => b.getAttribute('data-dir')).join() === '1,-1' && r.getAttribute('aria-label') === a[1] && k[2].children[0].getAttribute('aria-label') === a[1] + ' mehr' && k[2].children[1].getAttribute('aria-label') === a[1] + ' weniger' && JSON.stringify(k[0].children.map(x => x.getAttribute('d'))) === JSON.stringify(config.icons[a[2]]); }));
+    check('no keyboard: both fields are readOnly with inputmode="none" and carry data-stepper (the mark ui-net.js\'s setLocked looks for)', [sF, fF].every(x => x.readOnly === true && x.getAttribute('inputmode') === 'none' && x.hasAttribute('data-stepper')));
+    eng.release();
+    check('release UNDOES it: the fields are back in their sections (same parents, same tree, not readonly, no inputmode, no data-stepper), no wrapper is left, and they carry exactly the listeners they had (the stepper bound none on them)', sF.parentNode === n.before.sp && fF.parentNode === n.before.fp && dump(sF) === n.before.sd && dump(fF) === n.before.fd && !sF.readOnly && !fF.readOnly && !sF.hasAttribute('data-stepper') && hcount(sF) === n.before.sh && hcount(fF) === n.before.fh && p.doc.all().filter(x => x.className === 'stepper' && x.querySelector('#net-strength-exact')).length === 0);
+});
+T('netz-fine-steps', () => {
+    const n = netFine(), { p, eng, sF, fF, sC, fC, toasts, UI } = n; eng.start();
+    const btn = (f, dir) => f.parentNode.querySelectorAll('.stepper-btn').find(b => b.getAttribute('data-dir') === String(dir));
+    const log = []; ['input', 'change'].forEach(t => sF.addEventListener(t, e => log.push(t + ':' + (e.bubbles ? 'b' : 'n'))));
+    click0(btn(sF, 1));
+    check('strength 0.50 -> 0.51 with ONE tap: the stepper writes "0.51" (two decimals), dispatches input then change (both bubbling) on the field, and bindExact turns that into the carrier (51 percent): the SAME path as a typed value', sF.value === '0.51' && sC.value === '51' && log.join() === 'input:b,change:b' && sC.events.join() === 'input,change' && toasts.length === 0, sF.value + ' ' + sC.value + ' ' + log.join());
+    for (let i = 0; i < 4; i++) click0(btn(sF, 1));
+    check('0.55 after five taps up; seven taps down give 0.48, thirteen more 0.43 (0.01 each, no float drift)', sF.value === '0.55' && sC.value === '55');
+    for (let i = 0; i < 12; i++) click0(btn(sF, -1));
+    check('...and 0.43 after twelve taps down', sF.value === '0.43' && sC.value === '43', sF.value);
+    sC.value = '99'; n.showS(); click0(btn(sF, 1));
+    check('strength reaches 1.00 (carrier 100), and the next tap up does nothing: the chevron is disabled with the reason "Größter Wert erreicht." (the stepper\'s own message)', sF.value === '1.00' && sC.value === '100' && btn(sF, 1).getAttribute('aria-disabled') === 'true' && btn(sF, 1).dataset.reason === 'Größter Wert erreicht.', btn(sF, 1).dataset.reason);
+    sF.value = '7'; sF.dispatch('change', { type: 'change' });
+    check('bindExact is the same as before: a value above the range is clamped to 1.00 with its notice (MSG-S)', sF.value === '1.00' && sC.value === '100' && toasts.indexOf('MSG-S') >= 0, toasts.join());
+    sF.value = 'abc'; sF.dispatch('change', { type: 'change' });
+    check('...an invalid text is restored to the current value', sF.value === '1.00');
+    // focus: -1 .. 1
+    fC.value = '-99'; n.showF(); click0(btn(fF, -1));
+    check('focus runs from -1.00 to 1.00 in steps of 0.01 (-0.99 -> -1.00), the carrier -100, and stops there', fF.value === '-1.00' && fC.value === '-100' && btn(fF, -1).getAttribute('aria-disabled') === 'true');
+    click0(btn(fF, 1)); click0(btn(fF, 1));
+    check('...focus -0.98 after two taps up (the carrier -98): the net transform follows through the carrier', fF.value === '-0.98' && fC.value === '-98' && fC.events.length >= 4);
+    eng.release();
+});
+T('netz-fine-lock', () => {
+    const n = netFine(), { p, eng, sF, fF, sC, fC, fn, lock, UI } = n; eng.start();
+    const up = f => f.parentNode.querySelectorAll('.stepper-btn')[0];
+    const tick = () => { fn.setLocked(sF, lock.s); fn.setLocked(fF, lock.f); p.win.uiSync(); };
+    tick();
+    check('ticks while decorated and UNLOCKED leave the fields readonly (setLocked sets readOnly = false on a plain field; the data-stepper mark makes it leave it alone)', sF.readOnly === true && fF.readOnly === true && sF.getAttribute('aria-disabled') === null);
+    lock.f = 'Fokus gilt für Sin und Tan'; tick();
+    check('the focus field LOCKED (Aus or Geo): its field keeps readonly, carries aria-disabled with the reason, and the STEPPER mirrors it: root aria-disabled with the same reason (UI.stepper then does nothing; its chevrons follow through its own MutationObserver, which the pane proves)', fF.readOnly === true && fF.getAttribute('aria-disabled') === 'true' && fF.dataset.reason === lock.f && fF.parentNode.getAttribute('aria-disabled') === 'true' && fF.parentNode.dataset.reason === lock.f, String(fF.parentNode.dataset.reason));
+    const v0 = fF.value; click0(up(fF));
+    check('a tap on a chevron of the locked stepper changes nothing: no value, no carrier event', fF.value === v0 && fC.events.length === 0, fF.value);
+    check('...while the strength stepper (not locked) still works', (() => { const s0 = sF.value; click0(up(sF)); return sF.value !== s0; })());
+    lock.f = null; tick();
+    check('unlocked again: aria-disabled and the reason are gone from the field and the stepper root, readonly stays, the chevron steps', fF.getAttribute('aria-disabled') === null && fF.parentNode.getAttribute('aria-disabled') === null && fF.readOnly === true && (() => { const f0 = fF.value; click0(up(fF)); return fF.value !== f0; })());
+    for (let i = 0; i < 5; i++) { lock.s = i % 2 ? null : 'Die Stärke gilt für Sin, Tan und Geo.'; tick(); }
+    check('five more ticks locking and unlocking the strength: the field is readonly after every one (the tick never undoes it)', sF.readOnly === true);
+    lock.s = null; tick(); let ticks = 0; p.win.UI.onSync(() => { ticks++; }); eng.release();
+    check('release asks for one UI tick at once (window.uiSync), so ui-net.js re-reads the lock of the plain fields without waiting for the next redraw', ticks >= 1, String(ticks));
+    lock.s = 'reason'; lock.f = null; fn.setLocked(sF, lock.s); fn.setLocked(fF, lock.f);
+    check('after release the plain fields obey setLocked again: locked = readOnly, unlocked = not (the engine called a tick, ui-net.js owns them)', sF.readOnly === true && fF.readOnly === false && !sF.hasAttribute('data-stepper'));
+});
+T('netz-display', () => {
+    const p = buildPage({ ui: true }), eng = ph(p); eng.start(); eng.show('ebenen');
+    const x = p.doc.getElementById('layer-offset-x-input'), y = p.doc.getElementById('layer-offset-y-input'), r = p.doc.getElementById('layer-rotation-input');
+    const seen = []; x.addEventListener('input', () => seen.push(x.value)); x.addEventListener('change', () => seen.push(x.value));
+    x.value = '103.92304845413264';
+    check('the layer steppers DISPLAY at most one decimal: the shown text of 103.92304845413264 is 103.9, and what everything else reads (the sketch\'s .value(), the events) is the full value, unchanged', x.__shown === '103.9' && x.value === '103.92304845413264', x.__shown + ' / ' + x.value);
+    x.value = '60'; y.value = '0.04'; r.value = '345';
+    check('whole numbers and short values show as they are (60, 0, 345): no padding, no trailing zero; a negative value rounds toward the nearest tenth (-0.04 -> -0)', x.__shown === '60' && y.__shown === '0' && r.__shown === '345' && (() => { y.value = '-12.34'; return y.__shown === '-12.3'; })());
+    x.value = '103.92304845413264'; seen.length = 0;
+    const upX = x.parentNode.querySelectorAll('.stepper-btn')[0]; click0(upX);
+    check('a tap from the displayed 103.9: the stepper adds 10 to the STORED value and rounds to a whole number (step 10, round 0): 113.923... -> 114; the hidden decimals are dropped by the first tap; the events carry 114 (not 113.9)', x.value === '114' && x.__shown === '114' && seen.join() === '114,114', x.value + ' ' + seen.join());
+    x.value = '103.92304845413264'; click0(x.parentNode.querySelectorAll('.stepper-btn')[1]);
+    check('...and a tap down: 93.923... -> 94', x.value === '94');
+    x.value = '103.92304845413264'; const before = x.value; eng.release();
+    check('release deletes the display layer: the input has its plain value again (the full text 103.92304845413264 is what it holds), no own accessor, no shown text left', x.value === before && Object.getOwnPropertyDescriptor(x, 'value') && Object.getOwnPropertyDescriptor(x, 'value').value === before && x.__shown === undefined, JSON.stringify(Object.getOwnPropertyDescriptor(x, 'value')));
+    eng.apply('form'); eng.show('ebenen');
+    check('apply again puts the display layer back (once: no accessor chain)', x.__shown === '103.9' && x.value === before);
+    eng.release();
+});
+
+
+console.log('\n== the timeline sheet (sheets redesign, commit 5a): the rows, the gate and the view (ui-phone-timeline.js), with the REAL ui.js ==');
+const TLV = require(process.env.UI_PHONE_TIMELINE_JS || path.join(ROOT, 'ui-phone-timeline.js'));
+const TLS = config.sheets.timeline;
+const tlSheet = () => { const p = buildPage({ ui: true }), eng = ph(p); eng.start(); eng.show('zeit'); return { p, eng, host: p.doc.getElementById('ph-sheet-timeline') }; };
+const tlRows = host => host.querySelectorAll('.ph-sheet-block').map(b => b.children.map(r => (r.hidden ? '(h)' : '') + r.children.map(g => g.id).join('+')).join(' / '));
+T('timeline-rows', () => {
+    const { p, eng, host } = tlSheet();
+    check('the timeline sheet is data: block 1 = the icon row (286px: 48 + 8 + 9 + 8 + 48 + 8 + the 84px select + 8 + 9 + 8 + 48) and the readout (fluid, 20px), block 2 = the pairing view behind the gate ph-tl-editor-show: the chips (fluid), the moves 160 + the variant group 155 (a wrap row), [list][reset]; block 3 = the list behind ph-tl-list-show', JSON.stringify(TLS.blocks.map(b => b.map(r => r.items.map(i => i.id + (i.gate ? '@' + i.gate : '') + (i.w ? ':' + i.w : '') + (r.h ? ':h' + r.h : '')).join('+')))) === JSON.stringify([['ph-tl-icons:286', 'ph-tl-readout:h20'], ['ph-tl-chips@ph-tl-editor-show', 'ph-tl-moves@ph-tl-editor-show:160+ph-tl-variant@ph-tl-editor-show:155', 'ph-tl-listbtn@ph-tl-editor-show:48+ph-tl-reset@ph-tl-editor-show:48'], ['ph-tl-listhead@ph-tl-list-show', 'ph-tl-list@ph-tl-list-show']]) && TLS.blocks[1][1].wrap === true && ['ph-tl-icons', 'ph-tl-readout'].every(id => config.createdByScript[id] === 'ui-phone-timeline.js') && ['ph-tl-chips', 'ph-tl-moves', 'ph-tl-variant', 'ph-tl-reset', 'ph-tl-listbtn', 'ph-tl-listhead', 'ph-tl-list'].every(id => config.createdByScript[id] === 'ui-phone-pairing.js'));
+    check('apply moves the icon row, the readout and the pairing view\'s containers into rows INSIDE #timeline-group (the content: no new host), the sheet host gets ph-sheet-rows; every row of blocks 2 and 3 is hidden (gate closed), so the closed sheet shows ONE block', JSON.stringify(tlRows(host)) === JSON.stringify(['ph-tl-icons / ph-tl-readout', '(h)ph-tl-chips / (h)ph-tl-moves+ph-tl-variant / (h)ph-tl-listbtn+ph-tl-reset', '(h)ph-tl-listhead / (h)ph-tl-list']) && host.classList.contains('ph-sheet-rows') && p.tlGroup.children.filter(c => c.className === 'ph-sheet-block').length === 3 && host.querySelectorAll('.ph-sheet-block')[1].hidden === true && host.querySelectorAll('.ph-sheet-block')[2].hidden === true && host.querySelectorAll('.ph-sheet-block')[0].hidden === false, JSON.stringify(tlRows(host)));
+    check('the heights by the config: closed 16 + 48 + 8 + 20 + 16 = 108; open 108 - 16 + 16 + (48 + 8 + 48 + 8 + 48) + 16 = 284; open at 320 (the pairing row wraps into two lines) 284 + 56 = 340; closed at 320 108; the list state (header, ONE list row counted) 16 + 48 + 8 + 20 + 16 + 48 + 8 + 48 + 16 = 228', API.sheetHeight(config, 'timeline') === 108 && API.sheetHeight(config, 'timeline', { gates: ['ph-tl-editor-show'] }) === 284 && API.sheetHeight(config, 'timeline', { gates: ['ph-tl-editor-show'], narrow: true }) === 340 && API.sheetHeight(config, 'timeline', { gates: ['ph-tl-list-show'] }) === 228 && API.sheetHeight(config, 'timeline', { narrow: true }) === 108);
+    // the gate: the class on the content opens the row; sketch.js's own hidden still decides
+    check('the engine WATCHES the content\'s class (a MutationObserver on #timeline-group, attributeFilter class), so the gate follows the toggle at once, not only on the next UI tick', (p.win.observed || []).some(x => x.el === p.tlGroup && x.o && x.o.attributeFilter && x.o.attributeFilter.indexOf('class') >= 0));
+    p.tlGroup.classList.add('ph-tl-editor-show'); p.win.uiSync();
+    check('with the class ph-tl-editor-show on #timeline-group the three rows of block 2 and the block show', tlRows(host)[1] === 'ph-tl-chips / ph-tl-moves+ph-tl-variant / ph-tl-listbtn+ph-tl-reset' && host.querySelectorAll('.ph-sheet-block')[1].hidden === false, JSON.stringify(tlRows(host)));
+    p.tlGroup.classList.remove('ph-tl-editor-show'); p.tlGroup.classList.add('ph-tl-list-show'); p.win.uiSync();
+    check('the class ph-tl-list-show shows block 3 (the header and the list) and hides block 2: the list REPLACES the editor', tlRows(host)[2] === 'ph-tl-listhead / ph-tl-list' && host.querySelectorAll('.ph-sheet-block')[2].hidden === false && host.querySelectorAll('.ph-sheet-block')[1].hidden === true);
+    p.tlGroup.classList.remove('ph-tl-list-show'); p.win.uiSync();
+    check('...and removing the class hides them again', tlRows(host)[1] === '(h)ph-tl-chips / (h)ph-tl-moves+ph-tl-variant / (h)ph-tl-listbtn+ph-tl-reset' && host.querySelectorAll('.ph-sheet-block')[1].hidden === true && host.querySelectorAll('.ph-sheet-block')[2].hidden === true);
+    check('the old editor #timeline-pairing is the MODEL of the pairing view: it stays where it is (a child of #timeline-group, in no row), parked hidden by the CSS, with its own hidden attribute untouched', p.tlPairing.parentNode === p.tlGroup && p.tlPairing.hidden === true && !p.doc.all().some(n => /(^| )ph-sheet-row( |$)/.test(n.className) && n.contains(p.tlPairing)));
+    check('the old pieces are PARKED, not removed: the keyframe list, the net box, the status span and the text button are all still in the document (the CSS hides them; the icon buttons forward to two of them)', ['timeline-keyframe-list', 'timeline-net-state', 'timeline-status', 'btn-clear-timeline'].every(id => !!p.doc.getElementById(id) && p.doc.all().filter(n => n.id === id).length === 1));
+    eng.release();
+    check('release puts the editor back into the group and the two made elements back into their holder; no block, no row, no marker left; the host class and the gate class are no longer on anything', p.tlPairing.parentNode === p.tlGroup && p.tlHome.children.map(c => c.id).join() === 'ph-tl-icons,ph-tl-readout,ph-tl-chips,ph-tl-moves,ph-tl-variant,ph-tl-listbtn,ph-tl-reset,ph-tl-listhead,ph-tl-list' && p.doc.all().filter(n => /ph-sheet-(block|row)/.test(n.className)).length === 0 && !p.doc.getElementById('ph-sheet-timeline'));
+    check('release and apply again are idempotent: the same two blocks, every id once', (() => { const m = p.doc.mutations; eng.release(); const same = p.doc.mutations === m; eng.apply('form'); eng.show('zeit'); const h2 = p.doc.getElementById('ph-sheet-timeline'); return same && JSON.stringify(tlRows(h2)) === JSON.stringify(['ph-tl-icons / ph-tl-readout', '(h)ph-tl-chips / (h)ph-tl-moves+ph-tl-variant / (h)ph-tl-listbtn+ph-tl-reset', '(h)ph-tl-listhead / (h)ph-tl-list']) && ['ph-tl-icons', 'ph-tl-readout', 'timeline-pairing', 'ph-tl-chips', 'ph-tl-moves', 'ph-tl-variant', 'ph-tl-reset', 'ph-tl-listbtn', 'ph-tl-listhead', 'ph-tl-list'].every(id => p.doc.all().filter(n => n.id === id).length === 1); })());
+});
+// a view on a page of its own (the engine is not started: the view works on its elements wherever they are)
+const tlView = (o) => {
+    const p = buildPage({ ui: true }); p.tlHome._detach();
+    const state = Object.assign({ tl: null, summary: null, active: 'base' }, o || {});
+    const kf = p.doc.getElementById('timeline-keyframe-list'), clicks = [], clr = p.doc.getElementById('btn-clear-timeline');
+    clr.addEventListener('click', () => clicks.push('clear'));
+    const mkKf = n => { kf.childNodes.slice().forEach(c => c._detach()); for (let i = 0; i < n; i++) { const tab = p.doc.createElement('span'); const nb = p.doc.createElement('button'), xb = p.doc.createElement('button'); nb.addEventListener('click', () => clicks.push('net' + i)); xb.addEventListener('click', () => clicks.push('remove' + i)); tab.appendChild(nb); tab.appendChild(xb); kf.appendChild(tab); } };
+    p.doc.documentElement.classList.add('ph');
+    const view = TLV.createTimelineView(p.doc, p.win, { read: { timelineState: () => state.tl, timelineSummary: () => state.summary, activeLayerNow: () => state.active } });
+    const tlo = (ids, nets) => ({ keyframeLayerIds: ids, netStates: nets || ids.map(() => ({ x: {} })), segmentDurationsMs: ids.slice(1).map(() => 2000) });
+    const set = (patch) => { Object.assign(state, patch); if (patch.tl) mkKf(patch.tl.keyframeLayerIds.length); p.win.uiSync(); };
+    return { p, view, state, clicks, set, tlo, mkKf, nodes: view.nodes };
+};
+const dis = b => b.getAttribute('aria-disabled') === 'true';
+T('timeline-view', () => {
+    const v = tlView(), n = v.nodes;
+    check('the view makes two elements in a hidden holder (not yet in the sheet): #ph-tl-icons (a group named Zeitleiste with data-i18n) with the three buttons and two 1px hairlines, #ph-tl-readout (a polite live region)', n.holder.hidden === true && n.icons.id === 'ph-tl-icons' && n.icons.getAttribute('role') === 'group' && n.icons.getAttribute('data-i18n') === 'timeline.strip' && n.icons.children.map(c => c.tagName.toLowerCase() === 'span' ? 'sep' : c.className.split(' ').pop()).join() === 'ph-tl-netrec,sep,ph-tl-pairing,sep,ph-tl-trash' && n.readout.getAttribute('aria-live') === 'polite');
+    check('every button has a German name from the dictionary key (aria-label = title, data-i18n): Netz der gewählten Ebene neu aufnehmen / Linienzuordnung / Zeitleiste entfernen; the pairing toggle has aria-pressed', [[n.netrec, 'Netz der gewählten Ebene neu aufnehmen', 'timeline.recaptureNet'], [n.pairing, 'Linienzuordnung', 'timeline.pairing'], [n.trash, 'Zeitleiste entfernen', 'timeline.remove']].every(a => a[0].getAttribute('data-i18n') === a[2] && a[0].getAttribute('aria-label') === a[1] || (dis(a[0]) && a[0].dataset.baseTitle === a[1])) && n.pairing.getAttribute('aria-pressed') === 'false');
+    check('with no timeline: all three are disabled with their reasons - netrec and trash "Noch keine Keyframes", the toggle "Mindestens zwei Keyframes nötig" - and the readout is empty', dis(n.netrec) && dis(n.pairing) && dis(n.trash) && n.netrec.dataset.reason === 'Noch keine Keyframes' && n.trash.dataset.reason === 'Noch keine Keyframes' && n.pairing.dataset.reason === 'Mindestens zwei Keyframes nötig' && n.readout.textContent === '');
+});
+T('timeline-forward', () => {
+    const v = tlView(), n = v.nodes;
+    v.set({ tl: v.tlo([2, 0, 5]), summary: { state: 'animated' }, active: 0 });
+    check('three keyframes (layers 2, 0, 5), layer 0 selected: netrec is enabled; a tap forwards to the "Net" button of keyframe 2 (position 1) and to NO other button', !dis(n.netrec) && (n.netrec.dispatch('click', { detail: 1 }), v.clicks.join() === 'net1'), v.clicks.join());
+    v.clicks.length = 0; v.set({ active: 5 }); n.netrec.dispatch('click', { detail: 1 });
+    check('...layer 5 (the third keyframe): the third "Net" button only', v.clicks.join() === 'net2');
+    v.clicks.length = 0; v.set({ active: 2 }); n.netrec.dispatch('click', { detail: 1 });
+    check('...layer 2 (the first): the first one', v.clicks.join() === 'net0');
+    v.clicks.length = 0; v.set({ active: 'base' });
+    check('the BASE selected: netrec is disabled with "Gewählte Ebene ist kein Keyframe", and a tap forwards nothing', dis(n.netrec) && n.netrec.dataset.reason === 'Gewählte Ebene ist kein Keyframe' && (n.netrec.dispatch('click', { detail: 1 }), v.clicks.length === 0));
+    v.set({ active: 7 });
+    check('a layer that is no keyframe (7): the same reason, nothing forwarded', dis(n.netrec) && n.netrec.dataset.reason === 'Gewählte Ebene ist kein Keyframe' && (n.netrec.dispatch('click', { detail: 1 }), v.clicks.length === 0));
+    v.clicks.length = 0; n.trash.dispatch('click', { detail: 1 });
+    check('the trash forwards ONE click to #btn-clear-timeline (whose handler asks first: ui-timeline.js, test-timeline-strip.js) and does nothing else', !dis(n.trash) && v.clicks.join() === 'clear');
+    v.clicks.length = 0; v.set({ tl: null, summary: null, active: 'base' }); n.trash.dispatch('click', { detail: 1 });
+    check('without a timeline the trash is disabled ("Noch keine Keyframes") and forwards nothing', dis(n.trash) && n.trash.dataset.reason === 'Noch keine Keyframes' && v.clicks.length === 0);
+    check('the "x" buttons of the keyframe list are never forwarded to (only the first button of a keyframe)', (() => { v.set({ tl: v.tlo([0, 1]), summary: { state: 'animated' }, active: 1 }); v.clicks.length = 0; n.netrec.dispatch('click', { detail: 1 }); return v.clicks.join() === 'net1' && v.clicks.indexOf('remove1') < 0; })());
+});
+T('timeline-toggle', () => {
+    const v = tlView(), n = v.nodes, g = v.p.tlGroup;
+    v.set({ tl: v.tlo([0]), summary: { state: 'pending' }, active: 0 });
+    check('with ONE keyframe the toggle is disabled with "Mindestens zwei Keyframes nötig" and a tap does nothing (no class, aria-pressed false)', dis(n.pairing) && n.pairing.dataset.reason === 'Mindestens zwei Keyframes nötig' && (n.pairing.dispatch('click', { detail: 1 }), !g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'false'));
+    g.classList.add('ts-open'); v.set({ tl: v.tlo([0, 1]), summary: { state: 'animated' } });
+    check('with two keyframes it is enabled; a tap puts ph-tl-editor-open on #timeline-group and aria-pressed true (and the button looks active)', !dis(n.pairing) && (n.pairing.dispatch('click', { detail: 1 }), g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'true' && /\bactive\b/.test(n.pairing.className)));
+    n.pairing.dispatch('click', { detail: 1 });
+    check('...a second tap closes it again', !g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'false' && !/\bactive\b/.test(n.pairing.className));
+    n.pairing.dispatch('click', { detail: 1 }); g.classList.remove('ts-open'); v.p.win.uiSync();
+    check('it is UI state, closed again whenever the sheet closes (#timeline-group loses ts-open): the class and the pressed state go on the next tick', !g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'false');
+    // 5a2: the sketch draws nothing while a sheet closes and opens again, so NO UI tick comes in between (found in the pane: the toggle was still on after close and reopen)
+    g.classList.add('ts-open'); v.p.win.uiSync(); n.pairing.dispatch('click', { detail: 1 });
+    g.classList.remove('ts-open'); v.p.doc.dispatch('click', { target: v.p.doc.getElementById('ts-more') }); g.classList.add('ts-open');
+    check('close and reopen WITHOUT a tick in between (the click that closes the sheet bubbles to the document): the toggle is off, the class is gone, the editor stays hidden when the sheet is open again', !g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'false' && !/\bactive\b/.test(n.pairing.className) && (v.p.win.uiSync(), !g.classList.contains('ph-tl-editor-open')));
+    g.classList.add('ts-open'); n.pairing.dispatch('click', { detail: 1 }); v.set({ tl: v.tlo([0]) });
+    check('...and when the timeline drops below two keyframes while the editor is open', !g.classList.contains('ph-tl-editor-open') && dis(n.pairing));
+    v.p.doc.documentElement.classList.remove('ph'); g.classList.add('ts-open'); v.set({ tl: v.tlo([0, 1]) }); n.pairing.dispatch('click', { detail: 1 }); v.p.win.uiSync();
+    check('outside the phone layout the view does nothing on a tick (no class left on the group)', !g.classList.contains('ph-tl-editor-open'));
+});
+T('timeline-readout', () => {
+    const v = tlView(), n = v.nodes;
+    const say = (tl, st) => { v.set({ tl: tl, summary: st ? { state: st } : null }); return n.readout.textContent; };
+    check('the six states in German from the summary: none, partial (the missing keyframe numbers: 2), pending, incompatible, constant, animated (the keyframe count: 3)', say(v.tlo([0, 1], [null, null]), 'none') === 'Netz: nicht animiert' && say(v.tlo([0, 1], [{ x: 1 }, null]), 'partial') === 'Netz: Keyframe 2 ohne Netz' && say(v.tlo([0], [{ x: 1 }]), 'pending') === 'Netz: zweiten Keyframe hinzufügen' && say(v.tlo([0, 1]), 'incompatible') === 'Netz: nicht animierbar' && say(v.tlo([0, 1]), 'constant') === 'Netz: gleich in allen Keyframes' && say(v.tlo([0, 1, 2]), 'animated') === 'Netz: animiert (3 Keyframes)');
+    check('partial with several keyframes without a net: "1, 3"; and without a summary or a timeline the line is empty (it keeps its 20px)', say(v.tlo([0, 1, 2], [null, { x: 1 }, null]), 'partial') === 'Netz: Keyframe 1, 3 ohne Netz' && say(null, null) === '' && say(v.tlo([0, 1]), 'zzz') === '');
+});
+
+// ---- the pairing view of the timeline sheet (sheets redesign, commit 5b): ui-phone-pairing.js with the REAL ui.js and the real icon-row view, against a fake of the model that REBUILDS its rows after every change (as sketch.js does) ----
+console.log('\n== the pairing view (sheets redesign, commit 5b): forwarding, the selection, the model rebuilt after every action ==');
+const PV = require(process.env.UI_PHONE_PAIRING_JS || path.join(ROOT, 'ui-phone-pairing.js'));
+// the model: what sketch.js's renderTimelinePairingEditor() renders, rebuilt from scratch (new elements) after every action: row r = Start line r, perm[r] = its End line; up / down swap the End assignments of two rows,
+// flip toggles the End line's flip, prev / next step its variant k of c; the reset button is hidden while the pairing is the default
+const pairModel = (p, init) => {
+    const st = Object.assign({ perm: [0, 1, 2, 3], flips: [false, false, false, false], vk: [1, 1, 1, 1], vc: [12, 6, 6, 4], segCount: 1, seg: 0 }, init), log = [], doc = p.doc;
+    const sel = doc.getElementById('timeline-pairing-segment'), list = doc.getElementById('timeline-pairing-list'), reset = doc.getElementById('btn-timeline-pairing-reset');
+    const mk = (tag, cls, txt) => { const e = doc.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
+    const isDefault = () => st.perm.every((j, i) => j === i) && st.flips.every(f => !f) && st.vk.every(k => k === 1);
+    const render = () => {
+        p.tlPairing.hidden = st.segCount === 0;
+        if (st.segCount === 0) return;   // sketch.js: the panel is hidden and the rows are left as they were
+        sel.childNodes.slice().forEach(c => c._detach()); for (let i = 0; i < st.segCount; i++) { const o = mk('option', '', 'Segment ' + (i + 1) + ': Layer ' + (i + 1) + ' → Layer ' + (i + 2)); o.setAttribute('value', String(i)); sel.appendChild(o); } sel.value = String(st.seg);
+        list.childNodes.slice().forEach(c => c._detach());
+        st.perm.forEach((e, r) => {
+            const row = mk('div', 'pairing-row'), lab = mk('span', 'pairing-label', 'Start ' + (r + 1) + ' (a) → End ' + (e + 1) + ' (b)' + (st.flips[e] ? ' ⇄' : ''));
+            const up = mk('button', 'layer-btn pairing-move-btn', '▲'), down = mk('button', 'layer-btn pairing-move-btn', '▼'), flip = mk('button', 'layer-btn pairing-move-btn pairing-flip-btn' + (st.flips[e] ? ' active' : ''), '⇄');
+            up.disabled = r === 0; down.disabled = r === st.perm.length - 1;
+            up.addEventListener('click', () => { log.push('up' + r); if (st.refuse) { render(); return; } const q = st.perm.slice(); [q[r], q[r - 1]] = [q[r - 1], q[r]]; st.perm = q; render(); });
+            down.addEventListener('click', () => { log.push('down' + r); if (st.refuse) { render(); return; } const q = st.perm.slice(); [q[r], q[r + 1]] = [q[r + 1], q[r]]; st.perm = q; render(); });
+            flip.addEventListener('click', () => { log.push('flip' + r); st.flips[e] = !st.flips[e]; render(); });
+            [lab, up, down, flip].forEach(x => row.appendChild(x));
+            if (st.vc[e] > 1) {
+                const v = mk('span', 'pairing-variant'), prev = mk('button', 'layer-btn pairing-move-btn pairing-variant-prev'), cnt = mk('span', 'pairing-variant-count', st.vk[e] + '/' + st.vc[e]), next = mk('button', 'layer-btn pairing-move-btn pairing-variant-next');
+                cnt.setAttribute('data-k', String(st.vk[e])); cnt.setAttribute('data-c', String(st.vc[e]));
+                prev.addEventListener('click', () => { log.push('prev' + r); st.vk[e] = (st.vk[e] - 2 + st.vc[e]) % st.vc[e] + 1; render(); });
+                next.addEventListener('click', () => { log.push('next' + r); st.vk[e] = st.vk[e] % st.vc[e] + 1; render(); });
+                [prev, cnt, next].forEach(x => v.appendChild(x)); row.appendChild(v);
+            }
+            list.appendChild(row);
+        });
+        reset.hidden = isDefault();
+        renderBrowse();
+    };
+    // the model's list (renderTimelinePairingBrowser): offered for 1 <= n <= 5; the flag survives a segment that is not browsable (sketch.js keeps timelinePairingBrowseOpen); rows sorted by the sum, ties by the permutation
+    const bbtn = doc.getElementById('btn-timeline-pairing-browse'), browser = doc.getElementById('timeline-pairing-browser'), blist = doc.getElementById('timeline-pairing-browser-list'), bcount = doc.getElementById('timeline-pairing-browser-count');
+    const perms = n => n <= 1 ? [[0]] : [].concat.apply([], perms(n - 1).map(q => Array.from({ length: n }, (_, k) => { const r = q.slice(); r.splice(k, 0, n - 1); return r; }))).sort((a, b) => { for (let i = 0; i < n; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; });
+    const disp = q => q.reduce((a, j, i) => a + (i - j) * (i - j) * 1200 + (j === 0 ? 0 : 17), 0);
+    function renderBrowse() {
+        const n = st.perm.length, cand = st.segCount > 0 && n >= 1 && n <= 5;
+        bbtn.hidden = !cand; bbtn.textContent = st.browseOpen ? 'Hide list' : 'Browse all';
+        const open = cand && !!st.browseOpen; browser.hidden = !open;
+        blist.childNodes.slice().forEach(c => c._detach());
+        if (!open) return;
+        const items = (n === 1 ? [[0, false], [0, true]] : perms(n)).map(x => n === 1 ? { perm: [0], flip: x[1], sum: x[1] ? 0 : 0 } : { perm: x, sum: disp(x) });
+        items.sort((a, b) => a.sum - b.sum || (a.perm.join('') < b.perm.join('') ? -1 : 1));
+        bcount.textContent = 'Showing ' + (st.filterMax ? items.filter(i => i.sum <= st.filterMax).length : items.length) + ' of ' + items.length + (n === 1 ? ' variants (Start 1 \u2192 End 1, distinct pictures only)' : ' pairings (Start 1..' + n + ' \u2192 End ...)');
+        items.filter(i => !st.filterMax || i.sum <= st.filterMax).forEach(it => {
+            const b = mk('button', 'pairing-browse-row' + (n === 1 ? (it.flip === !!st.flips[0] ? ' current' : '') : (it.perm.join('') === st.perm.join('') ? ' current' : '')));
+            b.setAttribute('data-perm', it.perm.join('')); if (n === 1) { b.setAttribute('data-flip', it.flip ? '1' : '0'); b.setAttribute('data-member', '0'); }
+            b.appendChild(mk('span', '', n === 1 ? '2\u20135' + (it.flip ? ' \u21C4' : ' (as clicked)') : it.perm.map(j => j + 1).join(' '))); b.appendChild(mk('span', '', Math.round(it.sum).toLocaleString('en-US') + ' px\u00B2'));
+            const segR = st.seg; b.addEventListener('click', () => { log.push('row:' + it.perm.join('') + (n === 1 ? '|' + (it.flip ? 1 : 0) : '')); (st.rowSegs = st.rowSegs || []).push(segR); if (n === 1) st.flips[0] = it.flip; else st.perm = it.perm.slice(); render(); });
+            blist.appendChild(b);
+        });
+    }
+    bbtn.addEventListener('click', () => { log.push('browse'); st.browseOpen = !st.browseOpen; render(); });
+    sel.addEventListener('change', () => { log.push('seg' + sel.value); st.seg = parseInt(sel.value, 10) || 0; render(); });
+    reset.addEventListener('click', () => { log.push('reset'); st.perm = st.perm.map((_, i) => i); st.flips = st.flips.map(() => false); st.vk = st.vk.map(() => 1); render(); });
+    render();
+    return { st, log, render };
+};
+const pairPage = (init) => {
+    const v = tlView(), model = pairModel(v.p, init);
+    const view = PV.createPairingView(v.p.doc, v.p.win, { perm: () => model.st.perm.slice() });
+    v.set({ tl: v.tlo([0, 1, 2]), summary: { state: 'animated' } }); v.p.tlGroup.classList.add('ts-open');
+    return Object.assign({ model, pview: view, n: view.nodes, g: v.p.tlGroup }, { v });
+};
+const open = x => { x.v.nodes.pairing.dispatch('click', { detail: 1 }); x.v.p.win.uiSync(); };
+const chipsOf = x => x.n.chips.children;
+const selOf = x => chipsOf(x).findIndex(c => c.getAttribute('aria-pressed') === 'true');
+T('pairing-view-basics', () => {
+    const x = pairPage();
+    check('the view makes its containers in the SAME holder as the icon row (#ph-tl-home) and puts the segment select into the icon row right after the pairing toggle: [netrec | pairing select | trash]', x.n.chips.parentNode === x.v.nodes.holder && x.n.moves.parentNode === x.v.nodes.holder && x.n.variant.parentNode === x.v.nodes.holder && x.n.reset.parentNode === x.v.nodes.holder && x.v.nodes.icons.children.map(c => c.className.split(' ').pop() || c.tagName).join().replace(/ph-tl-btn ?/g, '') !== '' && x.v.nodes.icons.children.indexOf(x.n.segment) === x.v.nodes.icons.children.indexOf(x.v.nodes.pairing) + 1 && x.v.nodes.icons.children[x.v.nodes.icons.children.indexOf(x.n.segment) + 1].className === 'ph-tl-sep');
+    check('with ONE segment the select is hidden (also while the toggle is on); chips are not built while the toggle is off', x.n.segment.hidden === true && chipsOf(x).length === 0);
+    open(x);
+    check('the toggle on: one chip per line (4), numbered 1..4 from the row index, the FIRST selected (black: class active, aria-pressed), names "Linie n"', chipsOf(x).length === 4 && chipsOf(x).map(c => c.textContent).join() === '1,2,3,4' && selOf(x) === 0 && /\bactive\b/.test(chipsOf(x)[0].className) && !/\bactive\b/.test(chipsOf(x)[1].className) && chipsOf(x).map(c => c.getAttribute('aria-label')).join() === 'Linie 1,Linie 2,Linie 3,Linie 4');
+    check('the first row has no ▲ (aria-disabled, no reason: the model has none), ▼ is enabled, the reverse icon is enabled, the variant text is the model\'s "1/12" and both variant buttons are enabled', dis(x.n.up) && !x.n.up.dataset.reason && !dis(x.n.down) && !dis(x.n.flip) && x.n.count.textContent === '1/12' && !dis(x.n.prev) && !dis(x.n.next));
+    check('the pairing is the default: the reset icon is disabled with the reason "Zuordnung ist Standard" (its title)', dis(x.n.reset) && x.n.reset.dataset.reason === 'Zuordnung ist Standard');
+    x.n.reset.dispatch('click', { detail: 1 });
+    check('a tap on the disabled reset icon forwards nothing', x.model.log.length === 0);
+});
+T('pairing-view-no-tick', () => {
+    // the sketch redraws nothing when a sheet opens or a toggle is tapped: the view must not wait for a UI tick (found with the toggle of 5a2: a close and an open come with none)
+    const x = pairPage();
+    x.v.nodes.pairing.dispatch('click', { detail: 1 }); x.v.p.doc.dispatch('click', { target: x.v.nodes.pairing });
+    check('a tap on the pairing toggle builds the chips at once (the click that bubbles to the document refreshes the view; NO UI tick comes in between)', chipsOf(x).length === 4 && selOf(x) === 0);
+    x.model.st.perm = [0, 1]; x.model.st.flips = [false, false]; x.model.render(); x.v.p.doc.dispatch('click', { target: x.v.p.doc.getElementById('ts-more') });
+    check('...and any later click of the document refreshes it again (two lines now), without a tick', chipsOf(x).length === 2);
+    check('the chips group is named "Linienzuordnung" (role group, aria-label, data-i18n timeline.pairing) and the select "Segment" (data-i18n-label)', x.n.chips.getAttribute('role') === 'group' && x.n.chips.getAttribute('aria-label') === 'Linienzuordnung' && x.n.chips.getAttribute('data-i18n') === 'timeline.pairing' && x.n.segment.getAttribute('aria-label') === 'Segment' && x.n.segment.getAttribute('data-i18n-label') === 'timeline.segment');
+});
+T('pairing-view-chips', () => {
+    const x = pairPage({ vc: [12, 6, 1, 4] }); open(x);
+    chipsOf(x)[2].dispatch('click', { detail: 1 });
+    check('a chip tap selects that line (the third: black), changes NOTHING in the model (no click reached any model button, perm unchanged) and the moves follow the row: ▲ and ▼ are enabled', selOf(x) === 2 && x.model.log.length === 0 && x.model.st.perm.join() === '0,1,2,3' && !dis(x.n.up) && !dis(x.n.down));
+    check('the variant text is the SELECTED row\'s (End line 3 has 1 variant: no stepper in the model): "1/1" and both variant buttons disabled', x.n.count.textContent === '1/1' && dis(x.n.prev) && dis(x.n.next));
+    chipsOf(x)[3].dispatch('click', { detail: 1 });
+    check('the last line: ▼ is disabled', dis(x.n.down) && !dis(x.n.up) && x.n.count.textContent === '1/4');
+    // the number of lines changes under the selection: clamped
+    x.model.st.perm = [0, 1]; x.model.st.flips = [false, false]; x.model.render(); x.v.p.win.uiSync();
+    check('the model has two lines now (a keyframe was replaced): the selection is clamped to the last one and there are two chips', chipsOf(x).length === 2 && selOf(x) === 1);
+    x.model.st.perm = [0, 1, 2, 3]; x.model.st.flips = [false, false, false, false]; x.model.render(); x.v.p.win.uiSync();
+    check('...and when the lines come back the selection stays where it was (UI state, not saved: it follows no model state)', chipsOf(x).length === 4 && selOf(x) === 1);
+});
+T('pairing-view-forwarding', () => {
+    const x = pairPage(); open(x);
+    chipsOf(x)[2].dispatch('click', { detail: 1 });
+    x.n.up.dispatch('click', { detail: 1 });
+    check('▲ on line 3 forwards ONE click to the ▲ button of row 3 (index 2) of the model and nothing else; the model\'s own swap ran (perm 0,2,1,3); the selection FOLLOWED the End line (End 3 is on row 2 now: chip 2 selected)', x.model.log.join() === 'up2' && x.model.st.perm.join() === '0,2,1,3' && selOf(x) === 1, x.model.log.join() + ' ' + x.model.st.perm.join() + ' sel' + selOf(x));
+    x.n.up.dispatch('click', { detail: 1 });
+    check('▲ again: the click went to row 2 (up1), perm 2,0,1,3, selection on chip 1 - and now ▲ is disabled (the first row)', x.model.log.join() === 'up2,up1' && x.model.st.perm.join() === '2,0,1,3' && selOf(x) === 0 && dis(x.n.up));
+    x.n.up.dispatch('click', { detail: 1 });
+    check('a tap on the disabled ▲ forwards nothing, the selection stays', x.model.log.join() === 'up2,up1' && selOf(x) === 0);
+    x.n.down.dispatch('click', { detail: 1 });
+    check('▼ on line 1: click to row 1 (down0), perm 0,2,1,3: the End line moved down and the selection with it (chip 2)', x.model.log.join() === 'up2,up1,down0' && x.model.st.perm.join() === '0,2,1,3' && selOf(x) === 1);
+    x.n.next.dispatch('click', { detail: 1 });
+    check('the variant step ›: ONE click to the › of row 2 (next1) only; k/c from the rebuilt model "2/6"; the selection stays', x.model.log.join() === 'up2,up1,down0,next1' && x.n.count.textContent === '2/6' && selOf(x) === 1 && x.model.st.vk[2] === 2);
+    x.n.prev.dispatch('click', { detail: 1 }); x.n.prev.dispatch('click', { detail: 1 });
+    check('‹ twice: 1/6 and then 6/6 (the model wraps, the view only shows what it reads)', x.model.log.slice(-2).join() === 'prev1,prev1' && x.n.count.textContent === '6/6');
+    x.n.flip.dispatch('click', { detail: 1 });
+    check('⇄: ONE click to the flip button of row 2, End line 3 is flipped in the model, the selection stays', x.model.log.slice(-1)[0] === 'flip1' && x.model.st.flips[2] === true && selOf(x) === 1);
+    check('the pairing is not the default any more: the reset icon is enabled (no reason, no aria-disabled)', !dis(x.n.reset) && !x.n.reset.dataset.reason);
+    x.n.reset.dispatch('click', { detail: 1 });
+    check('reset: ONE click on #btn-timeline-pairing-reset, the model is the default again (perm 0,1,2,3, no flips, k = 1), the icon is disabled again with the reason, the selection stays on row 2', x.model.log.slice(-1)[0] === 'reset' && x.model.st.perm.join() === '0,1,2,3' && x.model.st.flips.every(f => !f) && dis(x.n.reset) && x.n.reset.dataset.reason === 'Zuordnung ist Standard' && selOf(x) === 1);
+    check('no tap forwarded to a DIFFERENT row\'s button and none to two buttons: every logged action is one entry of the sequence up2, up1, down0, next1, prev1, prev1, flip1, reset', x.model.log.join() === 'up2,up1,down0,next1,prev1,prev1,flip1,reset');
+});
+T('pairing-view-refused', () => {
+    const x = pairPage(); open(x);
+    chipsOf(x)[2].dispatch('click', { detail: 1 }); x.model.st.refuse = true;
+    x.n.up.dispatch('click', { detail: 1 });
+    check('the model REFUSES a move (sketch.js: setTimelinePairing returns without a change): the click reached the model\'s ▲ once, the permutation is unchanged and the selection stays on the line it was on (it follows the End line through the permutation, not a fixed +-1)', x.model.log.join() === 'up2' && x.model.st.perm.join() === '0,1,2,3' && selOf(x) === 2);
+});
+T('pairing-view-eight-in-a-row', () => {
+    const x = pairPage(); open(x);
+    // eight actions in a row, each followed by a REBUILD of every model element (new rows, new buttons): a held reference would hit a detached button
+    const seq = [['chip', 3], ['up'], ['up'], ['down'], ['next'], ['flip'], ['down'], ['reset']], expectSel = [3, 2, 1, 2, 2, 2, 3, 3], expectLog = ['', 'up3', 'up3,up2', 'up3,up2,down1', 'up3,up2,down1,next2', 'up3,up2,down1,next2,flip2', 'up3,up2,down1,next2,flip2,down2', 'up3,up2,down1,next2,flip2,down2,reset'];
+    const got = [];
+    seq.forEach((a, i) => { if (a[0] === 'chip') chipsOf(x)[a[1]].dispatch('click', { detail: 1 }); else x.n[a[0]].dispatch('click', { detail: 1 }); got.push([selOf(x), x.model.log.join()]); });
+    check('eight actions in a row (chip 4, ▲, ▲, ▼, ›, ⇄, ▼, reset), the model rebuilt after each: every action reached the right button of the right row, once, and the selection after each is ' + expectSel.join(), JSON.stringify(got) === JSON.stringify(expectSel.map((sel, i) => [sel, expectLog[i]])), JSON.stringify(got));
+    check('the view never holds a model element: after the eight actions none of the buttons it clicked is still in the document (the rows were replaced) and it still works', x.model.log.length === 7 && !x.v.p.doc.getElementById('timeline-pairing-list').children.some(r => r.className !== 'pairing-row'));
+});
+T('pairing-view-follow-real-data', () => {
+    // the selection follows the SAME End line: perm before / after of the model's own up / down on real permutations
+    const P = PV;
+    const cases = [['up', 2, [0, 1, 2, 3], [0, 2, 1, 3], 1], ['up', 1, [0, 2, 1, 3], [2, 0, 1, 3], 0], ['down', 0, [2, 0, 1, 3], [0, 2, 1, 3], 1], ['down', 2, [0, 1, 3, 2], [0, 1, 2, 3], 3], ['flip', 2, [0, 1, 2, 3], [0, 1, 2, 3], 2], ['next', 1, [3, 1, 0, 2], [3, 1, 0, 2], 1]];
+    check('followSelection: ▲ and ▼ follow the End line through the permutation (' + cases.length + ' real cases), ⇄ and the variant steps keep the row', cases.every(c => P.followSelection(c[0], c[1], 4, c[2], c[3]) === c[4]));
+    check('without the permutation it moves one row (clamped at both ends) and a missing End line falls back to the same', P.followSelection('up', 2, 4, null, null) === 1 && P.followSelection('down', 3, 4, null, null) === 3 && P.followSelection('up', 0, 4, null, null) === 0 && P.followSelection('up', 2, 4, [0, 1, 2, 3], [9, 9, 9, 9]) === 1);
+});
+T('pairing-view-segments', () => {
+    const x = pairPage({ segCount: 2, seg: 0 });
+    check('two segments: the select is SHOWN in the icon row (also with the toggle off) with the options "1→2" and "2→3" built from the model\'s options (values 0 and 1, the label from the position, not the model\'s text), the current one selected', x.n.segment.hidden === false && x.n.segment.children.map(o => o.getAttribute('value') + ':' + o.textContent).join() === '0:1→2,1:2→3' && x.n.segment.value === '0');
+    open(x);
+    x.n.segment.value = '1'; x.n.segment.dispatch('change');
+    check('a change sets the MODEL select\'s value and dispatches change on it (the model\'s own handler ran once: seg1) and the chips are rebuilt for the new segment', x.model.log.join() === 'seg1' && x.model.st.seg === 1 && x.n.segment.value === '1' && chipsOf(x).length === 4);
+    x.model.st.segCount = 1; x.model.st.seg = 0; x.model.render(); x.v.p.win.uiSync();
+    check('the model drops to one segment: the select is hidden again', x.n.segment.hidden === true && x.n.segment.children.length === 1);
+    x.model.st.segCount = 0; x.model.render(); x.v.p.win.uiSync();
+    check('no segment at all (the model hides its panel): no chips, every icon disabled', chipsOf(x).length === 0 && dis(x.n.up) && dis(x.n.down) && dis(x.n.flip) && dis(x.n.prev) && dis(x.n.next) && dis(x.n.reset));
+});
+T('pairing-view-reset-open', () => {
+    const x = pairPage(); open(x);
+    chipsOf(x)[1].dispatch('click', { detail: 1 }); x.n.flip.dispatch('click', { detail: 1 });
+    x.g.classList.remove('ts-open'); x.v.p.doc.dispatch('click', { target: x.v.p.doc.getElementById('ts-more') }); x.g.classList.add('ts-open'); x.v.p.win.uiSync();
+    check('the sheet closed and opened again: the toggle is off (5a2), the pairing view builds nothing (no chips), the selection of a line is UI state and may stay', chipsOf(x).length === 0 && !x.g.classList.contains('ph-tl-editor-open') && x.model.st.flips[1] === true);
+    x.v.set({ tl: x.v.tlo([0]) });
+    check('fewer than two keyframes with the toggle on: the toggle is off again (5a) and the view has nothing to show', chipsOf(x).length === 0);
+});
+T('pairing-view-outside-phone', () => {
+    const x = pairPage(); open(x);
+    x.v.p.doc.documentElement.classList.remove('ph'); const before = x.n.chips.children.length; x.model.st.perm = [1, 0, 2, 3]; x.model.render(); x.v.p.win.uiSync();
+    check('without html.ph the view does nothing on a tick', x.n.chips.children.length === before && chipsOf(x).length === 4);
+});
+
+
+// ---- the pairing list (sheets redesign, commit 5c): the model's own list is opened with its Browse all button, read afresh, forwarded to and closed again ----
+console.log('\n== the pairing list (sheets redesign, commit 5c) ==');
+const lst = x => x.n.list.children, lrows = x => lst(x).map(b => b.children[0].children.filter(c => /ph-tl-lorder/.test(c.className)).map(c => c.textContent).join() + '|' + b.children[1].textContent);
+const inList = x => x.g.classList.contains('ph-tl-list-show'), inEditor = x => x.g.classList.contains('ph-tl-editor-show');
+const modelFlags = x => ({ sort: x.v.p.doc.getElementById('timeline-pairing-sort').value, filter: x.v.p.doc.getElementById('timeline-pairing-filter').value, open: x.model.st.browseOpen });
+const goList = x => { open(x); x.n.listBtn.dispatch('click', { detail: 1 }); };
+T('pairing-list-icon', () => {
+    const x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] });
+    check('with the toggle off nothing of the list is shown (no class, no model list opened)', !inList(x) && !inEditor(x) && x.model.st.browseOpen === undefined);
+    open(x);
+    check('n = 3: the list icon is shown in row 3 next to reset ([list][reset]), named "Alle Zuordnungen", enabled; the editor class is set', x.n.listBtn.hidden === false && x.n.listBtn.getAttribute('aria-label') === 'Alle Zuordnungen' && !dis(x.n.listBtn) && inEditor(x) && !inList(x));
+    [1, 2, 4, 5].forEach(n => { x.model.st.perm = Array.from({ length: n }, (_, i) => i); x.model.st.flips = x.model.st.perm.map(() => false); x.model.st.vk = x.model.st.perm.map(() => 1); x.model.st.vc = x.model.st.perm.map(() => 1); x.model.render(); x.v.p.win.uiSync(); x['hidden' + n] = x.n.listBtn.hidden; });
+    check('the list icon is there for n = 1, 2, 4 and 5 lines', [1, 2, 4, 5].every(n => x['hidden' + n] === false));
+    x.model.st.perm = [0, 1, 2, 3, 4, 5]; x.model.st.flips = x.model.st.perm.map(() => false); x.model.st.vk = x.model.st.perm.map(() => 1); x.model.st.vc = x.model.st.perm.map(() => 1); x.model.render(); x.v.p.win.uiSync();
+    check('n = 6 (PAIRING_BROWSE_MAX_N = 5: the model hides its Browse all button): the list icon is NOT in the row (hidden, no dead control) and a tap on where it was does nothing', x.n.listBtn.hidden === true && (x.n.listBtn.dispatch('click', { detail: 1 }), !inList(x) && x.model.log.length === 0));
+});
+T('pairing-list-open', () => {
+    const x = pairPage({ perm: [0, 2, 1], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1], browseOpen: false });
+    x.v.p.doc.getElementById('timeline-pairing-sort').value = 'asc'; x.v.p.doc.getElementById('timeline-pairing-filter').value = '';
+    goList(x);
+    check('a tap on the list icon opens the MODEL\'s list with one click on its Browse all button (logged once) and shows the list view: the editor class is replaced by the list class', x.model.log.join() === 'browse' && x.model.st.browseOpen === true && inList(x) && !inEditor(x));
+    const L = x.pview.list.vm();
+    check('six pairings (3 lines): the rows are the model\'s, SORTED ASCENDING by the sum, the sums are the model\'s own numbers (0 + 17 x ..., 2 x 1200 + ..., ...)', lst(x).length === 6 && L.rows.every((r, i, a) => !i || a[i - 1].sum <= r.sum) && L.rows[0].order === '1 2 3' && L.rows[0].sum === 34);
+    check('the figures in German with a no-break space (the model\'s "4,834 px²" is read as 4834 and shown "4 834")', lrows(x).some(r => /\d \d{3}$/.test(r)) && lrows(x)[0].endsWith('|34'), lrows(x).join(' / '));
+    const cur = lst(x).filter(b => b.getAttribute('aria-current') === 'true');
+    check('the CURRENT pairing (1 3 2) is marked: black (class active) and aria-current, exactly one row', cur.length === 1 && /\bactive\b/.test(cur[0].className) && cur[0].children[0].children.filter(c => /ph-tl-lorder/.test(c.className))[0].textContent === '1 3 2');
+    const def = lst(x).filter(b => b.children[0].children.some(c => /ph-tl-ldef/.test(c.className)));
+    check('the DEFAULT pairing (1 2 3) is marked with the small text "Standard" (and named so: the row\'s accessible name ends with "(Standard)"), no other row', def.length === 1 && def[0].children[0].children.filter(c => /ph-tl-lorder/.test(c.className))[0].textContent === '1 2 3' && def[0].children[0].children.filter(c => /ph-tl-ldef/.test(c.className))[0].textContent === 'Standard' && /\(Standard\)$/.test(def[0].getAttribute('aria-label')));
+    check('every row has the accessible name "Zuordnung <order>, Σd² <value> px²" (aria-label and title)', lst(x).every(b => /^Zuordnung \d( \d)*, Σd² [\d ]+ px²/.test(b.getAttribute('aria-label')) && b.getAttribute('title') === b.getAttribute('aria-label')), lst(x)[1].getAttribute('aria-label'));
+    check('the header: the count from the model "6 von 6 Zuordnungen", a back arrow named "Zurück zur Zuordnung"', x.n.listCount.textContent === '6 von 6 Zuordnungen' && x.n.back.getAttribute('aria-label') === 'Zurück zur Zuordnung');
+    check('the model\'s sort (ascending) and filter (empty) were not touched, and its list is open (the view opened it)', JSON.stringify(modelFlags(x)) === JSON.stringify({ sort: 'asc', filter: '', open: true }));
+    check('nothing else was clicked: the model log is exactly the one Browse all click', x.model.log.join() === 'browse');
+});
+T('pairing-list-pick', () => {
+    const x = pairPage({ perm: [0, 2, 1], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] });
+    open(x); chipsOf(x)[2].dispatch('click', { detail: 1 }); x.n.listBtn.dispatch('click', { detail: 1 });
+    const selBefore = selOf(x); const pick = key => lst(x).filter(b => b.getAttribute('aria-label').indexOf('Zuordnung ' + key) === 0)[0];
+    pick('3 1 2').dispatch('click', { detail: 1 });
+    check('the third line was selected before the list was opened: after the pick the selection is on line 1 again', selBefore === 2 && selOf(x) === 0);
+    check('a tap on the row "3 1 2" forwards ONE click to the MODEL\'s row button with that permutation (row:201 logged once) and the model applied it (perm 2,0,1); the model\'s list is closed again (a second Browse all click: the view had opened it) and the view is back in the EDITOR with the first line selected, the rows gone', x.model.log.join() === 'browse,row:201,browse' && x.model.st.perm.join() === '2,0,1' && x.model.st.browseOpen === false && inEditor(x) && !inList(x) && selOf(x) === 0 && lst(x).length === 0);
+    check('the editor shows the new state (chips for 3 lines, the variant text of row 1, reset enabled: not the default)', chipsOf(x).length === 3 && !dis(x.n.reset));
+    x.n.listBtn.dispatch('click', { detail: 1 });
+    const cur = lst(x).filter(b => b.getAttribute('aria-current') === 'true')[0];
+    check('the list opened again marks the NEW current pairing (3 1 2)', !!cur && cur.getAttribute('aria-label').indexOf('Zuordnung 3 1 2') === 0 && lst(x).filter(b => b.getAttribute('aria-current') === 'true').length === 1);
+    check('the model\'s sort and filter are untouched (the view never writes them)', modelFlags(x).sort === undefined && modelFlags(x).filter === undefined);
+});
+T('pairing-list-leave', () => {
+    // back arrow
+    let x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] }); goList(x);
+    x.n.back.dispatch('click', { detail: 1 });
+    check('the back arrow returns to the editor and closes the model\'s list (browse, browse); nothing else was clicked', inEditor(x) && !inList(x) && x.model.log.join() === 'browse,browse' && x.model.st.browseOpen === false);
+    // Escape
+    x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] }); goList(x);
+    let stopped = 0; x.v.p.doc.dispatch('keydown', { key: 'Escape', stopPropagation() { stopped++; }, preventDefault() { } });
+    check('Escape with the list open goes BACK to the editor and is STOPPED (UI.overlay does not see it: the sheet stays open); the model\'s list is closed again', inEditor(x) && !inList(x) && stopped === 1 && x.model.st.browseOpen === false);
+    x.v.p.doc.dispatch('keydown', { key: 'Escape', stopPropagation() { stopped++; }, preventDefault() { } });
+    check('Escape from the editor is NOT touched by the view (it goes on to UI.overlay, which closes the sheet)', stopped === 1);
+    x.v.p.doc.dispatch('keydown', { key: 'a', stopPropagation() { stopped++; } });
+    check('another key with the list open is not touched either', stopped === 1);
+    // the sheet closes
+    x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] }); goList(x);
+    x.g.classList.remove('ts-open'); x.v.p.doc.dispatch('click', { target: x.v.p.doc.getElementById('ts-more') });
+    check('the sheet closes (a click on its "..." with ts-open gone): the list is left, both classes are gone, the model\'s list is closed again - the next opening starts closed', !inList(x) && !inEditor(x) && x.model.st.browseOpen === false && !x.g.classList.contains('ph-tl-editor-open'));
+    // keyframe removal
+    x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] }); goList(x);
+    x.g.classList.add('ts-open'); x.v.set({ tl: x.v.tlo([0]) });
+    check('a keyframe is removed (one left): the toggle goes off and with it the list; the model\'s list is closed', !inList(x) && !inEditor(x) && x.model.st.browseOpen === false);
+    // the toggle off
+    x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] }); goList(x);
+    x.v.nodes.pairing.dispatch('click', { detail: 1 }); x.v.p.doc.dispatch('click', { target: x.v.nodes.pairing });
+    check('the pairing toggle tapped off while the list is open: the list is left', !inList(x) && x.model.st.browseOpen === false);
+    // a model that had its list open already is left as it was
+    x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1], browseOpen: true }); goList(x);
+    const before = x.model.log.join(); x.n.back.dispatch('click', { detail: 1 });
+    check('the model\'s list was open before (the desktop left it so): the view does not click Browse all to open it and does not close it on leaving: it stays as found', before === '' && x.model.log.join() === '' && x.model.st.browseOpen === true);
+    // outside the phone layout
+    x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] }); goList(x);
+    x.v.p.doc.documentElement.classList.remove('ph'); x.v.p.win.uiSync();
+    check('the phone layout ends (768px) with the list open: the gate classes go and the model\'s list is closed (the page is as at 768px)', !inList(x) && !inEditor(x) && x.model.st.browseOpen === false);
+});
+T('pairing-list-segments', () => {
+    const x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1], segCount: 2 }); goList(x);
+    check('two segments, the list open on segment 1', lst(x).length === 6 && x.n.segment.hidden === false);
+    x.n.segment.value = '1'; x.n.segment.dispatch('change');
+    check('a segment change with the list open: the list FOLLOWS (the model re-renders its list for the new segment: still six rows, the count line re-read), the view stays in the list', inList(x) && lst(x).length === 6 && x.n.listCount.textContent === '6 von 6 Zuordnungen');
+    x.model.st.perm = [0, 1, 2, 3, 4, 5]; x.model.st.flips = x.model.st.perm.map(() => false); x.model.st.vk = x.model.st.perm.map(() => 1); x.model.st.vc = x.model.st.perm.map(() => 1); x.model.render(); x.v.p.win.uiSync();
+    check('the other segment has 6 lines (not browsable: the model hides its list): the view LEAVES the list (back in the editor, no list icon), and the model\'s open flag is reset by a click on its hidden Browse all button', !inList(x) && inEditor(x) && x.n.listBtn.hidden === true && x.model.st.browseOpen === false);
+    x.model.st.perm = [0, 1, 2]; x.model.st.flips = x.model.st.perm.map(() => false); x.model.st.vk = x.model.st.perm.map(() => 1); x.model.st.vc = x.model.st.perm.map(() => 1); x.model.render(); x.v.p.win.uiSync();
+    check('...so when a browsable segment is back the model\'s list is NOT open by itself (the page is as it was)', x.model.st.browseOpen === false && lst(x).length === 0 && x.v.p.doc.getElementById('timeline-pairing-browser').hidden === true);
+});
+T('pairing-list-stale-segment', () => {
+    // a row button of the list of segment 1 keeps closing over segment 1: only a FRESH lookup after the segment change reaches the row of segment 2
+    const x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1], segCount: 2 }); goList(x);
+    const pick = key => lst(x).filter(b => b.getAttribute('aria-label').indexOf('Zuordnung ' + key) === 0)[0];
+    pick('1 3 2').dispatch('click', { detail: 1 }); x.n.listBtn.dispatch('click', { detail: 1 });
+    x.n.segment.value = '1'; x.n.segment.dispatch('change');
+    pick('2 1 3').dispatch('click', { detail: 1 });
+    check('a pick in the list of segment 2 reaches the model row rendered for segment 2 (the first pick was rendered for segment 1: rowSegs 0, 1) - never a row button kept from the first look', JSON.stringify(x.model.st.rowSegs) === JSON.stringify([0, 1]), JSON.stringify(x.model.st.rowSegs));
+});
+T('pairing-list-orientations', () => {
+    const x = pairPage({ perm: [0], flips: [false], vk: [1], vc: [1] }); goList(x);
+    check('n = 1 (the two orientations): the list shows the model\'s two variants ("2–5 ⇄", "2–5"), the as-clicked one is the default and the current one', lst(x).length === 2 && lrows(x).map(r => r.split('|')[0]).sort().join() === '2–5,2–5 ⇄'.split(',').sort().join() && x.pview.list.vm().rows.find(r => r.isDefault).order === '2–5' && x.pview.list.vm().rows.find(r => r.current).order === '2–5');
+    lst(x).filter(b => /⇄/.test(b.children[0].children.filter(c => /ph-tl-lorder/.test(c.className))[0].textContent))[0].dispatch('click', { detail: 1 });
+    check('a tap on the reversed variant forwards to the model\'s row with data-flip 1 (row:0|1 once), the model applies it, the view is back in the editor with line 1', x.model.log.join() === 'browse,row:0|1,browse' && x.model.st.flips[0] === true && inEditor(x) && selOf(x) === 0);
+});
+T('pairing-list-no-stale', () => {
+    const x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] }); goList(x);
+    const first = lst(x)[0];
+    x.v.p.win.uiSync(); x.v.p.doc.dispatch('click', { target: x.v.p.doc.getElementById('ts-more') });
+    check('the list is rendered ONCE per change: a tick and a document click without a change leave the very same row elements (light: nothing is rebuilt)', lst(x)[0] === first && lst(x).length === 6);
+    x.model.st.perm = [2, 0, 1]; x.model.render(); x.v.p.win.uiSync();
+    check('when the model changes (another current pairing) the rows are rebuilt from the model\'s new rows and the mark moves', lst(x)[0] !== first && lst(x).filter(b => b.getAttribute('aria-current') === 'true')[0].getAttribute('aria-label').indexOf('Zuordnung 3 1 2') === 0);
+    // two picks in a row, the model rebuilding every time: the second pick must find the model's NEW row button
+    const pick = key => lst(x).filter(b => b.getAttribute('aria-label').indexOf('Zuordnung ' + key) === 0)[0];
+    pick('2 1 3').dispatch('click', { detail: 1 }); x.n.listBtn.dispatch('click', { detail: 1 }); pick('1 3 2').dispatch('click', { detail: 1 });
+    check('two picks in a row with the model rebuilt after each: each reaches the model\'s row of the moment (row:102 then row:021), once', x.model.log.filter(l => /^row:/.test(l)).join() === 'row:102,row:021' && x.model.st.perm.join() === '0,2,1');
+});
+console.log('\n== release removes the aria-haspopup that UI.overlay put on the sheets\' triggers (sheets redesign, commit 5b) ==');
+T('haspopup-release', () => {
+    const p = buildPage({ ui: true }), ls = p.doc.getElementById('ls-more'), ts = p.doc.getElementById('ts-more');
+    ts.setAttribute('aria-haspopup', 'menu');   // a value the trigger had of its own
+    const eng = ph(p); eng.start(); eng.show('zeit');
+    check('while the layout is on both triggers say aria-haspopup="dialog" (UI.overlay: the sheet is a dialog)', ls.getAttribute('aria-haspopup') === 'dialog' && ts.getAttribute('aria-haspopup') === 'dialog');
+    eng.release();
+    check('release: the layer "..." has NO aria-haspopup again (it had none), the strip\'s "..." has the value it had before ("menu"): above 768px the trigger opens an inline block, not a dialog', ls.getAttribute('aria-haspopup') === null && ts.getAttribute('aria-haspopup') === 'menu');
+    eng.apply('form'); eng.show('zeit');
+    check('apply again marks them again (the sheets are made once; the mark is put back with every apply)', ls.getAttribute('aria-haspopup') === 'dialog' && ts.getAttribute('aria-haspopup') === 'dialog');
+    eng.apply('farbe');
+    check('a tab change inside the phone layout (apply: release and build) leaves them marked', ls.getAttribute('aria-haspopup') === 'dialog' && ts.getAttribute('aria-haspopup') === 'dialog');
+    p.mq.set(false);
+    check('the media query leaving the phone layout takes them away again (the same release)', ls.getAttribute('aria-haspopup') === null && ts.getAttribute('aria-haspopup') === 'menu');
+    const q = buildPage({ ui: true }); const e2 = ph(q); e2.start(); e2.release();
+    check('the page equals a fresh load after the round trip as far as aria-haspopup goes: the attributes of both triggers match those of a page that never ran the engine (aria-expanded is the owners\' own: ui-timeline.js and ui-layers.js set it themselves; the fake page has none)', (() => { const fresh = buildPage({ ui: true }), strip = a => { const o = Object.assign({}, a); delete o['aria-expanded']; return JSON.stringify(o); }; return ['ls-more', 'ts-more'].every(id => strip(q.doc.getElementById(id).attrs) === strip(fresh.doc.getElementById(id).attrs)); })());
+});
+
+// ---- the labels of the phone layout through the dictionary (sheets redesign, commit 6a) ----
+T('labels-i18n', () => {
+    const I = require(path.join(ROOT, 'ui-i18n.js'));
+    const read = (lang, tab) => {
+        I.setLang(lang);
+        try {
+            const p = buildPage({ ui: true }); p.win.uiI18n = I;
+            const eng = ph(p); eng.start(); eng.apply(tab);
+            const d = p.doc;
+            return { subtabs: d.getElementById('ph-subtabs').children.map(b => b.textContent).join(), tools: d.getElementById('ph-toolrow').getAttribute('aria-label'), nav: d.getElementById('ph-subtabs').getAttribute('aria-label'),
+                layer: d.getElementById('ph-sheet-layer') && d.getElementById('ph-sheet-layer').getAttribute('aria-label'), timeline: d.getElementById('ph-sheet-timeline') && d.getElementById('ph-sheet-timeline').getAttribute('aria-label') };
+        } finally { I.setLang('de'); }
+    };
+    const de = { form: 'Raster,Ebenen,Zeit', farbe: 'Harmonie,Spuren,Ebenen,Zeit', netz: 'Art,Achsen,Ebenen,Zeit' }, en = { form: 'Grid,Layers,Time', farbe: 'Harmony,Trails,Layers,Time', netz: 'Type,Axes,Layers,Time' };
+    ['form', 'farbe', 'netz'].forEach(tab => {
+        const d = read('de', tab), e = read('en', tab);
+        check('German with the dictionary present (' + tab + '): sub-tabs ' + de[tab] + ', groups Werkzeuge / Unterbereiche, hosts Ebenen-Einstellungen / Zeitleiste: Mehr - as before', d.subtabs === de[tab] && d.tools === 'Werkzeuge' && d.nav === 'Unterbereiche' && d.layer === 'Ebenen-Einstellungen' && d.timeline === 'Zeitleiste: Mehr', JSON.stringify(d));
+        check('?lang=en (' + tab + '): sub-tabs ' + en[tab] + ', groups Tools / Sub-sections, hosts Layer settings / Timeline: more', e.subtabs === en[tab] && e.tools === 'Tools' && e.nav === 'Sub-sections' && e.layer === 'Layer settings' && e.timeline === 'Timeline: more', JSON.stringify(e));
+    });
+    const p = buildPage({ ui: true }), eng = ph(p); eng.start(); eng.apply('netz');
+    check('without the dictionary (the Node tests, a page without ui-i18n.js) the German text of the config is written', p.doc.getElementById('ph-subtabs').children.map(b => b.textContent).join() === de.netz && p.doc.getElementById('ph-toolrow').getAttribute('aria-label') === 'Werkzeuge' && p.doc.getElementById('ph-subtabs').getAttribute('aria-label') === 'Unterbereiche');
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

@@ -196,6 +196,16 @@ T('strip', () => {
     check('...Cancel closes it without clearing and the focus returns to the button that opened it', e.calls.length === 0 && e.tcd.ov.classList.contains('hidden') && e.doc.activeElement === e.clearBtn);
     e.clk(e.clearBtn); e.clk(e.tcd.k);
     check('...Confirm calls layerApi.clearTimeline() once and closes the dialog', J(e.calls) === J([['clearTimeline']]) && e.tcd.ov.classList.contains('hidden') && e.ctx.timeline === null);
+    // the phone layout's trash icon (ui-phone-timeline.js) FORWARDS a programmatic click (detail 0) to this button, which is parked (display: none: no offsetParent) while the sheet shows its own icons
+    e = build({ layers: [L(), L()], timeline: tlOf([0, 1]), active: 0 });
+    e.sync(); e.clearBtn.offsetParent = null; e.s.net.focus();   // the opener is the sheet's own trash icon, a stand-in here
+    const fwd = () => { e.clearBtn.dispatch('click', { detail: 0 }); while (e.moq.length) e.moq.shift()([]); };
+    fwd();
+    check('a FORWARDED click (detail 0, what button.click() sends) asks first too: the dialog opens, nothing is cleared', !e.tcd.ov.classList.contains('hidden') && e.calls.length === 0 && e.ctx.timeline !== null);
+    e.clk(e.tcd.c);
+    check('...with the text button parked (no box), Cancel keeps the timeline and the focus goes to the strip\'s "..." (not to the parked button, which cannot take it)', e.calls.length === 0 && e.ctx.timeline !== null && e.doc.activeElement === e.s.more && e.tcd.ov.classList.contains('hidden'));
+    e.s.net.focus(); fwd(); e.clk(e.tcd.k);
+    check('...and Confirm removes it once, the focus again on the "..."', J(e.calls) === J([['clearTimeline']]) && e.ctx.timeline === null && e.doc.activeElement === e.s.more);
 });
 
 T('the end of a playback', () => {

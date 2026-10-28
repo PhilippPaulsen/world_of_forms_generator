@@ -213,6 +213,9 @@ label { touch-action: manipulation; }
   display: none;
 }
 
+/* The readout line of the Netz sheet (ui-net.js writes it): only the phone layout shows it (html.ph #net-readout, at the end of the file). */
+.net-readout { display: none; }
+
 /* Layer "Mehr" (5d, step 1): the wrapper around the rarely used layer controls. display: contents keeps every group inside it a flex item of #controls-container, exactly
    where it was before the wrapper existed; [hidden] must be restated because display: contents would win over the attribute. */
 #layer-more-panel { display: contents; }
@@ -890,6 +893,21 @@ body.dark {
 
 /* The net group (#net-group) now sits inside the Netz overlay: its rows read left-aligned, its buttons follow --target. */
 .overlay-wide { max-width: min(92vw, 420px); }
+/* The Info card (sheets redesign, commit 6b): the pattern name, then two native <details> ("Netz", "Zeitleiste"), closed by default. Closed, the card is as wide as its content (width: max-content, as every
+   overlay); an open section widens it up to the 420px of .overlay-wide. As a popover it scrolls inside the viewport (ui.js: the `fit` option sets max-height below its top); as the phone's bottom sheet it
+   scrolls through `.overlay.sheet` (max-height 80dvh). The summary is --target high (36px, 48px under a coarse pointer) with the app's own keyboard ring; the native marker is replaced by a chevron. */
+#info-card { overflow-y: auto; }
+.info-sections { display: flex; flex-direction: column; border-top: 1px solid var(--color-text); }
+.info-section { border-bottom: 1px solid var(--color-text); }
+.info-section:last-child { border-bottom: 0; }
+.info-section > summary { display: flex; align-items: center; gap: 8px; min-height: var(--target); cursor: pointer; list-style: none; font-weight: var(--weight-strong); touch-action: manipulation; }
+.info-section > summary::-webkit-details-marker { display: none; }
+.info-section > summary::before { content: ""; flex: none; width: 6px; height: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); }
+.info-section[open] > summary::before { transform: rotate(45deg); }
+.info-section[open] > summary { margin-bottom: 8px; }
+.info-section > summary:focus-visible { outline: 2px solid var(--color-text); outline-offset: 2px; }
+.info-section > p { margin: 0 0 8px; font-size: var(--size-secondary); line-height: 1.35; }
+.info-section > p:last-child { margin-bottom: 16px; }
 .overlay .control-group { align-items: stretch; gap: 8px; width: 100%; }
 .overlay .icon-row { justify-content: flex-start; flex-wrap: wrap; gap: var(--gap); }
 .overlay .layer-btn {
@@ -1527,4 +1545,98 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   /* While an overlay is open (ui.js: UI.overlay puts the class overlay-open on html) a bottom sheet covers the lower part of the canvas and would lie under the notice, which sits above it (z-index 60 against 40)
      and would hide the field being edited: the stack goes to the TOP of the canvas then, 8px under the header, growing downward. */
   html.ph.overlay-open .notices { top: calc(var(--ph-header-h) + var(--sp-2)); transform: none; }
+
+  /* ---- sheets redesign, commit 3a: the layer sheet in rows (ui-phone.js buildBlocks(), ui-phone-config.js sheets.layer.blocks) ------------------------------------------------------------------- */
+  /* The sheet is a column of blocks 16px apart (the sheet's own 16px padding all round); a block is a column of rows 8px apart; a row is 48px high, left aligned, 8px between its items. The items are the layer's
+     own .control-group wrappers (moved whole; their labels are display: none by the label rule above). A row or block the engine hides (all its items hidden) takes no room and no gap. */
+  html.ph .ph-sheet.ph-sheet-rows { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; gap: var(--sp-3); }
+  html.ph .ph-sheet-block { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); min-width: 0; }
+  html.ph .ph-sheet-row { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--sp-2); min-width: 0; max-width: 100%; }
+  html.ph .ph-sheet-block > .ph-sheet-row { align-self: stretch; }   /* a row is as wide as its block (commit 5c: the pairing list rows are 343px wide; every other row keeps its items at the left) */
+  html.ph .ph-sheet-block[hidden], html.ph .ph-sheet-row[hidden] { display: none; }
+  html.ph .ph-sheet-row .control-group { flex: none; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--sp-2); width: auto; max-width: none; margin: 0; padding: 0; text-align: left; }
+  html.ph .ph-sheet-row .control-group[hidden] { display: none; }
+  /* the typed fields of the offsets and the rotation (until the steppers of commit 3b): 60 x --target */
+  html.ph .ph-sheet-row .control-group > input[type="number"] { box-sizing: border-box; flex: none; width: 60px; min-width: 0; height: var(--target); margin: 0; }
+  /* the node count and size steppers are as wide as the Form row's (117px): the number field is --target wide (the layer block's own rule for the inline block gives it 2.4ch, and an id wins over a class) */
+  html.ph #layer-more-panel .stepper > input[type="number"] { width: var(--target); min-width: var(--target); }
+  /* a row marked `wrap` wraps into lines when it does not fit (the layer sheet's first row: 328px; the timeline's pairing row: 323px); before commit 5b this was inside the 339px media query, which left 340 to 359px
+     phones with a row that overflowed by up to 20px */
+  html.ph .ph-sheet-row-wrap { flex-wrap: wrap; }
+  /* 320px: the number fields of the steppers give up 8px */
+  @media (max-width: 339px) {
+    html.ph #layer-more-panel .stepper > input[type="number"] { width: 40px; min-width: 40px; }
+  }
+
+  /* ---- sheets redesign, commit 4a: the Netz sheet (ui-phone.js buildOverlays(), ui-phone-config.js overlays.netz) -------------------------------------------------------------------------------- */
+  /* #more-netz is an overlay of its own (a bottom sheet here): the same blocks and rows as the layer sheet. The leftover containers (the strength section, #net-group with the hints and whatever sketch.js still shows in
+     it) take no room - every control that matters is in a row - and the hints, the macro title and the headings are parked hidden: the readout line says what they said, shortly. */
+  html.ph .overlay.ph-sheet-rows { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; gap: var(--sp-3); }
+  html.ph #more-netz.ph-sheet-rows > .overlay-section, html.ph #more-netz.ph-sheet-rows > #net-group { display: none; }
+  html.ph #net-focus-hint, html.ph #net-macro-hint, html.ph #net-field-hint, html.ph #net-field-info, html.ph #net-size-hint, html.ph .ph-sheet-row #net-macro-row > label { display: none; }
+  /* the exact fields in block 1: typed fields 60 x --target (commit 4b makes them steppers) */
+  html.ph .ph-sheet-row > input.exact-field { box-sizing: border-box; flex: none; width: 60px; min-width: 0; height: var(--target); margin: 0; text-align: center; }
+  html.ph .ph-sheet-row > input.exact-field[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
+  html.ph .ph-sheet-row #net-domain-row, html.ph .ph-sheet-row #net-geo-row { flex: none; flex-wrap: nowrap; justify-content: flex-start; gap: var(--sp-2); margin: 0; padding: 0; }
+  html.ph .ph-sheet-row #net-macro-row { display: block; margin: 0; }
+  html.ph .ph-sheet-row #net-macro-row[hidden], html.ph .ph-sheet-row #net-geo-row[hidden] { display: none; }
+  html.ph .ph-sheet-row #net-macro-buttons { justify-content: flex-start; flex-wrap: wrap; gap: var(--sp-2); }
+  html.ph .ph-sheet-row #net-macro-buttons .layer-btn { box-sizing: border-box; flex: none; min-height: var(--target); touch-action: manipulation; }
+  /* the three domains and Alternate are icons: the same buttons, their text (the accessible name, German) emptied visually and an icon drawn with a mask, like Net lines in the tool row (it inverts with the active state) */
+  html.ph .ph-sheet-row .net-domain-btn, html.ph .ph-sheet-row #net-alternate-btn { position: relative; box-sizing: border-box; flex: none; width: var(--target); height: var(--target); min-width: var(--target); padding: 0; border-radius: var(--radius); font-size: 0; line-height: 0; touch-action: manipulation; }
+  html.ph .ph-sheet-row .net-domain-btn[hidden], html.ph .ph-sheet-row #net-alternate-btn[hidden] { display: none; }
+  html.ph .ph-sheet-row .net-domain-btn::before, html.ph .ph-sheet-row #net-alternate-btn::before { content: ""; position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); background-color: currentColor; }
+  html.ph .ph-sheet-row .net-domain-btn:disabled { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
+  html.ph .ph-sheet-row #net-domain-single::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='5'%20y='5'%20width='14'%20height='14'%20rx='1'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='5'%20y='5'%20width='14'%20height='14'%20rx='1'/%3E%3C/svg%3E") center / contain no-repeat; }
+  html.ph .ph-sheet-row #net-domain-tiled::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='4'%20y='4'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='13'%20y='4'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='4'%20y='13'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='13'%20y='13'%20width='7'%20height='7'%20rx='1'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='4'%20y='4'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='13'%20y='4'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='4'%20y='13'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='13'%20y='13'%20width='7'%20height='7'%20rx='1'/%3E%3C/svg%3E") center / contain no-repeat; }
+  html.ph .ph-sheet-row #net-field-btn::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='4'%20y='4'%20width='16'%20height='16'%20rx='1'/%3E%3Cpath%20d='M4%209.3%20H20%20M4%2014.7%20H20%20M9.3%204%20V20%20M14.7%204%20V20'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='4'%20y='4'%20width='16'%20height='16'%20rx='1'/%3E%3Cpath%20d='M4%209.3%20H20%20M4%2014.7%20H20%20M9.3%204%20V20%20M14.7%204%20V20'/%3E%3C/svg%3E") center / contain no-repeat; }
+  html.ph .ph-sheet-row #net-alternate-btn::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M12%204%20V20'%20stroke-dasharray='2%202'/%3E%3Cpath%20d='M4%207%20L10%2012%20L4%2017%20Z'/%3E%3Cpath%20d='M20%207%20L14%2012%20L20%2017%20Z'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M12%204%20V20'%20stroke-dasharray='2%202'/%3E%3Cpath%20d='M4%207%20L10%2012%20L4%2017%20Z'/%3E%3Cpath%20d='M20%207%20L14%2012%20L20%2017%20Z'/%3E%3C/svg%3E") center / contain no-repeat; }
+  /* commit 4b: the exact fields as steppers (the engine wraps the typed text fields; the stepper markup and look are the Form row's, the field is the display, --target wide, no frame of its own) */
+  html.ph #more-netz .stepper > input.exact-field { box-sizing: border-box; flex: none; width: var(--target); min-width: var(--target); height: auto; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--color-text); font: inherit; font-size: var(--size-base); font-variant-numeric: tabular-nums; text-align: center; }
+  html.ph #more-netz .stepper > input.exact-field[aria-disabled="true"] { color: var(--color-disabled); cursor: not-allowed; }
+  @media (max-width: 339px) {
+    html.ph #more-netz .stepper > input.exact-field { width: 40px; min-width: 40px; }
+  }
+  /* ---- sheets redesign, commit 5a: the timeline sheet (ui-phone.js rows, ui-phone-timeline.js icons and readout) ------------------------------------------------------------------------------ */
+  /* #timeline-group is the sheet's content: it takes no box of its own (its blocks are the sheet's flex items) and is not hidden by the inline rule while the sheet is closed (the sheet's host is). The old keyframe
+     list, the net box, the status span and the text button are PARKED hidden (they stay in the DOM: the keyframe list's "Net" buttons and #btn-clear-timeline are what the icon buttons forward their clicks to). */
+  html.ph #timeline-group, html.ph #timeline-group:not(.ts-open) { display: contents; }
+  html.ph #timeline-group > .icon-row, html.ph #timeline-group > #timeline-keyframe-list, html.ph #timeline-group > #timeline-net-state, html.ph #timeline-group > #timeline-status { display: none; }
+  /* the icon row (commit 5b: 8px gaps as in the mock): netrec | pairing toggle + the segment select | trash, the hairlines 1px wide, 32px high, 4px side margins: 48 + 8 + 9 + 8 + 48 + 8 + 84 + 8 + 9 + 8 + 48 = 286px */
+  html.ph #ph-tl-icons { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--sp-2); margin: 0; padding: 0; }
+  html.ph .ph-tl-btn { box-sizing: border-box; flex: none; width: var(--target); height: var(--target); border-radius: var(--radius); touch-action: manipulation; }
+  html.ph .ph-tl-sep { flex: none; width: 1px; height: 32px; margin: 0 var(--sp-1); background: var(--color-hairline); }
+  html.ph .ph-tl-trash { color: var(--danger); }
+  html.ph .ph-tl-btn[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
+  html.ph #ph-tl-readout { display: block; box-sizing: border-box; height: 20px; margin: 0; padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; color: var(--color-secondary); }
+  /* commit 5b: the line-pairing editor (#timeline-pairing and what sketch.js renders into it) is the MODEL of ui-phone-pairing.js and is PARKED hidden: it stays in the document (the view's buttons forward to its own) */
+  html.ph #timeline-pairing { display: none; }
+  /* the pairing view: row 1 = one 48px chip per line (the selected one black), scrolling sideways; row 2 = [end up, end down, reverse] | [variant back, k/c, variant forward]; row 3 = reset */
+  html.ph .ph-tl-segment { box-sizing: border-box; flex: none; width: 84px; height: var(--target); margin: 0; padding: 0 var(--sp-4) 0 var(--sp-2); border: 1px solid var(--color-text); border-radius: var(--radius); background-color: var(--color-bg); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9 L12 15 L18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right var(--sp-2) center; background-size: 18px 18px; -webkit-appearance: none; appearance: none; color: var(--color-text); font: inherit; font-size: 16px; touch-action: manipulation; }
+  html.ph .ph-tl-segment[hidden] { display: none; }
+  html.ph .ph-tl-chips { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); flex: 1 1 0; min-width: 0; padding: var(--sp-1); margin: calc(-1 * var(--sp-1)); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }   /* room for the focus ring of an edge chip */
+  html.ph .ph-tl-chips::-webkit-scrollbar { display: none; }
+  html.ph .ph-tl-chip { font: inherit; font-size: 16px; font-variant-numeric: tabular-nums; }
+  html.ph .ph-tl-moves, html.ph .ph-tl-variant { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); flex: none; margin: 0; padding: 0; }
+  html.ph .ph-tl-variant .ph-tl-sep { margin: 0; }
+  html.ph .ph-tl-vcount { flex: none; width: 34px; text-align: center; font-variant-numeric: tabular-nums; }
+  /* commit 5c: the pairing list (a state of the same sheet): a header row [back][N von M Zuordnungen] and one 48px button per pairing, the current one black; the list scrolls inside the sheet (80dvh minus what stays above it:
+     16 + 48 + 8 + 20 + 16 + 48 + 8 + 16 = 180px, and 2px for the sheet's border and rounding) */
+  html.ph .ph-tl-listicon[hidden] { display: none; }
+  html.ph .ph-tl-listhead { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); flex: 1 1 0; min-width: 0; margin: 0; padding: 0; }
+  html.ph .ph-tl-listcount { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; color: var(--color-secondary); }
+  html.ph .ph-tl-list { position: relative; display: flex; flex-direction: column; gap: var(--sp-2); flex: 1 1 0; min-width: 0; max-height: calc(80dvh - 182px); padding: var(--sp-1); margin: calc(-1 * var(--sp-1)); overflow-x: hidden; overflow-y: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  html.ph .ph-tl-list::-webkit-scrollbar { display: none; }
+  html.ph .ph-tl-lrow { box-sizing: border-box; flex: none; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: var(--sp-2); width: 100%; height: var(--target); margin: 0; padding: 0 var(--sp-3); border: 1px solid var(--color-text); border-radius: var(--radius); background: var(--color-bg); color: var(--color-text); font: inherit; font-size: 16px; font-variant-numeric: tabular-nums; text-align: left; cursor: pointer; touch-action: manipulation; }
+  html.ph .ph-tl-lrow.active { background: var(--color-text); color: var(--color-bg); }
+  html.ph .ph-tl-lleft { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); min-width: 0; }
+  html.ph .ph-tl-ldef { font-size: 14px; opacity: 0.7; }
+  html.ph .ph-tl-lsum { flex: none; text-align: right; white-space: nowrap; }
+  /* below 355px the pairing row (323px) wraps and the variant group starts the second line: no hairline in front of it */
+  @media (max-width: 354px) {
+    html.ph .ph-tl-variant .ph-tl-sep { display: none; }
+  }
+  /* the readout: ONE line of 20px, muted, 14px; nothing else of the sheet's former explanations is shown. Above 768px the element is not shown at all (the rule is not in the phone block). */
+  html.ph #net-readout { display: block; box-sizing: border-box; height: 20px; margin: 0; padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; color: var(--color-secondary); }
+
 }

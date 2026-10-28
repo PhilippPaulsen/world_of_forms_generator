@@ -21,7 +21,8 @@
  *   shape_switch        square, hexagon, triangle again
  *   square_sin_field    the net chapter: square, the Netz tab (netz_row), Sinus (+ the Field default) and one
  *                       strength step (square_sin_field), the Netz "Mehr" overlay open (more_netz_open), back to
- *                       Aus and to the tab the page started in. `found` says which controls the script found.
+ *                       Aus and to the tab the page started in. `found` says which controls the script found. Since commit 4a of the sheets redesign the overlay is also
+ *                       measured in four more states (more_netz_sin_tiled_focus, more_netz_geo_tiled, more_netz_geo_single, more_netz_geo_macro) and the controls inside it are tracked.
  *   layer_timeline      a new layer (it becomes active), "Add to Timeline", and the same again:
  *                       two keyframes, so Play and the scrub bar are measured too. Since the
  *                       cleanup (step B) these two actions go through window.layerApi (add(),
@@ -84,6 +85,12 @@
     '#btn-more-netz',
     '#more-netz',
     '#net-group',
+    // commit 4a of the sheets redesign (baseline-cleanup-3.json): the controls INSIDE the Netz overlay - the exact fields, the domain row and its three buttons, the macro row and its first three buttons, the Alternate
+    // wrapper and button, Reverse, Net lines, the axes row, the Fokus row, the readout line (absent in a tree before 4a: null). Selectors that exist in both trees (class and data attributes, no new ids).
+    '#net-strength-exact', '#net-focus-exact', '#net-axes-row', '#net-focus-row', '#net-domain-row',
+    '.net-domain-btn[data-domain="single"]', '.net-domain-btn[data-domain="tiled"]', '.net-domain-btn[data-domain="field"]',
+    '#net-macro-row', '#net-macro-buttons', '#net-macro-buttons button:nth-child(1)', '#net-macro-buttons button:nth-child(2)', '#net-macro-buttons button:nth-child(3)',
+    '#net-geo-row', '#net-alternate-btn', '#net-reverse-btn', '#net-lines-btn', '#net-readout',
   ];
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -201,7 +208,28 @@
     if (strUp) { click(strUp); await sleep(wait); }
     net.square_sin_field = await snapQ();
     const moreNetz = document.querySelector('#btn-more-netz');
-    if (moreNetz) { click(moreNetz); await sleep(wait); net.more_netz_open = await snapQ(); click(moreNetz); await sleep(wait); }
+    if (moreNetz) {
+      click(moreNetz); await sleep(wait); net.more_netz_open = await snapQ();   // Sinus + Field
+      // commit 4a: the controls inside the overlay in four more states (the overlay stays open: only mousedown events, no pointerdown outside it): Sin + Tiled with a focus (Alternate shows),
+      // Geo + Tiled, Geo + Single, and Geo + Single with seven nodes (E = 6: the macro row shows). The state is put back afterwards (Field, focus 0, the node count it had).
+      const dBtn = (d) => document.querySelector('.net-domain-btn[data-domain="' + d + '"]');
+      const kBtn = (k) => document.querySelector('#nav-netz .net-kind-btn[data-kind="' + k + '"]');
+      const md = (el) => { if (el) el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window })); };
+      const setFocus = async (v) => { const f = document.querySelector('#net-focus-exact'); if (f) { f.value = v; f.dispatchEvent(new Event('change', { bubbles: true })); await sleep(wait); } };
+      md(dBtn('tiled')); await sleep(wait); await setFocus('0.30');
+      net.more_netz_sin_tiled_focus = await snapQ();
+      await setFocus('0.00');
+      md(kBtn('geometric')); await sleep(wait); net.more_netz_geo_tiled = await snapQ();
+      md(dBtn('single')); await sleep(wait); net.more_netz_geo_single = await snapQ();
+      const nodeIn = document.querySelector('#node-count-input'), nodeWas = nodeIn ? nodeIn.value : null;
+      if (nodeIn) {
+        nodeIn.value = '7'; nodeIn.dispatchEvent(new Event('input', { bubbles: true })); await sleep(wait * 2);
+        net.more_netz_geo_macro = await snapQ();
+        nodeIn.value = nodeWas; nodeIn.dispatchEvent(new Event('input', { bubbles: true })); await sleep(wait);
+      }
+      md(kBtn('sinus')); await sleep(wait); md(dBtn('field')); await sleep(wait);
+      click(moreNetz); await sleep(wait);
+    }
     net.found = {
       sin: !!sinBtn, strengthUp: !!strUp, moreNetz: !!moreNetz,
       sinusActive: !!(sinBtn && sinBtn.classList.contains('active')),

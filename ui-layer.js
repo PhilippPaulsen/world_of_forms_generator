@@ -17,8 +17,10 @@
  * The German texts are the reasons for now, copied from ui-form.js (the dictionary, data-i18n, comes in a later phase).
  */
 (function () {
+  // a string of the bilingual dictionary (ui-i18n.js) in the current language, else the German text written here
+  const tr = function (key, fallback) { const i = window.uiI18n; return i && i.has(key) ? i.t(key) : fallback; };
   const T = {
-    'reason.none': 'Keine Ebene aktiv.',
+    get 'reason.none'() { return tr('common.noLayer', 'Keine Ebene aktiv.'); },
     'reason.node.min': 'Mindestens 1 Knoten.',
     'reason.node.max.square': function (n) { return 'Höchstens ' + n + ' Knoten beim Quadrat.'; },
     'reason.node.max.other': function (n) { return 'Höchstens ' + n + ' Knoten bei Dreieck und Sechseck.'; },
