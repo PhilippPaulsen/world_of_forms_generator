@@ -1330,6 +1330,29 @@ T('haspopup-release', () => {
     check('the page equals a fresh load after the round trip as far as aria-haspopup goes: the attributes of both triggers match those of a page that never ran the engine (aria-expanded is the owners\' own: ui-timeline.js and ui-layers.js set it themselves; the fake page has none)', (() => { const fresh = buildPage({ ui: true }), strip = a => { const o = Object.assign({}, a); delete o['aria-expanded']; return JSON.stringify(o); }; return ['ls-more', 'ts-more'].every(id => strip(q.doc.getElementById(id).attrs) === strip(fresh.doc.getElementById(id).attrs)); })());
 });
 
+// ---- the labels of the phone layout through the dictionary (sheets redesign, commit 6a) ----
+T('labels-i18n', () => {
+    const I = require(path.join(ROOT, 'ui-i18n.js'));
+    const read = (lang, tab) => {
+        I.setLang(lang);
+        try {
+            const p = buildPage({ ui: true }); p.win.uiI18n = I;
+            const eng = ph(p); eng.start(); eng.apply(tab);
+            const d = p.doc;
+            return { subtabs: d.getElementById('ph-subtabs').children.map(b => b.textContent).join(), tools: d.getElementById('ph-toolrow').getAttribute('aria-label'), nav: d.getElementById('ph-subtabs').getAttribute('aria-label'),
+                layer: d.getElementById('ph-sheet-layer') && d.getElementById('ph-sheet-layer').getAttribute('aria-label'), timeline: d.getElementById('ph-sheet-timeline') && d.getElementById('ph-sheet-timeline').getAttribute('aria-label') };
+        } finally { I.setLang('de'); }
+    };
+    const de = { form: 'Raster,Ebenen,Zeit', farbe: 'Harmonie,Spuren,Ebenen,Zeit', netz: 'Art,Achsen,Ebenen,Zeit' }, en = { form: 'Grid,Layers,Time', farbe: 'Harmony,Trails,Layers,Time', netz: 'Type,Axes,Layers,Time' };
+    ['form', 'farbe', 'netz'].forEach(tab => {
+        const d = read('de', tab), e = read('en', tab);
+        check('German with the dictionary present (' + tab + '): sub-tabs ' + de[tab] + ', groups Werkzeuge / Unterbereiche, hosts Ebenen-Einstellungen / Zeitleiste: Mehr - as before', d.subtabs === de[tab] && d.tools === 'Werkzeuge' && d.nav === 'Unterbereiche' && d.layer === 'Ebenen-Einstellungen' && d.timeline === 'Zeitleiste: Mehr', JSON.stringify(d));
+        check('?lang=en (' + tab + '): sub-tabs ' + en[tab] + ', groups Tools / Sub-sections, hosts Layer settings / Timeline: more', e.subtabs === en[tab] && e.tools === 'Tools' && e.nav === 'Sub-sections' && e.layer === 'Layer settings' && e.timeline === 'Timeline: more', JSON.stringify(e));
+    });
+    const p = buildPage({ ui: true }), eng = ph(p); eng.start(); eng.apply('netz');
+    check('without the dictionary (the Node tests, a page without ui-i18n.js) the German text of the config is written', p.doc.getElementById('ph-subtabs').children.map(b => b.textContent).join() === de.netz && p.doc.getElementById('ph-toolrow').getAttribute('aria-label') === 'Werkzeuge' && p.doc.getElementById('ph-subtabs').getAttribute('aria-label') === 'Unterbereiche');
+});
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 console.log(failures ? 'FAIL' : 'PASS');
 process.exit(failures ? 1 : 0);

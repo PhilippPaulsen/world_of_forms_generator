@@ -230,6 +230,8 @@ T('routed', () => {
         ['ui-layer.js', "return tr\\('common\\.noLayer', '([^']+)'\\)", 'common.noLayer'],
         ['ui-layers.js', "i\\.has\\('common\\.noLayer'\\) \\? i\\.t\\('common\\.noLayer'\\) : '([^']+)'", 'common.noLayer'],
         ['ui-timeline.js', "'timeline\\.clear': '([^']+)'", 'timeline.remove'],
+        ['ui-layers.js', "i\\.has\\('layers\\.more'\\) \\? i\\.t\\('layers\\.more'\\) : '([^']+)'", 'layers.more'],
+        ['ui-timeline.js', "i\\.has\\('timeline\\.more'\\) \\? i\\.t\\('timeline\\.more'\\) : '([^']+)'", 'timeline.more'],
     ];
     const rows = table.map(([f, re, key]) => { const got = grab(f, new RegExp(re)); return { f, key, got, de: I.DICT[key] && I.DICT[key].de, ok: got !== null && got === (I.DICT[key] && I.DICT[key].de) }; });
     check('the German each script wrote before equals the dictionary German of its key (' + rows.length + ' routed strings: ' + rows.map(r => r.f.replace(/\.js$/, '') + ':' + r.key).join(', ') + ')', rows.every(r => r.ok), rows.filter(r => !r.ok).map(r => r.f + ':' + r.key + ' "' + r.got + '" / "' + r.de + '"').join(' ; '));
@@ -249,6 +251,22 @@ T('routed', () => {
     check('ui.js exposes the dictionary: UI.t, UI.setLang, UI.applyI18n and a UI.lang getter (the language of ui-i18n.js; German without it), and writes the notice close label through tr("notice.close", the German text)', /window\.UI\.t = I18N \? I18N\.t/.test(uiSrc) && /window\.UI\.setLang = I18N \? I18N\.setLang/.test(uiSrc) && /window\.UI\.applyI18n = I18N \? I18N\.applyI18n/.test(uiSrc) && /defineProperty\(window\.UI, 'lang'/.test(uiSrc) && /name\(b, tr\('notice\.close', NOTICE_TEXT\['notice\.close'\]\)\)/.test(uiSrc));
     const eng = strip(rd('ui-phone.js'));
     check('the phone engine writes the Fokus reason, the Net lines name and the Farbe opener name through say(key, the config\'s German text)', /UI\.setDisabled\(node, say\(f\.i18n, f\.reason\)\)/.test(eng) && /say\(l\.i18n, l\.text\)/.test(eng) && /say\(tr\.sheet\.openerLabel\.i18n, tr\.sheet\.openerLabel\.text\)/.test(eng));
+});
+
+// ---- the phone layout's labels (sheets redesign, commit 6a) ----
+T('phone-labels', () => {
+    const want = {
+        'subtab.raster': ['Raster', 'Grid'], 'subtab.ebenen': ['Ebenen', 'Layers'], 'subtab.zeit': ['Zeit', 'Time'], 'subtab.harmonie': ['Harmonie', 'Harmony'], 'subtab.spuren': ['Spuren', 'Trails'], 'subtab.art': ['Art', 'Type'], 'subtab.achsen': ['Achsen', 'Axes'],
+        'phone.tools': ['Werkzeuge', 'Tools'], 'phone.subtabs': ['Unterbereiche', 'Sub-sections'], 'farbe.strategy.group': ['Verteilungsstrategie', 'Distribution strategy'],
+        'layers.more': ['Ebenen-Einstellungen', 'Layer settings'], 'timeline.more': ['Zeitleiste: Mehr', 'Timeline: more']
+    };
+    check('the 12 keys of the phone labels exist with the German as authored and the English of the brief', Object.keys(want).every(k => I.has(k) && DICT[k].de === want[k][0] && DICT[k].en === want[k][1]), Object.keys(want).filter(k => !I.has(k) || DICT[k].de !== want[k][0] || DICT[k].en !== want[k][1]).join());
+    const strat = /<div id="farbe-strategy-group"[^>]*>/.exec(HTML.replace(/<!--[\s\S]*?-->/g, ''));
+    check('the strategy group in index.html (the one labelled group of the tool row) is keyed: aria-label "Verteilungsstrategie" with data-i18n="farbe.strategy.group", the German equals the dictionary', !!strat && /aria-label="Verteilungsstrategie"/.test(strat[0]) && /data-i18n="farbe\.strategy\.group"/.test(strat[0]));
+    const lay = strip(rd('ui-layers.js')), tim = strip(rd('ui-timeline.js'));
+    check('the "..." buttons of the layer strip and the timeline strip are named through the same two keys as the sheet hosts (a getter on the table: the dictionary text, else the German one)', /get 'layers\.more'\(\)/.test(lay) && /get 'timeline\.more'\(\)/.test(tim) && !/'layers\.more': '/.test(lay) && !/'timeline\.more': '/.test(tim));
+    const cfg = require(path.join(ROOT, 'ui-phone-config.js')).config;
+    check('every label of ui-phone-config.js uses a key from the list above (sub-tabs: subtab.<id>; sheets: layers.more / timeline.more; names: phone.tools / phone.subtabs)', Object.keys(cfg.subtabs).every(k => cfg.subtabs[k].i18n === 'subtab.' + k) && cfg.sheets.layer.i18n === 'layers.more' && cfg.sheets.timeline.i18n === 'timeline.more' && cfg.names.tools.i18n === 'phone.tools' && cfg.names.subtabs.i18n === 'phone.subtabs');
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

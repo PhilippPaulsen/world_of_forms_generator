@@ -51,7 +51,7 @@
     'layers.eye.kf.on': 'Keyframe, zusätzlich sichtbar',
     'layers.x.name': function (n) { return 'Ebene ' + n + ' entfernen'; },
     'layers.add': 'Ebene hinzufügen',
-    'layers.more': 'Ebenen-Einstellungen',
+    get 'layers.more'() { const i = root.uiI18n; return i && i.has('layers.more') ? i.t('layers.more') : 'Ebenen-Einstellungen'; },
     'layers.more.open': 'offen',
     'layers.more.closed': 'geschlossen',
     get 'layers.more.none'() { const i = root.uiI18n; return i && i.has('common.noLayer') ? i.t('common.noLayer') : 'Keine Ebene aktiv.'; },
