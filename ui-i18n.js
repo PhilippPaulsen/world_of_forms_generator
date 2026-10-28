@@ -213,8 +213,8 @@
     'info.net.field': { de: 'Feld: ein Gesetz über alle Kacheln, ungerade Größe von 3 bis 9.', en: 'Field: one law across all tiles, odd size from 3 to 9.' },
     'info.net.locks': { de: 'Solange ein Netz aktiv ist, sind Kurve und Frei aus.', en: 'While a net is active, Curve and Free are off.' },
     'info.tl.title': { de: 'Zeitleiste', en: 'Timeline' },
-    'info.tl.keyframes': { de: 'Ein Keyframe ist eine Ebene mit Raute. Sie muss zum vorigen passen (Form, Knotenzahl, Größe, Symmetrie, Linienzahl).', en: 'A keyframe is a layer with a diamond. It must match the previous one (shape, node count, size, symmetry, number of lines).' },
-    'info.tl.net': { de: 'Das Netz bewegt sich nur, wenn jeder Keyframe ein Netz hat und je zwei Netze zusammenpassen.', en: 'The net only moves when every keyframe has a net and each two nets fit together.' },
+    'info.tl.keyframes': { de: 'Ein Keyframe ist eine Ebene mit gefüllter Raute. Sie muss zum vorigen passen (Form, Knotenzahl, Größe, Symmetrie, Linienzahl).', en: 'A keyframe is a layer with a filled diamond. It must match the previous one (shape, node count, size, symmetry, number of lines).' },
+    'info.tl.net': { de: 'Das Netz bewegt sich nur, wenn jeder Keyframe ein Netz hat und je zwei benachbarte Netze zusammenpassen.', en: 'The net only moves when every keyframe has a net and each two neighbouring nets fit together.' },
 
     // ---- common ----
     'common.atMin': { de: 'Kleinster Wert erreicht.', en: 'Smallest value reached.' },

@@ -58,8 +58,8 @@ T('dictionary', () => {
         'info.net.kinds': ['Sinus: Maschen zum Kachelrand hin schmaler. Tangens: breiter. Geometrisch: gleiches Verhältnis.', 'Sine: meshes get narrower towards the tile edge. Tangent: wider. Geometric: same ratio each step.'],
         'info.net.field': ['Feld: ein Gesetz über alle Kacheln, ungerade Größe von 3 bis 9.', 'Field: one law across all tiles, odd size from 3 to 9.'],
         'info.net.locks': ['Solange ein Netz aktiv ist, sind Kurve und Frei aus.', 'While a net is active, Curve and Free are off.'],
-        'info.tl.keyframes': ['Ein Keyframe ist eine Ebene mit Raute. Sie muss zum vorigen passen (Form, Knotenzahl, Größe, Symmetrie, Linienzahl).', 'A keyframe is a layer with a diamond. It must match the previous one (shape, node count, size, symmetry, number of lines).'],
-        'info.tl.net': ['Das Netz bewegt sich nur, wenn jeder Keyframe ein Netz hat und je zwei Netze zusammenpassen.', 'The net only moves when every keyframe has a net and each two nets fit together.']
+        'info.tl.keyframes': ['Ein Keyframe ist eine Ebene mit gefüllter Raute. Sie muss zum vorigen passen (Form, Knotenzahl, Größe, Symmetrie, Linienzahl).', 'A keyframe is a layer with a filled diamond. It must match the previous one (shape, node count, size, symmetry, number of lines).'],
+        'info.tl.net': ['Das Netz bewegt sich nur, wenn jeder Keyframe ein Netz hat und je zwei benachbarte Netze zusammenpassen.', 'The net only moves when every keyframe has a net and each two neighbouring nets fit together.']
     };
     check('the five lines are exactly the maintainer\'s texts, in both languages', Object.keys(want).every(k => DICT[k].de === want[k][0] && DICT[k].en === want[k][1]) && DICT['info.net.title'].de === 'Netz' && DICT['info.tl.title'].de === 'Zeitleiste' && DICT['info.net.title'].en === 'Net' && DICT['info.tl.title'].en === 'Timeline');
     const all = ALL.map(k => DICT[k].de + ' ' + DICT[k].en).join(' ') + ' ' + htmlNoComments;
