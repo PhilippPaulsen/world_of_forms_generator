@@ -173,7 +173,7 @@
       return true;
     }
     function sync() {
-      if (!html.classList.contains('ph')) { if (pairingOpen) setPairing(false); return false; }   // nothing to keep up to date outside the phone layout
+      if (!html.classList.contains('sr-timeline')) { if (pairingOpen) setPairing(false); return false; }   // nothing to keep up to date outside the phone layout
       return refresh(false);
     }
     if (UI && UI.onSync) UI.onSync(sync);

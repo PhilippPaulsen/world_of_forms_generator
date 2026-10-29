@@ -23,6 +23,12 @@
  *   items      an item of a sheet's or overlay's row may carry `gate: 'class'`: it counts as hidden unless the sheet's content has that class (the timeline sheet's pairing editor: the toggle of ui-phone-timeline.js).
  *   sheets.<id>.steppers  (optional) inputId -> { icon, step, round?, min?, max?, wrap?, noTyping?, name, more, less }: an existing input that the engine wraps into a stepper (UI.stepper) while the layout is on and unwraps at
  *              release() (commit 3b). icons: key -> [stroke paths], the icons of those steppers and the two chevrons (chevron-up, chevron-down).
+ *   surfaces   THE SURFACE REGISTRY (patterns commit C0b-2): name -> { tabs, flag, hosts, inlineOn }. A surface is a piece of content with a compact arrangement of its own: the layer sheet, the timeline sheet, the Netz sheet
+ *              (the overlay #more-netz) and the colour trails (the Spuren chips). tabs: where it applies. flag: the class the engine puts on <html> while it is applied (null for none) - together with `sr` (any surface
+ *              applied) it is the gate of the twin rules in style.css and what the view modules read instead of `ph`. hosts.phone: what holds it while the phone layout is on - { kind: 'sheet', id } (config.sheets.<id>:
+ *              a bottom sheet), { kind: 'overlay', id } (config.overlays.<id>: an overlay that exists), { kind: 'pane', id } (the layout's sub-tab pane holds the rows: nothing to build). hosts.inline: where it would sit at
+ *              768px and up (the engine builds only kind 'overlay' there so far). inlineOn: the switch for the inline mode - OFF for every surface, so at 768px and up nothing is applied. The blocks and steppers stay in
+ *              config.sheets / config.overlays; tabs.<tab>.sheets / .overlays must list exactly the surfaces of that tab (validate()).
  *   afterShow  id -> [global, method]: called (when it exists) after the element moved into the visible panel - a moved element loses its scroll position.
  */
 (function (root) {
@@ -198,6 +204,13 @@
         ]
       }
     },
+    // The surface registry (see the header). The order is the order the engine applies them in: the sheets in their stack order, then the overlay. Every inline switch is OFF (C0b-2: preparation; each surface turns its own on in its commit).
+    surfaces: {
+      layer: { tabs: ['form', 'farbe', 'netz'], flag: null, hosts: { phone: { kind: 'sheet', id: 'layer' } }, inlineOn: false },
+      timeline: { tabs: ['form', 'farbe', 'netz'], flag: 'sr-timeline', hosts: { phone: { kind: 'sheet', id: 'timeline' }, inline: { kind: 'content', id: 'timeline-group' } }, inlineOn: false },
+      netz: { tabs: ['netz'], flag: 'sr-netz', hosts: { phone: { kind: 'overlay', id: 'netz' }, inline: { kind: 'overlay', id: 'netz' } }, inlineOn: false },
+      trails: { tabs: ['farbe'], flag: 'sr-trails', hosts: { phone: { kind: 'pane', id: 'spuren' }, inline: { kind: 'group', id: 'face-colors-group' } }, inlineOn: false }
+    },
     afterShow: { 'layer-strip': ['layerTable', 'revealActive'], 'ph-trail-chips': ['uiPhoneChips', 'refresh'] }
   };
 
@@ -372,6 +385,30 @@
           definedIn[it.id] = sid;
         });
       });
+    });
+    // the surface registry: every surface has tabs, a flag (null or an sr-... class, unique), a phone host that exists, and the inline switch (a boolean); an inline host only where the switch is on, and one the engine builds
+    const ENGINE_INLINE_KINDS = ['overlay'], PHONE_KINDS = ['sheet', 'overlay', 'pane'], flags = {};
+    const reg = cfg.surfaces;
+    if (!reg || typeof reg !== 'object' || !Object.keys(reg).length) bad.push('surfaces: no registry');
+    Object.keys(reg || {}).forEach(function (name) {
+      const sf = reg[name], where = 'surface ' + name;
+      if (!Array.isArray(sf.tabs) || !sf.tabs.length || sf.tabs.some(function (t) { return !cfg.tabs[t]; })) bad.push(where + ': tabs must be a non-empty list of tabs');
+      if (sf.flag !== null && !(typeof sf.flag === 'string' && /^sr-[a-z]+$/.test(sf.flag))) bad.push(where + ': the flag must be null or a class sr-<name>');
+      else if (sf.flag) { if (flags[sf.flag]) bad.push(where + ': the flag ' + sf.flag + ' is also the flag of ' + flags[sf.flag]); flags[sf.flag] = name; }
+      if (typeof sf.inlineOn !== 'boolean') bad.push(where + ': no inline switch (inlineOn must be true or false)');
+      const ph = (sf.hosts || {}).phone;
+      if (!ph || PHONE_KINDS.indexOf(ph.kind) < 0 || typeof ph.id !== 'string') bad.push(where + ': no phone host (kind sheet, overlay or pane, with an id)');
+      else if (ph.kind === 'sheet' && !(cfg.sheets || {})[ph.id]) bad.push(where + ': phone host sheet ' + ph.id + ' is not defined');
+      else if (ph.kind === 'overlay' && !(cfg.overlays || {})[ph.id]) bad.push(where + ': phone host overlay ' + ph.id + ' is not defined');
+      else if (ph.kind === 'pane' && !cfg.subtabs[ph.id]) bad.push(where + ': phone host pane ' + ph.id + ' is not a sub-tab');
+      if (sf.inlineOn === true) {
+        const ih = (sf.hosts || {}).inline;
+        if (!ih || typeof ih.id !== 'string') bad.push(where + ': the inline switch is on but there is no inline host');
+        else if (ENGINE_INLINE_KINDS.indexOf(ih.kind) < 0) bad.push(where + ': the inline switch is on but the engine builds no inline host of kind ' + ih.kind);
+      }
+      // a sheet or overlay surface must be the one the tabs list: tabs.<tab>.sheets / .overlays and the registry say the same
+      if (ph && ph.kind === 'sheet') Object.keys(cfg.tabs).forEach(function (tab) { if (((cfg.tabs[tab].sheets || []).indexOf(ph.id) >= 0) !== (sf.tabs.indexOf(tab) >= 0)) bad.push(where + ': tabs.' + tab + '.sheets and the registry disagree about sheet ' + ph.id); });
+      if (ph && ph.kind === 'overlay') Object.keys(cfg.tabs).forEach(function (tab) { if (((cfg.tabs[tab].overlays || []).indexOf(ph.id) >= 0) !== (sf.tabs.indexOf(tab) >= 0)) bad.push(where + ': tabs.' + tab + '.overlays and the registry disagree about overlay ' + ph.id); });
     });
     Object.keys(cfg.afterShow || {}).forEach(function (id) { if (!known(id)) bad.push('afterShow: id ' + id + ' is unknown'); });
     Object.keys(cfg.follow || {}).forEach(function (id) {

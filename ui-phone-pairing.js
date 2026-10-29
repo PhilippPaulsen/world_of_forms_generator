@@ -382,7 +382,7 @@
       return true;
     }
     function sync() {
-      if (!html.classList.contains('ph')) {   // nothing to keep up to date outside the phone layout: the gate classes go, the model's list is closed again
+      if (!html.classList.contains('sr-timeline')) {   // nothing to keep up to date while the timeline surface is not applied: the gate classes go, the model's list is closed again
         if (listOpen) dropList();
         setGroupClass('ph-tl-editor-show', false); setGroupClass('ph-tl-list-show', false);
         return false;

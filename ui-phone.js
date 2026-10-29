@@ -8,9 +8,15 @@
  *   apply(tab)     idempotent: nothing to do when that tab is already applied; another tab releases first. Does nothing (and releases) at >= 768px or for a tab that is not covered.
  *   release()      idempotent: moves every element back to its marker and removes what apply() made.
  *   show(subtab)   the sub-tab's pane goes into the slot, the other panes into the parking container (hidden: display none - out of the Tab order and the accessibility tree, and no hit testing).
- *   sheets         config.sheets: blocks that become bottom sheets (UI.overlay) while the layout is on; see buildSheets(). A sheet may have `blocks` (rows of existing elements, see buildBlocks()) and `steppers`
+ *   sheets         config.sheets: blocks that become bottom sheets (UI.overlay) while the layout is on; see buildSheet(). A sheet may have `blocks` (rows of existing elements, see buildBlocks()) and `steppers`
  *                  (existing inputs wrapped into UI.stepper while the layout is on, see decorateSteppers()).
  *   start()        listens: 'tabchange' on document (nav.js), the media query, resize / orientationchange; applies for the current tab.
+ *
+ * Since patterns commit C0b-2 apply(tab) = layout(tab) + surfaces(tab). layout(tab) is the PAGE LAYOUT above (stack, tool row, sub-tabs, slot, scroll lock, follows, `ph`, --panel-h, --ph-inner-h) and runs only below 768px for a
+ * covered tab, as before. surfaces(tab) loops over config.surfaces (the SURFACE REGISTRY, data): per surface the tabs, its flag class and a host per mode ('phone', 'inline'): the phone hosts are the sheets and the overlay
+ * the engine always had (the blocks and steppers stay in config.sheets / config.overlays), the trails' host is the Spuren pane of the layout. Every surface applied sets `html.sr` and its own `sr-...` class (the gates of the twin
+ * rules of style.css, and what the view modules read instead of `ph`); release removes them. At 768px and up a surface is applied only when its inline switch (`inlineOn`) is on: every switch is OFF, so nothing is applied there.
+ * Per-surface state lives in surfaceState[name] (its sheets, row blocks, decorated steppers, observers) with its own release steps; `moved`, `sheetCache`, `stepperCache`, take() and restoreAll() are shared.
  *
  * Sub-tab buttons follow the header tabs' model (nav.js): all of them are in the Tab order, Enter / Space activates one, aria-current marks the active one. The choice is remembered per tab.
  * Loaded after ui-layers.js and ui-timeline.js (they fill #layer-strip and #timeline-strip when they run) and before sketch.js's setup() (p5 runs it on the window load event).
@@ -29,6 +35,8 @@
     let applied = null;               // the tab the layout is applied for
     let firstApplyState = null;       // document.readyState at the first apply()
     let started = false;
+    const surfaceState = {};          // surface name -> { name, mode, flag, sheets, sheetBlocks, rowHosts, decorated, rowObserver, lockObserver }: what the surface made (C0b-2)
+    let inlineTab = null;             // the tab the surfaces are applied for WITHOUT the layout (768px and up, a surface whose inline switch is on)
 
     function el(tag, cls, attrs) {
       const e = doc.createElement(tag);
@@ -157,8 +165,7 @@
         node.setAttribute('aria-label', labelText); node.setAttribute('title', labelText);
         if (l.i18n) node.setAttribute('data-i18n', l.i18n);
       });
-      buildSheets(t, b);
-      buildOverlays(t, b);
+      buildSurfaces(tab, b, 'phone');
       return b;
     }
 
@@ -174,12 +181,15 @@
       if (def.open.notHidden) return !c.hidden;
       return !!(c.classList && c.classList.contains(def.open.hasClass));
     }
+    function eachSurface(fn) { Object.keys(surfaceState).forEach(function (name) { fn(surfaceState[name], name); }); }
     function syncSheets() {
-      if (!built || !built.sheets) return;
-      built.sheets.forEach(function (h) {
-        const want = sheetOpen(h.def);
-        if (want && !h.overlay.isOpen) h.overlay.open();
-        else if (!want && h.overlay.isOpen) h.overlay.close(!!(doc.activeElement && h.el.contains(doc.activeElement)));
+      if (!Object.keys(surfaceState).length) return;
+      eachSurface(function (st) {
+        st.sheets.forEach(function (h) {
+          const want = sheetOpen(h.def);
+          if (want && !h.overlay.isOpen) h.overlay.open();
+          else if (!want && h.overlay.isOpen) h.overlay.close(!!(doc.activeElement && h.el.contains(doc.activeElement)));
+        });
       });
       syncRows();
       syncLocks();
@@ -187,9 +197,9 @@
     // A sheet with `blocks` (config.sheets.<id>.blocks): the existing elements go into row containers inside blocks inside the sheet's content, in the order the config says. They move whole (nothing is cloned or
     // rewritten) and sketch.js keeps showing and hiding them; a row whose elements are ALL hidden is hidden itself, a block whose rows are all hidden too, so no empty row and no gap is left. release() puts the
     // elements back (restoreAll) and removes the containers; a MutationObserver (where there is one) and every UI tick re-read the `hidden` attributes.
-    function buildBlocks(def, host, content, b) {
+    function buildBlocks(def, host, content, st) {
       host.classList.add('ph-sheet-rows');
-      b.rowHosts.push(host);
+      st.rowHosts.push(host);
       def.blocks.forEach(function (rows) {
         const blk = el('div', 'ph-sheet-block'), rowEls = [];
         rows.forEach(function (row) {
@@ -201,12 +211,12 @@
           rowEls.push({ el: r, ids: row.items.map(function (it) { return it.id; }), gates: gates, content: content });
         });
         content.appendChild(blk);
-        b.sheetBlocks.push({ el: blk, rows: rowEls });
+        st.sheetBlocks.push({ el: blk, rows: rowEls });
       });
       if (typeof win.MutationObserver === 'function') {
-        b.rowObserver = new win.MutationObserver(function () { syncRows(); });
-        b.rowObserver.observe(content, { attributes: true, attributeFilter: ['class'] });   // a gate opens and closes with a class of the content
-        b.sheetBlocks.forEach(function (blk) { blk.rows.forEach(function (r) { r.ids.forEach(function (id) { const n = doc.getElementById(id); if (n) b.rowObserver.observe(n, { attributes: true, attributeFilter: ['hidden'], subtree: true }); }); }); });
+        st.rowObserver = new win.MutationObserver(function () { syncRows(); });
+        st.rowObserver.observe(content, { attributes: true, attributeFilter: ['class'] });   // a gate opens and closes with a class of the content
+        st.sheetBlocks.forEach(function (blk) { blk.rows.forEach(function (r) { r.ids.forEach(function (id) { const n = doc.getElementById(id); if (n) st.rowObserver.observe(n, { attributes: true, attributeFilter: ['hidden'], subtree: true }); }); }); });
       }
     }
     // config.sheets.<id>.steppers: an existing input (a plain typed field above 768px) is wrapped into a stepper - the markup of the Form row's steppers, made here from config data - while the layout is on, and
@@ -256,7 +266,7 @@
       nativeSet(displayOf(raw, decimals));
       return function undo() { const keep = raw; delete input.value; if (desc) nativeSet(keep); else { input.value = keep; delete input.__shown; } };
     }
-    function decorateSteppers(def, b) {
+    function decorateSteppers(def, st) {
       const UI = win.UI;
       if (!def.steppers || !UI || typeof UI.stepper !== 'function') return;
       Object.keys(def.steppers).forEach(function (iid) {
@@ -280,11 +290,11 @@
           UI.stepper(c.root, o);
           c.made = true;
         }
-        b.decorated.push(d);
+        st.decorated.push(d);
       });
-      if (typeof win.MutationObserver === 'function' && b.decorated.length) {
-        b.lockObserver = new win.MutationObserver(function () { syncLocks(); });
-        b.decorated.forEach(function (d) { b.lockObserver.observe(d.input, { attributes: true, attributeFilter: ['aria-disabled', 'data-reason'] }); });
+      if (typeof win.MutationObserver === 'function' && st.decorated.length) {
+        st.lockObserver = new win.MutationObserver(function () { syncLocks(); });
+        st.decorated.forEach(function (d) { st.lockObserver.observe(d.input, { attributes: true, attributeFilter: ['aria-disabled', 'data-reason'] }); });
       }
       syncLocks();
     }
@@ -292,15 +302,17 @@
     // disabled, and a tap on a chevron shows the reason. ui-net.js's setLocked() leaves readOnly alone while the input carries data-stepper (this engine owns it then).
     function syncLocks() {
       const UI = win.UI;
-      if (!built || !built.decorated || !UI || typeof UI.setDisabled !== 'function') return;
-      built.decorated.forEach(function (d) {
-        const locked = d.input.getAttribute('aria-disabled') === 'true';
-        UI.setDisabled(d.root, locked ? (d.input.dataset.reason || d.input.getAttribute('title') || '-') : null);
+      if (!UI || typeof UI.setDisabled !== 'function') return;
+      eachSurface(function (st) {
+        st.decorated.forEach(function (d) {
+          const locked = d.input.getAttribute('aria-disabled') === 'true';
+          UI.setDisabled(d.root, locked ? (d.input.dataset.reason || d.input.getAttribute('title') || '-') : null);
+        });
       });
     }
-    function undecorateSteppers(b) {
-      if (b.lockObserver) b.lockObserver.disconnect();
-      (b.decorated || []).forEach(function (d) {
+    function undecorateSteppers(st) {
+      if (st.lockObserver) st.lockObserver.disconnect();
+      (st.decorated || []).forEach(function (d) {
         if (d.undoDisplay) d.undoDisplay();
         if (d.root.parentNode) d.root.parentNode.removeChild(d.root);
         if (win.UI && typeof win.UI.setDisabled === 'function') win.UI.setDisabled(d.root, null);
@@ -308,8 +320,8 @@
         d.input.readOnly = d.saved.readOnly;
         if (d.saved.inputmode === null) d.input.removeAttribute('inputmode'); else d.input.setAttribute('inputmode', d.saved.inputmode);
       });
-      const had = (b.decorated || []).length > 0;
-      b.decorated = [];
+      const had = (st.decorated || []).length > 0;
+      st.decorated = [];
       // the owner of a lock (ui-net.js) re-reads its state on its next tick; ask for that tick now so the plain fields are right at once
       if (had && typeof win.uiSync === 'function') win.uiSync();
     }
@@ -319,54 +331,71 @@
       const kids = n.children ? Array.prototype.slice.call(n.children) : [];
       return kids.length > 0 && kids.every(function (k) { return k.hidden; });
     }
-    // config.overlays: an overlay that exists with its own UI.overlay (ui-net.js's #more-netz) gets the same rows as a sheet's content; its open state is its own
-    function buildOverlays(t, b) {
-      (t.overlays || []).forEach(function (oid) {
-        const def = (config.overlays || {})[oid], content = def && doc.getElementById(def.content);
-        if (!content) { if (def && missing.indexOf(def.content) < 0) missing.push(def.content); return; }
-        if (def.blocks) buildBlocks(def, content, content, b);
-        if (def.steppers) decorateSteppers(def, b);
-      });
+    // config.overlays: an overlay that exists with its own UI.overlay (ui-net.js's #more-netz) gets the same rows as a sheet's content; its open state is its own (host kind 'overlay' of a surface, in either mode)
+    function buildOverlay(oid, st) {
+      const def = (config.overlays || {})[oid], content = def && doc.getElementById(def.content);
+      if (!content) { if (def && missing.indexOf(def.content) < 0) missing.push(def.content); return; }
+      if (def.blocks) buildBlocks(def, content, content, st);
+      if (def.steppers) decorateSteppers(def, st);
     }
     function syncRows() {
-      if (!built || !built.sheetBlocks) return;
-      built.sheetBlocks.forEach(function (blk) {
-        let any = false;
-        blk.rows.forEach(function (r) {
-          const shown = r.ids.some(function (id) { const n = doc.getElementById(id); return !!n && !itemHidden(n) && (!r.gates[id] || (!!r.content.classList && r.content.classList.contains(r.gates[id]))); });
-          if (r.el.hidden === shown) r.el.hidden = !shown;
-          if (shown) any = true;
+      eachSurface(function (st) {
+        st.sheetBlocks.forEach(function (blk) {
+          let any = false;
+          blk.rows.forEach(function (r) {
+            const shown = r.ids.some(function (id) { const n = doc.getElementById(id); return !!n && !itemHidden(n) && (!r.gates[id] || (!!r.content.classList && r.content.classList.contains(r.gates[id]))); });
+            if (r.el.hidden === shown) r.el.hidden = !shown;
+            if (shown) any = true;
+          });
+          if (blk.el.hidden === any) blk.el.hidden = !any;
         });
-        if (blk.el.hidden === any) blk.el.hidden = !any;
       });
     }
-    function buildSheets(t, b) {
-      b.sheets = [];
-      b.sheetBlocks = [];
-      b.rowHosts = [];
-      b.decorated = [];
+    function buildSheet(sid, b, st) {
       const UI = win.UI;
-      if (!(t.sheets && t.sheets.length)) return;
       // without UI.overlay a block stays where it is (inline) - a sheet nobody can open would hide it
       if (!UI || typeof UI.overlay !== 'function') return;
-      t.sheets.forEach(function (sid) {
-        const def = config.sheets[sid], within = doc.getElementById(def.trigger.within), trigger = within && within.querySelector(def.trigger.selector);
-        if (!trigger || !doc.getElementById(def.content)) { if (missing.indexOf(sid) < 0) missing.push(sid); return; }
-        let h = sheetCache[sid];
-        if (!h || h.trigger !== trigger) {
-          h = { def: def, trigger: trigger, popup: trigger.getAttribute('aria-haspopup'), el: el('div', 'overlay ph-sheet', { id: def.host, role: 'dialog', 'aria-label': say(def.i18n, def.label) }) };   // popup: what the trigger had BEFORE UI.overlay marked it
-          h.el.hidden = true;
-          h.overlay = UI.overlay(trigger, h.el, { toggleOnClick: false, onClose: function () { if (sheetOpen(def)) trigger.click(); } });
-          trigger.addEventListener('click', syncSheets);
-          sheetCache[sid] = h;
-        }
-        h.trigger.setAttribute('aria-haspopup', 'dialog');   // UI.overlay set it when the host was made; release() took it away again (the trigger opens an inline block above 768px, not a dialog)
-        b.stack.appendChild(h.el);
-        const content = take(def.content, h.el);
-        if (def.blocks && content) buildBlocks(def, h.el, content, b);
-        if (def.steppers && content) decorateSteppers(def, b);
-        b.sheets.push(h);
+      const def = config.sheets[sid], within = doc.getElementById(def.trigger.within), trigger = within && within.querySelector(def.trigger.selector);
+      if (!trigger || !doc.getElementById(def.content)) { if (missing.indexOf(sid) < 0) missing.push(sid); return; }
+      let h = sheetCache[sid];
+      if (!h || h.trigger !== trigger) {
+        h = { def: def, trigger: trigger, popup: trigger.getAttribute('aria-haspopup'), el: el('div', 'overlay ph-sheet', { id: def.host, role: 'dialog', 'aria-label': say(def.i18n, def.label) }) };   // popup: what the trigger had BEFORE UI.overlay marked it
+        h.el.hidden = true;
+        h.overlay = UI.overlay(trigger, h.el, { toggleOnClick: false, onClose: function () { if (sheetOpen(def)) trigger.click(); } });
+        trigger.addEventListener('click', syncSheets);
+        sheetCache[sid] = h;
+      }
+      h.trigger.setAttribute('aria-haspopup', 'dialog');   // UI.overlay set it when the host was made; release() took it away again (the trigger opens an inline block above 768px, not a dialog)
+      b.stack.appendChild(h.el);
+      const content = take(def.content, h.el);
+      if (def.blocks && content) buildBlocks(def, h.el, content, st);
+      if (def.steppers && content) decorateSteppers(def, st);
+      st.sheets.push(h);
+    }
+    // surfaces(tab): the SURFACE REGISTRY (config.surfaces) in its order. mode 'phone' (the layout is on, b = what the layout built: the stack the sheet hosts go into) or 'inline' (768px and up, b = null: only a surface whose
+    // switch `inlineOn` is true, and only a host that needs no stack). A surface's state exists as soon as it applies (its flag is set whether or not a host could be built, as `ph` always was).
+    function buildSurfaces(tab, b, mode) {
+      Object.keys(config.surfaces || {}).forEach(function (name) {
+        const sf = config.surfaces[name];
+        if (sf.tabs.indexOf(tab) < 0) return;
+        if (mode === 'inline' && sf.inlineOn !== true) return;
+        const host = (sf.hosts || {})[mode];
+        if (!host) return;
+        const st = surfaceState[name] = { name: name, mode: mode, flag: sf.flag || null, sheets: [], sheetBlocks: [], rowHosts: [], decorated: [], rowObserver: null, lockObserver: null };
+        if (host.kind === 'sheet' && b) buildSheet(host.id, b, st);
+        else if (host.kind === 'overlay') buildOverlay(host.id, st);
+        // host kind 'pane' (the trails): the layout's sub-tab pane holds the rows; nothing to build here
       });
+    }
+    function setSurfaceFlags() {
+      const names = Object.keys(surfaceState);
+      if (!names.length) return;
+      html.classList.add('sr');
+      names.forEach(function (n) { if (surfaceState[n].flag) html.classList.add(surfaceState[n].flag); });
+    }
+    function removeSurfaceFlags() {
+      Object.keys(surfaceState).forEach(function (n) { if (surfaceState[n].flag) html.classList.remove(surfaceState[n].flag); delete surfaceState[n]; });
+      html.classList.remove('sr');
     }
 
     // config.follow: an element that moved out of a block follows the `hidden` of the block it left (sketch.js still shows and hides the block). Only while the layout is on; release() puts the follower back.
@@ -398,17 +427,20 @@
       if (title === null) node.removeAttribute('title'); else node.setAttribute('title', title);   // setDisabled leaves an empty title where there was none
     }
 
+    // apply(tab) = layout(tab) + surfaces(tab). Below 768px for a covered tab the layout is built (build(): the page layout, then the surfaces in their phone hosts) and every surface of the tab is applied;
+    // at 768px and up (or for a tab that is not covered) the layout is released and only a surface whose inline switch is on is applied (none: every switch is off).
     function apply(tab) {
       const t = config.tabs[tab];
-      if (!mq.matches || !t || !t.covered) { release(); return false; }
+      if (!mq.matches || !t || !t.covered) { release(); surfacesInline(tab); return false; }
       if (applied === tab && built) { setInnerHeight(); return true; }
-      if (applied) release();
+      if (applied || inlineTab) release();
       keepFocus(function () {
         built = build(tab);
         if (!built) { restoreAll(); return; }
         applied = tab;
         if (firstApplyState === null) firstApplyState = doc.readyState || null;
         html.classList.add('ph');
+        setSurfaceFlags();
         html.style.setProperty('--panel-h', t.panelH + 'px');
         setInnerHeight();
         show(remembered[tab] || t.defaultSubtab);
@@ -419,11 +451,26 @@
       return applied === tab;
     }
 
+    // surfaces(tab) without the layout: the surfaces of the tab whose inline switch is on, in their inline hosts (none today). Idempotent for the same tab.
+    function surfacesInline(tab) {
+      if (inlineTab === tab) return false;
+      if (inlineTab) release();
+      const on = Object.keys(config.surfaces || {}).some(function (n) { const sf = config.surfaces[n]; return sf.tabs.indexOf(tab) >= 0 && sf.inlineOn === true && (sf.hosts || {}).inline; });
+      if (!on) return false;
+      keepFocus(function () {
+        buildSurfaces(tab, null, 'inline');
+        inlineTab = tab;
+        setSurfaceFlags();
+        syncRows(); syncLocks();
+      });
+      return true;
+    }
+
     function release() {
-      if (!applied && !built && !moved.size) return false;
+      if (!applied && !built && !moved.size && !inlineTab && !Object.keys(surfaceState).length) return false;
       keepFocus(function () {
         // an open sheet closes first (its close also closes the block's own state), then the blocks go back
-        if (built && built.sheets) built.sheets.forEach(function (h) { if (h.overlay.isOpen) h.overlay.close(false); });
+        eachSurface(function (st) { st.sheets.forEach(function (h) { if (h.overlay.isOpen) h.overlay.close(false); }); });
         if (config.follow) Object.keys(config.follow).forEach(function (id) {
           const n = moved.has(id) ? doc.getElementById(id) : null;
           if (!n) return;
@@ -432,12 +479,14 @@
         if (built && built.labelsSaved) built.labelsSaved.forEach(function (o) {
           [['aria-label', o.label], ['title', o.title], ['data-i18n', o.i18n]].forEach(function (a) { if (a[1] === null) o.node.removeAttribute(a[0]); else o.node.setAttribute(a[0], a[1]); });
         });
-        if (built && built.rowObserver) built.rowObserver.disconnect();
+        eachSurface(function (st) { if (st.rowObserver) st.rowObserver.disconnect(); });
         restoreAll();
+        eachSurface(function (st) {
+          undecorateSteppers(st);
+          st.sheetBlocks.forEach(function (blk) { if (blk.el.parentNode) blk.el.parentNode.removeChild(blk.el); });
+          st.rowHosts.forEach(function (h) { h.classList.remove('ph-sheet-rows'); });
+        });
         if (built) {
-          undecorateSteppers(built);
-          (built.sheetBlocks || []).forEach(function (blk) { if (blk.el.parentNode) blk.el.parentNode.removeChild(blk.el); });
-          (built.rowHosts || []).forEach(function (h) { h.classList.remove('ph-sheet-rows'); });
           built.proxied.forEach(function (node) { delete node.focus; });
           if (built.openerSaved) {
             const o = built.openerSaved;
@@ -451,6 +500,8 @@
         Object.keys(sheetCache).forEach(function (sid) { const h = sheetCache[sid]; if (h.popup === null || h.popup === undefined) h.trigger.removeAttribute('aria-haspopup'); else h.trigger.setAttribute('aria-haspopup', h.popup); });
         built = null;
         applied = null;
+        inlineTab = null;
+        removeSurfaceFlags();
         html.classList.remove('ph');
         html.style.removeProperty('--panel-h');
         html.style.removeProperty('--ph-inner-h');
@@ -503,7 +554,7 @@
     }
 
     function state() {
-      return { applied: applied, sub: applied ? remembered[applied] || null : null, moved: Array.from(moved.keys()), missing: missing.slice(), firstApplyState: firstApplyState, remembered: Object.assign({}, remembered) };
+      return { applied: applied, sub: applied ? remembered[applied] || null : null, moved: Array.from(moved.keys()), missing: missing.slice(), firstApplyState: firstApplyState, remembered: Object.assign({}, remembered), surfaces: Object.keys(surfaceState), surfaceTab: inlineTab || applied };
     }
     return { apply: apply, release: release, show: show, sync: sync, start: start, state: state };
   }

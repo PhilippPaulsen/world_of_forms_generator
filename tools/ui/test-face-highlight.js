@@ -72,7 +72,7 @@ T('view', () => {
     check('it calls it only when the wanted outline CHANGED (compares with what it last passed)', /if \(same\) return false;[\s\S]{0,80}outlined = want;/.test(c));
     check('the triggers: UI tick (sync), every document click, deferred after a resize and after a tabchange; no MutationObserver', /doc\.addEventListener\('click'/.test(c) && /doc\.addEventListener\('tabchange'/.test(c) && /win\.addEventListener\('resize'/.test(c) && !/MutationObserver/.test(c));
     check('the active sheet comes from window.activeLayerNow, which ui-phone-timeline.js defines', /win\.activeLayerNow/.test(c) && /window\.activeLayerNow = function/.test(strip(fs.readFileSync(path.join(ROOT, 'ui-phone-timeline.js'), 'utf8'))));
-    check('release is covered: the chips count as shown only while they sit under #ph-slot (they go back into the hidden holder at release)', /n\.id === 'ph-slot'/.test(c) && /html\.classList\.contains\('ph'\)/.test(c));
+    check('release is covered: the chips count as shown only while they are not in their hidden holder and no ancestor is hidden (a parked pane, the holder after release), and only while the trails surface is applied (html.sr-trails, set and removed by the engine: C0b-2; it was html.ph)', /n === holder \|\| n\.hidden/.test(c) && /html\.classList\.contains\('sr-trails'\)/.test(c) && !/html\.classList\.contains\('ph'\)/.test(c));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

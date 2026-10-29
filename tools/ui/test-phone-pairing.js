@@ -183,6 +183,11 @@ T('release-popup', () => {
     check('the engine remembers what the trigger had before UI.overlay marked it (aria-haspopup), takes the mark away at release (or puts the old value back) and puts it back with every apply', /popup: trigger\.getAttribute\('aria-haspopup'\)/.test(code) && /h\.trigger\.removeAttribute\('aria-haspopup'\)/.test(code) && /h\.trigger\.setAttribute\('aria-haspopup', h\.popup\)/.test(code) && /h\.trigger\.setAttribute\('aria-haspopup', 'dialog'\)/.test(code));
 });
 
+T('gate', () => {
+    const code = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    check('the pairing view is on while the timeline SURFACE is applied: sync() reads html.sr-timeline (the engine\'s flag, C0b-2), not html.ph', /html\.classList\.contains\('sr-timeline'\)/.test(code) && !/classList\.contains\('ph'\)/.test(code));
+});
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 console.log(failures ? 'FAIL' : 'PASS');
 process.exit(failures ? 1 : 0);

@@ -437,7 +437,7 @@ T('layer-steppers', () => {
     check('the three input ids and the sketch hooks are untouched: the inputs keep their ids and sketch.js still reads them with parseFloat / setActiveLayerRotation (sketch.js is unchanged by this commit)', ids3.every(id => HTML.includes('id="' + id + '"')) && /offsetXInput\.input\(\(\) => \{[\s\S]{0,200}parseFloat\(offsetXInput\.value\(\)\) \|\| 0/.test(read('SKETCH_JS', 'sketch.js')) && /setActiveLayerRotation\(layerRotationInput\.value\(\)\)/.test(read('SKETCH_JS', 'sketch.js')));
     const eng = ENGINE.replace(/\/\/.*$/gm, '');
     check('the engine is control-agnostic: decorateSteppers() names no input or group id (the config does), makes the wrapper from config data (icons, names) and never uses innerHTML or cloneNode', (() => { const m = /function buildStepper[\s\S]*?\n    }\n/.exec(eng), d = /function decorateSteppers[\s\S]*?\n    }\n/.exec(eng); return !!m && !!d && !/innerHTML|cloneNode|layer-|offset|rotation/.test(m[0] + d[0]); })());
-    check('the engine moves the input (take(), a marker stays), keeps its listeners off it (the key handler is bound to the wrapper: keyEl), sets readOnly + inputmode itself and gives them back at release', /take\(iid, c\.root, c\.chevrons\)/.test(eng) && /keyEl: c\.root/.test(eng) && /readonly: false/.test(eng) && /d\.input\.readOnly = d\.saved\.readOnly/.test(eng) && /undecorateSteppers\(built\)/.test(eng));
+    check('the engine moves the input (take(), a marker stays), keeps its listeners off it (the key handler is bound to the wrapper: keyEl), sets readOnly + inputmode itself and gives them back at release', /take\(iid, c\.root, c\.chevrons\)/.test(eng) && /keyEl: c\.root/.test(eng) && /readonly: false/.test(eng) && /d\.input\.readOnly = d\.saved\.readOnly/.test(eng) && /eachSurface\(function \(st\) \{\s*undecorateSteppers\(st\);/.test(eng));
     check('the native number spinners are hidden for every stepper input (CSS above the phone block): -webkit-appearance none on the spin buttons and textfield appearance on `.stepper input[type="number"]`', /\.stepper input\[type="number"\]::-webkit-outer-spin-button,\s*\.stepper input\[type="number"\]::-webkit-inner-spin-button \{\s*-webkit-appearance: none;/.test(CSS) && /\.stepper input\[type="number"\] \{[^}]*-moz-appearance: textfield;[^}]*appearance: textfield;/.test(CSS));
 });
 T('layer-steppers-mutants', () => {
@@ -469,7 +469,7 @@ T('netz-overlay', () => {
     check('the elements the sheet needs have ids: the three domain buttons (net-domain-single, net-domain-tiled, net-field-btn), the readout, the exact fields; the domain row and the macro row wrap the buttons', ['net-domain-single', 'net-domain-tiled', 'net-field-btn', 'net-readout', 'net-strength-exact', 'net-focus-exact', 'net-macro-row', 'net-geo-row', 'net-domain-row'].every(id => ids.includes(id)) && /id="net-domain-row"[\s\S]{0,900}id="net-domain-single"[\s\S]{0,700}id="net-domain-tiled"[\s\S]{0,700}id="net-field-btn"/.test(htmlNoComments));
     check('sketch.js keeps the hooks the rows follow: it shows and hides the macro row, the Alternate wrapper and the Alternate button with the `hidden` attribute, and the Field button is natively disabled (no reason can reach the user: a native disabled button fires no click - ROADMAP)', /macroRow\.elt\.hidden = /.test(read('SKETCH_JS', 'sketch.js')) && /geoRow\.elt\.hidden = /.test(read('SKETCH_JS', 'sketch.js')) && /alternateBtn\.elt\.hidden = /.test(read('SKETCH_JS', 'sketch.js')) && /fieldBtn\.elt\.disabled = !fieldOk/.test(read('SKETCH_JS', 'sketch.js')));
     const eng = ENGINE.replace(/\/\/.*$/gm, '');
-    check('the engine is control-agnostic here too: buildOverlays() names no id and reads config.overlays; an item is hidden when it is, or when all its element children are (itemHidden)', (() => { const m = /function buildOverlays[\s\S]*?\n    }\n/.exec(eng); return !!m && !/net-|more-netz|layer-/.test(m[0]) && /config\.overlays/.test(m[0]) && /function itemHidden/.test(eng) && /buildOverlays\(t, b\)/.test(eng); })());
+    check('the engine is control-agnostic here too: buildOverlay() names no id and reads config.overlays; an item is hidden when it is, or when all its element children are (itemHidden); the surface loop builds it for a surface whose host kind is overlay', (() => { const m = /function buildOverlay\(oid, st\)[\s\S]*?\n    }\n/.exec(eng); return !!m && !/net-|more-netz|layer-/.test(m[0]) && /config\.overlays/.test(m[0]) && /function itemHidden/.test(eng) && /host\.kind === 'overlay'\) buildOverlay\(host\.id, st\)/.test(eng); })());
 });
 T('netz-overlay-mutants', () => {
     const env = { ids: idSet };
@@ -621,6 +621,35 @@ T('label-keys', () => {
     check('the engine writes the sub-tab text, the group names and the host label through say(key, German text), and holds no German label of its own', /say\(config\.subtabs\[sid\]\.i18n, config\.subtabs\[sid\]\.label\)/.test(eng) && /say\(config\.names\.tools\.i18n, config\.names\.tools\.text\)/.test(eng) && /say\(config\.names\.subtabs\.i18n, config\.names\.subtabs\.text\)/.test(eng) && /'aria-label': say\(def\.i18n, def\.label\)/.test(eng) && !/'Werkzeuge'|'Unterbereiche'|textContent = config\.subtabs\[sid\]\.label/.test(eng));
 });
 
+T('registry', () => {
+    const env = { ids: idSet }, R = config.surfaces;
+    check('the surface registry exists with four surfaces in the order the engine applies them: layer, timeline, netz, trails', !!R && Object.keys(R).join() === 'layer,timeline,netz,trails');
+    check('each surface says its tabs: layer and timeline every tab, netz the Netz tab, trails the Farbe tab', R.layer.tabs.join() === 'form,farbe,netz' && R.timeline.tabs.join() === 'form,farbe,netz' && R.netz.tabs.join() === 'netz' && R.trails.tabs.join() === 'farbe');
+    check('the flags are unique: layer none, timeline sr-timeline, netz sr-netz, trails sr-trails (the gate classes of the twin rules; the general html.sr is set by the engine for any applied surface)', R.layer.flag === null && R.timeline.flag === 'sr-timeline' && R.netz.flag === 'sr-netz' && R.trails.flag === 'sr-trails' && new Set(Object.values(R).map(x => x.flag).filter(Boolean)).size === 3);
+    check('EVERY surface has its inline switch and it is OFF (C0b-2 is preparation: at 768px and up nothing is applied)', Object.values(R).every(x => x.inlineOn === false));
+    check('the phone hosts are what the engine always had: the layer sheet, the timeline sheet, the Netz overlay (#more-netz) and the Spuren pane of the layout', R.layer.hosts.phone.kind === 'sheet' && R.layer.hosts.phone.id === 'layer' && R.timeline.hosts.phone.kind === 'sheet' && R.timeline.hosts.phone.id === 'timeline' && R.netz.hosts.phone.kind === 'overlay' && R.netz.hosts.phone.id === 'netz' && R.trails.hosts.phone.kind === 'pane' && R.trails.hosts.phone.id === 'spuren');
+    check('tabs.<tab>.sheets and .overlays list exactly what the registry says (one source in effect): every tab both sheets, Netz the overlay', ['form', 'farbe', 'netz'].every(t => config.tabs[t].sheets.join() === 'layer,timeline') && config.tabs.netz.overlays.join() === 'netz' && !config.tabs.form.overlays && !config.tabs.farbe.overlays);
+    check('the engine owns the classes: the flag names are in the registry data only; it sets html.sr (any surface) and the flag of each applied surface and removes them in release()', /html\.classList\.add\('sr'\)/.test(ENGINE) && /html\.classList\.add\(surfaceState\[n\]\.flag\)/.test(ENGINE) && /html\.classList\.remove\(surfaceState\[n\]\.flag\)/.test(ENGINE) && /html\.classList\.remove\('sr'\)/.test(ENGINE) && !/sr-(netz|trails|timeline)/.test(ENGINE.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')));
+    check('the engine names no surface and no id: apply = layout + surfaces; the surface loop reads config.surfaces; at 768px and up only a surface whose inlineOn is true is applied', /Object\.keys\(config\.surfaces \|\| \{\}\)/.test(ENGINE) && /sf\.inlineOn !== true/.test(ENGINE) && /mode === 'inline' && sf\.inlineOn/.test(ENGINE));
+    const mut = (name, fn, re) => { const c = clone(config); fn(c); const p = validate(c, env); check(`validate rejects: ${name}`, p.some(m => re.test(m)), p.join(' ; ') || 'no problem found'); };
+    mut('a surface without its inline switch', c => { delete c.surfaces.netz.inlineOn; }, /surface netz: no inline switch/);
+    mut('an inline switch that is a string', c => { c.surfaces.trails.inlineOn = 'off'; }, /surface trails: no inline switch/);
+    mut('two surfaces with the same flag', c => { c.surfaces.trails.flag = 'sr-netz'; }, /the flag sr-netz is also the flag of/);
+    mut('a flag that is not an sr- class', c => { c.surfaces.netz.flag = 'netz'; }, /surface netz: the flag must be/);
+    mut('a surface without a phone host', c => { delete c.surfaces.timeline.hosts.phone; }, /surface timeline: no phone host/);
+    mut('a phone host sheet nobody defines', c => { c.surfaces.timeline.hosts.phone.id = 'nirgends'; }, /phone host sheet nirgends is not defined/);
+    mut('a phone host overlay nobody defines', c => { c.surfaces.netz.hosts.phone.id = 'nirgends'; }, /phone host overlay nirgends is not defined/);
+    mut('a phone host pane that is not a sub-tab', c => { c.surfaces.trails.hosts.phone.id = 'nirgends'; }, /phone host pane nirgends is not a sub-tab/);
+    mut('a surface on a tab that does not exist', c => { c.surfaces.netz.tabs = ['netz', 'nirgends']; }, /surface netz: tabs must be/);
+    mut('the inline switch on with no inline host', c => { c.surfaces.timeline.inlineOn = true; delete c.surfaces.timeline.hosts.inline; }, /surface timeline: the inline switch is on but there is no inline host/);
+    mut('the inline switch on for a host the engine does not build (trails: a group)', c => { c.surfaces.trails.inlineOn = true; }, /surface trails: the inline switch is on but the engine builds no inline host of kind group/);
+    mut('the registry and tabs.<tab>.sheets disagree (Form lists no timeline sheet)', c => { c.tabs.form.sheets = ['layer']; }, /tabs\.form\.sheets and the registry disagree about sheet timeline/);
+    mut('the registry and tabs.<tab>.overlays disagree (Farbe lists the Netz overlay)', c => { c.tabs.farbe.overlays = ['netz']; }, /tabs\.farbe\.overlays and the registry disagree about overlay netz/);
+    mut('no registry at all', c => { delete c.surfaces; }, /surfaces: no registry/);
+    const ok = clone(config); ok.surfaces.netz.inlineOn = true;
+    check('a surface with a switch ON and an inline host the engine builds (the Netz overlay) is accepted (the later Netz commit turns it on)', !validate(ok, env).some(m => /surface netz/.test(m)), validate(ok, env).join(' ; '));
+});
+
 T('structure', () => {
     const marker = CSS.indexOf('=== Phone layout (');
     const block = CSS.slice(marker, PHONE_END);
@@ -725,8 +754,8 @@ T('twins', () => {
     check('every [hidden] variant and every narrower-width variant of the twins comes AFTER the rule it modifies', all.every((r, i) => parts(r).filter(q => /\[hidden\]/.test(q)).every(q => { const base = q.replace(/\[hidden\]/g, ''); const j = all.findIndex(o => o.at.join() === r.at.join() && parts(o).includes(base)); return j < 0 || j < i; })));
     // the gates are only set by the engine (a class of <html>): nothing sets them in C0b-1
     const scripts = ['sketch.js', 'ui.js', 'ui-phone.js', 'ui-phone-chips.js', 'ui-phone-timeline.js', 'ui-phone-pairing.js', 'ui-net.js', 'ui-layers.js', 'ui-timeline.js', 'ui-rail.js', 'ui-farbe.js', 'nav.js'].map(f => [f, fs.readFileSync(path.join(ROOT, f), 'utf8')]);
-    const setters = scripts.filter(([f, t]) => /classList\.(add|toggle)\(\s*['"]sr(-[a-z]+)?['"]/.test(t));
-    check('nothing sets a gate class yet (html.sr, html.sr-netz, html.sr-trails, html.sr-timeline): the twins match nowhere (changes with the engine split, C0b-2)', setters.length === 0, setters.map(x => x[0]).join() || 'no script');
+    const setters = scripts.filter(([f, t]) => /classList\.(add|toggle)\(\s*['"]sr(-[a-z]+)?['"]/.test(t) || /classList\.add\(\s*surfaceState\[/.test(t) || /classList\.add\(sf\.flag|classList\.add\(st\.flag/.test(t));
+    check('ONLY the engine sets a gate class (html.sr and the flags of the surface registry): ui-phone.js, in setSurfaceFlags(); no other script (since C0b-2; the twins match only while the engine has a surface applied)', setters.map(x => x[0]).join() === 'ui-phone.js', setters.map(x => x[0]).join() || 'no script');
     check('no markup uses the new classes: index.html has no class "sr", "sr-host", "sr-pane", "sr-row" or "sr-row-scroll" (the neutral classes are made by the engine later)', !/class="[^"]*\bsr(-host|-pane|-row|-row-scroll)?\b/.test(HTML));
 });
 

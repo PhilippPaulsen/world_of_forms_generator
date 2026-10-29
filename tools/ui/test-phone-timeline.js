@@ -77,6 +77,11 @@ T('wiring', () => {
     check('nothing of this view\'s CSS is above the phone block (no .ph-tl- class, no #ph-tl- id)', !/ph-tl-/.test(CSS.slice(0, marker)));
 });
 
+T('gate', () => {
+    const code = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    check('the view is on while the timeline SURFACE is applied: it reads html.sr-timeline (the engine\'s flag, C0b-2), not html.ph', /html\.classList\.contains\('sr-timeline'\)/.test(code) && !/classList\.contains\('ph'\)/.test(code));
+});
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 console.log(failures ? 'FAIL' : 'PASS');
 process.exit(failures ? 1 : 0);
