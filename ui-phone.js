@@ -332,11 +332,12 @@
       return kids.length > 0 && kids.every(function (k) { return k.hidden; });
     }
     // config.overlays: an overlay that exists with its own UI.overlay (ui-net.js's #more-netz) gets the same rows as a sheet's content; its open state is its own (host kind 'overlay' of a surface, in either mode)
-    function buildOverlay(oid, st) {
+    // host.steppers === false: the host does not wrap the overlay's typed inputs into steppers (the Netz overlay at 768px and up: its exact fields stay plain typed fields until the typed-field commit)
+    function buildOverlay(oid, st, host) {
       const def = (config.overlays || {})[oid], content = def && doc.getElementById(def.content);
       if (!content) { if (def && missing.indexOf(def.content) < 0) missing.push(def.content); return; }
       if (def.blocks) buildBlocks(def, content, content, st);
-      if (def.steppers) decorateSteppers(def, st);
+      if (def.steppers && !(host && host.steppers === false)) decorateSteppers(def, st);
     }
     function syncRows() {
       eachSurface(function (st) {
@@ -383,7 +384,7 @@
         if (!host) return;
         const st = surfaceState[name] = { name: name, mode: mode, flag: sf.flag || null, sheets: [], sheetBlocks: [], rowHosts: [], decorated: [], rowObserver: null, lockObserver: null };
         if (host.kind === 'sheet' && b) buildSheet(host.id, b, st);
-        else if (host.kind === 'overlay') buildOverlay(host.id, st);
+        else if (host.kind === 'overlay') buildOverlay(host.id, st, host);
         // host kind 'pane' (the trails): the layout's sub-tab pane holds the rows; nothing to build here
       });
     }

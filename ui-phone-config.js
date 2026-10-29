@@ -204,11 +204,11 @@
         ]
       }
     },
-    // The surface registry (see the header). The order is the order the engine applies them in: the sheets in their stack order, then the overlay. Every inline switch is OFF (C0b-2: preparation; each surface turns its own on in its commit).
+    // The surface registry (see the header). The order is the order the engine applies them in: the sheets in their stack order, then the overlay. The inline switches: OFF for layer, timeline and trails (each turns its own on in its commit); ON for netz since C0b-3 (the overlay content at 768px and up; its exact fields stay plain typed fields: inline host steppers false).
     surfaces: {
       layer: { tabs: ['form', 'farbe', 'netz'], flag: null, hosts: { phone: { kind: 'sheet', id: 'layer' } }, inlineOn: false },
       timeline: { tabs: ['form', 'farbe', 'netz'], flag: 'sr-timeline', hosts: { phone: { kind: 'sheet', id: 'timeline' }, inline: { kind: 'content', id: 'timeline-group' } }, inlineOn: false },
-      netz: { tabs: ['netz'], flag: 'sr-netz', hosts: { phone: { kind: 'overlay', id: 'netz' }, inline: { kind: 'overlay', id: 'netz' } }, inlineOn: false },
+      netz: { tabs: ['netz'], flag: 'sr-netz', hosts: { phone: { kind: 'overlay', id: 'netz' }, inline: { kind: 'overlay', id: 'netz', steppers: false } }, inlineOn: true },
       trails: { tabs: ['farbe'], flag: 'sr-trails', hosts: { phone: { kind: 'pane', id: 'spuren' }, inline: { kind: 'group', id: 'face-colors-group' } }, inlineOn: false }
     },
     afterShow: { 'layer-strip': ['layerTable', 'revealActive'], 'ph-trail-chips': ['uiPhoneChips', 'refresh'] }
@@ -405,6 +405,7 @@
         const ih = (sf.hosts || {}).inline;
         if (!ih || typeof ih.id !== 'string') bad.push(where + ': the inline switch is on but there is no inline host');
         else if (ENGINE_INLINE_KINDS.indexOf(ih.kind) < 0) bad.push(where + ': the inline switch is on but the engine builds no inline host of kind ' + ih.kind);
+        else if (ih.steppers !== undefined && typeof ih.steppers !== 'boolean') bad.push(where + ': the inline host\'s steppers must be true or false');
       }
       // a sheet or overlay surface must be the one the tabs list: tabs.<tab>.sheets / .overlays and the registry say the same
       if (ph && ph.kind === 'sheet') Object.keys(cfg.tabs).forEach(function (tab) { if (((cfg.tabs[tab].sheets || []).indexOf(ph.id) >= 0) !== (sf.tabs.indexOf(tab) >= 0)) bad.push(where + ': tabs.' + tab + '.sheets and the registry disagree about sheet ' + ph.id); });

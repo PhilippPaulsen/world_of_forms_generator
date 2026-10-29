@@ -469,7 +469,7 @@ T('netz-overlay', () => {
     check('the elements the sheet needs have ids: the three domain buttons (net-domain-single, net-domain-tiled, net-field-btn), the readout, the exact fields; the domain row and the macro row wrap the buttons', ['net-domain-single', 'net-domain-tiled', 'net-field-btn', 'net-readout', 'net-strength-exact', 'net-focus-exact', 'net-macro-row', 'net-geo-row', 'net-domain-row'].every(id => ids.includes(id)) && /id="net-domain-row"[\s\S]{0,900}id="net-domain-single"[\s\S]{0,700}id="net-domain-tiled"[\s\S]{0,700}id="net-field-btn"/.test(htmlNoComments));
     check('sketch.js keeps the hooks the rows follow: it shows and hides the macro row, the Alternate wrapper and the Alternate button with the `hidden` attribute, and the Field button is natively disabled (no reason can reach the user: a native disabled button fires no click - ROADMAP)', /macroRow\.elt\.hidden = /.test(read('SKETCH_JS', 'sketch.js')) && /geoRow\.elt\.hidden = /.test(read('SKETCH_JS', 'sketch.js')) && /alternateBtn\.elt\.hidden = /.test(read('SKETCH_JS', 'sketch.js')) && /fieldBtn\.elt\.disabled = !fieldOk/.test(read('SKETCH_JS', 'sketch.js')));
     const eng = ENGINE.replace(/\/\/.*$/gm, '');
-    check('the engine is control-agnostic here too: buildOverlay() names no id and reads config.overlays; an item is hidden when it is, or when all its element children are (itemHidden); the surface loop builds it for a surface whose host kind is overlay', (() => { const m = /function buildOverlay\(oid, st\)[\s\S]*?\n    }\n/.exec(eng); return !!m && !/net-|more-netz|layer-/.test(m[0]) && /config\.overlays/.test(m[0]) && /function itemHidden/.test(eng) && /host\.kind === 'overlay'\) buildOverlay\(host\.id, st\)/.test(eng); })());
+    check('the engine is control-agnostic here too: buildOverlay() names no id and reads config.overlays (an inline host may switch the steppers off: host.steppers === false); an item is hidden when it is, or when all its element children are (itemHidden); the surface loop builds it for a surface whose host kind is overlay', (() => { const m = /function buildOverlay\(oid, st, host\)[\s\S]*?\n    }\n/.exec(eng); return !!m && !/net-|more-netz|layer-/.test(m[0]) && /config\.overlays/.test(m[0]) && /function itemHidden/.test(eng) && /host\.kind === 'overlay'\) buildOverlay\(host\.id, st, host\)/.test(eng); })());
 });
 T('netz-overlay-mutants', () => {
     const env = { ids: idSet };
@@ -626,7 +626,7 @@ T('registry', () => {
     check('the surface registry exists with four surfaces in the order the engine applies them: layer, timeline, netz, trails', !!R && Object.keys(R).join() === 'layer,timeline,netz,trails');
     check('each surface says its tabs: layer and timeline every tab, netz the Netz tab, trails the Farbe tab', R.layer.tabs.join() === 'form,farbe,netz' && R.timeline.tabs.join() === 'form,farbe,netz' && R.netz.tabs.join() === 'netz' && R.trails.tabs.join() === 'farbe');
     check('the flags are unique: layer none, timeline sr-timeline, netz sr-netz, trails sr-trails (the gate classes of the twin rules; the general html.sr is set by the engine for any applied surface)', R.layer.flag === null && R.timeline.flag === 'sr-timeline' && R.netz.flag === 'sr-netz' && R.trails.flag === 'sr-trails' && new Set(Object.values(R).map(x => x.flag).filter(Boolean)).size === 3);
-    check('EVERY surface has its inline switch and it is OFF (C0b-2 is preparation: at 768px and up nothing is applied)', Object.values(R).every(x => x.inlineOn === false));
+    check('EVERY surface has its inline switch (a boolean); since C0b-3 it is ON for the Netz surface only (the overlay content at 768px and up), OFF for layer, timeline and trails', Object.values(R).every(x => typeof x.inlineOn === 'boolean') && R.netz.inlineOn === true && R.layer.inlineOn === false && R.timeline.inlineOn === false && R.trails.inlineOn === false);
     check('the phone hosts are what the engine always had: the layer sheet, the timeline sheet, the Netz overlay (#more-netz) and the Spuren pane of the layout', R.layer.hosts.phone.kind === 'sheet' && R.layer.hosts.phone.id === 'layer' && R.timeline.hosts.phone.kind === 'sheet' && R.timeline.hosts.phone.id === 'timeline' && R.netz.hosts.phone.kind === 'overlay' && R.netz.hosts.phone.id === 'netz' && R.trails.hosts.phone.kind === 'pane' && R.trails.hosts.phone.id === 'spuren');
     check('tabs.<tab>.sheets and .overlays list exactly what the registry says (one source in effect): every tab both sheets, Netz the overlay', ['form', 'farbe', 'netz'].every(t => config.tabs[t].sheets.join() === 'layer,timeline') && config.tabs.netz.overlays.join() === 'netz' && !config.tabs.form.overlays && !config.tabs.farbe.overlays);
     check('the engine owns the classes: the flag names are in the registry data only; it sets html.sr (any surface) and the flag of each applied surface and removes them in release()', /html\.classList\.add\('sr'\)/.test(ENGINE) && /html\.classList\.add\(surfaceState\[n\]\.flag\)/.test(ENGINE) && /html\.classList\.remove\(surfaceState\[n\]\.flag\)/.test(ENGINE) && /html\.classList\.remove\('sr'\)/.test(ENGINE) && !/sr-(netz|trails|timeline)/.test(ENGINE.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')));
@@ -648,6 +648,20 @@ T('registry', () => {
     mut('no registry at all', c => { delete c.surfaces; }, /surfaces: no registry/);
     const ok = clone(config); ok.surfaces.netz.inlineOn = true;
     check('a surface with a switch ON and an inline host the engine builds (the Netz overlay) is accepted (the later Netz commit turns it on)', !validate(ok, env).some(m => /surface netz/.test(m)), validate(ok, env).join(' ; '));
+});
+
+T('netz-desktop', () => {
+    const region = CSS.slice(PHONE_END), R = rules(region), netz = R.filter(r => /^html\.sr-netz\b/.test(r.sel.split(',')[0].trim())), find = sel => netz.find(r => r.sel.split(',').map(x => x.trim()).includes(sel));
+    const body = r => (r ? r.body : '');
+    check('the Netz surface is ON at 768px and up with the plain typed fields: the inline host is the overlay itself and says steppers: false; the config\'s phone host is unchanged', config.surfaces.netz.inlineOn === true && config.surfaces.netz.hosts.inline.kind === 'overlay' && config.surfaces.netz.hosts.inline.steppers === false && config.surfaces.netz.hosts.phone.steppers === undefined);
+    check('the long hints are parked hidden under html.sr-netz, as on the phone: #net-focus-hint, #net-macro-hint, #net-field-hint, #net-field-info, #net-size-hint and the macro label are display: none', (() => { const r = netz.find(x => /#net-focus-hint/.test(x.sel)); return !!r && ['#net-focus-hint', '#net-macro-hint', '#net-field-hint', '#net-field-info', '#net-size-hint', '.ph-sheet-row #net-macro-row > label'].every(h => r.sel.indexOf('html.sr-netz ' + h) >= 0) && /display:\s*none/.test(r.body); })());
+    check('the readout line shows under html.sr-netz: `html.sr-netz #net-readout { display: block; ... }` (the base .net-readout is display: none)', /display:\s*block/.test(body(find('html.sr-netz #net-readout'))) && /\.net-readout \{ display: none; \}/.test(CSS.slice(0, CSS.indexOf('=== Phone layout ('))));
+    check('control sizes follow the pointer token, never a fixed 48px: the domain and Alternate buttons, the macro buttons and the exact fields use var(--target); no html.sr-netz rule declares width, height or min-height as 48px', /width:\s*var\(--target\)/.test(body(find('html.sr-netz .ph-sheet-row .net-domain-btn'))) && /height:\s*var\(--target\)/.test(body(find('html.sr-netz .ph-sheet-row .net-domain-btn'))) && /min-height:\s*var\(--target\)/.test(body(find('html.sr-netz .ph-sheet-row #net-macro-buttons .layer-btn'))) && /height:\s*var\(--target\)/.test(body(find('html.sr-netz .ph-sheet-row > input.exact-field'))) && !netz.some(r => /(^|[;\s])(min-)?(width|height)\s*:\s*48px/.test(r.body)));
+    const dk = R.filter(r => /^html\.sr-netz:not\(\.ph\)/.test(r.sel));
+    check('the leftover #net-group (Both / X / Y, the Fokus stepper, Net lines) is SHOWN again at 768px and up by html.sr-netz:not(.ph) and keeps its own hidden attribute: it comes after the twin that hides it on the phone (equal-or-lower specificity would lose)', dk.length === 2 && /display:\s*flex/.test(dk[0].body) && /display:\s*none/.test(dk[1].body) && region.indexOf('html.sr-netz:not(.ph)') > region.indexOf('html.sr-netz #more-netz.ph-sheet-rows > .overlay-section'));
+    check('the phone-only parts are not here: no rule of the Netz surface mentions the sheet host (.ph-sheet without -rows/-row/-block), the scroll lock, the panel (.ph-slot) or html.ph', netz.every(r => !/\.ph-sheet(?![-\w])|\.ph-slot|html\.ph\b/.test(r.sel)));
+    const ui = fs.readFileSync(path.join(ROOT, 'ui-net.js'), 'utf8');
+    check('ui-net.js locks the Fokus exact field from the hidden Fokus row too (the layout\'s follow rule is the phone\'s): reasonFocus() ends with focusRowEl.hidden -> UI.t("net.reason.focus")', /function reasonFocus\(\)[^\n]*focusRowEl && focusRowEl\.hidden \? UI\.t\('net\.reason\.focus'\)/.test(ui) && /const focusRowEl = \$\('#net-focus-row'\)/.test(ui));
 });
 
 T('structure', () => {
@@ -710,17 +724,18 @@ T('twins', () => {
     const phone = rules(CSS.slice(marker, PHONE_END).slice(CSS.slice(marker, PHONE_END).indexOf('*/') + 2));
     check('the surfaces region ("=== Surfaces (") exists once, after the phone block, and is the LAST thing in style.css (the phone block ends with its media query before it)', SURF_MARK > marker && CSS.indexOf('=== Surfaces (', SURF_MARK + 1) < 0 && /\}\s*$/.test(CSS.slice(marker, PHONE_END)));
     const region = CSS.slice(PHONE_END);
-    const ban = ['NEUTRAL HOST CLASSES (html.sr)', 'SHARED ROWS AND BLOCKS (html.sr)', 'TRAILS (html.sr-trails)', 'NETZ SHEET (html.sr-netz)', 'TIMELINE (html.sr-timeline)'];
+    const ban = ['NEUTRAL HOST CLASSES (html.sr)', 'TOKENS (html.sr)', 'SHARED ROWS AND BLOCKS (html.sr)', 'TRAILS (html.sr-trails)', 'NETZ SHEET (html.sr-netz)', 'NETZ AT 768PX AND UP (html.sr-netz:not(.ph))', 'TIMELINE (html.sr-timeline)'];
     const bpos = ban.map(b => region.indexOf(b));
-    check('the region has its five banner-delimited blocks, each once and in this order: neutral host classes, shared rows and blocks, trails, Netz sheet, timeline', bpos.every((x, i) => x > 0 && region.indexOf(ban[i], x + 1) < 0 && (i === 0 || x > bpos[i - 1])), bpos.join());
+    check('the region has its seven banner-delimited blocks, each once and in this order: neutral host classes, tokens, shared rows and blocks, trails, Netz sheet, Netz at 768px and up, timeline', bpos.every((x, i) => x > 0 && region.indexOf(ban[i], x + 1) < 0 && (i === 0 || x > bpos[i - 1])), bpos.join());
     const cut = (i) => region.slice(region.lastIndexOf('/*', bpos[i]), i + 1 < bpos.length ? region.lastIndexOf('/*', bpos[i + 1]) : region.length).replace(/^\s*\/\*[\s\S]*?\*\//, '');
     const seg = ban.map((b, i) => rules(cut(i)));
-    check('the twins per block: 9 neutral / 7 shared / 9 trails / 22 Netz / 27 timeline = 74 (65 twins of phone rules and the 9 neutral host twins)', seg.map(x => x.length).join(' / ') === '9 / 7 / 9 / 22 / 27', seg.map(x => x.length).join(' / '));
-    const all = seg.flat();
-    const GATES = [/^html\.sr /, /^html\.sr /, /^html\.sr-trails /, /^html\.sr-netz /, /^html\.sr-timeline /];
+    check('the rules per block: 9 neutral / 1 tokens / 7 shared / 9 trails / 22 Netz twins / 2 Netz at 768px and up / 27 timeline (the 65 twins of phone rules and the 9 neutral host twins; the token rule and the two desktop rules are not twins)', seg.map(x => x.length).join(' / ') === '9 / 1 / 7 / 9 / 22 / 2 / 27', seg.map(x => x.length).join(' / '));
+    const TW = [0, 2, 3, 4, 6];                       // the blocks whose rules are twins of phone rules
+    const all = TW.flatMap(i => seg[i]);
+    const GATES = { 0: /^html\.sr /, 2: /^html\.sr /, 3: /^html\.sr-trails /, 4: /^html\.sr-netz /, 6: /^html\.sr-timeline / };
     const parts = r => r.sel.split(',').map(x => x.trim());
-    check('every selector of a twin starts with the gate of its block (html.sr, html.sr, html.sr-trails, html.sr-netz, html.sr-timeline) and nothing in the region mentions html.ph', seg.every((x, i) => x.every(r => parts(r).every(q => GATES[i].test(q) && !/html\.ph/.test(q)))));
-    check('NO twin is inside the phone media query: the media queries of the region are the narrower-width variants only (max-width 339 and 354), never @media (max-width: 767px)', all.every(r => !r.at.some(a => /767px/.test(a)) && r.at.every(a => /^@media \(max-width: (339|354)px\)$/.test(a))), [...new Set(all.map(r => r.at.join('>')))].join(' | '));
+    check('every selector of a twin starts with the gate of its block (html.sr, html.sr, html.sr-trails, html.sr-netz, html.sr-timeline) and nothing in the region mentions html.ph', TW.every(i => seg[i].every(r => parts(r).every(q => GATES[i].test(q) && !/html\.ph/.test(q)))) && seg.flat().every(r => !/html\.ph/.test(r.sel)));
+    check('NO rule of the region is inside the phone media query: the media queries are the narrower-width variants only (max-width 339 and 354), never @media (max-width: 767px)', seg.flat().every(r => !r.at.some(a => /767px/.test(a)) && r.at.every(a => /^@media \(max-width: (339|354)px\)$/.test(a))), [...new Set(seg.flat().map(r => r.at.join('>')))].join(' | '));
     check('nothing outside the region mentions html.sr: not the phone block, not the CSS above it', !/html\.sr\b/.test(CSS.slice(0, PHONE_END)));
     // each twin has an original: the same rule with html.ph back, same media chain, same declarations
     const norm = x => x.replace(/\s+/g, ' ').trim();
@@ -729,13 +744,18 @@ T('twins', () => {
         ['html.sr .sr-row-scroll::-webkit-scrollbar', 'html.ph .ph-row-scroll::-webkit-scrollbar'], ['html.sr .sr-row-scroll > *', 'html.ph .ph-row-scroll > *']];
     const origOf = (r, i) => i === 0 ? (NEUTRAL.find(n => n[0] === r.sel) || [])[1] : parts(r).map(q => q.replace(/^html\.sr(-[a-z]+)?/, 'html.ph')).join(', ');
     const missing = [], bodyDiff = [];
-    seg.forEach((x, i) => x.forEach(r => {
+    TW.forEach(i => seg[i].forEach(r => {
         const o = origOf(r, i);
         const cand = phone.filter(q => q.at.slice(1).join() === r.at.join() && (i === 0 ? parts(q).includes(o) : norm(q.sel) === norm(o)));
         if (!cand.length) missing.push(r.sel); else if (!cand.some(q => norm(q.body) === norm(r.body))) bodyDiff.push(r.sel);
     }));
     check('every twin has its original in the phone block (selector with html.ph put back, the same narrower-width chain) (' + all.length + ' twins)', missing.length === 0, missing.slice(0, 3).join(' ; ') || 'all found');
     check('the declarations of every twin are EXACTLY those of its original (same properties, same values, same order)', bodyDiff.length === 0, bodyDiff.slice(0, 3).join(' ; ') || 'all equal');
+    // the rules that are not twins: the tokens (the four spacings, the values of the phone block's html.ph rule; --target is not among them) and the two desktop rules of the Netz surface
+    const phTok = phone.find(r => r.sel === 'html.ph' && !r.at.slice(1).length), tokOf = (b) => { const o = {}; b.replace(/--sp-(\d):\s*([^;]+);/g, (m, n, v) => { o[n] = v.trim(); return m; }); return o; };
+    check('the token rule is `html.sr { --sp-1 .. --sp-4 }` with the values of the phone block\'s html.ph rule (4, 8, 16, 32px) and defines nothing else: no --target (it follows the pointer), no panel or canvas token', seg[1].length === 1 && seg[1][0].sel === 'html.sr' && JSON.stringify(tokOf(seg[1][0].body)) === JSON.stringify(tokOf(phTok.body)) && Object.keys(tokOf(seg[1][0].body)).join() === '1,2,3,4' && (seg[1][0].body.match(/--[a-z0-9-]+\s*:/g) || []).length === 4);
+    check('the Netz rules for 768px and up (2): both are html.sr-netz:not(.ph) (one class more than the twins they follow), both on #more-netz.ph-sheet-rows > #net-group: shown again as a flex column group, hidden again with its [hidden] attribute; they come AFTER the twins of the Netz sheet', seg[5].length === 2 && seg[5].every(r => /^html\.sr-netz:not\(\.ph\) #more-netz\.ph-sheet-rows > #net-group(\[hidden\])?$/.test(r.sel)) && /display:\s*flex/.test(seg[5][0].body) && /display:\s*none/.test(seg[5][1].body) && bpos[5] > bpos[4]);
+    check('no rule of the region forces --target (html.ph does; a gate must not): no `--target:` declaration in it', !/--target\s*:/.test(region));
     // the 17 rules that stay phone-only have no twin (the sheet host, the panel, the notices, the Netz panel buttons and Net lines icon, the layer sheet, the rail sheet, the dialogs, the timeline group box)
     const PHONE_ONLY = ['html.ph .ph-sheet', 'html.ph .ph-sheet .control-group', 'html.ph .ph-sheet.ph-sheet-rows', 'html.ph .ph-slot [hidden]', 'html.ph .ph-slot .net-kind-btn', 'html.ph .ph-slot .layer-btn', 'html.ph .ph-toolrow #net-lines-btn',
         'html.ph .ph-toolrow #net-lines-btn::before', 'html.ph #timeline-group, html.ph #timeline-group:not(.ts-open)', 'html.ph #layer-more-panel .stepper > input[type="number"]', 'html.ph .ph-sheet-row .control-group > input[type="number"]',
@@ -745,17 +765,16 @@ T('twins', () => {
     check('the phone-only rules have NO twin (' + PHONE_ONLY.length + ' listed: sheet host, panel, notices, Netz panel buttons, Net lines icon, layer sheet, rail sheet, dialogs, the timeline group box)', stray.length === 0 && PHONE_ONLY.every(sel => phone.some(r => norm(r.sel) === norm(sel))), stray.join(' ; ') || 'none');
     // the order of the twins inside a block is the order of their originals
     let orderBad = [];
-    seg.slice(1).forEach((x, bi) => {
-        const idx = x.map(r => { const o = origOf(r, bi + 1); return phone.findIndex(q => q.at.slice(1).join() === r.at.join() && norm(q.sel) === norm(o)); });
+    [2, 3, 4, 6].forEach(bi => {
+        const x = seg[bi], idx = x.map(r => { const o = origOf(r, bi); return phone.findIndex(q => q.at.slice(1).join() === r.at.join() && norm(q.sel) === norm(o)); });
         for (let k = 1; k < idx.length; k++) if (idx[k] < idx[k - 1]) orderBad.push(x[k].sel);
     });
     check('the twins keep the relative order of their originals within every block (the cascade of equal specificity is the source order)', orderBad.length === 0, orderBad.slice(0, 3).join(' ; ') || 'in order');
-    // the id rules and the media variants among the twins
     check('every [hidden] variant and every narrower-width variant of the twins comes AFTER the rule it modifies', all.every((r, i) => parts(r).filter(q => /\[hidden\]/.test(q)).every(q => { const base = q.replace(/\[hidden\]/g, ''); const j = all.findIndex(o => o.at.join() === r.at.join() && parts(o).includes(base)); return j < 0 || j < i; })));
-    // the gates are only set by the engine (a class of <html>): nothing sets them in C0b-1
+    // the gates are only set by the engine (a class of <html>)
     const scripts = ['sketch.js', 'ui.js', 'ui-phone.js', 'ui-phone-chips.js', 'ui-phone-timeline.js', 'ui-phone-pairing.js', 'ui-net.js', 'ui-layers.js', 'ui-timeline.js', 'ui-rail.js', 'ui-farbe.js', 'nav.js'].map(f => [f, fs.readFileSync(path.join(ROOT, f), 'utf8')]);
     const setters = scripts.filter(([f, t]) => /classList\.(add|toggle)\(\s*['"]sr(-[a-z]+)?['"]/.test(t) || /classList\.add\(\s*surfaceState\[/.test(t) || /classList\.add\(sf\.flag|classList\.add\(st\.flag/.test(t));
-    check('ONLY the engine sets a gate class (html.sr and the flags of the surface registry): ui-phone.js, in setSurfaceFlags(); no other script (since C0b-2; the twins match only while the engine has a surface applied)', setters.map(x => x[0]).join() === 'ui-phone.js', setters.map(x => x[0]).join() || 'no script');
+    check('ONLY the engine sets a gate class (html.sr and the flags of the surface registry): ui-phone.js, in setSurfaceFlags(); no other script', setters.map(x => x[0]).join() === 'ui-phone.js', setters.map(x => x[0]).join() || 'no script');
     check('no markup uses the new classes: index.html has no class "sr", "sr-host", "sr-pane", "sr-row" or "sr-row-scroll" (the neutral classes are made by the engine later)', !/class="[^"]*\bsr(-host|-pane|-row|-row-scroll)?\b/.test(HTML));
 });
 
