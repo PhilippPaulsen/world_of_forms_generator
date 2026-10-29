@@ -72,7 +72,16 @@ T('view', () => {
     check('it calls it only when the wanted outline CHANGED (compares with what it last passed)', /if \(same\) return false;[\s\S]{0,80}outlined = want;/.test(c));
     check('the triggers: UI tick (sync), every document click, deferred after a resize and after a tabchange; no MutationObserver', /doc\.addEventListener\('click'/.test(c) && /doc\.addEventListener\('tabchange'/.test(c) && /win\.addEventListener\('resize'/.test(c) && !/MutationObserver/.test(c));
     check('the active sheet comes from window.activeLayerNow, which ui-phone-timeline.js defines', /win\.activeLayerNow/.test(c) && /window\.activeLayerNow = function/.test(strip(fs.readFileSync(path.join(ROOT, 'ui-phone-timeline.js'), 'utf8'))));
-    check('release is covered: the chips count as shown only while they are not in their hidden holder and no ancestor is hidden (a parked pane, the holder after release), and only while the trails surface is applied (html.sr-trails, set and removed by the engine: C0b-2; it was html.ph)', /n === holder \|\| n\.hidden/.test(c) && /html\.classList\.contains\('sr-trails'\)/.test(c) && !/html\.classList\.contains\('ph'\)/.test(c));
+    check('release is covered: the chips count as shown only while they are not in their hidden holder and no ancestor is hidden (a parked pane, the holder after release), and only while the trails surface is applied (html.sr-trails, set and removed by the engine: C0b-2; it was html.ph)', /n === holder \|\| n\.hidden/.test(c) && /html\.classList\.contains\('sr-trails'\)/.test(c) && (c.match(/html\.classList\.contains\('ph'\)/g) || []).length === 1);   // html.ph is read once, for the text of the empty line, never for the gate
+});
+
+console.log('\n== the hover is forwarded, never written (C0b-5) ==');
+T('forward', () => {
+    const c = strip(CHIPS), render = strip(fnText(SKETCH, 'renderFaceColorsPanel'));
+    check('sketch.js binds the model rows\' hover with NATIVE mouseenter / mouseleave listeners on the row (what the chips forward to): the row\'s mouseenter sets faceHover = { sheet, key } and redraws, its mouseleave clears it only when the key is the same', /row\.addEventListener\('mouseenter', \(\) => \{ faceHover = \{ sheet, key: t\.key \}; redraw\(\); \}\)/.test(render) && /row\.addEventListener\('mouseleave', \(\) => \{ if \(faceHover && faceHover\.key === t\.key\) \{ faceHover = null; redraw\(\); \} \}\)/.test(render));
+    check('the chips send exactly those two event types, as plain non-bubbling MouseEvents, with dispatchEvent on the row found by key at that moment', /new Ev\(m\.type, \{ bubbles: false, cancelable: false, view: win \}\)/.test(c) && /row\.dispatchEvent\(/.test(c) && /type: 'mouseenter'/.test(c) && /type: 'mouseleave'/.test(c) && /function rowByKey\(key\)/.test(c));
+    check('only a mouse pointer starts a hover (pointerType) and every end of the chips (rebuild, not shown) clears it: the clear event is sent from render() and from syncHighlight()', /pointerType !== 'mouse'/.test(c) && /function render\(\) \{[\s\S]{0,200}applyHover\(\{ type: 'clear' \}\)/.test(c) && /if \(!shown\) applyHover\(\{ type: 'clear' \}\)/.test(c));
+    check('the redraw cost stays sketch.js\'s: the chips call no redraw() and no setFaceHover; there is no window.setFaceHover in sketch.js (the additive export was NOT needed)', !/redraw\(|setFaceHover/.test(c) && !/setFaceHover/.test(strip(SKETCH)));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

@@ -347,6 +347,18 @@
       if (def.blocks) buildBlocks(def, content, content, st, host && host.park);
       if (def.steppers && !(host && host.steppers === false)) decorateSteppers(def, st, host && Array.isArray(host.steppers) ? host.steppers : null);
     }
+    // host kind 'group' (the colour trails at 768px and up): an existing group of the page (the Face Colors group) gets a row host of its own - made here, id and items from the config - and the containers a view made
+    // (host.items) move into it. The group's own content stays where it is (the CSS parks it); its visibility stays whoever owns it (sketch.js hides the group while Fill is off). release() puts the items back
+    // and removes the host.
+    function buildGroup(host, st) {
+      const group = doc.getElementById(host.id);
+      if (!group) { if (missing.indexOf(host.id) < 0) missing.push(host.id); return; }
+      const h = el('div', 'sr-host', { id: host.hostId });
+      (host.items || []).forEach(function (id) { take(id, h); });
+      group.appendChild(h);
+      st.groupHosts.push(h);
+      (host.items || []).forEach(afterShow);
+    }
     function syncRows() {
       eachSurface(function (st) {
         st.sheetBlocks.forEach(function (blk) {
@@ -390,9 +402,10 @@
         if (mode === 'inline' && sf.inlineOn !== true) return;
         const host = (sf.hosts || {})[mode];
         if (!host) return;
-        const st = surfaceState[name] = { name: name, mode: mode, flag: sf.flag || null, sheets: [], sheetBlocks: [], rowHosts: [], decorated: [], rowObserver: null, lockObserver: null };
+        const st = surfaceState[name] = { name: name, mode: mode, flag: sf.flag || null, sheets: [], sheetBlocks: [], rowHosts: [], groupHosts: [], decorated: [], rowObserver: null, lockObserver: null };
         if (host.kind === 'sheet' && b) buildSheet(host.id, b, st);
         else if (host.kind === 'overlay') buildOverlay(host.id, st, host);
+        else if (host.kind === 'group') buildGroup(host, st);
         // host kind 'pane' (the trails): the layout's sub-tab pane holds the rows; nothing to build here
       });
     }
@@ -494,6 +507,7 @@
           undecorateSteppers(st);
           st.sheetBlocks.forEach(function (blk) { if (blk.el.parentNode) blk.el.parentNode.removeChild(blk.el); });
           st.rowHosts.forEach(function (h) { h.classList.remove('ph-sheet-rows'); });
+          (st.groupHosts || []).forEach(function (h) { if (h.parentNode) h.parentNode.removeChild(h); });
         });
         if (built) {
           built.proxied.forEach(function (node) { delete node.focus; });
@@ -538,13 +552,13 @@
       built.slot.setAttribute('aria-labelledby', 'ph-subtab-' + sid);
       if (lost) built.buttons[sid].focus();
       remembered[applied] = sid;
-      config.subtabs[sid].rows.forEach(function (row) {
-        row.items.forEach(function (it) {
-          const hook = config.afterShow && config.afterShow[it.id], g = hook && win[hook[0]];
-          if (g && typeof g[hook[1]] === 'function') g[hook[1]]();
-        });
-      });
+      config.subtabs[sid].rows.forEach(function (row) { row.items.forEach(function (it) { afterShow(it.id); }); });
       return true;
+    }
+    // the view that made an element may want to look again once it has moved into a visible place (config.afterShow)
+    function afterShow(id) {
+      const hook = config.afterShow && config.afterShow[id], g = hook && win[hook[0]];
+      if (g && typeof g[hook[1]] === 'function') g[hook[1]]();
     }
 
     // nav.js writes html[data-tab] in every show(), the first one on DOMContentLoaded; uiNav.current() already says 'form' before that (its default), which may not be the tab the URL asks for

@@ -23,6 +23,8 @@
  *                       strength step (square_sin_field), the Netz "Mehr" overlay open (more_netz_open), back to
  *                       Aus and to the tab the page started in. `found` says which controls the script found. Since commit 4a of the sheets redesign the overlay is also
  *                       measured in four more states (more_netz_sin_tiled_focus, more_netz_geo_tiled, more_netz_geo_single, more_netz_geo_macro) and the controls inside it are tracked.
+ *   face_trails         the trails chapter (patterns commit C0b-5): the Farbe tab, a triangle of three lines (two face trails) and Fill on (trails_fill_on): the Face Colors group and, at 768px and up, its
+ *                       chip view (nine more selectors, TRACKED_TRAILS, tracked in this one snapshot only); put back afterwards
  *   layer_timeline      a new layer (it becomes active), "Add to Timeline", and the same again:
  *                       two keyframes, so Play and the scrub bar are measured too. Since the
  *                       cleanup (step B) these two actions go through window.layerApi (add(),
@@ -95,6 +97,13 @@
     '#net-geo-row', '#net-alternate-btn', '#net-reverse-btn', '#net-lines-btn', '#net-readout',
   ];
 
+  // patterns commit C0b-5 (baseline-cleanup-7.json): the Face Colors group (shown by sketch.js while the active sheet's Fill is on) and, at 768px and up, the chip view that takes its place: the row host the engine
+  // makes, the chip bar, the first chip, the stepper row, its two buttons, the n/N display and the label. Tracked ONLY in the snapshots of the trails chapter (face_trails): in every other state they would be null
+  // (a recording of an earlier tree has no face_trails and none of these), and the file stays under 1 MB.
+  const TRACKED_TRAILS = [
+    '#face-colors-group', '#sr-trails-host', '#ph-trail-chips', '#ph-trail-chips .ph-chip:nth-child(1)', '#ph-trail-stepper', '#ph-trail-stepper .ph-trail-prev', '#ph-trail-stepper .ph-trail-next', '#ph-trail-stepper .ph-trail-count', '#ph-trail-stepper .ph-trail-label',
+  ];
+
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   function rect(el) {
@@ -149,9 +158,9 @@
     return (el.id ? '#' + el.id : el.tagName.toLowerCase() + (el.className ? '.' + String(el.className).split(' ')[0] : ''));
   }
 
-  function snap() {
+  function snap(withTrails) {
     const out = {};
-    TRACKED.forEach((sel) => { const el = document.querySelector(sel); out[sel] = sel.indexOf('#ui-notices') === 0 ? rectViewport(el) : rect(el); });
+    (withTrails ? TRACKED.concat(TRACKED_TRAILS) : TRACKED).forEach((sel) => { const el = document.querySelector(sel); out[sel] = sel.indexOf('#ui-notices') === 0 ? rectViewport(el) : rect(el); });
     const root = document.documentElement;
     out.scrollWidth = root.scrollWidth;
     out.clientWidth = root.clientWidth;
@@ -172,12 +181,12 @@
 
   // Every snapshot but the notice one is taken with NO notice showing: a notice that an earlier step raised (the net chapter's "Sin und Tan brauchen mindestens 4 Knoten" one) would still be
   // on screen in a fast recording and gone in a slow one. UI.hideToast() closes the non-sticky notices; one frame (or 80 ms where the page is hidden and no frame comes) lets the layout settle.
-  async function snapQ(keepNotices) {
+  async function snapQ(keepNotices, withTrails) {
     if (!keepNotices && window.UI && UI.hideToast) {
       UI.hideToast();
       await new Promise((r) => { let done = false; const fin = () => { if (!done) { done = true; r(); } }; if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fin); setTimeout(fin, 80); });
     }
-    return snap();
+    return snap(withTrails);
   }
 
   async function measureLayout(opts) {
@@ -243,6 +252,30 @@
     if (nav && startTab) { nav.show(startTab); await sleep(wait); }
     click(shapes[0]); await sleep(wait);
     result.square_sin_field = net;
+
+    // The trails chapter (patterns commit C0b-5). The Farbe tab, the base sheet with a triangle of three lines (two face trails) and Fill on: the Face Colors group is shown (sketch.js) and, with the trails surface applied
+    // at 768px and up, holds the chip bar and the stepper row (trails_fill_on). Everything is put back afterwards (Fill as it was, the three lines removed) and the page returns to the tab it started in.
+    const ft = {};
+    const fillBtn = document.querySelector('#btn-toggle-faces');
+    if (typeof activeNodes === 'function' && typeof activeConnections === 'function' && fillBtn) {
+      const fnodes = activeNodes(), fconns = activeConnections();
+      if (nav) { nav.show('farbe'); await sleep(wait); }
+      if (fnodes.length >= 3) {
+        const ids = fnodes.map((n) => n.id), n0 = fconns.length;
+        fconns.push([ids[0], ids[1]]); fconns.push([ids[1], ids[2]]); fconns.push([ids[2], ids[0]]);
+        if (typeof redraw === 'function') redraw();
+        await sleep(wait);
+        const fillWas = fillBtn.classList.contains('active');
+        if (!fillWas) { click(fillBtn); await sleep(wait * 3); }
+        ft.trails_fill_on = await snapQ(false, true);
+        if (!fillWas) { click(fillBtn); await sleep(wait); }
+        fconns.length = n0;
+        if (typeof redraw === 'function') redraw();
+        await sleep(wait);
+      }
+      if (nav && startTab) { nav.show(startTab); await sleep(wait); }
+    }
+    result.face_trails = ft;
 
     // Two keyframes, so the playback controls (Play, progress) appear too.
     // Each keyframe is a new layer that is active when "Add to Timeline"

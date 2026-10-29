@@ -540,7 +540,10 @@ T('farbe-highlight', () => {
     eng.show('spuren'); p.doc.dispatch('click', { target: p.doc.body });
     check('Farbe applied again with Spuren remembered: outlined', last() === 'base:k1' || last() === 'base:k2', calls.join());
     const n1 = calls.length; p.mq.set(false); p.doc.dispatch('click', { target: p.doc.body });
-    check('the phone layout ends (release: the chips go back into their hidden holder, html.ph is gone): CLEARED', last() === 'null:null' && calls.length === n1 + 1 && !p.doc.documentElement.classList.contains('ph'), calls.join());
+    check('the phone layout ends at 768px and up (release, and since C0b-5 the trails surface applies INLINE: the chips move into the Face Colors group): html.ph is gone and, the group being shown, the SAME trail is outlined afterwards (the release asks for one UI tick while the chips are between their places, which clears, and the inline host\'s afterShow looks again, which outlines again: both in the same synchronous step, no frame between; no stale outline)', last() === 'base:k1' && calls.length === n1 + 2 && calls[calls.length - 2] === 'null:null' && !p.doc.documentElement.classList.contains('ph') && p.doc.documentElement.classList.contains('sr-trails') && p.doc.getElementById('ph-trail-chips').parentNode.id === 'sr-trails-host', calls.join());
+    p.faceGroup.hidden = true; p.doc.dispatch('click', { target: p.doc.body });
+    check('...and the group hidden (Fill off) clears it', last() === 'null:null' && calls.length === n1 + 3, calls.join());
+    p.faceGroup.hidden = false; p.doc.dispatch('click', { target: p.doc.body });
     p.mq.set(true); eng.apply('farbe'); p.doc.dispatch('click', { target: p.doc.body });
     check('back in the phone layout the engine shows the REMEMBERED sub-tab (Spuren): outlined again, because the chips are in the slot', eng.state().sub === 'spuren' && last().indexOf('base:') === 0, calls.join());
     eng.show('harmonie'); p.doc.dispatch('click', { target: p.doc.body });
@@ -559,6 +562,75 @@ T('farbe-highlight', () => {
     check('a resize and a tabchange are looked at AFTER the engine\'s own listener: the view queues the look (defer, twice), it does not act inside the event', deferred.length === 2 && calls2.length === 0, deferred.length + ' / ' + calls2.join());
     deferred.splice(0).forEach(fn => fn());
     check('...and the queued look finds the state the engine left (Spuren shown: outlined, once)', calls2.join() === 'base:z' && ch2.outlined().key === 'z', calls2.join());
+});
+// patterns commit C0b-5: the trails surface at 768px and up. The chip view sits in a row host INSIDE the Face Colors group; the group's own content stays (the CSS parks it); no layout, no html.ph
+T('farbe-inline', () => {
+    const p = farbePage(); p.win.MouseEvent = class { constructor(t, o) { this.type = t; this.bubbles = !!(o && o.bubbles); } };
+    p.mq.matches = false; const eng = ph(p), groupKids0 = p.faceGroup.children.map(c => c.id).join(), before = dump(p.doc.documentElement); eng.start();
+    const host = p.doc.getElementById('sr-trails-host'), cls1 = () => p.doc.documentElement.className.split(/\s+/).filter(Boolean).sort().join(' ');
+    check('at 768px and up the Farbe tab applies the trails SURFACE only: no layout (no class ph, applied null, no stack), the flags sr and sr-trails', !p.doc.documentElement.classList.contains('ph') && eng.state().applied === null && p.doc.getElementById('ph-stack') === null && cls1() === 'sr sr-trails' && eng.state().surfaces.join() === 'trails', cls1());
+    check('...the engine made ONE row host div.sr-host#sr-trails-host as the LAST child of #face-colors-group; it holds #ph-trail-chips then #ph-trail-stepper; the chip holder is empty', !!host && host.className === 'sr-host' && host.parentNode === p.faceGroup && p.faceGroup.children[p.faceGroup.children.length - 1] === host && host.children.map(c => c.id).join() === 'ph-trail-chips,ph-trail-stepper' && p.doc.getElementById('ph-chip-home').children.length === 0 && p.doc.all().filter(n => n.id === 'sr-trails-host').length === 1);
+    check('...the group\'s own children are untouched and in place (the model stays: the list, the status, the notes), and no id is twice in the document', p.faceGroup.children.filter(c => c !== host).map(c => c.id).join() === groupKids0 && p.faceGroup.children.indexOf(p.faceList) >= 0 && (() => { const ids = p.doc.all().map(n => n.id).filter(Boolean); return new Set(ids).size === ids.length; })());
+    check('...the group\'s visibility is still sketch.js\'s: the engine never sets hidden on it (it is hidden as before while Fill is off)', p.faceGroup.hidden === true && eng.state().missing.length === 0);
+    // the lifecycle of the outline
+    const calls = [], N = p.chips.nodes; p.win.setFaceSelected = (sheet, key) => calls.push(sheet + ':' + key); let sheet = 'base'; p.win.activeLayerNow = () => sheet;
+    const last = () => calls.length ? calls[calls.length - 1] : '(none)';
+    const mkRows = specs => { while (p.faceList.firstChild) p.faceList.removeChild(p.faceList.firstChild); specs.forEach((sp, i) => { const row = p.doc.createElement('div'); row.className = 'fc-row'; row.dataset.key = sp; const sw = p.doc.createElement('span'); sw.className = 'fc-swatch'; sw.style.backgroundColor = 'rgb(' + i + ', 0, 0)'; const lab = p.doc.createElement('span'); lab.className = 'fc-label'; lab.textContent = 'Trail ' + (i + 1) + ' · 2 faces'; row.appendChild(sw); row.appendChild(lab); p.faceList.appendChild(row); }); };
+    const tick = () => { p.doc.dispatch('click', { target: p.doc.body }); p.win.uiSync(); };
+    mkRows(['k1', 'k2', 'k3']); p.chips.refresh(); tick();
+    check('Fill off (the group hidden): the chips are not shown, nothing is outlined, setFaceSelected was never called', calls.length === 0 && p.chips.outlined() === null, calls.join());
+    p.faceGroup.hidden = false; tick();
+    check('Fill on (sketch.js shows the group) with trails: the first trail is outlined at once: setFaceSelected("base", "k1"), once - no sub-tab and no #ph-slot are involved', last() === 'base:k1' && calls.length === 1, calls.join());
+    N.chips.children[2].dispatch('click');
+    check('a chip tap moves the outline to its trail', last() === 'base:k3' && calls.length === 2, calls.join());
+    tick();
+    check('a tick with nothing changed calls nothing', calls.length === 2, calls.join());
+    sheet = 1; tick();
+    check('the active sheet switches to a layer: the outline follows (1, k3)', last() === '1:k3', calls.join());
+    sheet = 'base'; tick();
+    p.faceGroup.hidden = true; tick();
+    check('Fill off: the group is hidden by sketch.js: the outline is CLEARED (once)', last() === 'null:null' && p.chips.outlined() === null, calls.join());
+    p.faceGroup.hidden = false; tick();
+    check('Fill on again: outlined again (the first trail: the selection was lost with the rows while the group was hidden, as on the phone)', last() === 'base:k1', calls.join());
+    N.chips.children[2].dispatch('click'); mkRows(['k1', 'k2']); p.chips.refresh(); tick();
+    check('the selected trail disappears (3 -> 2 trails): the CLAMPED trail is outlined (k2), not the dead key', last() === 'base:k2', calls.join());
+    const nTab = calls.length; p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
+    check('leaving the Farbe tab: the engine releases the trails surface (no sr-trails, no host, the chips back in their holder) and the outline is cleared', calls.length >= nTab + 0 && (p.win.uiSync(), true) && p.doc.getElementById('sr-trails-host') === null && p.doc.getElementById('ph-chip-home').children.map(c => c.id).join() === 'ph-trail-chips,ph-trail-stepper' && cls1() === 'sr sr-netz' && last() === 'null:null', cls1() + ' / ' + last());
+    p.doc.documentElement.setAttribute('data-tab', 'farbe'); p.doc.dispatch('tabchange', { detail: { tab: 'farbe' } }); tick();
+    check('back on Farbe: the host is made again (one), the chips are in it, outlined', !!p.doc.getElementById('sr-trails-host') && p.doc.getElementById('sr-trails-host').children.length === 2 && last().indexOf('base:') === 0 && cls1() === 'sr sr-trails', cls1() + ' / ' + last());
+    // phone <-> inline round trips
+    p.mq.set(true); tick();
+    check('narrow: the layout is built (ph), the host is gone, the chips are in the Spuren pane; the surface flag stays; one element per id', p.doc.documentElement.classList.contains('ph') && p.doc.getElementById('sr-trails-host') === null && cls1().indexOf('sr-trails') >= 0 && (() => { const ids = p.doc.all().map(n => n.id).filter(Boolean); return new Set(ids).size === ids.length; })());
+    p.mq.set(false); tick();
+    check('wide again: the layout is released, the host is back with the two containers, the group\'s children untouched, one element per id', !p.doc.documentElement.classList.contains('ph') && p.doc.getElementById('sr-trails-host') && p.doc.getElementById('sr-trails-host').children.map(c => c.id).join() === 'ph-trail-chips,ph-trail-stepper' && p.faceGroup.children.filter(c => c.id !== 'sr-trails-host').map(c => c.id).join() === groupKids0 && cls1() === 'sr sr-trails' && (() => { const ids = p.doc.all().map(n => n.id).filter(Boolean); return new Set(ids).size === ids.length; })(), cls1());
+    for (let i = 0; i < 3; i++) { p.mq.set(true); p.mq.set(false); }
+    check('three more round trips leave no drift: one host, two containers in it, the flags are sr and sr-trails, nothing else', p.doc.all().filter(n => n.id === 'sr-trails-host').length === 1 && p.doc.getElementById('sr-trails-host').children.length === 2 && cls1() === 'sr sr-trails');
+    eng.release();
+    check('release() takes everything back: the host is removed, the chips are in their holder, no flag, no class, no marker comment is left, the group\'s own children are where they were', p.doc.getElementById('sr-trails-host') === null && p.doc.getElementById('ph-chip-home').children.map(c => c.id).join() === 'ph-trail-chips,ph-trail-stepper' && cls1() === '' && p.faceGroup.children.map(c => c.id).join() === groupKids0 && (function none(n) { return n.childNodes.every(c => (c.nodeType !== 8 || !/^ph:/.test(c.text)) && (c.nodeType !== 1 || none(c))); })(p.doc.documentElement), cls1());
+    check('release is idempotent, and a new apply(farbe) does the same as the first (one host)', (() => { const m = p.doc.mutations; eng.release(); return p.doc.mutations === m; })() && (eng.apply('farbe'), p.doc.all().filter(n => n.id === 'sr-trails-host').length === 1));
+    // the hover
+    const q = farbePage(); q.win.MouseEvent = class { constructor(t, o) { this.type = t; this.bubbles = !!(o && o.bubbles); } }; q.mq.matches = false; const eq = ph(q); eq.start(); q.faceGroup.hidden = false;
+    const rowsLog = []; const mk = specs => { while (q.faceList.firstChild) q.faceList.removeChild(q.faceList.firstChild); specs.forEach((sp, i) => { const row = q.doc.createElement('div'); row.className = 'fc-row'; row.dataset.key = sp; const sw = q.doc.createElement('span'); sw.className = 'fc-swatch'; const lab = q.doc.createElement('span'); lab.className = 'fc-label'; lab.textContent = 'Trail ' + (i + 1) + ' · 2 faces'; row.appendChild(sw); row.appendChild(lab); ['mouseenter', 'mouseleave'].forEach(t => row.addEventListener(t, e => rowsLog.push(t + ':' + sp + ':' + (e.bubbles ? 'b' : 'n')))); q.faceList.appendChild(row); }); };
+    mk(['k1', 'k2', 'k3']); q.chips.refresh(); const Q = q.chips.nodes, cn = i => Q.chips.children[i];
+    cn(1).dispatch('pointerenter', { pointerType: 'mouse' });
+    check('hover: a MOUSE entering chip 2 sends ONE mouseenter (it does not bubble) to the model row k2 - looked up by its key, a row the CSS hides (display: none) takes it; nothing else is sent', rowsLog.join() === 'mouseenter:k2:n' && q.chips.hovered() === 'k2', rowsLog.join());
+    cn(2).dispatch('pointerenter', { pointerType: 'mouse' });
+    check('moving to chip 3: mouseleave on k2, then mouseenter on k3', rowsLog.slice(1).join() === 'mouseleave:k2:n,mouseenter:k3:n' && q.chips.hovered() === 'k3', rowsLog.join());
+    rowsLog.length = 0; cn(0).dispatch('pointerenter', { pointerType: 'touch' }); cn(0).dispatch('pointerenter', { pointerType: 'pen' });
+    check('a touch or a pen pointer entering a chip sends nothing and does not leave the hovered trail (the mouse events a tap emulates)', rowsLog.length === 0 && q.chips.hovered() === 'k3', rowsLog.join());
+    cn(2).dispatch('pointerleave');
+    check('the mouse leaves chip 3: one mouseleave on k3, the hover is cleared', rowsLog.join() === 'mouseleave:k3:n' && q.chips.hovered() === null, rowsLog.join());
+    rowsLog.length = 0; cn(0).dispatch('pointerenter', { pointerType: 'mouse' }); rowsLog.length = 0;
+    mk(['k1', 'k2', 'k3']); q.chips.refresh();
+    check('the chip bar is REBUILT while a chip is hovered: the leave goes to the row with that key as it is NOW (the new row k1, found fresh) and the hover is cleared - no stale hover', rowsLog.join() === 'mouseleave:k1:n' && q.chips.hovered() === null, rowsLog.join());
+    rowsLog.length = 0; Q.chips.children[0].dispatch('pointerenter', { pointerType: 'mouse' }); rowsLog.length = 0; q.faceGroup.hidden = true; q.win.uiSync();
+    check('the group is hidden (Fill off) while a chip is hovered: the hover is cleared at the next look', q.chips.hovered() === null && rowsLog.join() === 'mouseleave:k1:n', rowsLog.join());
+    q.faceGroup.hidden = false; q.win.uiSync(); Q.chips.children[1].dispatch('pointerenter', { pointerType: 'mouse' }); rowsLog.length = 0; q.doc.documentElement.setAttribute('data-tab', 'netz'); q.doc.dispatch('tabchange', { detail: { tab: 'netz' } }); q.win.uiSync();
+    check('the tab is left while a chip is hovered: the surface is released and the hover is cleared', q.chips.hovered() === null && rowsLog.join() === 'mouseleave:k2:n', rowsLog.join());
+    q.faceGroup.hidden = false; q.doc.documentElement.setAttribute('data-tab', 'farbe'); q.doc.dispatch('tabchange', { detail: { tab: 'farbe' } }); q.win.uiSync(); const QC = q.chips.nodes.chips;
+    QC.children[1].focus(); QC.children[1].dispatch('click');
+    check('a keyboard user on a chip stays on it: the tap rebuilds the bar, the focus goes to the new chip with the same index (it was lost with the removed chip before C0b-5)', q.doc.activeElement === QC.children[1] && QC.children[1].getAttribute('aria-pressed') === 'true', String(q.doc.activeElement && q.doc.activeElement.getAttribute && q.doc.activeElement.getAttribute('data-index')));
+    check('the view never writes the hover itself: no faceHover, no setFaceHover on the window', Object.keys(q.win).filter(k => /^faceHover|^setFaceHover/.test(k)).length === 0);
 });
 T('farbe-chips', () => {
     const p = farbePage(), eng = ph(p); eng.start(); eng.show('spuren');
@@ -1487,7 +1559,7 @@ T('surface-desktop', () => {
     check('start() at 768px and up (every inline switch is OFF): no class, nothing moved, no stack, the tree is untouched', cls(p) === '' && dump(p.doc.documentElement) === before && eng.state().surfaces.length === 0 && eng.state().moved.length === 0);
     p.mq.set(false); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
     check('...and a tab change and a repeated media-query event at 768px and up change nothing either', cls(p) === '' && dump(p.doc.documentElement) === before);
-    check('the registry: the inline switch is ON for the Netz surface only (the other three are OFF), so the Form tab at 768px and up applies nothing', Object.keys(config.surfaces).every(n => config.surfaces[n].inlineOn === (n === 'netz')));
+    check('the registry: the inline switch is ON for the Netz and trails surfaces (the other two are OFF), so the Form tab at 768px and up applies nothing', Object.keys(config.surfaces).every(n => config.surfaces[n].inlineOn === (n === 'netz' || n === 'trails')));
 });
 T('surface-switch', () => {
     // a COPY of the config with the Netz surface\'s switch ON: the inline mode applies the overlay blocks without the layout, and nothing else (the engine builds only an overlay host inline)
