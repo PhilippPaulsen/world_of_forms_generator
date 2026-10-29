@@ -129,10 +129,13 @@ console.log('\n== index.html: every control without visible text has an aria-lab
     check('the three anchor-preview swatches are role="img" with an aria-label', ['farbe-anchor-preview', 'farbe-anchor-preview-kreis', 'farbe-anchor-preview-dreieck'].every(id => new RegExp('<span id="' + id + '"[^>]*\\brole="img"[^>]*\\baria-label="Anker-Vorschau"').test(body)));
 
     // controls with visible text: named by the text; the title is a description and there is NO aria-label (the harmony and net buttons that already had a label of their own are not in this list)
-    const TEXT_BUTTONS = ['export-png', 'export-json', 'export-svg', 'net-field-btn', 'net-lines-btn', 'net-reverse-btn', 'net-alternate-btn', 'btn-fold-3', 'btn-fold-6'];
+    const TEXT_BUTTONS = ['export-png', 'export-json', 'export-svg', 'net-field-btn', 'net-alternate-btn', 'btn-fold-3', 'btn-fold-6'];
     const found = TEXT_BUTTONS.map(id => textTitle.find(t => t.id === id));
     check('the text buttons with a title are all found (the list is current)', found.every(Boolean), TEXT_BUTTONS.filter((id, i) => !found[i]).join(', ') || TEXT_BUTTONS.length + ' buttons');
     check('...and none of them has an aria-label: the visible text is the name, the title the description', found.filter(Boolean).every(t => !t.hasAria), found.filter(t => t && t.hasAria).map(t => t.id).join(', ') || 'none');
+    // C0b-4: Net lines and Reverse are icon buttons (no text): the name is the aria-label with the text of the title (UI.name's rule for a control with no visible text)
+    const iconNet = ['net-lines-btn', 'net-reverse-btn'].map(id => { const m = new RegExp('<button[^>]*\\bid="' + id + '"[^>]*>([^<]*)</button>').exec(body); return m && { id, text: m[1].trim(), title: (/\btitle="([^"]*)"/.exec(m[0]) || [])[1], aria: (/\baria-label="([^"]*)"/.exec(m[0]) || [])[1] }; });
+    check('Net lines and Reverse have no visible text and an aria-label equal to the title (the name of an icon-only button)', iconNet.every(b => b && b.text === '' && b.aria && b.aria === b.title), JSON.stringify(iconNet));
 }
 
 console.log('\n== sketch.js: the dynamic title sites ==');

@@ -197,19 +197,24 @@
     // A sheet with `blocks` (config.sheets.<id>.blocks): the existing elements go into row containers inside blocks inside the sheet's content, in the order the config says. They move whole (nothing is cloned or
     // rewritten) and sketch.js keeps showing and hiding them; a row whose elements are ALL hidden is hidden itself, a block whose rows are all hidden too, so no empty row and no gap is left. release() puts the
     // elements back (restoreAll) and removes the containers; a MutationObserver (where there is one) and every UI tick re-read the `hidden` attributes.
-    function buildBlocks(def, host, content, st) {
+    // park: ids of the host that stay where they are (the Netz overlay at 768px and up: the typed strength field, which is not shown there). A row left with no item and a block left with no row are not made.
+    function buildBlocks(def, host, content, st, park) {
+      const parked = function (id) { return !!park && park.indexOf(id) >= 0; };
       host.classList.add('ph-sheet-rows');
       st.rowHosts.push(host);
       def.blocks.forEach(function (rows) {
         const blk = el('div', 'ph-sheet-block'), rowEls = [];
         rows.forEach(function (row) {
+          const items = row.items.filter(function (it) { return !parked(it.id); });
+          if (!items.length) return;
           const r = el('div', row.wrap ? 'ph-sheet-row ph-sheet-row-wrap' : 'ph-sheet-row');
           if (row.h) r.setAttribute('data-h', String(row.h));
-          row.items.forEach(function (it) { take(it.id, r); });
+          items.forEach(function (it) { take(it.id, r); });
           blk.appendChild(r);
-          const gates = {}; row.items.forEach(function (it) { if (it.gate) gates[it.id] = it.gate; });   // an item behind a gate is hidden unless the content has that class
-          rowEls.push({ el: r, ids: row.items.map(function (it) { return it.id; }), gates: gates, content: content });
+          const gates = {}; items.forEach(function (it) { if (it.gate) gates[it.id] = it.gate; });   // an item behind a gate is hidden unless the content has that class
+          rowEls.push({ el: r, ids: items.map(function (it) { return it.id; }), gates: gates, content: content });
         });
+        if (!rowEls.length) return;
         content.appendChild(blk);
         st.sheetBlocks.push({ el: blk, rows: rowEls });
       });
@@ -266,10 +271,12 @@
       nativeSet(displayOf(raw, decimals));
       return function undo() { const keep = raw; delete input.value; if (desc) nativeSet(keep); else { input.value = keep; delete input.__shown; } };
     }
-    function decorateSteppers(def, st) {
+    // only: the ids to decorate (a host that wants some of the overlay's steppers: the Netz overlay at 768px and up has the fine Fokus stepper only); without it every stepper of the definition
+    function decorateSteppers(def, st, only) {
       const UI = win.UI;
       if (!def.steppers || !UI || typeof UI.stepper !== 'function') return;
       Object.keys(def.steppers).forEach(function (iid) {
+        if (only && only.indexOf(iid) < 0) return;
         const sp = def.steppers[iid], input = doc.getElementById(iid);
         if (!input || !input.parentNode) { if (missing.indexOf(iid) < 0) missing.push(iid); return; }
         let c = stepperCache[iid];
@@ -332,12 +339,13 @@
       return kids.length > 0 && kids.every(function (k) { return k.hidden; });
     }
     // config.overlays: an overlay that exists with its own UI.overlay (ui-net.js's #more-netz) gets the same rows as a sheet's content; its open state is its own (host kind 'overlay' of a surface, in either mode)
-    // host.steppers === false: the host does not wrap the overlay's typed inputs into steppers (the Netz overlay at 768px and up: its exact fields stay plain typed fields until the typed-field commit)
+    // host.steppers: false = the host wraps none of the overlay's typed inputs into steppers; a list of ids = only those; absent = all (the phone). host.park: ids of the blocks that stay where they are, hidden with
+    // their section (the Netz overlay at 768px and up, patterns C0b-4: the typed strength field is parked - the strength is edited in the panel's stepper - and the Fokus input is a fine stepper)
     function buildOverlay(oid, st, host) {
       const def = (config.overlays || {})[oid], content = def && doc.getElementById(def.content);
       if (!content) { if (def && missing.indexOf(def.content) < 0) missing.push(def.content); return; }
-      if (def.blocks) buildBlocks(def, content, content, st);
-      if (def.steppers && !(host && host.steppers === false)) decorateSteppers(def, st);
+      if (def.blocks) buildBlocks(def, content, content, st, host && host.park);
+      if (def.steppers && !(host && host.steppers === false)) decorateSteppers(def, st, host && Array.isArray(host.steppers) ? host.steppers : null);
     }
     function syncRows() {
       eachSurface(function (st) {

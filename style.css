@@ -1582,9 +1582,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   html.ph .ph-slot .layer-btn { box-sizing: border-box; min-height: var(--target); }
 
   /* Net lines: the text button of the Netz sheet (#more-netz) becomes an icon in the tool row - two wavy lines drawn with a mask, so the button, its text (the accessible name), its title and its active state
-     are the ones it has; the text is visually emptied, not removed */
+     are the ones it has; the button has no text, its name is its aria-label (netz.lines.button) */
   html.ph .ph-toolrow #net-lines-btn { position: relative; box-sizing: border-box; flex: none; width: var(--target); height: var(--target); min-width: var(--target); padding: 0; border-radius: var(--radius); font-size: 0; line-height: 0; touch-action: manipulation; }
   html.ph .ph-toolrow #net-lines-btn::before { content: ""; position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); background-color: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 8 C6 4 9 4 12 8 S18 12 21 8'/%3E%3Cpath d='M3 16 C6 12 9 12 12 16 S18 20 21 16'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 8 C6 4 9 4 12 8 S18 12 21 8'/%3E%3Cpath d='M3 16 C6 12 9 12 12 16 S18 20 21 16'/%3E%3C/svg%3E") center / contain no-repeat; }
+
+  /* Reverse (Art panel, Geo only): an icon too, two opposed arrows drawn with a mask; the button has no text, its name is its aria-label (the dictionary key netz.reverse) */
+  html.ph .ph-slot #net-reverse-btn { position: relative; box-sizing: border-box; flex: none; width: var(--target); height: var(--target); min-width: var(--target); padding: 0; border-radius: var(--radius); touch-action: manipulation; }
+  html.ph .ph-slot #net-reverse-btn::before { content: ""; position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); background-color: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8 H20 M16 4 L20 8 L16 12'/%3E%3Cpath d='M20 16 H4 M8 12 L4 16 L8 20'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8 H20 M16 4 L20 8 L16 12'/%3E%3Cpath d='M20 16 H4 M8 12 L4 16 L8 20'/%3E%3C/svg%3E") center / contain no-repeat; }
+  html.ph .ph-slot #net-reverse-btn[hidden] { display: none; }
 
   /* #more-netz is an overlay of its own (a bottom sheet here): the same blocks and rows as the layer sheet. The leftover containers (the strength section, #net-group with the hints and whatever sketch.js still shows in
      it) take no room - every control that matters is in a row - and the hints, the macro title and the headings are parked hidden: the readout line says what they said, shortly. */
@@ -1779,11 +1784,20 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 /* ================================================================================================================================================================
    NETZ AT 768PX AND UP (html.sr-netz:not(.ph))
-   2 rules, after the twins (one more class than they have): what differs from the phone sheet while the layout is OFF (C0b-3).
+   what differs from the phone sheet while the layout is OFF (C0b-3, C0b-4): one more class than the twins, so they come after them. The overlay holds each control once, left aligned: the leftover #net-group (XY / X / Y
+   and the Net lines icon, one row), the fine Fokus stepper, the domain icons, the macro buttons, the Geo row (Reverse and Alternate as icons) and the readout. The typed strength field and the old Fokus row (heading and
+   a 0.1 stepper) are parked hidden: the strength is edited in the panel's stepper, the Fokus has its one fine stepper.
    ================================================================================================================================================================ */
-  /* the controls of #net-group that are NOT in the phone blocks (they live in the panel on the phone: Both / X / Y, the Fokus stepper, Net lines) stay in the overlay at 768px and up: the leftover group is shown again (the strength section, whose heading is all that is left of it, stays hidden) */
-  html.sr-netz:not(.ph) #more-netz.ph-sheet-rows > #net-group { display: flex; }
+  html.sr-netz:not(.ph) #more-netz.ph-sheet-rows { align-items: flex-start; text-align: left; }
+  html.sr-netz:not(.ph) #more-netz.ph-sheet-rows > #net-group { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: var(--sp-2); width: auto; }
   html.sr-netz:not(.ph) #more-netz.ph-sheet-rows > #net-group[hidden] { display: none; }
+  html.sr-netz:not(.ph) #more-netz #net-group .icon-row { justify-content: flex-start; flex-wrap: nowrap; gap: var(--sp-2); }
+  html.sr-netz:not(.ph) #more-netz #net-focus-row, html.sr-netz:not(.ph) #more-netz #net-strength-row { display: none; }
+  html.sr-netz:not(.ph) #more-netz .net-axes-btn { box-sizing: border-box; min-width: var(--target); padding: 0 var(--sp-2); }
+  html.sr-netz:not(.ph) #more-netz #net-lines-btn, html.sr-netz:not(.ph) #more-netz #net-reverse-btn { position: relative; box-sizing: border-box; flex: none; width: var(--target); height: var(--target); min-width: var(--target); padding: 0; border-radius: var(--radius); touch-action: manipulation; }
+  html.sr-netz:not(.ph) #more-netz #net-lines-btn::before { content: ""; position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); background-color: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 8 C6 4 9 4 12 8 S18 12 21 8'/%3E%3Cpath d='M3 16 C6 12 9 12 12 16 S18 20 21 16'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 8 C6 4 9 4 12 8 S18 12 21 8'/%3E%3Cpath d='M3 16 C6 12 9 12 12 16 S18 20 21 16'/%3E%3C/svg%3E") center / contain no-repeat; }
+  html.sr-netz:not(.ph) #more-netz #net-reverse-btn::before { content: ""; position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); background-color: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8 H20 M16 4 L20 8 L16 12'/%3E%3Cpath d='M20 16 H4 M8 12 L4 16 L8 20'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8 H20 M16 4 L20 8 L16 12'/%3E%3Cpath d='M20 16 H4 M8 12 L4 16 L8 20'/%3E%3C/svg%3E") center / contain no-repeat; }
+  html.sr-netz:not(.ph) #more-netz #net-reverse-btn[hidden] { display: none; }
 
 /* ================================================================================================================================================================
    TIMELINE (html.sr-timeline)

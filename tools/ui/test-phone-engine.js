@@ -653,9 +653,13 @@ T('netz-apply', () => {
     eq.release();
     check('...and a release at the end leaves the tree as it was (no marker, no container, no hidden follower)', dump(q.doc.documentElement) === d0);
 });
+const nzRows = p => p.moreNetz.children.filter(c => c.className === 'ph-sheet-block').map(b => b.children.map(r => r.children.map(g => g.id || (g.querySelector('input') || {}).id).join('+')).join(' / '));   // a wrapped field is named by its input
+const inRow = n => (' ' + n.parentNode.className + ' ').indexOf(' ph-sheet-row ') >= 0;   // the item itself is a row item (not just a child of the overlay, whose class is ph-sheet-rows)
 T('netz-wide', () => {
     const p = netzPage(); p.mq.matches = false; const eng = ph(p), d = dump(p.doc.documentElement); eng.start();
-    check('at 768px and up (the media query does not match) the Netz tab is NOT converted - no layout, no class ph, no stack, applied null - but since C0b-3 the Netz SURFACE is applied in place: sr and sr-netz, the blocks in #more-netz, the exact fields plain typed fields (no stepper)', !p.doc.documentElement.classList.contains('ph') && eng.state().applied === null && p.doc.getElementById('ph-stack') === null && cls(p) === 'sr sr-netz' && eng.state().surfaces.join() === 'netz' && p.moreNetz.querySelectorAll('.ph-sheet-block').length === 2 && p.doc.all().filter(n => n.className === 'stepper' && n.id === '').every(n => !n.children.some(c => c.id === 'net-strength-exact' || c.id === 'net-focus-exact')) && p.doc.getElementById('net-strength-exact').parentNode.className.indexOf('ph-sheet-row') >= 0);
+    const fe = p.doc.getElementById('net-focus-exact'), se = p.doc.getElementById('net-strength-exact');
+    check('at 768px and up (the media query does not match) the Netz tab is NOT converted - no layout, no class ph, no stack, applied null - but since C0b-3 the Netz SURFACE is applied in place: sr and sr-netz, the blocks in #more-netz; since C0b-4 the typed STRENGTH field is parked (it stays where it is, in no row, no stepper) and the Fokus field is the fine stepper (the wrapper in a row, the input readonly with data-stepper)', !p.doc.documentElement.classList.contains('ph') && eng.state().applied === null && p.doc.getElementById('ph-stack') === null && cls(p) === 'sr sr-netz' && eng.state().surfaces.join() === 'netz' && p.moreNetz.querySelectorAll('.ph-sheet-block').length === 2 && !inRow(se) && se.parentNode.className.indexOf('stepper') < 0 && !se.hasAttribute('data-stepper') && fe.parentNode.className.indexOf('stepper') >= 0 && (' ' + fe.parentNode.parentNode.className + ' ').indexOf(' ph-sheet-row ') >= 0 && fe.hasAttribute('data-stepper') && fe.readOnly === true);
+    check('...block 1 is the Fokus stepper alone (one row, one item), block 2 the domain / macro / Geo / readout rows: nothing in the overlay is typed (no editable input in a row)', JSON.stringify(nzRows(p)) === JSON.stringify(['net-focus-exact', 'net-domain-row / net-macro-row / net-geo-row / net-readout']) && p.doc.all().filter(n => n.tagName === 'INPUT' && n.className.indexOf('exact-field') >= 0 && !n.readOnly && inRow(n)).length === 0, JSON.stringify(nzRows(p)));
     const dInline = dump(p.doc.documentElement);
     p.mq.set(true);
     check('...and turning narrow applies it (the layout on top of the surface, with the other phone surface: ph sr sr-netz sr-timeline); widening again releases the layout and applies the surface inline again: the tree is the inline one, once', p.doc.documentElement.classList.contains('ph') && cls(p) === 'ph sr sr-netz sr-timeline' && (p.mq.set(false), dump(p.doc.documentElement) === dInline && cls(p) === 'sr sr-netz'), 'cls=' + cls(p) + ' same=' + (dump(p.doc.documentElement) === dInline));
@@ -877,7 +881,6 @@ T('steppers-no-ui', () => {
 
 console.log('\n== the Netz sheet in rows (sheets redesign, commit 4a): config.overlays.netz, an overlay with its own UI.overlay ==');
 const NZ = config.overlays.netz, nzIds = [].concat.apply([], [].concat.apply([], NZ.blocks).map(r => r.items.map(i => i.id)));
-const nzRows = p => p.moreNetz.children.filter(c => c.className === 'ph-sheet-block').map(b => b.children.map(r => r.children.map(g => g.id || (g.querySelector('input') || {}).id).join('+')).join(' / '));   // a wrapped field is named by its input
 T('netz-rows-build', () => {
     const p = netzPage(), orig = {}; nzIds.forEach(id => { orig[id] = p.doc.getElementById(id); });
     const eng = ph(p); eng.start();
@@ -919,7 +922,7 @@ T('netz-rows-release', () => {
     check('apply again after a release rebuilds the same rows and every id is once in the document', JSON.stringify(nzRows(p)) === JSON.stringify(['net-strength-exact+net-focus-exact', 'net-domain-row / net-macro-row / net-geo-row / net-readout']) && nzIds.every(id => p.doc.all().filter(n => n.id === id).length === 1));
     check('...and a second apply does no work', (() => { const m = p.doc.mutations; eng.apply('netz'); return p.doc.mutations === m; })());
     p.mq.set(false);
-    check('a width change to 768+ releases the LAYOUT and builds the surface inline: the overlay keeps its two blocks, the items sit in rows again (not in their old parents), no stack, no class ph, the exact fields are plain typed fields (the steppers were taken off)', p.moreNetz.querySelectorAll('.ph-sheet-block').length === 2 && !p.doc.documentElement.classList.contains('ph') && p.doc.getElementById('ph-stack') === null && orig['net-strength-exact'].parentNode.className.indexOf('ph-sheet-row') >= 0 && orig['net-strength-exact'].parentNode.className !== 'stepper' && cls(p) === 'sr sr-netz');
+    check('a width change to 768+ releases the LAYOUT and builds the surface inline: the overlay keeps its two blocks, the items sit in rows again (not in their old parents), no stack, no class ph, the strength field is parked (in no row) and only the Fokus field is a stepper (the other steppers were taken off)', p.moreNetz.querySelectorAll('.ph-sheet-block').length === 2 && !p.doc.documentElement.classList.contains('ph') && p.doc.getElementById('ph-stack') === null && orig['net-strength-exact'].parentNode === nb['net-strength-exact'][0] && orig['net-focus-exact'].parentNode.className.indexOf('stepper') >= 0 && (' ' + orig['net-focus-exact'].parentNode.parentNode.className + ' ').indexOf(' ph-sheet-row ') >= 0 && p.doc.all().filter(n => n.tagName === 'INPUT' && n.hasAttribute('data-stepper')).map(n => n.id).join() === 'net-focus-exact' && cls(p) === 'sr sr-netz');
 });
 
 
@@ -971,6 +974,31 @@ T('netz-fine-steps', () => {
     click0(btn(fF, 1)); click0(btn(fF, 1));
     check('...focus -0.98 after two taps up (the carrier -98): the net transform follows through the carrier', fF.value === '-0.98' && fC.value === '-98' && fC.events.length >= 4);
     eng.release();
+});
+// patterns C0b-4: at 768px and up the overlay has ONE focus control (the fine stepper around #net-focus-exact) and no typed strength field (parked: it stays where it is, plain, not shown); bindExact and setLocked work as before
+T('netz-fine-inline', () => {
+    const n = netFine(), { p, eng, sF, fF, sC, fC, toasts, lock } = n; p.mq.matches = false; eng.start();
+    const btn = (f, dir) => f.parentNode.querySelectorAll('.stepper-btn').find(b => b.getAttribute('data-dir') === String(dir));
+    check('at 768px and up only the FOKUS field is a stepper (readOnly, inputmode none, data-stepper, the name Fokus fein); the strength field is parked: not wrapped, not marked, not readonly, still in its own section, and in no row', fF.parentNode.className === 'stepper' && fF.readOnly === true && fF.hasAttribute('data-stepper') && fF.parentNode.getAttribute('aria-label') === 'Fokus fein' && !sF.hasAttribute('data-stepper') && !sF.readOnly && sF.parentNode === n.before.sp && !inRow(sF) && p.doc.all().filter(x => x.id === 'net-strength-exact' || x.id === 'net-focus-exact').length === 2);
+    const log = []; ['input', 'change'].forEach(t => fF.addEventListener(t, e => log.push(t + ':' + (e.bubbles ? 'b' : 'n'))));
+    click0(btn(fF, 1));
+    check('the focus steps by 0.01, not 0.1: 0.00 -> 0.01 with ONE tap, the carrier (percent) is 1, input then change reach bindExact and the carrier as for a typed value', fF.value === '0.01' && fC.value === '1' && log.join() === 'input:b,change:b' && fC.events.join() === 'input,change', fF.value + ' ' + fC.value + ' ' + log.join());
+    for (let i = 0; i < 9; i++) click0(btn(fF, 1));
+    check('...0.10 after ten taps (no float drift), and back to -0.05 after fifteen taps down', fF.value === '0.10' && fC.value === '10' && (() => { for (let i = 0; i < 15; i++) click0(btn(fF, -1)); return fF.value === '-0.05' && fC.value === '-5'; })());
+    fC.value = '99'; n.showF(); click0(btn(fF, 1)); click0(btn(fF, 1));
+    check('the focus stops at 1.00 (carrier 100): the chevron is disabled with the stepper\'s reason', fF.value === '1.00' && fC.value === '100' && btn(fF, 1).getAttribute('aria-disabled') === 'true' && btn(fF, 1).dataset.reason === 'Größter Wert erreicht.', fF.value);
+    fF.value = '7'; fF.dispatch('change', { type: 'change' });
+    check('a value above the range is still clamped by bindExact with its notice (MSG-F), an invalid text restored: the carriers keep working with the parked fields', fF.value === '1.00' && fC.value === '100' && toasts.indexOf('MSG-F') >= 0 && (() => { fF.value = 'abc'; fF.dispatch('change', { type: 'change' }); return fF.value === '1.00'; })(), toasts.join());
+    sF.value = '2'; sF.dispatch('change', { type: 'change' });
+    check('...the parked strength field still goes through bindExact when something sets it (clamp to 1.00, the notice MSG-S, the carrier 100): the phone sheet and programmatic changes keep working', sF.value === '1.00' && sC.value === '100' && toasts.indexOf('MSG-S') >= 0);
+    const tick = () => { n.fn.setLocked(sF, lock.s); n.fn.setLocked(fF, lock.f); p.win.uiSync(); };
+    lock.f = 'Fokus gilt für Sin und Tan'; lock.s = 'Die Stärke gilt für Sin, Tan und Geo.'; tick();
+    const v0 = fF.value; click0(btn(fF, -1));
+    check('the Fokus LOCK (Aus, Geo) is mirrored by the stepper at 768px and up: field and root aria-disabled with the same reason, a tap changes nothing; the parked strength field is locked as a plain field (readonly, aria-disabled)', fF.getAttribute('aria-disabled') === 'true' && fF.parentNode.getAttribute('aria-disabled') === 'true' && fF.parentNode.dataset.reason === lock.f && fF.value === v0 && sF.readOnly === true && sF.getAttribute('aria-disabled') === 'true', String(fF.parentNode.dataset.reason));
+    lock.f = null; lock.s = null; tick();
+    check('...unlocked again: the stepper steps, the parked field is editable again', fF.getAttribute('aria-disabled') === null && fF.parentNode.getAttribute('aria-disabled') === null && !sF.readOnly && (() => { const f0 = fF.value; click0(btn(fF, -1)); return fF.value !== f0; })());
+    eng.release();
+    check('release undoes it: the Fokus field is back in its section (same parent, same tree, not readonly), no wrapper and no row is left, the strength field never moved', fF.parentNode === n.before.fp && dump(fF) === n.before.fd && !fF.readOnly && !fF.hasAttribute('data-stepper') && sF.parentNode === n.before.sp && p.doc.all().filter(x => /ph-sheet-(block|row)|^stepper$/.test(x.className) && x.id === '' && x.children.some(c => c.id === 'net-focus-exact')).length === 0);
 });
 T('netz-fine-lock', () => {
     const n = netFine(), { p, eng, sF, fF, sC, fC, fn, lock, UI } = n; eng.start();

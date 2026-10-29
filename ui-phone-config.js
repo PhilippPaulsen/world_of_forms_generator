@@ -110,9 +110,9 @@
       // the chip view of the trails (ui-phone-chips.js makes both containers; the model is the hidden #face-colors-list)
       spuren: { label: 'Spuren', i18n: 'subtab.spuren', rows: [{ items: [{ id: 'ph-trail-chips', fluid: true }] }, { items: [{ id: 'ph-trail-stepper', fluid: true }] }] },
       // Netz (commit 3). Art: row 1 = the four kinds (Aus, Sin, Tan, Geo: 4 x 60 + 3 gaps = 264), row 2 = the strength stepper, the panel's own More (#more-netz: the domain, Macro, the exact fields, Alternate and the
-      // hints stay in it) and Reverse LAST (sketch.js shows it for Geo only: More keeps its place whether or not Reverse is there; 117 + 8 + 48 + 8 + 74 = 255). Achsen: row 1 = Both / X / Y, row 2 = the Fokus stepper (sketch.js shows its row for Sin and Tan only: disabled with a reason otherwise, see `follow`).
-      art: { label: 'Art', i18n: 'subtab.art', rows: [{ items: [{ id: 'nav-kinds', w: 264 }] }, { items: [{ id: 'net-strength-stepper', w: 117, wMin: 109 }, { id: 'btn-more-netz', w: 48 }, { id: 'net-reverse-btn', w: 74 }] }] },
-      achsen: { label: 'Achsen', i18n: 'subtab.achsen', rows: [{ items: [{ id: 'net-axes-row', w: 158 }] }, { items: [{ id: 'net-focus-stepper', w: 117, wMin: 109 }] }] }
+      // hints stay in it) and Reverse LAST, an icon (sketch.js shows it for Geo only: More keeps its place whether or not Reverse is there; 117 + 8 + 48 + 8 + 48 = 229). Achsen: row 1 = XY / X / Y, row 2 = the Fokus stepper (sketch.js shows its row for Sin and Tan only: disabled with a reason otherwise, see `follow`).
+      art: { label: 'Art', i18n: 'subtab.art', rows: [{ items: [{ id: 'nav-kinds', w: 264 }] }, { items: [{ id: 'net-strength-stepper', w: 117, wMin: 109 }, { id: 'btn-more-netz', w: 48 }, { id: 'net-reverse-btn', w: 48 }] }] },
+      achsen: { label: 'Achsen', i18n: 'subtab.achsen', rows: [{ items: [{ id: 'net-axes-row', w: 154 }] }, { items: [{ id: 'net-focus-stepper', w: 117, wMin: 109 }] }] }
     },
     // Bottom sheets (1b): a block that stays inline above 768px and in the tabs that are not covered moves into a sheet (UI.overlay) while the layout is on. The sheet FOLLOWS the block's own open state - the
     // "..." button's existing handler flips it, nothing here toggles it - and closing the sheet (Escape, the scrim, a tap outside, a resize) closes that state by clicking the button once more.
@@ -204,11 +204,11 @@
         ]
       }
     },
-    // The surface registry (see the header). The order is the order the engine applies them in: the sheets in their stack order, then the overlay. The inline switches: OFF for layer, timeline and trails (each turns its own on in its commit); ON for netz since C0b-3 (the overlay content at 768px and up; its exact fields stay plain typed fields: inline host steppers false).
+    // The surface registry (see the header). The order is the order the engine applies them in: the sheets in their stack order, then the overlay. The inline switches: OFF for layer, timeline and trails (each turns its own on in its commit); ON for netz since C0b-3 (the overlay content at 768px and up). Its inline host (C0b-4) decorates only the fine Fokus input (`steppers`: a list of the overlay's stepper ids) and leaves the typed strength field where it is (`park`: ids of the blocks that are not built; the section they sit in is hidden by the CSS - the strength is edited in the panel's stepper there).
     surfaces: {
       layer: { tabs: ['form', 'farbe', 'netz'], flag: null, hosts: { phone: { kind: 'sheet', id: 'layer' } }, inlineOn: false },
       timeline: { tabs: ['form', 'farbe', 'netz'], flag: 'sr-timeline', hosts: { phone: { kind: 'sheet', id: 'timeline' }, inline: { kind: 'content', id: 'timeline-group' } }, inlineOn: false },
-      netz: { tabs: ['netz'], flag: 'sr-netz', hosts: { phone: { kind: 'overlay', id: 'netz' }, inline: { kind: 'overlay', id: 'netz', steppers: false } }, inlineOn: true },
+      netz: { tabs: ['netz'], flag: 'sr-netz', hosts: { phone: { kind: 'overlay', id: 'netz' }, inline: { kind: 'overlay', id: 'netz', steppers: ['net-focus-exact'], park: ['net-strength-exact'] } }, inlineOn: true },
       trails: { tabs: ['farbe'], flag: 'sr-trails', hosts: { phone: { kind: 'pane', id: 'spuren' }, inline: { kind: 'group', id: 'face-colors-group' } }, inlineOn: false }
     },
     afterShow: { 'layer-strip': ['layerTable', 'revealActive'], 'ph-trail-chips': ['uiPhoneChips', 'refresh'] }
@@ -405,7 +405,12 @@
         const ih = (sf.hosts || {}).inline;
         if (!ih || typeof ih.id !== 'string') bad.push(where + ': the inline switch is on but there is no inline host');
         else if (ENGINE_INLINE_KINDS.indexOf(ih.kind) < 0) bad.push(where + ': the inline switch is on but the engine builds no inline host of kind ' + ih.kind);
-        else if (ih.steppers !== undefined && typeof ih.steppers !== 'boolean') bad.push(where + ': the inline host\'s steppers must be true or false');
+        else {
+          const ov = (cfg.overlays || {})[ih.id] || {}, ovItems = [];
+          (ov.blocks || []).forEach(function (rows) { rows.forEach(function (r) { r.items.forEach(function (it) { ovItems.push(it.id); }); }); });
+          if (ih.steppers !== undefined && typeof ih.steppers !== 'boolean' && !(Array.isArray(ih.steppers) && ih.steppers.every(function (id) { return Object.prototype.hasOwnProperty.call(ov.steppers || {}, id); }))) bad.push(where + ': the inline host\'s steppers must be true, false or a list of ids of the overlay\'s steppers');
+          if (ih.park !== undefined && !(Array.isArray(ih.park) && ih.park.every(function (id) { return ovItems.indexOf(id) >= 0; }))) bad.push(where + ': the inline host\'s park must be a list of ids that are items of the overlay\'s blocks');
+        }
       }
       // a sheet or overlay surface must be the one the tabs list: tabs.<tab>.sheets / .overlays and the registry say the same
       if (ph && ph.kind === 'sheet') Object.keys(cfg.tabs).forEach(function (tab) { if (((cfg.tabs[tab].sheets || []).indexOf(ph.id) >= 0) !== (sf.tabs.indexOf(tab) >= 0)) bad.push(where + ': tabs.' + tab + '.sheets and the registry disagree about sheet ' + ph.id); });
