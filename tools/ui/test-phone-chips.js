@@ -7,7 +7,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..', '..');
 const FILE = process.env.UI_PHONE_CHIPS_JS || path.join(ROOT, 'ui-phone-chips.js');
 const API = require(FILE);
-const { trailModel, resolveSelection, trailSignature, readRows, labelFor, highlightFor } = API;
+const { trailModel, resolveSelection, trailSignature, readRows, labelFor, highlightFor, hoverStep } = API;
 
 let failures = 0, checks = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
@@ -74,18 +74,34 @@ T('highlight', () => {
     check('the input is not changed (the model is pure)', (() => { const sel = { key: 'c', index: 2 }, rs = rows.slice(0, 2); highlightFor(ctx({ rows: rs, selection: sel })); return sel.key === 'c' && sel.index === 2 && rs.length === 2; })());
 });
 
+console.log('\n== the hover (C0b-5: a mouse over a chip does what a mouse over the model row does) ==');
+T('hover', () => {
+    const N = { key: null }, J = JSON.stringify, enter = (key, pt) => ({ type: 'enter', key, pointerType: pt === undefined ? 'mouse' : pt }), E = k => ({ type: 'mouseenter', key: k }), L = k => ({ type: 'mouseleave', key: k });
+    check('a MOUSE enters a chip: the state is its key and ONE mouseenter is sent', J(hoverStep(N, enter('a'))) === J({ state: { key: 'a' }, send: [E('a')] }));
+    check('entering the same chip again sends nothing (no double hover)', J(hoverStep({ key: 'a' }, enter('a'))) === J({ state: { key: 'a' }, send: [] }));
+    check('moving to another chip LEAVES the first and enters the second, in that order', J(hoverStep({ key: 'a' }, enter('b'))) === J({ state: { key: 'b' }, send: [L('a'), E('b')] }));
+    check('a TOUCH or a PEN never enters (the mouse events a tap emulates must not leave a hover): nothing is sent, the state is as it was, even while another chip is hovered; an event with no pointerType at all is no mouse either', ['touch', 'pen', '', null, 'Mouse'].every(pt => J(hoverStep(N, enter('a', pt))) === J({ state: N, send: [] }) && J(hoverStep({ key: 'x' }, enter('a', pt))) === J({ state: { key: 'x' }, send: [] })) && J(hoverStep(N, { type: 'enter', key: 'a' })) === J({ state: N, send: [] }));
+    check('leaving the hovered chip sends ONE mouseleave and clears the state; the leave of another chip (a stale event) and a leave with nothing hovered send nothing', J(hoverStep({ key: 'a' }, { type: 'leave', key: 'a' })) === J({ state: N, send: [L('a')] }) && J(hoverStep({ key: 'a' }, { type: 'leave', key: 'b' })) === J({ state: { key: 'a' }, send: [] }) && J(hoverStep(N, { type: 'leave', key: 'a' })) === J({ state: N, send: [] }));
+    check('CLEAR (the chip bar is rebuilt, the surface released, the group hidden, the tab left) while a chip is hovered sends the mouseleave and clears; with nothing hovered it sends nothing', J(hoverStep({ key: 'a' }, { type: 'clear' })) === J({ state: N, send: [L('a')] }) && J(hoverStep(N, { type: 'clear' })) === J({ state: N, send: [] }));
+    check('after a rebuild the SAME chip can be entered again (the state was cleared): enter a, clear, enter a gives enter, leave, enter', (() => { let st = N; const out = []; [enter('a'), { type: 'clear' }, enter('a')].forEach(ev => { const r = hoverStep(st, ev); st = r.state; r.send.forEach(m => out.push(m.type + ':' + m.key)); }); return out.join() === 'mouseenter:a,mouseleave:a,mouseenter:a' && st.key === 'a'; })());
+    check('a key may be any string (a trail key has commas and semicolons) and the key 0-like values are kept: "27000,30000;30000,35196" and "0" are real keys; null and undefined are no chip', J(hoverStep(N, enter('27000,30000;30000,35196'))).indexOf('27000,30000;30000,35196') > 0 && hoverStep(N, enter('0')).state.key === '0' && J(hoverStep(N, enter(null))) === J({ state: N, send: [] }) && J(hoverStep(N, enter(undefined))) === J({ state: N, send: [] }));
+    check('pure: the state object is not changed, an unknown event or no event is a no-op, no state at all is "nothing hovered"', (() => { const st = { key: 'a' }; hoverStep(st, enter('b')); return st.key === 'a' && J(hoverStep(st, { type: 'wiggle' })) === J({ state: { key: 'a' }, send: [] }) && J(hoverStep(st)) === J({ state: { key: 'a' }, send: [] }) && J(hoverStep(undefined, enter('a'))) === J({ state: { key: 'a' }, send: [E('a')] }); })());
+    check('the hover changes nothing of the selection model: the model of a hovered view is the same (the hover is not part of trailModel or the signature)', J(trailModel([row('a', 'x', 1, 1, 2)], null)) === J(trailModel([row('a', 'x', 1, 1, 2)], null)) && trailSignature([row('a', 'x', 1, 1, 2)], { key: 'a', index: 0 }) === trailSignature([row('a', 'x', 1, 1, 2)], { key: 'a', index: 0 }));
+});
+
 console.log('\n== the file ==');
 T('source', () => {
     const src = fs.readFileSync(FILE, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
     check('the view never clones the model rows (no cloneNode) and does not watch the DOM (no MutationObserver): it rebuilds from a signature on UI.onSync ticks', !/cloneNode|MutationObserver/.test(src) && /UI\.onSync/.test(src) && /trailSignature/.test(src));
     check('the stepper buttons FORWARD to the row\'s own .pairing-move-btn (b.click()), not to a function of their own', /querySelectorAll\('\.pairing-move-btn'\)/.test(src) && /b\.click\(\)/.test(src));
     check('the German texts are keyed: every T key has a data-i18n use or a key lookup', ['trails.none', 'trails.group', 'trails.prev', 'trails.next', 'trails.label.one', 'trails.label.other'].every(k => src.includes("'" + k + "'")));
-    check('it exposes the selected trail for the later highlight commit (selectedTrail) and builds no highlight (no mouseenter, no redraw)', /selectedTrail/.test(src) && !/mouseenter|redraw\(|faceHover/.test(src));
+    check('it exposes the selected trail (selectedTrail) and never writes the hover or redraws itself: no assignment to faceHover, no redraw() call (the hover reaches sketch.js as a forwarded mouseenter / mouseleave on the model row, C0b-5)', /selectedTrail/.test(src) && !/redraw\(|faceHover\s*=[^=]/.test(src) && /'mouseenter'/.test(src) && /'mouseleave'/.test(src));
 });
 
 T('gate', () => {
     const src = fs.readFileSync(FILE, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-    check('the view is on while the TRAILS surface is applied: sync() and the highlight read html.sr-trails (the engine\'s flag, C0b-2) together with the Farbe tab, not html.ph', (src.match(/classList\.contains\('sr-trails'\)/g) || []).length === 2 && !/classList\.contains\('ph'\)/.test(src));
+    check('the view is on while the TRAILS surface is applied: sync() and the highlight read html.sr-trails (the engine\'s flag, C0b-2) together with the Farbe tab, not html.ph', (src.match(/classList\.contains\('sr-trails'\)/g) || []).length === 2 && (src.match(/classList\.contains\('ph'\)/g) || []).length === 1);
+    check('...html.ph is read once, only to choose the text of the EMPTY line: at 768px and up (no ph) the muted line says why faces are unavailable (farbeReason, sketch.js\'s text as data); on the phone it stays "Keine Flächen"', /const why = !html\.classList\.contains\('ph'\) && typeof win\.farbeReason === 'function' \? win\.farbeReason\(\) : null;/.test(src));
     check('shownNow() = the container is not in its hidden holder and no ancestor is hidden (a parked pane, the holder after release; at 768px and up the host\'s own hidden state); it no longer looks for #ph-slot', /function shownNow\(\) \{ if \(!chips\.parentNode\) return false; for \(let n = chips; n; n = n\.parentNode\) \{ if \(n === holder \|\| n\.hidden\) return false; \} return true; \}/.test(src) && !/ph-slot/.test(src));
 });
 

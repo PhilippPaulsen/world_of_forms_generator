@@ -27,7 +27,7 @@
  *              (the overlay #more-netz) and the colour trails (the Spuren chips). tabs: where it applies. flag: the class the engine puts on <html> while it is applied (null for none) - together with `sr` (any surface
  *              applied) it is the gate of the twin rules in style.css and what the view modules read instead of `ph`. hosts.phone: what holds it while the phone layout is on - { kind: 'sheet', id } (config.sheets.<id>:
  *              a bottom sheet), { kind: 'overlay', id } (config.overlays.<id>: an overlay that exists), { kind: 'pane', id } (the layout's sub-tab pane holds the rows: nothing to build). hosts.inline: where it would sit at
- *              768px and up (the engine builds only kind 'overlay' there so far). inlineOn: the switch for the inline mode - OFF for every surface, so at 768px and up nothing is applied. The blocks and steppers stay in
+ *              768px and up: { kind: 'overlay', id, steppers?, park? } (the Netz overlay builds its rows in place) or { kind: 'group', id, hostId, items } (the engine makes a row host `hostId` inside the existing group `id` and moves the containers a view made - `items` - into it; release() puts them back and removes the host: the colour trails). inlineOn: the switch for the inline mode - ON for netz (C0b-3) and trails (C0b-5), OFF for layer and timeline. The blocks and steppers stay in
  *              config.sheets / config.overlays; tabs.<tab>.sheets / .overlays must list exactly the surfaces of that tab (validate()).
  *   afterShow  id -> [global, method]: called (when it exists) after the element moved into the visible panel - a moved element loses its scroll position.
  */
@@ -204,12 +204,12 @@
         ]
       }
     },
-    // The surface registry (see the header). The order is the order the engine applies them in: the sheets in their stack order, then the overlay. The inline switches: OFF for layer, timeline and trails (each turns its own on in its commit); ON for netz since C0b-3 (the overlay content at 768px and up). Its inline host (C0b-4) decorates only the fine Fokus input (`steppers`: a list of the overlay's stepper ids) and leaves the typed strength field where it is (`park`: ids of the blocks that are not built; the section they sit in is hidden by the CSS - the strength is edited in the panel's stepper there).
+    // The surface registry (see the header). The order is the order the engine applies them in: the sheets in their stack order, then the overlay. The inline switches: OFF for layer and timeline (each turns its own on in its commit); ON for trails since C0b-5 (the chip view in the Face Colors group at 768px and up: the group's own rows are parked by the CSS); ON for netz since C0b-3 (the overlay content at 768px and up). Its inline host (C0b-4) decorates only the fine Fokus input (`steppers`: a list of the overlay's stepper ids) and leaves the typed strength field where it is (`park`: ids of the blocks that are not built; the section they sit in is hidden by the CSS - the strength is edited in the panel's stepper there).
     surfaces: {
       layer: { tabs: ['form', 'farbe', 'netz'], flag: null, hosts: { phone: { kind: 'sheet', id: 'layer' } }, inlineOn: false },
       timeline: { tabs: ['form', 'farbe', 'netz'], flag: 'sr-timeline', hosts: { phone: { kind: 'sheet', id: 'timeline' }, inline: { kind: 'content', id: 'timeline-group' } }, inlineOn: false },
       netz: { tabs: ['netz'], flag: 'sr-netz', hosts: { phone: { kind: 'overlay', id: 'netz' }, inline: { kind: 'overlay', id: 'netz', steppers: ['net-focus-exact'], park: ['net-strength-exact'] } }, inlineOn: true },
-      trails: { tabs: ['farbe'], flag: 'sr-trails', hosts: { phone: { kind: 'pane', id: 'spuren' }, inline: { kind: 'group', id: 'face-colors-group' } }, inlineOn: false }
+      trails: { tabs: ['farbe'], flag: 'sr-trails', hosts: { phone: { kind: 'pane', id: 'spuren' }, inline: { kind: 'group', id: 'face-colors-group', hostId: 'sr-trails-host', items: ['ph-trail-chips', 'ph-trail-stepper'] } }, inlineOn: true }
     },
     afterShow: { 'layer-strip': ['layerTable', 'revealActive'], 'ph-trail-chips': ['uiPhoneChips', 'refresh'] }
   };
@@ -387,7 +387,7 @@
       });
     });
     // the surface registry: every surface has tabs, a flag (null or an sr-... class, unique), a phone host that exists, and the inline switch (a boolean); an inline host only where the switch is on, and one the engine builds
-    const ENGINE_INLINE_KINDS = ['overlay'], PHONE_KINDS = ['sheet', 'overlay', 'pane'], flags = {};
+    const ENGINE_INLINE_KINDS = ['overlay', 'group'], PHONE_KINDS = ['sheet', 'overlay', 'pane'], flags = {};
     const reg = cfg.surfaces;
     if (!reg || typeof reg !== 'object' || !Object.keys(reg).length) bad.push('surfaces: no registry');
     Object.keys(reg || {}).forEach(function (name) {
@@ -405,7 +405,13 @@
         const ih = (sf.hosts || {}).inline;
         if (!ih || typeof ih.id !== 'string') bad.push(where + ': the inline switch is on but there is no inline host');
         else if (ENGINE_INLINE_KINDS.indexOf(ih.kind) < 0) bad.push(where + ': the inline switch is on but the engine builds no inline host of kind ' + ih.kind);
-        else {
+        else if (ih.kind === 'group') {
+          if (!known(ih.id)) bad.push(where + ': the inline host group ' + ih.id + ' is not in index.html');
+          if (typeof ih.hostId !== 'string' || !ih.hostId) bad.push(where + ': the inline host group has no hostId (the id of the row host the engine makes)');
+          else if (known(ih.hostId)) bad.push(where + ': the hostId ' + ih.hostId + ' is also an id of index.html or of a script');
+          if (!Array.isArray(ih.items) || !ih.items.length) bad.push(where + ': the inline host group lists no items (the containers a view made: ids the engine moves into the host)');
+          else ih.items.forEach(function (id) { if (!known(id)) bad.push(where + ': the inline host group item ' + id + ' is neither in index.html nor made by a script'); });
+        } else {
           const ov = (cfg.overlays || {})[ih.id] || {}, ovItems = [];
           (ov.blocks || []).forEach(function (rows) { rows.forEach(function (r) { r.items.forEach(function (it) { ovItems.push(it.id); }); }); });
           if (ih.steppers !== undefined && typeof ih.steppers !== 'boolean' && !(Array.isArray(ih.steppers) && ih.steppers.every(function (id) { return Object.prototype.hasOwnProperty.call(ov.steppers || {}, id); }))) bad.push(where + ': the inline host\'s steppers must be true, false or a list of ids of the overlay\'s steppers');

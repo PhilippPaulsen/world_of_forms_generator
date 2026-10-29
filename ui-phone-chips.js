@@ -16,6 +16,12 @@
  *                             never faceHover) only when it CHANGED, on every UI tick, after every click that reaches the document (a sub-tab switch redraws nothing) and, deferred, after a resize or a tab
  *                             change (the engine releases or applies in its own listener). The view holds no reference into the model: the key is read from row.dataset.key.
  *
+ *   hoverStep(state, ev)      PURE (patterns C0b-5, the hover of the model rows kept on the chips). state = { key }: the trail whose row got a forwarded `mouseenter` (null = none). ev = { type: 'enter', key,
+ *                             pointerType } | { type: 'leave', key } | { type: 'clear' } (a rebuild of the chip bar, the surface released, the group hidden, the tab left). -> { state, send: [{ type: 'mouseenter' |
+ *                             'mouseleave', key }] }. Only a MOUSE pointer enters (a touch or a pen never does: the mouse events a tap emulates must not leave a hover); an enter on another trail leaves the first.
+ *                             The view sends each event to the model row, looked up FRESHLY by its key at that moment (a plain MouseEvent that does not bubble: sketch.js's own listeners set and clear faceHover,
+ *                             this view never writes it); the hover wins over the selection while it lasts (faceHighlightKeyFor), the selection shows again when the hover ends.
+ *
  * The German texts are keyed (data-i18n): trails.none, trails.label.one / .other, trails.prev, trails.next, trails.group.
  */
 (function (root) {
@@ -68,6 +74,20 @@
     const sel = resolveSelection(rows, c.selection);
     if (sel.key === null || sel.key === undefined) return null;
     return { sheet: c.sheet === undefined || c.sheet === null ? 'base' : c.sheet, key: sel.key };
+  }
+
+  function hoverStep(state, ev) {
+    const cur = state && state.key !== undefined && state.key !== null ? state.key : null, none = { state: { key: cur }, send: [] };
+    if (!ev) return none;
+    if (ev.type === 'enter') {
+      if (ev.pointerType !== 'mouse' || ev.key === null || ev.key === undefined || cur === ev.key) return none;
+      const send = cur !== null ? [{ type: 'mouseleave', key: cur }] : [];
+      send.push({ type: 'mouseenter', key: ev.key });
+      return { state: { key: ev.key }, send: send };
+    }
+    if (ev.type === 'leave') return cur !== null && (ev.key === undefined || ev.key === cur) ? { state: { key: null }, send: [{ type: 'mouseleave', key: cur }] } : none;
+    if (ev.type === 'clear') return cur !== null ? { state: { key: null }, send: [{ type: 'mouseleave', key: cur }] } : none;
+    return none;
   }
 
   function trailSignature(rows, sel, extra) {
@@ -145,6 +165,20 @@
     }
     function select(i) { const r = currentRows()[i]; if (!r) return; selected = { key: r.key, index: i }; refresh(true); }
 
+    // ---- the hover (a mouse over a chip does what a mouse over the model row does) ----------------------------------------------------------------------------------------------------------
+    // the model row is looked up by its key when the event is sent (the rows are replaced whenever sketch.js rebuilds the panel; nothing is kept); a display:none row takes the event like any other
+    let hover = { key: null };
+    function rowByKey(key) { const l = listEl(); return l ? Array.prototype.find.call(l.children || [], function (r) { return r.dataset && r.dataset.key === key; }) || null : null; }
+    function applyHover(ev) {
+      const r = hoverStep(hover, ev);
+      hover = r.state;
+      r.send.forEach(function (m) {
+        const row = rowByKey(m.key), Ev = win.MouseEvent;
+        if (row && typeof Ev === 'function') row.dispatchEvent(new Ev(m.type, { bubbles: false, cancelable: false, view: win }));
+      });
+      return r.send.length > 0;
+    }
+
     // ---- the outline of the selected trail on the canvas ---------------------------------------------------------------------------------------------------------------------------------
     // the chips are shown while they are NOT in their hidden holder and no ancestor is hidden: on the phone that is while the Spuren pane is the shown one (a parked pane sits in the hidden #ph-park, and after release() they are
     // back in their holder); where a surface host holds them at 768px and up it is while that host is not hidden (the Face Colors group is hidden with Fill off)
@@ -153,6 +187,7 @@
     let outlined = null;   // what this view last passed to setFaceSelected: { sheet, key } or null
     function syncHighlight() {
       const phone = html.classList.contains('sr-trails'), tab = html.getAttribute('data-tab'), shown = phone && tab === 'farbe' && shownNow();   // the rows are read only when they can matter
+      if (!shown) applyHover({ type: 'clear' });   // the chips are away (Fill off, another tab, released): no hover is left on a row
       const want = highlightFor({ phone: phone, tab: tab, shown: shown, rows: shown ? currentRows() : [], selection: selected, sheet: sheetNow() });
       const same = want === null ? outlined === null : (outlined !== null && outlined.sheet === want.sheet && outlined.key === want.key);
       if (same) return false;
@@ -163,10 +198,16 @@
 
     function render() {
       let activeNode = null;
+      applyHover({ type: 'clear' });   // the chips about to be replaced may be hovered: leave the row first (a removed element sends no pointerleave)
+      // a chip that has the focus is replaced with the bar: the focus goes to the chip with the same index afterwards (a keyboard user who presses Enter on a chip stays on it)
+      const focused = doc.activeElement && doc.activeElement.parentNode === chips ? doc.activeElement.getAttribute('data-index') : null;
       while (chips.firstChild) chips.removeChild(chips.firstChild);
       if (model.empty) {
-        const none = el('span', 'ph-chips-empty', { 'data-i18n': 'trails.none' });
-        none.textContent = text('trails.none');
+        // at 768px and up the Face Colors group's own status line is parked: when faces are unavailable (curve or free mode, a Single or Tiled net, a hidden layer) the muted line says why, as the group did (sketch.js's text,
+        // read as data through farbeReason); on the phone it stays "Keine Flächen"
+        const why = !html.classList.contains('ph') && typeof win.farbeReason === 'function' ? win.farbeReason() : null;
+        const none = el('span', 'ph-chips-empty', why ? { title: why } : { 'data-i18n': 'trails.none' });
+        none.textContent = why || text('trails.none');
         chips.appendChild(none);
       } else {
         model.chips.forEach(function (c) {
@@ -176,11 +217,14 @@
           const bar = el('span', 'ph-chip-bar', { 'aria-hidden': 'true' });
           bar.style.background = c.color;
           b.appendChild(bar);
-          const idx = c.index;
+          const idx = c.index, key = c.key;
           b.addEventListener('click', function () { select(idx); });
+          b.addEventListener('pointerenter', function (e) { applyHover({ type: 'enter', key: key, pointerType: e.pointerType }); });
+          b.addEventListener('pointerleave', function () { applyHover({ type: 'leave', key: key }); });
           chips.appendChild(b);
         });
       }
+      if (focused !== null) { const again = Array.prototype.find.call(chips.children, function (c) { return c.getAttribute('data-index') === focused; }); if (again && typeof again.focus === 'function') { try { again.focus({ preventScroll: true }); } catch (e) { again.focus(); } } }
       count.textContent = model.count;
       label.textContent = model.label;
       const why = reasonNow();
@@ -218,10 +262,10 @@
     if (doc.addEventListener) { doc.addEventListener('click', function () { syncHighlight(); }); doc.addEventListener('tabchange', function () { defer(syncHighlight); }); }
     if (win.addEventListener) { win.addEventListener('resize', function () { defer(syncHighlight); }); }
     refresh(true);
-    return { sync: sync, syncHighlight: syncHighlight, outlined: function () { return outlined; }, refresh: function () { return refresh(true); }, selectedTrail: selectedTrail, select: select, forward: forward, model: function () { return model; }, nodes: { holder: holder, chips: chips, stepper: stepper, prev: prev, next: next, count: count, label: label } };
+    return { sync: sync, syncHighlight: syncHighlight, outlined: function () { return outlined; }, refresh: function () { return refresh(true); }, selectedTrail: selectedTrail, select: select, forward: forward, hovered: function () { return hover.key; }, applyHover: applyHover, model: function () { return model; }, nodes: { holder: holder, chips: chips, stepper: stepper, prev: prev, next: next, count: count, label: label } };
   }
 
-  const api = { trailModel: trailModel, trailSignature: trailSignature, resolveSelection: resolveSelection, readRows: readRows, labelFor: labelFor, highlightFor: highlightFor, createChips: createChips, T: T };
+  const api = { trailModel: trailModel, trailSignature: trailSignature, resolveSelection: resolveSelection, readRows: readRows, labelFor: labelFor, highlightFor: highlightFor, hoverStep: hoverStep, createChips: createChips, T: T };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof document !== 'undefined' && typeof window !== 'undefined' && document.body) {
     root.uiPhoneChips = createChips(document, window);
