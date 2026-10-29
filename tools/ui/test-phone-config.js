@@ -17,6 +17,9 @@ const ROOT = path.join(__dirname, '..', '..');
 const read = (env, rel) => fs.readFileSync(process.env[env] || path.join(ROOT, rel), 'utf8');
 const CFG_PATH = process.env.PHONE_CONFIG_JS || path.join(ROOT, 'ui-phone-config.js');
 const HTML = read('INDEX_HTML', 'index.html'), CSS = read('STYLE_CSS', 'style.css'), ENGINE = read('UI_PHONE_JS', 'ui-phone.js');
+// Since patterns commit C0b-1 style.css ends with TWO regions: the phone block (the comment "=== Phone layout (" up to the closing brace of its media query) and, after it, the surfaces region (the comment "=== Surfaces (":
+// the twins of the phone block's surface rules under the gates html.sr*). PHONE_END is where the phone block ends; every check of the phone block slices there, the twins have their own section ('twins').
+const SURF_MARK = CSS.indexOf('=== Surfaces ('), PHONE_END = SURF_MARK < 0 ? CSS.length : CSS.lastIndexOf('/*', SURF_MARK);
 const API = require(CFG_PATH);
 const { config, validate, chromeH } = API;
 
@@ -114,7 +117,7 @@ T('wrappers', () => {
 
 console.log('\n== config and CSS agree ==');
 T('css', () => {
-    const tok = n => { const m = new RegExp('--' + n + ':\\s*([^;]+);').exec(CSS.slice(CSS.indexOf('=== Phone layout ('))); return m ? m[1].trim() : null; };
+    const tok = n => { const m = new RegExp('--' + n + ':\\s*([^;]+);').exec(CSS.slice(CSS.indexOf('=== Phone layout ('), PHONE_END)); return m ? m[1].trim() : null; };
     const S = config.sizes;
     check('--ph-header-h, --ph-toolrow-h, --ph-subtabs-h, --panel-h in the CSS are the sizes of the config (40, 64, 44, 104)', tok('ph-header-h') === S.header + 'px' && tok('ph-toolrow-h') === S.toolRow + 'px' && tok('ph-subtabs-h') === S.subtabs + 'px' && tok('panel-h') === config.tabs.form.panelH + 'px', [tok('ph-header-h'), tok('ph-toolrow-h'), tok('ph-subtabs-h'), tok('panel-h')].join(' '));
     check('--chrome-h is the sum of the six zones (header + 8 above the canvas + tool row + sub-tab row + 8 above the panel + panel) = the config\'s chromeH', tok('chrome-h') === 'calc(var(--ph-header-h) + var(--sp-2) + var(--ph-toolrow-h) + var(--ph-subtabs-h) + var(--sp-2) + var(--panel-h))' && S.gap === config.scale[1] && chromeH(config, 'form') === S.header + S.gap + S.toolRow + S.subtabs + S.gap + config.tabs.form.panelH, tok('chrome-h'));
@@ -126,7 +129,7 @@ T('css', () => {
 
 console.log('\n== the spacing scale ==');
 T('scale', () => {
-    const body = CSS.slice(CSS.indexOf('=== Phone layout ('));
+    const body = CSS.slice(CSS.indexOf('=== Phone layout ('), PHONE_END);
     // the style rules of the phone block (a brace-aware parse, comments out); defined again below for the CSS section, hence a local copy
     const parse = text => { const t = text.replace(/\/\*[\s\S]*?\*\//g, ''), out = []; (function walk(s, at) { let i = 0; while (i < s.length) { const o = s.indexOf('{', i); if (o < 0) break; const prelude = s.slice(i, o).trim(); let d = 1, j = o + 1; while (j < s.length && d) { if (s[j] === '{') d++; else if (s[j] === '}') d--; j++; } const inner = s.slice(o + 1, j - 1); if (prelude.startsWith('@')) { if (/^@(media|supports)/.test(prelude)) walk(inner, at.concat(prelude)); } else out.push({ sel: prelude, at, body: inner }); i = j; } })(t, []); return out; };
     const rs = parse(body.slice(body.indexOf('*/') + 2));
@@ -308,8 +311,8 @@ function rules(text) {
 }
 T('css', () => {
     const marker = CSS.indexOf('=== Phone layout (');
-    check('the phone block starts at the marker comment "=== Phone layout (" and is the LAST thing in style.css', marker > 0 && CSS.indexOf('=== Phone layout (', marker + 1) < 0);
-    const before = CSS.slice(0, marker).replace(/\/\*[\s\S]*?\*\//g, ''), block = CSS.slice(marker);
+    check('the phone block starts at the marker comment "=== Phone layout (" once and is followed only by the surfaces region ("=== Surfaces (", the twins): nothing else comes after it', marker > 0 && CSS.indexOf('=== Phone layout (', marker + 1) < 0 && SURF_MARK > marker && PHONE_END > marker && CSS.indexOf('=== Surfaces (', SURF_MARK + 1) < 0);
+    const before = CSS.slice(0, marker).replace(/\/\*[\s\S]*?\*\//g, ''), block = CSS.slice(marker, PHONE_END);
     check('nothing above the block mentions html.ph or a .ph- class: no phone rule hides outside the gate', !/html\.ph\b|\.ph-[a-z]|#ph-/.test(before));
     const rs = rules(block.slice(block.indexOf('*/') + 2));
     check('the block has rules (' + rs.length + ')', rs.length > 20);
@@ -403,7 +406,7 @@ T('layer-rows-mutants', () => {
     mut('blocks that is not a list', c => { c.sheets.layer.blocks = 'rows'; }, /blocks must be a non-empty list/);
 });
 T('layer-rows-css', () => {
-    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker), rs = rules(block.slice(block.indexOf('*/') + 2));
+    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker, PHONE_END), rs = rules(block.slice(block.indexOf('*/') + 2));
     const find = sel => rs.filter(r => r.sel.replace(/\s+/g, ' ') === sel);
     const inPhone = r => r.at[0] === '@media (max-width: 767px)';
     const sheetRules = rs.filter(r => /\.ph-sheet-(rows|block|row)/.test(r.sel) || /#layer-more-panel/.test(r.sel));
@@ -485,7 +488,7 @@ T('netz-overlay-mutants', () => {
     mut('an overlay without blocks', c => { delete c.overlays.netz.blocks; }, /no blocks/);
 });
 T('netz-overlay-css', () => {
-    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker), rs = rules(block.slice(block.indexOf('*/') + 2));
+    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker, PHONE_END), rs = rules(block.slice(block.indexOf('*/') + 2));
     const one = sel => rs.filter(r => r.sel.replace(/\s+/g, ' ') === sel);
     const mine = rs.filter(r => /#more-netz|\.ph-sheet-row (#net|\.net|>)|#net-(readout|focus-hint|macro-hint|field-hint|field-info|size-hint)|\.overlay\.ph-sheet-rows/.test(r.sel));
     check('the Netz sheet\'s rules (' + mine.length + ') all start with html.ph and sit in the phone media query, none above the block', mine.length >= 14 && mine.every(r => r.at[0] === '@media (max-width: 767px)' && r.sel.split(',').every(x => /^\s*html\.ph[\s\[.#]/.test(x))));
@@ -528,7 +531,7 @@ T('display', () => {
     check('the rounding is a display function of the text only (displayOf): it never changes the stored text and leaves anything that is not a number as it is', /function displayOf\(raw, decimals\)/.test(eng) && /Math\.round\(n \* f\) \/ f/.test(eng) && /if \(t\.trim\(\) === '' \|\| !isFinite\(n\)\) return t;/.test(eng));
 });
 T('netz-fine-css', () => {
-    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker), rs = rules(block.slice(block.indexOf('*/') + 2));
+    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker, PHONE_END), rs = rules(block.slice(block.indexOf('*/') + 2));
     const one = sel => rs.filter(r => r.sel.replace(/\s+/g, ' ') === sel);
     const rule = one('html.ph #more-netz .stepper > input.exact-field');
     check('the exact field inside its stepper is the display like the other steppers\' fields: --target wide, no frame, transparent, tabular figures, centred (html.ph #more-netz .stepper > input.exact-field), at 320px 40px wide in a nested @media (max-width: 339px)', rule.length === 2 && rule.some(r => r.at.length === 1 && /width:\s*var\(--target\)/.test(r.body) && /border:\s*0/.test(r.body) && /background:\s*transparent/.test(r.body) && /text-align:\s*center/.test(r.body)) && rule.some(r => r.at.length === 2 && r.at[1] === '@media (max-width: 339px)' && /width:\s*40px/.test(r.body)));
@@ -582,7 +585,7 @@ T('timeline-sheet-mutants', () => {
     mut('an id that is nowhere (the readout misspelled)', c => { c.sheets.timeline.blocks[0][1].items[0].id = 'ph-tl-readot'; }, /ph-tl-readot is neither in index\.html nor created/);
 });
 T('timeline-sheet-css', () => {
-    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker), rs = rules(block.slice(block.indexOf('*/') + 2));
+    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker, PHONE_END), rs = rules(block.slice(block.indexOf('*/') + 2));
     const one = sel => rs.filter(r => r.sel.replace(/\s+/g, ' ') === sel);
     const mine = rs.filter(r => /#timeline-group|ph-tl-|#ph-tl-|#timeline-pairing/.test(r.sel));
     check('the timeline sheet\'s rules (' + mine.length + ') all start with html.ph and sit in the phone media query, none above the block', mine.length >= 8 && mine.every(r => r.at[0] === '@media (max-width: 767px)' && r.sel.split(',').every(x => /^\s*html\.ph[\s\[.#:]/.test(x))));
@@ -620,7 +623,7 @@ T('label-keys', () => {
 
 T('structure', () => {
     const marker = CSS.indexOf('=== Phone layout (');
-    const block = CSS.slice(marker);
+    const block = CSS.slice(marker, PHONE_END);
     const NAMES = ['PAGE LAYOUT (patterns C0a', 'SHARED (patterns C0a', 'OTHER SURFACES (patterns C0a', 'SURFACE: TRAILS (patterns C0a', 'SURFACE: NETZ (patterns C0a', 'SURFACE: LAYER SHEET (patterns C0a', 'SURFACE: TIMELINE (patterns C0a'];
     const pos = NAMES.map(n => block.indexOf(n));
     check('the phone block has its seven banner-delimited blocks, each once and in this order: PAGE LAYOUT, SHARED, OTHER SURFACES, TRAILS, NETZ, LAYER SHEET, TIMELINE', pos.every((x, i) => x > 0 && block.indexOf(NAMES[i], x + 1) < 0 && (i === 0 || x > pos[i - 1])), pos.join());
@@ -671,6 +674,60 @@ T('structure', () => {
     // every rule is still gated: media query + html.ph
     check('EVERY rule of the seven blocks is inside @media (max-width: 767px) and EVERY selector starts with html.ph (the media query is the one opened before the first banner, checked above)', all.length > 100 && all.every(r => r.at[0] === '@media (max-width: 767px)' && r.sel.split(',').every(s => /^\s*html\.ph(\s|$|\[|\.|:)/.test(s))));
     check('the legacy narrow-width rules (not html.ph: the old wrapped rows) stay ABOVE the marker, untouched by the reorganization: the six other @media (max-width: 767px) blocks of style.css', (CSS.slice(0, marker).match(/@media \(max-width: 767px\)/g) || []).length === 6);
+});
+
+T('twins', () => {
+    const marker = CSS.indexOf('=== Phone layout (');
+    const phone = rules(CSS.slice(marker, PHONE_END).slice(CSS.slice(marker, PHONE_END).indexOf('*/') + 2));
+    check('the surfaces region ("=== Surfaces (") exists once, after the phone block, and is the LAST thing in style.css (the phone block ends with its media query before it)', SURF_MARK > marker && CSS.indexOf('=== Surfaces (', SURF_MARK + 1) < 0 && /\}\s*$/.test(CSS.slice(marker, PHONE_END)));
+    const region = CSS.slice(PHONE_END);
+    const ban = ['NEUTRAL HOST CLASSES (html.sr)', 'SHARED ROWS AND BLOCKS (html.sr)', 'TRAILS (html.sr-trails)', 'NETZ SHEET (html.sr-netz)', 'TIMELINE (html.sr-timeline)'];
+    const bpos = ban.map(b => region.indexOf(b));
+    check('the region has its five banner-delimited blocks, each once and in this order: neutral host classes, shared rows and blocks, trails, Netz sheet, timeline', bpos.every((x, i) => x > 0 && region.indexOf(ban[i], x + 1) < 0 && (i === 0 || x > bpos[i - 1])), bpos.join());
+    const cut = (i) => region.slice(region.lastIndexOf('/*', bpos[i]), i + 1 < bpos.length ? region.lastIndexOf('/*', bpos[i + 1]) : region.length).replace(/^\s*\/\*[\s\S]*?\*\//, '');
+    const seg = ban.map((b, i) => rules(cut(i)));
+    check('the twins per block: 9 neutral / 7 shared / 9 trails / 22 Netz / 27 timeline = 74 (65 twins of phone rules and the 9 neutral host twins)', seg.map(x => x.length).join(' / ') === '9 / 7 / 9 / 22 / 27', seg.map(x => x.length).join(' / '));
+    const all = seg.flat();
+    const GATES = [/^html\.sr /, /^html\.sr /, /^html\.sr-trails /, /^html\.sr-netz /, /^html\.sr-timeline /];
+    const parts = r => r.sel.split(',').map(x => x.trim());
+    check('every selector of a twin starts with the gate of its block (html.sr, html.sr, html.sr-trails, html.sr-netz, html.sr-timeline) and nothing in the region mentions html.ph', seg.every((x, i) => x.every(r => parts(r).every(q => GATES[i].test(q) && !/html\.ph/.test(q)))));
+    check('NO twin is inside the phone media query: the media queries of the region are the narrower-width variants only (max-width 339 and 354), never @media (max-width: 767px)', all.every(r => !r.at.some(a => /767px/.test(a)) && r.at.every(a => /^@media \(max-width: (339|354)px\)$/.test(a))), [...new Set(all.map(r => r.at.join('>')))].join(' | '));
+    check('nothing outside the region mentions html.sr: not the phone block, not the CSS above it', !/html\.sr\b/.test(CSS.slice(0, PHONE_END)));
+    // each twin has an original: the same rule with html.ph back, same media chain, same declarations
+    const norm = x => x.replace(/\s+/g, ' ').trim();
+    const NEUTRAL = [['html.sr .sr-pane', 'html.ph .ph-pane'], ['html.sr .sr-row', 'html.ph .ph-row'], ['html.sr .sr-host .icon-btn', 'html.ph .ph-slot .icon-btn'], ['html.sr .sr-host .nav-cluster', 'html.ph .ph-slot .nav-cluster'],
+        ['html.sr .sr-host .icon-btn[aria-disabled="true"]', 'html.ph .ph-slot .icon-btn[aria-disabled="true"]'], ['html.sr .sr-row > .ph-sep', 'html.ph .ph-row > .ph-sep'], ['html.sr .sr-row-scroll', 'html.ph .ph-row-scroll'],
+        ['html.sr .sr-row-scroll::-webkit-scrollbar', 'html.ph .ph-row-scroll::-webkit-scrollbar'], ['html.sr .sr-row-scroll > *', 'html.ph .ph-row-scroll > *']];
+    const origOf = (r, i) => i === 0 ? (NEUTRAL.find(n => n[0] === r.sel) || [])[1] : parts(r).map(q => q.replace(/^html\.sr(-[a-z]+)?/, 'html.ph')).join(', ');
+    const missing = [], bodyDiff = [];
+    seg.forEach((x, i) => x.forEach(r => {
+        const o = origOf(r, i);
+        const cand = phone.filter(q => q.at.slice(1).join() === r.at.join() && (i === 0 ? parts(q).includes(o) : norm(q.sel) === norm(o)));
+        if (!cand.length) missing.push(r.sel); else if (!cand.some(q => norm(q.body) === norm(r.body))) bodyDiff.push(r.sel);
+    }));
+    check('every twin has its original in the phone block (selector with html.ph put back, the same narrower-width chain) (' + all.length + ' twins)', missing.length === 0, missing.slice(0, 3).join(' ; ') || 'all found');
+    check('the declarations of every twin are EXACTLY those of its original (same properties, same values, same order)', bodyDiff.length === 0, bodyDiff.slice(0, 3).join(' ; ') || 'all equal');
+    // the 17 rules that stay phone-only have no twin (the sheet host, the panel, the notices, the Netz panel buttons and Net lines icon, the layer sheet, the rail sheet, the dialogs, the timeline group box)
+    const PHONE_ONLY = ['html.ph .ph-sheet', 'html.ph .ph-sheet .control-group', 'html.ph .ph-sheet.ph-sheet-rows', 'html.ph .ph-slot [hidden]', 'html.ph .ph-slot .net-kind-btn', 'html.ph .ph-slot .layer-btn', 'html.ph .ph-toolrow #net-lines-btn',
+        'html.ph .ph-toolrow #net-lines-btn::before', 'html.ph #timeline-group, html.ph #timeline-group:not(.ts-open)', 'html.ph #layer-more-panel .stepper > input[type="number"]', 'html.ph .ph-sheet-row .control-group > input[type="number"]',
+        'html.ph .dialog-content', 'html.ph .dialog-content button', 'html.ph #more-rail .more-settings', 'html.ph[data-tab="farbe"] #more-rail > .more-row:not(.more-extra)', 'html.ph .ph-slot #farbe-anchor-preview', 'html.ph .notices', 'html.ph.overlay-open .notices'];
+    const twinSels = new Set(all.flatMap(r => parts(r).map(q => q.replace(/^html\.sr(-[a-z]+)?/, 'html.ph'))));
+    const stray = PHONE_ONLY.filter(sel => sel.split(',').map(q => q.trim()).some(q => twinSels.has(q)));
+    check('the phone-only rules have NO twin (' + PHONE_ONLY.length + ' listed: sheet host, panel, notices, Netz panel buttons, Net lines icon, layer sheet, rail sheet, dialogs, the timeline group box)', stray.length === 0 && PHONE_ONLY.every(sel => phone.some(r => norm(r.sel) === norm(sel))), stray.join(' ; ') || 'none');
+    // the order of the twins inside a block is the order of their originals
+    let orderBad = [];
+    seg.slice(1).forEach((x, bi) => {
+        const idx = x.map(r => { const o = origOf(r, bi + 1); return phone.findIndex(q => q.at.slice(1).join() === r.at.join() && norm(q.sel) === norm(o)); });
+        for (let k = 1; k < idx.length; k++) if (idx[k] < idx[k - 1]) orderBad.push(x[k].sel);
+    });
+    check('the twins keep the relative order of their originals within every block (the cascade of equal specificity is the source order)', orderBad.length === 0, orderBad.slice(0, 3).join(' ; ') || 'in order');
+    // the id rules and the media variants among the twins
+    check('every [hidden] variant and every narrower-width variant of the twins comes AFTER the rule it modifies', all.every((r, i) => parts(r).filter(q => /\[hidden\]/.test(q)).every(q => { const base = q.replace(/\[hidden\]/g, ''); const j = all.findIndex(o => o.at.join() === r.at.join() && parts(o).includes(base)); return j < 0 || j < i; })));
+    // the gates are only set by the engine (a class of <html>): nothing sets them in C0b-1
+    const scripts = ['sketch.js', 'ui.js', 'ui-phone.js', 'ui-phone-chips.js', 'ui-phone-timeline.js', 'ui-phone-pairing.js', 'ui-net.js', 'ui-layers.js', 'ui-timeline.js', 'ui-rail.js', 'ui-farbe.js', 'nav.js'].map(f => [f, fs.readFileSync(path.join(ROOT, f), 'utf8')]);
+    const setters = scripts.filter(([f, t]) => /classList\.(add|toggle)\(\s*['"]sr(-[a-z]+)?['"]/.test(t));
+    check('nothing sets a gate class yet (html.sr, html.sr-netz, html.sr-trails, html.sr-timeline): the twins match nowhere (changes with the engine split, C0b-2)', setters.length === 0, setters.map(x => x[0]).join() || 'no script');
+    check('no markup uses the new classes: index.html has no class "sr", "sr-host", "sr-pane", "sr-row" or "sr-row-scroll" (the neutral classes are made by the engine later)', !/class="[^"]*\bsr(-host|-pane|-row|-row-scroll)?\b/.test(HTML));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
