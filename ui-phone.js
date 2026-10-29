@@ -359,6 +359,14 @@
       st.groupHosts.push(h);
       (host.items || []).forEach(afterShow);
     }
+    // host kind 'content' (the timeline group at 768px and up): the blocks of a sheet are built inside the existing content element itself - no sheet host, no UI.overlay, no trigger sync: the element's own open state
+    // (ts-open, flipped by the strip's "..." button's own handler) decides whether it is shown. host.blocks = which of the sheet's blocks (by number); release() takes them out again with the rest.
+    function buildContent(host, st) {
+      const def = (config.sheets || {})[host.sheet], content = def && doc.getElementById(def.content);
+      if (!content) { if (def && missing.indexOf(def.content) < 0) missing.push(def.content); return; }
+      const blocks = Array.isArray(host.blocks) ? host.blocks.map(function (i) { return def.blocks[i]; }).filter(Boolean) : def.blocks;
+      if (blocks && blocks.length) buildBlocks(Object.assign({}, def, { blocks: blocks }), content, content, st);
+    }
     function syncRows() {
       eachSurface(function (st) {
         st.sheetBlocks.forEach(function (blk) {
@@ -406,6 +414,7 @@
         if (host.kind === 'sheet' && b) buildSheet(host.id, b, st);
         else if (host.kind === 'overlay') buildOverlay(host.id, st, host);
         else if (host.kind === 'group') buildGroup(host, st);
+        else if (host.kind === 'content') buildContent(host, st);
         // host kind 'pane' (the trails): the layout's sub-tab pane holds the rows; nothing to build here
       });
     }

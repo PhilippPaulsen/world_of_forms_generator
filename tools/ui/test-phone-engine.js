@@ -165,6 +165,7 @@ function buildPage(opts) {
     return { doc, win, mq, calls, scrim, layerModel, layerPanel, tlGroup, tlPairing, tlHome, faceList, faceGroup, focusRow, geoRow, moreNetz, macroRow, domainRow };
 }
 const ph = (page, cfg) => createPhone(page.doc, page.win, cfg || config);
+const noInline = () => { const c = JSON.parse(JSON.stringify(config)); Object.keys(c.surfaces).forEach(n => { c.surfaces[n].inlineOn = false; }); return c; };   // a copy with every inline switch OFF: the layout tests that ask for "nothing applied at 768px and up"
 const formPageUI = () => buildPage({ ui: true });
 const cls = p => p.doc.documentElement.className.split(/\s+/).filter(Boolean).filter(c => c === 'ph' || /^sr(-|$)/.test(c)).sort().join(' ');   // the gate classes on <html>, sorted
 // a structure string of the whole tree (tag, id, class, kids; comments by text): equal before apply and after release
@@ -267,8 +268,8 @@ T('subtabs', () => {
 console.log('\n== width, tabs and events ==');
 T('events', () => {
     const p = buildPage(); p.mq.matches = false;
-    const eng = ph(p), before = dump(p.doc.documentElement); eng.start();
-    check('at 768px and up (the media query does not match) start() applies nothing: the tree is untouched', dump(p.doc.documentElement) === before && !p.doc.documentElement.classList.contains('ph'));
+    const eng = ph(p, noInline()), before = dump(p.doc.documentElement); eng.start();
+    check('at 768px and up (the media query does not match; every inline switch off) start() applies nothing: the tree is untouched', dump(p.doc.documentElement) === before && !p.doc.documentElement.classList.contains('ph'));
     check('apply(form) there returns false and releases', eng.apply('form') === false && dump(p.doc.documentElement) === before);
     p.mq.set(true);
     check('the media query turning to a phone width applies (resize / rotation)', p.doc.documentElement.classList.contains('ph') && eng.state().applied === 'form');
@@ -303,7 +304,7 @@ T('missing', () => {
 
 console.log('\n== the sheets (commit 1b): the layer "Mehr" block and the timeline "Mehr" group, with the REAL ui.js ==');
 // a phone page with the real UI.overlay, the layer strip (Ebenen) in the slot so its "..." button can take the focus
-const sheetPage = sub => { const p = buildPage({ ui: true }), eng = ph(p); eng.start(); eng.show(sub || 'ebenen'); return { p, eng, host: p.doc.getElementById('ph-sheet-layer'), tl: p.doc.getElementById('ph-sheet-timeline'), lt: p.doc.getElementById('ls-more'), ts: p.doc.getElementById('ts-more') }; };
+const sheetPage = (sub, cfg) => { const p = buildPage({ ui: true }), eng = ph(p, cfg); eng.start(); eng.show(sub || 'ebenen'); return { p, eng, host: p.doc.getElementById('ph-sheet-layer'), tl: p.doc.getElementById('ph-sheet-timeline'), lt: p.doc.getElementById('ls-more'), ts: p.doc.getElementById('ts-more') }; };
 const esc = host => { let stopped = 0; host.dispatch('keydown', { key: 'Escape', stopPropagation() { stopped++; } }); return stopped; };
 T('sheet-build', () => {
     const { p, host, tl, lt, ts } = sheetPage();
@@ -356,7 +357,7 @@ T('sheet-timeline', () => {
     check('...with a single scrim', p.scrim.hidden === false);
 });
 T('sheet-lifecycle', () => {
-    const { p, eng, host, tl, lt } = sheetPage(); const d0 = (() => { const q = buildPage(); return dump(q.doc.documentElement); })();
+    const { p, eng, host, tl, lt } = sheetPage(undefined, noInline()); const d0 = (() => { const q = buildPage(); return dump(q.doc.documentElement); })();
     lt.dispatch('click');
     p.mq.set(false);
     check('a width change to 768+ with a sheet open: the sheet closes cleanly, the block goes back into the controls container with its state closed, scrim hidden, nothing inert, the whole tree is the one before', dump(p.doc.documentElement) === d0 && p.scrim.hidden && p.layerModel.open === false && p.layerPanel.hidden === true && lt.getAttribute('aria-expanded') === 'false' && !p.doc.getElementById('ph-sheet-layer'));
@@ -568,7 +569,7 @@ T('farbe-inline', () => {
     const p = farbePage(); p.win.MouseEvent = class { constructor(t, o) { this.type = t; this.bubbles = !!(o && o.bubbles); } };
     p.mq.matches = false; const eng = ph(p), groupKids0 = p.faceGroup.children.map(c => c.id).join(), before = dump(p.doc.documentElement); eng.start();
     const host = p.doc.getElementById('sr-trails-host'), cls1 = () => p.doc.documentElement.className.split(/\s+/).filter(Boolean).sort().join(' ');
-    check('at 768px and up the Farbe tab applies the trails SURFACE only: no layout (no class ph, applied null, no stack), the flags sr and sr-trails', !p.doc.documentElement.classList.contains('ph') && eng.state().applied === null && p.doc.getElementById('ph-stack') === null && cls1() === 'sr sr-trails' && eng.state().surfaces.join() === 'trails', cls1());
+    check('at 768px and up the Farbe tab applies the SURFACES only (the timeline and the trails): no layout (no class ph, applied null, no stack), the flags sr, sr-timeline and sr-trails', !p.doc.documentElement.classList.contains('ph') && eng.state().applied === null && p.doc.getElementById('ph-stack') === null && cls1() === 'sr sr-timeline sr-trails' && eng.state().surfaces.join() === 'timeline,trails', cls1());
     check('...the engine made ONE row host div.sr-host#sr-trails-host as the LAST child of #face-colors-group; it holds #ph-trail-chips then #ph-trail-stepper; the chip holder is empty', !!host && host.className === 'sr-host' && host.parentNode === p.faceGroup && p.faceGroup.children[p.faceGroup.children.length - 1] === host && host.children.map(c => c.id).join() === 'ph-trail-chips,ph-trail-stepper' && p.doc.getElementById('ph-chip-home').children.length === 0 && p.doc.all().filter(n => n.id === 'sr-trails-host').length === 1);
     check('...the group\'s own children are untouched and in place (the model stays: the list, the status, the notes), and no id is twice in the document', p.faceGroup.children.filter(c => c !== host).map(c => c.id).join() === groupKids0 && p.faceGroup.children.indexOf(p.faceList) >= 0 && (() => { const ids = p.doc.all().map(n => n.id).filter(Boolean); return new Set(ids).size === ids.length; })());
     check('...the group\'s visibility is still sketch.js\'s: the engine never sets hidden on it (it is hidden as before while Fill is off)', p.faceGroup.hidden === true && eng.state().missing.length === 0);
@@ -595,16 +596,16 @@ T('farbe-inline', () => {
     N.chips.children[2].dispatch('click'); mkRows(['k1', 'k2']); p.chips.refresh(); tick();
     check('the selected trail disappears (3 -> 2 trails): the CLAMPED trail is outlined (k2), not the dead key', last() === 'base:k2', calls.join());
     const nTab = calls.length; p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
-    check('leaving the Farbe tab: the engine releases the trails surface (no sr-trails, no host, the chips back in their holder) and the outline is cleared', calls.length >= nTab + 0 && (p.win.uiSync(), true) && p.doc.getElementById('sr-trails-host') === null && p.doc.getElementById('ph-chip-home').children.map(c => c.id).join() === 'ph-trail-chips,ph-trail-stepper' && cls1() === 'sr sr-netz' && last() === 'null:null', cls1() + ' / ' + last());
+    check('leaving the Farbe tab: the engine releases the trails surface (no sr-trails, no host, the chips back in their holder) and the outline is cleared', calls.length >= nTab + 0 && (p.win.uiSync(), true) && p.doc.getElementById('sr-trails-host') === null && p.doc.getElementById('ph-chip-home').children.map(c => c.id).join() === 'ph-trail-chips,ph-trail-stepper' && cls1() === 'sr sr-netz sr-timeline' && last() === 'null:null', cls1() + ' / ' + last());
     p.doc.documentElement.setAttribute('data-tab', 'farbe'); p.doc.dispatch('tabchange', { detail: { tab: 'farbe' } }); tick();
-    check('back on Farbe: the host is made again (one), the chips are in it, outlined', !!p.doc.getElementById('sr-trails-host') && p.doc.getElementById('sr-trails-host').children.length === 2 && last().indexOf('base:') === 0 && cls1() === 'sr sr-trails', cls1() + ' / ' + last());
+    check('back on Farbe: the host is made again (one), the chips are in it, outlined', !!p.doc.getElementById('sr-trails-host') && p.doc.getElementById('sr-trails-host').children.length === 2 && last().indexOf('base:') === 0 && cls1() === 'sr sr-timeline sr-trails', cls1() + ' / ' + last());
     // phone <-> inline round trips
     p.mq.set(true); tick();
     check('narrow: the layout is built (ph), the host is gone, the chips are in the Spuren pane; the surface flag stays; one element per id', p.doc.documentElement.classList.contains('ph') && p.doc.getElementById('sr-trails-host') === null && cls1().indexOf('sr-trails') >= 0 && (() => { const ids = p.doc.all().map(n => n.id).filter(Boolean); return new Set(ids).size === ids.length; })());
     p.mq.set(false); tick();
-    check('wide again: the layout is released, the host is back with the two containers, the group\'s children untouched, one element per id', !p.doc.documentElement.classList.contains('ph') && p.doc.getElementById('sr-trails-host') && p.doc.getElementById('sr-trails-host').children.map(c => c.id).join() === 'ph-trail-chips,ph-trail-stepper' && p.faceGroup.children.filter(c => c.id !== 'sr-trails-host').map(c => c.id).join() === groupKids0 && cls1() === 'sr sr-trails' && (() => { const ids = p.doc.all().map(n => n.id).filter(Boolean); return new Set(ids).size === ids.length; })(), cls1());
+    check('wide again: the layout is released, the host is back with the two containers, the group\'s children untouched, one element per id', !p.doc.documentElement.classList.contains('ph') && p.doc.getElementById('sr-trails-host') && p.doc.getElementById('sr-trails-host').children.map(c => c.id).join() === 'ph-trail-chips,ph-trail-stepper' && p.faceGroup.children.filter(c => c.id !== 'sr-trails-host').map(c => c.id).join() === groupKids0 && cls1() === 'sr sr-timeline sr-trails' && (() => { const ids = p.doc.all().map(n => n.id).filter(Boolean); return new Set(ids).size === ids.length; })(), cls1());
     for (let i = 0; i < 3; i++) { p.mq.set(true); p.mq.set(false); }
-    check('three more round trips leave no drift: one host, two containers in it, the flags are sr and sr-trails, nothing else', p.doc.all().filter(n => n.id === 'sr-trails-host').length === 1 && p.doc.getElementById('sr-trails-host').children.length === 2 && cls1() === 'sr sr-trails');
+    check('three more round trips leave no drift: one host, two containers in it, the flags are sr, sr-timeline and sr-trails, nothing else', p.doc.all().filter(n => n.id === 'sr-trails-host').length === 1 && p.doc.getElementById('sr-trails-host').children.length === 2 && cls1() === 'sr sr-timeline sr-trails');
     eng.release();
     check('release() takes everything back: the host is removed, the chips are in their holder, no flag, no class, no marker comment is left, the group\'s own children are where they were', p.doc.getElementById('sr-trails-host') === null && p.doc.getElementById('ph-chip-home').children.map(c => c.id).join() === 'ph-trail-chips,ph-trail-stepper' && cls1() === '' && p.faceGroup.children.map(c => c.id).join() === groupKids0 && (function none(n) { return n.childNodes.every(c => (c.nodeType !== 8 || !/^ph:/.test(c.text)) && (c.nodeType !== 1 || none(c))); })(p.doc.documentElement), cls1());
     check('release is idempotent, and a new apply(farbe) does the same as the first (one host)', (() => { const m = p.doc.mutations; eng.release(); return p.doc.mutations === m; })() && (eng.apply('farbe'), p.doc.all().filter(n => n.id === 'sr-trails-host').length === 1));
@@ -730,15 +731,15 @@ const inRow = n => (' ' + n.parentNode.className + ' ').indexOf(' ph-sheet-row '
 T('netz-wide', () => {
     const p = netzPage(); p.mq.matches = false; const eng = ph(p), d = dump(p.doc.documentElement); eng.start();
     const fe = p.doc.getElementById('net-focus-exact'), se = p.doc.getElementById('net-strength-exact');
-    check('at 768px and up (the media query does not match) the Netz tab is NOT converted - no layout, no class ph, no stack, applied null - but since C0b-3 the Netz SURFACE is applied in place: sr and sr-netz, the blocks in #more-netz; since C0b-4 the typed STRENGTH field is parked (it stays where it is, in no row, no stepper) and the Fokus field is the fine stepper (the wrapper in a row, the input readonly with data-stepper)', !p.doc.documentElement.classList.contains('ph') && eng.state().applied === null && p.doc.getElementById('ph-stack') === null && cls(p) === 'sr sr-netz' && eng.state().surfaces.join() === 'netz' && p.moreNetz.querySelectorAll('.ph-sheet-block').length === 2 && !inRow(se) && se.parentNode.className.indexOf('stepper') < 0 && !se.hasAttribute('data-stepper') && fe.parentNode.className.indexOf('stepper') >= 0 && (' ' + fe.parentNode.parentNode.className + ' ').indexOf(' ph-sheet-row ') >= 0 && fe.hasAttribute('data-stepper') && fe.readOnly === true);
+    check('at 768px and up (the media query does not match) the Netz tab is NOT converted - no layout, no class ph, no stack, applied null - but since C0b-3 the Netz SURFACE is applied in place (with the timeline surface, which every tab has): sr, sr-netz and sr-timeline, the blocks in #more-netz; since C0b-4 the typed STRENGTH field is parked (it stays where it is, in no row, no stepper) and the Fokus field is the fine stepper (the wrapper in a row, the input readonly with data-stepper)', !p.doc.documentElement.classList.contains('ph') && eng.state().applied === null && p.doc.getElementById('ph-stack') === null && cls(p) === 'sr sr-netz sr-timeline' && eng.state().surfaces.join() === 'timeline,netz' && p.moreNetz.querySelectorAll('.ph-sheet-block').length === 2 && !inRow(se) && se.parentNode.className.indexOf('stepper') < 0 && !se.hasAttribute('data-stepper') && fe.parentNode.className.indexOf('stepper') >= 0 && (' ' + fe.parentNode.parentNode.className + ' ').indexOf(' ph-sheet-row ') >= 0 && fe.hasAttribute('data-stepper') && fe.readOnly === true);
     check('...block 1 is the Fokus stepper alone (one row, one item), block 2 the domain / macro / Geo / readout rows: nothing in the overlay is typed (no editable input in a row)', JSON.stringify(nzRows(p)) === JSON.stringify(['net-focus-exact', 'net-domain-row / net-macro-row / net-geo-row / net-readout']) && p.doc.all().filter(n => n.tagName === 'INPUT' && n.className.indexOf('exact-field') >= 0 && !n.readOnly && inRow(n)).length === 0, JSON.stringify(nzRows(p)));
     const dInline = dump(p.doc.documentElement);
     p.mq.set(true);
-    check('...and turning narrow applies it (the layout on top of the surface, with the other phone surface: ph sr sr-netz sr-timeline); widening again releases the layout and applies the surface inline again: the tree is the inline one, once', p.doc.documentElement.classList.contains('ph') && cls(p) === 'ph sr sr-netz sr-timeline' && (p.mq.set(false), dump(p.doc.documentElement) === dInline && cls(p) === 'sr sr-netz'), 'cls=' + cls(p) + ' same=' + (dump(p.doc.documentElement) === dInline));
+    check('...and turning narrow applies it (the layout on top of the surface, with the other phone surface: ph sr sr-netz sr-timeline); widening again releases the layout and applies the surface inline again: the tree is the inline one, once', p.doc.documentElement.classList.contains('ph') && cls(p) === 'ph sr sr-netz sr-timeline' && (p.mq.set(false), dump(p.doc.documentElement) === dInline && cls(p) === 'sr sr-netz sr-timeline'), 'cls=' + cls(p) + ' same=' + (dump(p.doc.documentElement) === dInline));
     eng.release();
     check('release() takes everything back: the tree is the one before the first start, no class', dump(p.doc.documentElement) === d && cls(p) === '');
     eng.apply('netz'); p.doc.documentElement.setAttribute('data-tab', 'form'); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
-    check('a tab change away from Netz at 768px and up releases the surface (it applies on the Netz tab only): no class, the tree is the one before', cls(p) === '' && dump(p.doc.documentElement) === d && eng.state().surfaces.length === 0, cls(p));
+    check('a tab change away from Netz at 768px and up releases the Netz surface (it applies on the Netz tab only): the timeline surface stays (sr sr-timeline), no Netz block, no sr-netz, every id once', cls(p) === 'sr sr-timeline' && eng.state().surfaces.join() === 'timeline' && p.moreNetz.querySelectorAll('.ph-sheet-block').length === 0 && !p.moreNetz.classList.contains('ph-sheet-rows') && [].concat.apply([], [].concat.apply([], config.overlays.netz.blocks).map(r => r.items.map(i => i.id))).every(id => p.doc.all().filter(n => n.id === id).length === 1), cls(p));
     // commit 3b: at 768px and up nothing of the follow mode or the label is applied: the Fokus stepper is not disabled (its block is hidden, nothing marks it), Net lines keeps its own text as its name
     const q = netzPage(); q.mq.matches = false; const eq = ph(q); eq.start();
     const fq = q.doc.getElementById('net-focus-stepper'), nq = q.doc.getElementById('net-lines-btn');
@@ -994,7 +995,7 @@ T('netz-rows-release', () => {
     check('apply again after a release rebuilds the same rows and every id is once in the document', JSON.stringify(nzRows(p)) === JSON.stringify(['net-strength-exact+net-focus-exact', 'net-domain-row / net-macro-row / net-geo-row / net-readout']) && nzIds.every(id => p.doc.all().filter(n => n.id === id).length === 1));
     check('...and a second apply does no work', (() => { const m = p.doc.mutations; eng.apply('netz'); return p.doc.mutations === m; })());
     p.mq.set(false);
-    check('a width change to 768+ releases the LAYOUT and builds the surface inline: the overlay keeps its two blocks, the items sit in rows again (not in their old parents), no stack, no class ph, the strength field is parked (in no row) and only the Fokus field is a stepper (the other steppers were taken off)', p.moreNetz.querySelectorAll('.ph-sheet-block').length === 2 && !p.doc.documentElement.classList.contains('ph') && p.doc.getElementById('ph-stack') === null && orig['net-strength-exact'].parentNode === nb['net-strength-exact'][0] && orig['net-focus-exact'].parentNode.className.indexOf('stepper') >= 0 && (' ' + orig['net-focus-exact'].parentNode.parentNode.className + ' ').indexOf(' ph-sheet-row ') >= 0 && p.doc.all().filter(n => n.tagName === 'INPUT' && n.hasAttribute('data-stepper')).map(n => n.id).join() === 'net-focus-exact' && cls(p) === 'sr sr-netz');
+    check('a width change to 768+ releases the LAYOUT and builds the surface inline: the overlay keeps its two blocks, the items sit in rows again (not in their old parents), no stack, no class ph, the strength field is parked (in no row) and only the Fokus field is a stepper (the other steppers were taken off)', p.moreNetz.querySelectorAll('.ph-sheet-block').length === 2 && !p.doc.documentElement.classList.contains('ph') && p.doc.getElementById('ph-stack') === null && orig['net-strength-exact'].parentNode === nb['net-strength-exact'][0] && orig['net-focus-exact'].parentNode.className.indexOf('stepper') >= 0 && (' ' + orig['net-focus-exact'].parentNode.parentNode.className + ' ').indexOf(' ph-sheet-row ') >= 0 && p.doc.all().filter(n => n.tagName === 'INPUT' && n.hasAttribute('data-stepper')).map(n => n.id).join() === 'net-focus-exact' && cls(p) === 'sr sr-netz sr-timeline');
 });
 
 
@@ -1138,13 +1139,13 @@ T('timeline-rows', () => {
     check('release and apply again are idempotent: the same two blocks, every id once', (() => { const m = p.doc.mutations; eng.release(); const same = p.doc.mutations === m; eng.apply('form'); eng.show('zeit'); const h2 = p.doc.getElementById('ph-sheet-timeline'); return same && JSON.stringify(tlRows(h2)) === JSON.stringify(['ph-tl-icons / ph-tl-readout', '(h)ph-tl-chips / (h)ph-tl-moves+ph-tl-variant / (h)ph-tl-listbtn+ph-tl-reset', '(h)ph-tl-listhead / (h)ph-tl-list']) && ['ph-tl-icons', 'ph-tl-readout', 'timeline-pairing', 'ph-tl-chips', 'ph-tl-moves', 'ph-tl-variant', 'ph-tl-reset', 'ph-tl-listbtn', 'ph-tl-listhead', 'ph-tl-list'].every(id => p.doc.all().filter(n => n.id === id).length === 1); })());
 });
 // a view on a page of its own (the engine is not started: the view works on its elements wherever they are)
-const tlView = (o) => {
+const tlView = (o, noPh) => {
     const p = buildPage({ ui: true }); p.tlHome._detach();
     const state = Object.assign({ tl: null, summary: null, active: 'base' }, o || {});
     const kf = p.doc.getElementById('timeline-keyframe-list'), clicks = [], clr = p.doc.getElementById('btn-clear-timeline');
     clr.addEventListener('click', () => clicks.push('clear'));
     const mkKf = n => { kf.childNodes.slice().forEach(c => c._detach()); for (let i = 0; i < n; i++) { const tab = p.doc.createElement('span'); const nb = p.doc.createElement('button'), xb = p.doc.createElement('button'); nb.addEventListener('click', () => clicks.push('net' + i)); xb.addEventListener('click', () => clicks.push('remove' + i)); tab.appendChild(nb); tab.appendChild(xb); kf.appendChild(tab); } };
-    p.doc.documentElement.classList.add('ph'); p.doc.documentElement.classList.add('sr-timeline');   // the view reads the surface flag the engine sets (C0b-2)
+    if (!noPh) p.doc.documentElement.classList.add('ph'); p.doc.documentElement.classList.add('sr-timeline');   // the view reads the surface flag the engine sets (C0b-2); noPh = the timeline surface at 768px and up (C0b-6a: no layout, no html.ph)
     const view = TLV.createTimelineView(p.doc, p.win, { read: { timelineState: () => state.tl, timelineSummary: () => state.summary, activeLayerNow: () => state.active } });
     const tlo = (ids, nets) => ({ keyframeLayerIds: ids, netStates: nets || ids.map(() => ({ x: {} })), segmentDurationsMs: ids.slice(1).map(() => 2000) });
     const set = (patch) => { Object.assign(state, patch); if (patch.tl) mkKf(patch.tl.keyframeLayerIds.length); p.win.uiSync(); };
@@ -1174,6 +1175,25 @@ T('timeline-forward', () => {
     v.clicks.length = 0; v.set({ tl: null, summary: null, active: 'base' }); n.trash.dispatch('click', { detail: 1 });
     check('without a timeline the trash is disabled ("Noch keine Keyframes") and forwards nothing', dis(n.trash) && n.trash.dataset.reason === 'Noch keine Keyframes' && v.clicks.length === 0);
     check('the "x" buttons of the keyframe list are never forwarded to (only the first button of a keyframe)', (() => { v.set({ tl: v.tlo([0, 1]), summary: { state: 'animated' }, active: 1 }); v.clicks.length = 0; n.netrec.dispatch('click', { detail: 1 }); return v.clicks.join() === 'net1' && v.clicks.indexOf('remove1') < 0; })());
+});
+// patterns commit C0b-6a: the same view at 768px and up - the surface flag only, no html.ph, no sheet: the open state of the group (ts-open, flipped by the strip's own handler) is the open state
+T('timeline-inline', () => {
+    const v = tlView({}, true), n = v.nodes, g = v.p.tlGroup;
+    check('without html.ph (only sr-timeline) the view works: it reads the surface flag, never the layout', !v.p.doc.documentElement.classList.contains('ph') && v.p.doc.documentElement.classList.contains('sr-timeline'));
+    v.set({ tl: v.tlo([2, 0]), summary: { state: 'animated' }, active: 0 });
+    check('netrec forwards to the "Net" button of the selected layer\'s keyframe only (layer 0 = position 1) and to no other; the readout says the state', !dis(n.netrec) && (n.netrec.dispatch('click', { detail: 1 }), v.clicks.join() === 'net1') && n.readout.textContent === 'Netz: animiert (2 Keyframes)', v.clicks.join() + ' / ' + n.readout.textContent);
+    v.clicks.length = 0; v.set({ active: 'base' });
+    check('the base selected: netrec is disabled with its reason and forwards nothing', dis(n.netrec) && n.netrec.dataset.reason === 'Gewählte Ebene ist kein Keyframe' && (n.netrec.dispatch('click', { detail: 1 }), v.clicks.length === 0));
+    v.clicks.length = 0; n.trash.dispatch('click', { detail: 1 });
+    check('the trash forwards ONE click to #btn-clear-timeline (which asks first) and nothing else', v.clicks.join() === 'clear');
+    g.classList.add('ts-open'); v.p.win.uiSync(); n.pairing.dispatch('click', { detail: 1 });
+    check('the pairing toggle (two keyframes) turns on: ph-tl-editor-open on the group, aria-pressed true', g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'true');
+    g.classList.remove('ts-open'); v.p.doc.dispatch('click', { target: v.p.doc.body });
+    check('the group closes (the strip\'s "..." flips ts-open, the click reaches the document): the toggle is OFF at once, without a UI tick: no class, aria-pressed false', !g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'false');
+    g.classList.add('ts-open'); v.p.doc.dispatch('click', { target: v.p.doc.body }); v.p.win.uiSync();
+    check('...and reopened it is still off (the open state is the whole story: no stale toggle)', !g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'false');
+    n.pairing.dispatch('click', { detail: 1 }); v.set({ tl: v.tlo([0]), summary: { state: 'pending' } });
+    check('a keyframe is removed (one left): the toggle disables with "Mindestens zwei Keyframes nötig" and goes off, the editor class goes', dis(n.pairing) && n.pairing.dataset.reason === 'Mindestens zwei Keyframes nötig' && !g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'false');
 });
 T('timeline-toggle', () => {
     const v = tlView(), n = v.nodes, g = v.p.tlGroup;
@@ -1547,7 +1567,7 @@ T('surface-flags', () => {
     p.doc.documentElement.setAttribute('data-tab', 'form'); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
     check('...and back to Form: ph sr sr-timeline again, the same single set (no flag twice, no leftover)', cls(p) === 'ph sr sr-timeline', cls(p));
     p.mq.set(false);
-    check('the width turning to 768px and up releases the layout AND removes every class it set (ph, sr, sr-timeline): nothing is applied there, every inline switch is off', cls(p) === '' && eng.state().surfaces.length === 0 && eng.state().applied === null && p.doc.getElementById('ph-stack') === null, cls(p));
+    check('the width turning to 768px and up releases the LAYOUT (no ph, no stack, applied null, the layout\'s classes gone) - the timeline surface stays applied there inline (C0b-6a: sr and sr-timeline, the icon row built in #timeline-group), the layer sheet (no inline host) is gone', cls(p) === 'sr sr-timeline' && eng.state().surfaces.join() === 'timeline' && eng.state().applied === null && p.doc.getElementById('ph-stack') === null && p.doc.getElementById('ph-sheet-layer') === null && p.doc.getElementById('ph-sheet-timeline') === null, cls(p));
     p.mq.set(true);
     check('back to a phone width: applied again, the same classes', cls(p) === 'ph sr sr-timeline' && eng.state().applied === 'form', cls(p));
     eng.release();
@@ -1555,34 +1575,38 @@ T('surface-flags', () => {
 });
 T('surface-desktop', () => {
     const p = formPageUI(); p.mq.set(false);
-    const before = dump(p.doc.documentElement), eng = ph(p); eng.start();
-    check('start() at 768px and up (every inline switch is OFF): no class, nothing moved, no stack, the tree is untouched', cls(p) === '' && dump(p.doc.documentElement) === before && eng.state().surfaces.length === 0 && eng.state().moved.length === 0);
+    const before = dump(p.doc.documentElement), eng = ph(p, noInline()); eng.start();
+    check('start() at 768px and up with EVERY inline switch off: no class, nothing moved, no stack, the tree is untouched', cls(p) === '' && dump(p.doc.documentElement) === before && eng.state().surfaces.length === 0 && eng.state().moved.length === 0);
     p.mq.set(false); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
     check('...and a tab change and a repeated media-query event at 768px and up change nothing either', cls(p) === '' && dump(p.doc.documentElement) === before);
-    check('the registry: the inline switch is ON for the Netz and trails surfaces (the other two are OFF), so the Form tab at 768px and up applies nothing', Object.keys(config.surfaces).every(n => config.surfaces[n].inlineOn === (n === 'netz' || n === 'trails')));
+    check('the registry: the inline switch is ON for the Netz, trails and timeline surfaces (the layer sheet is OFF: it has no inline host)', Object.keys(config.surfaces).every(n => config.surfaces[n].inlineOn === (n === 'netz' || n === 'trails' || n === 'timeline')));
+    const q = formPageUI(); q.mq.set(false); const e2 = ph(q); e2.start();
+    check('with the real config the Form tab at 768px and up applies the TIMELINE surface only (C0b-6a): sr and sr-timeline, no ph, no stack, the icon row and the readout built inside #timeline-group (one block), the strip\'s group keeps its own open state', cls(q) === 'sr sr-timeline' && e2.state().surfaces.join() === 'timeline' && q.doc.getElementById('ph-stack') === null && e2.state().applied === null && q.doc.getElementById('timeline-group').className.indexOf('ph-sheet-rows') >= 0 && q.doc.getElementById('timeline-group').children.filter(c => c.className === 'ph-sheet-block').length === 1 && q.doc.getElementById('ph-tl-icons').parentNode.className === 'ph-sheet-row', cls(q));
+    e2.release();
+    check('release() puts the icon row and the readout back into their holder: no block, no class, no ph-sheet-rows left on the group, no marker', cls(q) === '' && q.doc.getElementById('timeline-group').className.indexOf('ph-sheet-rows') < 0 && q.doc.all().filter(n => /ph-sheet-block/.test(n.className)).length === 0 && q.doc.getElementById('ph-tl-home').children.map(c => c.id).slice(0, 2).join() === 'ph-tl-icons,ph-tl-readout');
 });
 T('surface-switch', () => {
     // a COPY of the config with the Netz surface\'s switch ON: the inline mode applies the overlay blocks without the layout, and nothing else (the engine builds only an overlay host inline)
     const cfg = JSON.parse(JSON.stringify(config)); cfg.surfaces.netz.inlineOn = true;   // the real config has it on since C0b-3; a copy keeps this test independent of that
     const p = netzPage(); p.mq.set(false);
     const before = dump(p.doc.documentElement), eng = ph(p, cfg); eng.start();
-    check('with the switch ON (the real config since C0b-3) a desktop Netz tab applies the surface only: sr and sr-netz, NO ph, no stack, no tool row', cls(p) === 'sr sr-netz' && p.doc.getElementById('ph-stack') === null && eng.state().applied === null && eng.state().surfaces.join() === 'netz' && eng.state().surfaceTab === 'netz', cls(p) + ' / ' + eng.state().surfaces.join());
-    check('...its blocks are in the Netz overlay (the host class ph-sheet-rows) and no other surface (the timeline, the layer sheet, the trails) is applied', p.doc.getElementById('more-netz').className.indexOf('ph-sheet-rows') >= 0 && p.doc.all().filter(n => n.id === 'ph-sheet-timeline' || n.id === 'ph-sheet-layer').length === 0);
+    check('with the switch ON (the real config since C0b-3) a desktop Netz tab applies the surfaces only (the Netz overlay and, as on every tab, the timeline): sr, sr-netz and sr-timeline, NO ph, no stack, no tool row', cls(p) === 'sr sr-netz sr-timeline' && p.doc.getElementById('ph-stack') === null && eng.state().applied === null && eng.state().surfaces.join() === 'timeline,netz' && eng.state().surfaceTab === 'netz', cls(p) + ' / ' + eng.state().surfaces.join());
+    check('...its blocks are in the Netz overlay (the host class ph-sheet-rows) and no sheet (the layer sheet and the timeline sheet are phone hosts) and no trails surface is applied', p.doc.getElementById('more-netz').className.indexOf('ph-sheet-rows') >= 0 && p.doc.all().filter(n => n.id === 'ph-sheet-timeline' || n.id === 'ph-sheet-layer').length === 0 && cls(p).indexOf('sr-trails') < 0);
     p.mq.set(true);
     check('the width turning to a phone: the layout is built and every surface of the tab applied (once: ph sr sr-netz sr-timeline), the Netz blocks not doubled', cls(p) === 'ph sr sr-netz sr-timeline' && p.doc.all().filter(n => n.className === 'ph-sheet-block').length >= 2 && eng.state().surfaces.join() === 'layer,timeline,netz', cls(p));
     const blocks = p.doc.all().filter(n => /\bph-sheet-block\b/.test(n.className) && n.parentNode && n.parentNode.id === 'more-netz').length;
     p.mq.set(false);
-    check('and back to the desktop with the switch on: the layout is released, the surface is applied inline again (sr sr-netz)', cls(p) === 'sr sr-netz' && p.doc.getElementById('ph-stack') === null && p.doc.all().filter(n => /\bph-sheet-block\b/.test(n.className) && n.parentNode && n.parentNode.id === 'more-netz').length === blocks, cls(p));
+    check('and back to the desktop with the switch on: the layout is released, the surface is applied inline again (sr sr-netz sr-timeline)', cls(p) === 'sr sr-netz sr-timeline' && p.doc.getElementById('ph-stack') === null && p.doc.all().filter(n => /\bph-sheet-block\b/.test(n.className) && n.parentNode && n.parentNode.id === 'more-netz').length === blocks, cls(p));
     const idsOf = pp => JSON.stringify(pp.doc.all().map(n => n.id).filter(Boolean).sort());
     check('no id is made or lost by the round trips between the layout and the inline surface: the ids of the page with the surface inline are the same ids after phone, desktop, phone, desktop, and no id is twice', (() => { const a0 = idsOf(p); p.mq.set(true); const onPhone = idsOf(p); p.mq.set(false); const a1 = idsOf(p); p.mq.set(true); p.mq.set(false); const a2 = idsOf(p); const ids = JSON.parse(a2); return a0 === a1 && a1 === a2 && new Set(ids).size === ids.length && onPhone !== a0; })());
     p.doc.documentElement.setAttribute('data-tab', 'form'); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
-    check('a tab change from Netz to Form at 768px and up with the overlay\'s blocks built releases them: no class, no block, the exact fields back in their groups', cls(p) === '' && p.moreNetz.querySelectorAll('.ph-sheet-block').length === 0, cls(p));
+    check('a tab change from Netz to Form at 768px and up with the overlay\'s blocks built releases them: only the timeline flag is left (sr sr-timeline), no Netz block, the exact fields back in their groups', cls(p) === 'sr sr-timeline' && p.moreNetz.querySelectorAll('.ph-sheet-block').length === 0, cls(p));
     p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
     eng.release();
-    check('release() puts the whole tree back (no marker, no block, no class) and removes sr and sr-netz', cls(p) === '' && dump(p.doc.documentElement) === before, cls(p));
+    check('release() puts the whole tree back (no marker, no block, no class) and removes sr, sr-netz and sr-timeline', cls(p) === '' && dump(p.doc.documentElement) === before, cls(p));
     const off = JSON.parse(JSON.stringify(config)); off.surfaces.netz.inlineOn = false;
     const q = netzPage(); q.mq.set(false); const e2 = ph(q, off); e2.start();
-    check('the same page with the switch OFF (a copy of the config) applies nothing at 768px and up', cls(q) === '' && e2.state().surfaces.length === 0);
+    check('the same page with the Netz switch OFF (a copy of the config) applies the timeline surface only at 768px and up, and with every switch off nothing', cls(q) === 'sr sr-timeline' && e2.state().surfaces.join() === 'timeline' && (() => { const q2 = netzPage(); q2.mq.set(false); const e3 = ph(q2, noInline()); e3.start(); return cls(q2) === '' && e3.state().surfaces.length === 0; })());
 });
 T('surface-roundtrips', () => {
     const p = formPageUI(), eng = ph(p), before = dump(p.doc.documentElement); eng.start();
