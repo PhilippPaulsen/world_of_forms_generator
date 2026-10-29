@@ -146,12 +146,13 @@
     function select(i) { const r = currentRows()[i]; if (!r) return; selected = { key: r.key, index: i }; refresh(true); }
 
     // ---- the outline of the selected trail on the canvas ---------------------------------------------------------------------------------------------------------------------------------
-    // the chips are in the panel slot only while the Spuren pane is the shown one (a parked pane sits in the hidden #ph-park, and after release() they are back in their hidden holder)
-    function shownNow() { for (let n = chips.parentNode; n; n = n.parentNode) { if (n.id === 'ph-slot') return true; } return false; }
+    // the chips are shown while they are NOT in their hidden holder and no ancestor is hidden: on the phone that is while the Spuren pane is the shown one (a parked pane sits in the hidden #ph-park, and after release() they are
+    // back in their holder); where a surface host holds them at 768px and up it is while that host is not hidden (the Face Colors group is hidden with Fill off)
+    function shownNow() { if (!chips.parentNode) return false; for (let n = chips; n; n = n.parentNode) { if (n === holder || n.hidden) return false; } return true; }
     function sheetNow() { return typeof win.activeLayerNow === 'function' ? win.activeLayerNow() : 'base'; }
     let outlined = null;   // what this view last passed to setFaceSelected: { sheet, key } or null
     function syncHighlight() {
-      const phone = html.classList.contains('ph'), tab = html.getAttribute('data-tab'), shown = phone && tab === 'farbe' && shownNow();   // the rows are read only when they can matter
+      const phone = html.classList.contains('sr-trails'), tab = html.getAttribute('data-tab'), shown = phone && tab === 'farbe' && shownNow();   // the rows are read only when they can matter
       const want = highlightFor({ phone: phone, tab: tab, shown: shown, rows: shown ? currentRows() : [], selection: selected, sheet: sheetNow() });
       const same = want === null ? outlined === null : (outlined !== null && outlined.sheet === want.sheet && outlined.key === want.key);
       if (same) return false;
@@ -201,7 +202,7 @@
       return true;
     }
     function sync() {
-      if (!html.classList.contains('ph') || html.getAttribute('data-tab') !== 'farbe') { syncHighlight(); return false; }   // nothing to keep up to date outside the Farbe phone layout (but a stale outline goes)
+      if (!html.classList.contains('sr-trails') || html.getAttribute('data-tab') !== 'farbe') { syncHighlight(); return false; }   // nothing to keep up to date outside the Farbe phone layout (but a stale outline goes)
       return refresh(false);
     }
     function selectedTrail() {

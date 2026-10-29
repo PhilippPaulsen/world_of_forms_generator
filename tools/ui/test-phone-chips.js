@@ -83,6 +83,12 @@ T('source', () => {
     check('it exposes the selected trail for the later highlight commit (selectedTrail) and builds no highlight (no mouseenter, no redraw)', /selectedTrail/.test(src) && !/mouseenter|redraw\(|faceHover/.test(src));
 });
 
+T('gate', () => {
+    const src = fs.readFileSync(FILE, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    check('the view is on while the TRAILS surface is applied: sync() and the highlight read html.sr-trails (the engine\'s flag, C0b-2) together with the Farbe tab, not html.ph', (src.match(/classList\.contains\('sr-trails'\)/g) || []).length === 2 && !/classList\.contains\('ph'\)/.test(src));
+    check('shownNow() = the container is not in its hidden holder and no ancestor is hidden (a parked pane, the holder after release; at 768px and up the host\'s own hidden state); it no longer looks for #ph-slot', /function shownNow\(\) \{ if \(!chips\.parentNode\) return false; for \(let n = chips; n; n = n\.parentNode\) \{ if \(n === holder \|\| n\.hidden\) return false; \} return true; \}/.test(src) && !/ph-slot/.test(src));
+});
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 console.log(failures ? 'FAIL' : 'PASS');
 process.exit(failures ? 1 : 0);
