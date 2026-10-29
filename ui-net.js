@@ -70,6 +70,8 @@
     if (b) UI.showReason(b);
   });
   const axesBtns = Array.prototype.slice.call(document.querySelectorAll('.net-axes-btn')), reverseBtn = $('#net-reverse-btn');
+  // the icon-only toggles (Net lines, Reverse, Alternate; C0b-4: no text any more) say their state, not only draw it: sketch.js keeps the 'active' class, aria-pressed follows it
+  [$('#net-lines-btn'), reverseBtn, $('#net-alternate-btn')].forEach(function (b) { if (b) UI.pressed(b); });
   // Arrow keys move AND choose, like native radios (the choice itself is sketch.js's p5 handler: a 'mousedown').
   kindBtns.forEach(function (b, i) {
     b.addEventListener('keydown', function (e) {
