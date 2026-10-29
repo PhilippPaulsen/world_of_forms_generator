@@ -147,7 +147,7 @@ T('model-list-premises', () => {
     check('the list is offered for 1 <= n <= PAIRING_BROWSE_MAX_N = 5 only: the model hides its Browse all button otherwise (the list icon follows)', /const PAIRING_BROWSE_MAX_N = 5;/.test(SKETCH) && /timelinePairingBrowseBtn\.elt\.hidden = !cand/.test(br) && /n > PAIRING_BROWSE_MAX_N\) return null/.test(SKETCH) && /timelinePairingBrowseBtn\.elt\.addEventListener\('click', \(\) => \{\s*timelinePairingBrowseOpen = !timelinePairingBrowseOpen;/.test(SKETCH));
 });
 T('css', () => {
-    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker), body = block.slice(block.indexOf('*/') + 2);
+    const marker = CSS.indexOf('=== Phone layout ('), surf = CSS.indexOf('=== Surfaces ('), block = CSS.slice(marker, surf < 0 ? CSS.length : CSS.lastIndexOf('/*', surf)), body = block.slice(block.indexOf('*/') + 2);   // the phone block ends where the surfaces region (the twins, C0b-1) begins
     // a tolerant rule reader: selector, body and the media queries around it
     const rs = []; let depth = 0, at = [], i = 0, start = 0, stack = [];
     for (; i < body.length; i++) {
