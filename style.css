@@ -1842,3 +1842,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   @media (max-width: 354px) {
     html.sr-timeline .ph-tl-variant .ph-tl-sep { display: none; }
   }
+
+/* ================================================================================================================================================================
+   TIMELINE AT 768PX AND UP (html.sr-timeline:not(.ph))
+   what differs from the timeline sheet while the layout is OFF (C0b-6a, the FRAME): the timeline group (#timeline-group, opened by the strip's "..." through ts-open) is the content itself - the blocks of the sheet are
+   built inside it (block 1: the icon row and the readout line) - and sits under the canvas as before: centred, at most --canvas-size wide. The keyframe list, the net box, the status span and the text remove button are parked
+   hidden by the twins above, never removed. The old line-pairing editor (#timeline-pairing, the model) is parked too and shown, in its present look, only while the pairing toggle is on (ph-tl-editor-open): the interim
+   until 6b. The segment select of the pairing view belongs to 6b: parked hidden.
+   ================================================================================================================================================================ */
+  html.sr-timeline:not(.ph) #timeline-group.ts-open.ph-sheet-rows { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-3); box-sizing: border-box; width: fit-content; max-width: var(--canvas-size); margin-left: auto; margin-right: auto; }
+  html.sr-timeline:not(.ph) #timeline-group.ph-tl-editor-open #timeline-pairing:not([hidden]) { display: block; align-self: stretch; }
+  html.sr-timeline:not(.ph) #timeline-group > .ph-sheet-block { order: -1; }   /* the icon row and the readout come before the interim editor (the blocks are appended after the group's old children) */
+  html.sr-timeline:not(.ph) .ph-tl-segment { display: none; }
