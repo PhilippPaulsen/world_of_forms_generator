@@ -165,6 +165,8 @@ function buildPage(opts) {
     return { doc, win, mq, calls, scrim, layerModel, layerPanel, tlGroup, tlPairing, tlHome, faceList, faceGroup, focusRow, geoRow, moreNetz, macroRow, domainRow };
 }
 const ph = (page, cfg) => createPhone(page.doc, page.win, cfg || config);
+const formPageUI = () => buildPage({ ui: true });
+const cls = p => p.doc.documentElement.className.split(/\s+/).filter(Boolean).filter(c => c === 'ph' || /^sr(-|$)/.test(c)).sort().join(' ');   // the gate classes on <html>, sorted
 // a structure string of the whole tree (tag, id, class, kids; comments by text): equal before apply and after release
 const dump = n => n.nodeType === 8 ? '<!--' + n.text + '-->' : '<' + n.tagName + (n.id ? '#' + n.id : '') + (n.className ? '.' + n.className.split(/\s+/).join('.') : '') + (n.hidden ? '[hidden]' : '') + '>' + n.childNodes.map(dump).join('') + '</>';
 const formIds = () => { const t = config.tabs.form, tr = config.toolRows[t.toolRow], out = [].concat.apply([], tr.groups).concat(tr.end, tr.sheet ? tr.sheet.items : []); t.subtabs.forEach(s => config.subtabs[s].rows.forEach(r => r.items.forEach(i => out.push(i.id)))); return out; };
@@ -653,9 +655,14 @@ T('netz-apply', () => {
 });
 T('netz-wide', () => {
     const p = netzPage(); p.mq.matches = false; const eng = ph(p), d = dump(p.doc.documentElement); eng.start();
-    check('at 768px and up (the media query does not match) the Netz tab is NOT converted: the tree is untouched, no class ph', dump(p.doc.documentElement) === d && !p.doc.documentElement.classList.contains('ph') && eng.state().applied === null);
+    check('at 768px and up (the media query does not match) the Netz tab is NOT converted - no layout, no class ph, no stack, applied null - but since C0b-3 the Netz SURFACE is applied in place: sr and sr-netz, the blocks in #more-netz, the exact fields plain typed fields (no stepper)', !p.doc.documentElement.classList.contains('ph') && eng.state().applied === null && p.doc.getElementById('ph-stack') === null && cls(p) === 'sr sr-netz' && eng.state().surfaces.join() === 'netz' && p.moreNetz.querySelectorAll('.ph-sheet-block').length === 2 && p.doc.all().filter(n => n.className === 'stepper' && n.id === '').every(n => !n.children.some(c => c.id === 'net-strength-exact' || c.id === 'net-focus-exact')) && p.doc.getElementById('net-strength-exact').parentNode.className.indexOf('ph-sheet-row') >= 0);
+    const dInline = dump(p.doc.documentElement);
     p.mq.set(true);
-    check('...and turning narrow applies it; widening again releases every control', p.doc.documentElement.classList.contains('ph') && (p.mq.set(false), dump(p.doc.documentElement) === d));
+    check('...and turning narrow applies it (the layout on top of the surface, with the other phone surface: ph sr sr-netz sr-timeline); widening again releases the layout and applies the surface inline again: the tree is the inline one, once', p.doc.documentElement.classList.contains('ph') && cls(p) === 'ph sr sr-netz sr-timeline' && (p.mq.set(false), dump(p.doc.documentElement) === dInline && cls(p) === 'sr sr-netz'), 'cls=' + cls(p) + ' same=' + (dump(p.doc.documentElement) === dInline));
+    eng.release();
+    check('release() takes everything back: the tree is the one before the first start, no class', dump(p.doc.documentElement) === d && cls(p) === '');
+    eng.apply('netz'); p.doc.documentElement.setAttribute('data-tab', 'form'); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
+    check('a tab change away from Netz at 768px and up releases the surface (it applies on the Netz tab only): no class, the tree is the one before', cls(p) === '' && dump(p.doc.documentElement) === d && eng.state().surfaces.length === 0, cls(p));
     // commit 3b: at 768px and up nothing of the follow mode or the label is applied: the Fokus stepper is not disabled (its block is hidden, nothing marks it), Net lines keeps its own text as its name
     const q = netzPage(); q.mq.matches = false; const eq = ph(q); eq.start();
     const fq = q.doc.getElementById('net-focus-stepper'), nq = q.doc.getElementById('net-lines-btn');
@@ -912,7 +919,7 @@ T('netz-rows-release', () => {
     check('apply again after a release rebuilds the same rows and every id is once in the document', JSON.stringify(nzRows(p)) === JSON.stringify(['net-strength-exact+net-focus-exact', 'net-domain-row / net-macro-row / net-geo-row / net-readout']) && nzIds.every(id => p.doc.all().filter(n => n.id === id).length === 1));
     check('...and a second apply does no work', (() => { const m = p.doc.mutations; eng.apply('netz'); return p.doc.mutations === m; })());
     p.mq.set(false);
-    check('a width change to 768+ releases it (the overlay keeps its layout and typed fields above 768px)', nzIds.every(id => orig[id].parentNode === nb[id][0]) && p.moreNetz.querySelectorAll('.ph-sheet-block').length === 0);
+    check('a width change to 768+ releases the LAYOUT and builds the surface inline: the overlay keeps its two blocks, the items sit in rows again (not in their old parents), no stack, no class ph, the exact fields are plain typed fields (the steppers were taken off)', p.moreNetz.querySelectorAll('.ph-sheet-block').length === 2 && !p.doc.documentElement.classList.contains('ph') && p.doc.getElementById('ph-stack') === null && orig['net-strength-exact'].parentNode.className.indexOf('ph-sheet-row') >= 0 && orig['net-strength-exact'].parentNode.className !== 'stepper' && cls(p) === 'sr sr-netz');
 });
 
 
@@ -1427,8 +1434,6 @@ T('labels-i18n', () => {
 });
 
 console.log('\n== the surfaces (patterns commit C0b-2: apply = layout + surfaces; the gate classes sr, sr-netz, sr-trails, sr-timeline) ==');
-const formPageUI = () => buildPage({ ui: true });
-const cls = p => p.doc.documentElement.className.split(/\s+/).filter(Boolean).filter(c => c === 'ph' || /^sr(-|$)/.test(c)).sort().join(' ');
 T('surface-flags', () => {
     const p = formPageUI(), eng = ph(p);
     check('before start() no gate class is on <html>', cls(p) === '');
@@ -1454,24 +1459,30 @@ T('surface-desktop', () => {
     check('start() at 768px and up (every inline switch is OFF): no class, nothing moved, no stack, the tree is untouched', cls(p) === '' && dump(p.doc.documentElement) === before && eng.state().surfaces.length === 0 && eng.state().moved.length === 0);
     p.mq.set(false); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
     check('...and a tab change and a repeated media-query event at 768px and up change nothing either', cls(p) === '' && dump(p.doc.documentElement) === before);
-    check('the registry says every inline switch is off', Object.keys(config.surfaces).every(n => config.surfaces[n].inlineOn === false));
+    check('the registry: the inline switch is ON for the Netz surface only (the other three are OFF), so the Form tab at 768px and up applies nothing', Object.keys(config.surfaces).every(n => config.surfaces[n].inlineOn === (n === 'netz')));
 });
 T('surface-switch', () => {
     // a COPY of the config with the Netz surface\'s switch ON: the inline mode applies the overlay blocks without the layout, and nothing else (the engine builds only an overlay host inline)
-    const cfg = JSON.parse(JSON.stringify(config)); cfg.surfaces.netz.inlineOn = true;
+    const cfg = JSON.parse(JSON.stringify(config)); cfg.surfaces.netz.inlineOn = true;   // the real config has it on since C0b-3; a copy keeps this test independent of that
     const p = netzPage(); p.mq.set(false);
     const before = dump(p.doc.documentElement), eng = ph(p, cfg); eng.start();
-    check('with the switch ON a desktop Netz tab applies the surface only: sr and sr-netz, NO ph, no stack, no tool row', cls(p) === 'sr sr-netz' && p.doc.getElementById('ph-stack') === null && eng.state().applied === null && eng.state().surfaces.join() === 'netz' && eng.state().surfaceTab === 'netz', cls(p) + ' / ' + eng.state().surfaces.join());
+    check('with the switch ON (the real config since C0b-3) a desktop Netz tab applies the surface only: sr and sr-netz, NO ph, no stack, no tool row', cls(p) === 'sr sr-netz' && p.doc.getElementById('ph-stack') === null && eng.state().applied === null && eng.state().surfaces.join() === 'netz' && eng.state().surfaceTab === 'netz', cls(p) + ' / ' + eng.state().surfaces.join());
     check('...its blocks are in the Netz overlay (the host class ph-sheet-rows) and no other surface (the timeline, the layer sheet, the trails) is applied', p.doc.getElementById('more-netz').className.indexOf('ph-sheet-rows') >= 0 && p.doc.all().filter(n => n.id === 'ph-sheet-timeline' || n.id === 'ph-sheet-layer').length === 0);
     p.mq.set(true);
     check('the width turning to a phone: the layout is built and every surface of the tab applied (once: ph sr sr-netz sr-timeline), the Netz blocks not doubled', cls(p) === 'ph sr sr-netz sr-timeline' && p.doc.all().filter(n => n.className === 'ph-sheet-block').length >= 2 && eng.state().surfaces.join() === 'layer,timeline,netz', cls(p));
     const blocks = p.doc.all().filter(n => /\bph-sheet-block\b/.test(n.className) && n.parentNode && n.parentNode.id === 'more-netz').length;
     p.mq.set(false);
     check('and back to the desktop with the switch on: the layout is released, the surface is applied inline again (sr sr-netz)', cls(p) === 'sr sr-netz' && p.doc.getElementById('ph-stack') === null && p.doc.all().filter(n => /\bph-sheet-block\b/.test(n.className) && n.parentNode && n.parentNode.id === 'more-netz').length === blocks, cls(p));
+    const idsOf = pp => JSON.stringify(pp.doc.all().map(n => n.id).filter(Boolean).sort());
+    check('no id is made or lost by the round trips between the layout and the inline surface: the ids of the page with the surface inline are the same ids after phone, desktop, phone, desktop, and no id is twice', (() => { const a0 = idsOf(p); p.mq.set(true); const onPhone = idsOf(p); p.mq.set(false); const a1 = idsOf(p); p.mq.set(true); p.mq.set(false); const a2 = idsOf(p); const ids = JSON.parse(a2); return a0 === a1 && a1 === a2 && new Set(ids).size === ids.length && onPhone !== a0; })());
+    p.doc.documentElement.setAttribute('data-tab', 'form'); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
+    check('a tab change from Netz to Form at 768px and up with the overlay\'s blocks built releases them: no class, no block, the exact fields back in their groups', cls(p) === '' && p.moreNetz.querySelectorAll('.ph-sheet-block').length === 0, cls(p));
+    p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
     eng.release();
     check('release() puts the whole tree back (no marker, no block, no class) and removes sr and sr-netz', cls(p) === '' && dump(p.doc.documentElement) === before, cls(p));
-    const q = netzPage(); q.mq.set(false); const e2 = ph(q, config); e2.start();
-    check('the same page with the REAL config (switch off) applies nothing at 768px and up', cls(q) === '' && e2.state().surfaces.length === 0);
+    const off = JSON.parse(JSON.stringify(config)); off.surfaces.netz.inlineOn = false;
+    const q = netzPage(); q.mq.set(false); const e2 = ph(q, off); e2.start();
+    check('the same page with the switch OFF (a copy of the config) applies nothing at 768px and up', cls(q) === '' && e2.state().surfaces.length === 0);
 });
 T('surface-roundtrips', () => {
     const p = formPageUI(), eng = ph(p), before = dump(p.doc.documentElement); eng.start();

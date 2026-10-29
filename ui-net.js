@@ -38,6 +38,7 @@
   const strengthRoot = row.querySelector('.stepper');
   const strengthInput = $('#net-strength-input'), strengthDisplay = $('#net-strength-value');
   const focusRoot = panel.querySelector('#net-focus-row .stepper');
+  const focusRowEl = $('#net-focus-row');
   const focusInput = $('#net-focus-input'), focusDisplay = $('#net-focus-value');
   const strengthExact = $('#net-strength-exact'), focusExact = $('#net-focus-exact');
   const readoutEl = $('#net-readout');
@@ -49,7 +50,9 @@
   }
   function reasonAll() { return applies() ? null : T['reason.net.notApplicable']; }
   // the phone layout disables the Fokus stepper (aria-disabled on its root, with the reason) while sketch.js hides the Fokus row (Aus, Geo); the exact field says the same and is locked
-  function reasonFocus() { return reasonAll() || (UI.isDisabled(focusRoot) ? focusRoot.dataset.reason || '' : null); }
+  // At 768px and up (the Netz surface, patterns C0b-3) nothing disables the stepper - the layout's follow rule is the phone's - but the exact field sits in the overlay's rows whatever sketch.js does with the Fokus row,
+  // so the hidden row itself says "does not apply" (Aus, Geo), with the same text the phone layout writes.
+  function reasonFocus() { return reasonAll() || (UI.isDisabled(focusRoot) ? focusRoot.dataset.reason || '' : null) || (focusRowEl && focusRowEl.hidden ? UI.t('net.reason.focus') : null); }
   function reasonStrength() { return reasonAll() || (kind() === 'regular' ? T['reason.net.needsKind'] : null); }
 
   // ---- kinds: a radiogroup whose state sketch.js owns ------------------------------------------------------------
