@@ -718,7 +718,7 @@ T('structure', () => {
     const seg = NAMES.map((n, i) => rules(cut(pos[i], i + 1 < pos.length ? pos[i + 1] : -1).replace(/^\s*\/\*[\s\S]*?\*\//, '')));
     const all = rules(block.slice(block.indexOf('*/') + 2));
     check('the seven blocks hold every rule of the phone block exactly once (' + seg.map(x => x.length).join(' + ') + ' = ' + all.length + ')', seg.reduce((n, x) => n + x.length, 0) === all.length && all.length > 100 && seg.every(x => x.length >= 3));
-    check('the blocks hold 39 / 11 / 5 / 9 / 29 / 3 / 28 rules: a dropped or an added rule changes a count (change the numbers with the rule, and say in which block it belongs)', seg.map(x => x.length).join(' / ') === '39 / 11 / 5 / 9 / 29 / 3 / 28', seg.map(x => x.length).join(' / '));
+    check('the blocks hold 39 / 11 / 4 / 9 / 29 / 3 / 28 rules: a dropped or an added rule changes a count (change the numbers with the rule, and say in which block it belongs; fix F2 moved the anchor swatch\'s rule out of OTHER SURFACES: 5 -> 4)', seg.map(x => x.length).join(' / ') === '39 / 11 / 4 / 9 / 29 / 3 / 28', seg.map(x => x.length).join(' / '));
     // no rule twice (the same media chain, selector and body)
     const keys = all.map(r => r.at.join('>') + '|' + r.sel.replace(/\s+/g, ' ') + '|' + r.body.replace(/\s+/g, ' ').trim());
     const dup = keys.filter((k, i) => keys.indexOf(k) !== i);
@@ -808,7 +808,7 @@ T('twins', () => {
     // the 20 rules that stay phone-only have no twin (the sheet host, the panel, the notices, the Netz panel buttons and the Net lines and Reverse icons, the layer sheet, the rail sheet, the dialogs, the timeline group box)
     const PHONE_ONLY = ['html.ph .ph-sheet', 'html.ph .ph-sheet .control-group', 'html.ph .ph-sheet.ph-sheet-rows', 'html.ph .ph-slot [hidden]', 'html.ph .ph-slot .net-kind-btn', 'html.ph .ph-slot .layer-btn', 'html.ph .ph-toolrow #net-lines-btn',
         'html.ph .ph-toolrow #net-lines-btn::before', 'html.ph .ph-slot #net-reverse-btn', 'html.ph .ph-slot #net-reverse-btn::before', 'html.ph .ph-slot #net-reverse-btn[hidden]', 'html.ph #timeline-group, html.ph #timeline-group:not(.ts-open)', 'html.ph #layer-more-panel .stepper > input[type="number"]', 'html.ph .ph-sheet-row .control-group > input[type="number"]',
-        'html.ph .dialog-content', 'html.ph .dialog-content button', 'html.ph #more-rail .more-settings', 'html.ph[data-tab="farbe"] #more-rail > .more-row:not(.more-extra)', 'html.ph .ph-slot #farbe-anchor-preview', 'html.ph .notices', 'html.ph.overlay-open .notices'];
+        'html.ph .dialog-content', 'html.ph .dialog-content button', 'html.ph #more-rail .more-settings', 'html.ph[data-tab="farbe"] #more-rail > .more-row:not(.more-extra)', 'html.ph .notices', 'html.ph.overlay-open .notices'];
     const twinSels = new Set(all.flatMap(r => parts(r).map(q => q.replace(/^html\.sr(-[a-z]+)?/, 'html.ph'))));
     const stray = PHONE_ONLY.filter(sel => sel.split(',').map(q => q.trim()).some(q => twinSels.has(q)));
     check('the phone-only rules have NO twin (' + PHONE_ONLY.length + ' listed: sheet host, panel, notices, Netz panel buttons, Net lines and Reverse icons, layer sheet, rail sheet, dialogs, the timeline group box)', stray.length === 0 && PHONE_ONLY.every(sel => phone.some(r => norm(r.sel) === norm(sel))), stray.join(' ; ') || 'none');
