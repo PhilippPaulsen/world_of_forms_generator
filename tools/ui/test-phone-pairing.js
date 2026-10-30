@@ -183,6 +183,14 @@ T('release-popup', () => {
     check('the engine remembers what the trigger had before UI.overlay marked it (aria-haspopup), takes the mark away at release (or puts the old value back) and puts it back with every apply', /popup: trigger\.getAttribute\('aria-haspopup'\)/.test(code) && /h\.trigger\.removeAttribute\('aria-haspopup'\)/.test(code) && /h\.trigger\.setAttribute\('aria-haspopup', h\.popup\)/.test(code) && /h\.trigger\.setAttribute\('aria-haspopup', 'dialog'\)/.test(code));
 });
 
+T('surface-css', () => {
+    // C0b-6b: at 768px and up the twins (html.sr-timeline ...) carry the view's rules and a few html.sr-timeline:not(.ph) rules say what differs
+    const reg = CSS.slice(CSS.indexOf('=== Surfaces ('));
+    check('the view\'s rules exist as twins under html.sr-timeline for every class it makes: segment, chips, chip, moves, variant, vcount, listicon, listhead, listcount, list, lrow, lleft, ldef, lsum', ['ph-tl-segment', 'ph-tl-chips', 'ph-tl-chip', 'ph-tl-moves', 'ph-tl-variant', 'ph-tl-vcount', 'ph-tl-listicon', 'ph-tl-listhead', 'ph-tl-listcount', 'ph-tl-list', 'ph-tl-lrow', 'ph-tl-lleft', 'ph-tl-ldef', 'ph-tl-lsum'].every(c => reg.indexOf('html.sr-timeline .' + c) >= 0));
+    check('the list is capped at five rows at 768px and up with the pointer token: html.sr-timeline:not(.ph) .ph-tl-list { max-height: calc(5 * var(--target) + 4 * var(--sp-2)) } - the phone\'s 80dvh - 182px is in the twin and is overridden (one more class)', /html\.sr-timeline:not\(\.ph\) \.ph-tl-list \{ max-height: calc\(5 \* var\(--target\) \+ 4 \* var\(--sp-2\)\); \}/.test(reg) && /html\.sr-timeline \.ph-tl-list \{[^}]*max-height: calc\(80dvh - 182px\)/.test(reg));
+    check('the segment select has NO display rule of its own at 768px and up (the view shows it only with two or more segments: the hidden attribute, the twin\'s [hidden] rule); the interim rules of 6a are gone', !/html\.sr-timeline:not\(\.ph\) \.ph-tl-segment/.test(reg) && !/#timeline-pairing:not\(\[hidden\]\)/.test(reg));
+});
+
 T('gate', () => {
     const code = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
     check('the pairing view is on while the timeline SURFACE is applied: sync() reads html.sr-timeline (the engine\'s flag, C0b-2), not html.ph', /html\.classList\.contains\('sr-timeline'\)/.test(code) && !/classList\.contains\('ph'\)/.test(code));

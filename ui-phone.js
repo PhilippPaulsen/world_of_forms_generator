@@ -472,6 +472,7 @@
         if (firstApplyState === null) firstApplyState = doc.readyState || null;
         html.classList.add('ph');
         setSurfaceFlags();
+        layoutSwitched();
         html.style.setProperty('--panel-h', t.panelH + 'px');
         setInnerHeight();
         show(remembered[tab] || t.defaultSubtab);
@@ -530,6 +531,7 @@
         }
         // UI.overlay marked every sheet's trigger aria-haspopup="dialog" and cannot undo it: above 768px the trigger opens the inline block again, so the attribute goes (or the value it had before comes back)
         Object.keys(sheetCache).forEach(function (sid) { const h = sheetCache[sid]; if (h.popup === null || h.popup === undefined) h.trigger.removeAttribute('aria-haspopup'); else h.trigger.setAttribute('aria-haspopup', h.popup); });
+        const hadLayout = !!built;
         built = null;
         applied = null;
         inlineTab = null;
@@ -537,6 +539,7 @@
         html.classList.remove('ph');
         html.style.removeProperty('--panel-h');
         html.style.removeProperty('--ph-inner-h');
+        if (hadLayout) layoutSwitched();   // the views look at the final state (no html.ph)
       });
       return true;
     }
@@ -563,6 +566,10 @@
       remembered[applied] = sid;
       config.subtabs[sid].rows.forEach(function (row) { row.items.forEach(function (it) { afterShow(it.id); }); });
       return true;
+    }
+    // views whose UI state belongs to one arrangement (config.layoutSwitch): told when the phone layout is built or released
+    function layoutSwitched() {
+      (config.layoutSwitch || []).forEach(function (h) { const g = win[h[0]]; if (g && typeof g[h[1]] === 'function') g[h[1]](); });
     }
     // the view that made an element may want to look again once it has moved into a visible place (config.afterShow)
     function afterShow(id) {
