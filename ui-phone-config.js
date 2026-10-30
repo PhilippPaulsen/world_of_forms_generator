@@ -27,8 +27,9 @@
  *              (the overlay #more-netz) and the colour trails (the Spuren chips). tabs: where it applies. flag: the class the engine puts on <html> while it is applied (null for none) - together with `sr` (any surface
  *              applied) it is the gate of the twin rules in style.css and what the view modules read instead of `ph`. hosts.phone: what holds it while the phone layout is on - { kind: 'sheet', id } (config.sheets.<id>:
  *              a bottom sheet), { kind: 'overlay', id } (config.overlays.<id>: an overlay that exists), { kind: 'pane', id } (the layout's sub-tab pane holds the rows: nothing to build). hosts.inline: where it would sit at
- *              768px and up: { kind: 'overlay', id, steppers?, park? } (the Netz overlay builds its rows in place) or { kind: 'group', id, hostId, items } (the engine makes a row host `hostId` inside the existing group `id` and moves the containers a view made - `items` - into it; release() puts them back and removes the host: the colour trails) or { kind: 'content', id, sheet, blocks? } (the blocks of the sheet `sheet` are built inside the existing content element `id` itself, no host and no sheet; `blocks` = which of the sheet's blocks, by number: the timeline group at 768px and up builds block 1 only). inlineOn: the switch for the inline mode - ON for netz (C0b-3), trails (C0b-5) and timeline (C0b-6a), OFF for layer. The blocks and steppers stay in
+ *              768px and up: { kind: 'overlay', id, steppers?, park? } (the Netz overlay builds its rows in place) or { kind: 'group', id, hostId, items } (the engine makes a row host `hostId` inside the existing group `id` and moves the containers a view made - `items` - into it; release() puts them back and removes the host: the colour trails) or { kind: 'content', id, sheet, blocks? } (the blocks of the sheet `sheet` are built inside the existing content element `id` itself, no host and no sheet; `blocks` = which of the sheet's blocks, by number: the timeline group at 768px and up builds all three). inlineOn: the switch for the inline mode - ON for netz (C0b-3), trails (C0b-5) and timeline (C0b-6a), OFF for layer. The blocks and steppers stay in
  *              config.sheets / config.overlays; tabs.<tab>.sheets / .overlays must list exactly the surfaces of that tab (validate()).
+ *   layoutSwitch  [[global, method], ...]: called (when it exists) whenever the phone layout is built or released: a view whose UI state belongs to one arrangement resets (the timeline's pairing toggle).
  *   afterShow  id -> [global, method]: called (when it exists) after the element moved into the visible panel - a moved element loses its scroll position.
  */
 (function (root) {
@@ -204,14 +205,16 @@
         ]
       }
     },
-    // The surface registry (see the header). The order is the order the engine applies them in: the sheets in their stack order, then the overlay. The inline switches: OFF for layer (it turns its own on in its commit); ON for timeline since C0b-6a (the frame: the icon row and the readout inside #timeline-group at 768px and up; the pairing view of its blocks 2 and 3 comes with 6b); ON for trails since C0b-5 (the chip view in the Face Colors group at 768px and up: the group's own rows are parked by the CSS); ON for netz since C0b-3 (the overlay content at 768px and up). Its inline host (C0b-4) decorates only the fine Fokus input (`steppers`: a list of the overlay's stepper ids) and leaves the typed strength field where it is (`park`: ids of the blocks that are not built; the section they sit in is hidden by the CSS - the strength is edited in the panel's stepper there).
+    // The surface registry (see the header). The order is the order the engine applies them in: the sheets in their stack order, then the overlay. The inline switches: OFF for layer (it turns its own on in its commit); ON for timeline since C0b-6a (the icon row and the readout inside #timeline-group at 768px and up) and C0b-6b (the pairing view: its blocks 2 and 3 too); ON for trails since C0b-5 (the chip view in the Face Colors group at 768px and up: the group's own rows are parked by the CSS); ON for netz since C0b-3 (the overlay content at 768px and up). Its inline host (C0b-4) decorates only the fine Fokus input (`steppers`: a list of the overlay's stepper ids) and leaves the typed strength field where it is (`park`: ids of the blocks that are not built; the section they sit in is hidden by the CSS - the strength is edited in the panel's stepper there).
     surfaces: {
       layer: { tabs: ['form', 'farbe', 'netz'], flag: null, hosts: { phone: { kind: 'sheet', id: 'layer' } }, inlineOn: false },
-      timeline: { tabs: ['form', 'farbe', 'netz'], flag: 'sr-timeline', hosts: { phone: { kind: 'sheet', id: 'timeline' }, inline: { kind: 'content', id: 'timeline-group', sheet: 'timeline', blocks: [0] } }, inlineOn: true },
+      timeline: { tabs: ['form', 'farbe', 'netz'], flag: 'sr-timeline', hosts: { phone: { kind: 'sheet', id: 'timeline' }, inline: { kind: 'content', id: 'timeline-group', sheet: 'timeline', blocks: [0, 1, 2] } }, inlineOn: true },
       netz: { tabs: ['netz'], flag: 'sr-netz', hosts: { phone: { kind: 'overlay', id: 'netz' }, inline: { kind: 'overlay', id: 'netz', steppers: ['net-focus-exact'], park: ['net-strength-exact'] } }, inlineOn: true },
       trails: { tabs: ['farbe'], flag: 'sr-trails', hosts: { phone: { kind: 'pane', id: 'spuren' }, inline: { kind: 'group', id: 'face-colors-group', hostId: 'sr-trails-host', items: ['ph-trail-chips', 'ph-trail-stepper'] } }, inlineOn: true }
     },
-    afterShow: { 'layer-strip': ['layerTable', 'revealActive'], 'ph-trail-chips': ['uiPhoneChips', 'refresh'] }
+    afterShow: { 'layer-strip': ['layerTable', 'revealActive'], 'ph-trail-chips': ['uiPhoneChips', 'refresh'] },
+    // views whose UI state belongs to one arrangement: called when the phone layout is built and when it is released (the width crosses 768px, a tab change inside the phone layout): the timeline view's pairing toggle is off again and the pairing view, which sees that, leaves its list (C0b-6b); the ORDER matters
+    layoutSwitch: [['uiPhoneTimeline', 'reset'], ['uiPhonePairing', 'refresh']]
   };
 
   // a follow entry is a string (the id of the block; mode 'hide') or { of, mode, reason }
@@ -429,6 +432,7 @@
       if (ph && ph.kind === 'overlay') Object.keys(cfg.tabs).forEach(function (tab) { if (((cfg.tabs[tab].overlays || []).indexOf(ph.id) >= 0) !== (sf.tabs.indexOf(tab) >= 0)) bad.push(where + ': tabs.' + tab + '.overlays and the registry disagree about overlay ' + ph.id); });
     });
     Object.keys(cfg.afterShow || {}).forEach(function (id) { if (!known(id)) bad.push('afterShow: id ' + id + ' is unknown'); });
+    (cfg.layoutSwitch || []).forEach(function (h, i) { if (!(Array.isArray(h) && h.length === 2 && typeof h[0] === 'string' && typeof h[1] === 'string' && h[0] && h[1])) bad.push('layoutSwitch[' + i + ']: must be [global, method]'); });
     Object.keys(cfg.follow || {}).forEach(function (id) {
       const f = followSpec(cfg.follow[id]);
       if (!known(id) || !known(f.of)) bad.push('follow: ' + id + ' or ' + f.of + ' is unknown');

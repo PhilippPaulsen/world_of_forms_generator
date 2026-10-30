@@ -1224,6 +1224,7 @@ T('timeline-readout', () => {
 // ---- the pairing view of the timeline sheet (sheets redesign, commit 5b): ui-phone-pairing.js with the REAL ui.js and the real icon-row view, against a fake of the model that REBUILDS its rows after every change (as sketch.js does) ----
 console.log('\n== the pairing view (sheets redesign, commit 5b): forwarding, the selection, the model rebuilt after every action ==');
 const PV = require(process.env.UI_PHONE_PAIRING_JS || path.join(ROOT, 'ui-phone-pairing.js'));
+const PVSRC = fs.readFileSync(process.env.UI_PHONE_PAIRING_JS || path.join(ROOT, 'ui-phone-pairing.js'), 'utf8');
 // the model: what sketch.js's renderTimelinePairingEditor() renders, rebuilt from scratch (new elements) after every action: row r = Start line r, perm[r] = its End line; up / down swap the End assignments of two rows,
 // flip toggles the End line's flip, prev / next step its variant k of c; the reset button is hidden while the pairing is the default
 const pairModel = (p, init) => {
@@ -1283,8 +1284,8 @@ const pairModel = (p, init) => {
     render();
     return { st, log, render };
 };
-const pairPage = (init) => {
-    const v = tlView(), model = pairModel(v.p, init);
+const pairPage = (init, noPh) => {
+    const v = tlView({}, noPh), model = pairModel(v.p, init);
     const view = PV.createPairingView(v.p.doc, v.p.win, { perm: () => model.st.perm.slice() });
     v.set({ tl: v.tlo([0, 1, 2]), summary: { state: 'animated' } }); v.p.tlGroup.classList.add('ts-open');
     return Object.assign({ model, pview: view, n: view.nodes, g: v.p.tlGroup }, { v });
@@ -1581,7 +1582,7 @@ T('surface-desktop', () => {
     check('...and a tab change and a repeated media-query event at 768px and up change nothing either', cls(p) === '' && dump(p.doc.documentElement) === before);
     check('the registry: the inline switch is ON for the Netz, trails and timeline surfaces (the layer sheet is OFF: it has no inline host)', Object.keys(config.surfaces).every(n => config.surfaces[n].inlineOn === (n === 'netz' || n === 'trails' || n === 'timeline')));
     const q = formPageUI(); q.mq.set(false); const e2 = ph(q); e2.start();
-    check('with the real config the Form tab at 768px and up applies the TIMELINE surface only (C0b-6a): sr and sr-timeline, no ph, no stack, the icon row and the readout built inside #timeline-group (one block), the strip\'s group keeps its own open state', cls(q) === 'sr sr-timeline' && e2.state().surfaces.join() === 'timeline' && q.doc.getElementById('ph-stack') === null && e2.state().applied === null && q.doc.getElementById('timeline-group').className.indexOf('ph-sheet-rows') >= 0 && q.doc.getElementById('timeline-group').children.filter(c => c.className === 'ph-sheet-block').length === 1 && q.doc.getElementById('ph-tl-icons').parentNode.className === 'ph-sheet-row', cls(q));
+    check('with the real config the Form tab at 768px and up applies the TIMELINE surface only (C0b-6a): sr and sr-timeline, no ph, no stack, the three blocks of the timeline sheet built inside #timeline-group (the icon row and the readout, the editor rows, the list rows: the view\'s gates open them), the strip\'s group keeps its own open state', cls(q) === 'sr sr-timeline' && e2.state().surfaces.join() === 'timeline' && q.doc.getElementById('ph-stack') === null && e2.state().applied === null && q.doc.getElementById('timeline-group').className.indexOf('ph-sheet-rows') >= 0 && q.doc.getElementById('timeline-group').children.filter(c => c.className === 'ph-sheet-block').length === 3 && q.doc.getElementById('ph-tl-icons').parentNode.className === 'ph-sheet-row', cls(q));
     e2.release();
     check('release() puts the icon row and the readout back into their holder: no block, no class, no ph-sheet-rows left on the group, no marker', cls(q) === '' && q.doc.getElementById('timeline-group').className.indexOf('ph-sheet-rows') < 0 && q.doc.all().filter(n => /ph-sheet-block/.test(n.className)).length === 0 && q.doc.getElementById('ph-tl-home').children.map(c => c.id).slice(0, 2).join() === 'ph-tl-icons,ph-tl-readout');
 });
@@ -1622,6 +1623,53 @@ T('surface-sources', () => {
     check('the inline mode needs the switch: buildSurfaces() skips a surface with inlineOn !== true in mode inline, and surfacesInline() does nothing unless one is on', /mode === 'inline' && sf\.inlineOn !== true\) return;/.test(eng) && /sf\.inlineOn === true && \(sf\.hosts \|\| \{\}\)\.inline/.test(eng));
     check('release() removes the flags (removeSurfaceFlags) and the surface state, after the blocks and steppers are undone', /removeSurfaceFlags\(\);\s*html\.classList\.remove\('ph'\)/.test(eng) && /function removeSurfaceFlags\(\)/.test(eng));
     check('the engine names no surface: no layer / timeline / netz / trails and no sr-... class in its code (the registry is data)', !/['"](layer|timeline|netz|trails)['"]/.test(eng.replace(/'(farbe|form)'/g, '')) && !/sr-(netz|trails|timeline)/.test(eng));
+});
+
+
+// ---- patterns commit C0b-6b: the pairing view and its list at 768px and up (the surface flag only, no html.ph, no sheet) ----
+console.log('\n== the pairing view at 768px and up (C0b-6b) ==');
+const inEd = x => x.g.classList.contains('ph-tl-editor-show'), inLs = x => x.g.classList.contains('ph-tl-list-show');
+T('pairing-view-inline', () => {
+    const x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] }, true);
+    check('without html.ph (only sr-timeline) the toggle builds the editor: three chips, the first selected, the gate class ph-tl-editor-show on the group, the list icon offered', !x.v.p.doc.documentElement.classList.contains('ph') && (open(x), chipsOf(x).length === 3 && selOf(x) === 0 && inEd(x) && !inLs(x) && x.n.listBtn.hidden === false));
+    chipsOf(x)[1].dispatch('click', { detail: 1 }); x.model.log.length = 0; x.n.down.dispatch('click', { detail: 1 });
+    check('end-down on line 2 forwards ONE click to the model\'s own button of row 2 and the selection follows the moved line (line 3)', x.model.log.join() === 'down1' && selOf(x) === 2, x.model.log.join() + ' / ' + selOf(x));
+    x.n.listBtn.dispatch('click', { detail: 1 });
+    check('the list icon opens the list as a view state of the same group: ph-tl-list-show instead of the editor gate, the model\'s list opened by ONE click on Browse all', x.pview.list.open() === true && inLs(x) && !inEd(x) && x.model.log.join() === 'down1,browse', x.model.log.join());
+    let stopped = 0; x.v.p.doc.dispatch('keydown', { key: 'Escape', stopPropagation() { stopped++; }, preventDefault() { } });
+    check('the FIRST Escape leaves the list (back to the editor, the model\'s list closed again by one click) and is swallowed (captured before anything else sees it)', x.pview.list.open() === false && inEd(x) && stopped === 1 && x.model.log.slice(-1)[0] === 'browse', x.model.log.join());
+    let stopped2 = 0; x.v.p.doc.dispatch('keydown', { key: 'Escape', stopPropagation() { stopped2++; }, preventDefault() { } });
+    check('a SECOND Escape with nothing to leave does nothing in the view: not swallowed, the group stays open, the toggle stays on (the group is no sheet: Escape closes nothing)', stopped2 === 0 && x.g.classList.contains('ts-open') && x.g.classList.contains('ph-tl-editor-open') && inEd(x));
+    x.n.listBtn.dispatch('click', { detail: 1 }); x.g.classList.remove('ts-open'); x.v.p.doc.dispatch('click', { target: x.v.p.doc.body });
+    check('the group closes while the list is open (the strip\'s "..." flips ts-open): the toggle is off, the list is left, the gate classes are gone, the model\'s list is closed again, no chip is kept', x.pview.list.open() === false && !x.g.classList.contains('ph-tl-editor-open') && !inEd(x) && !inLs(x) && x.model.st.browseOpen === false && chipsOf(x).length === 0, JSON.stringify([x.pview.list.open(), x.g.className, x.model.st.browseOpen, chipsOf(x).length]));
+    x.g.classList.add('ts-open'); x.v.p.doc.dispatch('click', { target: x.v.p.doc.body }); open(x); x.n.listBtn.dispatch('click', { detail: 1 });
+    x.v.view.reset(); x.pview.refresh();
+    check('the layout switch (the engine calls the timeline view\'s reset(), then the pairing view\'s refresh()): the toggle is off AND the list is left in the same step, the model\'s list is closed; with the calls in the other order the list would stay', !x.g.classList.contains('ph-tl-editor-open') && x.pview.list.open() === false && !inLs(x) && !inEd(x) && x.model.st.browseOpen === false && x.v.nodes.pairing.getAttribute('aria-pressed') === 'false');
+    open(x); x.n.listBtn.dispatch('click', { detail: 1 });
+    x.v.view.reset();
+    check('...reset() alone only turns the toggle off; the pairing view leaves its list at its next look (a tick, a click, or the refresh the engine asks for second)', x.v.nodes.pairing.getAttribute('aria-pressed') === 'false' && (x.pview.refresh(), x.pview.list.open() === false));
+    x.v.set({ tl: x.v.tlo([0, 1, 2]), summary: { state: 'animated' } }); open(x); x.n.listBtn.dispatch('click', { detail: 1 }); x.v.set({ tl: x.v.tlo([0]), summary: { state: 'pending' } });
+    check('a keyframe is removed down to one while the list is open: the toggle goes off and disables, the list is left, nothing of the editor is kept', x.pview.list.open() === false && !inLs(x) && !inEd(x) && x.v.nodes.pairing.getAttribute('aria-pressed') === 'false' && chipsOf(x).length === 0);
+});
+T('pairing-view-inline-source', () => {
+    const code = PVSRC.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+    check('the pairing view\'s Escape handler is the ONE capture listener that acts only while the list is open (e.key === "Escape" && listOpen); no other key, no ts-open, no sheet: at 768px and up Escape closes nothing else', (code.match(/addEventListener\('keydown'/g) || []).length === 1 && /e\.key === 'Escape' && listOpen/.test(code) && /, true\)/.test(code.slice(code.indexOf("addEventListener('keydown'"), code.indexOf("addEventListener('keydown'") + 400)));
+    check('the view reads no layout: no html.ph, no #ph-slot, no UI.overlay; the gate is html.sr-timeline and the toggle class on the group', !/classList\.contains\('ph'\)|ph-slot|UI\.overlay/.test(code) && /classList\.contains\('sr-timeline'\)/.test(code));
+});
+T('layout-switch', () => {
+    const p = buildPage({ ui: true }); const calls = []; p.win.uiPhoneTimeline = { reset() { calls.push('reset'); } }; p.win.uiPhonePairing = { refresh() { calls.push('refresh'); } };
+    p.mq.matches = false; const eng = ph(p); eng.start();
+    check('at 768px and up no layout is built: the layout-switch hooks are not called by start()', calls.length === 0, calls.join());
+    p.mq.set(true);
+    check('the phone layout is built: the hooks are called ONCE each, in the config order (the timeline view resets first, then the pairing view looks again)', calls.join() === 'reset,refresh', calls.join());
+    calls.length = 0; p.mq.set(false);
+    check('the layout is released (the width crosses 768px): the same two calls, in the same order, once each', calls.join() === 'reset,refresh', calls.join());
+    calls.length = 0; p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
+    check('a tab change at 768px and up (the surfaces switch, no layout is built or released) calls nothing', calls.length === 0, calls.join());
+    p.mq.set(true); calls.length = 0; p.doc.documentElement.setAttribute('data-tab', 'form'); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
+    check('a tab change inside the phone layout releases and builds it again: the hooks run for both (the toggle is UI state of one arrangement)', calls.join() === 'reset,refresh,reset,refresh', calls.join());
+    const q = buildPage({ ui: true }); q.mq.matches = false; const e2 = ph(q); e2.start(); q.mq.set(true); q.mq.set(false);
+    check('a page without the views (no window.uiPhoneTimeline, no uiPhonePairing) does not throw', true);
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

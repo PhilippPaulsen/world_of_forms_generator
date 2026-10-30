@@ -33,7 +33,8 @@
  *                       addToTimeline()), the functions the table, the rail, the strip and the
  *                       diamonds call - the old hidden #btn-add-layer / #btn-add-to-timeline are
  *                       only the FALLBACK of a tree that has no layerApi. The same state results.
- *   timeline_more       the timeline strip's "Mehr" opened (real clicks) and closed again
+ *   timeline_more       the timeline strip's "Mehr" opened (real clicks) and closed again; since patterns commit C0b-6b also timeline_editor (the pairing toggle on) and timeline_list (the list icon), tracked with
+ *                       TRACKED_PAIRING, in the cells where the pairing view is shown (768px and up of that commit on)
  *   layer_more          the layer "Mehr" opened (layerApi.toggleMore) and closed again
  *   plus_probe          ONE REAL click on the visible "+" of the current view (the table, the rail
  *                       or the strip: whichever has a rect); `probe` says which element it was
@@ -109,6 +110,9 @@
   // patterns commit C0b-6a (baseline-cleanup-8.json): the compact timeline group (#timeline-group, opened by the strip's "Mehr"): the icon row, its three buttons and the readout line. Tracked ONLY in the snapshot of the open
   // group (timeline_more), like TRACKED_TRAILS: elsewhere they would be null (the holder is hidden) and the file stays small.
   const TRACKED_TIMELINE = ['#ph-tl-icons', '#ph-tl-readout', '.ph-tl-netrec', '.ph-tl-pairing', '.ph-tl-trash'];
+  // patterns commit C0b-6b: the pairing view inside that group - the line chips, the end and variant buttons, the list icon and reset, the list header and the list with its first row - tracked ONLY in the snapshots
+  // of the editor (timeline_editor) and of the list (timeline_list)
+  const TRACKED_PAIRING = ['.ph-tl-segment', '#ph-tl-chips', '#ph-tl-chips .ph-tl-chip:nth-child(1)', '#ph-tl-moves', '.ph-tl-up', '.ph-tl-down', '.ph-tl-flip', '#ph-tl-variant', '.ph-tl-vcount', '#ph-tl-listbtn', '#ph-tl-reset', '#ph-tl-listhead', '.ph-tl-back', '.ph-tl-listcount', '#ph-tl-list', '#ph-tl-list .ph-tl-lrow:nth-child(1)'];
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -164,9 +168,9 @@
     return (el.id ? '#' + el.id : el.tagName.toLowerCase() + (el.className ? '.' + String(el.className).split(' ')[0] : ''));
   }
 
-  function snap(withTrails, withTimeline) {
+  function snap(withTrails, withTimeline, withPairing) {
     const out = {};
-    TRACKED.concat(withTrails ? TRACKED_TRAILS : [], withTimeline ? TRACKED_TIMELINE : []).forEach((sel) => { const el = document.querySelector(sel); out[sel] = sel.indexOf('#ui-notices') === 0 ? rectViewport(el) : rect(el); });
+    TRACKED.concat(withTrails ? TRACKED_TRAILS : [], withTimeline ? TRACKED_TIMELINE : [], withPairing ? TRACKED_PAIRING : []).forEach((sel) => { const el = document.querySelector(sel); out[sel] = sel.indexOf('#ui-notices') === 0 ? rectViewport(el) : rect(el); });
     const root = document.documentElement;
     out.scrollWidth = root.scrollWidth;
     out.clientWidth = root.clientWidth;
@@ -187,12 +191,12 @@
 
   // Every snapshot but the notice one is taken with NO notice showing: a notice that an earlier step raised (the net chapter's "Sin und Tan brauchen mindestens 4 Knoten" one) would still be
   // on screen in a fast recording and gone in a slow one. UI.hideToast() closes the non-sticky notices; one frame (or 80 ms where the page is hidden and no frame comes) lets the layout settle.
-  async function snapQ(keepNotices, withTrails, withTimeline) {
+  async function snapQ(keepNotices, withTrails, withTimeline, withPairing) {
     if (!keepNotices && window.UI && UI.hideToast) {
       UI.hideToast();
       await new Promise((r) => { let done = false; const fin = () => { if (!done) { done = true; r(); } }; if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fin); setTimeout(fin, 80); });
     }
-    return snap(withTrails, withTimeline);
+    return snap(withTrails, withTimeline, withPairing);
   }
 
   async function measureLayout(opts) {
@@ -334,7 +338,21 @@
 
     // the timeline strip's "Mehr" (real clicks): opens the old #timeline-group (the keyframe list, the net status, the pairing editor, the status line, "Zeitleiste entfernen"); closed again after
     const tsMore = document.querySelector('#timeline-strip .ts-more');
-    if (tsMore) { realClick(tsMore); await sleep(wait); result.timeline_more = await snapQ(false, false, true); realClick(tsMore); await sleep(wait); }
+    if (tsMore) {
+      realClick(tsMore); await sleep(wait); result.timeline_more = await snapQ(false, false, true);
+      // the pairing toggle on (the editor of the pairing view at 768px and up), then its list icon (the list), then back: only where the toggle is there and enabled (a tree before the surface has none)
+      const pt = document.querySelector('.ph-tl-pairing');
+      if (pt && pt.offsetParent !== null && pt.getAttribute('aria-disabled') !== 'true') {
+        realClick(pt); await sleep(wait * 2); result.timeline_editor = await snapQ(false, false, true, true);
+        const lb = document.querySelector('#ph-tl-listbtn');
+        if (lb && lb.offsetParent !== null && !lb.hidden) {
+          realClick(lb); await sleep(wait * 2); result.timeline_list = await snapQ(false, false, true, true);
+          const bk = document.querySelector('.ph-tl-back'); if (bk && bk.offsetParent !== null) { realClick(bk); await sleep(wait); }
+        }
+        realClick(pt); await sleep(wait);
+      }
+      realClick(tsMore); await sleep(wait);
+    }
     // the layer "Mehr" of the active layer (a layer is active now): opened and closed again
     if (api && api.toggleMore) { api.toggleMore(); await sleep(wait); result.layer_more = await snapQ(); api.toggleMore(); await sleep(wait); }
     // ONE real click on the visible "+" of the current view (a third layer): which element it was is in `probe`

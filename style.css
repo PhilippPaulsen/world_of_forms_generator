@@ -1803,10 +1803,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
    TRAILS AT 768PX AND UP (html.sr-trails:not(.ph))
    what differs from the Spuren pane while the layout is OFF (C0b-5): the chip view takes the place of the Face Colors group (#face-colors-group, shown by sketch.js while the active sheet's Fill is on). The group's own
    content - the title, the keyframe note, the status, the rule note, the list (the MODEL sketch.js keeps rendering) and the "unassigned" row - is parked hidden, never removed; the row host the engine makes
-   (.sr-host, the neutral class) holds the chip bar and the stepper row, centred under the canvas, as wide as the canvas at most.
+   (.sr-host, the neutral class) holds the chip bar and the stepper row. C0b-6b: the group has a FIXED width of --canvas-size, its left edge on the canvas' left edge (auto margins: the page centres the canvas), and everything in
+   it is left aligned: a changing number of chips or the muted line does not move the stepper row or the group.
    ================================================================================================================================================================ */
   html.sr-trails:not(.ph) #face-colors-group > :not(.sr-host) { display: none; }
-  html.sr-trails:not(.ph) #face-colors-group > .sr-host { display: flex; flex-direction: column; gap: var(--sp-2); box-sizing: border-box; width: 100%; max-width: var(--canvas-size); min-width: 0; }
+  html.sr-trails:not(.ph) #face-colors-group { box-sizing: border-box; width: var(--canvas-size); max-width: 100%; margin-left: auto; margin-right: auto; padding: 0; align-items: flex-start; text-align: left; }
+  html.sr-trails:not(.ph) #face-colors-group > .sr-host { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); box-sizing: border-box; width: 100%; min-width: 0; }
   html.sr-trails:not(.ph) .ph-chips-empty { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 /* ================================================================================================================================================================
@@ -1845,12 +1847,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 /* ================================================================================================================================================================
    TIMELINE AT 768PX AND UP (html.sr-timeline:not(.ph))
-   what differs from the timeline sheet while the layout is OFF (C0b-6a, the FRAME): the timeline group (#timeline-group, opened by the strip's "..." through ts-open) is the content itself - the blocks of the sheet are
-   built inside it (block 1: the icon row and the readout line) - and sits under the canvas as before: centred, at most --canvas-size wide. The keyframe list, the net box, the status span and the text remove button are parked
-   hidden by the twins above, never removed. The old line-pairing editor (#timeline-pairing, the model) is parked too and shown, in its present look, only while the pairing toggle is on (ph-tl-editor-open): the interim
-   until 6b. The segment select of the pairing view belongs to 6b: parked hidden.
+   what differs from the timeline sheet while the layout is OFF (C0b-6a the frame, C0b-6b the pairing view): the timeline group (#timeline-group, opened by the strip's "..." through ts-open) is the content itself - the
+   blocks of the sheet are built inside it (block 1: the icon row and the readout line; block 2: the pairing editor; block 3: the pairing list) - and sits under the canvas as before: a FIXED width of --canvas-size,
+   its left edge on the canvas' left edge (the page centres the canvas, so the box is centred with auto margins and its content starts at its left edge), every row left aligned: nothing in it moves when the editor or
+   the list opens (the blocks come in order below the icon row). The keyframe list, the net box, the status span and the text remove button and the old line-pairing editor (#timeline-pairing, the MODEL) are parked hidden by
+   the twins above, never removed. The pairing list is capped at 5 rows (the pointer token instead of a fixed 48px), scrolling inside itself; the phone's 80dvh cap does not apply.
    ================================================================================================================================================================ */
-  html.sr-timeline:not(.ph) #timeline-group.ts-open.ph-sheet-rows { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-3); box-sizing: border-box; width: fit-content; max-width: var(--canvas-size); margin-left: auto; margin-right: auto; }
-  html.sr-timeline:not(.ph) #timeline-group.ph-tl-editor-open #timeline-pairing:not([hidden]) { display: block; align-self: stretch; }
-  html.sr-timeline:not(.ph) #timeline-group > .ph-sheet-block { order: -1; }   /* the icon row and the readout come before the interim editor (the blocks are appended after the group's old children) */
-  html.sr-timeline:not(.ph) .ph-tl-segment { display: none; }
+  html.sr-timeline:not(.ph) #timeline-group.ts-open.ph-sheet-rows { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: var(--sp-3); box-sizing: border-box; width: var(--canvas-size); max-width: 100%; margin-left: auto; margin-right: auto; padding: 0; text-align: left; }
+  html.sr-timeline:not(.ph) #timeline-group > .ph-sheet-block { order: -1; align-items: flex-start; }   /* the blocks come before the group's old (parked) children: the icon row, the readout, then the editor or the list */
+  html.sr-timeline:not(.ph) .ph-tl-list { max-height: calc(5 * var(--target) + 4 * var(--sp-2)); }
