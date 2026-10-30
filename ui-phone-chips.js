@@ -17,10 +17,23 @@
  *                             change (the engine releases or applies in its own listener). The view holds no reference into the model: the key is read from row.dataset.key.
  *
  *   hoverStep(state, ev)      PURE (patterns C0b-5, the hover of the model rows kept on the chips). state = { key }: the trail whose row got a forwarded `mouseenter` (null = none). ev = { type: 'enter', key,
- *                             pointerType } | { type: 'leave', key } | { type: 'clear' } (a rebuild of the chip bar, the surface released, the group hidden, the tab left). -> { state, send: [{ type: 'mouseenter' |
+ *                             pointerType } | { type: 'leave', key } | { type: 'clear' } (a rebuild of the chip bar, the surface released, the group hidden, the tab left) | { type: 'click', key } | { type: 'forget' }. -> { state, send: [{ type: 'mouseenter' |
  *                             'mouseleave', key }] }. Only a MOUSE pointer enters (a touch or a pen never does: the mouse events a tap emulates must not leave a hover); an enter on another trail leaves the first.
  *                             The view sends each event to the model row, looked up FRESHLY by its key at that moment (a plain MouseEvent that does not bubble: sketch.js's own listeners set and clear faceHover,
  *                             this view never writes it); the hover wins over the selection while it lasts (faceHighlightKeyFor), the selection shows again when the hover ends.
+ *                             A CLICK MUST WORK AT ONCE (patterns T1): a click rebuilds the chip bar, and the browser then fires a pointerenter on the NEW chip under the resting mouse, whose hover would show the
+ *                             outline the click just switched off. So a click on the chip a MOUSE hovers sets state.ignore = its key (a touch or keyboard click has no hover and sets nothing): the next enter
+ *                             of that key is ignored (no mouseenter, no hover) until its pointer LEAVES it (state.ignore is cleared by the leave of that key, by the enter of ANOTHER chip, by 'forget': the chip
+ *                             is gone after a rebuild, the surface released or the group hidden). 'clear' keeps it (the click's own rebuild clears the hover and must not drop the flag). Another chip's hover
+ *                             works at once. The state is { key } while nothing is ignored, { key, ignore } while a chip is.
+ *
+ *   outlineStep(state, ev)    PURE (patterns T1, a second click on the selected chip switches the OUTLINE off). state = { outline, sheet, ph } (view state, never saved; outline defaults to ON). ev = { type: 'click',
+ *                             same } (a click on a chip: the SELECTED one toggles the outline, an unselected one is selected and outlines) | { type: 'look', active, sheet, ph } (every look of the view: active = the
+ *                             trails surface is applied, the tab is Farbe and the group is shown, i.e. Fill is on; the outline goes back ON when it is not active (released, the tab left, Fill off), when the active
+ *                             sheet changed since the last look or when html.ph changed (the layout was built or released: a resize across 768px)) | { type: 'rows', gone } (the selected trail is not in the rows any
+ *                             more: the clamped trail is selected and outlines). The SELECTION is not part of it: with the outline OFF the chip stays selected (black), the stepper still acts on that trail, and
+ *                             highlightFor() gives null (ctx.outline === false), which the view passes on as setFaceSelected(null, null). The hover (faceHover) never reads it and still wins while it lasts.
+ *                             The selected chip's aria-pressed says the outline: 'true' = ON.
  *
  * The German texts are keyed (data-i18n): trails.none, trails.label.one / .other, trails.prev, trails.next, trails.group.
  */
@@ -73,21 +86,44 @@
     if (!rows.length) return null;
     const sel = resolveSelection(rows, c.selection);
     if (sel.key === null || sel.key === undefined) return null;
+    if (c.outline === false) return null;   // the selection stays, only the outline is off (patterns T1); undefined = ON
     return { sheet: c.sheet === undefined || c.sheet === null ? 'base' : c.sheet, key: sel.key };
   }
 
   function hoverStep(state, ev) {
-    const cur = state && state.key !== undefined && state.key !== null ? state.key : null, none = { state: { key: cur }, send: [] };
+    const cur = state && state.key !== undefined && state.key !== null ? state.key : null, ign = state && state.ignore !== undefined && state.ignore !== null ? state.ignore : null;
+    const mk = function (key, ig) { return ig === null ? { key: key } : { key: key, ignore: ig }; };
+    const none = { state: mk(cur, ign), send: [] };
     if (!ev) return none;
     if (ev.type === 'enter') {
-      if (ev.pointerType !== 'mouse' || ev.key === null || ev.key === undefined || cur === ev.key) return none;
+      if (ev.pointerType !== 'mouse' || ev.key === null || ev.key === undefined) return none;
+      if (ign !== null && ev.key === ign) return none;   // the chip a click just rebuilt under the resting mouse: no hover until the pointer has left it
+      if (cur === ev.key) return none;
       const send = cur !== null ? [{ type: 'mouseleave', key: cur }] : [];
       send.push({ type: 'mouseenter', key: ev.key });
-      return { state: { key: ev.key }, send: send };
+      return { state: mk(ev.key, null), send: send };   // another chip entered: nothing is ignored any more
     }
-    if (ev.type === 'leave') return cur !== null && (ev.key === undefined || ev.key === cur) ? { state: { key: null }, send: [{ type: 'mouseleave', key: cur }] } : none;
-    if (ev.type === 'clear') return cur !== null ? { state: { key: null }, send: [{ type: 'mouseleave', key: cur }] } : none;
+    if (ev.type === 'leave') {
+      const ig = ev.key !== undefined && ev.key === ign ? null : ign;
+      return cur !== null && (ev.key === undefined || ev.key === cur) ? { state: mk(null, ig), send: [{ type: 'mouseleave', key: cur }] } : { state: mk(cur, ig), send: [] };
+    }
+    if (ev.type === 'clear') return cur !== null ? { state: mk(null, ign), send: [{ type: 'mouseleave', key: cur }] } : none;
+    if (ev.type === 'click') return cur !== null && ev.key === cur ? { state: mk(cur, ev.key), send: [] } : none;
+    if (ev.type === 'forget') return { state: mk(cur, null), send: [] };
     return none;
+  }
+
+  function outlineStep(state, ev) {
+    const st = state || {}, cur = { outline: st.outline !== false, sheet: st.sheet === undefined ? null : st.sheet, ph: st.ph === undefined ? null : st.ph };
+    if (!ev) return cur;
+    if (ev.type === 'click') return { outline: ev.same ? !cur.outline : true, sheet: cur.sheet, ph: cur.ph };
+    if (ev.type === 'rows') return { outline: ev.gone ? true : cur.outline, sheet: cur.sheet, ph: cur.ph };
+    if (ev.type === 'look') {
+      const sheet = ev.sheet === undefined ? null : ev.sheet, ph = ev.ph === undefined ? null : ev.ph;
+      const reset = !ev.active || (cur.sheet !== null && sheet !== cur.sheet) || (cur.ph !== null && ph !== cur.ph);
+      return { outline: reset ? true : cur.outline, sheet: sheet, ph: ph };
+    }
+    return cur;
   }
 
   function trailSignature(rows, sel, extra) {
@@ -115,6 +151,7 @@
     opts = opts || {};
     const html = doc.documentElement;
     let selected = { key: null, index: 0 };
+    let ostate = { outline: true, sheet: null, ph: null };   // the outline on/off (outlineStep); the selection above is independent of it
     let signature = null;
     let model = trailModel([], selected);
 
@@ -163,7 +200,8 @@
       if (b) b.click();
       refresh(true);
     }
-    function select(i) { const r = currentRows()[i]; if (!r) return; selected = { key: r.key, index: i }; refresh(true); }
+    // a click on the SELECTED chip toggles the outline (the selection stays); a click on another chip selects it and outlines it
+    function select(i) { const r = currentRows()[i]; if (!r) return; ostate = outlineStep(ostate, { type: 'click', same: r.key === selected.key }); selected = { key: r.key, index: i }; refresh(true); }
 
     // ---- the hover (a mouse over a chip does what a mouse over the model row does) ----------------------------------------------------------------------------------------------------------
     // the model row is looked up by its key when the event is sent (the rows are replaced whenever sketch.js rebuilds the panel; nothing is kept); a display:none row takes the event like any other
@@ -187,8 +225,11 @@
     let outlined = null;   // what this view last passed to setFaceSelected: { sheet, key } or null
     function syncHighlight() {
       const phone = html.classList.contains('sr-trails'), tab = html.getAttribute('data-tab'), shown = phone && tab === 'farbe' && shownNow();   // the rows are read only when they can matter
-      if (!shown) applyHover({ type: 'clear' });   // the chips are away (Fill off, another tab, released): no hover is left on a row
-      const want = highlightFor({ phone: phone, tab: tab, shown: shown, rows: shown ? currentRows() : [], selection: selected, sheet: sheetNow() });
+      // the outline goes back ON when the surface is released, the tab is left, Fill is off, the active sheet changed or the layout was built or released (a sub-tab switch on the phone is none of these)
+      const sheet = sheetNow();
+      ostate = outlineStep(ostate, { type: 'look', active: phone && tab === 'farbe' && !groupHidden(), sheet: sheet, ph: html.classList.contains('ph') });
+      if (!shown) { applyHover({ type: 'clear' }); applyHover({ type: 'forget' }); }   // the chips are away (Fill off, another tab, released): no hover is left on a row and no chip is ignored
+      const want = highlightFor({ phone: phone, tab: tab, shown: shown, rows: shown ? currentRows() : [], selection: selected, sheet: sheet, outline: ostate.outline });
       const same = want === null ? outlined === null : (outlined !== null && outlined.sheet === want.sheet && outlined.key === want.key);
       if (same) return false;
       outlined = want;
@@ -211,20 +252,21 @@
         chips.appendChild(none);
       } else {
         model.chips.forEach(function (c) {
-          const b = el('button', 'ph-chip', { type: 'button', 'aria-pressed': c.selected ? 'true' : 'false', 'aria-label': c.label, title: c.label, 'data-index': String(c.index) });
+          const b = el('button', 'ph-chip', { type: 'button', 'aria-pressed': c.selected && ostate.outline ? 'true' : 'false', 'aria-label': c.label, title: c.label, 'data-index': String(c.index) });
           if (c.selected) { b.className += ' active'; activeNode = b; }
           b.textContent = String(c.number);
           const bar = el('span', 'ph-chip-bar', { 'aria-hidden': 'true' });
           bar.style.background = c.color;
           b.appendChild(bar);
           const idx = c.index, key = c.key;
-          b.addEventListener('click', function () { select(idx); });
+          b.addEventListener('click', function () { applyHover({ type: 'click', key: key }); select(idx); });
           b.addEventListener('pointerenter', function (e) { applyHover({ type: 'enter', key: key, pointerType: e.pointerType }); });
           b.addEventListener('pointerleave', function () { applyHover({ type: 'leave', key: key }); });
           chips.appendChild(b);
         });
       }
       if (focused !== null) { const again = Array.prototype.find.call(chips.children, function (c) { return c.getAttribute('data-index') === focused; }); if (again && typeof again.focus === 'function') { try { again.focus({ preventScroll: true }); } catch (e) { again.focus(); } } }
+      if (hover.ignore !== undefined && !model.chips.some(function (c) { return c.key === hover.ignore; })) applyHover({ type: 'forget' });   // the ignored chip is gone with this rebuild
       count.textContent = model.count;
       label.textContent = model.label;
       const why = reasonNow();
@@ -236,8 +278,9 @@
     // sync(): on every UI.onSync tick (cheap: a signature compare); refresh(force): after a tap or when the pane is shown
     function refresh(force) {
       const rows = currentRows();
+      if (selected.key !== null && !rows.some(function (r) { return r.key === selected.key; })) ostate = outlineStep(ostate, { type: 'rows', gone: true });   // the selected trail vanished: the clamped one outlines
       selected = resolveSelection(rows, selected);
-      const sig = trailSignature(rows, selected, typeof win.farbeReason === 'function' ? win.farbeReason() : null);
+      const sig = trailSignature(rows, selected, [typeof win.farbeReason === 'function' ? win.farbeReason() : null, ostate.outline]);
       if (!force && sig === signature) { syncHighlight(); return false; }
       signature = sig;
       model = trailModel(rows, selected);
@@ -262,10 +305,10 @@
     if (doc.addEventListener) { doc.addEventListener('click', function () { syncHighlight(); }); doc.addEventListener('tabchange', function () { defer(syncHighlight); }); }
     if (win.addEventListener) { win.addEventListener('resize', function () { defer(syncHighlight); }); }
     refresh(true);
-    return { sync: sync, syncHighlight: syncHighlight, outlined: function () { return outlined; }, refresh: function () { return refresh(true); }, selectedTrail: selectedTrail, select: select, forward: forward, hovered: function () { return hover.key; }, applyHover: applyHover, model: function () { return model; }, nodes: { holder: holder, chips: chips, stepper: stepper, prev: prev, next: next, count: count, label: label } };
+    return { sync: sync, syncHighlight: syncHighlight, outlined: function () { return outlined; }, outline: function () { return ostate.outline; }, refresh: function () { return refresh(true); }, selectedTrail: selectedTrail, select: select, forward: forward, hovered: function () { return hover.key; }, ignored: function () { return hover.ignore === undefined ? null : hover.ignore; }, applyHover: applyHover, model: function () { return model; }, nodes: { holder: holder, chips: chips, stepper: stepper, prev: prev, next: next, count: count, label: label } };
   }
 
-  const api = { trailModel: trailModel, trailSignature: trailSignature, resolveSelection: resolveSelection, readRows: readRows, labelFor: labelFor, highlightFor: highlightFor, hoverStep: hoverStep, createChips: createChips, T: T };
+  const api = { trailModel: trailModel, trailSignature: trailSignature, resolveSelection: resolveSelection, readRows: readRows, labelFor: labelFor, highlightFor: highlightFor, outlineStep: outlineStep, hoverStep: hoverStep, createChips: createChips, T: T };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof document !== 'undefined' && typeof window !== 'undefined' && document.body) {
     root.uiPhoneChips = createChips(document, window);
