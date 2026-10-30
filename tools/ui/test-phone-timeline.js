@@ -73,8 +73,14 @@ T('wiring', () => {
     check('it FORWARDS: netrec clicks the first button of the keyframe\'s tab in #timeline-keyframe-list (children[pos]), the trash clicks #btn-clear-timeline; nothing else is clicked and nothing is cloned', /list\.children\[m\.netrec\.pos\]/.test(s) && /tab\.querySelector\('button'\)/.test(s) && /doc\.getElementById\('btn-clear-timeline'\)/.test(s) && !/cloneNode/.test(s));
     check('the model controls it forwards to are still what sketch.js builds: one .layer-tab per keyframe in sequence order whose FIRST button is "Net" (renderTimelineKeyframeList), and "Net" calls recaptureTimelineKeyframeNet(pos) (sketch.js is unchanged by this commit)', /timeline\.keyframeLayerIds\.forEach\(\(layerIndex, pos\) => \{\s*const tab = document\.createElement\('span'\);\s*tab\.className = 'layer-tab';/.test(SKETCH) && /netBtn\.textContent = 'Net';[\s\S]{0,260}recaptureTimelineKeyframeNet\(pos\)/.test(SKETCH) && /tab\.appendChild\(label\);\s*tab\.appendChild\(netBtn\);\s*tab\.appendChild\(removeBtn\);/.test(SKETCH));
     check('the page globals it reads are the ones that exist (read only): `timeline` (core/state.js), timelineNetSummary() (core/netwarp.js), `activeLayer` (sketch.js) - behind three window.* readers made by the file', /^let timeline\b/m.test(fs.readFileSync(path.join(ROOT, 'core', 'state.js'), 'utf8')) && /^function timelineNetSummary\(\)/m.test(NETWARP) && /^let activeLayer\b/m.test(fs.readFileSync(path.join(ROOT, 'core', 'state.js'), 'utf8')) && /window\.timelineState = /.test(SRC) && /window\.timelineSummary = /.test(SRC) && /window\.activeLayerNow = /.test(SRC));
+    check('the view exports reset() for the engine\'s layout-switch hook (config.layoutSwitch: [uiPhoneTimeline, reset]): it turns the pairing toggle off and looks again; it touches nothing else (C0b-6b)', /function reset\(\) \{ if \(pairingOpen\) setPairing\(false\); return refresh\(true\); \}/.test(s) && /return \{ sync: sync, reset: reset,/.test(s));
     const marker = CSS.indexOf('=== Phone layout (');
     check('nothing of this view\'s CSS is above the phone block (no .ph-tl- class, no #ph-tl- id)', !/ph-tl-/.test(CSS.slice(0, marker)));
+});
+
+T('gate', () => {
+    const code = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    check('the view is on while the timeline SURFACE is applied: it reads html.sr-timeline (the engine\'s flag, C0b-2), not html.ph', /html\.classList\.contains\('sr-timeline'\)/.test(code) && !/classList\.contains\('ph'\)/.test(code));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

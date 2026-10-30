@@ -44,8 +44,8 @@ const SESSION_APPLY_CAPTURED = Object.freeze([
     'additionalLayers', 'timeline', 'activeLayer',
     'baseNetTransform', 'baseNetAnimation', 'faceHover',
 ]);
-// the `let`s of core/state.js apply deliberately leaves alone
-const SESSION_APPLY_UNTOUCHED = Object.freeze(['canvasW', 'canvasH', 'svgPathCollector', 'segmentCollector', 'activeNetWarp']);
+// the `let`s of core/state.js apply deliberately leaves alone (faceSelected: the chip view's outline of the selected trail, UI state it re-derives from the restored trails on its next tick; a rollback must not bring back a key of the old pattern)
+const SESSION_APPLY_UNTOUCHED = Object.freeze(['canvasW', 'canvasH', 'svgPathCollector', 'segmentCollector', 'activeNetWarp', 'faceSelected']);
 
 // The live references, by name (NOT copies): enough to undo an apply, and to check by identity that an undo was complete.
 function captureSessionGlobals() {

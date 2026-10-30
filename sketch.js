@@ -4606,6 +4606,18 @@ function initFaceColorsPanel() {
     if (listEl) listEl.addEventListener('mouseleave', () => { if (faceHover) { faceHover = null; redraw(); } });
 }
 
+// The selected trail's outline (the chip view of the phone layout, ui-phone-chips.js): sets the own slot faceSelected (core/state.js), never faceHover, and redraws only when the value changed.
+// key null clears it. Returns whether it changed.
+function setFaceSelected(sheet, key) {
+    const next = key === null || key === undefined ? null : { sheet: sheet, key: key };
+    const same = next === null ? faceSelected === null : (faceSelected !== null && faceSelected.sheet === next.sheet && faceSelected.key === next.key);
+    if (same) return false;
+    faceSelected = next;
+    redraw();
+    return true;
+}
+window.setFaceSelected = setFaceSelected;
+
 // Updates #pattern-name-status for whichever sheet is currently active.
 // Called once per draw() (see there for why this is cached rather than
 // unconditional like updateCrossLayerStatus()).

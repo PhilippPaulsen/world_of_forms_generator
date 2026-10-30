@@ -96,6 +96,9 @@ let baseLastSelection = null;
 // (core/facecolor.js's distributionStrategyFor()/setDistributionStrategyFor()).
 let baseDistributionStrategy = null;
 let faceHover = null;
+// The trail the chip view has SELECTED (ui-phone-chips.js, through window.setFaceSelected in sketch.js): {sheet, key} or null. Its own slot, never written by the hover handlers; the hover wins on its own
+// sheet while both are set (core/facecolor.js faceHighlightKeyFor()).
+let faceSelected = null;
 let activeLayer = 'base'; // 'base' | integer index into additionalLayers - which sheet mousePressed()/addRandomConnection()/undo/redo/clear target
 
 // Roadmap 1.8 Stage C (persistent-layer timeline, superseding the

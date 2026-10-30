@@ -147,7 +147,7 @@ T('model-list-premises', () => {
     check('the list is offered for 1 <= n <= PAIRING_BROWSE_MAX_N = 5 only: the model hides its Browse all button otherwise (the list icon follows)', /const PAIRING_BROWSE_MAX_N = 5;/.test(SKETCH) && /timelinePairingBrowseBtn\.elt\.hidden = !cand/.test(br) && /n > PAIRING_BROWSE_MAX_N\) return null/.test(SKETCH) && /timelinePairingBrowseBtn\.elt\.addEventListener\('click', \(\) => \{\s*timelinePairingBrowseOpen = !timelinePairingBrowseOpen;/.test(SKETCH));
 });
 T('css', () => {
-    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker), body = block.slice(block.indexOf('*/') + 2);
+    const marker = CSS.indexOf('=== Phone layout ('), surf = CSS.indexOf('=== Surfaces ('), block = CSS.slice(marker, surf < 0 ? CSS.length : CSS.lastIndexOf('/*', surf)), body = block.slice(block.indexOf('*/') + 2);   // the phone block ends where the surfaces region (the twins, C0b-1) begins
     // a tolerant rule reader: selector, body and the media queries around it
     const rs = []; let depth = 0, at = [], i = 0, start = 0, stack = [];
     for (; i < body.length; i++) {
@@ -181,6 +181,19 @@ T('css', () => {
 T('release-popup', () => {
     const code = ENGINE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     check('the engine remembers what the trigger had before UI.overlay marked it (aria-haspopup), takes the mark away at release (or puts the old value back) and puts it back with every apply', /popup: trigger\.getAttribute\('aria-haspopup'\)/.test(code) && /h\.trigger\.removeAttribute\('aria-haspopup'\)/.test(code) && /h\.trigger\.setAttribute\('aria-haspopup', h\.popup\)/.test(code) && /h\.trigger\.setAttribute\('aria-haspopup', 'dialog'\)/.test(code));
+});
+
+T('surface-css', () => {
+    // C0b-6b: at 768px and up the twins (html.sr-timeline ...) carry the view's rules and a few html.sr-timeline:not(.ph) rules say what differs
+    const reg = CSS.slice(CSS.indexOf('=== Surfaces ('));
+    check('the view\'s rules exist as twins under html.sr-timeline for every class it makes: segment, chips, chip, moves, variant, vcount, listicon, listhead, listcount, list, lrow, lleft, ldef, lsum', ['ph-tl-segment', 'ph-tl-chips', 'ph-tl-chip', 'ph-tl-moves', 'ph-tl-variant', 'ph-tl-vcount', 'ph-tl-listicon', 'ph-tl-listhead', 'ph-tl-listcount', 'ph-tl-list', 'ph-tl-lrow', 'ph-tl-lleft', 'ph-tl-ldef', 'ph-tl-lsum'].every(c => reg.indexOf('html.sr-timeline .' + c) >= 0));
+    check('the list is capped at five rows at 768px and up with the pointer token: html.sr-timeline:not(.ph) .ph-tl-list { max-height: calc(5 * var(--target) + 4 * var(--sp-2)) } - the phone\'s 80dvh - 182px is in the twin and is overridden (one more class)', /html\.sr-timeline:not\(\.ph\) \.ph-tl-list \{ max-height: calc\(5 \* var\(--target\) \+ 4 \* var\(--sp-2\)\); \}/.test(reg) && /html\.sr-timeline \.ph-tl-list \{[^}]*max-height: calc\(80dvh - 182px\)/.test(reg));
+    check('the segment select has NO display rule of its own at 768px and up (the view shows it only with two or more segments: the hidden attribute, the twin\'s [hidden] rule); the interim rules of 6a are gone', !/html\.sr-timeline:not\(\.ph\) \.ph-tl-segment/.test(reg) && !/#timeline-pairing:not\(\[hidden\]\)/.test(reg));
+});
+
+T('gate', () => {
+    const code = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    check('the pairing view is on while the timeline SURFACE is applied: sync() reads html.sr-timeline (the engine\'s flag, C0b-2), not html.ph', /html\.classList\.contains\('sr-timeline'\)/.test(code) && !/classList\.contains\('ph'\)/.test(code));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

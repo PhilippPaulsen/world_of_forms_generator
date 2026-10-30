@@ -57,8 +57,9 @@
     const sibs = [...el.parentNode.children], tag = el.tagName.toLowerCase() + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/)[0] : '');
     return (scope || '') + ' ' + tag + '[' + sibs.indexOf(el) + ']';
   }
+  // #nav-symmetry is named explicitly: it was tracked as a [role="radiogroup"] until the patterns commit A1 made it a role="group" (two toggles); a generic [role="group"] would also pull in the other wrappers
   function controls(root, out, prefix) {
-    qa(root + ' button, ' + root + ' a, ' + root + ' input, ' + root + ' [role="spinbutton"], ' + root + ' select, ' + root + ' [role="radiogroup"]').forEach((el) => { out[prefix + keyOf(el, root)] = rect(el); });
+    qa(root + ' button, ' + root + ' a, ' + root + ' input, ' + root + ' [role="spinbutton"], ' + root + ' select, ' + root + ' [role="radiogroup"], ' + root + ' #nav-symmetry').forEach((el) => { out[prefix + keyOf(el, root)] = rect(el); });
   }
   function scalars() {
     const de = document.documentElement, cv = q('#canvas-container'), sl = q('#ph-slot'), c = rect(cv), s = rect(sl);

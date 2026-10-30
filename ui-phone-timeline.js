@@ -173,7 +173,7 @@
       return true;
     }
     function sync() {
-      if (!html.classList.contains('ph')) { if (pairingOpen) setPairing(false); return false; }   // nothing to keep up to date outside the phone layout
+      if (!html.classList.contains('sr-timeline')) { if (pairingOpen) setPairing(false); return false; }   // nothing to keep up to date outside the phone layout
       return refresh(false);
     }
     if (UI && UI.onSync) UI.onSync(sync);
@@ -181,7 +181,9 @@
     // Every close of the sheet (the "..." button, Escape, the scrim, a tap outside, a width change) is a click on the strip's "..." (ui-phone.js onClose), and a click bubbles to the document after ui-timeline.js has flipped ts-open
     if (doc.addEventListener) doc.addEventListener('click', function () { sync(); });
     refresh(true);
-    return { sync: sync, refresh: function () { return refresh(true); }, model: function () { return model; }, forwardNetrec: forwardNetrec, forwardTrash: forwardTrash, togglePairing: togglePairing, nodes: { holder: holder, icons: icons, netrec: netrecBtn, pairing: pairingBtn, trash: trashBtn, readout: readoutEl } };
+    // the arrangement changed (the phone layout built or released: ui-phone.js config.layoutSwitch): the pairing toggle is UI state of one arrangement and is off again
+    function reset() { if (pairingOpen) setPairing(false); return refresh(true); }
+    return { sync: sync, reset: reset, refresh: function () { return refresh(true); }, model: function () { return model; }, forwardNetrec: forwardNetrec, forwardTrash: forwardTrash, togglePairing: togglePairing, nodes: { holder: holder, icons: icons, netrec: netrecBtn, pairing: pairingBtn, trash: trashBtn, readout: readoutEl } };
   }
 
   const api = { phoneTimelineModel: phoneTimelineModel, modelSignature: modelSignature, readoutOf: readoutOf, missingNets: missingNets, createTimelineView: createTimelineView, T: T, READOUT_KEYS: READOUT_KEYS };

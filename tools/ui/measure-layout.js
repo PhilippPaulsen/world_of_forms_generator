@@ -23,13 +23,18 @@
  *                       strength step (square_sin_field), the Netz "Mehr" overlay open (more_netz_open), back to
  *                       Aus and to the tab the page started in. `found` says which controls the script found. Since commit 4a of the sheets redesign the overlay is also
  *                       measured in four more states (more_netz_sin_tiled_focus, more_netz_geo_tiled, more_netz_geo_single, more_netz_geo_macro) and the controls inside it are tracked.
+                       The net chapter runs in the NETZ cell only (and the trails chapter in the FARBE cell only) unless measureLayout({ allTabs: true }): in the other tabs' cells it would record the same
+ *                       states again (verified byte-identical against baseline-cleanup-7.json at every width), and the file stays under 1 MB (cleanup-8: fewer states, headroom for the pairing view).
+ *   face_trails         the trails chapter (patterns commit C0b-5): the Farbe tab, a triangle of three lines (two face trails) and Fill on (trails_fill_on): the Face Colors group and, at 768px and up, its
+ *                       chip view (nine more selectors, TRACKED_TRAILS, tracked in this one snapshot only); put back afterwards
  *   layer_timeline      a new layer (it becomes active), "Add to Timeline", and the same again:
  *                       two keyframes, so Play and the scrub bar are measured too. Since the
  *                       cleanup (step B) these two actions go through window.layerApi (add(),
  *                       addToTimeline()), the functions the table, the rail, the strip and the
  *                       diamonds call - the old hidden #btn-add-layer / #btn-add-to-timeline are
  *                       only the FALLBACK of a tree that has no layerApi. The same state results.
- *   timeline_more       the timeline strip's "Mehr" opened (real clicks) and closed again
+ *   timeline_more       the timeline strip's "Mehr" opened (real clicks) and closed again; since patterns commit C0b-6b also timeline_editor (the pairing toggle on) and timeline_list (the list icon), tracked with
+ *                       TRACKED_PAIRING, in the cells where the pairing view is shown (768px and up of that commit on)
  *   layer_more          the layer "Mehr" opened (layerApi.toggleMore) and closed again
  *   plus_probe          ONE REAL click on the visible "+" of the current view (the table, the rail
  *                       or the strip: whichever has a rect); `probe` says which element it was
@@ -59,6 +64,8 @@
     '#btn-add-layer',
     '#btn-save',
     '#btn-help',
+    // the Form row's symmetry toggles and the Mehr button next to them (patterns commit 9: first tracked here; cleanup-3 does not have them)
+    '#nav-symmetry', '#btn-sym-rotation', '#btn-sym-mirror', '#btn-more-form', '#more-form',
     // the canvas rail (rail rearrangement, commits 1 to 3): one element of each group, the links, the Mehr trigger and its popover
     '#btn-undo',
     '#btn-random',
@@ -92,6 +99,20 @@
     '#net-macro-row', '#net-macro-buttons', '#net-macro-buttons button:nth-child(1)', '#net-macro-buttons button:nth-child(2)', '#net-macro-buttons button:nth-child(3)',
     '#net-geo-row', '#net-alternate-btn', '#net-reverse-btn', '#net-lines-btn', '#net-readout',
   ];
+
+  // patterns commit C0b-5 (baseline-cleanup-7.json): the Face Colors group (shown by sketch.js while the active sheet's Fill is on) and, at 768px and up, the chip view that takes its place: the row host the engine
+  // makes, the chip bar, the first chip, the stepper row, its two buttons, the n/N display and the label. Tracked ONLY in the snapshots of the trails chapter (face_trails): in every other state they would be null
+  // (a recording of an earlier tree has no face_trails and none of these), and the file stays under 1 MB.
+  const TRACKED_TRAILS = [
+    '#face-colors-group', '#sr-trails-host', '#ph-trail-chips', '#ph-trail-chips .ph-chip:nth-child(1)', '#ph-trail-stepper', '#ph-trail-stepper .ph-trail-prev', '#ph-trail-stepper .ph-trail-next', '#ph-trail-stepper .ph-trail-count', '#ph-trail-stepper .ph-trail-label',
+  ];
+
+  // patterns commit C0b-6a (baseline-cleanup-8.json): the compact timeline group (#timeline-group, opened by the strip's "Mehr"): the icon row, its three buttons and the readout line. Tracked ONLY in the snapshot of the open
+  // group (timeline_more), like TRACKED_TRAILS: elsewhere they would be null (the holder is hidden) and the file stays small.
+  const TRACKED_TIMELINE = ['#ph-tl-icons', '#ph-tl-readout', '.ph-tl-netrec', '.ph-tl-pairing', '.ph-tl-trash'];
+  // patterns commit C0b-6b: the pairing view inside that group - the line chips, the end and variant buttons, the list icon and reset, the list header and the list with its first row - tracked ONLY in the snapshots
+  // of the editor (timeline_editor) and of the list (timeline_list)
+  const TRACKED_PAIRING = ['.ph-tl-segment', '#ph-tl-chips', '#ph-tl-chips .ph-tl-chip:nth-child(1)', '#ph-tl-moves', '.ph-tl-up', '.ph-tl-down', '.ph-tl-flip', '#ph-tl-variant', '.ph-tl-vcount', '#ph-tl-listbtn', '#ph-tl-reset', '#ph-tl-listhead', '.ph-tl-back', '.ph-tl-listcount', '#ph-tl-list', '#ph-tl-list .ph-tl-lrow:nth-child(1)'];
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -147,9 +168,9 @@
     return (el.id ? '#' + el.id : el.tagName.toLowerCase() + (el.className ? '.' + String(el.className).split(' ')[0] : ''));
   }
 
-  function snap() {
+  function snap(withTrails, withTimeline, withPairing) {
     const out = {};
-    TRACKED.forEach((sel) => { const el = document.querySelector(sel); out[sel] = sel.indexOf('#ui-notices') === 0 ? rectViewport(el) : rect(el); });
+    TRACKED.concat(withTrails ? TRACKED_TRAILS : [], withTimeline ? TRACKED_TIMELINE : [], withPairing ? TRACKED_PAIRING : []).forEach((sel) => { const el = document.querySelector(sel); out[sel] = sel.indexOf('#ui-notices') === 0 ? rectViewport(el) : rect(el); });
     const root = document.documentElement;
     out.scrollWidth = root.scrollWidth;
     out.clientWidth = root.clientWidth;
@@ -170,12 +191,12 @@
 
   // Every snapshot but the notice one is taken with NO notice showing: a notice that an earlier step raised (the net chapter's "Sin und Tan brauchen mindestens 4 Knoten" one) would still be
   // on screen in a fast recording and gone in a slow one. UI.hideToast() closes the non-sticky notices; one frame (or 80 ms where the page is hidden and no frame comes) lets the layout settle.
-  async function snapQ(keepNotices) {
+  async function snapQ(keepNotices, withTrails, withTimeline, withPairing) {
     if (!keepNotices && window.UI && UI.hideToast) {
       UI.hideToast();
       await new Promise((r) => { let done = false; const fin = () => { if (!done) { done = true; r(); } }; if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fin); setTimeout(fin, 80); });
     }
-    return snap();
+    return snap(withTrails, withTimeline, withPairing);
   }
 
   async function measureLayout(opts) {
@@ -198,7 +219,8 @@
     // and its two chevrons) and the Mehr trigger (#btn-more-netz); everything else (Single / Tiled / Field, Macro, Focus, exact values) is in the overlay #more-netz. Switching a kind on applies
     // the defaults (both axes, Field), so a Sinus click is enough for the "square + Sinus + Field" state. The chapter visits the Netz tab, measures the row, the strength step and the opened
     // overlay, switches the net back off and returns to the tab the page started in.
-    const net = {};
+    const net = {}, netChapter = (opts && opts.allTabs) || !startTab || startTab === 'netz';
+    if (netChapter) {
     click(shapes[1]); await sleep(wait);
     if (nav) { nav.show('netz'); await sleep(wait); }
     net.netz_row = await snapQ();
@@ -240,7 +262,34 @@
     if (offBtn) { click(offBtn); await sleep(wait); }
     if (nav && startTab) { nav.show(startTab); await sleep(wait); }
     click(shapes[0]); await sleep(wait);
-    result.square_sin_field = net;
+    }
+    if (netChapter) result.square_sin_field = net;
+
+    // The trails chapter (patterns commit C0b-5). The Farbe tab, the base sheet with a triangle of three lines (two face trails) and Fill on: the Face Colors group is shown (sketch.js) and, with the trails surface applied
+    // at 768px and up, holds the chip bar and the stepper row (trails_fill_on). Everything is put back afterwards (Fill as it was, the three lines removed) and the page returns to the tab it started in.
+    const ft = {}, trailsChapter = (opts && opts.allTabs) || startTab === 'farbe';
+    if (trailsChapter) {
+    const fillBtn = document.querySelector('#btn-toggle-faces');
+    if (typeof activeNodes === 'function' && typeof activeConnections === 'function' && fillBtn) {
+      const fnodes = activeNodes(), fconns = activeConnections();
+      if (nav) { nav.show('farbe'); await sleep(wait); }
+      if (fnodes.length >= 3) {
+        const ids = fnodes.map((n) => n.id), n0 = fconns.length;
+        fconns.push([ids[0], ids[1]]); fconns.push([ids[1], ids[2]]); fconns.push([ids[2], ids[0]]);
+        if (typeof redraw === 'function') redraw();
+        await sleep(wait);
+        const fillWas = fillBtn.classList.contains('active');
+        if (!fillWas) { click(fillBtn); await sleep(wait * 3); }
+        ft.trails_fill_on = await snapQ(false, true);
+        if (!fillWas) { click(fillBtn); await sleep(wait); }
+        fconns.length = n0;
+        if (typeof redraw === 'function') redraw();
+        await sleep(wait);
+      }
+      if (nav && startTab) { nav.show(startTab); await sleep(wait); }
+    }
+    }
+    if (trailsChapter) result.face_trails = ft;
 
     // Two keyframes, so the playback controls (Play, progress) appear too.
     // Each keyframe is a new layer that is active when "Add to Timeline"
@@ -289,7 +338,21 @@
 
     // the timeline strip's "Mehr" (real clicks): opens the old #timeline-group (the keyframe list, the net status, the pairing editor, the status line, "Zeitleiste entfernen"); closed again after
     const tsMore = document.querySelector('#timeline-strip .ts-more');
-    if (tsMore) { realClick(tsMore); await sleep(wait); result.timeline_more = await snapQ(); realClick(tsMore); await sleep(wait); }
+    if (tsMore) {
+      realClick(tsMore); await sleep(wait); result.timeline_more = await snapQ(false, false, true);
+      // the pairing toggle on (the editor of the pairing view at 768px and up), then its list icon (the list), then back: only where the toggle is there and enabled (a tree before the surface has none)
+      const pt = document.querySelector('.ph-tl-pairing');
+      if (pt && pt.offsetParent !== null && pt.getAttribute('aria-disabled') !== 'true') {
+        realClick(pt); await sleep(wait * 2); result.timeline_editor = await snapQ(false, false, true, true);
+        const lb = document.querySelector('#ph-tl-listbtn');
+        if (lb && lb.offsetParent !== null && !lb.hidden) {
+          realClick(lb); await sleep(wait * 2); result.timeline_list = await snapQ(false, false, true, true);
+          const bk = document.querySelector('.ph-tl-back'); if (bk && bk.offsetParent !== null) { realClick(bk); await sleep(wait); }
+        }
+        realClick(pt); await sleep(wait);
+      }
+      realClick(tsMore); await sleep(wait);
+    }
     // the layer "Mehr" of the active layer (a layer is active now): opened and closed again
     if (api && api.toggleMore) { api.toggleMore(); await sleep(wait); result.layer_more = await snapQ(); api.toggleMore(); await sleep(wait); }
     // ONE real click on the visible "+" of the current view (a third layer): which element it was is in `probe`

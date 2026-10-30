@@ -11,12 +11,12 @@
  *   'none'       none                                          neither (the "other" state, set under More)
  *   'mirror'     reflection_only (group Z2)                    neither (the "other" state, set under More)
  *
- * The main control is ONE exclusive choice with two options: rotation, or
- * rotation + mirror. 'none' and 'mirror' (mirror only) are the "other"
- * symmetries - reachable under More, and what catalog back-links, paste,
- * layers and the timeline can still carry; while one of them is current the
- * main control shows neither option as active. Clicking a main option sets
- * it normally.
+ * The Form row has TWO independent toggles (sheets-after block, commit A1): Drehung
+ * (the mode has rotation) and Spiegelung (it has a mirror); symmetryCategoryFor() /
+ * symmetryToggle() make the category from them. Both on is the default (spiegeling);
+ * both off is 'none' (valid). The older exclusive pair (symmetryVisibleState /
+ * symmetryCategoryForVisible: rotation, or rotation + mirror, with 'none' and 'mirror'
+ * as the "other" state under More) stays here, unchanged and tested, but no control uses it.
  *
  * 'spiegeling' is the historical default (Ostwald's Spiegeling covers the
  * full reflection-containing case). 'mirror' is new as a UI state: the
@@ -54,6 +54,19 @@ function symmetryCategoryForVisible(state) {
     return null;
 }
 
+// The Form row's TWO independent toggles (Drehung, Spiegelung) and the category they make: none | drehling | mirror | spiegeling.
+// Pure: (rotation, mirror) -> category, and the category after flipping ONE half ('rotation' | 'mirror'). They never touch the fold
+// or a raw mode id: symmetryModeFor() / sketch.js's setCategory stay the only writers of the mode.
+function symmetryCategoryFor(rotation, mirror) {
+    return rotation ? (mirror ? 'spiegeling' : 'drehling') : (mirror ? 'mirror' : 'none');
+}
+function symmetryToggle(category, which) {
+    const rotation = symmetryHasRotation(category), mirror = symmetryHasMirror(category);
+    if (which === 'rotation') return symmetryCategoryFor(!rotation, mirror);
+    if (which === 'mirror') return symmetryCategoryFor(rotation, !mirror);
+    return category;
+}
+
 // The hexagon's 3-/6-fold choice only applies while rotation is part of the mode.
 function symmetryFoldApplies(category, shape) {
     return shape === 'hex' && symmetryHasRotation(category);
@@ -87,6 +100,6 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         SYMMETRY_CATEGORIES, SYMMETRY_OTHER_CATEGORIES, symmetryHasRotation, symmetryHasMirror,
         symmetryVisibleState, symmetryCategoryForVisible, symmetryFoldApplies, symmetryModeFor,
-        symmetryCategoryFoldFor,
+        symmetryCategoryFoldFor, symmetryCategoryFor, symmetryToggle,
     };
 }

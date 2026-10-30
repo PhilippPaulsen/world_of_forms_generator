@@ -1376,8 +1376,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
    text tabs). Every padding, margin and gap below is one of them, 0, or a calc of them (tools/ui/test-phone-config.js lists a violation with its selector). 48, 44, 40 are control and bar sizes, not spacing.
    Stack (px): header 40 | 8 | the canvas | tool row 64 (8 + 48 + 8, its hairline inside) | sub-tab row 44 (hairline inside) | 8 | panel 104 (two rows of 48 with an 8px gap). --chrome-h is everything but the
    canvas (268); the canvas is a square of min(100vw - 2 x --sp-3, the viewport height - --chrome-h), left aligned at the 16px gutter (--canvas-ratio 1: width = height x ratio, so another proportion is a change of
-   one number here; the bitmap, the sketch and the pointer mapping stay as they are). --ph-inner-h is window.innerHeight from the script: the fallback of a browser without the small viewport unit (svh). */
+   one number here; the bitmap, the sketch and the pointer mapping stay as they are). --ph-inner-h is window.innerHeight from the script: the fallback of a browser without the small viewport unit (svh).
+   STRUCTURE (patterns C0a, a reordering only: no value, selector or rule changed): ONE media query holds, in this order, the PAGE LAYOUT block (everything around the canvas), SHARED (what several surfaces use:
+   the sheet host and the rows of the sheets in rows), OTHER SURFACES (rail More sheet, dialogs, Farbe harmony), and one block per surface: TRAILS, NETZ, LAYER SHEET, TIMELINE. Each block starts with a banner
+   comment; a new rule goes into the block of the surface it serves. Where two rules of equal specificity could meet on one element their order is the old one (tools/ui/test-phone-config.js, commit C0a). */
 @media (max-width: 767px) {
+  /* ================================================================================================================================================================================
+     PAGE LAYOUT (patterns C0a: the rules are ordered by what they serve; no value or selector changed). The custom properties, the header, the canvas stack, the tool row, the sub-tab
+     row, the panel slot, the notice anchor and the scroll lock: what is around every surface. Built in the phone layout commits 1a to 4.
+     ================================================================================================================================================================================ */
+
   html.ph {
     --sp-1: 4px;
     --sp-2: 8px;
@@ -1410,7 +1418,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
      frame is drawn by the sketch inside the bitmap */
   html.ph .canvas-row { display: flex; flex-wrap: nowrap; justify-content: flex-start; align-items: flex-start; gap: 0; padding: var(--sp-2) var(--sp-3) 0; }
   html.ph .canvas-row #canvas-container { flex: none; width: var(--canvas-w); height: var(--canvas-h); margin: 0; }
-
   html.ph .ph-stack { align-self: stretch; width: 100%; }
 
   /* the tool row: 64px = 8 + 48 + 8, its hairline drawn inside (a shadow takes no room); 48px icons, 4px inside a group, a hairline between groups; the groups scroll sideways when they do not fit and More
@@ -1475,30 +1482,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
   html.ph .ph-slot .nav-cluster { gap: var(--sp-2); }
   html.ph .ph-slot .icon-btn[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
+
   /* the narrowest phones (320px): the two steppers and More must fit the 288px row, so the number field gives up 8px */
   @media (max-width: 339px) {
     html.ph .ph-slot .stepper > input[type="number"] { width: 40px; min-width: 40px; }
   }
 
-  /* ---- commit 1b: sheets, no scrolling ------------------------------------------------------------------------------------------------------------------------------------------------------ */
   /* The page does not scroll: html and body are exactly the viewport (--ph-h is 100svh, or window.innerHeight where svh does not exist) and clip. The leftover containers (the controls container, whose
      two big blocks are sheets now and whose contextual groups moved into the rail's sheet) take no room. What still scrolls: the sheets (.overlay.sheet: max-height 80dvh, overflow auto), the info card, the
      dialogs (below), the strips of chips and the tool row (sideways). */
   html.ph, html.ph body { height: var(--ph-h); min-height: 0; overflow: hidden; }
   html.ph .main-container { display: none; }
 
-  /* the layer "Mehr" and timeline "Mehr" blocks in their sheets (ui-phone.js makes the host, UI.overlay opens it): the groups flow like they did in the controls container */
-  html.ph .ph-sheet { flex-direction: row; flex-wrap: wrap; align-items: flex-start; justify-content: center; gap: var(--sp-3); }
-  html.ph .ph-sheet .control-group { max-width: 100%; }
-
-  /* the rail's sheet: the contextual groups (Curve / Free settings) sit under the second icon row; the wrapper takes no room of its own, so a hidden group leaves no gap */
-  html.ph #more-rail .more-settings { display: contents; }
-
-  /* a dialog never gets taller than the screen, and scrolls inside (the Download, Neu anfangen, remove and timeline dialogs had no maximum) */
-  html.ph .dialog-content { box-sizing: border-box; max-height: calc(var(--ph-h) - 2 * var(--sp-3)); overflow-y: auto; }
-  html.ph .dialog-content button { min-height: var(--target); }   /* a mouse at a phone width gets the same 48px buttons the coarse rule gives a finger */
-
-  /* ---- commit 2: the Farbe tab --------------------------------------------------------------------------------------------------------------------------------------------------------------- */
   /* a hairline inside a panel row sits between two 8px gaps (no margin of its own: validate() counts the gaps only); a row that does not fit 288px (the harmony row) scrolls sideways below 340px */
   html.ph .ph-row > .ph-sep { margin: 0; }
   @media (max-width: 339px) {
@@ -1511,11 +1506,61 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   html.ph .ph-toolgroup .rail-group { display: flex; flex-direction: row; align-items: center; gap: var(--sp-1); margin: 0; padding: 0; }
   html.ph .ph-toolgroup .rail-group::before { display: none; }
 
+  /* Under the phone layout the notices stack (#ui-notices, at most ONE notice: ui.js) sits over the BOTTOM of the canvas: as wide as the canvas and at its left edge, its bottom edge 8px above the canvas's bottom
+     edge (header + the 8px above the canvas + --canvas-h - 8px), growing upward; so it never reaches the tool row, the sub-tab row or the panel. `top` and translateY(-100%) rather than `bottom`: the position
+     does not depend on the viewport height the browser reports (svh against lvh). Without html.ph (768px and up, and nothing else) the stack keeps the bottom anchor above. */
+  html.ph .notices { top: calc(var(--ph-header-h) + var(--sp-2) + var(--canvas-h) - var(--sp-2)); bottom: auto; left: var(--sp-3); width: var(--canvas-w); transform: translateY(-100%); }
+
+  /* While an overlay is open (ui.js: UI.overlay puts the class overlay-open on html) a bottom sheet covers the lower part of the canvas and would lie under the notice, which sits above it (z-index 60 against 40)
+     and would hide the field being edited: the stack goes to the TOP of the canvas then, 8px under the header, growing downward. */
+  html.ph.overlay-open .notices { top: calc(var(--ph-header-h) + var(--sp-2)); transform: none; }
+
+  /* ================================================================================================================================================================================
+     SHARED (patterns C0a): what more than one surface uses - the sheet host (.ph-sheet), the rows and blocks of the sheets in rows (layer sheet, Netz sheet and timeline sheet), the wrapping
+     row and the hidden rule of the panel slot. Placed before the surface blocks that style the same classes.
+     ================================================================================================================================================================================ */
+
+  /* the layer "Mehr" and timeline "Mehr" blocks in their sheets (ui-phone.js makes the host, UI.overlay opens it): the groups flow like they did in the controls container */
+  html.ph .ph-sheet { flex-direction: row; flex-wrap: wrap; align-items: flex-start; justify-content: center; gap: var(--sp-3); }
+  html.ph .ph-sheet .control-group { max-width: 100%; }
+
+  /* The sheet is a column of blocks 16px apart (the sheet's own 16px padding all round); a block is a column of rows 8px apart; a row is 48px high, left aligned, 8px between its items. The items are the layer's
+     own .control-group wrappers (moved whole; their labels are display: none by the label rule above). A row or block the engine hides (all its items hidden) takes no room and no gap. */
+  html.ph .ph-sheet.ph-sheet-rows { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; gap: var(--sp-3); }
+  html.ph .ph-sheet-block { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); min-width: 0; }
+  html.ph .ph-sheet-row { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--sp-2); min-width: 0; max-width: 100%; }
+  html.ph .ph-sheet-block > .ph-sheet-row { align-self: stretch; }   /* a row is as wide as its block (commit 5c: the pairing list rows are 343px wide; every other row keeps its items at the left) */
+  html.ph .ph-sheet-block[hidden], html.ph .ph-sheet-row[hidden] { display: none; }
+  html.ph .ph-sheet-row .control-group { flex: none; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--sp-2); width: auto; max-width: none; margin: 0; padding: 0; text-align: left; }
+  html.ph .ph-sheet-row .control-group[hidden] { display: none; }
+
+  /* a row marked `wrap` wraps into lines when it does not fit (the layer sheet's first row: 328px; the timeline's pairing row: 323px); before commit 5b this was inside the 339px media query, which left 340 to 359px
+     phones with a row that overflowed by up to 20px */
+  html.ph .ph-sheet-row-wrap { flex-wrap: wrap; }
+
+  /* an element sketch.js hides (Reverse, the Fokus stepper) stays hidden whatever display its class gives it */
+  html.ph .ph-slot [hidden] { display: none; }
+
+  /* ================================================================================================================================================================================
+     OTHER SURFACES (patterns C0a): the rail's More sheet, the dialogs and the Farbe harmony panel (the anchor preview). Nothing here belongs to the four surface blocks below.
+     ================================================================================================================================================================================ */
+
+  /* the rail's sheet: the contextual groups (Curve / Free settings) sit under the second icon row; the wrapper takes no room of its own, so a hidden group leaves no gap */
+  html.ph #more-rail .more-settings { display: contents; }
+
+  /* a dialog never gets taller than the screen, and scrolls inside (the Download, Neu anfangen, remove and timeline dialogs had no maximum) */
+  html.ph .dialog-content { box-sizing: border-box; max-height: calc(var(--ph-h) - 2 * var(--sp-3)); overflow-y: auto; }
+  html.ph .dialog-content button { min-height: var(--target); }   /* a mouse at a phone width gets the same 48px buttons the coarse rule gives a finger */
+
   /* the rail's sheet in Farbe: Form's first row (Curve, Free, Free Endpoints, Alternative Net, Neu anfangen) is not offered there (it was hidden in Farbe before); the second row holds Farbe's buttons */
   html.ph[data-tab="farbe"] #more-rail > .more-row:not(.more-extra) { display: none; }
 
   /* the anchor preview: a 48px swatch at the end of the second row */
   html.ph .ph-slot #farbe-anchor-preview { box-sizing: border-box; width: var(--target); height: var(--target); border-radius: var(--radius); flex: none; }
+
+  /* ================================================================================================================================================================================
+     SURFACE: TRAILS (patterns C0a; the Spuren chip view of the Farbe tab, phone layout commit 2; ui-phone-chips.js). One 48px chip per trail, the trail stepper under it.
+     ================================================================================================================================================================================ */
 
   /* Spuren: row 1 = one 48px chip per trail (the number centred, a 4px bar of the trail's colour at the bottom edge), scrolling sideways, the selected one black; row 2 = the stepper of the selected trail */
   html.ph .ph-chips { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; padding: var(--sp-1); margin: calc(-1 * var(--sp-1)); overflow-x: auto; scrollbar-width: none; }
@@ -1527,53 +1572,31 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   html.ph .ph-trail-stepper { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
   html.ph .ph-trail-count { min-width: var(--target); text-align: center; font-variant-numeric: tabular-nums; }
   html.ph .ph-trail-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-secondary); font-size: var(--size-secondary); }
-  /* ---- commit 3: the Netz tab ---------------------------------------------------------------------------------------------------------------------------------------------------------------- */
+
+  /* ================================================================================================================================================================================
+     SURFACE: NETZ (patterns C0a; the Netz tab's panel buttons and Net lines icon, phone layout commit 3, the Netz sheet in rows, sheets redesign commit 4a/4b, and the readout line).
+     ================================================================================================================================================================================ */
+
   /* Art: the four kind buttons are 60px wide ("Aus" / "Sin" / "Tan" / "Geo", as in the Netz row); the text buttons of the panel (Both / X / Y, Reverse) are --target high */
-  /* an element sketch.js hides (Reverse, the Fokus stepper) stays hidden whatever display its class gives it */
-  html.ph .ph-slot [hidden] { display: none; }
   html.ph .ph-slot .net-kind-btn { width: 60px; }
   html.ph .ph-slot .layer-btn { box-sizing: border-box; min-height: var(--target); }
+
   /* Net lines: the text button of the Netz sheet (#more-netz) becomes an icon in the tool row - two wavy lines drawn with a mask, so the button, its text (the accessible name), its title and its active state
-     are the ones it has; the text is visually emptied, not removed */
+     are the ones it has; the button has no text, its name is its aria-label (netz.lines.button) */
   html.ph .ph-toolrow #net-lines-btn { position: relative; box-sizing: border-box; flex: none; width: var(--target); height: var(--target); min-width: var(--target); padding: 0; border-radius: var(--radius); font-size: 0; line-height: 0; touch-action: manipulation; }
   html.ph .ph-toolrow #net-lines-btn::before { content: ""; position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); background-color: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 8 C6 4 9 4 12 8 S18 12 21 8'/%3E%3Cpath d='M3 16 C6 12 9 12 12 16 S18 20 21 16'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 8 C6 4 9 4 12 8 S18 12 21 8'/%3E%3Cpath d='M3 16 C6 12 9 12 12 16 S18 20 21 16'/%3E%3C/svg%3E") center / contain no-repeat; }
-  /* ---- commit 4: the notices ----------------------------------------------------------------------------------------------------------------------------------------------------------------- */
-  /* Under the phone layout the notices stack (#ui-notices, at most ONE notice: ui.js) sits over the BOTTOM of the canvas: as wide as the canvas and at its left edge, its bottom edge 8px above the canvas's bottom
-     edge (header + the 8px above the canvas + --canvas-h - 8px), growing upward; so it never reaches the tool row, the sub-tab row or the panel. `top` and translateY(-100%) rather than `bottom`: the position
-     does not depend on the viewport height the browser reports (svh against lvh). Without html.ph (768px and up, and nothing else) the stack keeps the bottom anchor above. */
-  html.ph .notices { top: calc(var(--ph-header-h) + var(--sp-2) + var(--canvas-h) - var(--sp-2)); bottom: auto; left: var(--sp-3); width: var(--canvas-w); transform: translateY(-100%); }
-  /* While an overlay is open (ui.js: UI.overlay puts the class overlay-open on html) a bottom sheet covers the lower part of the canvas and would lie under the notice, which sits above it (z-index 60 against 40)
-     and would hide the field being edited: the stack goes to the TOP of the canvas then, 8px under the header, growing downward. */
-  html.ph.overlay-open .notices { top: calc(var(--ph-header-h) + var(--sp-2)); transform: none; }
 
-  /* ---- sheets redesign, commit 3a: the layer sheet in rows (ui-phone.js buildBlocks(), ui-phone-config.js sheets.layer.blocks) ------------------------------------------------------------------- */
-  /* The sheet is a column of blocks 16px apart (the sheet's own 16px padding all round); a block is a column of rows 8px apart; a row is 48px high, left aligned, 8px between its items. The items are the layer's
-     own .control-group wrappers (moved whole; their labels are display: none by the label rule above). A row or block the engine hides (all its items hidden) takes no room and no gap. */
-  html.ph .ph-sheet.ph-sheet-rows { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; gap: var(--sp-3); }
-  html.ph .ph-sheet-block { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); min-width: 0; }
-  html.ph .ph-sheet-row { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--sp-2); min-width: 0; max-width: 100%; }
-  html.ph .ph-sheet-block > .ph-sheet-row { align-self: stretch; }   /* a row is as wide as its block (commit 5c: the pairing list rows are 343px wide; every other row keeps its items at the left) */
-  html.ph .ph-sheet-block[hidden], html.ph .ph-sheet-row[hidden] { display: none; }
-  html.ph .ph-sheet-row .control-group { flex: none; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--sp-2); width: auto; max-width: none; margin: 0; padding: 0; text-align: left; }
-  html.ph .ph-sheet-row .control-group[hidden] { display: none; }
-  /* the typed fields of the offsets and the rotation (until the steppers of commit 3b): 60 x --target */
-  html.ph .ph-sheet-row .control-group > input[type="number"] { box-sizing: border-box; flex: none; width: 60px; min-width: 0; height: var(--target); margin: 0; }
-  /* the node count and size steppers are as wide as the Form row's (117px): the number field is --target wide (the layer block's own rule for the inline block gives it 2.4ch, and an id wins over a class) */
-  html.ph #layer-more-panel .stepper > input[type="number"] { width: var(--target); min-width: var(--target); }
-  /* a row marked `wrap` wraps into lines when it does not fit (the layer sheet's first row: 328px; the timeline's pairing row: 323px); before commit 5b this was inside the 339px media query, which left 340 to 359px
-     phones with a row that overflowed by up to 20px */
-  html.ph .ph-sheet-row-wrap { flex-wrap: wrap; }
-  /* 320px: the number fields of the steppers give up 8px */
-  @media (max-width: 339px) {
-    html.ph #layer-more-panel .stepper > input[type="number"] { width: 40px; min-width: 40px; }
-  }
+  /* Reverse (Art panel, Geo only): an icon too, two opposed arrows drawn with a mask; the button has no text, its name is its aria-label (the dictionary key netz.reverse) */
+  html.ph .ph-slot #net-reverse-btn { position: relative; box-sizing: border-box; flex: none; width: var(--target); height: var(--target); min-width: var(--target); padding: 0; border-radius: var(--radius); touch-action: manipulation; }
+  html.ph .ph-slot #net-reverse-btn::before { content: ""; position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); background-color: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8 H20 M16 4 L20 8 L16 12'/%3E%3Cpath d='M20 16 H4 M8 12 L4 16 L8 20'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8 H20 M16 4 L20 8 L16 12'/%3E%3Cpath d='M20 16 H4 M8 12 L4 16 L8 20'/%3E%3C/svg%3E") center / contain no-repeat; }
+  html.ph .ph-slot #net-reverse-btn[hidden] { display: none; }
 
-  /* ---- sheets redesign, commit 4a: the Netz sheet (ui-phone.js buildOverlays(), ui-phone-config.js overlays.netz) -------------------------------------------------------------------------------- */
   /* #more-netz is an overlay of its own (a bottom sheet here): the same blocks and rows as the layer sheet. The leftover containers (the strength section, #net-group with the hints and whatever sketch.js still shows in
      it) take no room - every control that matters is in a row - and the hints, the macro title and the headings are parked hidden: the readout line says what they said, shortly. */
   html.ph .overlay.ph-sheet-rows { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; gap: var(--sp-3); }
   html.ph #more-netz.ph-sheet-rows > .overlay-section, html.ph #more-netz.ph-sheet-rows > #net-group { display: none; }
   html.ph #net-focus-hint, html.ph #net-macro-hint, html.ph #net-field-hint, html.ph #net-field-info, html.ph #net-size-hint, html.ph .ph-sheet-row #net-macro-row > label { display: none; }
+
   /* the exact fields in block 1: typed fields 60 x --target (commit 4b makes them steppers) */
   html.ph .ph-sheet-row > input.exact-field { box-sizing: border-box; flex: none; width: 60px; min-width: 0; height: var(--target); margin: 0; text-align: center; }
   html.ph .ph-sheet-row > input.exact-field[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
@@ -1582,6 +1605,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   html.ph .ph-sheet-row #net-macro-row[hidden], html.ph .ph-sheet-row #net-geo-row[hidden] { display: none; }
   html.ph .ph-sheet-row #net-macro-buttons { justify-content: flex-start; flex-wrap: wrap; gap: var(--sp-2); }
   html.ph .ph-sheet-row #net-macro-buttons .layer-btn { box-sizing: border-box; flex: none; min-height: var(--target); touch-action: manipulation; }
+
   /* the three domains and Alternate are icons: the same buttons, their text (the accessible name, German) emptied visually and an icon drawn with a mask, like Net lines in the tool row (it inverts with the active state) */
   html.ph .ph-sheet-row .net-domain-btn, html.ph .ph-sheet-row #net-alternate-btn { position: relative; box-sizing: border-box; flex: none; width: var(--target); height: var(--target); min-width: var(--target); padding: 0; border-radius: var(--radius); font-size: 0; line-height: 0; touch-action: manipulation; }
   html.ph .ph-sheet-row .net-domain-btn[hidden], html.ph .ph-sheet-row #net-alternate-btn[hidden] { display: none; }
@@ -1591,17 +1615,41 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   html.ph .ph-sheet-row #net-domain-tiled::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='4'%20y='4'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='13'%20y='4'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='4'%20y='13'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='13'%20y='13'%20width='7'%20height='7'%20rx='1'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='4'%20y='4'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='13'%20y='4'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='4'%20y='13'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='13'%20y='13'%20width='7'%20height='7'%20rx='1'/%3E%3C/svg%3E") center / contain no-repeat; }
   html.ph .ph-sheet-row #net-field-btn::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='4'%20y='4'%20width='16'%20height='16'%20rx='1'/%3E%3Cpath%20d='M4%209.3%20H20%20M4%2014.7%20H20%20M9.3%204%20V20%20M14.7%204%20V20'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='4'%20y='4'%20width='16'%20height='16'%20rx='1'/%3E%3Cpath%20d='M4%209.3%20H20%20M4%2014.7%20H20%20M9.3%204%20V20%20M14.7%204%20V20'/%3E%3C/svg%3E") center / contain no-repeat; }
   html.ph .ph-sheet-row #net-alternate-btn::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M12%204%20V20'%20stroke-dasharray='2%202'/%3E%3Cpath%20d='M4%207%20L10%2012%20L4%2017%20Z'/%3E%3Cpath%20d='M20%207%20L14%2012%20L20%2017%20Z'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M12%204%20V20'%20stroke-dasharray='2%202'/%3E%3Cpath%20d='M4%207%20L10%2012%20L4%2017%20Z'/%3E%3Cpath%20d='M20%207%20L14%2012%20L20%2017%20Z'/%3E%3C/svg%3E") center / contain no-repeat; }
+
   /* commit 4b: the exact fields as steppers (the engine wraps the typed text fields; the stepper markup and look are the Form row's, the field is the display, --target wide, no frame of its own) */
   html.ph #more-netz .stepper > input.exact-field { box-sizing: border-box; flex: none; width: var(--target); min-width: var(--target); height: auto; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--color-text); font: inherit; font-size: var(--size-base); font-variant-numeric: tabular-nums; text-align: center; }
   html.ph #more-netz .stepper > input.exact-field[aria-disabled="true"] { color: var(--color-disabled); cursor: not-allowed; }
   @media (max-width: 339px) {
     html.ph #more-netz .stepper > input.exact-field { width: 40px; min-width: 40px; }
   }
-  /* ---- sheets redesign, commit 5a: the timeline sheet (ui-phone.js rows, ui-phone-timeline.js icons and readout) ------------------------------------------------------------------------------ */
+
+  /* the readout: ONE line of 20px, muted, 14px; nothing else of the sheet's former explanations is shown. Above 768px the element is not shown at all (the rule is not in the phone block). */
+  html.ph #net-readout { display: block; box-sizing: border-box; height: 20px; margin: 0; padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; color: var(--color-secondary); }
+
+  /* ================================================================================================================================================================================
+     SURFACE: LAYER SHEET (patterns C0a; the layer sheet in rows, sheets redesign commit 3a; ui-phone.js buildBlocks(), ui-phone-config.js sheets.layer.blocks). The rows themselves are in SHARED.
+     ================================================================================================================================================================================ */
+
+  /* the typed fields of the offsets and the rotation (until the steppers of commit 3b): 60 x --target */
+  html.ph .ph-sheet-row .control-group > input[type="number"] { box-sizing: border-box; flex: none; width: 60px; min-width: 0; height: var(--target); margin: 0; }
+
+  /* the node count and size steppers are as wide as the Form row's (117px): the number field is --target wide (the layer block's own rule for the inline block gives it 2.4ch, and an id wins over a class) */
+  html.ph #layer-more-panel .stepper > input[type="number"] { width: var(--target); min-width: var(--target); }
+
+  /* 320px: the number fields of the steppers give up 8px */
+  @media (max-width: 339px) {
+    html.ph #layer-more-panel .stepper > input[type="number"] { width: 40px; min-width: 40px; }
+  }
+
+  /* ================================================================================================================================================================================
+     SURFACE: TIMELINE (patterns C0a; the timeline sheet and the line-pairing editor and list, sheets redesign commits 5a to 5c; ui-phone-timeline.js, ui-phone-pairing.js).
+     ================================================================================================================================================================================ */
+
   /* #timeline-group is the sheet's content: it takes no box of its own (its blocks are the sheet's flex items) and is not hidden by the inline rule while the sheet is closed (the sheet's host is). The old keyframe
      list, the net box, the status span and the text button are PARKED hidden (they stay in the DOM: the keyframe list's "Net" buttons and #btn-clear-timeline are what the icon buttons forward their clicks to). */
   html.ph #timeline-group, html.ph #timeline-group:not(.ts-open) { display: contents; }
   html.ph #timeline-group > .icon-row, html.ph #timeline-group > #timeline-keyframe-list, html.ph #timeline-group > #timeline-net-state, html.ph #timeline-group > #timeline-status { display: none; }
+
   /* the icon row (commit 5b: 8px gaps as in the mock): netrec | pairing toggle + the segment select | trash, the hairlines 1px wide, 32px high, 4px side margins: 48 + 8 + 9 + 8 + 48 + 8 + 84 + 8 + 9 + 8 + 48 = 286px */
   html.ph #ph-tl-icons { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--sp-2); margin: 0; padding: 0; }
   html.ph .ph-tl-btn { box-sizing: border-box; flex: none; width: var(--target); height: var(--target); border-radius: var(--radius); touch-action: manipulation; }
@@ -1609,8 +1657,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   html.ph .ph-tl-trash { color: var(--danger); }
   html.ph .ph-tl-btn[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
   html.ph #ph-tl-readout { display: block; box-sizing: border-box; height: 20px; margin: 0; padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; color: var(--color-secondary); }
+
   /* commit 5b: the line-pairing editor (#timeline-pairing and what sketch.js renders into it) is the MODEL of ui-phone-pairing.js and is PARKED hidden: it stays in the document (the view's buttons forward to its own) */
   html.ph #timeline-pairing { display: none; }
+
   /* the pairing view: row 1 = one 48px chip per line (the selected one black), scrolling sideways; row 2 = [end up, end down, reverse] | [variant back, k/c, variant forward]; row 3 = reset */
   html.ph .ph-tl-segment { box-sizing: border-box; flex: none; width: 84px; height: var(--target); margin: 0; padding: 0 var(--sp-4) 0 var(--sp-2); border: 1px solid var(--color-text); border-radius: var(--radius); background-color: var(--color-bg); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9 L12 15 L18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right var(--sp-2) center; background-size: 18px 18px; -webkit-appearance: none; appearance: none; color: var(--color-text); font: inherit; font-size: 16px; touch-action: manipulation; }
   html.ph .ph-tl-segment[hidden] { display: none; }
@@ -1620,6 +1670,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   html.ph .ph-tl-moves, html.ph .ph-tl-variant { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); flex: none; margin: 0; padding: 0; }
   html.ph .ph-tl-variant .ph-tl-sep { margin: 0; }
   html.ph .ph-tl-vcount { flex: none; width: 34px; text-align: center; font-variant-numeric: tabular-nums; }
+
   /* commit 5c: the pairing list (a state of the same sheet): a header row [back][N von M Zuordnungen] and one 48px button per pairing, the current one black; the list scrolls inside the sheet (80dvh minus what stays above it:
      16 + 48 + 8 + 20 + 16 + 48 + 8 + 16 = 180px, and 2px for the sheet's border and rounding) */
   html.ph .ph-tl-listicon[hidden] { display: none; }
@@ -1632,11 +1683,176 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   html.ph .ph-tl-lleft { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); min-width: 0; }
   html.ph .ph-tl-ldef { font-size: 14px; opacity: 0.7; }
   html.ph .ph-tl-lsum { flex: none; text-align: right; white-space: nowrap; }
+
   /* below 355px the pairing row (323px) wraps and the variant group starts the second line: no hairline in front of it */
   @media (max-width: 354px) {
     html.ph .ph-tl-variant .ph-tl-sep { display: none; }
   }
-  /* the readout: ONE line of 20px, muted, 14px; nothing else of the sheet's former explanations is shown. Above 768px the element is not shown at all (the rule is not in the phone block). */
-  html.ph #net-readout { display: block; box-sizing: border-box; height: 20px; margin: 0; padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; color: var(--color-secondary); }
-
 }
+
+
+/* === Surfaces (patterns C0b-1; the TWINS of the phone block's surface rules, for the compact surfaces at 768px and up; ui-phone.js sets the classes, from commit C0b-2) ====================================================
+   Nothing sets these gates yet, so no rule below matches anywhere: the page is unchanged. Each twin has the SAME declarations as its original in the phone block above (same selector, `html.ph` replaced by its gate),
+   in the same order; the originals stay where they are, inside @media (max-width: 767px). The gates, all classes of <html> set only by the engine: `html.sr` (any surface applied: the rows and blocks the surfaces share),
+   `html.sr-netz`, `html.sr-trails`, `html.sr-timeline` (one surface each). The neutral host classes of the neutral block (.sr-host, .sr-pane, .sr-row, .sr-row-scroll) are the twins of .ph-slot, .ph-pane, .ph-row, .ph-row-scroll
+   (page-layout rules the trail view borrows). NOT here, because they belong to the page layout: the sheet host (.ph-sheet), the panel (.ph-slot), the notices, the Netz panel buttons and the Net lines icon, the layer sheet, the
+   rail sheet and the dialogs; `html.ph` forces --target to 48px and so no gate here does. A rule that must differ at 768px and up will use `html.sr-...:not(.ph)` after its twin. */
+
+/* ================================================================================================================================================================
+   NEUTRAL HOST CLASSES (html.sr)
+   9 rules
+   ================================================================================================================================================================ */
+  html.sr .sr-pane { display: flex; flex-direction: column; gap: var(--sp-2); }
+  html.sr .sr-row { display: flex; align-items: center; justify-content: flex-start; gap: var(--sp-2); min-width: 0; }
+  html.sr .sr-host .icon-btn {
+    box-sizing: border-box;
+    width: var(--target);
+    height: var(--target);
+    border-radius: var(--radius);
+    flex: none;
+    touch-action: manipulation;
+  }
+  html.sr .sr-host .nav-cluster { gap: var(--sp-2); }
+  html.sr .sr-host .icon-btn[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
+  html.sr .sr-row > .ph-sep { margin: 0; }
+@media (max-width: 339px) {
+    html.sr .sr-row-scroll { overflow-x: auto; scrollbar-width: none; padding: var(--sp-1); margin: calc(-1 * var(--sp-1)); }
+    html.sr .sr-row-scroll::-webkit-scrollbar { display: none; }
+    html.sr .sr-row-scroll > * { flex: none; }
+  }
+
+/* ================================================================================================================================================================
+   TOKENS (html.sr)
+   1 rule: the four spacings of the phone block (html.ph defines them with the page-layout tokens); a surface at 768px and up needs them too. Same values; --target is NOT defined here: it follows the pointer.
+   ================================================================================================================================================================ */
+  html.sr { --sp-1: 4px; --sp-2: 8px; --sp-3: 16px; --sp-4: 32px; }
+
+/* ================================================================================================================================================================
+   SHARED ROWS AND BLOCKS (html.sr)
+   7 rules
+   ================================================================================================================================================================ */
+  html.sr .ph-sheet-block { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); min-width: 0; }
+  html.sr .ph-sheet-row { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--sp-2); min-width: 0; max-width: 100%; }
+  html.sr .ph-sheet-block > .ph-sheet-row { align-self: stretch; }   /* a row is as wide as its block (commit 5c: the pairing list rows are 343px wide; every other row keeps its items at the left) */
+  html.sr .ph-sheet-block[hidden], html.sr .ph-sheet-row[hidden] { display: none; }
+  html.sr .ph-sheet-row .control-group { flex: none; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--sp-2); width: auto; max-width: none; margin: 0; padding: 0; text-align: left; }
+  html.sr .ph-sheet-row .control-group[hidden] { display: none; }
+  html.sr .ph-sheet-row-wrap { flex-wrap: wrap; }
+
+/* ================================================================================================================================================================
+   TRAILS (html.sr-trails)
+   9 rules
+   ================================================================================================================================================================ */
+  html.sr-trails .ph-chips { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; padding: var(--sp-1); margin: calc(-1 * var(--sp-1)); overflow-x: auto; scrollbar-width: none; }
+  html.sr-trails .ph-chips::-webkit-scrollbar { display: none; }
+  html.sr-trails .ph-chip { position: relative; box-sizing: border-box; flex: none; width: var(--target); height: var(--target); margin: 0; padding: 0; overflow: hidden; border: 1px solid var(--color-text); border-radius: var(--radius); background: var(--color-bg); color: var(--color-text); font: inherit; font-size: var(--fs-tab); cursor: pointer; touch-action: manipulation; }
+  html.sr-trails .ph-chip.active { background: var(--color-text); color: var(--color-bg); }
+  html.sr-trails .ph-chip-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; }
+  html.sr-trails .ph-chips-empty { display: flex; align-items: center; height: var(--target); color: var(--color-secondary); font-size: var(--size-secondary); }
+  html.sr-trails .ph-trail-stepper { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+  html.sr-trails .ph-trail-count { min-width: var(--target); text-align: center; font-variant-numeric: tabular-nums; }
+  html.sr-trails .ph-trail-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-secondary); font-size: var(--size-secondary); }
+
+/* ================================================================================================================================================================
+   NETZ SHEET (html.sr-netz)
+   22 rules
+   ================================================================================================================================================================ */
+  html.sr-netz .overlay.ph-sheet-rows { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; gap: var(--sp-3); }
+  html.sr-netz #more-netz.ph-sheet-rows > .overlay-section, html.sr-netz #more-netz.ph-sheet-rows > #net-group { display: none; }
+  html.sr-netz #net-focus-hint, html.sr-netz #net-macro-hint, html.sr-netz #net-field-hint, html.sr-netz #net-field-info, html.sr-netz #net-size-hint, html.sr-netz .ph-sheet-row #net-macro-row > label { display: none; }
+  html.sr-netz .ph-sheet-row > input.exact-field { box-sizing: border-box; flex: none; width: 60px; min-width: 0; height: var(--target); margin: 0; text-align: center; }
+  html.sr-netz .ph-sheet-row > input.exact-field[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
+  html.sr-netz .ph-sheet-row #net-domain-row, html.sr-netz .ph-sheet-row #net-geo-row { flex: none; flex-wrap: nowrap; justify-content: flex-start; gap: var(--sp-2); margin: 0; padding: 0; }
+  html.sr-netz .ph-sheet-row #net-macro-row { display: block; margin: 0; }
+  html.sr-netz .ph-sheet-row #net-macro-row[hidden], html.sr-netz .ph-sheet-row #net-geo-row[hidden] { display: none; }
+  html.sr-netz .ph-sheet-row #net-macro-buttons { justify-content: flex-start; flex-wrap: wrap; gap: var(--sp-2); }
+  html.sr-netz .ph-sheet-row #net-macro-buttons .layer-btn { box-sizing: border-box; flex: none; min-height: var(--target); touch-action: manipulation; }
+  html.sr-netz .ph-sheet-row .net-domain-btn, html.sr-netz .ph-sheet-row #net-alternate-btn { position: relative; box-sizing: border-box; flex: none; width: var(--target); height: var(--target); min-width: var(--target); padding: 0; border-radius: var(--radius); font-size: 0; line-height: 0; touch-action: manipulation; }
+  html.sr-netz .ph-sheet-row .net-domain-btn[hidden], html.sr-netz .ph-sheet-row #net-alternate-btn[hidden] { display: none; }
+  html.sr-netz .ph-sheet-row .net-domain-btn::before, html.sr-netz .ph-sheet-row #net-alternate-btn::before { content: ""; position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); background-color: currentColor; }
+  html.sr-netz .ph-sheet-row .net-domain-btn:disabled { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
+  html.sr-netz .ph-sheet-row #net-domain-single::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='5'%20y='5'%20width='14'%20height='14'%20rx='1'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='5'%20y='5'%20width='14'%20height='14'%20rx='1'/%3E%3C/svg%3E") center / contain no-repeat; }
+  html.sr-netz .ph-sheet-row #net-domain-tiled::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='4'%20y='4'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='13'%20y='4'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='4'%20y='13'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='13'%20y='13'%20width='7'%20height='7'%20rx='1'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='4'%20y='4'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='13'%20y='4'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='4'%20y='13'%20width='7'%20height='7'%20rx='1'/%3E%3Crect%20x='13'%20y='13'%20width='7'%20height='7'%20rx='1'/%3E%3C/svg%3E") center / contain no-repeat; }
+  html.sr-netz .ph-sheet-row #net-field-btn::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='4'%20y='4'%20width='16'%20height='16'%20rx='1'/%3E%3Cpath%20d='M4%209.3%20H20%20M4%2014.7%20H20%20M9.3%204%20V20%20M14.7%204%20V20'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Crect%20x='4'%20y='4'%20width='16'%20height='16'%20rx='1'/%3E%3Cpath%20d='M4%209.3%20H20%20M4%2014.7%20H20%20M9.3%204%20V20%20M14.7%204%20V20'/%3E%3C/svg%3E") center / contain no-repeat; }
+  html.sr-netz .ph-sheet-row #net-alternate-btn::before { -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M12%204%20V20'%20stroke-dasharray='2%202'/%3E%3Cpath%20d='M4%207%20L10%2012%20L4%2017%20Z'/%3E%3Cpath%20d='M20%207%20L14%2012%20L20%2017%20Z'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M12%204%20V20'%20stroke-dasharray='2%202'/%3E%3Cpath%20d='M4%207%20L10%2012%20L4%2017%20Z'/%3E%3Cpath%20d='M20%207%20L14%2012%20L20%2017%20Z'/%3E%3C/svg%3E") center / contain no-repeat; }
+  html.sr-netz #more-netz .stepper > input.exact-field { box-sizing: border-box; flex: none; width: var(--target); min-width: var(--target); height: auto; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--color-text); font: inherit; font-size: var(--size-base); font-variant-numeric: tabular-nums; text-align: center; }
+  html.sr-netz #more-netz .stepper > input.exact-field[aria-disabled="true"] { color: var(--color-disabled); cursor: not-allowed; }
+  @media (max-width: 339px) {
+    html.sr-netz #more-netz .stepper > input.exact-field { width: 40px; min-width: 40px; }
+  }
+  html.sr-netz #net-readout { display: block; box-sizing: border-box; height: 20px; margin: 0; padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; color: var(--color-secondary); }
+
+/* ================================================================================================================================================================
+   NETZ AT 768PX AND UP (html.sr-netz:not(.ph))
+   what differs from the phone sheet while the layout is OFF (C0b-3, C0b-4): one more class than the twins, so they come after them. The overlay holds each control once, left aligned: the leftover #net-group (XY / X / Y
+   and the Net lines icon, one row), the fine Fokus stepper, the domain icons, the macro buttons, the Geo row (Reverse and Alternate as icons) and the readout. The typed strength field and the old Fokus row (heading and
+   a 0.1 stepper) are parked hidden: the strength is edited in the panel's stepper, the Fokus has its one fine stepper.
+   ================================================================================================================================================================ */
+  html.sr-netz:not(.ph) #more-netz.ph-sheet-rows { align-items: flex-start; text-align: left; }
+  html.sr-netz:not(.ph) #more-netz.ph-sheet-rows > #net-group { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: var(--sp-2); width: auto; }
+  html.sr-netz:not(.ph) #more-netz.ph-sheet-rows > #net-group[hidden] { display: none; }
+  html.sr-netz:not(.ph) #more-netz #net-group .icon-row { justify-content: flex-start; flex-wrap: nowrap; gap: var(--sp-2); }
+  html.sr-netz:not(.ph) #more-netz #net-focus-row, html.sr-netz:not(.ph) #more-netz #net-strength-row { display: none; }
+  html.sr-netz:not(.ph) #more-netz .net-axes-btn { box-sizing: border-box; min-width: var(--target); padding: 0 var(--sp-2); }
+  html.sr-netz:not(.ph) #more-netz #net-lines-btn, html.sr-netz:not(.ph) #more-netz #net-reverse-btn { position: relative; box-sizing: border-box; flex: none; width: var(--target); height: var(--target); min-width: var(--target); padding: 0; border-radius: var(--radius); touch-action: manipulation; }
+  html.sr-netz:not(.ph) #more-netz #net-lines-btn::before { content: ""; position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); background-color: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 8 C6 4 9 4 12 8 S18 12 21 8'/%3E%3Cpath d='M3 16 C6 12 9 12 12 16 S18 20 21 16'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 8 C6 4 9 4 12 8 S18 12 21 8'/%3E%3Cpath d='M3 16 C6 12 9 12 12 16 S18 20 21 16'/%3E%3C/svg%3E") center / contain no-repeat; }
+  html.sr-netz:not(.ph) #more-netz #net-reverse-btn::before { content: ""; position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); background-color: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8 H20 M16 4 L20 8 L16 12'/%3E%3Cpath d='M20 16 H4 M8 12 L4 16 L8 20'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8 H20 M16 4 L20 8 L16 12'/%3E%3Cpath d='M20 16 H4 M8 12 L4 16 L8 20'/%3E%3C/svg%3E") center / contain no-repeat; }
+  html.sr-netz:not(.ph) #more-netz #net-reverse-btn[hidden] { display: none; }
+
+/* ================================================================================================================================================================
+   TRAILS AT 768PX AND UP (html.sr-trails:not(.ph))
+   what differs from the Spuren pane while the layout is OFF (C0b-5): the chip view takes the place of the Face Colors group (#face-colors-group, shown by sketch.js while the active sheet's Fill is on). The group's own
+   content - the title, the keyframe note, the status, the rule note, the list (the MODEL sketch.js keeps rendering) and the "unassigned" row - is parked hidden, never removed; the row host the engine makes
+   (.sr-host, the neutral class) holds the chip bar and the stepper row. C0b-6b: the group has a FIXED width of --canvas-size, its left edge on the canvas' left edge (auto margins: the page centres the canvas), and everything in
+   it is left aligned: a changing number of chips or the muted line does not move the stepper row or the group.
+   ================================================================================================================================================================ */
+  html.sr-trails:not(.ph) #face-colors-group > :not(.sr-host) { display: none; }
+  html.sr-trails:not(.ph) #face-colors-group { box-sizing: border-box; width: var(--canvas-size); max-width: 100%; margin-left: auto; margin-right: auto; padding: 0; align-items: flex-start; text-align: left; }
+  html.sr-trails:not(.ph) #face-colors-group > .sr-host { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); box-sizing: border-box; width: 100%; min-width: 0; }
+  html.sr-trails:not(.ph) .ph-chips-empty { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* ================================================================================================================================================================
+   TIMELINE (html.sr-timeline)
+   27 rules
+   ================================================================================================================================================================ */
+  html.sr-timeline #timeline-group > .icon-row, html.sr-timeline #timeline-group > #timeline-keyframe-list, html.sr-timeline #timeline-group > #timeline-net-state, html.sr-timeline #timeline-group > #timeline-status { display: none; }
+  html.sr-timeline #ph-tl-icons { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--sp-2); margin: 0; padding: 0; }
+  html.sr-timeline .ph-tl-btn { box-sizing: border-box; flex: none; width: var(--target); height: var(--target); border-radius: var(--radius); touch-action: manipulation; }
+  html.sr-timeline .ph-tl-sep { flex: none; width: 1px; height: 32px; margin: 0 var(--sp-1); background: var(--color-hairline); }
+  html.sr-timeline .ph-tl-trash { color: var(--danger); }
+  html.sr-timeline .ph-tl-btn[aria-disabled="true"] { color: var(--color-disabled); border-color: var(--color-hairline); cursor: not-allowed; }
+  html.sr-timeline #ph-tl-readout { display: block; box-sizing: border-box; height: 20px; margin: 0; padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; color: var(--color-secondary); }
+  html.sr-timeline #timeline-pairing { display: none; }
+  html.sr-timeline .ph-tl-segment { box-sizing: border-box; flex: none; width: 84px; height: var(--target); margin: 0; padding: 0 var(--sp-4) 0 var(--sp-2); border: 1px solid var(--color-text); border-radius: var(--radius); background-color: var(--color-bg); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9 L12 15 L18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right var(--sp-2) center; background-size: 18px 18px; -webkit-appearance: none; appearance: none; color: var(--color-text); font: inherit; font-size: 16px; touch-action: manipulation; }
+  html.sr-timeline .ph-tl-segment[hidden] { display: none; }
+  html.sr-timeline .ph-tl-chips { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); flex: 1 1 0; min-width: 0; padding: var(--sp-1); margin: calc(-1 * var(--sp-1)); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }   /* room for the focus ring of an edge chip */
+  html.sr-timeline .ph-tl-chips::-webkit-scrollbar { display: none; }
+  html.sr-timeline .ph-tl-chip { font: inherit; font-size: 16px; font-variant-numeric: tabular-nums; }
+  html.sr-timeline .ph-tl-moves, html.sr-timeline .ph-tl-variant { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); flex: none; margin: 0; padding: 0; }
+  html.sr-timeline .ph-tl-variant .ph-tl-sep { margin: 0; }
+  html.sr-timeline .ph-tl-vcount { flex: none; width: 34px; text-align: center; font-variant-numeric: tabular-nums; }
+  html.sr-timeline .ph-tl-listicon[hidden] { display: none; }
+  html.sr-timeline .ph-tl-listhead { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); flex: 1 1 0; min-width: 0; margin: 0; padding: 0; }
+  html.sr-timeline .ph-tl-listcount { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; color: var(--color-secondary); }
+  html.sr-timeline .ph-tl-list { position: relative; display: flex; flex-direction: column; gap: var(--sp-2); flex: 1 1 0; min-width: 0; max-height: calc(80dvh - 182px); padding: var(--sp-1); margin: calc(-1 * var(--sp-1)); overflow-x: hidden; overflow-y: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  html.sr-timeline .ph-tl-list::-webkit-scrollbar { display: none; }
+  html.sr-timeline .ph-tl-lrow { box-sizing: border-box; flex: none; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: var(--sp-2); width: 100%; height: var(--target); margin: 0; padding: 0 var(--sp-3); border: 1px solid var(--color-text); border-radius: var(--radius); background: var(--color-bg); color: var(--color-text); font: inherit; font-size: 16px; font-variant-numeric: tabular-nums; text-align: left; cursor: pointer; touch-action: manipulation; }
+  html.sr-timeline .ph-tl-lrow.active { background: var(--color-text); color: var(--color-bg); }
+  html.sr-timeline .ph-tl-lleft { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); min-width: 0; }
+  html.sr-timeline .ph-tl-ldef { font-size: 14px; opacity: 0.7; }
+  html.sr-timeline .ph-tl-lsum { flex: none; text-align: right; white-space: nowrap; }
+  @media (max-width: 354px) {
+    html.sr-timeline .ph-tl-variant .ph-tl-sep { display: none; }
+  }
+
+/* ================================================================================================================================================================
+   TIMELINE AT 768PX AND UP (html.sr-timeline:not(.ph))
+   what differs from the timeline sheet while the layout is OFF (C0b-6a the frame, C0b-6b the pairing view): the timeline group (#timeline-group, opened by the strip's "..." through ts-open) is the content itself - the
+   blocks of the sheet are built inside it (block 1: the icon row and the readout line; block 2: the pairing editor; block 3: the pairing list) - and sits under the canvas as before: a FIXED width of --canvas-size,
+   its left edge on the canvas' left edge (the page centres the canvas, so the box is centred with auto margins and its content starts at its left edge), every row left aligned: nothing in it moves when the editor or
+   the list opens (the blocks come in order below the icon row). The keyframe list, the net box, the status span and the text remove button and the old line-pairing editor (#timeline-pairing, the MODEL) are parked hidden by
+   the twins above, never removed. The pairing list is capped at 5 rows (the pointer token instead of a fixed 48px), scrolling inside itself; the phone's 80dvh cap does not apply.
+   ================================================================================================================================================================ */
+  html.sr-timeline:not(.ph) #timeline-group.ts-open.ph-sheet-rows { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: var(--sp-3); box-sizing: border-box; width: var(--canvas-size); max-width: 100%; margin-left: auto; margin-right: auto; padding: 0; text-align: left; }
+  html.sr-timeline:not(.ph) #timeline-group > .ph-sheet-block { order: -1; align-items: flex-start; }   /* the blocks come before the group's old (parked) children: the icon row, the readout, then the editor or the list */
+  html.sr-timeline:not(.ph) .ph-tl-list { max-height: calc(5 * var(--target) + 4 * var(--sp-2)); }
