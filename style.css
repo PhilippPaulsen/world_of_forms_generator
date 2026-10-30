@@ -528,8 +528,14 @@ body.dark {
   margin-left: auto;
   width: var(--target);
   height: var(--target);
+  border: 0;                     /* fix F2: the help icon is frameless at every width, as it was on the phone since the phone layout: no frame, no fill, a muted icon; the hit area is the whole --target square */
   border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-secondary);
   font-size: var(--size-base);   /* no browser-default 13.33px */
+}
+@media (hover: hover) {
+  .app-header .icon-btn:hover { background: var(--hover-bg); }   /* the subtle hover of a fine pointer; the keyboard ring is the global button:focus-visible rule below */
 }
 
 .nav-rows { align-self: stretch; }
@@ -583,6 +589,9 @@ body.dark {
 
 .nav-cluster { display: flex; align-items: center; gap: var(--gap); flex: none; }
 .nav-divider { width: 1px; height: var(--target); background: var(--color-hairline); margin: 0 4px; flex: none; }
+/* The anchor-colour swatch at the end of the Farbe row (fix F2): a --target square with the buttons' radius, the colour filling it and the .fc-swatch frame (1px #888), as it has been on the phone; it was a 16px chip at 768px
+   and up. Its colour is set inline by ui-farbe.js (the colour logic is unchanged). */
+#farbe-anchor-preview { box-sizing: border-box; width: var(--target); height: var(--target); border-radius: var(--radius); flex: none; }
 .nav-break { display: none; }
 /* Group D Phase B4 follow-up: the old rule row moved into #more-farbe (see that markup's own comment) -
    #nav-farbe is back to just the anchor row, which fits Form/Netz's own single-line convention again, no
@@ -1413,7 +1422,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   /* header: 40px with the hairline inside, the tabs on the left in text style, Help a frameless muted icon on the right (same element, id, handler and aria-label) with a 40px hit area */
   html.ph .app-header { height: var(--ph-header-h); }
-  html.ph .app-header .icon-btn { width: var(--ph-header-h); height: var(--ph-header-h); min-width: var(--ph-header-h); min-height: var(--ph-header-h); border: 0; background: transparent; color: var(--color-secondary); }
+  html.ph .app-header .icon-btn { width: var(--ph-header-h); height: var(--ph-header-h); min-width: var(--ph-header-h); min-height: var(--ph-header-h); }   /* frame, fill and colour: the generic .app-header .icon-btn rule (fix F2) */
 
   /* the Form nav row is empty (its controls are in the panel) and the rail has nothing left for Form: neither takes room */
   html.ph .nav-rows,
@@ -1560,8 +1569,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   /* the rail's sheet in Farbe: Form's first row (Curve, Free, Free Endpoints, Alternative Net, Neu anfangen) is not offered there (it was hidden in Farbe before); the second row holds Farbe's buttons */
   html.ph[data-tab="farbe"] #more-rail > .more-row:not(.more-extra) { display: none; }
 
-  /* the anchor preview: a 48px swatch at the end of the second row */
-  html.ph .ph-slot #farbe-anchor-preview { box-sizing: border-box; width: var(--target); height: var(--target); border-radius: var(--radius); flex: none; }
+  /* the anchor preview: a 48px swatch at the end of the second row (its rule is the generic #farbe-anchor-preview rule next to .nav-divider, fix F2) */
 
   /* ================================================================================================================================================================================
      SURFACE: TRAILS (patterns C0a; the Spuren chip view of the Farbe tab, phone layout commit 2; ui-phone-chips.js). One 48px chip per trail, the trail stepper under it.

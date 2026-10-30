@@ -64,6 +64,8 @@
     '#btn-add-layer',
     '#btn-save',
     '#btn-help',
+    // fix F2 (baseline-cleanup-10.json): the top bar itself (the help button's neighbour; cleanup-9 and earlier do not track it)
+    '.app-header',
     // the Form row's symmetry toggles and the Mehr button next to them (patterns commit 9: first tracked here; cleanup-3 does not have them)
     '#nav-symmetry', '#btn-sym-rotation', '#btn-sym-mirror', '#btn-more-form', '#more-form',
     // the canvas rail (rail rearrangement, commits 1 to 3): one element of each group, the links, the Mehr trigger and its popover
@@ -106,6 +108,10 @@
   const TRACKED_TRAILS = [
     '#face-colors-group', '#sr-trails-host', '#ph-trail-chips', '#ph-trail-chips .ph-chip:nth-child(1)', '#ph-trail-stepper', '#ph-trail-stepper .ph-trail-prev', '#ph-trail-stepper .ph-trail-next', '#ph-trail-stepper .ph-trail-count', '#ph-trail-stepper .ph-trail-label',
   ];
+
+  // fix F2 (baseline-cleanup-10.json): the Farbe nav row (#nav-farbe) with the anchor views, the first harmony button, the two anchor steppers and the anchor-colour swatch. Tracked in the snapshots taken while the Farbe tab is
+  // shown (data-tab="farbe"): elsewhere the row is hidden (null) and the file stays small.
+  const TRACKED_FARBEROW = ['#nav-farbe', '#nav-anchor-views', '#farbe-family-circle', '#btn-harmony-2', '#farbe-anchor-hue-stepper', '#farbe-anchor-register-stepper', '#farbe-anchor-preview'];
 
   // patterns commit C0b-6a (baseline-cleanup-8.json): the compact timeline group (#timeline-group, opened by the strip's "Mehr"): the icon row, its three buttons and the readout line. Tracked ONLY in the snapshot of the open
   // group (timeline_more), like TRACKED_TRAILS: elsewhere they would be null (the holder is hidden) and the file stays small.
@@ -170,7 +176,8 @@
 
   function snap(withTrails, withTimeline, withPairing) {
     const out = {};
-    TRACKED.concat(withTrails ? TRACKED_TRAILS : [], withTimeline ? TRACKED_TIMELINE : [], withPairing ? TRACKED_PAIRING : []).forEach((sel) => { const el = document.querySelector(sel); out[sel] = sel.indexOf('#ui-notices') === 0 ? rectViewport(el) : rect(el); });
+    const farbeRow = document.documentElement.getAttribute('data-tab') === 'farbe';
+    TRACKED.concat(withTrails ? TRACKED_TRAILS : [], withTimeline ? TRACKED_TIMELINE : [], withPairing ? TRACKED_PAIRING : [], farbeRow ? TRACKED_FARBEROW : []).forEach((sel) => { const el = document.querySelector(sel); out[sel] = sel.indexOf('#ui-notices') === 0 ? rectViewport(el) : rect(el); });
     const root = document.documentElement;
     out.scrollWidth = root.scrollWidth;
     out.clientWidth = root.clientWidth;
