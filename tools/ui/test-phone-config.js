@@ -9,12 +9,17 @@
 // one (the engine moves a listed element with everything in it). (4) The numbers of the config are the numbers of the CSS tokens (--ph-header-h ... --panel-h, --chrome-h) and the canvas formula is the one the
 // plan fixed. (5) The two scripts are loaded in index.html after ui-layers.js, ui-timeline.js and ui-rail.js, config before engine, with the page's ?v=. (6) The phone CSS: from the marker comment to the end
 // of style.css every rule is inside @media (max-width: 767px) and every selector starts with `html.ph`; nothing above the marker mentions `html.ph` or a `.ph-` class.
+// (7) Since patterns commit C0a the phone block is ORDERED by what its rules serve (a reordering only): ONE media query holding seven banner-delimited blocks, PAGE LAYOUT, SHARED, OTHER SURFACES, TRAILS,
+// NETZ, LAYER SHEET, TIMELINE; no rule appears twice; a surface's class names only occur in its own block; a `[hidden]` rule or a narrower-width variant comes after the rule it modifies.
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..', '..');
 const read = (env, rel) => fs.readFileSync(process.env[env] || path.join(ROOT, rel), 'utf8');
 const CFG_PATH = process.env.PHONE_CONFIG_JS || path.join(ROOT, 'ui-phone-config.js');
 const HTML = read('INDEX_HTML', 'index.html'), CSS = read('STYLE_CSS', 'style.css'), ENGINE = read('UI_PHONE_JS', 'ui-phone.js');
+// Since patterns commit C0b-1 style.css ends with TWO regions: the phone block (the comment "=== Phone layout (" up to the closing brace of its media query) and, after it, the surfaces region (the comment "=== Surfaces (":
+// the twins of the phone block's surface rules under the gates html.sr*). PHONE_END is where the phone block ends; every check of the phone block slices there, the twins have their own section ('twins').
+const SURF_MARK = CSS.indexOf('=== Surfaces ('), PHONE_END = SURF_MARK < 0 ? CSS.length : CSS.lastIndexOf('/*', SURF_MARK);
 const API = require(CFG_PATH);
 const { config, validate, chromeH } = API;
 
@@ -106,13 +111,13 @@ T('wrappers', () => {
     all.forEach(id => { const s = span(id); if (!s) return; all.forEach(o => { if (o !== id && new RegExp('\\bid="' + o + '"').test(s)) nested.push(o + ' in ' + id); }); });
     check('no listed control sits INSIDE another listed one (the engine moves an element with everything in it)', nested.length === 0, nested.join(', ') || 'none');
     const sh = span('nav-shapes') || '';
-    check('#nav-shapes holds the three shape buttons; #nav-symmetry the two symmetry radios (the wrappers are the elements the Form row had)', (sh.match(/data-shape=/g) || []).length === 3 && /btn-sym-rotation"/.test(span('nav-symmetry') || '') && /btn-sym-rotation-mirror"/.test(span('nav-symmetry') || ''));
+    check('#nav-shapes holds the three shape buttons; #nav-symmetry the two symmetry toggles (Drehung, Spiegelung: a group of aria-pressed buttons; the wrappers are the elements the Form row had)', (sh.match(/data-shape=/g) || []).length === 3 && /btn-sym-rotation"/.test(span('nav-symmetry') || '') && /btn-sym-mirror"/.test(span('nav-symmetry') || ''));
     check('#nav-node-stepper holds #node-count-input, #nav-size-stepper #shape-size-input', /id="node-count-input"/.test(span('nav-node-stepper') || '') && /id="shape-size-input"/.test(span('nav-size-stepper') || ''));
 });
 
 console.log('\n== config and CSS agree ==');
 T('css', () => {
-    const tok = n => { const m = new RegExp('--' + n + ':\\s*([^;]+);').exec(CSS.slice(CSS.indexOf('=== Phone layout ('))); return m ? m[1].trim() : null; };
+    const tok = n => { const m = new RegExp('--' + n + ':\\s*([^;]+);').exec(CSS.slice(CSS.indexOf('=== Phone layout ('), PHONE_END)); return m ? m[1].trim() : null; };
     const S = config.sizes;
     check('--ph-header-h, --ph-toolrow-h, --ph-subtabs-h, --panel-h in the CSS are the sizes of the config (40, 64, 44, 104)', tok('ph-header-h') === S.header + 'px' && tok('ph-toolrow-h') === S.toolRow + 'px' && tok('ph-subtabs-h') === S.subtabs + 'px' && tok('panel-h') === config.tabs.form.panelH + 'px', [tok('ph-header-h'), tok('ph-toolrow-h'), tok('ph-subtabs-h'), tok('panel-h')].join(' '));
     check('--chrome-h is the sum of the six zones (header + 8 above the canvas + tool row + sub-tab row + 8 above the panel + panel) = the config\'s chromeH', tok('chrome-h') === 'calc(var(--ph-header-h) + var(--sp-2) + var(--ph-toolrow-h) + var(--ph-subtabs-h) + var(--sp-2) + var(--panel-h))' && S.gap === config.scale[1] && chromeH(config, 'form') === S.header + S.gap + S.toolRow + S.subtabs + S.gap + config.tabs.form.panelH, tok('chrome-h'));
@@ -124,7 +129,7 @@ T('css', () => {
 
 console.log('\n== the spacing scale ==');
 T('scale', () => {
-    const body = CSS.slice(CSS.indexOf('=== Phone layout ('));
+    const body = CSS.slice(CSS.indexOf('=== Phone layout ('), PHONE_END);
     // the style rules of the phone block (a brace-aware parse, comments out); defined again below for the CSS section, hence a local copy
     const parse = text => { const t = text.replace(/\/\*[\s\S]*?\*\//g, ''), out = []; (function walk(s, at) { let i = 0; while (i < s.length) { const o = s.indexOf('{', i); if (o < 0) break; const prelude = s.slice(i, o).trim(); let d = 1, j = o + 1; while (j < s.length && d) { if (s[j] === '{') d++; else if (s[j] === '}') d--; j++; } const inner = s.slice(o + 1, j - 1); if (prelude.startsWith('@')) { if (/^@(media|supports)/.test(prelude)) walk(inner, at.concat(prelude)); } else out.push({ sel: prelude, at, body: inner }); i = j; } })(t, []); return out; };
     const rs = parse(body.slice(body.indexOf('*/') + 2));
@@ -229,8 +234,8 @@ T('netz', () => {
     check('the tool row: Undo, Redo | Nodes, Net lines, Fill | More at the end: 6 icons, 4px inside a group, two hairlines = 334px of the 343', JSON.stringify(tr.groups) === '[["btn-undo","btn-redo"],["btn-toggle-nodes","net-lines-btn","btn-toggle-faces"]]' && JSON.stringify(tr.end) === '["btn-more-rail"]' && (6 * 48 + 3 * 4 + 2 * 17) === 334 && !tr.icons);
     check('the rail\'s sheet gets Random, the catalog link, Info, Download and Clear (Paste Pattern is Form only), plus the Curve / Free settings groups like Form\'s; More keeps its own name (no openerLabel)', JSON.stringify(tr.sheet.items) === '["btn-random","btn-gallery","btn-info","btn-save","btn-clear"]' && JSON.stringify(tr.sheet.settings) === JSON.stringify(config.toolRows.form.sheet.settings) && tr.sheet.opener === 'btn-more-rail' && !tr.sheet.openerLabel);
     const w = r => r.items.reduce((a, i) => a + (i.w || 0), 0) + 8 * (r.items.length - 1), wMin = r => r.items.reduce((a, i) => a + (i.wMin || i.w || 0), 0) + 8 * (r.items.length - 1);
-    check('Art: row 1 = the four kinds (4 x 60 + 3 gaps = 264), row 2 = the strength stepper (117), the panel\'s own More (48) and Reverse LAST (74; sketch.js shows it for Geo only, so More keeps its place with Sin, Tan, Aus and Geo): 117 + 8 + 48 + 8 + 74 = 255px, 247 with the narrow stepper; both fit 288 - nothing scrolls', A.rows.length === 2 && A.rows[0].items.map(i => i.id + ':' + i.w).join() === 'nav-kinds:264' && A.rows[1].items.map(i => i.id).join() === 'net-strength-stepper,btn-more-netz,net-reverse-btn' && w(A.rows[0]) === 264 && w(A.rows[1]) === 255 && wMin(A.rows[1]) === 247 && !A.rows.some(r => r.scroll));
-    check('Achsen: row 1 = Both / X / Y (158px measured at a coarse pointer: 52 + 48 + 48 + 2 gaps), row 2 = the Fokus stepper (117); no row scrolls', X.rows.length === 2 && X.rows[0].items[0].id === 'net-axes-row' && X.rows[0].items[0].w === 158 && X.rows[1].items.map(i => i.id).join() === 'net-focus-stepper' && X.rows[1].items[0].w === 117 && !X.rows.some(r => r.scroll));
+    check('Art: row 1 = the four kinds (4 x 60 + 3 gaps = 264), row 2 = the strength stepper (117), the panel\'s own More (48) and Reverse LAST (an icon, 48 since C0b-4; sketch.js shows it for Geo only, so More keeps its place with Sin, Tan, Aus and Geo): 117 + 8 + 48 + 8 + 48 = 229px, 221 with the narrow stepper; both fit 288 - nothing scrolls', A.rows.length === 2 && A.rows[0].items.map(i => i.id + ':' + i.w).join() === 'nav-kinds:264' && A.rows[1].items.map(i => i.id).join() === 'net-strength-stepper,btn-more-netz,net-reverse-btn' && w(A.rows[0]) === 264 && w(A.rows[1]) === 229 && wMin(A.rows[1]) === 221 && !A.rows.some(r => r.scroll));
+    check('Achsen: row 1 = XY / X / Y (154px measured at a coarse pointer: 48 + 48 + 48 + 2 gaps; "Both" was 52 wide), row 2 = the Fokus stepper (117); no row scrolls', X.rows.length === 2 && X.rows[0].items[0].id === 'net-axes-row' && X.rows[0].items[0].w === 154 && X.rows[1].items.map(i => i.id).join() === 'net-focus-stepper' && X.rows[1].items[0].w === 117 && !X.rows.some(r => r.scroll));
     check('follow: the Fokus stepper follows #net-focus-row (sketch.js shows that row for Sin and Tan only) in mode "disable": it stays shown and is disabled with the reason "Fokus gilt für Sin und Tan"', JSON.stringify(config.follow) === '{"net-focus-stepper":{"of":"net-focus-row","mode":"disable","reason":"Fokus gilt für Sin und Tan","i18n":"net.reason.focus"}}' && JSON.stringify(API.followSpec('x')) === '{"of":"x","mode":"hide"}');
     check('labels: Net lines has its own name while the Netz tool row is on: "Netzlinien zeigen" with a data-i18n key; no other tool row has labels', JSON.stringify(tr.labels) === '{"net-lines-btn":{"text":"Netzlinien zeigen","i18n":"netz.lines.button"}}' && !config.toolRows.form.labels && !config.toolRows.farbe.labels);
     const f = controlsOf(config, 'netz');
@@ -238,7 +243,8 @@ T('netz', () => {
     const span = id => { const m = new RegExp('<([a-z0-9]+)\\b[^>]*\\bid="' + id + '"[^>]*>').exec(htmlNoComments); if (!m) return ''; const tag = m[1], re = new RegExp('<(/?)' + tag + '\\b[^>]*>', 'g'); re.lastIndex = m.index + m[0].length; let depth = 1, r; while ((r = re.exec(htmlNoComments))) { depth += r[1] ? -1 : 1; if (!depth) return htmlNoComments.slice(m.index, re.lastIndex); } return ''; };
     check('#nav-kinds is the radiogroup of the four kind buttons (role=radiogroup, four .net-kind-btn with role=radio: Aus, Sin, Tan, Geo); #net-strength-stepper holds #net-strength-value and the two chevrons', /id="nav-kinds"[^>]*role="radiogroup"/.test(htmlNoComments) && ['regular', 'sinus', 'tangens', 'geometric'].every(k => new RegExp('net-kind-btn[^>]*data-kind="' + k + '"[^>]*role="radio"').test(span('nav-kinds'))) && /id="net-strength-value"/.test(span('net-strength-stepper')) && (span('net-strength-stepper').match(/class="stepper-btn"/g) || []).length === 2);
     check('the Fokus stepper sits INSIDE #net-focus-row (the block sketch.js shows and hides) next to the exact field, which does NOT move; #net-geo-row keeps Reverse and Alternate in the markup (only Reverse is moved at run time: it has its own hidden in sketch.js)', /id="net-focus-stepper"/.test(span('net-focus-row')) && /id="net-focus-exact"/.test(span('net-focus-row')) && !new RegExp('id="net-focus-exact"').test(span('net-focus-stepper')) && /id="net-reverse-btn"/.test(span('net-geo-row')) && /id="net-alternate-btn"/.test(span('net-geo-row')));
-    check('Net lines keeps what it has: id net-lines-btn, the title, the text "Net lines" (its accessible name; the phone CSS empties it visually, not in the DOM), in #net-group where it is at 768px and up', /<button class="layer-btn" id="net-lines-btn" title="Draw the net's own grid lines[^"]*">Net lines<\/button>/.test(htmlNoComments) && /id="net-lines-btn"/.test(span('net-group')));
+    check('Net lines is an icon button with no text of its own (C0b-4): id net-lines-btn, title and aria-label "Netzlinien zeigen" (its name, the dictionary key netz.lines.button), still in #net-group where it is at 768px and up', /<button class="layer-btn" id="net-lines-btn" title="Netzlinien zeigen" aria-label="Netzlinien zeigen" data-i18n="netz\.lines\.button"><\/button>/.test(htmlNoComments) && /id="net-lines-btn"/.test(span('net-group')));
+    check('Reverse is an icon button with no text (C0b-4): id net-reverse-btn, title and aria-label "Richtung umkehren" (key netz.reverse), in #net-geo-row; the three axes buttons read XY / X / Y with the names "Beide Achsen" / "Nur X" / "Nur Y" (data-i18n-label net.axes.both / x / y), not the English "Both"', /<button class="layer-btn" id="net-reverse-btn" title="Richtung umkehren" aria-label="Richtung umkehren" data-i18n="netz\.reverse"><\/button>/.test(span('net-geo-row')) && ['both:net.axes.both:Beide Achsen:XY', 'x:net.axes.x:Nur X:X', 'y:net.axes.y:Nur Y:Y'].every(t => { const [a, k, n, g] = t.split(':'); return htmlNoComments.indexOf('<button class="layer-btn net-axes-btn' + (a === 'both' ? ' active' : '') + '" data-axes="' + a + '" title="' + n + '" aria-label="' + n + '" data-i18n-label="' + k + '">' + g + '</button>') > 0; }) && !/>Both</.test(htmlNoComments));
     check('the wrapper ids added to index.html exist once: nav-kinds, net-strength-stepper, net-focus-stepper', ['nav-kinds', 'net-strength-stepper', 'net-focus-stepper'].every(id => ids.filter(x => x === id).length === 1));
 });
 T('netz-mutants', () => {
@@ -306,8 +312,8 @@ function rules(text) {
 }
 T('css', () => {
     const marker = CSS.indexOf('=== Phone layout (');
-    check('the phone block starts at the marker comment "=== Phone layout (" and is the LAST thing in style.css', marker > 0 && CSS.indexOf('=== Phone layout (', marker + 1) < 0);
-    const before = CSS.slice(0, marker).replace(/\/\*[\s\S]*?\*\//g, ''), block = CSS.slice(marker);
+    check('the phone block starts at the marker comment "=== Phone layout (" once and is followed only by the surfaces region ("=== Surfaces (", the twins): nothing else comes after it', marker > 0 && CSS.indexOf('=== Phone layout (', marker + 1) < 0 && SURF_MARK > marker && PHONE_END > marker && CSS.indexOf('=== Surfaces (', SURF_MARK + 1) < 0);
+    const before = CSS.slice(0, marker).replace(/\/\*[\s\S]*?\*\//g, ''), block = CSS.slice(marker, PHONE_END);
     check('nothing above the block mentions html.ph or a .ph- class: no phone rule hides outside the gate', !/html\.ph\b|\.ph-[a-z]|#ph-/.test(before));
     const rs = rules(block.slice(block.indexOf('*/') + 2));
     check('the block has rules (' + rs.length + ')', rs.length > 20);
@@ -401,7 +407,7 @@ T('layer-rows-mutants', () => {
     mut('blocks that is not a list', c => { c.sheets.layer.blocks = 'rows'; }, /blocks must be a non-empty list/);
 });
 T('layer-rows-css', () => {
-    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker), rs = rules(block.slice(block.indexOf('*/') + 2));
+    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker, PHONE_END), rs = rules(block.slice(block.indexOf('*/') + 2));
     const find = sel => rs.filter(r => r.sel.replace(/\s+/g, ' ') === sel);
     const inPhone = r => r.at[0] === '@media (max-width: 767px)';
     const sheetRules = rs.filter(r => /\.ph-sheet-(rows|block|row)/.test(r.sel) || /#layer-more-panel/.test(r.sel));
@@ -432,7 +438,7 @@ T('layer-steppers', () => {
     check('the three input ids and the sketch hooks are untouched: the inputs keep their ids and sketch.js still reads them with parseFloat / setActiveLayerRotation (sketch.js is unchanged by this commit)', ids3.every(id => HTML.includes('id="' + id + '"')) && /offsetXInput\.input\(\(\) => \{[\s\S]{0,200}parseFloat\(offsetXInput\.value\(\)\) \|\| 0/.test(read('SKETCH_JS', 'sketch.js')) && /setActiveLayerRotation\(layerRotationInput\.value\(\)\)/.test(read('SKETCH_JS', 'sketch.js')));
     const eng = ENGINE.replace(/\/\/.*$/gm, '');
     check('the engine is control-agnostic: decorateSteppers() names no input or group id (the config does), makes the wrapper from config data (icons, names) and never uses innerHTML or cloneNode', (() => { const m = /function buildStepper[\s\S]*?\n    }\n/.exec(eng), d = /function decorateSteppers[\s\S]*?\n    }\n/.exec(eng); return !!m && !!d && !/innerHTML|cloneNode|layer-|offset|rotation/.test(m[0] + d[0]); })());
-    check('the engine moves the input (take(), a marker stays), keeps its listeners off it (the key handler is bound to the wrapper: keyEl), sets readOnly + inputmode itself and gives them back at release', /take\(iid, c\.root, c\.chevrons\)/.test(eng) && /keyEl: c\.root/.test(eng) && /readonly: false/.test(eng) && /d\.input\.readOnly = d\.saved\.readOnly/.test(eng) && /undecorateSteppers\(built\)/.test(eng));
+    check('the engine moves the input (take(), a marker stays), keeps its listeners off it (the key handler is bound to the wrapper: keyEl), sets readOnly + inputmode itself and gives them back at release', /take\(iid, c\.root, c\.chevrons\)/.test(eng) && /keyEl: c\.root/.test(eng) && /readonly: false/.test(eng) && /d\.input\.readOnly = d\.saved\.readOnly/.test(eng) && /eachSurface\(function \(st\) \{\s*undecorateSteppers\(st\);/.test(eng));
     check('the native number spinners are hidden for every stepper input (CSS above the phone block): -webkit-appearance none on the spin buttons and textfield appearance on `.stepper input[type="number"]`', /\.stepper input\[type="number"\]::-webkit-outer-spin-button,\s*\.stepper input\[type="number"\]::-webkit-inner-spin-button \{\s*-webkit-appearance: none;/.test(CSS) && /\.stepper input\[type="number"\] \{[^}]*-moz-appearance: textfield;[^}]*appearance: textfield;/.test(CSS));
 });
 T('layer-steppers-mutants', () => {
@@ -464,7 +470,7 @@ T('netz-overlay', () => {
     check('the elements the sheet needs have ids: the three domain buttons (net-domain-single, net-domain-tiled, net-field-btn), the readout, the exact fields; the domain row and the macro row wrap the buttons', ['net-domain-single', 'net-domain-tiled', 'net-field-btn', 'net-readout', 'net-strength-exact', 'net-focus-exact', 'net-macro-row', 'net-geo-row', 'net-domain-row'].every(id => ids.includes(id)) && /id="net-domain-row"[\s\S]{0,900}id="net-domain-single"[\s\S]{0,700}id="net-domain-tiled"[\s\S]{0,700}id="net-field-btn"/.test(htmlNoComments));
     check('sketch.js keeps the hooks the rows follow: it shows and hides the macro row, the Alternate wrapper and the Alternate button with the `hidden` attribute, and the Field button is natively disabled (no reason can reach the user: a native disabled button fires no click - ROADMAP)', /macroRow\.elt\.hidden = /.test(read('SKETCH_JS', 'sketch.js')) && /geoRow\.elt\.hidden = /.test(read('SKETCH_JS', 'sketch.js')) && /alternateBtn\.elt\.hidden = /.test(read('SKETCH_JS', 'sketch.js')) && /fieldBtn\.elt\.disabled = !fieldOk/.test(read('SKETCH_JS', 'sketch.js')));
     const eng = ENGINE.replace(/\/\/.*$/gm, '');
-    check('the engine is control-agnostic here too: buildOverlays() names no id and reads config.overlays; an item is hidden when it is, or when all its element children are (itemHidden)', (() => { const m = /function buildOverlays[\s\S]*?\n    }\n/.exec(eng); return !!m && !/net-|more-netz|layer-/.test(m[0]) && /config\.overlays/.test(m[0]) && /function itemHidden/.test(eng) && /buildOverlays\(t, b\)/.test(eng); })());
+    check('the engine is control-agnostic here too: buildOverlay() names no id and reads config.overlays (an inline host may switch the steppers off: host.steppers === false, name some: a list of ids; and park items: host.park); an item is hidden when it is, or when all its element children are (itemHidden); the surface loop builds it for a surface whose host kind is overlay', (() => { const m = /function buildOverlay\(oid, st, host\)[\s\S]*?\n    }\n/.exec(eng); return !!m && !/net-|more-netz|layer-/.test(m[0]) && /config\.overlays/.test(m[0]) && /function itemHidden/.test(eng) && /host\.kind === 'overlay'\) buildOverlay\(host\.id, st, host\)/.test(eng); })());
 });
 T('netz-overlay-mutants', () => {
     const env = { ids: idSet };
@@ -483,7 +489,7 @@ T('netz-overlay-mutants', () => {
     mut('an overlay without blocks', c => { delete c.overlays.netz.blocks; }, /no blocks/);
 });
 T('netz-overlay-css', () => {
-    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker), rs = rules(block.slice(block.indexOf('*/') + 2));
+    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker, PHONE_END), rs = rules(block.slice(block.indexOf('*/') + 2));
     const one = sel => rs.filter(r => r.sel.replace(/\s+/g, ' ') === sel);
     const mine = rs.filter(r => /#more-netz|\.ph-sheet-row (#net|\.net|>)|#net-(readout|focus-hint|macro-hint|field-hint|field-info|size-hint)|\.overlay\.ph-sheet-rows/.test(r.sel));
     check('the Netz sheet\'s rules (' + mine.length + ') all start with html.ph and sit in the phone media query, none above the block', mine.length >= 14 && mine.every(r => r.at[0] === '@media (max-width: 767px)' && r.sel.split(',').every(x => /^\s*html\.ph[\s\[.#]/.test(x))));
@@ -526,7 +532,7 @@ T('display', () => {
     check('the rounding is a display function of the text only (displayOf): it never changes the stored text and leaves anything that is not a number as it is', /function displayOf\(raw, decimals\)/.test(eng) && /Math\.round\(n \* f\) \/ f/.test(eng) && /if \(t\.trim\(\) === '' \|\| !isFinite\(n\)\) return t;/.test(eng));
 });
 T('netz-fine-css', () => {
-    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker), rs = rules(block.slice(block.indexOf('*/') + 2));
+    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker, PHONE_END), rs = rules(block.slice(block.indexOf('*/') + 2));
     const one = sel => rs.filter(r => r.sel.replace(/\s+/g, ' ') === sel);
     const rule = one('html.ph #more-netz .stepper > input.exact-field');
     check('the exact field inside its stepper is the display like the other steppers\' fields: --target wide, no frame, transparent, tabular figures, centred (html.ph #more-netz .stepper > input.exact-field), at 320px 40px wide in a nested @media (max-width: 339px)', rule.length === 2 && rule.some(r => r.at.length === 1 && /width:\s*var\(--target\)/.test(r.body) && /border:\s*0/.test(r.body) && /background:\s*transparent/.test(r.body) && /text-align:\s*center/.test(r.body)) && rule.some(r => r.at.length === 2 && r.at[1] === '@media (max-width: 339px)' && /width:\s*40px/.test(r.body)));
@@ -580,7 +586,7 @@ T('timeline-sheet-mutants', () => {
     mut('an id that is nowhere (the readout misspelled)', c => { c.sheets.timeline.blocks[0][1].items[0].id = 'ph-tl-readot'; }, /ph-tl-readot is neither in index\.html nor created/);
 });
 T('timeline-sheet-css', () => {
-    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker), rs = rules(block.slice(block.indexOf('*/') + 2));
+    const marker = CSS.indexOf('=== Phone layout ('), block = CSS.slice(marker, PHONE_END), rs = rules(block.slice(block.indexOf('*/') + 2));
     const one = sel => rs.filter(r => r.sel.replace(/\s+/g, ' ') === sel);
     const mine = rs.filter(r => /#timeline-group|ph-tl-|#ph-tl-|#timeline-pairing/.test(r.sel));
     check('the timeline sheet\'s rules (' + mine.length + ') all start with html.ph and sit in the phone media query, none above the block', mine.length >= 8 && mine.every(r => r.at[0] === '@media (max-width: 767px)' && r.sel.split(',').every(x => /^\s*html\.ph[\s\[.#:]/.test(x))));
@@ -614,6 +620,211 @@ T('label-keys', () => {
     check('the names are keyed too: `names: { tools: { text, i18n }, subtabs: { text, i18n } }` in the source', /names: \{ tools: \{ text: '[^']+', i18n: 'phone\.tools' \}, subtabs: \{ text: '[^']+', i18n: 'phone\.subtabs' \} \}/.test(src));
     const eng = ENGINE.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
     check('the engine writes the sub-tab text, the group names and the host label through say(key, German text), and holds no German label of its own', /say\(config\.subtabs\[sid\]\.i18n, config\.subtabs\[sid\]\.label\)/.test(eng) && /say\(config\.names\.tools\.i18n, config\.names\.tools\.text\)/.test(eng) && /say\(config\.names\.subtabs\.i18n, config\.names\.subtabs\.text\)/.test(eng) && /'aria-label': say\(def\.i18n, def\.label\)/.test(eng) && !/'Werkzeuge'|'Unterbereiche'|textContent = config\.subtabs\[sid\]\.label/.test(eng));
+});
+
+T('registry', () => {
+    const env = { ids: idSet }, R = config.surfaces;
+    check('the surface registry exists with four surfaces in the order the engine applies them: layer, timeline, netz, trails', !!R && Object.keys(R).join() === 'layer,timeline,netz,trails');
+    check('each surface says its tabs: layer and timeline every tab, netz the Netz tab, trails the Farbe tab', R.layer.tabs.join() === 'form,farbe,netz' && R.timeline.tabs.join() === 'form,farbe,netz' && R.netz.tabs.join() === 'netz' && R.trails.tabs.join() === 'farbe');
+    check('the flags are unique: layer none, timeline sr-timeline, netz sr-netz, trails sr-trails (the gate classes of the twin rules; the general html.sr is set by the engine for any applied surface)', R.layer.flag === null && R.timeline.flag === 'sr-timeline' && R.netz.flag === 'sr-netz' && R.trails.flag === 'sr-trails' && new Set(Object.values(R).map(x => x.flag).filter(Boolean)).size === 3);
+    check('EVERY surface has its inline switch (a boolean); since C0b-3 it is ON for the Netz surface (the overlay content at 768px and up), since C0b-5 for the trails (the chip view in the Face Colors group), since C0b-6a for the timeline (the frame inside #timeline-group), OFF for layer only', Object.values(R).every(x => typeof x.inlineOn === 'boolean') && R.netz.inlineOn === true && R.trails.inlineOn === true && R.timeline.inlineOn === true && R.layer.inlineOn === false);
+    check('the phone hosts are what the engine always had: the layer sheet, the timeline sheet, the Netz overlay (#more-netz) and the Spuren pane of the layout', R.layer.hosts.phone.kind === 'sheet' && R.layer.hosts.phone.id === 'layer' && R.timeline.hosts.phone.kind === 'sheet' && R.timeline.hosts.phone.id === 'timeline' && R.netz.hosts.phone.kind === 'overlay' && R.netz.hosts.phone.id === 'netz' && R.trails.hosts.phone.kind === 'pane' && R.trails.hosts.phone.id === 'spuren');
+    check('tabs.<tab>.sheets and .overlays list exactly what the registry says (one source in effect): every tab both sheets, Netz the overlay', ['form', 'farbe', 'netz'].every(t => config.tabs[t].sheets.join() === 'layer,timeline') && config.tabs.netz.overlays.join() === 'netz' && !config.tabs.form.overlays && !config.tabs.farbe.overlays);
+    check('the engine owns the classes: the flag names are in the registry data only; it sets html.sr (any surface) and the flag of each applied surface and removes them in release()', /html\.classList\.add\('sr'\)/.test(ENGINE) && /html\.classList\.add\(surfaceState\[n\]\.flag\)/.test(ENGINE) && /html\.classList\.remove\(surfaceState\[n\]\.flag\)/.test(ENGINE) && /html\.classList\.remove\('sr'\)/.test(ENGINE) && !/sr-(netz|trails|timeline)/.test(ENGINE.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')));
+    check('the engine names no surface and no id: apply = layout + surfaces; the surface loop reads config.surfaces; at 768px and up only a surface whose inlineOn is true is applied', /Object\.keys\(config\.surfaces \|\| \{\}\)/.test(ENGINE) && /sf\.inlineOn !== true/.test(ENGINE) && /mode === 'inline' && sf\.inlineOn/.test(ENGINE));
+    const mut = (name, fn, re) => { const c = clone(config); fn(c); const p = validate(c, env); check(`validate rejects: ${name}`, p.some(m => re.test(m)), p.join(' ; ') || 'no problem found'); };
+    mut('a surface without its inline switch', c => { delete c.surfaces.netz.inlineOn; }, /surface netz: no inline switch/);
+    mut('an inline switch that is a string', c => { c.surfaces.trails.inlineOn = 'off'; }, /surface trails: no inline switch/);
+    mut('two surfaces with the same flag', c => { c.surfaces.trails.flag = 'sr-netz'; }, /the flag sr-netz is also the flag of/);
+    mut('a flag that is not an sr- class', c => { c.surfaces.netz.flag = 'netz'; }, /surface netz: the flag must be/);
+    mut('a surface without a phone host', c => { delete c.surfaces.timeline.hosts.phone; }, /surface timeline: no phone host/);
+    mut('a phone host sheet nobody defines', c => { c.surfaces.timeline.hosts.phone.id = 'nirgends'; }, /phone host sheet nirgends is not defined/);
+    mut('a phone host overlay nobody defines', c => { c.surfaces.netz.hosts.phone.id = 'nirgends'; }, /phone host overlay nirgends is not defined/);
+    mut('a phone host pane that is not a sub-tab', c => { c.surfaces.trails.hosts.phone.id = 'nirgends'; }, /phone host pane nirgends is not a sub-tab/);
+    mut('a surface on a tab that does not exist', c => { c.surfaces.netz.tabs = ['netz', 'nirgends']; }, /surface netz: tabs must be/);
+    mut('the inline switch on with no inline host', c => { c.surfaces.timeline.inlineOn = true; delete c.surfaces.timeline.hosts.inline; }, /surface timeline: the inline switch is on but there is no inline host/);
+    mut('the inline switch on for a host the engine does not build (a popover)', c => { c.surfaces.timeline.hosts.inline.kind = 'popover'; }, /surface timeline: the inline switch is on but the engine builds no inline host of kind popover/);
+    mut('the timeline content host that names no sheet', c => { c.surfaces.timeline.hosts.inline.sheet = 'nope'; }, /the inline host content names the sheet nope, which is not defined/);
+    mut('the timeline content host with another content than the sheet\'s', c => { c.surfaces.timeline.hosts.inline.id = 'timeline-strip'; }, /the inline host content timeline-strip is not the content of the sheet timeline/);
+    mut('the timeline content host listing a block the sheet does not have', c => { c.surfaces.timeline.hosts.inline.blocks = [0, 7]; }, /the inline host content lists blocks that the sheet does not have/);
+    mut('the trails group host without its hostId', c => { delete c.surfaces.trails.hosts.inline.hostId; }, /surface trails: the inline host group has no hostId/);
+    mut('the trails hostId that is an id of index.html', c => { c.surfaces.trails.hosts.inline.hostId = 'face-colors-list'; }, /the hostId face-colors-list is also an id of index\.html/);
+    mut('the trails group host with an item nobody makes', c => { c.surfaces.trails.hosts.inline.items = ['ph-trail-chips', 'ph-nobody']; }, /the inline host group item ph-nobody is neither in index\.html nor made by a script/);
+    mut('the trails group host with no items', c => { c.surfaces.trails.hosts.inline.items = []; }, /the inline host group lists no items/);
+    mut('the trails group that is not in index.html', c => { c.surfaces.trails.hosts.inline.id = 'no-such-group'; }, /the inline host group no-such-group is not in index\.html/);
+    mut('the registry and tabs.<tab>.sheets disagree (Form lists no timeline sheet)', c => { c.tabs.form.sheets = ['layer']; }, /tabs\.form\.sheets and the registry disagree about sheet timeline/);
+    mut('the registry and tabs.<tab>.overlays disagree (Farbe lists the Netz overlay)', c => { c.tabs.farbe.overlays = ['netz']; }, /tabs\.farbe\.overlays and the registry disagree about overlay netz/);
+    mut('no registry at all', c => { delete c.surfaces; }, /surfaces: no registry/);
+    mut('the inline host decorates a stepper the overlay does not have', c => { c.surfaces.netz.hosts.inline.steppers = ['net-nope-exact']; }, /surface netz: the inline host's steppers must be true, false or a list of ids of the overlay's steppers/);
+    mut('the inline host parks an id that is no item of the overlay', c => { c.surfaces.netz.hosts.inline.park = ['net-nope-exact']; }, /surface netz: the inline host's park must be a list of ids that are items of the overlay's blocks/);
+    mut('the inline host\'s park is not a list', c => { c.surfaces.netz.hosts.inline.park = 'net-strength-exact'; }, /the inline host's park must be a list/);
+    const ok = clone(config); ok.surfaces.netz.inlineOn = true;
+    check('a surface with a switch ON and an inline host the engine builds (the Netz overlay) is accepted (the later Netz commit turns it on)', !validate(ok, env).some(m => /surface netz/.test(m)), validate(ok, env).join(' ; '));
+});
+
+T('timeline-desktop', () => {
+    const region = CSS.slice(PHONE_END), R = rules(region), TL = R.filter(r => /^html\.sr-timeline:not\(\.ph\)/.test(r.sel)), t = config.surfaces.timeline, ih = t.hosts.inline;
+    const TLV = fs.readFileSync(process.env.UI_PHONE_TIMELINE_JS || path.join(ROOT, 'ui-phone-timeline.js'), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+    check('the timeline surface is ON at 768px and up (C0b-6a the frame, C0b-6b the pairing view): flag sr-timeline; the inline host is the CONTENT itself - #timeline-group - with ALL THREE blocks of the timeline sheet (the icon row and the readout, the pairing editor, the pairing list); the phone host (the sheet) is unchanged; the layout switch tells the timeline view to reset and then the pairing view to look again (the ORDER)', t.inlineOn === true && t.flag === 'sr-timeline' && ih.kind === 'content' && ih.id === 'timeline-group' && ih.sheet === 'timeline' && JSON.stringify(ih.blocks) === '[0,1,2]' && config.sheets.timeline.blocks.length === 3 && t.hosts.phone.kind === 'sheet' && t.hosts.phone.id === 'timeline' && config.sheets.timeline.content === 'timeline-group' && JSON.stringify(config.layoutSwitch) === '[["uiPhoneTimeline","reset"],["uiPhonePairing","refresh"]]');
+    check('the engine calls the layout-switch hooks when the phone layout is built and when it is released (layoutSwitched(): config.layoutSwitch, by name, no view named in the engine) and validate() wants [global, method] pairs', (() => { const e = ENGINE.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, ''); return /function layoutSwitched\(\) \{[\s\S]*?config\.layoutSwitch[\s\S]*?\}\n/.test(e) && (e.match(/layoutSwitched\(\)/g) || []).length === 3 && !/uiPhoneTimeline|uiPhonePairing/.test(e); })());
+    check('the engine builds a content host by data: buildContent() names no id, reads config.sheets[host.sheet] and host.blocks, builds the blocks inside the content element (no sheet host, no UI.overlay, no trigger) and the surface loop calls it for kind content', (() => { const m = /function buildContent\(host, st\)[\s\S]*?\n    }\n/.exec(ENGINE.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')); return !!m && !/timeline|ph-tl|ts-open/.test(m[0]) && /host\.sheet/.test(m[0]) && /host\.blocks/.test(m[0]) && /buildBlocks\(/.test(m[0]) && !/UI\.overlay|el\('div', 'overlay/.test(m[0]) && /host\.kind === 'content'\) buildContent\(host, st\)/.test(ENGINE); })());
+    const by = sel => TL.find(r => r.sel === sel), P = 'html.sr-timeline:not(.ph) ', bd = r => (r ? r.body : '');
+    check('the timeline rules for 768px and up (3, all html.sr-timeline:not(.ph), after the twins): the OPEN group (.ts-open, the open state stays the strip\'s own) is a flex column box with a FIXED width of --canvas-size (never fit-content), at most 100%, auto margins (the page centres the canvas: the box\'s left edge is the canvas\' left edge), padding 0, left aligned (text-align: left, align-items: stretch so every block and row starts at the group\'s left edge, no centring); a closed group keeps the base rule (display: none: no rule of the region sets display on it without .ts-open)', TL.length === 3 && /display:\s*flex/.test(bd(by(P + '#timeline-group.ts-open.ph-sheet-rows'))) && /flex-direction:\s*column/.test(bd(by(P + '#timeline-group.ts-open.ph-sheet-rows'))) && /width:\s*var\(--canvas-size\)/.test(bd(by(P + '#timeline-group.ts-open.ph-sheet-rows'))) && !/fit-content|shrink|max-content/.test(bd(by(P + '#timeline-group.ts-open.ph-sheet-rows'))) && /max-width:\s*100%/.test(bd(by(P + '#timeline-group.ts-open.ph-sheet-rows'))) && /margin-left:\s*auto/.test(bd(by(P + '#timeline-group.ts-open.ph-sheet-rows'))) && /padding:\s*0\b/.test(bd(by(P + '#timeline-group.ts-open.ph-sheet-rows'))) && /text-align:\s*left/.test(bd(by(P + '#timeline-group.ts-open.ph-sheet-rows'))) && !TL.some(r => /(justify-content|align-items|text-align):\s*center/.test(r.body)) && R.filter(r => /#timeline-group(?![-.\w:>])/.test(r.sel) && /display:\s*(flex|block|grid)/.test(r.body)).every(r => /\.ts-open/.test(r.sel)));
+    check('...the blocks come BEFORE the old (parked) children (order: -1: the icon row, the readout, then the editor or the list: nothing moves when the editor opens); the pairing list is capped at FIVE rows: max-height: calc(5 * var(--target) + 4 * var(--sp-2)) (212px at 36, 232 at 48), the phone\'s 80dvh cap does not apply (no rule of the region mentions dvh); the old line-pairing editor stays parked (the twin) and no rule shows it again', /order:\s*-1/.test(bd(by(P + '#timeline-group > .ph-sheet-block'))) && /align-items:\s*flex-start/.test(bd(by(P + '#timeline-group > .ph-sheet-block'))) && /max-height:\s*calc\(5 \* var\(--target\) \+ 4 \* var\(--sp-2\)\)/.test(bd(by(P + '.ph-tl-list'))) && !/dvh/.test(TL.map(r => r.body).join(' ')) && /html\.sr-timeline #timeline-pairing \{ display: none; \}/.test(region) && !/#timeline-pairing:not\(\[hidden\]\)/.test(region) && !/\.ph-tl-segment \{ display: none; \}\n/.test(region.slice(region.indexOf('TIMELINE AT 768PX AND UP'))));
+    check('the parked parts stay parked by the twins, never removed: the keyframe list, the net box, the status span and the text remove button are display: none under html.sr-timeline (one twin rule), the markup still holds them', /html\.sr-timeline #timeline-group > \.icon-row, html\.sr-timeline #timeline-group > #timeline-keyframe-list, html\.sr-timeline #timeline-group > #timeline-net-state, html\.sr-timeline #timeline-group > #timeline-status \{ display: none; \}/.test(region) && ['btn-clear-timeline', 'timeline-keyframe-list', 'timeline-net-state', 'timeline-status', 'timeline-pairing'].every(id => HTML.indexOf('id="' + id + '"') > 0));
+    check('the icon buttons and the readout follow the token and the line of the phone sheet: .ph-tl-btn is var(--target) square, #ph-tl-readout 20px (the twins), and no html.sr-timeline rule fixes a size of 36px or 48px', (() => { const tw = R.filter(r => /^html\.sr-timeline /.test(r.sel)); const btn = tw.find(r => r.sel === 'html.sr-timeline .ph-tl-btn'), ro = tw.find(r => r.sel === 'html.sr-timeline #ph-tl-readout'); return !!btn && /width:\s*var\(--target\)/.test(btn.body) && /height:\s*var\(--target\)/.test(btn.body) && !!ro && /height:\s*20px/.test(ro.body) && !R.filter(r => /sr-timeline/.test(r.sel)).some(r => /(^|[;\s])(min-)?(width|height)\s*:\s*(48|36)px/.test(r.body)); })());
+    check('the view needs no sheet: the toggle resets when the group loses ts-open (the open state of the inline group is the sheet\'s too) and sync() reads html.sr-timeline, not html.ph', /classList\.contains\('ts-open'\)/.test(TLV) && /classList\.contains\('sr-timeline'\)/.test(TLV) && !/classList\.contains\('ph'\)/.test(TLV));
+});
+
+T('trails-desktop', () => {
+    const region = CSS.slice(PHONE_END), R = rules(region), CHIPS_SRC = fs.readFileSync(process.env.UI_PHONE_CHIPS_JS || path.join(ROOT, 'ui-phone-chips.js'), 'utf8'), chipsCode = CHIPS_SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    const t = config.surfaces.trails, ih = t.hosts.inline;
+    check('the trails surface is ON at 768px and up (C0b-5): flag sr-trails; the inline host is a GROUP: the existing #face-colors-group gets a row host `sr-trails-host` (made by the engine, not in index.html) that holds the two containers ui-phone-chips.js makes; the phone host (the Spuren pane) is unchanged', t.inlineOn === true && t.flag === 'sr-trails' && ih.kind === 'group' && ih.id === 'face-colors-group' && ih.hostId === 'sr-trails-host' && JSON.stringify(ih.items) === '["ph-trail-chips","ph-trail-stepper"]' && t.hosts.phone.kind === 'pane' && t.hosts.phone.id === 'spuren' && HTML.indexOf('sr-trails-host') < 0);
+    check('the engine builds a group host by data: buildGroup() names no id, takes host.items into a div.sr-host with the config\'s hostId, appends it to the group, remembers it (groupHosts) and release() removes it after restoreAll(); the surface loop calls it for kind group', (() => { const m = /function buildGroup\(host, st\)[\s\S]*?\n    }\n/.exec(ENGINE.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')); return !!m && !/face-colors|ph-trail|sr-trails/.test(m[0]) && /host\.items/.test(m[0]) && /'sr-host'/.test(m[0]) && /host\.hostId/.test(m[0]) && /group\.appendChild\(h\)/.test(m[0]) && /groupHosts\.push\(h\)/.test(m[0]) && /host\.kind === 'group'\) buildGroup\(host, st\)/.test(ENGINE) && /groupHosts \|\| \[\]\)\.forEach\(function \(h\) \{ if \(h\.parentNode\) h\.parentNode\.removeChild\(h\)/.test(ENGINE); })());
+    const TR = R.filter(r => /^html\.sr-trails:not\(\.ph\)/.test(r.sel)), P = 'html.sr-trails:not(.ph) #face-colors-group > ';
+    const park = TR.find(r => r.sel === P + ':not(.sr-host)'), host = TR.find(r => r.sel === P + '.sr-host'), empty = TR.find(r => r.sel === 'html.sr-trails:not(.ph) .ph-chips-empty');
+    const grp = TR.find(r => r.sel === 'html.sr-trails:not(.ph) #face-colors-group');
+    check('the trails rules for 768px and up (4, all html.sr-trails:not(.ph), after the twins; C0b-6b): the group has a FIXED width of --canvas-size (at most 100%, auto margins, padding 0, left aligned: its left edge is the canvas\' left edge); the group\'s own children are PARKED (display: none, never removed: the list is the model); the host is a flex column, 8px gap, 100% of the group, left aligned; the muted line ellipsizes; nothing centres', TR.length === 4 && !!grp && /width:\s*var\(--canvas-size\)/.test(grp.body) && /max-width:\s*100%/.test(grp.body) && /margin-left:\s*auto/.test(grp.body) && /padding:\s*0\b/.test(grp.body) && /align-items:\s*flex-start/.test(grp.body) && /text-align:\s*left/.test(grp.body) && !!park && /display:\s*none/.test(park.body) && !!host && /display:\s*flex/.test(host.body) && /flex-direction:\s*column/.test(host.body) && /gap:\s*var\(--sp-2\)/.test(host.body) && /width:\s*100%/.test(host.body) && /align-items:\s*flex-start/.test(host.body) && !TR.some(r => /(justify-content|align-items|text-align):\s*center/.test(r.body) || /fit-content|max-content/.test(r.body)) && !!empty && /text-overflow:\s*ellipsis/.test(empty.body));
+    check('the chips and the stepper buttons follow the pointer token at 768px and up, never a fixed size: the trails twins use var(--target) and no html.sr-trails rule declares 48px or 36px', (() => { const tw = R.filter(r => /^html\.sr-trails /.test(r.sel)); const chip = tw.find(r => r.sel === 'html.sr-trails .ph-chip'); return !!chip && /width:\s*var\(--target\)/.test(chip.body) && /height:\s*var\(--target\)/.test(chip.body) && !R.filter(r => /sr-trails/.test(r.sel)).some(r => /(^|[;\s])(min-)?(width|height)\s*:\s*(48|36)px/.test(r.body)); })());
+    check('the view never writes the hover itself: ui-phone-chips.js has no assignment to faceHover; it forwards `mouseenter` / `mouseleave` to the model row (a plain MouseEvent that does not bubble) looked up by its key at that moment, and only for a MOUSE pointer', !/faceHover\s*=[^=]/.test(chipsCode) && /new Ev\(m\.type, \{ bubbles: false/.test(chipsCode) && /pointerType !== 'mouse'/.test(chipsCode) && /function rowByKey\(key\)[^\n]*dataset\.key === key/.test(chipsCode) && !/hoverRow\s*=|rowRef\s*=/.test(chipsCode));
+});
+
+T('netz-desktop', () => {
+    const region = CSS.slice(PHONE_END), R = rules(region), netz = R.filter(r => /^html\.sr-netz\b/.test(r.sel.split(',')[0].trim())), find = sel => netz.find(r => r.sel.split(',').map(x => x.trim()).includes(sel));
+    const body = r => (r ? r.body : '');
+    check('the Netz surface is ON at 768px and up: the inline host is the overlay itself; it decorates ONLY the fine Fokus input (steppers: [net-focus-exact]) and parks the typed strength field (park: [net-strength-exact]); the config\'s phone host is unchanged (every stepper, nothing parked)', config.surfaces.netz.inlineOn === true && config.surfaces.netz.hosts.inline.kind === 'overlay' && JSON.stringify(config.surfaces.netz.hosts.inline.steppers) === '["net-focus-exact"]' && JSON.stringify(config.surfaces.netz.hosts.inline.park) === '["net-strength-exact"]' && config.surfaces.netz.hosts.phone.steppers === undefined && config.surfaces.netz.hosts.phone.park === undefined);
+    check('the long hints are parked hidden under html.sr-netz, as on the phone: #net-focus-hint, #net-macro-hint, #net-field-hint, #net-field-info, #net-size-hint and the macro label are display: none', (() => { const r = netz.find(x => /#net-focus-hint/.test(x.sel)); return !!r && ['#net-focus-hint', '#net-macro-hint', '#net-field-hint', '#net-field-info', '#net-size-hint', '.ph-sheet-row #net-macro-row > label'].every(h => r.sel.indexOf('html.sr-netz ' + h) >= 0) && /display:\s*none/.test(r.body); })());
+    check('the readout line shows under html.sr-netz: `html.sr-netz #net-readout { display: block; ... }` (the base .net-readout is display: none)', /display:\s*block/.test(body(find('html.sr-netz #net-readout'))) && /\.net-readout \{ display: none; \}/.test(CSS.slice(0, CSS.indexOf('=== Phone layout ('))));
+    check('control sizes follow the pointer token, never a fixed 48px: the domain and Alternate buttons, the macro buttons and the exact fields use var(--target); no html.sr-netz rule declares width, height or min-height as 48px', /width:\s*var\(--target\)/.test(body(find('html.sr-netz .ph-sheet-row .net-domain-btn'))) && /height:\s*var\(--target\)/.test(body(find('html.sr-netz .ph-sheet-row .net-domain-btn'))) && /min-height:\s*var\(--target\)/.test(body(find('html.sr-netz .ph-sheet-row #net-macro-buttons .layer-btn'))) && /height:\s*var\(--target\)/.test(body(find('html.sr-netz .ph-sheet-row > input.exact-field'))) && !netz.some(r => /(^|[;\s])(min-)?(width|height)\s*:\s*48px/.test(r.body)));
+    const dk = R.filter(r => /^html\.sr-netz:not\(\.ph\)/.test(r.sel));
+    const grp = dk.find(r => r.sel === 'html.sr-netz:not(.ph) #more-netz.ph-sheet-rows > #net-group'), grpH = dk.find(r => r.sel === 'html.sr-netz:not(.ph) #more-netz.ph-sheet-rows > #net-group[hidden]');
+    check('the leftover #net-group (XY / X / Y and the Net lines icon) is SHOWN again at 768px and up by html.sr-netz:not(.ph), as one left aligned flex ROW (wrapping, 8px gaps), and keeps its own hidden attribute: it comes after the twin that hides it on the phone (equal-or-lower specificity would lose)', !!grp && !!grpH && /display:\s*flex/.test(grp.body) && /flex-direction:\s*row/.test(grp.body) && /justify-content:\s*flex-start/.test(grp.body) && /gap:\s*var\(--sp-2\)/.test(grp.body) && /display:\s*none/.test(grpH.body) && region.indexOf('html.sr-netz:not(.ph)') > region.indexOf('html.sr-netz #more-netz.ph-sheet-rows > .overlay-section'));
+    check('the phone-only parts are not here: no rule of the Netz surface mentions the sheet host (.ph-sheet without -rows/-row/-block), the scroll lock, the panel (.ph-slot) or html.ph', netz.every(r => !/\.ph-sheet(?![-\w])|\.ph-slot|html\.ph\b/.test(r.sel)));
+    const ui = fs.readFileSync(path.join(ROOT, 'ui-net.js'), 'utf8');
+    check('ui-net.js gives the icon-only toggles Net lines, Reverse and Alternate aria-pressed (UI.pressed follows sketch.js\'s active class): a control without text must say its state', /\[\$\('#net-lines-btn'\), reverseBtn, \$\('#net-alternate-btn'\)\]\.forEach\(function \(b\) \{ if \(b\) UI\.pressed\(b\); \}\);/.test(ui));
+    check('ui-net.js locks the Fokus exact field from the hidden Fokus row too (the layout\'s follow rule is the phone\'s): reasonFocus() ends with focusRowEl.hidden -> UI.t("net.reason.focus")', /function reasonFocus\(\)[^\n]*focusRowEl && focusRowEl\.hidden \? UI\.t\('net\.reason\.focus'\)/.test(ui) && /const focusRowEl = \$\('#net-focus-row'\)/.test(ui));
+});
+
+T('structure', () => {
+    const marker = CSS.indexOf('=== Phone layout (');
+    const block = CSS.slice(marker, PHONE_END);
+    const NAMES = ['PAGE LAYOUT (patterns C0a', 'SHARED (patterns C0a', 'OTHER SURFACES (patterns C0a', 'SURFACE: TRAILS (patterns C0a', 'SURFACE: NETZ (patterns C0a', 'SURFACE: LAYER SHEET (patterns C0a', 'SURFACE: TIMELINE (patterns C0a'];
+    const pos = NAMES.map(n => block.indexOf(n));
+    check('the phone block has its seven banner-delimited blocks, each once and in this order: PAGE LAYOUT, SHARED, OTHER SURFACES, TRAILS, NETZ, LAYER SHEET, TIMELINE', pos.every((x, i) => x > 0 && block.indexOf(NAMES[i], x + 1) < 0 && (i === 0 || x > pos[i - 1])), pos.join());
+    const gate = block.indexOf('@media (max-width: 767px) {');
+    check('the blocks sit inside the ONE phone media query: it opens before the first banner and no other top-level @media (max-width: 767px) follows the marker', gate > 0 && gate < pos[0] && block.indexOf('@media (max-width: 767px) {', gate + 1) < 0);
+    // the rules of each block: a banner starts a block and the next banner ends it (the last one ends before the media query's closing brace)
+    const cut = (a, b) => block.slice(block.lastIndexOf('/*', a), b < 0 ? block.lastIndexOf('}') : block.lastIndexOf('/*', b));
+    const seg = NAMES.map((n, i) => rules(cut(pos[i], i + 1 < pos.length ? pos[i + 1] : -1).replace(/^\s*\/\*[\s\S]*?\*\//, '')));
+    const all = rules(block.slice(block.indexOf('*/') + 2));
+    check('the seven blocks hold every rule of the phone block exactly once (' + seg.map(x => x.length).join(' + ') + ' = ' + all.length + ')', seg.reduce((n, x) => n + x.length, 0) === all.length && all.length > 100 && seg.every(x => x.length >= 3));
+    check('the blocks hold 39 / 11 / 5 / 9 / 29 / 3 / 28 rules: a dropped or an added rule changes a count (change the numbers with the rule, and say in which block it belongs)', seg.map(x => x.length).join(' / ') === '39 / 11 / 5 / 9 / 29 / 3 / 28', seg.map(x => x.length).join(' / '));
+    // no rule twice (the same media chain, selector and body)
+    const keys = all.map(r => r.at.join('>') + '|' + r.sel.replace(/\s+/g, ' ') + '|' + r.body.replace(/\s+/g, ' ').trim());
+    const dup = keys.filter((k, i) => keys.indexOf(k) !== i);
+    check('no rule appears twice in the phone block (same media chain, selector and declarations)', dup.length === 0, dup.map(k => k.split('|')[1]).slice(0, 4).join(' ; ') || all.length + ' rules, all different');
+    const selTwice = keys.map(k => k.split('|').slice(0, 2).join('|')).filter((k, i, a) => a.indexOf(k) !== i);
+    check('no selector is restated in the same media chain (a second rule for one selector would be a cascade you cannot see in the block)', selTwice.length === 0, selTwice.map(k => k.split('|')[1]).slice(0, 4).join(' ; ') || 'none');
+    // a surface's class names only occur in its own block
+    const SURF = [
+        ['TRAILS', /\.ph-chip|\.ph-trail/, 3], ['TIMELINE', /\.ph-tl-|#ph-tl-|#timeline-|ts-open/, 6], ['LAYER SHEET', /#layer-more-panel/, 5],
+        ['NETZ', /#more-netz|#net-|\.net-kind-btn|\.net-domain-btn|exact-field/, 4]];
+    SURF.forEach(([name, re, bi]) => {
+        const where = seg.map((x, i) => x.filter(r => re.test(r.sel)).length);
+        check(name + ': every rule that names its classes sits in its own block (' + where.join('/') + ' per block, all in block ' + (bi + 1) + ')', where.every((n, i) => i === bi || n === 0) && where[bi] > 0, where.join());
+    });
+    const pageSel = seg[0].map(r => r.sel).join(' ; ');
+    check('PAGE LAYOUT names no surface: no chip, trail, timeline, Netz or layer-sheet selector in it', !/\.ph-chip|\.ph-trail|\.ph-tl-|#timeline-|#more-netz|#net-|#layer-more-panel|\.ph-sheet/.test(pageSel));
+    const shared = seg[1].map(r => r.sel).join(' ; ');
+    check('SHARED holds only the sheet host, the rows and blocks of the sheets in rows, the wrapping row and the panel slot\'s [hidden] rule', seg[1].every(r => /^html\.ph \.ph-sheet|^html\.ph \.ph-slot \[hidden\]/.test(r.sel.split(',')[0].trim())) && /\.ph-sheet-row-wrap/.test(shared));
+    // order: the rule a [hidden] variant or a narrower-width variant modifies comes first
+    const order = [], parts = r => r.sel.split(',').map(x => x.trim());
+    all.forEach((r, i) => {
+        parts(r).filter(x => /\[hidden\]/.test(x)).forEach(x => {
+            const base = x.replace(/\[hidden\]/g, '');
+            const j = all.findIndex(q => q.at.join() === r.at.join() && parts(q).includes(base));
+            if (j >= 0 && j > i) order.push(x + ' before ' + base);
+        });
+        if (r.at.length > 1) {
+            const j = all.findIndex(q => q.at.length === 1 && q.sel === r.sel);
+            if (j > i) order.push(r.sel + ' (narrow) before its base rule');
+        }
+    });
+    check('every [hidden] variant and every narrower-width variant comes AFTER the rule it modifies (the cascade of equal specificity is the source order)', order.length === 0, order.join(' ; ') || 'all in order');
+    const pairs = [['html.ph .ph-sep', 'html.ph .ph-row > .ph-sep'], ['html.ph .ph-sheet', 'html.ph .ph-sheet.ph-sheet-rows'], ['html.ph .ph-sheet-block', 'html.ph .ph-sheet-block > .ph-sheet-row'], ['html.ph .ph-tl-sep', 'html.ph .ph-tl-variant .ph-tl-sep'], ['html.ph .ph-tl-chips', 'html.ph .ph-tl-chip']];
+    check('the pairs of rules that style one element in layers keep the base first (' + pairs.map(p => p[1].split(' ').pop()).join(', ') + ')', pairs.every(p => { const a = all.findIndex(r => r.sel === p[0] && r.at.length === 1), b = all.findIndex(r => r.sel === p[1] && r.at.length === 1); return a >= 0 && b >= 0 && a < b; }));
+    const sepAt = ['', '@media (max-width: 365px)', '@media (max-width: 349px)', '@media (max-width: 339px)'].map(a => all.findIndex(r => r.sel === 'html.ph .ph-sep' && (r.at[1] || '') === a));
+    check('the separator margin: the base rule, then the 365, 349 and 339px variants in THIS order (equal specificity: the narrowest, later one wins)', sepAt.every((x, i) => x >= 0 && (i === 0 || x > sepAt[i - 1])), sepAt.join());
+    // every rule is still gated: media query + html.ph
+    check('EVERY rule of the seven blocks is inside @media (max-width: 767px) and EVERY selector starts with html.ph (the media query is the one opened before the first banner, checked above)', all.length > 100 && all.every(r => r.at[0] === '@media (max-width: 767px)' && r.sel.split(',').every(s => /^\s*html\.ph(\s|$|\[|\.|:)/.test(s))));
+    check('the legacy narrow-width rules (not html.ph: the old wrapped rows) stay ABOVE the marker, untouched by the reorganization: the six other @media (max-width: 767px) blocks of style.css', (CSS.slice(0, marker).match(/@media \(max-width: 767px\)/g) || []).length === 6);
+});
+
+T('twins', () => {
+    const marker = CSS.indexOf('=== Phone layout (');
+    const phone = rules(CSS.slice(marker, PHONE_END).slice(CSS.slice(marker, PHONE_END).indexOf('*/') + 2));
+    check('the surfaces region ("=== Surfaces (") exists once, after the phone block, and is the LAST thing in style.css (the phone block ends with its media query before it)', SURF_MARK > marker && CSS.indexOf('=== Surfaces (', SURF_MARK + 1) < 0 && /\}\s*$/.test(CSS.slice(marker, PHONE_END)));
+    const region = CSS.slice(PHONE_END);
+    const ban = ['NEUTRAL HOST CLASSES (html.sr)', 'TOKENS (html.sr)', 'SHARED ROWS AND BLOCKS (html.sr)', 'TRAILS (html.sr-trails)', 'NETZ SHEET (html.sr-netz)', 'NETZ AT 768PX AND UP (html.sr-netz:not(.ph))', 'TRAILS AT 768PX AND UP (html.sr-trails:not(.ph))', 'TIMELINE (html.sr-timeline)', 'TIMELINE AT 768PX AND UP (html.sr-timeline:not(.ph))'];
+    const bpos = ban.map(b => region.indexOf(b));
+    check('the region has its nine banner-delimited blocks, each once and in this order: neutral host classes, tokens, shared rows and blocks, trails, Netz sheet, Netz at 768px and up, trails at 768px and up, timeline, timeline at 768px and up', bpos.every((x, i) => x > 0 && region.indexOf(ban[i], x + 1) < 0 && (i === 0 || x > bpos[i - 1])), bpos.join());
+    const cut = (i) => region.slice(region.lastIndexOf('/*', bpos[i]), i + 1 < bpos.length ? region.lastIndexOf('/*', bpos[i + 1]) : region.length).replace(/^\s*\/\*[\s\S]*?\*\//, '');
+    const seg = ban.map((b, i) => rules(cut(i)));
+    check('the rules per block: 9 neutral / 1 tokens / 7 shared / 9 trails / 22 Netz twins / 10 Netz at 768px and up / 4 trails at 768px and up / 27 timeline / 3 timeline at 768px and up (the 65 twins of phone rules and the 9 neutral host twins; the token rule and the seventeen desktop rules are not twins)', seg.map(x => x.length).join(' / ') === '9 / 1 / 7 / 9 / 22 / 10 / 4 / 27 / 3', seg.map(x => x.length).join(' / '));
+    const TW = [0, 2, 3, 4, 7];                       // the blocks whose rules are twins of phone rules
+    const all = TW.flatMap(i => seg[i]);
+    const GATES = { 0: /^html\.sr /, 2: /^html\.sr /, 3: /^html\.sr-trails /, 4: /^html\.sr-netz /, 7: /^html\.sr-timeline / };
+    const parts = r => r.sel.split(',').map(x => x.trim());
+    check('every selector of a twin starts with the gate of its block (html.sr, html.sr, html.sr-trails, html.sr-netz, html.sr-timeline) and nothing in the region mentions html.ph', TW.every(i => seg[i].every(r => parts(r).every(q => GATES[i].test(q) && !/html\.ph/.test(q)))) && seg.flat().every(r => !/html\.ph/.test(r.sel)));
+    check('NO rule of the region is inside the phone media query: the media queries are the narrower-width variants only (max-width 339 and 354), never @media (max-width: 767px)', seg.flat().every(r => !r.at.some(a => /767px/.test(a)) && r.at.every(a => /^@media \(max-width: (339|354)px\)$/.test(a))), [...new Set(seg.flat().map(r => r.at.join('>')))].join(' | '));
+    check('nothing outside the region mentions html.sr: not the phone block, not the CSS above it', !/html\.sr\b/.test(CSS.slice(0, PHONE_END)));
+    // each twin has an original: the same rule with html.ph back, same media chain, same declarations
+    const norm = x => x.replace(/\s+/g, ' ').trim();
+    const NEUTRAL = [['html.sr .sr-pane', 'html.ph .ph-pane'], ['html.sr .sr-row', 'html.ph .ph-row'], ['html.sr .sr-host .icon-btn', 'html.ph .ph-slot .icon-btn'], ['html.sr .sr-host .nav-cluster', 'html.ph .ph-slot .nav-cluster'],
+        ['html.sr .sr-host .icon-btn[aria-disabled="true"]', 'html.ph .ph-slot .icon-btn[aria-disabled="true"]'], ['html.sr .sr-row > .ph-sep', 'html.ph .ph-row > .ph-sep'], ['html.sr .sr-row-scroll', 'html.ph .ph-row-scroll'],
+        ['html.sr .sr-row-scroll::-webkit-scrollbar', 'html.ph .ph-row-scroll::-webkit-scrollbar'], ['html.sr .sr-row-scroll > *', 'html.ph .ph-row-scroll > *']];
+    const origOf = (r, i) => i === 0 ? (NEUTRAL.find(n => n[0] === r.sel) || [])[1] : parts(r).map(q => q.replace(/^html\.sr(-[a-z]+)?/, 'html.ph')).join(', ');
+    const missing = [], bodyDiff = [];
+    TW.forEach(i => seg[i].forEach(r => {
+        const o = origOf(r, i);
+        const cand = phone.filter(q => q.at.slice(1).join() === r.at.join() && (i === 0 ? parts(q).includes(o) : norm(q.sel) === norm(o)));
+        if (!cand.length) missing.push(r.sel); else if (!cand.some(q => norm(q.body) === norm(r.body))) bodyDiff.push(r.sel);
+    }));
+    check('every twin has its original in the phone block (selector with html.ph put back, the same narrower-width chain) (' + all.length + ' twins)', missing.length === 0, missing.slice(0, 3).join(' ; ') || 'all found');
+    check('the declarations of every twin are EXACTLY those of its original (same properties, same values, same order)', bodyDiff.length === 0, bodyDiff.slice(0, 3).join(' ; ') || 'all equal');
+    // the rules that are not twins: the tokens (the four spacings, the values of the phone block's html.ph rule; --target is not among them) and the two desktop rules of the Netz surface
+    const phTok = phone.find(r => r.sel === 'html.ph' && !r.at.slice(1).length), tokOf = (b) => { const o = {}; b.replace(/--sp-(\d):\s*([^;]+);/g, (m, n, v) => { o[n] = v.trim(); return m; }); return o; };
+    check('the token rule is `html.sr { --sp-1 .. --sp-4 }` with the values of the phone block\'s html.ph rule (4, 8, 16, 32px) and defines nothing else: no --target (it follows the pointer), no panel or canvas token', seg[1].length === 1 && seg[1][0].sel === 'html.sr' && JSON.stringify(tokOf(seg[1][0].body)) === JSON.stringify(tokOf(phTok.body)) && Object.keys(tokOf(seg[1][0].body)).join() === '1,2,3,4' && (seg[1][0].body.match(/--[a-z0-9-]+\s*:/g) || []).length === 4);
+    const bd = r => (r ? r.body : ''), D = seg[5], dsel = D.map(r => r.sel), dby = sel => D.find(r => r.sel === sel);
+    const P = 'html.sr-netz:not(.ph) #more-netz';
+    check('the Netz rules for 768px and up (10): every one is html.sr-netz:not(.ph) (one class more than the twins they follow) and they come AFTER the twins of the Netz sheet', D.length === 10 && dsel.every(x => /^html\.sr-netz:not\(\.ph\) /.test(x.split(',')[0].trim())) && bpos[5] > bpos[4]);
+    check('...LEFT aligned, no centring: the overlay has align-items: flex-start and text-align: left, the leftover group and its icon rows justify-content: flex-start, and no rule of the region says center for justify-content, align-items on a column or text-align', /align-items:\s*flex-start/.test(bd(dby(P + '.ph-sheet-rows'))) && /text-align:\s*left/.test(bd(dby(P + '.ph-sheet-rows'))) && /justify-content:\s*flex-start/.test(bd(dby(P + ' #net-group .icon-row'))) && D.every(r => !/justify-content:\s*center|text-align:\s*center/.test(r.body)));
+    check('...the old Fokus row (heading and the 0.1 stepper) and the empty strength row are parked hidden (display: none), the DOM keeps them for sketch.js', /display:\s*none/.test(bd(dby(P + ' #net-focus-row, ' + P + ' #net-strength-row'))));
+    check('...Net lines and Reverse are icon buttons: --target square, a ::before drawn with a mask (the mechanism of the domain icons), no text; Reverse hides again with its [hidden]', /width:\s*var\(--target\)/.test(bd(dby(P + ' #net-lines-btn, ' + P + ' #net-reverse-btn'))) && /height:\s*var\(--target\)/.test(bd(dby(P + ' #net-lines-btn, ' + P + ' #net-reverse-btn'))) && /mask:\s*url\(/.test(bd(dby(P + ' #net-lines-btn::before'))) && /mask:\s*url\(/.test(bd(dby(P + ' #net-reverse-btn::before'))) && /display:\s*none/.test(bd(dby(P + ' #net-reverse-btn[hidden]'))));
+    check('...the axes buttons are at least --target wide (XY / X / Y: a glyph each)', /min-width:\s*var\(--target\)/.test(bd(dby(P + ' .net-axes-btn'))));
+    const rv = phone.filter(r => /#net-reverse-btn/.test(r.sel));
+    check('the phone: Reverse in the Art panel is an icon too (C0b-4): html.ph .ph-slot #net-reverse-btn is --target square with a mask ::before and hides with [hidden]; the three rules sit in the Netz block of the phone block and have NO twin (the panel does not exist at 768px and up)', rv.length === 3 && rv.every(r => /^html\.ph \.ph-slot #net-reverse-btn/.test(r.sel)) && /width:\s*var\(--target\)/.test(rv[0].body) && /mask:\s*url\(/.test(rv[1].body) && /display:\s*none/.test(rv[2].body) && (() => { const a = CSS.indexOf('SURFACE: NETZ (patterns C0a'), b = CSS.indexOf('SURFACE: LAYER SHEET (patterns C0a'), at = CSS.indexOf('html.ph .ph-slot #net-reverse-btn {'); return a > 0 && b > a && at > a && at < b; })());
+    check('no rule of the region forces --target (html.ph does; a gate must not): no `--target:` declaration in it', !/--target\s*:/.test(region));
+    // the 20 rules that stay phone-only have no twin (the sheet host, the panel, the notices, the Netz panel buttons and the Net lines and Reverse icons, the layer sheet, the rail sheet, the dialogs, the timeline group box)
+    const PHONE_ONLY = ['html.ph .ph-sheet', 'html.ph .ph-sheet .control-group', 'html.ph .ph-sheet.ph-sheet-rows', 'html.ph .ph-slot [hidden]', 'html.ph .ph-slot .net-kind-btn', 'html.ph .ph-slot .layer-btn', 'html.ph .ph-toolrow #net-lines-btn',
+        'html.ph .ph-toolrow #net-lines-btn::before', 'html.ph .ph-slot #net-reverse-btn', 'html.ph .ph-slot #net-reverse-btn::before', 'html.ph .ph-slot #net-reverse-btn[hidden]', 'html.ph #timeline-group, html.ph #timeline-group:not(.ts-open)', 'html.ph #layer-more-panel .stepper > input[type="number"]', 'html.ph .ph-sheet-row .control-group > input[type="number"]',
+        'html.ph .dialog-content', 'html.ph .dialog-content button', 'html.ph #more-rail .more-settings', 'html.ph[data-tab="farbe"] #more-rail > .more-row:not(.more-extra)', 'html.ph .ph-slot #farbe-anchor-preview', 'html.ph .notices', 'html.ph.overlay-open .notices'];
+    const twinSels = new Set(all.flatMap(r => parts(r).map(q => q.replace(/^html\.sr(-[a-z]+)?/, 'html.ph'))));
+    const stray = PHONE_ONLY.filter(sel => sel.split(',').map(q => q.trim()).some(q => twinSels.has(q)));
+    check('the phone-only rules have NO twin (' + PHONE_ONLY.length + ' listed: sheet host, panel, notices, Netz panel buttons, Net lines and Reverse icons, layer sheet, rail sheet, dialogs, the timeline group box)', stray.length === 0 && PHONE_ONLY.every(sel => phone.some(r => norm(r.sel) === norm(sel))), stray.join(' ; ') || 'none');
+    // the order of the twins inside a block is the order of their originals
+    let orderBad = [];
+    [2, 3, 4, 6].forEach(bi => {
+        const x = seg[bi], idx = x.map(r => { const o = origOf(r, bi); return phone.findIndex(q => q.at.slice(1).join() === r.at.join() && norm(q.sel) === norm(o)); });
+        for (let k = 1; k < idx.length; k++) if (idx[k] < idx[k - 1]) orderBad.push(x[k].sel);
+    });
+    check('the twins keep the relative order of their originals within every block (the cascade of equal specificity is the source order)', orderBad.length === 0, orderBad.slice(0, 3).join(' ; ') || 'in order');
+    check('every [hidden] variant and every narrower-width variant of the twins comes AFTER the rule it modifies', all.every((r, i) => parts(r).filter(q => /\[hidden\]/.test(q)).every(q => { const base = q.replace(/\[hidden\]/g, ''); const j = all.findIndex(o => o.at.join() === r.at.join() && parts(o).includes(base)); return j < 0 || j < i; })));
+    // the gates are only set by the engine (a class of <html>)
+    const scripts = ['sketch.js', 'ui.js', 'ui-phone.js', 'ui-phone-chips.js', 'ui-phone-timeline.js', 'ui-phone-pairing.js', 'ui-net.js', 'ui-layers.js', 'ui-timeline.js', 'ui-rail.js', 'ui-farbe.js', 'nav.js'].map(f => [f, fs.readFileSync(path.join(ROOT, f), 'utf8')]);
+    const setters = scripts.filter(([f, t]) => /classList\.(add|toggle)\(\s*['"]sr(-[a-z]+)?['"]/.test(t) || /classList\.add\(\s*surfaceState\[/.test(t) || /classList\.add\(sf\.flag|classList\.add\(st\.flag/.test(t));
+    check('ONLY the engine sets a gate class (html.sr and the flags of the surface registry): ui-phone.js, in setSurfaceFlags(); no other script', setters.map(x => x[0]).join() === 'ui-phone.js', setters.map(x => x[0]).join() || 'no script');
+    check('no markup uses the new classes: index.html has no class "sr", "sr-host", "sr-pane", "sr-row" or "sr-row-scroll" (the neutral classes are made by the engine later)', !/class="[^"]*\bsr(-host|-pane|-row|-row-scroll)?\b/.test(HTML));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

@@ -833,9 +833,11 @@ function setDistributionStrategyFor(sheet, strategy) {
     if (layer) layer.distributionStrategy = strategy;
 }
 
-// The trail key to outline on `sheet`'s faces right now (hover), or null.
+// The trail key to outline on `sheet`'s faces right now: the hovered trail of that sheet, else its selected trail (the chip view), or null.
+// typeof: a page or a test that loads this file without core/state.js has no faceSelected.
 function faceHighlightKeyFor(sheet) {
-    return faceHover && faceHover.sheet === sheet ? faceHover.key : null;
+    if (faceHover && faceHover.sheet === sheet) return faceHover.key;
+    return typeof faceSelected !== 'undefined' && faceSelected && faceSelected.sheet === sheet ? faceSelected.key : null;
 }
 
 // ----------------- CROSSFADE: LIVE GLUE ------------------------------

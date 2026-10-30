@@ -23,6 +23,13 @@
  *   items      an item of a sheet's or overlay's row may carry `gate: 'class'`: it counts as hidden unless the sheet's content has that class (the timeline sheet's pairing editor: the toggle of ui-phone-timeline.js).
  *   sheets.<id>.steppers  (optional) inputId -> { icon, step, round?, min?, max?, wrap?, noTyping?, name, more, less }: an existing input that the engine wraps into a stepper (UI.stepper) while the layout is on and unwraps at
  *              release() (commit 3b). icons: key -> [stroke paths], the icons of those steppers and the two chevrons (chevron-up, chevron-down).
+ *   surfaces   THE SURFACE REGISTRY (patterns commit C0b-2): name -> { tabs, flag, hosts, inlineOn }. A surface is a piece of content with a compact arrangement of its own: the layer sheet, the timeline sheet, the Netz sheet
+ *              (the overlay #more-netz) and the colour trails (the Spuren chips). tabs: where it applies. flag: the class the engine puts on <html> while it is applied (null for none) - together with `sr` (any surface
+ *              applied) it is the gate of the twin rules in style.css and what the view modules read instead of `ph`. hosts.phone: what holds it while the phone layout is on - { kind: 'sheet', id } (config.sheets.<id>:
+ *              a bottom sheet), { kind: 'overlay', id } (config.overlays.<id>: an overlay that exists), { kind: 'pane', id } (the layout's sub-tab pane holds the rows: nothing to build). hosts.inline: where it would sit at
+ *              768px and up: { kind: 'overlay', id, steppers?, park? } (the Netz overlay builds its rows in place) or { kind: 'group', id, hostId, items } (the engine makes a row host `hostId` inside the existing group `id` and moves the containers a view made - `items` - into it; release() puts them back and removes the host: the colour trails) or { kind: 'content', id, sheet, blocks? } (the blocks of the sheet `sheet` are built inside the existing content element `id` itself, no host and no sheet; `blocks` = which of the sheet's blocks, by number: the timeline group at 768px and up builds all three). inlineOn: the switch for the inline mode - ON for netz (C0b-3), trails (C0b-5) and timeline (C0b-6a), OFF for layer. The blocks and steppers stay in
+ *              config.sheets / config.overlays; tabs.<tab>.sheets / .overlays must list exactly the surfaces of that tab (validate()).
+ *   layoutSwitch  [[global, method], ...]: called (when it exists) whenever the phone layout is built or released: a view whose UI state belongs to one arrangement resets (the timeline's pairing toggle).
  *   afterShow  id -> [global, method]: called (when it exists) after the element moved into the visible panel - a moved element loses its scroll position.
  */
 (function (root) {
@@ -104,9 +111,9 @@
       // the chip view of the trails (ui-phone-chips.js makes both containers; the model is the hidden #face-colors-list)
       spuren: { label: 'Spuren', i18n: 'subtab.spuren', rows: [{ items: [{ id: 'ph-trail-chips', fluid: true }] }, { items: [{ id: 'ph-trail-stepper', fluid: true }] }] },
       // Netz (commit 3). Art: row 1 = the four kinds (Aus, Sin, Tan, Geo: 4 x 60 + 3 gaps = 264), row 2 = the strength stepper, the panel's own More (#more-netz: the domain, Macro, the exact fields, Alternate and the
-      // hints stay in it) and Reverse LAST (sketch.js shows it for Geo only: More keeps its place whether or not Reverse is there; 117 + 8 + 48 + 8 + 74 = 255). Achsen: row 1 = Both / X / Y, row 2 = the Fokus stepper (sketch.js shows its row for Sin and Tan only: disabled with a reason otherwise, see `follow`).
-      art: { label: 'Art', i18n: 'subtab.art', rows: [{ items: [{ id: 'nav-kinds', w: 264 }] }, { items: [{ id: 'net-strength-stepper', w: 117, wMin: 109 }, { id: 'btn-more-netz', w: 48 }, { id: 'net-reverse-btn', w: 74 }] }] },
-      achsen: { label: 'Achsen', i18n: 'subtab.achsen', rows: [{ items: [{ id: 'net-axes-row', w: 158 }] }, { items: [{ id: 'net-focus-stepper', w: 117, wMin: 109 }] }] }
+      // hints stay in it) and Reverse LAST, an icon (sketch.js shows it for Geo only: More keeps its place whether or not Reverse is there; 117 + 8 + 48 + 8 + 48 = 229). Achsen: row 1 = XY / X / Y, row 2 = the Fokus stepper (sketch.js shows its row for Sin and Tan only: disabled with a reason otherwise, see `follow`).
+      art: { label: 'Art', i18n: 'subtab.art', rows: [{ items: [{ id: 'nav-kinds', w: 264 }] }, { items: [{ id: 'net-strength-stepper', w: 117, wMin: 109 }, { id: 'btn-more-netz', w: 48 }, { id: 'net-reverse-btn', w: 48 }] }] },
+      achsen: { label: 'Achsen', i18n: 'subtab.achsen', rows: [{ items: [{ id: 'net-axes-row', w: 154 }] }, { items: [{ id: 'net-focus-stepper', w: 117, wMin: 109 }] }] }
     },
     // Bottom sheets (1b): a block that stays inline above 768px and in the tabs that are not covered moves into a sheet (UI.overlay) while the layout is on. The sheet FOLLOWS the block's own open state - the
     // "..." button's existing handler flips it, nothing here toggles it - and closing the sheet (Escape, the scrim, a tap outside, a resize) closes that state by clicking the button once more.
@@ -198,7 +205,16 @@
         ]
       }
     },
-    afterShow: { 'layer-strip': ['layerTable', 'revealActive'], 'ph-trail-chips': ['uiPhoneChips', 'refresh'] }
+    // The surface registry (see the header). The order is the order the engine applies them in: the sheets in their stack order, then the overlay. The inline switches: OFF for layer (it turns its own on in its commit); ON for timeline since C0b-6a (the icon row and the readout inside #timeline-group at 768px and up) and C0b-6b (the pairing view: its blocks 2 and 3 too); ON for trails since C0b-5 (the chip view in the Face Colors group at 768px and up: the group's own rows are parked by the CSS); ON for netz since C0b-3 (the overlay content at 768px and up). Its inline host (C0b-4) decorates only the fine Fokus input (`steppers`: a list of the overlay's stepper ids) and leaves the typed strength field where it is (`park`: ids of the blocks that are not built; the section they sit in is hidden by the CSS - the strength is edited in the panel's stepper there).
+    surfaces: {
+      layer: { tabs: ['form', 'farbe', 'netz'], flag: null, hosts: { phone: { kind: 'sheet', id: 'layer' } }, inlineOn: false },
+      timeline: { tabs: ['form', 'farbe', 'netz'], flag: 'sr-timeline', hosts: { phone: { kind: 'sheet', id: 'timeline' }, inline: { kind: 'content', id: 'timeline-group', sheet: 'timeline', blocks: [0, 1, 2] } }, inlineOn: true },
+      netz: { tabs: ['netz'], flag: 'sr-netz', hosts: { phone: { kind: 'overlay', id: 'netz' }, inline: { kind: 'overlay', id: 'netz', steppers: ['net-focus-exact'], park: ['net-strength-exact'] } }, inlineOn: true },
+      trails: { tabs: ['farbe'], flag: 'sr-trails', hosts: { phone: { kind: 'pane', id: 'spuren' }, inline: { kind: 'group', id: 'face-colors-group', hostId: 'sr-trails-host', items: ['ph-trail-chips', 'ph-trail-stepper'] } }, inlineOn: true }
+    },
+    afterShow: { 'layer-strip': ['layerTable', 'revealActive'], 'ph-trail-chips': ['uiPhoneChips', 'refresh'] },
+    // views whose UI state belongs to one arrangement: called when the phone layout is built and when it is released (the width crosses 768px, a tab change inside the phone layout): the timeline view's pairing toggle is off again and the pairing view, which sees that, leaves its list (C0b-6b); the ORDER matters
+    layoutSwitch: [['uiPhoneTimeline', 'reset'], ['uiPhonePairing', 'refresh']]
   };
 
   // a follow entry is a string (the id of the block; mode 'hide') or { of, mode, reason }
@@ -373,7 +389,50 @@
         });
       });
     });
+    // the surface registry: every surface has tabs, a flag (null or an sr-... class, unique), a phone host that exists, and the inline switch (a boolean); an inline host only where the switch is on, and one the engine builds
+    const ENGINE_INLINE_KINDS = ['overlay', 'group', 'content'], PHONE_KINDS = ['sheet', 'overlay', 'pane'], flags = {};
+    const reg = cfg.surfaces;
+    if (!reg || typeof reg !== 'object' || !Object.keys(reg).length) bad.push('surfaces: no registry');
+    Object.keys(reg || {}).forEach(function (name) {
+      const sf = reg[name], where = 'surface ' + name;
+      if (!Array.isArray(sf.tabs) || !sf.tabs.length || sf.tabs.some(function (t) { return !cfg.tabs[t]; })) bad.push(where + ': tabs must be a non-empty list of tabs');
+      if (sf.flag !== null && !(typeof sf.flag === 'string' && /^sr-[a-z]+$/.test(sf.flag))) bad.push(where + ': the flag must be null or a class sr-<name>');
+      else if (sf.flag) { if (flags[sf.flag]) bad.push(where + ': the flag ' + sf.flag + ' is also the flag of ' + flags[sf.flag]); flags[sf.flag] = name; }
+      if (typeof sf.inlineOn !== 'boolean') bad.push(where + ': no inline switch (inlineOn must be true or false)');
+      const ph = (sf.hosts || {}).phone;
+      if (!ph || PHONE_KINDS.indexOf(ph.kind) < 0 || typeof ph.id !== 'string') bad.push(where + ': no phone host (kind sheet, overlay or pane, with an id)');
+      else if (ph.kind === 'sheet' && !(cfg.sheets || {})[ph.id]) bad.push(where + ': phone host sheet ' + ph.id + ' is not defined');
+      else if (ph.kind === 'overlay' && !(cfg.overlays || {})[ph.id]) bad.push(where + ': phone host overlay ' + ph.id + ' is not defined');
+      else if (ph.kind === 'pane' && !cfg.subtabs[ph.id]) bad.push(where + ': phone host pane ' + ph.id + ' is not a sub-tab');
+      if (sf.inlineOn === true) {
+        const ih = (sf.hosts || {}).inline;
+        if (!ih || typeof ih.id !== 'string') bad.push(where + ': the inline switch is on but there is no inline host');
+        else if (ENGINE_INLINE_KINDS.indexOf(ih.kind) < 0) bad.push(where + ': the inline switch is on but the engine builds no inline host of kind ' + ih.kind);
+        else if (ih.kind === 'group') {
+          if (!known(ih.id)) bad.push(where + ': the inline host group ' + ih.id + ' is not in index.html');
+          if (typeof ih.hostId !== 'string' || !ih.hostId) bad.push(where + ': the inline host group has no hostId (the id of the row host the engine makes)');
+          else if (known(ih.hostId)) bad.push(where + ': the hostId ' + ih.hostId + ' is also an id of index.html or of a script');
+          if (!Array.isArray(ih.items) || !ih.items.length) bad.push(where + ': the inline host group lists no items (the containers a view made: ids the engine moves into the host)');
+          else ih.items.forEach(function (id) { if (!known(id)) bad.push(where + ': the inline host group item ' + id + ' is neither in index.html nor made by a script'); });
+        } else if (ih.kind === 'content') {
+          const sh = (cfg.sheets || {})[ih.sheet];
+          if (!sh) bad.push(where + ': the inline host content names the sheet ' + ih.sheet + ', which is not defined');
+          else if (sh.content !== ih.id) bad.push(where + ': the inline host content ' + ih.id + ' is not the content of the sheet ' + ih.sheet + ' (' + sh.content + ')');
+          if (!known(ih.id)) bad.push(where + ': the inline host content ' + ih.id + ' is not in index.html');
+          if (ih.blocks !== undefined && !(Array.isArray(ih.blocks) && ih.blocks.length && sh && ih.blocks.every(function (i) { return Number.isInteger(i) && i >= 0 && i < (sh.blocks || []).length; }))) bad.push(where + ': the inline host content lists blocks that the sheet does not have (a list of block numbers)');
+        } else {
+          const ov = (cfg.overlays || {})[ih.id] || {}, ovItems = [];
+          (ov.blocks || []).forEach(function (rows) { rows.forEach(function (r) { r.items.forEach(function (it) { ovItems.push(it.id); }); }); });
+          if (ih.steppers !== undefined && typeof ih.steppers !== 'boolean' && !(Array.isArray(ih.steppers) && ih.steppers.every(function (id) { return Object.prototype.hasOwnProperty.call(ov.steppers || {}, id); }))) bad.push(where + ': the inline host\'s steppers must be true, false or a list of ids of the overlay\'s steppers');
+          if (ih.park !== undefined && !(Array.isArray(ih.park) && ih.park.every(function (id) { return ovItems.indexOf(id) >= 0; }))) bad.push(where + ': the inline host\'s park must be a list of ids that are items of the overlay\'s blocks');
+        }
+      }
+      // a sheet or overlay surface must be the one the tabs list: tabs.<tab>.sheets / .overlays and the registry say the same
+      if (ph && ph.kind === 'sheet') Object.keys(cfg.tabs).forEach(function (tab) { if (((cfg.tabs[tab].sheets || []).indexOf(ph.id) >= 0) !== (sf.tabs.indexOf(tab) >= 0)) bad.push(where + ': tabs.' + tab + '.sheets and the registry disagree about sheet ' + ph.id); });
+      if (ph && ph.kind === 'overlay') Object.keys(cfg.tabs).forEach(function (tab) { if (((cfg.tabs[tab].overlays || []).indexOf(ph.id) >= 0) !== (sf.tabs.indexOf(tab) >= 0)) bad.push(where + ': tabs.' + tab + '.overlays and the registry disagree about overlay ' + ph.id); });
+    });
     Object.keys(cfg.afterShow || {}).forEach(function (id) { if (!known(id)) bad.push('afterShow: id ' + id + ' is unknown'); });
+    (cfg.layoutSwitch || []).forEach(function (h, i) { if (!(Array.isArray(h) && h.length === 2 && typeof h[0] === 'string' && typeof h[1] === 'string' && h[0] && h[1])) bad.push('layoutSwitch[' + i + ']: must be [global, method]'); });
     Object.keys(cfg.follow || {}).forEach(function (id) {
       const f = followSpec(cfg.follow[id]);
       if (!known(id) || !known(f.of)) bad.push('follow: ' + id + ' or ' + f.of + ' is unknown');

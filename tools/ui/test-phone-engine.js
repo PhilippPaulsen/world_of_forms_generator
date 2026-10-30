@@ -84,7 +84,7 @@ function buildPage(opts) {
             el('div', { id: 'nav-node-stepper', class: 'stepper' }, [el('input', { id: 'node-count-input', type: 'number' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')]),
             el('div', { id: 'nav-size-stepper', class: 'stepper' }, [el('input', { id: 'shape-size-input', type: 'number' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')]),
             el('span', { class: 'nav-divider' }),
-            el('div', { id: 'nav-symmetry', class: 'nav-cluster nav-symmetry' }, [btn('btn-sym-rotation'), btn('btn-sym-rotation-mirror')]),
+            el('div', { id: 'nav-symmetry', class: 'nav-cluster nav-symmetry' }, [btn('btn-sym-rotation'), btn('btn-sym-mirror')]),
             btn('btn-more-form', 'icon-btn nav-more'), el('span', { class: 'nav-break' })]),
         el('div', { id: 'nav-farbe', class: 'nav-row nav-farbe' }, [
             el('div', { id: 'nav-anchor-views', class: 'nav-cluster nav-anchor-views' }, [btn('btn-open-kreis'), btn('btn-open-dreieck')]),
@@ -165,6 +165,9 @@ function buildPage(opts) {
     return { doc, win, mq, calls, scrim, layerModel, layerPanel, tlGroup, tlPairing, tlHome, faceList, faceGroup, focusRow, geoRow, moreNetz, macroRow, domainRow };
 }
 const ph = (page, cfg) => createPhone(page.doc, page.win, cfg || config);
+const noInline = () => { const c = JSON.parse(JSON.stringify(config)); Object.keys(c.surfaces).forEach(n => { c.surfaces[n].inlineOn = false; }); return c; };   // a copy with every inline switch OFF: the layout tests that ask for "nothing applied at 768px and up"
+const formPageUI = () => buildPage({ ui: true });
+const cls = p => p.doc.documentElement.className.split(/\s+/).filter(Boolean).filter(c => c === 'ph' || /^sr(-|$)/.test(c)).sort().join(' ');   // the gate classes on <html>, sorted
 // a structure string of the whole tree (tag, id, class, kids; comments by text): equal before apply and after release
 const dump = n => n.nodeType === 8 ? '<!--' + n.text + '-->' : '<' + n.tagName + (n.id ? '#' + n.id : '') + (n.className ? '.' + n.className.split(/\s+/).join('.') : '') + (n.hidden ? '[hidden]' : '') + '>' + n.childNodes.map(dump).join('') + '</>';
 const formIds = () => { const t = config.tabs.form, tr = config.toolRows[t.toolRow], out = [].concat.apply([], tr.groups).concat(tr.end, tr.sheet ? tr.sheet.items : []); t.subtabs.forEach(s => config.subtabs[s].rows.forEach(r => r.items.forEach(i => out.push(i.id)))); return out; };
@@ -265,8 +268,8 @@ T('subtabs', () => {
 console.log('\n== width, tabs and events ==');
 T('events', () => {
     const p = buildPage(); p.mq.matches = false;
-    const eng = ph(p), before = dump(p.doc.documentElement); eng.start();
-    check('at 768px and up (the media query does not match) start() applies nothing: the tree is untouched', dump(p.doc.documentElement) === before && !p.doc.documentElement.classList.contains('ph'));
+    const eng = ph(p, noInline()), before = dump(p.doc.documentElement); eng.start();
+    check('at 768px and up (the media query does not match; every inline switch off) start() applies nothing: the tree is untouched', dump(p.doc.documentElement) === before && !p.doc.documentElement.classList.contains('ph'));
     check('apply(form) there returns false and releases', eng.apply('form') === false && dump(p.doc.documentElement) === before);
     p.mq.set(true);
     check('the media query turning to a phone width applies (resize / rotation)', p.doc.documentElement.classList.contains('ph') && eng.state().applied === 'form');
@@ -301,7 +304,7 @@ T('missing', () => {
 
 console.log('\n== the sheets (commit 1b): the layer "Mehr" block and the timeline "Mehr" group, with the REAL ui.js ==');
 // a phone page with the real UI.overlay, the layer strip (Ebenen) in the slot so its "..." button can take the focus
-const sheetPage = sub => { const p = buildPage({ ui: true }), eng = ph(p); eng.start(); eng.show(sub || 'ebenen'); return { p, eng, host: p.doc.getElementById('ph-sheet-layer'), tl: p.doc.getElementById('ph-sheet-timeline'), lt: p.doc.getElementById('ls-more'), ts: p.doc.getElementById('ts-more') }; };
+const sheetPage = (sub, cfg) => { const p = buildPage({ ui: true }), eng = ph(p, cfg); eng.start(); eng.show(sub || 'ebenen'); return { p, eng, host: p.doc.getElementById('ph-sheet-layer'), tl: p.doc.getElementById('ph-sheet-timeline'), lt: p.doc.getElementById('ls-more'), ts: p.doc.getElementById('ts-more') }; };
 const esc = host => { let stopped = 0; host.dispatch('keydown', { key: 'Escape', stopPropagation() { stopped++; } }); return stopped; };
 T('sheet-build', () => {
     const { p, host, tl, lt, ts } = sheetPage();
@@ -354,7 +357,7 @@ T('sheet-timeline', () => {
     check('...with a single scrim', p.scrim.hidden === false);
 });
 T('sheet-lifecycle', () => {
-    const { p, eng, host, tl, lt } = sheetPage(); const d0 = (() => { const q = buildPage(); return dump(q.doc.documentElement); })();
+    const { p, eng, host, tl, lt } = sheetPage(undefined, noInline()); const d0 = (() => { const q = buildPage(); return dump(q.doc.documentElement); })();
     lt.dispatch('click');
     p.mq.set(false);
     check('a width change to 768+ with a sheet open: the sheet closes cleanly, the block goes back into the controls container with its state closed, scrim hidden, nothing inert, the whole tree is the one before', dump(p.doc.documentElement) === d0 && p.scrim.hidden && p.layerModel.open === false && p.layerPanel.hidden === true && lt.getAttribute('aria-expanded') === 'false' && !p.doc.getElementById('ph-sheet-layer'));
@@ -491,6 +494,253 @@ T('farbe-apply', () => {
     const f = farbePage(); f.doc.documentElement.setAttribute('data-tab', 'form'); const ef = ph(f); ef.start();
     check('Form applied while the Farbe pieces are on the page: they stay where they are (the strategy group in the rail, the families in the Farbe row)', f.doc.getElementById('farbe-strategy-group').parentNode.className === 'rail-bottom' && f.doc.getElementById('farbe-family-circle').parentNode.id === 'nav-farbe');
 });
+// the outline of the selected trail (commit B): the chip view passes (sheet, key | null) to window.setFaceSelected ONLY when it changed; every clearing case of the brief
+T('farbe-highlight', () => {
+    const p = farbePage(), eng = ph(p); eng.start();
+    const ch = p.chips, N = ch.nodes, calls = [], deferred = [];
+    p.win.setFaceSelected = (sheet, key) => { calls.push(sheet + ':' + key); };
+    let sheet = 'base'; p.win.activeLayerNow = () => sheet;
+    const last = () => calls.length ? calls[calls.length - 1] : '(none)';
+    const mkRows = specs => { while (p.faceList.firstChild) p.faceList.removeChild(p.faceList.firstChild); specs.forEach((sp, i) => { const row = p.doc.createElement('div'); row.className = 'fc-row'; row.dataset.key = sp; const sw = p.doc.createElement('span'); sw.className = 'fc-swatch'; sw.style.backgroundColor = 'rgb(' + i + ', 0, 0)'; const lab = p.doc.createElement('span'); lab.className = 'fc-label'; lab.textContent = 'Trail ' + (i + 1) + ' · 2 faces'; row.appendChild(sw); row.appendChild(lab); p.faceList.appendChild(row); }); };
+    const tap = id => { p.doc.getElementById(id).dispatch('click'); p.doc.dispatch('click', { target: p.doc.body }); };   // the sub-tab button's own handler, then the click reaching the document
+    p.faceGroup.hidden = false; mkRows(['k1', 'k2', 'k3']); ch.refresh();
+    check('Harmonie is shown (the chips are parked): nothing is outlined, setFaceSelected was never called', calls.length === 0 && ch.outlined() === null);
+    tap('ph-subtab-spuren');
+    check('the Spuren pane shows: the FIRST trail is outlined at once, on the base sheet: setFaceSelected("base", "k1")', last() === 'base:k1' && calls.length === 1, calls.join());
+    N.chips.children[2].dispatch('click');
+    check('a tap on chip 3 moves the outline to ITS key (setFaceSelected("base", "k3")); one call', last() === 'base:k3' && calls.length === 2, calls.join());
+    p.win.uiSync();
+    check('a UI tick with nothing changed calls nothing (no redraw cost per tick)', calls.length === 2, calls.join());
+    tap('ph-subtab-harmonie');
+    check('another sub-tab (Harmonie): the outline is CLEARED (setFaceSelected(null, null)), the selection itself is kept', last() === 'null:null' && ch.outlined() === null && calls.length === 3, calls.join());
+    tap('ph-subtab-spuren');
+    check('back on Spuren: the selected trail (k3) is outlined again', last() === 'base:k3' && calls.length === 4, calls.join());
+    tap('ph-subtab-ebenen'); tap('ph-subtab-zeit');
+    check('Ebenen and Zeit are no Spuren panel either: cleared once, not again', last() === 'null:null' && calls.length === 5, calls.join());
+    tap('ph-subtab-spuren'); sheet = 1; p.doc.dispatch('click', { target: p.doc.body });
+    check('a layer becomes the active sheet: the outline follows the ACTIVE sheet (setFaceSelected(1, "k3")) - one call, no clear in between needed', last() === '1:k3', calls.join());
+    sheet = 'base'; p.doc.dispatch('click', { target: p.doc.body });
+    check('back to the base: the base sheet again', last() === 'base:k3', calls.join());
+    // Fill turned off: the model group is hidden by sketch.js
+    p.faceGroup.hidden = true; p.doc.dispatch('click', { target: p.doc.body });
+    check('Fill off (the panel is hidden): CLEARED', last() === 'null:null' && ch.outlined() === null, calls.join());
+    p.win.uiSync(); p.faceGroup.hidden = false; p.win.uiSync();
+    check('Fill on again with rows (two ticks later): outlined again (the first trail: the selection was lost with the rows)', last() === 'base:k1', calls.join());
+    // the trail list loses the selected trail
+    N.chips.children[2].dispatch('click'); mkRows(['k1', 'k2']); ch.refresh();
+    check('the selected trail vanished (3 -> 2 trails): the CLAMPED trail is outlined (k2), not the dead key', last() === 'base:k2', calls.join());
+    mkRows([]); ch.refresh();
+    check('no trails at all (a refused sheet, no faces): cleared', last() === 'null:null' && ch.outlined() === null, calls.join());
+    mkRows(['k1', 'k2']); ch.refresh();
+    // tab change: Farbe -> Netz (the engine applies Netz; data-tab changes first)
+    const n0 = calls.length;
+    p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
+    check('leaving the Farbe tab: cleared once the engine has switched (the view looks again after the tabchange: one cleared call)', last() === 'null:null' && calls.length === n0 + 1 && ch.outlined() === null, calls.join());
+    p.doc.documentElement.setAttribute('data-tab', 'farbe'); p.doc.dispatch('tabchange', { detail: { tab: 'farbe' } });
+    // release: widening to 768px and up
+    eng.show('spuren'); p.doc.dispatch('click', { target: p.doc.body });
+    check('Farbe applied again with Spuren remembered: outlined', last() === 'base:k1' || last() === 'base:k2', calls.join());
+    const n1 = calls.length; p.mq.set(false); p.doc.dispatch('click', { target: p.doc.body });
+    check('the phone layout ends at 768px and up (release, and since C0b-5 the trails surface applies INLINE: the chips move into the Face Colors group): html.ph is gone and, the group being shown, the SAME trail is outlined afterwards (the release asks for one UI tick while the chips are between their places, which clears, and the inline host\'s afterShow looks again, which outlines again: both in the same synchronous step, no frame between; no stale outline)', last() === 'base:k1' && calls.length === n1 + 2 && calls[calls.length - 2] === 'null:null' && !p.doc.documentElement.classList.contains('ph') && p.doc.documentElement.classList.contains('sr-trails') && p.doc.getElementById('ph-trail-chips').parentNode.id === 'sr-trails-host', calls.join());
+    p.faceGroup.hidden = true; p.doc.dispatch('click', { target: p.doc.body });
+    check('...and the group hidden (Fill off) clears it', last() === 'null:null' && calls.length === n1 + 3, calls.join());
+    p.faceGroup.hidden = false; p.doc.dispatch('click', { target: p.doc.body });
+    p.mq.set(true); eng.apply('farbe'); p.doc.dispatch('click', { target: p.doc.body });
+    check('back in the phone layout the engine shows the REMEMBERED sub-tab (Spuren): outlined again, because the chips are in the slot', eng.state().sub === 'spuren' && last().indexOf('base:') === 0, calls.join());
+    eng.show('harmonie'); p.doc.dispatch('click', { target: p.doc.body });
+    check('and once Harmonie is the shown pane it is cleared', last() === 'null:null', calls.join());
+    // never writes anything else
+    check('the view never touches hover: it calls only window.setFaceSelected (no faceHover, nothing else on the window)', Object.keys(p.win).filter(k => /^faceHover|^setFaceHover/.test(k)).length === 0);
+    // a page without setFaceSelected (a reduced shell, a Node test): the view works and does not throw
+    const q = farbePage(), eq = ph(q); eq.start(); eq.show('spuren'); q.faceGroup.hidden = false; (() => { const row = q.doc.createElement('div'); row.className = 'fc-row'; row.dataset.key = 'z'; q.faceList.appendChild(row); })();
+    let threw = false; try { q.chips.refresh(); q.doc.dispatch('click', { target: q.doc.body }); q.win.uiSync(); } catch (e) { threw = true; }
+    check('without window.setFaceSelected the view does not throw', !threw);
+    // the deferral for resize and tabchange: injected, so the test says exactly when
+    const r = buildPage({ ui: true }); const calls2 = []; r.win.setFaceSelected = (s2, k2) => calls2.push(s2 + ':' + k2);
+    const ch2 = CHIPS.createChips(r.doc, r.win, { defer: fn => deferred.push(fn) }); r.doc.documentElement.setAttribute('data-tab', 'farbe');
+    const er = ph(r); er.start(); er.show('spuren'); r.faceGroup.hidden = false; (() => { const row = r.doc.createElement('div'); row.className = 'fc-row'; row.dataset.key = 'z'; r.faceList.appendChild(row); })();
+    r.win.dispatch('resize'); r.doc.dispatch('tabchange', { detail: { tab: 'farbe' } });
+    check('a resize and a tabchange are looked at AFTER the engine\'s own listener: the view queues the look (defer, twice), it does not act inside the event', deferred.length === 2 && calls2.length === 0, deferred.length + ' / ' + calls2.join());
+    deferred.splice(0).forEach(fn => fn());
+    check('...and the queued look finds the state the engine left (Spuren shown: outlined, once)', calls2.join() === 'base:z' && ch2.outlined().key === 'z', calls2.join());
+});
+// patterns commit T1: a second click on the SELECTED chip switches only the OUTLINE off (the selection, the black chip and the stepper stay); the same story on the phone layout and at 768px and up
+['phone', 'inline'].forEach(mode => T('farbe-outline-' + mode, () => {
+    const phone = mode === 'phone', p = farbePage(); p.win.MouseEvent = class { constructor(t, o) { this.type = t; this.bubbles = !!(o && o.bubbles); } };
+    p.mq.matches = phone; const eng = ph(p); eng.start(); if (phone) eng.show('spuren');
+    const ch = p.chips, N = ch.nodes, calls = [], log = []; p.win.setFaceSelected = (sheet, key) => calls.push(sheet + ':' + key); let sheet = 'base'; p.win.activeLayerNow = () => sheet;
+    const last = () => calls.length ? calls[calls.length - 1] : '(none)', chip = i => N.chips.children[i], pressed = i => chip(i).getAttribute('aria-pressed'), black = i => /\bactive\b/.test(chip(i).className);
+    const tick = () => { p.doc.dispatch('click', { target: p.doc.body }); p.win.uiSync(); };
+    const mkRows = keys => { while (p.faceList.firstChild) p.faceList.removeChild(p.faceList.firstChild); keys.forEach((k, i) => { const row = p.doc.createElement('div'); row.className = 'fc-row'; row.dataset.key = k; const sw = p.doc.createElement('span'); sw.className = 'fc-swatch'; sw.style.backgroundColor = 'rgb(' + i + ', 0, 0)'; const lab = p.doc.createElement('span'); lab.className = 'fc-label'; lab.textContent = 'Trail ' + (i + 1) + ' · 2 faces'; row.appendChild(sw); row.appendChild(lab);
+        const wrap = p.doc.createElement('span'); wrap.className = 'pairing-variant'; ['-', 'cnt', '+'].forEach((t, j) => { if (j === 1) { const c = p.doc.createElement('span'); c.className = 'pairing-variant-count'; c.dataset.k = '1'; c.dataset.c = '3'; c.textContent = '1/3'; wrap.appendChild(c); } else { const b = p.doc.createElement('button'); b.className = 'layer-btn pairing-move-btn'; b.addEventListener('click', () => log.push('step:' + k + t)); wrap.appendChild(b); } }); row.appendChild(wrap);
+        ['mouseenter', 'mouseleave'].forEach(t => row.addEventListener(t, () => log.push(t + ':' + k))); p.faceList.appendChild(row); }); };
+    p.faceGroup.hidden = false; mkRows(['k1', 'k2', 'k3']); ch.refresh(); tick();
+    check(mode + ': by default the first trail is outlined and its chip is aria-pressed (outline ON) and black', last() === 'base:k1' && ch.outline() === true && pressed(0) === 'true' && black(0) && pressed(1) === 'false' && !black(1), calls.join());
+    chip(0).dispatch('click'); tick();
+    check(mode + ': a SECOND click on the selected chip switches the outline off: setFaceSelected(null, null) once, the chip STAYS black and is aria-pressed false, the label and the selection are unchanged', last() === 'null:null' && calls.length === 2 && ch.outlined() === null && ch.outline() === false && pressed(0) === 'false' && black(0) && N.chips.children[0].getAttribute('aria-label') === 'Spur 1 · 2 Flächen' && ch.selectedTrail().key === 'k1', calls.join());
+    tick(); p.win.uiSync();
+    check(mode + ': ticks and clicks with the outline OFF call nothing and keep it OFF', calls.length === 2 && ch.outline() === false && pressed(0) === 'false', calls.join());
+    N.next.dispatch('click'); N.prev.dispatch('click');
+    check(mode + ': the stepper still acts on the selected trail with the outline OFF (the model row\'s own buttons of k1, nothing else) and is not disabled', log.join() === 'step:k1+,step:k1-' && !N.next.getAttribute('aria-disabled') && !N.prev.getAttribute('aria-disabled') && ch.selectedTrail().key === 'k1' && ch.outline() === false && calls.length === 2, log.join());
+    log.length = 0; chip(1).dispatch('pointerenter', { pointerType: 'mouse' });
+    check(mode + ': a mouse over ANOTHER chip still hovers (a plain mouseenter to its model row) and does not touch the outline state or setFaceSelected', log.join() === 'mouseenter:k2' && calls.length === 2 && ch.outline() === false, log.join());
+    chip(1).dispatch('pointerleave'); chip(0).dispatch('pointerenter', { pointerType: 'mouse' });
+    check(mode + ': a mouse over the selected chip whose outline is OFF hovers too; leaving returns to the state: OFF, nothing outlined by this view', log.join() === 'mouseenter:k2,mouseleave:k2,mouseenter:k1' && ch.outline() === false && ch.outlined() === null && calls.length === 2, log.join());
+    chip(0).dispatch('pointerleave'); chip(0).dispatch('click'); tick();
+    check(mode + ': a THIRD click brings the outline back: setFaceSelected("base", "k1"), aria-pressed true again', last() === 'base:k1' && calls.length === 3 && ch.outline() === true && pressed(0) === 'true' && black(0), calls.join());
+    chip(2).dispatch('click'); tick();
+    check(mode + ': a click on ANOTHER chip selects it and outlines it (k3), the first chip is no longer black or pressed', last() === 'base:k3' && ch.outline() === true && pressed(2) === 'true' && black(2) && pressed(0) === 'false' && !black(0), calls.join());
+    chip(2).dispatch('click'); chip(0).dispatch('click'); tick();
+    check(mode + ': with the outline OFF a click on an UNSELECTED chip selects it AND outlines it (it does not stay OFF)', last() === 'base:k1' && ch.outline() === true && pressed(0) === 'true' && ch.selectedTrail().key === 'k1', calls.join());
+    // every reset, each from OFF
+    const off = () => { chip(ch.selectedTrail().index).dispatch('click'); tick(); return ch.outline() === false; };
+    check(mode + ': (setup) the outline is OFF', off());
+    if (phone) { eng.show('harmonie'); tick(); eng.show('spuren'); tick(); }
+    check(mode + (phone ? ': a sub-tab switch (Harmonie and back) is no reset: still OFF, nothing outlined' : ': (the inline surface has no sub-tabs; the group stays)'), ch.outline() === false && ch.outlined() === null, calls.join());
+    sheet = 1; tick();
+    check(mode + ': RESET - the active sheet changes (a layer): ON, the trail is outlined on THAT sheet (1, k1), aria-pressed true', ch.outline() === true && last() === '1:k1' && pressed(0) === 'true', calls.join());
+    off(); sheet = 'base'; tick();
+    check(mode + ': RESET - back to the base sheet: ON again', ch.outline() === true && last() === 'base:k1', calls.join());
+    off(); p.faceGroup.hidden = true; tick(); p.faceGroup.hidden = false; tick();
+    check(mode + ': RESET - Fill turns off (the group is hidden) and on again: ON', ch.outline() === true && last() === 'base:k1' && pressed(0) === 'true', calls.join());
+    off(); chip(2).dispatch('click'); chip(2).dispatch('click'); tick();
+    check(mode + ': (setup) k3 selected with the outline OFF', ch.outline() === false && ch.selectedTrail().key === 'k3', calls.join());
+    mkRows(['k1', 'k2']); ch.refresh(); tick();
+    check(mode + ': RESET - the list changes so that the selected trail disappears: the CLAMPED trail (k2) is selected and outlined, ON, aria-pressed true', ch.outline() === true && ch.selectedTrail().key === 'k2' && last() === 'base:k2' && pressed(1) === 'true', calls.join());
+    off(); mkRows(['k0', 'k1', 'k2']); ch.refresh(); tick();
+    check(mode + ': a trail INSERTED before the selected one is no reset: the selection stays by key (k2) and the outline stays OFF', ch.outline() === false && ch.selectedTrail().key === 'k2' && ch.outlined() === null, calls.join());
+    p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } }); tick();
+    p.doc.documentElement.setAttribute('data-tab', 'farbe'); p.doc.dispatch('tabchange', { detail: { tab: 'farbe' } }); tick(); if (phone) { eng.show('spuren'); tick(); }
+    check(mode + ': RESET - the Farbe tab is left and entered again: ON, outlined', ch.outline() === true && last().indexOf('base:') === 0 && ch.outlined() !== null, calls.join());
+    off(); p.mq.set(!phone); tick(); p.mq.set(phone); tick(); if (phone) { eng.show('spuren'); tick(); }
+    check(mode + ': RESET - the layout is released and built (a resize across 768px and back): ON, no stale OFF, the trail is outlined', ch.outline() === true && ch.outlined() !== null && last().indexOf('base:') === 0 && (() => { const c = ch.nodes.chips.children; return c.some(x => x.getAttribute('aria-pressed') === 'true'); })(), calls.join());
+    off(); eng.release(); tick(); eng.apply('farbe'); tick(); if (phone) { eng.show('spuren'); tick(); }
+    check(mode + ': RESET - release() and apply() (the surface is released): ON again', ch.outline() === true && ch.outlined() !== null, calls.join());
+    const n0 = calls.length; N.chips.children.forEach(c => { c.dispatch('pointerenter', { pointerType: 'touch' }); });
+    check(mode + ': a touch never hovers and a pointer event alone never changes the outline', calls.length === n0 && ch.outline() === true);
+}));
+// patterns commit T1 (a click must work at once): the browser fires a pointerenter on the REBUILT chip under the resting mouse; it must not bring the hover (and the outline) back until the pointer has left
+['phone', 'inline'].forEach(mode => T('farbe-click-at-once-' + mode, () => {
+    const phone = mode === 'phone', p = farbePage(); p.win.MouseEvent = class { constructor(t, o) { this.type = t; this.bubbles = !!(o && o.bubbles); } };
+    p.mq.matches = phone; const eng = ph(p); eng.start(); if (phone) eng.show('spuren');
+    const ch = p.chips, N = ch.nodes, calls = [], log = []; p.win.setFaceSelected = (sheet, key) => calls.push(sheet + ':' + key); p.win.activeLayerNow = () => 'base';
+    const chip = i => N.chips.children[i], mouse = { pointerType: 'mouse' };
+    const tick = () => { p.doc.dispatch('click', { target: p.doc.body }); p.win.uiSync(); };
+    const mkRows = keys => { while (p.faceList.firstChild) p.faceList.removeChild(p.faceList.firstChild); keys.forEach((k, i) => { const row = p.doc.createElement('div'); row.className = 'fc-row'; row.dataset.key = k; const sw = p.doc.createElement('span'); sw.className = 'fc-swatch'; sw.style.backgroundColor = 'rgb(' + i + ', 0, 0)'; const lab = p.doc.createElement('span'); lab.className = 'fc-label'; lab.textContent = 'Trail ' + (i + 1) + ' · 2 faces'; row.appendChild(sw); row.appendChild(lab); ['mouseenter', 'mouseleave'].forEach(t => row.addEventListener(t, () => log.push(t + ':' + k))); p.faceList.appendChild(row); }); };
+    p.faceGroup.hidden = false; mkRows(['k1', 'k2', 'k3']); ch.refresh(); tick();
+    chip(0).dispatch('pointerenter', mouse); log.length = 0;
+    chip(0).dispatch('click'); tick();
+    check(mode + ': a click on the selected chip the MOUSE rests on: the outline is OFF at once (setFaceSelected(null, null)), the hover left the row (one mouseleave) and the chip is marked ignored', ch.outline() === false && calls[calls.length - 1] === 'null:null' && log.join() === 'mouseleave:k1' && ch.ignored() === 'k1' && ch.hovered() === null, calls.join() + ' / ' + log.join());
+    log.length = 0; chip(0).dispatch('pointerenter', mouse);
+    check(mode + ': the browser fires pointerenter on the REBUILT chip under the resting mouse: IGNORED (no mouseenter to the row, no hover): the outline stays off while the mouse rests', log.length === 0 && ch.hovered() === null && ch.outline() === false && ch.outlined() === null, log.join());
+    chip(0).dispatch('pointerenter', mouse); tick();
+    check(mode + ': ...also when the event comes again and after ticks and document clicks', log.length === 0 && ch.hovered() === null && ch.ignored() === 'k1');
+    chip(1).dispatch('pointerenter', mouse);
+    check(mode + ': the hover of ANOTHER chip works at once (mouseenter to its row) and the flag is gone', log.join() === 'mouseenter:k2' && ch.hovered() === 'k2' && ch.ignored() === null, log.join());
+    chip(1).dispatch('pointerleave'); log.length = 0; chip(0).dispatch('pointerenter', mouse);
+    check(mode + ': after that the first chip hovers as before (the outline by hover, the state still OFF)', log.join() === 'mouseenter:k1' && ch.hovered() === 'k1' && ch.outline() === false, log.join());
+    chip(0).dispatch('pointerleave'); log.length = 0;
+    chip(0).dispatch('pointerenter', mouse); chip(0).dispatch('click'); tick();
+    check(mode + ': a click with the mouse resting again brings the outline back AT ONCE (setFaceSelected("base", "k1")), the hover is not re-entered', ch.outline() === true && calls[calls.length - 1] === 'base:k1' && ch.ignored() === 'k1' && (chip(0).dispatch('pointerenter', mouse), ch.hovered() === null), calls.join());
+    chip(0).dispatch('pointerleave');
+    check(mode + ': the pointer LEAVES the chip: the flag is cleared; entering it again hovers', ch.ignored() === null && (log.length = 0, chip(0).dispatch('pointerenter', mouse), log.join() === 'mouseenter:k1' && ch.hovered() === 'k1'), log.join());
+    chip(0).dispatch('pointerleave');
+    // flag cleared by the chip going away
+    chip(2).dispatch('pointerenter', mouse); chip(2).dispatch('click'); tick();
+    check(mode + ': (setup) k3 clicked while hovered: the flag is on k3', ch.ignored() === 'k3' && ch.selectedTrail().key === 'k3');
+    mkRows(['k1', 'k2']); ch.refresh(); tick();
+    check(mode + ': the ignored chip is gone after a rebuild (the trail vanished): the flag is forgotten', ch.ignored() === null);
+    chip(1).dispatch('pointerenter', mouse); chip(1).dispatch('click'); tick();
+    check(mode + ': (setup) the flag is on k2', ch.ignored() === 'k2');
+    p.faceGroup.hidden = true; tick();
+    check(mode + ': the group is hidden (Fill off): the flag is forgotten, nothing is hovered', ch.ignored() === null && ch.hovered() === null);
+    p.faceGroup.hidden = false; mkRows(['k1', 'k2']); ch.refresh(); tick(); chip(0).dispatch('pointerenter', mouse); chip(0).dispatch('click'); tick();
+    check(mode + ': (setup) the flag is on k1 again', ch.ignored() === 'k1');
+    eng.release(); tick(); eng.apply('farbe'); tick(); if (phone) { eng.show('spuren'); tick(); }
+    check(mode + ': the surface is released: the flag is forgotten, and the first enter after the apply hovers', ch.ignored() === null && (log.length = 0, chip(0).dispatch('pointerenter', mouse), log[log.length - 1] === 'mouseenter:k1'), log.join());
+    chip(0).dispatch('pointerleave');
+    log.length = 0; chip(1).dispatch('click'); tick(); chip(1).dispatch('pointerenter', mouse);
+    check(mode + ': a click that is NOT on a hovered chip (a keyboard Enter, a touch tap) sets no flag: the next mouse enter hovers', ch.ignored() === null && ch.hovered() === 'k2', log.join());
+    chip(1).dispatch('pointerleave');
+    log.length = 0; chip(0).dispatch('pointerenter', { pointerType: 'touch' }); chip(0).dispatch('pointerenter', { pointerType: 'pen' });
+    check(mode + ': a touch or a pen pointer is never forwarded', log.length === 0 && ch.hovered() === null);
+}));
+T('farbe-outline-created-active', () => {
+    // a view created while everything is already active (the Farbe tab, the surface flag, Fill on with trails) starts with the outline ON: nothing resets it before the first click
+    const p = buildPage({ ui: true }), html = p.doc.documentElement; html.setAttribute('data-tab', 'farbe'); html.classList.add('sr-trails'); p.faceGroup.hidden = false;
+    ['k1', 'k2'].forEach((k, i) => { const row = p.doc.createElement('div'); row.className = 'fc-row'; row.dataset.key = k; const sw = p.doc.createElement('span'); sw.className = 'fc-swatch'; sw.style.backgroundColor = 'rgb(' + i + ', 0, 0)'; const lab = p.doc.createElement('span'); lab.className = 'fc-label'; lab.textContent = 'Trail ' + (i + 1) + ' · 2 faces'; row.appendChild(sw); row.appendChild(lab); p.faceList.appendChild(row); });
+    const ch = CHIPS.createChips(p.doc, p.win);
+    check('a view created on an already active page: the outline is ON and the selected chip is aria-pressed', ch.outline() === true && ch.nodes.chips.children[0].getAttribute('aria-pressed') === 'true' && ch.nodes.chips.children[1].getAttribute('aria-pressed') === 'false');
+});
+// patterns commit C0b-5: the trails surface at 768px and up. The chip view sits in a row host INSIDE the Face Colors group; the group's own content stays (the CSS parks it); no layout, no html.ph
+T('farbe-inline', () => {
+    const p = farbePage(); p.win.MouseEvent = class { constructor(t, o) { this.type = t; this.bubbles = !!(o && o.bubbles); } };
+    p.mq.matches = false; const eng = ph(p), groupKids0 = p.faceGroup.children.map(c => c.id).join(), before = dump(p.doc.documentElement); eng.start();
+    const host = p.doc.getElementById('sr-trails-host'), cls1 = () => p.doc.documentElement.className.split(/\s+/).filter(Boolean).sort().join(' ');
+    check('at 768px and up the Farbe tab applies the SURFACES only (the timeline and the trails): no layout (no class ph, applied null, no stack), the flags sr, sr-timeline and sr-trails', !p.doc.documentElement.classList.contains('ph') && eng.state().applied === null && p.doc.getElementById('ph-stack') === null && cls1() === 'sr sr-timeline sr-trails' && eng.state().surfaces.join() === 'timeline,trails', cls1());
+    check('...the engine made ONE row host div.sr-host#sr-trails-host as the LAST child of #face-colors-group; it holds #ph-trail-chips then #ph-trail-stepper; the chip holder is empty', !!host && host.className === 'sr-host' && host.parentNode === p.faceGroup && p.faceGroup.children[p.faceGroup.children.length - 1] === host && host.children.map(c => c.id).join() === 'ph-trail-chips,ph-trail-stepper' && p.doc.getElementById('ph-chip-home').children.length === 0 && p.doc.all().filter(n => n.id === 'sr-trails-host').length === 1);
+    check('...the group\'s own children are untouched and in place (the model stays: the list, the status, the notes), and no id is twice in the document', p.faceGroup.children.filter(c => c !== host).map(c => c.id).join() === groupKids0 && p.faceGroup.children.indexOf(p.faceList) >= 0 && (() => { const ids = p.doc.all().map(n => n.id).filter(Boolean); return new Set(ids).size === ids.length; })());
+    check('...the group\'s visibility is still sketch.js\'s: the engine never sets hidden on it (it is hidden as before while Fill is off)', p.faceGroup.hidden === true && eng.state().missing.length === 0);
+    // the lifecycle of the outline
+    const calls = [], N = p.chips.nodes; p.win.setFaceSelected = (sheet, key) => calls.push(sheet + ':' + key); let sheet = 'base'; p.win.activeLayerNow = () => sheet;
+    const last = () => calls.length ? calls[calls.length - 1] : '(none)';
+    const mkRows = specs => { while (p.faceList.firstChild) p.faceList.removeChild(p.faceList.firstChild); specs.forEach((sp, i) => { const row = p.doc.createElement('div'); row.className = 'fc-row'; row.dataset.key = sp; const sw = p.doc.createElement('span'); sw.className = 'fc-swatch'; sw.style.backgroundColor = 'rgb(' + i + ', 0, 0)'; const lab = p.doc.createElement('span'); lab.className = 'fc-label'; lab.textContent = 'Trail ' + (i + 1) + ' · 2 faces'; row.appendChild(sw); row.appendChild(lab); p.faceList.appendChild(row); }); };
+    const tick = () => { p.doc.dispatch('click', { target: p.doc.body }); p.win.uiSync(); };
+    mkRows(['k1', 'k2', 'k3']); p.chips.refresh(); tick();
+    check('Fill off (the group hidden): the chips are not shown, nothing is outlined, setFaceSelected was never called', calls.length === 0 && p.chips.outlined() === null, calls.join());
+    p.faceGroup.hidden = false; tick();
+    check('Fill on (sketch.js shows the group) with trails: the first trail is outlined at once: setFaceSelected("base", "k1"), once - no sub-tab and no #ph-slot are involved', last() === 'base:k1' && calls.length === 1, calls.join());
+    N.chips.children[2].dispatch('click');
+    check('a chip tap moves the outline to its trail', last() === 'base:k3' && calls.length === 2, calls.join());
+    tick();
+    check('a tick with nothing changed calls nothing', calls.length === 2, calls.join());
+    sheet = 1; tick();
+    check('the active sheet switches to a layer: the outline follows (1, k3)', last() === '1:k3', calls.join());
+    sheet = 'base'; tick();
+    p.faceGroup.hidden = true; tick();
+    check('Fill off: the group is hidden by sketch.js: the outline is CLEARED (once)', last() === 'null:null' && p.chips.outlined() === null, calls.join());
+    p.faceGroup.hidden = false; tick();
+    check('Fill on again: outlined again (the first trail: the selection was lost with the rows while the group was hidden, as on the phone)', last() === 'base:k1', calls.join());
+    N.chips.children[2].dispatch('click'); mkRows(['k1', 'k2']); p.chips.refresh(); tick();
+    check('the selected trail disappears (3 -> 2 trails): the CLAMPED trail is outlined (k2), not the dead key', last() === 'base:k2', calls.join());
+    const nTab = calls.length; p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
+    check('leaving the Farbe tab: the engine releases the trails surface (no sr-trails, no host, the chips back in their holder) and the outline is cleared', calls.length >= nTab + 0 && (p.win.uiSync(), true) && p.doc.getElementById('sr-trails-host') === null && p.doc.getElementById('ph-chip-home').children.map(c => c.id).join() === 'ph-trail-chips,ph-trail-stepper' && cls1() === 'sr sr-netz sr-timeline' && last() === 'null:null', cls1() + ' / ' + last());
+    p.doc.documentElement.setAttribute('data-tab', 'farbe'); p.doc.dispatch('tabchange', { detail: { tab: 'farbe' } }); tick();
+    check('back on Farbe: the host is made again (one), the chips are in it, outlined', !!p.doc.getElementById('sr-trails-host') && p.doc.getElementById('sr-trails-host').children.length === 2 && last().indexOf('base:') === 0 && cls1() === 'sr sr-timeline sr-trails', cls1() + ' / ' + last());
+    // phone <-> inline round trips
+    p.mq.set(true); tick();
+    check('narrow: the layout is built (ph), the host is gone, the chips are in the Spuren pane; the surface flag stays; one element per id', p.doc.documentElement.classList.contains('ph') && p.doc.getElementById('sr-trails-host') === null && cls1().indexOf('sr-trails') >= 0 && (() => { const ids = p.doc.all().map(n => n.id).filter(Boolean); return new Set(ids).size === ids.length; })());
+    p.mq.set(false); tick();
+    check('wide again: the layout is released, the host is back with the two containers, the group\'s children untouched, one element per id', !p.doc.documentElement.classList.contains('ph') && p.doc.getElementById('sr-trails-host') && p.doc.getElementById('sr-trails-host').children.map(c => c.id).join() === 'ph-trail-chips,ph-trail-stepper' && p.faceGroup.children.filter(c => c.id !== 'sr-trails-host').map(c => c.id).join() === groupKids0 && cls1() === 'sr sr-timeline sr-trails' && (() => { const ids = p.doc.all().map(n => n.id).filter(Boolean); return new Set(ids).size === ids.length; })(), cls1());
+    for (let i = 0; i < 3; i++) { p.mq.set(true); p.mq.set(false); }
+    check('three more round trips leave no drift: one host, two containers in it, the flags are sr, sr-timeline and sr-trails, nothing else', p.doc.all().filter(n => n.id === 'sr-trails-host').length === 1 && p.doc.getElementById('sr-trails-host').children.length === 2 && cls1() === 'sr sr-timeline sr-trails');
+    eng.release();
+    check('release() takes everything back: the host is removed, the chips are in their holder, no flag, no class, no marker comment is left, the group\'s own children are where they were', p.doc.getElementById('sr-trails-host') === null && p.doc.getElementById('ph-chip-home').children.map(c => c.id).join() === 'ph-trail-chips,ph-trail-stepper' && cls1() === '' && p.faceGroup.children.map(c => c.id).join() === groupKids0 && (function none(n) { return n.childNodes.every(c => (c.nodeType !== 8 || !/^ph:/.test(c.text)) && (c.nodeType !== 1 || none(c))); })(p.doc.documentElement), cls1());
+    check('release is idempotent, and a new apply(farbe) does the same as the first (one host)', (() => { const m = p.doc.mutations; eng.release(); return p.doc.mutations === m; })() && (eng.apply('farbe'), p.doc.all().filter(n => n.id === 'sr-trails-host').length === 1));
+    // the hover
+    const q = farbePage(); q.win.MouseEvent = class { constructor(t, o) { this.type = t; this.bubbles = !!(o && o.bubbles); } }; q.mq.matches = false; const eq = ph(q); eq.start(); q.faceGroup.hidden = false;
+    const rowsLog = []; const mk = specs => { while (q.faceList.firstChild) q.faceList.removeChild(q.faceList.firstChild); specs.forEach((sp, i) => { const row = q.doc.createElement('div'); row.className = 'fc-row'; row.dataset.key = sp; const sw = q.doc.createElement('span'); sw.className = 'fc-swatch'; const lab = q.doc.createElement('span'); lab.className = 'fc-label'; lab.textContent = 'Trail ' + (i + 1) + ' · 2 faces'; row.appendChild(sw); row.appendChild(lab); ['mouseenter', 'mouseleave'].forEach(t => row.addEventListener(t, e => rowsLog.push(t + ':' + sp + ':' + (e.bubbles ? 'b' : 'n')))); q.faceList.appendChild(row); }); };
+    mk(['k1', 'k2', 'k3']); q.chips.refresh(); const Q = q.chips.nodes, cn = i => Q.chips.children[i];
+    cn(1).dispatch('pointerenter', { pointerType: 'mouse' });
+    check('hover: a MOUSE entering chip 2 sends ONE mouseenter (it does not bubble) to the model row k2 - looked up by its key, a row the CSS hides (display: none) takes it; nothing else is sent', rowsLog.join() === 'mouseenter:k2:n' && q.chips.hovered() === 'k2', rowsLog.join());
+    cn(2).dispatch('pointerenter', { pointerType: 'mouse' });
+    check('moving to chip 3: mouseleave on k2, then mouseenter on k3', rowsLog.slice(1).join() === 'mouseleave:k2:n,mouseenter:k3:n' && q.chips.hovered() === 'k3', rowsLog.join());
+    rowsLog.length = 0; cn(0).dispatch('pointerenter', { pointerType: 'touch' }); cn(0).dispatch('pointerenter', { pointerType: 'pen' });
+    check('a touch or a pen pointer entering a chip sends nothing and does not leave the hovered trail (the mouse events a tap emulates)', rowsLog.length === 0 && q.chips.hovered() === 'k3', rowsLog.join());
+    cn(2).dispatch('pointerleave');
+    check('the mouse leaves chip 3: one mouseleave on k3, the hover is cleared', rowsLog.join() === 'mouseleave:k3:n' && q.chips.hovered() === null, rowsLog.join());
+    rowsLog.length = 0; cn(0).dispatch('pointerenter', { pointerType: 'mouse' }); rowsLog.length = 0;
+    mk(['k1', 'k2', 'k3']); q.chips.refresh();
+    check('the chip bar is REBUILT while a chip is hovered: the leave goes to the row with that key as it is NOW (the new row k1, found fresh) and the hover is cleared - no stale hover', rowsLog.join() === 'mouseleave:k1:n' && q.chips.hovered() === null, rowsLog.join());
+    rowsLog.length = 0; Q.chips.children[0].dispatch('pointerenter', { pointerType: 'mouse' }); rowsLog.length = 0; q.faceGroup.hidden = true; q.win.uiSync();
+    check('the group is hidden (Fill off) while a chip is hovered: the hover is cleared at the next look', q.chips.hovered() === null && rowsLog.join() === 'mouseleave:k1:n', rowsLog.join());
+    q.faceGroup.hidden = false; q.win.uiSync(); Q.chips.children[1].dispatch('pointerenter', { pointerType: 'mouse' }); rowsLog.length = 0; q.doc.documentElement.setAttribute('data-tab', 'netz'); q.doc.dispatch('tabchange', { detail: { tab: 'netz' } }); q.win.uiSync();
+    check('the tab is left while a chip is hovered: the surface is released and the hover is cleared', q.chips.hovered() === null && rowsLog.join() === 'mouseleave:k2:n', rowsLog.join());
+    q.faceGroup.hidden = false; q.doc.documentElement.setAttribute('data-tab', 'farbe'); q.doc.dispatch('tabchange', { detail: { tab: 'farbe' } }); q.win.uiSync(); const QC = q.chips.nodes.chips;
+    QC.children[1].focus(); QC.children[1].dispatch('click');
+    check('a keyboard user on a chip stays on it: the tap rebuilds the bar, the focus goes to the new chip with the same index (it was lost with the removed chip before C0b-5)', q.doc.activeElement === QC.children[1] && QC.children[1].getAttribute('aria-pressed') === 'true', String(q.doc.activeElement && q.doc.activeElement.getAttribute && q.doc.activeElement.getAttribute('data-index')));
+    check('the view never writes the hover itself: no faceHover, no setFaceHover on the window', Object.keys(q.win).filter(k => /^faceHover|^setFaceHover/.test(k)).length === 0);
+});
 T('farbe-chips', () => {
     const p = farbePage(), eng = ph(p); eng.start(); eng.show('spuren');
     const ch = p.chips, N = ch.nodes;
@@ -584,11 +834,20 @@ T('netz-apply', () => {
     eq.release();
     check('...and a release at the end leaves the tree as it was (no marker, no container, no hidden follower)', dump(q.doc.documentElement) === d0);
 });
+const nzRows = p => p.moreNetz.children.filter(c => c.className === 'ph-sheet-block').map(b => b.children.map(r => r.children.map(g => g.id || (g.querySelector('input') || {}).id).join('+')).join(' / '));   // a wrapped field is named by its input
+const inRow = n => (' ' + n.parentNode.className + ' ').indexOf(' ph-sheet-row ') >= 0;   // the item itself is a row item (not just a child of the overlay, whose class is ph-sheet-rows)
 T('netz-wide', () => {
     const p = netzPage(); p.mq.matches = false; const eng = ph(p), d = dump(p.doc.documentElement); eng.start();
-    check('at 768px and up (the media query does not match) the Netz tab is NOT converted: the tree is untouched, no class ph', dump(p.doc.documentElement) === d && !p.doc.documentElement.classList.contains('ph') && eng.state().applied === null);
+    const fe = p.doc.getElementById('net-focus-exact'), se = p.doc.getElementById('net-strength-exact');
+    check('at 768px and up (the media query does not match) the Netz tab is NOT converted - no layout, no class ph, no stack, applied null - but since C0b-3 the Netz SURFACE is applied in place (with the timeline surface, which every tab has): sr, sr-netz and sr-timeline, the blocks in #more-netz; since C0b-4 the typed STRENGTH field is parked (it stays where it is, in no row, no stepper) and the Fokus field is the fine stepper (the wrapper in a row, the input readonly with data-stepper)', !p.doc.documentElement.classList.contains('ph') && eng.state().applied === null && p.doc.getElementById('ph-stack') === null && cls(p) === 'sr sr-netz sr-timeline' && eng.state().surfaces.join() === 'timeline,netz' && p.moreNetz.querySelectorAll('.ph-sheet-block').length === 2 && !inRow(se) && se.parentNode.className.indexOf('stepper') < 0 && !se.hasAttribute('data-stepper') && fe.parentNode.className.indexOf('stepper') >= 0 && (' ' + fe.parentNode.parentNode.className + ' ').indexOf(' ph-sheet-row ') >= 0 && fe.hasAttribute('data-stepper') && fe.readOnly === true);
+    check('...block 1 is the Fokus stepper alone (one row, one item), block 2 the domain / macro / Geo / readout rows: nothing in the overlay is typed (no editable input in a row)', JSON.stringify(nzRows(p)) === JSON.stringify(['net-focus-exact', 'net-domain-row / net-macro-row / net-geo-row / net-readout']) && p.doc.all().filter(n => n.tagName === 'INPUT' && n.className.indexOf('exact-field') >= 0 && !n.readOnly && inRow(n)).length === 0, JSON.stringify(nzRows(p)));
+    const dInline = dump(p.doc.documentElement);
     p.mq.set(true);
-    check('...and turning narrow applies it; widening again releases every control', p.doc.documentElement.classList.contains('ph') && (p.mq.set(false), dump(p.doc.documentElement) === d));
+    check('...and turning narrow applies it (the layout on top of the surface, with the other phone surface: ph sr sr-netz sr-timeline); widening again releases the layout and applies the surface inline again: the tree is the inline one, once', p.doc.documentElement.classList.contains('ph') && cls(p) === 'ph sr sr-netz sr-timeline' && (p.mq.set(false), dump(p.doc.documentElement) === dInline && cls(p) === 'sr sr-netz sr-timeline'), 'cls=' + cls(p) + ' same=' + (dump(p.doc.documentElement) === dInline));
+    eng.release();
+    check('release() takes everything back: the tree is the one before the first start, no class', dump(p.doc.documentElement) === d && cls(p) === '');
+    eng.apply('netz'); p.doc.documentElement.setAttribute('data-tab', 'form'); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
+    check('a tab change away from Netz at 768px and up releases the Netz surface (it applies on the Netz tab only): the timeline surface stays (sr sr-timeline), no Netz block, no sr-netz, every id once', cls(p) === 'sr sr-timeline' && eng.state().surfaces.join() === 'timeline' && p.moreNetz.querySelectorAll('.ph-sheet-block').length === 0 && !p.moreNetz.classList.contains('ph-sheet-rows') && [].concat.apply([], [].concat.apply([], config.overlays.netz.blocks).map(r => r.items.map(i => i.id))).every(id => p.doc.all().filter(n => n.id === id).length === 1), cls(p));
     // commit 3b: at 768px and up nothing of the follow mode or the label is applied: the Fokus stepper is not disabled (its block is hidden, nothing marks it), Net lines keeps its own text as its name
     const q = netzPage(); q.mq.matches = false; const eq = ph(q); eq.start();
     const fq = q.doc.getElementById('net-focus-stepper'), nq = q.doc.getElementById('net-lines-btn');
@@ -803,7 +1062,6 @@ T('steppers-no-ui', () => {
 
 console.log('\n== the Netz sheet in rows (sheets redesign, commit 4a): config.overlays.netz, an overlay with its own UI.overlay ==');
 const NZ = config.overlays.netz, nzIds = [].concat.apply([], [].concat.apply([], NZ.blocks).map(r => r.items.map(i => i.id)));
-const nzRows = p => p.moreNetz.children.filter(c => c.className === 'ph-sheet-block').map(b => b.children.map(r => r.children.map(g => g.id || (g.querySelector('input') || {}).id).join('+')).join(' / '));   // a wrapped field is named by its input
 T('netz-rows-build', () => {
     const p = netzPage(), orig = {}; nzIds.forEach(id => { orig[id] = p.doc.getElementById(id); });
     const eng = ph(p); eng.start();
@@ -845,7 +1103,7 @@ T('netz-rows-release', () => {
     check('apply again after a release rebuilds the same rows and every id is once in the document', JSON.stringify(nzRows(p)) === JSON.stringify(['net-strength-exact+net-focus-exact', 'net-domain-row / net-macro-row / net-geo-row / net-readout']) && nzIds.every(id => p.doc.all().filter(n => n.id === id).length === 1));
     check('...and a second apply does no work', (() => { const m = p.doc.mutations; eng.apply('netz'); return p.doc.mutations === m; })());
     p.mq.set(false);
-    check('a width change to 768+ releases it (the overlay keeps its layout and typed fields above 768px)', nzIds.every(id => orig[id].parentNode === nb[id][0]) && p.moreNetz.querySelectorAll('.ph-sheet-block').length === 0);
+    check('a width change to 768+ releases the LAYOUT and builds the surface inline: the overlay keeps its two blocks, the items sit in rows again (not in their old parents), no stack, no class ph, the strength field is parked (in no row) and only the Fokus field is a stepper (the other steppers were taken off)', p.moreNetz.querySelectorAll('.ph-sheet-block').length === 2 && !p.doc.documentElement.classList.contains('ph') && p.doc.getElementById('ph-stack') === null && orig['net-strength-exact'].parentNode === nb['net-strength-exact'][0] && orig['net-focus-exact'].parentNode.className.indexOf('stepper') >= 0 && (' ' + orig['net-focus-exact'].parentNode.parentNode.className + ' ').indexOf(' ph-sheet-row ') >= 0 && p.doc.all().filter(n => n.tagName === 'INPUT' && n.hasAttribute('data-stepper')).map(n => n.id).join() === 'net-focus-exact' && cls(p) === 'sr sr-netz sr-timeline');
 });
 
 
@@ -897,6 +1155,31 @@ T('netz-fine-steps', () => {
     click0(btn(fF, 1)); click0(btn(fF, 1));
     check('...focus -0.98 after two taps up (the carrier -98): the net transform follows through the carrier', fF.value === '-0.98' && fC.value === '-98' && fC.events.length >= 4);
     eng.release();
+});
+// patterns C0b-4: at 768px and up the overlay has ONE focus control (the fine stepper around #net-focus-exact) and no typed strength field (parked: it stays where it is, plain, not shown); bindExact and setLocked work as before
+T('netz-fine-inline', () => {
+    const n = netFine(), { p, eng, sF, fF, sC, fC, toasts, lock } = n; p.mq.matches = false; eng.start();
+    const btn = (f, dir) => f.parentNode.querySelectorAll('.stepper-btn').find(b => b.getAttribute('data-dir') === String(dir));
+    check('at 768px and up only the FOKUS field is a stepper (readOnly, inputmode none, data-stepper, the name Fokus fein); the strength field is parked: not wrapped, not marked, not readonly, still in its own section, and in no row', fF.parentNode.className === 'stepper' && fF.readOnly === true && fF.hasAttribute('data-stepper') && fF.parentNode.getAttribute('aria-label') === 'Fokus fein' && !sF.hasAttribute('data-stepper') && !sF.readOnly && sF.parentNode === n.before.sp && !inRow(sF) && p.doc.all().filter(x => x.id === 'net-strength-exact' || x.id === 'net-focus-exact').length === 2);
+    const log = []; ['input', 'change'].forEach(t => fF.addEventListener(t, e => log.push(t + ':' + (e.bubbles ? 'b' : 'n'))));
+    click0(btn(fF, 1));
+    check('the focus steps by 0.01, not 0.1: 0.00 -> 0.01 with ONE tap, the carrier (percent) is 1, input then change reach bindExact and the carrier as for a typed value', fF.value === '0.01' && fC.value === '1' && log.join() === 'input:b,change:b' && fC.events.join() === 'input,change', fF.value + ' ' + fC.value + ' ' + log.join());
+    for (let i = 0; i < 9; i++) click0(btn(fF, 1));
+    check('...0.10 after ten taps (no float drift), and back to -0.05 after fifteen taps down', fF.value === '0.10' && fC.value === '10' && (() => { for (let i = 0; i < 15; i++) click0(btn(fF, -1)); return fF.value === '-0.05' && fC.value === '-5'; })());
+    fC.value = '99'; n.showF(); click0(btn(fF, 1)); click0(btn(fF, 1));
+    check('the focus stops at 1.00 (carrier 100): the chevron is disabled with the stepper\'s reason', fF.value === '1.00' && fC.value === '100' && btn(fF, 1).getAttribute('aria-disabled') === 'true' && btn(fF, 1).dataset.reason === 'Größter Wert erreicht.', fF.value);
+    fF.value = '7'; fF.dispatch('change', { type: 'change' });
+    check('a value above the range is still clamped by bindExact with its notice (MSG-F), an invalid text restored: the carriers keep working with the parked fields', fF.value === '1.00' && fC.value === '100' && toasts.indexOf('MSG-F') >= 0 && (() => { fF.value = 'abc'; fF.dispatch('change', { type: 'change' }); return fF.value === '1.00'; })(), toasts.join());
+    sF.value = '2'; sF.dispatch('change', { type: 'change' });
+    check('...the parked strength field still goes through bindExact when something sets it (clamp to 1.00, the notice MSG-S, the carrier 100): the phone sheet and programmatic changes keep working', sF.value === '1.00' && sC.value === '100' && toasts.indexOf('MSG-S') >= 0);
+    const tick = () => { n.fn.setLocked(sF, lock.s); n.fn.setLocked(fF, lock.f); p.win.uiSync(); };
+    lock.f = 'Fokus gilt für Sin und Tan'; lock.s = 'Die Stärke gilt für Sin, Tan und Geo.'; tick();
+    const v0 = fF.value; click0(btn(fF, -1));
+    check('the Fokus LOCK (Aus, Geo) is mirrored by the stepper at 768px and up: field and root aria-disabled with the same reason, a tap changes nothing; the parked strength field is locked as a plain field (readonly, aria-disabled)', fF.getAttribute('aria-disabled') === 'true' && fF.parentNode.getAttribute('aria-disabled') === 'true' && fF.parentNode.dataset.reason === lock.f && fF.value === v0 && sF.readOnly === true && sF.getAttribute('aria-disabled') === 'true', String(fF.parentNode.dataset.reason));
+    lock.f = null; lock.s = null; tick();
+    check('...unlocked again: the stepper steps, the parked field is editable again', fF.getAttribute('aria-disabled') === null && fF.parentNode.getAttribute('aria-disabled') === null && !sF.readOnly && (() => { const f0 = fF.value; click0(btn(fF, -1)); return fF.value !== f0; })());
+    eng.release();
+    check('release undoes it: the Fokus field is back in its section (same parent, same tree, not readonly), no wrapper and no row is left, the strength field never moved', fF.parentNode === n.before.fp && dump(fF) === n.before.fd && !fF.readOnly && !fF.hasAttribute('data-stepper') && sF.parentNode === n.before.sp && p.doc.all().filter(x => /ph-sheet-(block|row)|^stepper$/.test(x.className) && x.id === '' && x.children.some(c => c.id === 'net-focus-exact')).length === 0);
 });
 T('netz-fine-lock', () => {
     const n = netFine(), { p, eng, sF, fF, sC, fC, fn, lock, UI } = n; eng.start();
@@ -964,13 +1247,13 @@ T('timeline-rows', () => {
     check('release and apply again are idempotent: the same two blocks, every id once', (() => { const m = p.doc.mutations; eng.release(); const same = p.doc.mutations === m; eng.apply('form'); eng.show('zeit'); const h2 = p.doc.getElementById('ph-sheet-timeline'); return same && JSON.stringify(tlRows(h2)) === JSON.stringify(['ph-tl-icons / ph-tl-readout', '(h)ph-tl-chips / (h)ph-tl-moves+ph-tl-variant / (h)ph-tl-listbtn+ph-tl-reset', '(h)ph-tl-listhead / (h)ph-tl-list']) && ['ph-tl-icons', 'ph-tl-readout', 'timeline-pairing', 'ph-tl-chips', 'ph-tl-moves', 'ph-tl-variant', 'ph-tl-reset', 'ph-tl-listbtn', 'ph-tl-listhead', 'ph-tl-list'].every(id => p.doc.all().filter(n => n.id === id).length === 1); })());
 });
 // a view on a page of its own (the engine is not started: the view works on its elements wherever they are)
-const tlView = (o) => {
+const tlView = (o, noPh) => {
     const p = buildPage({ ui: true }); p.tlHome._detach();
     const state = Object.assign({ tl: null, summary: null, active: 'base' }, o || {});
     const kf = p.doc.getElementById('timeline-keyframe-list'), clicks = [], clr = p.doc.getElementById('btn-clear-timeline');
     clr.addEventListener('click', () => clicks.push('clear'));
     const mkKf = n => { kf.childNodes.slice().forEach(c => c._detach()); for (let i = 0; i < n; i++) { const tab = p.doc.createElement('span'); const nb = p.doc.createElement('button'), xb = p.doc.createElement('button'); nb.addEventListener('click', () => clicks.push('net' + i)); xb.addEventListener('click', () => clicks.push('remove' + i)); tab.appendChild(nb); tab.appendChild(xb); kf.appendChild(tab); } };
-    p.doc.documentElement.classList.add('ph');
+    if (!noPh) p.doc.documentElement.classList.add('ph'); p.doc.documentElement.classList.add('sr-timeline');   // the view reads the surface flag the engine sets (C0b-2); noPh = the timeline surface at 768px and up (C0b-6a: no layout, no html.ph)
     const view = TLV.createTimelineView(p.doc, p.win, { read: { timelineState: () => state.tl, timelineSummary: () => state.summary, activeLayerNow: () => state.active } });
     const tlo = (ids, nets) => ({ keyframeLayerIds: ids, netStates: nets || ids.map(() => ({ x: {} })), segmentDurationsMs: ids.slice(1).map(() => 2000) });
     const set = (patch) => { Object.assign(state, patch); if (patch.tl) mkKf(patch.tl.keyframeLayerIds.length); p.win.uiSync(); };
@@ -1001,6 +1284,25 @@ T('timeline-forward', () => {
     check('without a timeline the trash is disabled ("Noch keine Keyframes") and forwards nothing', dis(n.trash) && n.trash.dataset.reason === 'Noch keine Keyframes' && v.clicks.length === 0);
     check('the "x" buttons of the keyframe list are never forwarded to (only the first button of a keyframe)', (() => { v.set({ tl: v.tlo([0, 1]), summary: { state: 'animated' }, active: 1 }); v.clicks.length = 0; n.netrec.dispatch('click', { detail: 1 }); return v.clicks.join() === 'net1' && v.clicks.indexOf('remove1') < 0; })());
 });
+// patterns commit C0b-6a: the same view at 768px and up - the surface flag only, no html.ph, no sheet: the open state of the group (ts-open, flipped by the strip's own handler) is the open state
+T('timeline-inline', () => {
+    const v = tlView({}, true), n = v.nodes, g = v.p.tlGroup;
+    check('without html.ph (only sr-timeline) the view works: it reads the surface flag, never the layout', !v.p.doc.documentElement.classList.contains('ph') && v.p.doc.documentElement.classList.contains('sr-timeline'));
+    v.set({ tl: v.tlo([2, 0]), summary: { state: 'animated' }, active: 0 });
+    check('netrec forwards to the "Net" button of the selected layer\'s keyframe only (layer 0 = position 1) and to no other; the readout says the state', !dis(n.netrec) && (n.netrec.dispatch('click', { detail: 1 }), v.clicks.join() === 'net1') && n.readout.textContent === 'Netz: animiert (2 Keyframes)', v.clicks.join() + ' / ' + n.readout.textContent);
+    v.clicks.length = 0; v.set({ active: 'base' });
+    check('the base selected: netrec is disabled with its reason and forwards nothing', dis(n.netrec) && n.netrec.dataset.reason === 'Gewählte Ebene ist kein Keyframe' && (n.netrec.dispatch('click', { detail: 1 }), v.clicks.length === 0));
+    v.clicks.length = 0; n.trash.dispatch('click', { detail: 1 });
+    check('the trash forwards ONE click to #btn-clear-timeline (which asks first) and nothing else', v.clicks.join() === 'clear');
+    g.classList.add('ts-open'); v.p.win.uiSync(); n.pairing.dispatch('click', { detail: 1 });
+    check('the pairing toggle (two keyframes) turns on: ph-tl-editor-open on the group, aria-pressed true', g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'true');
+    g.classList.remove('ts-open'); v.p.doc.dispatch('click', { target: v.p.doc.body });
+    check('the group closes (the strip\'s "..." flips ts-open, the click reaches the document): the toggle is OFF at once, without a UI tick: no class, aria-pressed false', !g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'false');
+    g.classList.add('ts-open'); v.p.doc.dispatch('click', { target: v.p.doc.body }); v.p.win.uiSync();
+    check('...and reopened it is still off (the open state is the whole story: no stale toggle)', !g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'false');
+    n.pairing.dispatch('click', { detail: 1 }); v.set({ tl: v.tlo([0]), summary: { state: 'pending' } });
+    check('a keyframe is removed (one left): the toggle disables with "Mindestens zwei Keyframes nötig" and goes off, the editor class goes', dis(n.pairing) && n.pairing.dataset.reason === 'Mindestens zwei Keyframes nötig' && !g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'false');
+});
 T('timeline-toggle', () => {
     const v = tlView(), n = v.nodes, g = v.p.tlGroup;
     v.set({ tl: v.tlo([0]), summary: { state: 'pending' }, active: 0 });
@@ -1017,7 +1319,7 @@ T('timeline-toggle', () => {
     check('close and reopen WITHOUT a tick in between (the click that closes the sheet bubbles to the document): the toggle is off, the class is gone, the editor stays hidden when the sheet is open again', !g.classList.contains('ph-tl-editor-open') && n.pairing.getAttribute('aria-pressed') === 'false' && !/\bactive\b/.test(n.pairing.className) && (v.p.win.uiSync(), !g.classList.contains('ph-tl-editor-open')));
     g.classList.add('ts-open'); n.pairing.dispatch('click', { detail: 1 }); v.set({ tl: v.tlo([0]) });
     check('...and when the timeline drops below two keyframes while the editor is open', !g.classList.contains('ph-tl-editor-open') && dis(n.pairing));
-    v.p.doc.documentElement.classList.remove('ph'); g.classList.add('ts-open'); v.set({ tl: v.tlo([0, 1]) }); n.pairing.dispatch('click', { detail: 1 }); v.p.win.uiSync();
+    v.p.doc.documentElement.classList.remove('sr-timeline'); g.classList.add('ts-open'); v.set({ tl: v.tlo([0, 1]) }); n.pairing.dispatch('click', { detail: 1 }); v.p.win.uiSync();
     check('outside the phone layout the view does nothing on a tick (no class left on the group)', !g.classList.contains('ph-tl-editor-open'));
 });
 T('timeline-readout', () => {
@@ -1030,6 +1332,7 @@ T('timeline-readout', () => {
 // ---- the pairing view of the timeline sheet (sheets redesign, commit 5b): ui-phone-pairing.js with the REAL ui.js and the real icon-row view, against a fake of the model that REBUILDS its rows after every change (as sketch.js does) ----
 console.log('\n== the pairing view (sheets redesign, commit 5b): forwarding, the selection, the model rebuilt after every action ==');
 const PV = require(process.env.UI_PHONE_PAIRING_JS || path.join(ROOT, 'ui-phone-pairing.js'));
+const PVSRC = fs.readFileSync(process.env.UI_PHONE_PAIRING_JS || path.join(ROOT, 'ui-phone-pairing.js'), 'utf8');
 // the model: what sketch.js's renderTimelinePairingEditor() renders, rebuilt from scratch (new elements) after every action: row r = Start line r, perm[r] = its End line; up / down swap the End assignments of two rows,
 // flip toggles the End line's flip, prev / next step its variant k of c; the reset button is hidden while the pairing is the default
 const pairModel = (p, init) => {
@@ -1089,8 +1392,8 @@ const pairModel = (p, init) => {
     render();
     return { st, log, render };
 };
-const pairPage = (init) => {
-    const v = tlView(), model = pairModel(v.p, init);
+const pairPage = (init, noPh) => {
+    const v = tlView({}, noPh), model = pairModel(v.p, init);
     const view = PV.createPairingView(v.p.doc, v.p.win, { perm: () => model.st.perm.slice() });
     v.set({ tl: v.tlo([0, 1, 2]), summary: { state: 'animated' } }); v.p.tlGroup.classList.add('ts-open');
     return Object.assign({ model, pview: view, n: view.nodes, g: v.p.tlGroup }, { v });
@@ -1196,7 +1499,7 @@ T('pairing-view-reset-open', () => {
 });
 T('pairing-view-outside-phone', () => {
     const x = pairPage(); open(x);
-    x.v.p.doc.documentElement.classList.remove('ph'); const before = x.n.chips.children.length; x.model.st.perm = [1, 0, 2, 3]; x.model.render(); x.v.p.win.uiSync();
+    x.v.p.doc.documentElement.classList.remove('sr-timeline'); const before = x.n.chips.children.length; x.model.st.perm = [1, 0, 2, 3]; x.model.render(); x.v.p.win.uiSync();
     check('without html.ph the view does nothing on a tick', x.n.chips.children.length === before && chipsOf(x).length === 4);
 });
 
@@ -1278,7 +1581,7 @@ T('pairing-list-leave', () => {
     check('the model\'s list was open before (the desktop left it so): the view does not click Browse all to open it and does not close it on leaving: it stays as found', before === '' && x.model.log.join() === '' && x.model.st.browseOpen === true);
     // outside the phone layout
     x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] }); goList(x);
-    x.v.p.doc.documentElement.classList.remove('ph'); x.v.p.win.uiSync();
+    x.v.p.doc.documentElement.classList.remove('sr-timeline'); x.v.p.win.uiSync();
     check('the phone layout ends (768px) with the list open: the gate classes go and the model\'s list is closed (the page is as at 768px)', !inList(x) && !inEditor(x) && x.model.st.browseOpen === false);
 });
 T('pairing-list-segments', () => {
@@ -1357,6 +1660,124 @@ T('labels-i18n', () => {
     });
     const p = buildPage({ ui: true }), eng = ph(p); eng.start(); eng.apply('netz');
     check('without the dictionary (the Node tests, a page without ui-i18n.js) the German text of the config is written', p.doc.getElementById('ph-subtabs').children.map(b => b.textContent).join() === de.netz && p.doc.getElementById('ph-toolrow').getAttribute('aria-label') === 'Werkzeuge' && p.doc.getElementById('ph-subtabs').getAttribute('aria-label') === 'Unterbereiche');
+});
+
+console.log('\n== the surfaces (patterns commit C0b-2: apply = layout + surfaces; the gate classes sr, sr-netz, sr-trails, sr-timeline) ==');
+T('surface-flags', () => {
+    const p = formPageUI(), eng = ph(p);
+    check('before start() no gate class is on <html>', cls(p) === '');
+    eng.start();
+    check('Form on the phone: ph, sr and sr-timeline (the timeline surface applies on every tab; the layer sheet has no flag) - no sr-netz, no sr-trails', cls(p) === 'ph sr sr-timeline', cls(p));
+    check('state() lists the surfaces applied, in the registry\'s order: layer, timeline', eng.state().surfaces.join() === 'layer,timeline' && eng.state().surfaceTab === 'form', eng.state().surfaces.join());
+    p.doc.documentElement.setAttribute('data-tab', 'farbe'); p.doc.dispatch('tabchange', { detail: { tab: 'farbe' } });
+    check('a tab change to Farbe: sr-trails joins (the trails surface is the Farbe tab\'s), sr-timeline stays: ph sr sr-timeline sr-trails', cls(p) === 'ph sr sr-timeline sr-trails' && eng.state().surfaces.join() === 'layer,timeline,trails', cls(p) + ' / ' + eng.state().surfaces.join());
+    p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
+    check('...to Netz: sr-netz replaces sr-trails (no flag left behind by the tab before): ph sr sr-netz sr-timeline', cls(p) === 'ph sr sr-netz sr-timeline' && eng.state().surfaces.join() === 'layer,timeline,netz', cls(p));
+    p.doc.documentElement.setAttribute('data-tab', 'form'); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
+    check('...and back to Form: ph sr sr-timeline again, the same single set (no flag twice, no leftover)', cls(p) === 'ph sr sr-timeline', cls(p));
+    p.mq.set(false);
+    check('the width turning to 768px and up releases the LAYOUT (no ph, no stack, applied null, the layout\'s classes gone) - the timeline surface stays applied there inline (C0b-6a: sr and sr-timeline, the icon row built in #timeline-group), the layer sheet (no inline host) is gone', cls(p) === 'sr sr-timeline' && eng.state().surfaces.join() === 'timeline' && eng.state().applied === null && p.doc.getElementById('ph-stack') === null && p.doc.getElementById('ph-sheet-layer') === null && p.doc.getElementById('ph-sheet-timeline') === null, cls(p));
+    p.mq.set(true);
+    check('back to a phone width: applied again, the same classes', cls(p) === 'ph sr sr-timeline' && eng.state().applied === 'form', cls(p));
+    eng.release();
+    check('release() removes the classes (idempotent: a second release changes nothing)', cls(p) === '' && eng.release() === false, cls(p));
+});
+T('surface-desktop', () => {
+    const p = formPageUI(); p.mq.set(false);
+    const before = dump(p.doc.documentElement), eng = ph(p, noInline()); eng.start();
+    check('start() at 768px and up with EVERY inline switch off: no class, nothing moved, no stack, the tree is untouched', cls(p) === '' && dump(p.doc.documentElement) === before && eng.state().surfaces.length === 0 && eng.state().moved.length === 0);
+    p.mq.set(false); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
+    check('...and a tab change and a repeated media-query event at 768px and up change nothing either', cls(p) === '' && dump(p.doc.documentElement) === before);
+    check('the registry: the inline switch is ON for the Netz, trails and timeline surfaces (the layer sheet is OFF: it has no inline host)', Object.keys(config.surfaces).every(n => config.surfaces[n].inlineOn === (n === 'netz' || n === 'trails' || n === 'timeline')));
+    const q = formPageUI(); q.mq.set(false); const e2 = ph(q); e2.start();
+    check('with the real config the Form tab at 768px and up applies the TIMELINE surface only (C0b-6a): sr and sr-timeline, no ph, no stack, the three blocks of the timeline sheet built inside #timeline-group (the icon row and the readout, the editor rows, the list rows: the view\'s gates open them), the strip\'s group keeps its own open state', cls(q) === 'sr sr-timeline' && e2.state().surfaces.join() === 'timeline' && q.doc.getElementById('ph-stack') === null && e2.state().applied === null && q.doc.getElementById('timeline-group').className.indexOf('ph-sheet-rows') >= 0 && q.doc.getElementById('timeline-group').children.filter(c => c.className === 'ph-sheet-block').length === 3 && q.doc.getElementById('ph-tl-icons').parentNode.className === 'ph-sheet-row', cls(q));
+    e2.release();
+    check('release() puts the icon row and the readout back into their holder: no block, no class, no ph-sheet-rows left on the group, no marker', cls(q) === '' && q.doc.getElementById('timeline-group').className.indexOf('ph-sheet-rows') < 0 && q.doc.all().filter(n => /ph-sheet-block/.test(n.className)).length === 0 && q.doc.getElementById('ph-tl-home').children.map(c => c.id).slice(0, 2).join() === 'ph-tl-icons,ph-tl-readout');
+});
+T('surface-switch', () => {
+    // a COPY of the config with the Netz surface\'s switch ON: the inline mode applies the overlay blocks without the layout, and nothing else (the engine builds only an overlay host inline)
+    const cfg = JSON.parse(JSON.stringify(config)); cfg.surfaces.netz.inlineOn = true;   // the real config has it on since C0b-3; a copy keeps this test independent of that
+    const p = netzPage(); p.mq.set(false);
+    const before = dump(p.doc.documentElement), eng = ph(p, cfg); eng.start();
+    check('with the switch ON (the real config since C0b-3) a desktop Netz tab applies the surfaces only (the Netz overlay and, as on every tab, the timeline): sr, sr-netz and sr-timeline, NO ph, no stack, no tool row', cls(p) === 'sr sr-netz sr-timeline' && p.doc.getElementById('ph-stack') === null && eng.state().applied === null && eng.state().surfaces.join() === 'timeline,netz' && eng.state().surfaceTab === 'netz', cls(p) + ' / ' + eng.state().surfaces.join());
+    check('...its blocks are in the Netz overlay (the host class ph-sheet-rows) and no sheet (the layer sheet and the timeline sheet are phone hosts) and no trails surface is applied', p.doc.getElementById('more-netz').className.indexOf('ph-sheet-rows') >= 0 && p.doc.all().filter(n => n.id === 'ph-sheet-timeline' || n.id === 'ph-sheet-layer').length === 0 && cls(p).indexOf('sr-trails') < 0);
+    p.mq.set(true);
+    check('the width turning to a phone: the layout is built and every surface of the tab applied (once: ph sr sr-netz sr-timeline), the Netz blocks not doubled', cls(p) === 'ph sr sr-netz sr-timeline' && p.doc.all().filter(n => n.className === 'ph-sheet-block').length >= 2 && eng.state().surfaces.join() === 'layer,timeline,netz', cls(p));
+    const blocks = p.doc.all().filter(n => /\bph-sheet-block\b/.test(n.className) && n.parentNode && n.parentNode.id === 'more-netz').length;
+    p.mq.set(false);
+    check('and back to the desktop with the switch on: the layout is released, the surface is applied inline again (sr sr-netz sr-timeline)', cls(p) === 'sr sr-netz sr-timeline' && p.doc.getElementById('ph-stack') === null && p.doc.all().filter(n => /\bph-sheet-block\b/.test(n.className) && n.parentNode && n.parentNode.id === 'more-netz').length === blocks, cls(p));
+    const idsOf = pp => JSON.stringify(pp.doc.all().map(n => n.id).filter(Boolean).sort());
+    check('no id is made or lost by the round trips between the layout and the inline surface: the ids of the page with the surface inline are the same ids after phone, desktop, phone, desktop, and no id is twice', (() => { const a0 = idsOf(p); p.mq.set(true); const onPhone = idsOf(p); p.mq.set(false); const a1 = idsOf(p); p.mq.set(true); p.mq.set(false); const a2 = idsOf(p); const ids = JSON.parse(a2); return a0 === a1 && a1 === a2 && new Set(ids).size === ids.length && onPhone !== a0; })());
+    p.doc.documentElement.setAttribute('data-tab', 'form'); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
+    check('a tab change from Netz to Form at 768px and up with the overlay\'s blocks built releases them: only the timeline flag is left (sr sr-timeline), no Netz block, the exact fields back in their groups', cls(p) === 'sr sr-timeline' && p.moreNetz.querySelectorAll('.ph-sheet-block').length === 0, cls(p));
+    p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
+    eng.release();
+    check('release() puts the whole tree back (no marker, no block, no class) and removes sr, sr-netz and sr-timeline', cls(p) === '' && dump(p.doc.documentElement) === before, cls(p));
+    const off = JSON.parse(JSON.stringify(config)); off.surfaces.netz.inlineOn = false;
+    const q = netzPage(); q.mq.set(false); const e2 = ph(q, off); e2.start();
+    check('the same page with the Netz switch OFF (a copy of the config) applies the timeline surface only at 768px and up, and with every switch off nothing', cls(q) === 'sr sr-timeline' && e2.state().surfaces.join() === 'timeline' && (() => { const q2 = netzPage(); q2.mq.set(false); const e3 = ph(q2, noInline()); e3.start(); return cls(q2) === '' && e3.state().surfaces.length === 0; })());
+});
+T('surface-roundtrips', () => {
+    const p = formPageUI(), eng = ph(p), before = dump(p.doc.documentElement); eng.start();
+    for (let i = 0; i < 3; i++) { ['farbe', 'netz', 'form'].forEach(t => { p.doc.documentElement.setAttribute('data-tab', t); p.doc.dispatch('tabchange', { detail: { tab: t } }); }); p.mq.set(false); p.mq.set(true); }
+    const all = p.doc.all();
+    check('three round trips Form, Farbe, Netz and a resize across 768 each: one stack, one host per sheet, no duplicated id, the same classes as the first time', all.filter(n => n.id === 'ph-stack').length === 1 && ['ph-sheet-layer', 'ph-sheet-timeline'].every(id => all.filter(n => n.id === id).length === 1) && cls(p) === 'ph sr sr-timeline', cls(p));
+    eng.release();
+    check('...and release leaves the tree as it was before the first apply, with no class', dump(p.doc.documentElement) === before && cls(p) === '');
+});
+T('surface-sources', () => {
+    const eng = fs.readFileSync(process.env.UI_PHONE_JS || path.join(ROOT, 'ui-phone.js'), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+    check('the layout step is guarded: apply() applies the layout only for a covered tab at a phone width (mq.matches && t.covered) and otherwise releases and runs the inline surfaces', /if \(!mq\.matches \|\| !t \|\| !t\.covered\) \{ release\(\); surfacesInline\(tab\); return false; \}/.test(eng));
+    check('the inline mode needs the switch: buildSurfaces() skips a surface with inlineOn !== true in mode inline, and surfacesInline() does nothing unless one is on', /mode === 'inline' && sf\.inlineOn !== true\) return;/.test(eng) && /sf\.inlineOn === true && \(sf\.hosts \|\| \{\}\)\.inline/.test(eng));
+    check('release() removes the flags (removeSurfaceFlags) and the surface state, after the blocks and steppers are undone', /removeSurfaceFlags\(\);\s*html\.classList\.remove\('ph'\)/.test(eng) && /function removeSurfaceFlags\(\)/.test(eng));
+    check('the engine names no surface: no layer / timeline / netz / trails and no sr-... class in its code (the registry is data)', !/['"](layer|timeline|netz|trails)['"]/.test(eng.replace(/'(farbe|form)'/g, '')) && !/sr-(netz|trails|timeline)/.test(eng));
+});
+
+
+// ---- patterns commit C0b-6b: the pairing view and its list at 768px and up (the surface flag only, no html.ph, no sheet) ----
+console.log('\n== the pairing view at 768px and up (C0b-6b) ==');
+const inEd = x => x.g.classList.contains('ph-tl-editor-show'), inLs = x => x.g.classList.contains('ph-tl-list-show');
+T('pairing-view-inline', () => {
+    const x = pairPage({ perm: [0, 1, 2], flips: [false, false, false], vk: [1, 1, 1], vc: [1, 1, 1] }, true);
+    check('without html.ph (only sr-timeline) the toggle builds the editor: three chips, the first selected, the gate class ph-tl-editor-show on the group, the list icon offered', !x.v.p.doc.documentElement.classList.contains('ph') && (open(x), chipsOf(x).length === 3 && selOf(x) === 0 && inEd(x) && !inLs(x) && x.n.listBtn.hidden === false));
+    chipsOf(x)[1].dispatch('click', { detail: 1 }); x.model.log.length = 0; x.n.down.dispatch('click', { detail: 1 });
+    check('end-down on line 2 forwards ONE click to the model\'s own button of row 2 and the selection follows the moved line (line 3)', x.model.log.join() === 'down1' && selOf(x) === 2, x.model.log.join() + ' / ' + selOf(x));
+    x.n.listBtn.dispatch('click', { detail: 1 });
+    check('the list icon opens the list as a view state of the same group: ph-tl-list-show instead of the editor gate, the model\'s list opened by ONE click on Browse all', x.pview.list.open() === true && inLs(x) && !inEd(x) && x.model.log.join() === 'down1,browse', x.model.log.join());
+    let stopped = 0; x.v.p.doc.dispatch('keydown', { key: 'Escape', stopPropagation() { stopped++; }, preventDefault() { } });
+    check('the FIRST Escape leaves the list (back to the editor, the model\'s list closed again by one click) and is swallowed (captured before anything else sees it)', x.pview.list.open() === false && inEd(x) && stopped === 1 && x.model.log.slice(-1)[0] === 'browse', x.model.log.join());
+    let stopped2 = 0; x.v.p.doc.dispatch('keydown', { key: 'Escape', stopPropagation() { stopped2++; }, preventDefault() { } });
+    check('a SECOND Escape with nothing to leave does nothing in the view: not swallowed, the group stays open, the toggle stays on (the group is no sheet: Escape closes nothing)', stopped2 === 0 && x.g.classList.contains('ts-open') && x.g.classList.contains('ph-tl-editor-open') && inEd(x));
+    x.n.listBtn.dispatch('click', { detail: 1 }); x.g.classList.remove('ts-open'); x.v.p.doc.dispatch('click', { target: x.v.p.doc.body });
+    check('the group closes while the list is open (the strip\'s "..." flips ts-open): the toggle is off, the list is left, the gate classes are gone, the model\'s list is closed again, no chip is kept', x.pview.list.open() === false && !x.g.classList.contains('ph-tl-editor-open') && !inEd(x) && !inLs(x) && x.model.st.browseOpen === false && chipsOf(x).length === 0, JSON.stringify([x.pview.list.open(), x.g.className, x.model.st.browseOpen, chipsOf(x).length]));
+    x.g.classList.add('ts-open'); x.v.p.doc.dispatch('click', { target: x.v.p.doc.body }); open(x); x.n.listBtn.dispatch('click', { detail: 1 });
+    x.v.view.reset(); x.pview.refresh();
+    check('the layout switch (the engine calls the timeline view\'s reset(), then the pairing view\'s refresh()): the toggle is off AND the list is left in the same step, the model\'s list is closed; with the calls in the other order the list would stay', !x.g.classList.contains('ph-tl-editor-open') && x.pview.list.open() === false && !inLs(x) && !inEd(x) && x.model.st.browseOpen === false && x.v.nodes.pairing.getAttribute('aria-pressed') === 'false');
+    open(x); x.n.listBtn.dispatch('click', { detail: 1 });
+    x.v.view.reset();
+    check('...reset() alone only turns the toggle off; the pairing view leaves its list at its next look (a tick, a click, or the refresh the engine asks for second)', x.v.nodes.pairing.getAttribute('aria-pressed') === 'false' && (x.pview.refresh(), x.pview.list.open() === false));
+    x.v.set({ tl: x.v.tlo([0, 1, 2]), summary: { state: 'animated' } }); open(x); x.n.listBtn.dispatch('click', { detail: 1 }); x.v.set({ tl: x.v.tlo([0]), summary: { state: 'pending' } });
+    check('a keyframe is removed down to one while the list is open: the toggle goes off and disables, the list is left, nothing of the editor is kept', x.pview.list.open() === false && !inLs(x) && !inEd(x) && x.v.nodes.pairing.getAttribute('aria-pressed') === 'false' && chipsOf(x).length === 0);
+});
+T('pairing-view-inline-source', () => {
+    const code = PVSRC.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+    check('the pairing view\'s Escape handler is the ONE capture listener that acts only while the list is open (e.key === "Escape" && listOpen); no other key, no ts-open, no sheet: at 768px and up Escape closes nothing else', (code.match(/addEventListener\('keydown'/g) || []).length === 1 && /e\.key === 'Escape' && listOpen/.test(code) && /, true\)/.test(code.slice(code.indexOf("addEventListener('keydown'"), code.indexOf("addEventListener('keydown'") + 400)));
+    check('the view reads no layout: no html.ph, no #ph-slot, no UI.overlay; the gate is html.sr-timeline and the toggle class on the group', !/classList\.contains\('ph'\)|ph-slot|UI\.overlay/.test(code) && /classList\.contains\('sr-timeline'\)/.test(code));
+});
+T('layout-switch', () => {
+    const p = buildPage({ ui: true }); const calls = []; p.win.uiPhoneTimeline = { reset() { calls.push('reset'); } }; p.win.uiPhonePairing = { refresh() { calls.push('refresh'); } };
+    p.mq.matches = false; const eng = ph(p); eng.start();
+    check('at 768px and up no layout is built: the layout-switch hooks are not called by start()', calls.length === 0, calls.join());
+    p.mq.set(true);
+    check('the phone layout is built: the hooks are called ONCE each, in the config order (the timeline view resets first, then the pairing view looks again)', calls.join() === 'reset,refresh', calls.join());
+    calls.length = 0; p.mq.set(false);
+    check('the layout is released (the width crosses 768px): the same two calls, in the same order, once each', calls.join() === 'reset,refresh', calls.join());
+    calls.length = 0; p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } });
+    check('a tab change at 768px and up (the surfaces switch, no layout is built or released) calls nothing', calls.length === 0, calls.join());
+    p.mq.set(true); calls.length = 0; p.doc.documentElement.setAttribute('data-tab', 'form'); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
+    check('a tab change inside the phone layout releases and builds it again: the hooks run for both (the toggle is UI state of one arrangement)', calls.join() === 'reset,refresh,reset,refresh', calls.join());
+    const q = buildPage({ ui: true }); q.mq.matches = false; const e2 = ph(q); e2.start(); q.mq.set(true); q.mq.set(false);
+    check('a page without the views (no window.uiPhoneTimeline, no uiPhonePairing) does not throw', true);
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
