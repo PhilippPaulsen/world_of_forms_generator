@@ -37,8 +37,9 @@ const CASES = [['linear', 0], ['linear', 45], ['linear', 90], ['linear', 135], [
 const opts = (a) => ({ angleDeg: a, center: CENTER });
 
 console.log('== the file ==');
+const A1NAMES = ['spatialMorphBlendPoint', 'spatialMorphClamp01', 'spatialMorphCornerWeights', 'spatialMorphDirection', 'spatialMorphModes', 'spatialMorphNormalizeMode', 'spatialMorphScalar', 'spatialMorphSmooth', 'spatialMorphUnit', 'spatialMorphUnitCoords'];   // the stage-a1 names this file pins; stage a2 added more (tools/morph/test-spatial-morph-geometry.js)
 T('file', () => {
-  check('the module exports the nine functions and the mode list, all starting with spatialMorph', Object.keys(M).sort().join() === ['spatialMorphBlendPoint', 'spatialMorphClamp01', 'spatialMorphCornerWeights', 'spatialMorphDirection', 'spatialMorphModes', 'spatialMorphNormalizeMode', 'spatialMorphScalar', 'spatialMorphSmooth', 'spatialMorphUnit', 'spatialMorphUnitCoords'].sort().join(), Object.keys(M).join());
+  check('the module exports the nine stage-a1 functions and the mode list (stage a2 adds more: test-spatial-morph-geometry.js pins the full list), all starting with spatialMorph', A1NAMES.every((n) => n in M) && Object.keys(M).every((n) => /^spatialMorph[A-Z]/.test(n)), Object.keys(M).join());
   check('the modes are linear, radial, bilinear (frozen)', JSON.stringify(M.spatialMorphModes) === '["linear","radial","bilinear"]' && Object.isFrozen(M.spatialMorphModes));
 });
 
@@ -291,7 +292,7 @@ T('names', () => {
   const R = makeReader(DATA);
   const topLevel = (src) => { const s = src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')); const out = []; s.split('\n').forEach((line) => { let m; if ((m = /^(?:async\s+)?function\s*\*?\s*([\w$]+)/.exec(line)) || (m = /^(?:const|let|var)\s+([\w$]+)/.exec(line)) || (m = /^class\s+([\w$]+)/.exec(line))) out.push(m[1]); }); return out; };
   const names = topLevel(SRC);
-  check(`the file has top-level names (${names.length}: ${names.join(', ')}) and EVERY one starts with spatialMorph`, names.length === 10 && names.every((n) => /^spatialMorph[A-Z]/.test(n)), names.filter((n) => !/^spatialMorph[A-Z]/.test(n)).join());
+  check(`the file has top-level names (${names.length}: ${names.join(', ')}) and EVERY one starts with spatialMorph`, A1NAMES.every((n) => names.includes(n)) && names.every((n) => /^spatialMorph[A-Z]/.test(n)), names.filter((n) => !/^spatialMorph[A-Z]/.test(n)).join());
   check('the module.exports list is exactly these names (nothing exported that is not top-level, nothing top-level left out)', JSON.stringify(Object.keys(M).sort()) === JSON.stringify(names.slice().sort()));
   const hits = names.filter((n) => R.kindOf(n) !== null || DATA.members.includes(n) || DATA.constants.includes(n) || DATA.globalFunctions.includes(n) || DATA.objectPrototypeNames.includes(n));
   check('no name is a p5 member, constant or global function of the frozen list tools/ui/p5-names-1.9.0.json (the reader\'s own check, kindOf, says none reacts)', hits.length === 0, hits.join());
