@@ -1041,6 +1041,11 @@ body.dark {
 /* Farbe-only and Form-only controls. Hidden by html[data-tab] (nav.js sets it) regardless of viewport width - these selectors out-specify .icon-btn's display: flex. */
 html:not([data-tab="farbe"]) .rail-farbe-only { display: none; }
 html:not([data-tab="form"]) .rail-form-only { display: none; }
+/* The Face Colors group (#face-colors-group, sketch.js updateFaceColorsPanel()) belongs to the Farbe tab only (fix F1). sketch.js shows it whenever the active sheet's Fill is on and knows no tab, and the group sits
+   in the controls container, which is visible at 768px and up in every tab: with Fill on, the Form and Netz tabs showed its status, notes and rows under the canvas (the keyframe layers of the net workflow made it
+   the "timeline keyframe and hidden" ghost messages). A display rule, not the `hidden` attribute: it holds whatever sketch.js does to `hidden`, and it takes everything inside with it (a leftover chip view too).
+   In the Farbe tab at 768px and up only the chip view shows: the parked rule of the trails surface below hides the rest. On the phone the container is hidden anyway. */
+html:not([data-tab="farbe"]) #face-colors-group { display: none; }
 /* Farbe: Undo / Redo / Random (group A), Clear (group E) and Mehr are not applicable to face-color work (fill already requires straight lines; generating / undoing /
    clearing pattern connections aren't color operations) - hidden as whole groups, so a hidden group leaves no gap; the Formorgel link goes too (the Farborgel link takes its place); Kurven (curve toggle) sits in the More popover, which is hidden with More. Undo / Redo's stack (core/state.js) is per layer, not tab-scoped, so hiding the buttons loses no history. */
 html[data-tab="farbe"] #rail-group-a,
