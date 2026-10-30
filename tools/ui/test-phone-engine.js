@@ -564,6 +564,114 @@ T('farbe-highlight', () => {
     deferred.splice(0).forEach(fn => fn());
     check('...and the queued look finds the state the engine left (Spuren shown: outlined, once)', calls2.join() === 'base:z' && ch2.outlined().key === 'z', calls2.join());
 });
+// patterns commit T1: a second click on the SELECTED chip switches only the OUTLINE off (the selection, the black chip and the stepper stay); the same story on the phone layout and at 768px and up
+['phone', 'inline'].forEach(mode => T('farbe-outline-' + mode, () => {
+    const phone = mode === 'phone', p = farbePage(); p.win.MouseEvent = class { constructor(t, o) { this.type = t; this.bubbles = !!(o && o.bubbles); } };
+    p.mq.matches = phone; const eng = ph(p); eng.start(); if (phone) eng.show('spuren');
+    const ch = p.chips, N = ch.nodes, calls = [], log = []; p.win.setFaceSelected = (sheet, key) => calls.push(sheet + ':' + key); let sheet = 'base'; p.win.activeLayerNow = () => sheet;
+    const last = () => calls.length ? calls[calls.length - 1] : '(none)', chip = i => N.chips.children[i], pressed = i => chip(i).getAttribute('aria-pressed'), black = i => /\bactive\b/.test(chip(i).className);
+    const tick = () => { p.doc.dispatch('click', { target: p.doc.body }); p.win.uiSync(); };
+    const mkRows = keys => { while (p.faceList.firstChild) p.faceList.removeChild(p.faceList.firstChild); keys.forEach((k, i) => { const row = p.doc.createElement('div'); row.className = 'fc-row'; row.dataset.key = k; const sw = p.doc.createElement('span'); sw.className = 'fc-swatch'; sw.style.backgroundColor = 'rgb(' + i + ', 0, 0)'; const lab = p.doc.createElement('span'); lab.className = 'fc-label'; lab.textContent = 'Trail ' + (i + 1) + ' · 2 faces'; row.appendChild(sw); row.appendChild(lab);
+        const wrap = p.doc.createElement('span'); wrap.className = 'pairing-variant'; ['-', 'cnt', '+'].forEach((t, j) => { if (j === 1) { const c = p.doc.createElement('span'); c.className = 'pairing-variant-count'; c.dataset.k = '1'; c.dataset.c = '3'; c.textContent = '1/3'; wrap.appendChild(c); } else { const b = p.doc.createElement('button'); b.className = 'layer-btn pairing-move-btn'; b.addEventListener('click', () => log.push('step:' + k + t)); wrap.appendChild(b); } }); row.appendChild(wrap);
+        ['mouseenter', 'mouseleave'].forEach(t => row.addEventListener(t, () => log.push(t + ':' + k))); p.faceList.appendChild(row); }); };
+    p.faceGroup.hidden = false; mkRows(['k1', 'k2', 'k3']); ch.refresh(); tick();
+    check(mode + ': by default the first trail is outlined and its chip is aria-pressed (outline ON) and black', last() === 'base:k1' && ch.outline() === true && pressed(0) === 'true' && black(0) && pressed(1) === 'false' && !black(1), calls.join());
+    chip(0).dispatch('click'); tick();
+    check(mode + ': a SECOND click on the selected chip switches the outline off: setFaceSelected(null, null) once, the chip STAYS black and is aria-pressed false, the label and the selection are unchanged', last() === 'null:null' && calls.length === 2 && ch.outlined() === null && ch.outline() === false && pressed(0) === 'false' && black(0) && N.chips.children[0].getAttribute('aria-label') === 'Spur 1 · 2 Flächen' && ch.selectedTrail().key === 'k1', calls.join());
+    tick(); p.win.uiSync();
+    check(mode + ': ticks and clicks with the outline OFF call nothing and keep it OFF', calls.length === 2 && ch.outline() === false && pressed(0) === 'false', calls.join());
+    N.next.dispatch('click'); N.prev.dispatch('click');
+    check(mode + ': the stepper still acts on the selected trail with the outline OFF (the model row\'s own buttons of k1, nothing else) and is not disabled', log.join() === 'step:k1+,step:k1-' && !N.next.getAttribute('aria-disabled') && !N.prev.getAttribute('aria-disabled') && ch.selectedTrail().key === 'k1' && ch.outline() === false && calls.length === 2, log.join());
+    log.length = 0; chip(1).dispatch('pointerenter', { pointerType: 'mouse' });
+    check(mode + ': a mouse over ANOTHER chip still hovers (a plain mouseenter to its model row) and does not touch the outline state or setFaceSelected', log.join() === 'mouseenter:k2' && calls.length === 2 && ch.outline() === false, log.join());
+    chip(1).dispatch('pointerleave'); chip(0).dispatch('pointerenter', { pointerType: 'mouse' });
+    check(mode + ': a mouse over the selected chip whose outline is OFF hovers too; leaving returns to the state: OFF, nothing outlined by this view', log.join() === 'mouseenter:k2,mouseleave:k2,mouseenter:k1' && ch.outline() === false && ch.outlined() === null && calls.length === 2, log.join());
+    chip(0).dispatch('pointerleave'); chip(0).dispatch('click'); tick();
+    check(mode + ': a THIRD click brings the outline back: setFaceSelected("base", "k1"), aria-pressed true again', last() === 'base:k1' && calls.length === 3 && ch.outline() === true && pressed(0) === 'true' && black(0), calls.join());
+    chip(2).dispatch('click'); tick();
+    check(mode + ': a click on ANOTHER chip selects it and outlines it (k3), the first chip is no longer black or pressed', last() === 'base:k3' && ch.outline() === true && pressed(2) === 'true' && black(2) && pressed(0) === 'false' && !black(0), calls.join());
+    chip(2).dispatch('click'); chip(0).dispatch('click'); tick();
+    check(mode + ': with the outline OFF a click on an UNSELECTED chip selects it AND outlines it (it does not stay OFF)', last() === 'base:k1' && ch.outline() === true && pressed(0) === 'true' && ch.selectedTrail().key === 'k1', calls.join());
+    // every reset, each from OFF
+    const off = () => { chip(ch.selectedTrail().index).dispatch('click'); tick(); return ch.outline() === false; };
+    check(mode + ': (setup) the outline is OFF', off());
+    if (phone) { eng.show('harmonie'); tick(); eng.show('spuren'); tick(); }
+    check(mode + (phone ? ': a sub-tab switch (Harmonie and back) is no reset: still OFF, nothing outlined' : ': (the inline surface has no sub-tabs; the group stays)'), ch.outline() === false && ch.outlined() === null, calls.join());
+    sheet = 1; tick();
+    check(mode + ': RESET - the active sheet changes (a layer): ON, the trail is outlined on THAT sheet (1, k1), aria-pressed true', ch.outline() === true && last() === '1:k1' && pressed(0) === 'true', calls.join());
+    off(); sheet = 'base'; tick();
+    check(mode + ': RESET - back to the base sheet: ON again', ch.outline() === true && last() === 'base:k1', calls.join());
+    off(); p.faceGroup.hidden = true; tick(); p.faceGroup.hidden = false; tick();
+    check(mode + ': RESET - Fill turns off (the group is hidden) and on again: ON', ch.outline() === true && last() === 'base:k1' && pressed(0) === 'true', calls.join());
+    off(); chip(2).dispatch('click'); chip(2).dispatch('click'); tick();
+    check(mode + ': (setup) k3 selected with the outline OFF', ch.outline() === false && ch.selectedTrail().key === 'k3', calls.join());
+    mkRows(['k1', 'k2']); ch.refresh(); tick();
+    check(mode + ': RESET - the list changes so that the selected trail disappears: the CLAMPED trail (k2) is selected and outlined, ON, aria-pressed true', ch.outline() === true && ch.selectedTrail().key === 'k2' && last() === 'base:k2' && pressed(1) === 'true', calls.join());
+    off(); mkRows(['k0', 'k1', 'k2']); ch.refresh(); tick();
+    check(mode + ': a trail INSERTED before the selected one is no reset: the selection stays by key (k2) and the outline stays OFF', ch.outline() === false && ch.selectedTrail().key === 'k2' && ch.outlined() === null, calls.join());
+    p.doc.documentElement.setAttribute('data-tab', 'netz'); p.doc.dispatch('tabchange', { detail: { tab: 'netz' } }); tick();
+    p.doc.documentElement.setAttribute('data-tab', 'farbe'); p.doc.dispatch('tabchange', { detail: { tab: 'farbe' } }); tick(); if (phone) { eng.show('spuren'); tick(); }
+    check(mode + ': RESET - the Farbe tab is left and entered again: ON, outlined', ch.outline() === true && last().indexOf('base:') === 0 && ch.outlined() !== null, calls.join());
+    off(); p.mq.set(!phone); tick(); p.mq.set(phone); tick(); if (phone) { eng.show('spuren'); tick(); }
+    check(mode + ': RESET - the layout is released and built (a resize across 768px and back): ON, no stale OFF, the trail is outlined', ch.outline() === true && ch.outlined() !== null && last().indexOf('base:') === 0 && (() => { const c = ch.nodes.chips.children; return c.some(x => x.getAttribute('aria-pressed') === 'true'); })(), calls.join());
+    off(); eng.release(); tick(); eng.apply('farbe'); tick(); if (phone) { eng.show('spuren'); tick(); }
+    check(mode + ': RESET - release() and apply() (the surface is released): ON again', ch.outline() === true && ch.outlined() !== null, calls.join());
+    const n0 = calls.length; N.chips.children.forEach(c => { c.dispatch('pointerenter', { pointerType: 'touch' }); });
+    check(mode + ': a touch never hovers and a pointer event alone never changes the outline', calls.length === n0 && ch.outline() === true);
+}));
+// patterns commit T1 (a click must work at once): the browser fires a pointerenter on the REBUILT chip under the resting mouse; it must not bring the hover (and the outline) back until the pointer has left
+['phone', 'inline'].forEach(mode => T('farbe-click-at-once-' + mode, () => {
+    const phone = mode === 'phone', p = farbePage(); p.win.MouseEvent = class { constructor(t, o) { this.type = t; this.bubbles = !!(o && o.bubbles); } };
+    p.mq.matches = phone; const eng = ph(p); eng.start(); if (phone) eng.show('spuren');
+    const ch = p.chips, N = ch.nodes, calls = [], log = []; p.win.setFaceSelected = (sheet, key) => calls.push(sheet + ':' + key); p.win.activeLayerNow = () => 'base';
+    const chip = i => N.chips.children[i], mouse = { pointerType: 'mouse' };
+    const tick = () => { p.doc.dispatch('click', { target: p.doc.body }); p.win.uiSync(); };
+    const mkRows = keys => { while (p.faceList.firstChild) p.faceList.removeChild(p.faceList.firstChild); keys.forEach((k, i) => { const row = p.doc.createElement('div'); row.className = 'fc-row'; row.dataset.key = k; const sw = p.doc.createElement('span'); sw.className = 'fc-swatch'; sw.style.backgroundColor = 'rgb(' + i + ', 0, 0)'; const lab = p.doc.createElement('span'); lab.className = 'fc-label'; lab.textContent = 'Trail ' + (i + 1) + ' · 2 faces'; row.appendChild(sw); row.appendChild(lab); ['mouseenter', 'mouseleave'].forEach(t => row.addEventListener(t, () => log.push(t + ':' + k))); p.faceList.appendChild(row); }); };
+    p.faceGroup.hidden = false; mkRows(['k1', 'k2', 'k3']); ch.refresh(); tick();
+    chip(0).dispatch('pointerenter', mouse); log.length = 0;
+    chip(0).dispatch('click'); tick();
+    check(mode + ': a click on the selected chip the MOUSE rests on: the outline is OFF at once (setFaceSelected(null, null)), the hover left the row (one mouseleave) and the chip is marked ignored', ch.outline() === false && calls[calls.length - 1] === 'null:null' && log.join() === 'mouseleave:k1' && ch.ignored() === 'k1' && ch.hovered() === null, calls.join() + ' / ' + log.join());
+    log.length = 0; chip(0).dispatch('pointerenter', mouse);
+    check(mode + ': the browser fires pointerenter on the REBUILT chip under the resting mouse: IGNORED (no mouseenter to the row, no hover): the outline stays off while the mouse rests', log.length === 0 && ch.hovered() === null && ch.outline() === false && ch.outlined() === null, log.join());
+    chip(0).dispatch('pointerenter', mouse); tick();
+    check(mode + ': ...also when the event comes again and after ticks and document clicks', log.length === 0 && ch.hovered() === null && ch.ignored() === 'k1');
+    chip(1).dispatch('pointerenter', mouse);
+    check(mode + ': the hover of ANOTHER chip works at once (mouseenter to its row) and the flag is gone', log.join() === 'mouseenter:k2' && ch.hovered() === 'k2' && ch.ignored() === null, log.join());
+    chip(1).dispatch('pointerleave'); log.length = 0; chip(0).dispatch('pointerenter', mouse);
+    check(mode + ': after that the first chip hovers as before (the outline by hover, the state still OFF)', log.join() === 'mouseenter:k1' && ch.hovered() === 'k1' && ch.outline() === false, log.join());
+    chip(0).dispatch('pointerleave'); log.length = 0;
+    chip(0).dispatch('pointerenter', mouse); chip(0).dispatch('click'); tick();
+    check(mode + ': a click with the mouse resting again brings the outline back AT ONCE (setFaceSelected("base", "k1")), the hover is not re-entered', ch.outline() === true && calls[calls.length - 1] === 'base:k1' && ch.ignored() === 'k1' && (chip(0).dispatch('pointerenter', mouse), ch.hovered() === null), calls.join());
+    chip(0).dispatch('pointerleave');
+    check(mode + ': the pointer LEAVES the chip: the flag is cleared; entering it again hovers', ch.ignored() === null && (log.length = 0, chip(0).dispatch('pointerenter', mouse), log.join() === 'mouseenter:k1' && ch.hovered() === 'k1'), log.join());
+    chip(0).dispatch('pointerleave');
+    // flag cleared by the chip going away
+    chip(2).dispatch('pointerenter', mouse); chip(2).dispatch('click'); tick();
+    check(mode + ': (setup) k3 clicked while hovered: the flag is on k3', ch.ignored() === 'k3' && ch.selectedTrail().key === 'k3');
+    mkRows(['k1', 'k2']); ch.refresh(); tick();
+    check(mode + ': the ignored chip is gone after a rebuild (the trail vanished): the flag is forgotten', ch.ignored() === null);
+    chip(1).dispatch('pointerenter', mouse); chip(1).dispatch('click'); tick();
+    check(mode + ': (setup) the flag is on k2', ch.ignored() === 'k2');
+    p.faceGroup.hidden = true; tick();
+    check(mode + ': the group is hidden (Fill off): the flag is forgotten, nothing is hovered', ch.ignored() === null && ch.hovered() === null);
+    p.faceGroup.hidden = false; mkRows(['k1', 'k2']); ch.refresh(); tick(); chip(0).dispatch('pointerenter', mouse); chip(0).dispatch('click'); tick();
+    check(mode + ': (setup) the flag is on k1 again', ch.ignored() === 'k1');
+    eng.release(); tick(); eng.apply('farbe'); tick(); if (phone) { eng.show('spuren'); tick(); }
+    check(mode + ': the surface is released: the flag is forgotten, and the first enter after the apply hovers', ch.ignored() === null && (log.length = 0, chip(0).dispatch('pointerenter', mouse), log[log.length - 1] === 'mouseenter:k1'), log.join());
+    chip(0).dispatch('pointerleave');
+    log.length = 0; chip(1).dispatch('click'); tick(); chip(1).dispatch('pointerenter', mouse);
+    check(mode + ': a click that is NOT on a hovered chip (a keyboard Enter, a touch tap) sets no flag: the next mouse enter hovers', ch.ignored() === null && ch.hovered() === 'k2', log.join());
+    chip(1).dispatch('pointerleave');
+    log.length = 0; chip(0).dispatch('pointerenter', { pointerType: 'touch' }); chip(0).dispatch('pointerenter', { pointerType: 'pen' });
+    check(mode + ': a touch or a pen pointer is never forwarded', log.length === 0 && ch.hovered() === null);
+}));
+T('farbe-outline-created-active', () => {
+    // a view created while everything is already active (the Farbe tab, the surface flag, Fill on with trails) starts with the outline ON: nothing resets it before the first click
+    const p = buildPage({ ui: true }), html = p.doc.documentElement; html.setAttribute('data-tab', 'farbe'); html.classList.add('sr-trails'); p.faceGroup.hidden = false;
+    ['k1', 'k2'].forEach((k, i) => { const row = p.doc.createElement('div'); row.className = 'fc-row'; row.dataset.key = k; const sw = p.doc.createElement('span'); sw.className = 'fc-swatch'; sw.style.backgroundColor = 'rgb(' + i + ', 0, 0)'; const lab = p.doc.createElement('span'); lab.className = 'fc-label'; lab.textContent = 'Trail ' + (i + 1) + ' · 2 faces'; row.appendChild(sw); row.appendChild(lab); p.faceList.appendChild(row); });
+    const ch = CHIPS.createChips(p.doc, p.win);
+    check('a view created on an already active page: the outline is ON and the selected chip is aria-pressed', ch.outline() === true && ch.nodes.chips.children[0].getAttribute('aria-pressed') === 'true' && ch.nodes.chips.children[1].getAttribute('aria-pressed') === 'false');
+});
 // patterns commit C0b-5: the trails surface at 768px and up. The chip view sits in a row host INSIDE the Face Colors group; the group's own content stays (the CSS parks it); no layout, no html.ph
 T('farbe-inline', () => {
     const p = farbePage(); p.win.MouseEvent = class { constructor(t, o) { this.type = t; this.bubbles = !!(o && o.bubbles); } };
