@@ -49,6 +49,7 @@ function tileFor(shape) {
 // position-based F. try/finally: the warp must never leak into face detection, export data or
 // the next call. Phase 1: face fills are skipped on a warped net (see the netwarp.js docblock).
 function drawTessellation() {
+    if (typeof spatialMorphTryDraw === 'function' && spatialMorphTryDraw()) return;   // morph stage c (core/spatial-morph-render.js): true = the spatial morph was drawn instead; off by default, absent in the gallery
     activeNetWarp = netWarpForBase(netTransformNow(), currentShape, outerCorners, nodeCount, shapeSizeFactor);   // the net in force now: author spec or the live animation frame
     try { _drawTessellationCore(); } finally { activeNetWarp = null; }
 }

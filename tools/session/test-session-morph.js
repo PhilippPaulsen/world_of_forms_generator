@@ -209,10 +209,11 @@ console.log('\n== 5. autosave, export, readers ==');
     check('through the real writer: first write, an unchanged state is not written again, a changed parameter is written (markDirty after every draw is all the page needs: nothing in sketch.js marks it)', w1 === 1 && w2 === 1 && w3 === 2, [w1, w2, w3].join(','));
     // export: omitted
     const e0 = exportOf(w); setMorph(w, DEF); const e1 = exportOf(w);
-    check('the export JSON does not carry the block (buildExportData is the same with the morph on and off): it describes the drawn pattern, and nothing draws the morph yet', same(e0, e1) && !J(e0).includes('spatialMorph') && !F.read('core/export.js').includes('spatialMorph'));
+    check('the export JSON does not carry the block (buildExportData is the same with the morph on and off): it describes the pattern, not the morph frame', same(e0, e1) && !J(e0).includes('spatialMorph') && !F.read('core/export.js').includes('spatialMorph'));
     // readers
     const readers = ['gallery.html', 'gallery.js', 'gallery-render.js', 'sketch.js', 'core/export.js', 'core/tiling.js', 'core/orbits.js'];
-    check('the catalog / gallery readers, sketch.js, the export and the tiling do not mention the morph block (sketch.js is unchanged in stage b)', readers.every(f => !F.read(f).includes('spatialMorph')), readers.filter(f => F.read(f).includes('spatialMorph')).join(','));
+    const names = f => /\bspatialMorph\b/.test(F.read(f));   // the block's own name; core/tiling.js names only the render hook spatialMorphTryDraw (stage c)
+    check('the catalog / gallery readers, sketch.js, the export and the tiling do not read the morph block (spatialMorph)', readers.every(f => !names(f)), readers.filter(names).join(','));
     check('the gallery does not load the session code, so it cannot read or write the block', !/core\/session|core\/spatial-morph/.test(F.read('gallery.html')));
     const html = F.read('index.html');
     const tags = [...html.matchAll(/<script src="([^"?]+)\?v=([^"]+)"><\/script>/g)].map(m => m[1]);
