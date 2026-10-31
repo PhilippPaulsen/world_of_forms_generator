@@ -1,6 +1,6 @@
 /*
  * core/spatial-morph.js
- * The weight mathematics (stage a1), the GEOMETRY (stage a2) and the PARAMETERS as data (stage b) of the STATIC, LINES-ONLY spatial morph: keyframe layers sit at the corners of a region of the 2D tessellation, and every point
+ * The weight mathematics (stage a1), the GEOMETRY (stage a2), the PARAMETERS as data (stage b) and the pure helpers of the render hook (stage c) of the STATIC, LINES-ONLY spatial morph: keyframe layers sit at the corners of a region of the 2D tessellation, and every point
  * of it (a tile centroid, or a point on a tile seam) is a blend of them with its own weights. This file turns a point into four corner weights and blends four corner
  * points with them. Nothing else: the keyframes' line alignment and the boundary anchoring come in stage a2, the render hook in stage c.
  * Pure: explicit arguments, plain data in and out, no globals, no p5, no DOM, no timers, no input is changed. Every top-level name starts with spatialMorph (the file is a
@@ -372,7 +372,7 @@ function spatialMorphPrepareLines(corners, poly, options) {
 function spatialMorphAnchoredPoint(desc, wTile, wEdge) {
     const d = desc || { onBoundary: false, moved: false, points: [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }], edgePoints: [{ x: 0, y: 0 }] };
     const okW = (w) => w && typeof w === 'object' && ['w00', 'w10', 'w01', 'w11'].every((k) => typeof w[k] === 'number' && Number.isFinite(w[k]));
-    if (!d.onBoundary) return okW(wTile) ? spatialMorphBlendPoint(d.points[0], d.points[1], d.points[2], d.points[3], wTile) : { x: d.points[0].x, y: d.points[0].y };
+    if (!d.onBoundary) return (d.moved && okW(wTile)) ? spatialMorphBlendPoint(d.points[0], d.points[1], d.points[2], d.points[3], wTile) : { x: d.points[0].x, y: d.points[0].y };   // not moved: the position itself (a blend of four equal points could differ by an ulp)
     if (!d.moved || !okW(wEdge)) return { x: d.edgePoints[0].x, y: d.edgePoints[0].y };
     return spatialMorphBlendPoint(d.edgePoints[0], d.edgePoints[1], d.edgePoints[2], d.edgePoints[3], wEdge);
 }
@@ -414,6 +414,112 @@ function spatialMorphEqual(a, b) {
     return x.enabled === y.enabled && x.mode === y.mode && x.angleDeg === y.angleDeg;
 }
 
+// =====================================================================================================================================================================================
+// STAGE c: pure helpers for the render hook (core/spatial-morph-render.js does the drawing; everything here is data in, data out).
+// =====================================================================================================================================================================================
+
+// The status codes the render hook reports (read by stage e, no UI text now). 'off': the switch is off. 'ok': the morph was drawn. 'netActive': the morph was drawn WITHOUT the net
+// that is in force (the prototype ignores the net as well). The others: the normal frame was drawn instead ('renderError': something threw).
+const spatialMorphStatusCodes = Object.freeze(['off', 'ok', 'netActive', 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'alignmentFailed', 'renderError']);
+
+// Which layers are the keyframes AND why not (the pre-conditions of the morph): spatialMorphSelectKeyframeLayers() plus the rule of the maintainers: the keyframes have the SAME shape and
+// the same line count. layers = [{ shape, lineCount, isPlayback }], options as for the selection ({ mode, timelineIds, base }). A layer with no lines is not a keyframe.
+//   -> { ok: true, ids, source } | { ok: false, code: 'needsTwoKeyframes' | 'shapeMismatch' | 'lineCountMismatch' }
+function spatialMorphPlanKeyframes(layers, options) {
+    const L = Array.isArray(layers) ? layers : [];
+    const o = options || {};
+    const sel = spatialMorphSelectKeyframeLayers(L, o);
+    const info = (id) => (id === 'base' ? o.base : L[id]);
+    if (sel.ok) {
+        const ref = info(sel.ids[0]);
+        for (const id of sel.ids) {
+            const l = info(id);
+            if (!l || !ref) return { ok: false, code: 'needsTwoKeyframes' };
+            if (l.shape !== ref.shape) return { ok: false, code: 'shapeMismatch' };
+            if (l.lineCount !== ref.lineCount) return { ok: false, code: 'lineCountMismatch' };
+        }
+        return sel;
+    }
+    // why not: look at the first two layers that could be keyframes (in the timeline's order when there is one)
+    const tl = Array.isArray(o.timelineIds) && o.timelineIds.length >= 2 ? o.timelineIds : null;
+    const order = [];
+    (tl || []).forEach((id) => { if (!order.includes(id)) order.push(id); });
+    for (let i = 0; i < L.length; i++) if (!order.includes(i)) order.push(i);
+    const usable = order.filter((i) => Number.isInteger(i) && i >= 0 && i < L.length && L[i] && typeof L[i] === 'object' && !L[i].isPlayback && Number.isFinite(L[i].lineCount) && L[i].lineCount > 0);
+    if (usable.length < 2) return { ok: false, code: 'needsTwoKeyframes' };
+    const a = L[usable[0]], b = L[usable[1]];
+    if (a.shape !== b.shape) return { ok: false, code: 'shapeMismatch' };
+    if (a.lineCount !== b.lineCount) return { ok: false, code: 'lineCountMismatch' };
+    return { ok: false, code: 'needsTwoKeyframes' };
+}
+
+// The symmetry operations a tile draws for a shape and a symmetry mode, in the order core/symmetry.js drawConnectionWithSymmetry() draws them: the identity, the rotations, then (with a
+// reflection) the reflection and the reflected rotations. -> { ops: [{ angle, reflected }], hasReflection }
+function spatialMorphSymmetryOps(shape, mode) {
+    let rot = [];
+    const r3 = mode === 'rotation3' || mode === 'rotation_reflection3', r6 = mode === 'rotation6' || mode === 'rotation_reflection6';
+    if (shape === 'square') { if (r3 || r6) rot = [90, 180, 270]; }
+    else if (shape === 'triangle') { if (r3 || r6) rot = [120, 240]; }
+    else if (shape === 'hex') { if (r3) rot = [120, 240]; else if (r6) rot = [60, 120, 180, 240, 300]; }
+    const hasReflection = mode === 'reflection_only' || mode === 'rotation_reflection3' || mode === 'rotation_reflection6';
+    const ops = [{ angle: 0, reflected: false }];
+    rot.forEach((a) => ops.push({ angle: a, reflected: false }));
+    if (hasReflection) {
+        ops.push({ angle: 0, reflected: true });
+        if (mode !== 'reflection_only') rot.forEach((a) => ops.push({ angle: a, reflected: true }));
+    }
+    return { ops, hasReflection };
+}
+
+// The SPAN (see the header) of a set of tile centroids, as the prototype scans it: the centroids strictly inside the canvas (0, W) x (0, H) first, then the closed canvas, then all of them;
+// the first scan whose scalar range (linear / radial) or x range (bilinear) is wider than 1e-3 wins; nothing wide enough gives { 0..W, 0..H }. For the y range the prototype keeps 0..H
+// when the centroids have none. mode as for spatialMorphScalar (an unknown mode is linear); options = { angleDeg, center } (the centre of radial: the canvas centre).
+function spatialMorphSpanFromCentroids(mode, centroids, canvasW, canvasH, options) {
+    const m = spatialMorphNormalizeMode(mode);
+    const W = (typeof canvasW === 'number' && Number.isFinite(canvasW) && canvasW > 0) ? canvasW : 600;
+    const H = (typeof canvasH === 'number' && Number.isFinite(canvasH) && canvasH > 0) ? canvasH : 600;
+    const o = options || {};
+    const opts = { angleDeg: o.angleDeg, center: o.center || { x: W / 2, y: H / 2 } };
+    const EPS = 1e-3;
+    const list = Array.isArray(centroids) ? centroids.filter((c) => c && Number.isFinite(c.x) && Number.isFinite(c.y)) : [];
+    const scan = (pred) => {
+        let minS = Infinity, maxS = -Infinity, minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (let k = 0; k < list.length; k++) {
+            const c = list[k];
+            if (!pred(c)) continue;
+            const v = m === 'bilinear' ? c.x : spatialMorphScalar(m, c, opts);
+            if (v < minS) minS = v; if (v > maxS) maxS = v;
+            if (c.x < minX) minX = c.x; if (c.x > maxX) maxX = c.x;
+            if (c.y < minY) minY = c.y; if (c.y > maxY) maxY = c.y;
+        }
+        return { minS, maxS, minX, maxX, minY, maxY };
+    };
+    const make = (r) => ({
+        scalarMin: r.minS, scalarMax: r.maxS, minX: r.minX, maxX: r.maxX,
+        minY: (r.maxY - r.minY > EPS) ? r.minY : 0, maxY: (r.maxY - r.minY > EPS) ? r.maxY : H,
+    });
+    const wide = (r) => r.maxS - r.minS > EPS && r.maxX - r.minX > EPS;
+    const strict = scan((c) => c.x > EPS && c.x < W - EPS && c.y > EPS && c.y < H - EPS);
+    if (wide(strict)) return make(strict);
+    const closed = scan((c) => c.x >= -EPS && c.x <= W + EPS && c.y >= -EPS && c.y <= H + EPS);
+    if (wide(closed)) return make(closed);
+    const all = scan(() => true);
+    if (wide(all)) return make(all);
+    return { scalarMin: 0, scalarMax: W, minX: 0, maxX: W, minY: 0, maxY: H };
+}
+
+// The key a frozen span is valid for: the lattice (shape, polygon, canvas, number and ends of the tile list) and the projection (mode, angle for linear). Same key = same span, so the
+// render hook computes it once; a rebuilt grid, another shape, size, mode, angle or canvas gives another key. Pure string.
+function spatialMorphSpanKey(mode, angleDeg, shape, polygon, canvasW, canvasH, centroids) {
+    const m = spatialMorphNormalizeMode(mode);
+    const a = m === 'linear' ? spatialMorphNumber(angleDeg) : 0;
+    const r = (v) => Math.round(spatialMorphNumber(v) * 100);
+    const poly = (Array.isArray(polygon) ? polygon : []).map((p) => (p ? r(p.x) + ',' + r(p.y) : '-')).join(';');
+    const list = Array.isArray(centroids) ? centroids : [];
+    const f = list[0] || {}, l = list[list.length - 1] || {};
+    return [m, a, String(shape), poly, r(canvasW), r(canvasH), list.length, r(f.x), r(f.y), r(l.x), r(l.y)].join('|');
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         spatialMorphModes, spatialMorphClamp01, spatialMorphSmooth, spatialMorphNormalizeMode, spatialMorphDirection, spatialMorphScalar,
@@ -422,5 +528,6 @@ if (typeof module !== 'undefined' && module.exports) {
         spatialMorphBlendLines, spatialMorphProjectToSegment, spatialMorphEdgeMidpoint, spatialMorphTolerance, spatialMorphOnEdge, spatialMorphFindContainingEdge, spatialMorphPrepareEndpoint,
         spatialMorphPrepareLines, spatialMorphAnchoredPoint, spatialMorphAnchoredLine,
         spatialMorphDefaults, spatialMorphNormalize, spatialMorphEqual,
+        spatialMorphStatusCodes, spatialMorphPlanKeyframes, spatialMorphSymmetryOps, spatialMorphSpanFromCentroids, spatialMorphSpanKey,
     };
 }

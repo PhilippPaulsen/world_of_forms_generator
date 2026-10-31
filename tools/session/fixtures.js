@@ -27,10 +27,13 @@ function sessionSources() {
 // opts.state: also load core/state.js (the real globals); opts.export: also core/export.js (buildExportData)
 function makeContext(opts) {
     opts = opts || {};
-    const files = [C.loadSrc(false)];
+    let core = C.loadSrc(false);
+    // opts.coreOverrides = { 'core/tiling.js': '/path/to/another/copy.js' }: another copy of a core file in place of the working tree's (the morph render tests load the tree before the hook this way)
+    for (const rel of Object.keys(opts.coreOverrides || {})) { const orig = read(rel); if (!core.includes(orig)) throw new Error('coreOverrides: ' + rel + ' is not one of the core files'); core = core.replace(orig, () => fs.readFileSync(opts.coreOverrides[rel], 'utf8')); }
+    const files = [core];
     files.push(fs.readFileSync(process.env.SPATIAL_MORPH_JS || path.join(ROOT, 'core', 'spatial-morph.js'), 'utf8'));   // the morph parameter helpers session.js calls (morph stage b); SPATIAL_MORPH_JS for sabotage runs
     files.push(read('core/symmetry-toggles.js'));   // symmetryModeFor() / symmetryCategoryFoldFor() - the pure half of the Form row's symmetry logic
-    if (opts.state) files.push(read('core/state.js'));
+    if (opts.state) files.push(process.env.STATE_JS ? fs.readFileSync(process.env.STATE_JS, 'utf8') : read('core/state.js'));   // STATE_JS: a sabotage copy
     if (opts.export) files.push(read('core/export.js'));
     files.push(sessionSources());
     const sb = {
