@@ -301,7 +301,8 @@ T('names', () => {
   const clash = names.filter((n) => owner.has(n));
   check(`none collides with a top-level name of the other core files, sketch.js or the ui, nav and gallery scripts (${otherFiles.length} files, ${owner.size} names scanned)`, clash.length === 0 && owner.size > 300, clash.map((n) => n + ' in ' + owner.get(n)).join());
   const idx = (name) => { const h = fs.readFileSync(path.join(ROOT, name), 'utf8'); return /spatial-morph\.js/.test(h); };
-  check('the file is not loaded by any page yet (index.html and gallery.html do not mention it): stage a1 has no wiring', !idx('index.html') && !idx('gallery.html'));
+  const tags = (fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').match(/<script src="([^"?]+)\?v=[^"]+"><\/script>/g) || []).map((t) => /src="([^"?]+)/.exec(t)[1]);
+  check('index.html loads the file exactly once, BEFORE core/session.js (stage b: the session code calls its parameter helpers); gallery.html does not load it (it has no session)', tags.filter((t) => t === 'core/spatial-morph.js').length === 1 && tags.indexOf('core/spatial-morph.js') < tags.indexOf('core/session.js') && tags.indexOf('core/spatial-morph.js') > tags.indexOf('core/state.js') && !idx('gallery.html'));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
