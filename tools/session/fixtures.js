@@ -28,6 +28,7 @@ function sessionSources() {
 function makeContext(opts) {
     opts = opts || {};
     const files = [C.loadSrc(false)];
+    files.push(fs.readFileSync(process.env.SPATIAL_MORPH_JS || path.join(ROOT, 'core', 'spatial-morph.js'), 'utf8'));   // the morph parameter helpers session.js calls (morph stage b); SPATIAL_MORPH_JS for sabotage runs
     files.push(read('core/symmetry-toggles.js'));   // symmetryModeFor() / symmetryCategoryFoldFor() - the pure half of the Form row's symmetry logic
     if (opts.state) files.push(read('core/state.js'));
     if (opts.export) files.push(read('core/export.js'));

@@ -32,6 +32,8 @@
  * Depends on (browser: load AFTER core/forms.js, core/color.js and core/farborgel-bridge.js): validateHarmonySelection(), maxNodeCountFor(),
  * getHarmonyRule() / harmonyRuleParams() / OSTWALD_REFERENCE_SYSTEM (palette checks), and for planSessionRestore() the grid builders,
  * layerGrid() and completeEdgeToRegularPolygon() / _subdivide*Interior(). Each dependency is feature-tested, not assumed.
+ * The spatial morph parameters (settings.spatialMorph, additive, written only when they differ from the defaults) go through spatialMorphNormalize() / spatialMorphEqual() of
+ * core/spatial-morph.js (load it BEFORE this file); without it the block is neither written nor read.
  */
 
 const SESSION_SCHEMA_VERSION = 1;
@@ -121,9 +123,16 @@ function _snapSheet(o) {
     };
 }
 
+// The spatial morph parameters (core/spatial-morph.js): {} while they are the defaults - so a snapshot of a pattern without a morph is byte-for-byte the one
+// written before the block existed - else { spatialMorph: { enabled, mode, angleDeg } } (normalised). Feature-tested: without core/spatial-morph.js nothing is written.
+function _snapMorph(m) {
+    if (typeof spatialMorphNormalize !== 'function' || typeof spatialMorphEqual !== 'function') return {};
+    return spatialMorphEqual(m, undefined) ? {} : { spatialMorph: spatialMorphNormalize(m) };
+}
+
 // `s` is the state-like object: { currentShape, nodeCount, shapeSizeFactor, canvasW, canvasH, symmetryMode,
 // symmetryCategory?, symmetryFold?, curveType, lineColor, showNodes, showFaces, freeEndpointsEnabled, altNetSeed,
-// baseNetTransform, connections, redoStack, nodes, baseFaceAssignments (Map), baseFacePalette, baseFaceAnchor,
+// baseNetTransform, spatialMorph?, connections, redoStack, nodes, baseFaceAssignments (Map), baseFacePalette, baseFaceAnchor,
 // baseLastHarmonyType, baseLastSelection, baseDistributionStrategy, additionalLayers, timeline, activeLayer } -
 // the globals of core/state.js, gathered by the caller. Returns a plain-JSON object (maps become entry arrays,
 // runtime clocks are left out). The result is only as trustworthy as `s`: validateSession() is what a reader must run.
@@ -142,7 +151,7 @@ function buildSessionSnapshot(s, now) {
         schema: SESSION_SCHEMA_VERSION,
         trailKeys: SESSION_TRAIL_KEY_VERSION,
         savedAt: typeof now === 'number' ? now : Date.now(),
-        settings: {
+        settings: Object.assign({
             shape: s.currentShape, nodeCount: s.nodeCount, shapeSizeFactor: s.shapeSizeFactor,
             canvas: { w: s.canvasW, h: s.canvasH },
             symmetryMode: s.symmetryMode,
@@ -152,7 +161,7 @@ function buildSessionSnapshot(s, now) {
             lineColor: s.lineColor, showNodes: !!s.showNodes, showFaces: !!s.showFaces, freeEndpointsEnabled: !!s.freeEndpointsEnabled,
             altNetSeed: s.altNetSeed ? JSON.parse(JSON.stringify(s.altNetSeed)) : null,
             netTransform: s.baseNetTransform ? JSON.parse(JSON.stringify(s.baseNetTransform)) : null,
-        },
+        }, _snapMorph(s.spatialMorph)),
         base,
         layers,
         activeLayer: s.activeLayer,
@@ -328,6 +337,12 @@ function validateSession(input) {
         const settings = { shape: st.shape, nodeCount: st.nodeCount, shapeSizeFactor: st.shapeSizeFactor, canvas: { w: st.canvas.w, h: st.canvas.h },
             symmetryMode: st.symmetryMode, symmetryCategory: st.symmetryCategory === undefined ? null : st.symmetryCategory, symmetryFold: st.symmetryFold === undefined ? null : st.symmetryFold,
             curveType, lineColor: st.lineColor, showNodes: st.showNodes, showFaces: st.showFaces, freeEndpointsEnabled: st.freeEndpointsEnabled, altNetSeed, netTransform };
+        // spatial morph (morph stage b): additive, optional. Absent, malformed or equal to the defaults -> no key (the restore then sets the defaults); a bad field falls back to
+        // its own default, never an error. Without core/spatial-morph.js the block is ignored.
+        if (st.spatialMorph !== undefined && typeof spatialMorphNormalize === 'function' && typeof spatialMorphEqual === 'function') {
+            const m = spatialMorphNormalize(st.spatialMorph);
+            if (!spatialMorphEqual(m, undefined)) settings.spatialMorph = m;
+        }
 
         const base = _vSheet(raw.base, 'base');
         if (!Array.isArray(raw.layers) || raw.layers.length > SESSION_MAX_LAYERS) throw 'layers must be an array (max ' + SESSION_MAX_LAYERS + ')';

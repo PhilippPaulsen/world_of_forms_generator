@@ -1,6 +1,6 @@
 /*
  * core/spatial-morph.js
- * The weight mathematics (stage a1) and the GEOMETRY (stage a2) of the STATIC, LINES-ONLY spatial morph: keyframe layers sit at the corners of a region of the 2D tessellation, and every point
+ * The weight mathematics (stage a1), the GEOMETRY (stage a2) and the PARAMETERS as data (stage b) of the STATIC, LINES-ONLY spatial morph: keyframe layers sit at the corners of a region of the 2D tessellation, and every point
  * of it (a tile centroid, or a point on a tile seam) is a blend of them with its own weights. This file turns a point into four corner weights and blends four corner
  * points with them. Nothing else: the keyframes' line alignment and the boundary anchoring come in stage a2, the render hook in stage c.
  * Pure: explicit arguments, plain data in and out, no globals, no p5, no DOM, no timers, no input is changed. Every top-level name starts with spatialMorph (the file is a
@@ -384,6 +384,36 @@ function spatialMorphAnchoredLine(prepared, wTile, wEdgeA, wEdgeB) {
     return { x1: a.x, y1: a.y, x2: b.x, y2: b.y };
 }
 
+// =====================================================================================================================================================================================
+// STAGE b: the PARAMETERS of the morph as data. core/state.js holds them in one project-level object { enabled, mode, angleDeg } (the let spatialMorph), core/session.js saves and checks
+// them, core/session-apply.js restores them; these three pure functions are the only place that knows the defaults and the rules, so the saver, the checker and the tests agree.
+//   enabled  boolean, default false. mode  'linear' | 'radial' | 'bilinear', default 'linear' (anything else is 'linear'). angleDeg  any finite number of degrees, default 0 (used by
+//   linear only; a negative, fractional or 360+ value is kept as it is, -0 becomes 0; a NaN, an infinity or a non-number is 0).
+// Nothing else is a parameter of the first version (no speed, spread, wave, ping-pong, faces).
+// =====================================================================================================================================================================================
+
+// A fresh default object each call (callers may keep and change it).
+function spatialMorphDefaults() {
+    return { enabled: false, mode: 'linear', angleDeg: 0 };
+}
+
+// Any value -> a NEW normalised parameter object: a missing, malformed or wrong-typed field falls back to its own default (field by field); the input is not changed and nothing throws.
+function spatialMorphNormalize(v) {
+    const d = spatialMorphDefaults();
+    if (v === null || typeof v !== 'object' || Array.isArray(v)) return d;
+    return {
+        enabled: v.enabled === true,
+        mode: (typeof v.mode === 'string' && spatialMorphModes.includes(v.mode)) ? v.mode : d.mode,
+        angleDeg: (typeof v.angleDeg === 'number' && Number.isFinite(v.angleDeg)) ? (v.angleDeg === 0 ? 0 : v.angleDeg) : d.angleDeg,
+    };
+}
+
+// Are two parameter values the same after normalising? (spatialMorphEqual(x, undefined) is "is x the defaults".)
+function spatialMorphEqual(a, b) {
+    const x = spatialMorphNormalize(a), y = spatialMorphNormalize(b);
+    return x.enabled === y.enabled && x.mode === y.mode && x.angleDeg === y.angleDeg;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         spatialMorphModes, spatialMorphClamp01, spatialMorphSmooth, spatialMorphNormalizeMode, spatialMorphDirection, spatialMorphScalar,
@@ -391,5 +421,6 @@ if (typeof module !== 'undefined' && module.exports) {
         spatialMorphBoundaryTolerance, spatialMorphSamePointTolerance, spatialMorphNumber, spatialMorphIsLine, spatialMorphValidateCorners, spatialMorphSelectKeyframeLayers, spatialMorphChooseCorners,
         spatialMorphBlendLines, spatialMorphProjectToSegment, spatialMorphEdgeMidpoint, spatialMorphTolerance, spatialMorphOnEdge, spatialMorphFindContainingEdge, spatialMorphPrepareEndpoint,
         spatialMorphPrepareLines, spatialMorphAnchoredPoint, spatialMorphAnchoredLine,
+        spatialMorphDefaults, spatialMorphNormalize, spatialMorphEqual,
     };
 }
