@@ -46,9 +46,9 @@
     // the ids that no HTML file holds because a script creates them: id -> the script. (None yet; the layer and timeline strips are containers in index.html that ui-layers.js / ui-timeline.js fill.)
     createdByScript: { 'ph-trail-chips': 'ui-phone-chips.js', 'ph-trail-stepper': 'ui-phone-chips.js', 'ph-tl-icons': 'ui-phone-timeline.js', 'ph-tl-readout': 'ui-phone-timeline.js', 'ph-tl-chips': 'ui-phone-pairing.js', 'ph-tl-moves': 'ui-phone-pairing.js', 'ph-tl-variant': 'ui-phone-pairing.js', 'ph-tl-reset': 'ui-phone-pairing.js', 'ph-tl-listbtn': 'ui-phone-pairing.js', 'ph-tl-listhead': 'ui-phone-pairing.js', 'ph-tl-list': 'ui-phone-pairing.js' },
     tabs: {
-      form: { covered: true, panelH: 104, subtabs: ['raster', 'ebenen', 'zeit'], defaultSubtab: 'raster', toolRow: 'form', sheets: ['layer', 'timeline'] },
-      farbe: { covered: true, panelH: 104, subtabs: ['harmonie', 'spuren', 'ebenen', 'zeit'], defaultSubtab: 'harmonie', toolRow: 'farbe', sheets: ['layer', 'timeline'] },
-      netz: { covered: true, panelH: 104, subtabs: ['art', 'achsen', 'ebenen', 'zeit'], defaultSubtab: 'art', toolRow: 'netz', sheets: ['layer', 'timeline'], overlays: ['netz'] }
+      form: { covered: true, panelH: 104, subtabs: ['raster', 'ebenen', 'zeit'], defaultSubtab: 'raster', toolRow: 'form', sheets: ['layer', 'timeline', 'morph'] },
+      farbe: { covered: true, panelH: 104, subtabs: ['harmonie', 'spuren', 'ebenen', 'zeit'], defaultSubtab: 'harmonie', toolRow: 'farbe', sheets: ['layer', 'timeline', 'morph'] },
+      netz: { covered: true, panelH: 104, subtabs: ['art', 'achsen', 'ebenen', 'zeit'], defaultSubtab: 'art', toolRow: 'netz', sheets: ['layer', 'timeline', 'morph'], overlays: ['netz'] }
     },
     toolRows: {
       form: {
@@ -177,6 +177,19 @@
             { items: [{ id: 'ph-tl-list', fluid: true, gate: 'ph-tl-list-show' }] }
           ]
         ]
+      },
+      // The Morph sheet (morph stage e2a, one more surface): #morph-group is the content; the button that opens it is the Morph button ui-morph.js puts next to "..." in the layer views (the strip's is the trigger), the open state is
+      // the class mo-open of the group, which that button flips (like ts-open). ONE block of three rows: on/off + the three modes (48 + 8 + 160 = 216px), the angle stepper (linear only: the row collapses while #morph-angle
+      // is hidden) and ONE status line of 20px. The controls are in index.html; ui-morph.js wires them.
+      morph: {
+        host: 'ph-sheet-morph', label: 'Morph', i18n: 'morph.sheet', content: 'morph-group', trigger: { within: 'layer-strip', selector: '.lt-morph' }, open: { hasClass: 'mo-open' },
+        blocks: [
+          [
+            { items: [{ id: 'morph-toggle', w: 48 }, { id: 'morph-modes', w: 160 }] },
+            { items: [{ id: 'morph-angle', w: 117, wMin: 109 }] },
+            { h: 20, items: [{ id: 'morph-status', fluid: true }] }
+          ]
+        ]
       }
     },
     // The Netz sheet (commit 4a): #more-netz is an overlay of its own (ui-net.js opens it from the "..." of the Art panel), so it has no host here: its content is the overlay itself. No headings, no visible labels. Block 1 =
@@ -209,6 +222,7 @@
     surfaces: {
       layer: { tabs: ['form', 'farbe', 'netz'], flag: null, hosts: { phone: { kind: 'sheet', id: 'layer' } }, inlineOn: false },
       timeline: { tabs: ['form', 'farbe', 'netz'], flag: 'sr-timeline', hosts: { phone: { kind: 'sheet', id: 'timeline' }, inline: { kind: 'content', id: 'timeline-group', sheet: 'timeline', blocks: [0, 1, 2] } }, inlineOn: true },
+      morph: { tabs: ['form', 'farbe', 'netz'], flag: 'sr-morph', hosts: { phone: { kind: 'sheet', id: 'morph' }, inline: { kind: 'content', id: 'morph-group', sheet: 'morph', blocks: [0] } }, inlineOn: true },
       netz: { tabs: ['netz'], flag: 'sr-netz', hosts: { phone: { kind: 'overlay', id: 'netz' }, inline: { kind: 'overlay', id: 'netz', steppers: ['net-focus-exact'], park: ['net-strength-exact'] } }, inlineOn: true },
       trails: { tabs: ['farbe'], flag: 'sr-trails', hosts: { phone: { kind: 'pane', id: 'spuren' }, inline: { kind: 'group', id: 'face-colors-group', hostId: 'sr-trails-host', items: ['ph-trail-chips', 'ph-trail-stepper'] } }, inlineOn: true }
     },
