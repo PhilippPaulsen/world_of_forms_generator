@@ -55,7 +55,7 @@ console.log('== 1. the pure helpers ==');
 T('helpers', () => {
   const P = M.spatialMorphPlanKeyframes;
   const lay = (shape, n, extra) => Object.assign({ shape, lineCount: n }, extra || {});
-  check('the status codes are the documented list and frozen', same(M.spatialMorphStatusCodes, ['off', 'ok', 'netActive', 'bilinearStatic', 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'alignmentFailed', 'renderError']) && Object.isFrozen(M.spatialMorphStatusCodes));
+  check('the status codes are the documented list and frozen', same(M.spatialMorphStatusCodes, ['off', 'ok', 'netActive', 'bilinearStatic', 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'parameterMismatch', 'alignmentFailed', 'renderError']) && Object.isFrozen(M.spatialMorphStatusCodes));
   check('plan: two layers of the same shape and count are keyframes; a timeline order is kept', same(P([lay('square', 3), lay('square', 3), lay('square', 3)], { mode: 'bilinear', timelineIds: [2, 0] }).ids, [2, 0, 1]) && same(P([lay('square', 3), lay('square', 3)], { mode: 'linear', timelineIds: [1, 0] }).ids, [1, 0]));
   const codes = [
     ['no layers and nothing else', [], {}, 'needsTwoKeyframes'], ['one layer, no base', [lay('square', 3)], { mode: 'bilinear' }, 'needsTwoKeyframes'],

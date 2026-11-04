@@ -8,7 +8,7 @@
  * the face fills and the net warp are NOT drawn; the node dots, the net-line overlay and the cross-layer fills that draw() adds after drawTessellation() are untouched. No wave.
  * FOLLOWING THE TIMELINE (stage d): linear and radial with a timeline of two or more keyframes draw the ACTIVE SEGMENT of the timeline's progress (timeline.elapsedMs: the playback, the scrub bar):
  * the front of core/spatial-morph.js spatialMorphFrontWeight() wanders across the surface in the direction of the angle (radial: from the centre outward), behind it the LATER keyframe, ahead of it
- * the earlier one; at progress 0 only keyframe i shows, at the end of segment i the frame is the start of segment i + 1. Bilinear, and every case without a timeline, is the STATIC blend of stage c. A keyframe layer's own offset, rotation and scale are IGNORED (its lines are taken in the sheet's own grid, as resolveConnectionsToCoords() reads them), as in the prototype.
+ * the earlier one; at progress 0 only keyframe i shows, at the end of segment i the frame is the start of segment i + 1. Bilinear, and every case without a timeline, is the STATIC blend of stage c. The morph is drawn on the FIRST KEYFRAME LAYER'S OWN grid (stage d2: its persisted outerCorners / centroid / shape / symmetryMode / size, exactly what core/tiling.js hands tileFor() for that layer's normal frame), not the base sheet's; a keyframe layer's own offset and rotation are IGNORED (its lines are taken in its grid as resolveConnectionsToCoords() reads them), as in the prototype.
  *
  * HOW (no change to the tile loops): the tile functions of core/tiling.js are called ONCE with an empty layer override while drawShapeCell() is temporarily replaced by a recorder, so the
  * lattice, the tile centres, the flips and the mirror axis are exactly the ones the normal frame uses; the recorder is put back in a finally. The recorded tiles are then drawn here: per
@@ -16,7 +16,7 @@
  * core/symmetry.js drawConnectionWithSymmetry(), through drawCurvedBezier() with the current curve style (so curves, free lines and the line colour / weight are the normal frame's).
  *
  * PRE-CONDITIONS and the STATUS: with the switch on, the morph needs two keyframe layers of the same shape and line count (the timeline's, else the layers in index order, else the base sheet
- * and one layer). If they are not there the normal frame is drawn and spatialMorphStatus().code says why: 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'alignmentFailed'
+ * and one layer). If they are not there the normal frame is drawn and spatialMorphStatus().code says why: 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'parameterMismatch' (the keyframes differ in symmetry mode or size factor; the timeline requires them equal), 'alignmentFailed'
  * (resolveTimelineKeyframeCoords() refused), 'renderError' (something threw; nothing escapes). 'ok' = drawn, 'netActive' = drawn and a net warp is in force (the morph ignores the net),
  * 'off' = the switch is off. The status is read-only data for the UI of a later stage; this file writes no text. The SVG export (svgPathCollector set) always gets the normal pattern.
  *
@@ -148,15 +148,25 @@ function spatialMorphRenderAlign(plan, mode, realTimeline) {
     return { ok: true, corners: ch, lineIds: spatialMorphRenderLineIds(additionalLayers[ids[0]]), keyframeCount: ch.keyframeCount };
 }
 
-// The tiles the normal frame would draw for the base sheet, in its order: [{ c, flip, rot, axis, shape, mode }]. The recorder replaces drawShapeCell() for the length of the call only.
-function spatialMorphRenderRecordTiles() {
+// The sheet whose lattice, shape and symmetry mode the morph is drawn on (stage d2): the first keyframe layer's OWN persisted outerCorners / centroid / shape / symmetryMode, exactly what core/tiling.js
+// drawTessellation() hands tileFor() when it draws that layer's normal frame (the independent pass), NOT the base sheet's (they differ whenever a keyframe layer has another symmetry mode or size
+// factor than the base). The base sheet itself when the plan is the base fallback or the layer has no persisted grid. -> { outerCorners, centroid, nodes, shape, symmetryMode }
+function spatialMorphRenderSource(plan) {
+    const layer = (plan && plan.ids && plan.ids[0] !== 'base') ? additionalLayers[plan.ids[0]] : null;
+    if (!layer || !Array.isArray(layer.outerCorners) || layer.outerCorners.length < 3 || !layer.centroid) return { outerCorners, centroid, nodes, shape: currentShape, symmetryMode };
+    return { outerCorners: layer.outerCorners, centroid: layer.centroid, nodes: layer.nodes || nodes, shape: layer.shape || currentShape, symmetryMode: layer.symmetryMode || symmetryMode };
+}
+
+// The tiles the normal frame would draw for a sheet (src, see spatialMorphRenderSource(); default the base sheet), in its order: [{ c, flip, rot, axis, shape, mode }]. The recorder replaces drawShapeCell() for the length of the call only.
+function spatialMorphRenderRecordTiles(src) {
     const tiles = [];
     const real = drawShapeCell;
-    const emptyLayer = { outerCorners, centroid, connections: [], nodes, offsetX: 0, offsetY: 0, rotation: 0, shape: currentShape, symmetryMode };
+    const s = src || { outerCorners, centroid, nodes, shape: currentShape, symmetryMode };
+    const emptyLayer = { outerCorners: s.outerCorners, centroid: s.centroid, connections: [], nodes: s.nodes, offsetX: 0, offsetY: 0, rotation: 0, shape: s.shape, symmetryMode: s.symmetryMode };
     drawShapeCell = function (connSet, tileCentroid, flip180, nodeArr, rotationDeg, mirrorAxisOverride, shapeOverride, symmetryModeOverride) {
         tiles.push({ c: { x: tileCentroid.x, y: tileCentroid.y }, flip: !!flip180, rot: rotationDeg || 0, axis: mirrorAxisOverride, shape: shapeOverride, mode: symmetryModeOverride });
     };
-    try { tileFor(currentShape)(null, null, emptyLayer); } finally { drawShapeCell = real; }
+    try { tileFor(s.shape)(null, null, emptyLayer); } finally { drawShapeCell = real; }
     return tiles;
 }
 
@@ -171,8 +181,8 @@ function spatialMorphRenderToWorld(p, tile, op, axisDir) {
 function spatialMorphRenderDraw(sm) {
     const mode = spatialMorphNormalizeMode(sm.mode);
     const angleDeg = spatialMorphNumber(sm.angleDeg);
-    const infos = additionalLayers.map((l) => ({ shape: l.shape, lineCount: spatialMorphRenderLineCount(l.connections), isPlayback: !!l.isTimelinePlayback }));
-    const base = { shape: currentShape, lineCount: spatialMorphRenderLineCount(connections) };
+    const infos = additionalLayers.map((l) => ({ shape: l.shape, lineCount: spatialMorphRenderLineCount(l.connections), isPlayback: !!l.isTimelinePlayback, symmetryMode: l.symmetryMode, sizeFactor: l.shapeSizeFactor }));
+    const base = { shape: currentShape, lineCount: spatialMorphRenderLineCount(connections), symmetryMode, sizeFactor: shapeSizeFactor };
     const tlIds = (timeline && Array.isArray(timeline.keyframeLayerIds)) ? timeline.keyframeLayerIds : null;
     // Stage d: linear and radial with a timeline of two or more keyframes follow its progress through the ACTIVE SEGMENT (earlier keyframe K_i, later K_i+1, aligned by the timeline's own pairing, flips and
     // members of that segment). Bilinear, and every case without a timeline, stays the static blend of stage c.
@@ -198,11 +208,12 @@ function spatialMorphRenderDraw(sm) {
     }
     if (!aligned.ok || !spatialMorphValidateCorners(aligned.corners).ok) { spatialMorphRenderSetStatus('alignmentFailed', keyframes, mode, progress, segment); return false; }
 
-    const tiles = spatialMorphRenderRecordTiles();
+    const src = spatialMorphRenderSource(plan);
+    const tiles = spatialMorphRenderRecordTiles(src);
     if (tiles.length === 0) { spatialMorphRenderSetStatus('renderError', keyframes, mode, progress, segment); return false; }
     const centroids = tiles.map((t) => t.c);
     const center = { x: canvasW / 2, y: canvasH / 2 };
-    const key = spatialMorphSpanKey(mode, angleDeg, currentShape, outerCorners, canvasW, canvasH, centroids);
+    const key = spatialMorphSpanKey(mode, angleDeg, src.shape, src.outerCorners, canvasW, canvasH, centroids);
     const st = spatialMorphRenderState;
     if (st.span === null || st.spanKey !== key) {
         st.span = spatialMorphSpanFromCentroids(mode, centroids, canvasW, canvasH, { angleDeg, center });
@@ -215,9 +226,9 @@ function spatialMorphRenderDraw(sm) {
     // tiles that share an edge get the same weights for an endpoint that slides on it and the seam stays closed
     const fopts = { angleDeg, center, progress, band: spatialMorphFrontBand };
     const weightsAt = progress === null ? (pt) => spatialMorphCornerWeights(mode, pt, span, opts) : (pt) => spatialMorphFrontCornerWeights(mode, pt, span, fopts);
-    const prepared = spatialMorphPrepareLines(aligned.corners, outerCorners);
+    const prepared = spatialMorphPrepareLines(aligned.corners, src.outerCorners);
     const lineIds = aligned.lineIds;
-    const sym = spatialMorphSymmetryOps(currentShape, symmetryMode);
+    const sym = spatialMorphSymmetryOps(src.shape, src.symmetryMode);
     const mirrored = sym.hasReflection ? mirrorCurveType(curveType) : curveType;
 
     let started = false;

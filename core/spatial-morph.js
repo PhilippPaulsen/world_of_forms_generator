@@ -429,11 +429,12 @@ function spatialMorphEqual(a, b) {
 
 // The status codes the render hook reports (read by stage e, no UI text now). 'off': the switch is off. 'ok': the morph was drawn. 'netActive': the morph was drawn WITHOUT the net
 // that is in force (the prototype ignores the net as well). 'bilinearStatic': drawn, bilinear has no front and ignores the progress (stage d). The others: the normal frame was drawn instead ('renderError': something threw).
-const spatialMorphStatusCodes = Object.freeze(['off', 'ok', 'netActive', 'bilinearStatic', 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'alignmentFailed', 'renderError']);
+const spatialMorphStatusCodes = Object.freeze(['off', 'ok', 'netActive', 'bilinearStatic', 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'parameterMismatch', 'alignmentFailed', 'renderError']);
 
 // Which layers are the keyframes AND why not (the pre-conditions of the morph): spatialMorphSelectKeyframeLayers() plus the rule of the maintainers: the keyframes have the SAME shape and
-// the same line count. layers = [{ shape, lineCount, isPlayback }], options as for the selection ({ mode, timelineIds, base }). A layer with no lines is not a keyframe.
-//   -> { ok: true, ids, source } | { ok: false, code: 'needsTwoKeyframes' | 'shapeMismatch' | 'lineCountMismatch' }
+// the same line count, and (stage d2) the same symmetry mode and size factor, the parameters the lattice and the symmetry copies are drawn from (a field that is missing on either side is not compared).
+// layers = [{ shape, lineCount, isPlayback, symmetryMode, sizeFactor }], options as for the selection ({ mode, timelineIds, base }). A layer with no lines is not a keyframe.
+//   -> { ok: true, ids, source } | { ok: false, code: 'needsTwoKeyframes' | 'shapeMismatch' | 'lineCountMismatch' | 'parameterMismatch' }
 function spatialMorphPlanKeyframes(layers, options) {
     const L = Array.isArray(layers) ? layers : [];
     const o = options || {};
@@ -446,6 +447,11 @@ function spatialMorphPlanKeyframes(layers, options) {
             if (!l || !ref) return { ok: false, code: 'needsTwoKeyframes' };
             if (l.shape !== ref.shape) return { ok: false, code: 'shapeMismatch' };
             if (l.lineCount !== ref.lineCount) return { ok: false, code: 'lineCountMismatch' };
+        }
+        for (const id of sel.ids) {
+            const l = info(id);
+            const differs = (k) => l[k] !== undefined && ref[k] !== undefined && l[k] !== ref[k];
+            if (differs('symmetryMode') || differs('sizeFactor')) return { ok: false, code: 'parameterMismatch' };
         }
         return sel;
     }
