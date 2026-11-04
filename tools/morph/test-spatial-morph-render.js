@@ -55,7 +55,7 @@ console.log('== 1. the pure helpers ==');
 T('helpers', () => {
   const P = M.spatialMorphPlanKeyframes;
   const lay = (shape, n, extra) => Object.assign({ shape, lineCount: n }, extra || {});
-  check('the status codes are the documented list and frozen', same(M.spatialMorphStatusCodes, ['off', 'ok', 'netActive', 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'alignmentFailed', 'renderError']) && Object.isFrozen(M.spatialMorphStatusCodes));
+  check('the status codes are the documented list and frozen', same(M.spatialMorphStatusCodes, ['off', 'ok', 'netActive', 'bilinearStatic', 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'alignmentFailed', 'renderError']) && Object.isFrozen(M.spatialMorphStatusCodes));
   check('plan: two layers of the same shape and count are keyframes; a timeline order is kept', same(P([lay('square', 3), lay('square', 3), lay('square', 3)], { mode: 'bilinear', timelineIds: [2, 0] }).ids, [2, 0, 1]) && same(P([lay('square', 3), lay('square', 3)], { mode: 'linear', timelineIds: [1, 0] }).ids, [1, 0]));
   const codes = [
     ['no layers and nothing else', [], {}, 'needsTwoKeyframes'], ['one layer, no base', [lay('square', 3)], { mode: 'bilinear' }, 'needsTwoKeyframes'],
@@ -183,7 +183,7 @@ T('identical', () => {
     for (const mode of ['linear', 'radial', 'bilinear']) {
       w.setMorph({ enabled: true, mode, angleDeg: mode === 'linear' ? 135 : 0 });
       const h = hashOf(w.drawn()); cases++;
-      if (h === normal && w.status().code === 'ok') equalCases++; else if (!firstBad) firstBad = `${shape}/${sym}/${kfCount}kf/${mode} ${w.status().code}`;
+      if (h === normal && w.status().code === (mode === 'bilinear' ? 'bilinearStatic' : 'ok')) equalCases++; else if (!firstBad) firstBad = `${shape}/${sym}/${kfCount}kf/${mode} ${w.status().code}`;
     }
   }
   check(`identical keyframes: the morph draws EXACTLY the normal frame, call for call (${equalCases}/${cases}: 3 shapes x 4 symmetry modes x 2/3/4 keyframes x linear/radial/bilinear)`, equalCases === cases, firstBad);
@@ -202,7 +202,7 @@ T('identical', () => {
   // different keyframes really differ
   const w = makeRenderWorld('square', 3, 3, 'none');
   w.baseConnections(CONNS.square);
-  const a = w.addKeyframeLayer(CONNS.square), b = w.addKeyframeLayer(ALT.square); w.setTimeline([a, b]);
+  w.addKeyframeLayer(CONNS.square); w.addKeyframeLayer(ALT.square);   // no timeline: the STATIC blend of stage c (with a timeline linear and radial follow its progress, see test-spatial-morph-time.js)
   const normal = hashOf(w.drawn());
   w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 });
   check('different keyframes give a different frame (the morph is not the normal frame)', hashOf(w.drawn()) !== normal && w.status().code === 'ok');
@@ -226,7 +226,7 @@ T('extremes', () => {
     const built = H.buildClosedCorners(M, a2, sym, 500 + shape.length);
     const w = makeRenderWorld(shape, 3, 3, sym);
     const L = cornerLayers(w, built, ['k00', 'k10']);
-    w.setTimeline(L.map((l) => l.id));
+    // no timeline: the static blend
     // the normal frames of the two keyframe patterns: the base sheet holds the pattern (its own nodes), no morph
     const asBase = (l) => { w.set(`nodes = ${J(l.nodes)}; connections = ${J(l.conns)};`); return w.frame(); };
     const F0 = asBase(L[0]), F1 = asBase(L[1]);
@@ -263,7 +263,7 @@ T('seams', () => {
     const built = H.buildClosedCorners(M, a2, sym, 300 + shape.length);
     const w = makeRenderWorld(shape, 3, 3, sym);
     const ids = cornerLayers(w, built, ['k00', 'k10', 'k01', 'k11']).map((l) => l.id);
-    w.setTimeline(ids);
+    // no timeline: the static blend (the layers in index order)
     const tiles = w.get('spatialMorphRenderRecordTiles()');
     const polys = tiles.map((t) => w.get(`outerCorners.map(p => toTileLocal(p, ${J(t.c)}, ${t.flip}, ${t.rot}))`));
     const R = Math.max(...a2.poly.map((p) => Math.hypot(p.x - a2.ctr.x, p.y - a2.ctr.y)));
@@ -332,7 +332,7 @@ T('status', () => {
     const h = hashOf(world.drawn());
     const st = world.status();
     world.set('spatialMorph.enabled = false;'); const hOff = hashOf(world.drawn()); world.set('spatialMorph.enabled = true;');
-    check(`${what}: status '${code}', the NORMAL frame is drawn (the same as with the switch off), nothing is logged`, st.code === code && st.keyframes === 0 && h === hOff && log.length === 0, J(st));
+    check(`${what}: status '${code}', the NORMAL frame is drawn (the same as with the switch off), nothing is logged`, st.code === code && (st.keyframes === 0 || st.segment === 0) && h === hOff && log.length === 0, J(st));
   }
   // renderError: something throws inside the morph
   w = mk(); { const a = w.addKeyframeLayer(CONNS.square), b = w.addKeyframeLayer(ALT.square); w.setTimeline([a, b]); }
@@ -353,7 +353,7 @@ T('status', () => {
   // ok / netActive / off
   w = mk(); { const a = w.addKeyframeLayer(CONNS.square), b = w.addKeyframeLayer(ALT.square); w.setTimeline([a, b]); }
   w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 }); w.drawn();
-  check("a drawn morph: status 'ok' with the keyframe count and the mode", same(w.status(), { code: 'ok', keyframes: 2, mode: 'linear' }), J(w.status()));
+  check("a drawn morph: status 'ok' with the keyframe count and the mode", same(w.status(), { code: 'ok', keyframes: 2, mode: 'linear', progress: 0, segment: 0 }), J(w.status()));
   w.setMorph({ enabled: false, mode: 'linear', angleDeg: 0 }); w.drawn();
   check("switching it off: status 'off'", w.status().code === 'off');
 });
@@ -375,7 +375,7 @@ T('interplay', () => {
     const g = layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, 3, 3, 'square', canvasW, canvasH); pb.nodes = g.nodes; pb.centroid = g.centroid; pb.outerCorners = g.outerCorners; additionalLayers.push(pb); timeline.playbackLayerIndex = additionalLayers.length - 1; })();`);
   w.setMorph({ enabled: true, mode: 'bilinear', angleDeg: 0 });
   const frames = [0, 0.25, 0.5, 1].map((p) => { w.set(`timeline.elapsedMs = ${p} * totalTimelineDurationMs(timeline); timeline.playing = ${p === 0.5}; timeline.startTime = millis() - timeline.elapsedMs; applyTimelineFrame();`); return hashOf(w.drawn()); });
-  check('the timeline paused or playing at four progress values: the morph frame is the same (static, independent of the progress); the playback layer is not drawn', new Set(frames).size === 1 && w.status().code === 'ok', J(frames));
+  check('the timeline paused or playing at four progress values: the BILINEAR morph frame is the same (static, independent of the progress, status bilinearStatic); the playback layer is not drawn', new Set(frames).size === 1 && w.status().code === 'bilinearStatic' && w.status().progress === null, J(frames));
   w.setMorph({ enabled: false, mode: 'bilinear', angleDeg: 0 });
   w.set('timeline.elapsedMs = 0.25 * totalTimelineDurationMs(timeline); applyTimelineFrame();'); const n0 = hashOf(w.drawn());
   w.set('timeline.elapsedMs = 0.75 * totalTimelineDurationMs(timeline); applyTimelineFrame();'); const n1 = hashOf(w.drawn());
@@ -400,7 +400,7 @@ T('interplay', () => {
   check('the JSON export is the normal pattern and carries no morph block, switch on or off', jOn === jOff && !jOn.includes('spatialMorph'));
   // the morph reads the keyframe lines live: editing a keyframe layer changes the next frame; undo goes back
   w = mk(2, CONNS.square, ALT.square);
-  w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 });
+  w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 }); w.set('timeline.elapsedMs = 1000;');   // half way through the segment: the front is on the surface
   const live0 = hashOf(w.drawn());
   w.set('additionalLayers[0].connections.push([4, 6]);'); const bad = hashOf(w.drawn()), badStatus = w.status().code;
   w.set('additionalLayers[0].connections.pop();'); const back = hashOf(w.drawn());

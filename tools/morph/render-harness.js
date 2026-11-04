@@ -57,4 +57,49 @@ function makeRenderWorld(shape, order, size, symmetryMode, files) {
     return world;
 }
 
-module.exports = { makeRenderWorld, ROOT };
+// The seam setup of the real drawn segments: a render world whose keyframe layers are the a2 test corner sets (custom nodes: every boundary endpoint has a partner on the neighbouring tile and slides on ITS
+// OWN edge between the keyframes), and the list of seam point pairs found on the frame of the K00 pattern alone. keyframes = ['k00', 'k10'] or all four. Not a timeline: the caller sets it.
+//   -> { w, built, ids, tiles, pairs, G, match: [[a, b]], unmatched } with a = { k, e, p } (segment index in a frame, endpoint 1 or 2, its position in the K00 frame)
+function seamSetup(M, H, shape, sym, seed, keyframes, baseFrameFn) {
+    const a2 = H.makeWorld(shape, 3, 3, 600);
+    const built = H.buildClosedCorners(M, a2, sym, seed);
+    const w = makeRenderWorld(shape, 3, 3, sym);
+    const layers = keyframes.map((k) => {
+        const nodes = [], conns = [];
+        built.corners[k].forEach((l, i) => { nodes.push({ id: 2 * i + 1, x: l.x1, y: l.y1 }, { id: 2 * i + 2, x: l.x2, y: l.y2 }); conns.push([2 * i + 1, 2 * i + 2]); });
+        const id = w.addKeyframeLayer(conns);
+        w.set(`additionalLayers[${id}].nodes = ${JSON.stringify(nodes)};`);
+        return id;
+    });
+    const tiles = w.get('spatialMorphRenderRecordTiles()');
+    const polys = tiles.map((t) => w.get(`outerCorners.map(p => toTileLocal(p, ${JSON.stringify(t.c)}, ${t.flip}, ${t.rot}))`));
+    const R = Math.max(...a2.poly.map((p) => Math.hypot(p.x - a2.ctr.x, p.y - a2.ctr.y)));
+    const pairs = [];
+    for (let i = 0; i < tiles.length; i++) for (let j = i + 1; j < tiles.length; j++) {
+        if (Math.hypot(tiles[i].c.x - tiles[j].c.x, tiles[i].c.y - tiles[j].c.y) > 2 * R + 1e-6) continue;
+        const sh = polys[i].filter((p) => polys[j].some((q) => Math.hypot(p.x - q.x, p.y - q.y) < 1e-6));
+        if (sh.length === 2) pairs.push({ a: i, b: j, v: sh[0], w: sh[1] });
+    }
+    const ops = M.spatialMorphSymmetryOps(shape, sym).ops.length, G = built.lines * ops;
+    return { w, a2, built, ids: layers, tiles, pairs, G, ops, polys, match: null, unmatched: 0, buildMatch(frame) {
+        const ends = (t, v, ww) => { const o = []; for (let k = t * G; k < (t + 1) * G; k++) for (const e of [1, 2]) { const p = { x: frame[k]['x' + e], y: frame[k]['y' + e] }; if (H.distToSegment(p, v, ww) <= 1e-6) o.push({ k, e, p }); } return o; };
+        const match = []; let unmatched = 0;
+        for (const p of pairs) {
+            const eA = ends(p.a, p.v, p.w), eB = ends(p.b, p.v, p.w), used = new Set();
+            for (const oa of eA) {
+                let best = -1, bd = Infinity;
+                eB.forEach((ob, j) => { if (used.has(j)) return; const d = Math.hypot(oa.p.x - ob.p.x, oa.p.y - ob.p.y); if (d < bd) { bd = d; best = j; } });
+                if (best < 0 || bd > 1e-9) { unmatched++; continue; }
+                used.add(best); match.push([oa, eB[best]]);
+            }
+            unmatched += eB.length - used.size;
+        }
+        this.match = match; this.unmatched = unmatched; return { match, unmatched };
+    }, drift(frame) {
+        let d = 0, moved = 0;
+        for (const [oa, ob] of this.match) { const ax = frame[oa.k]['x' + oa.e], ay = frame[oa.k]['y' + oa.e], bx = frame[ob.k]['x' + ob.e], by = frame[ob.k]['y' + ob.e]; d = Math.max(d, Math.hypot(ax - bx, ay - by)); moved = Math.max(moved, Math.hypot(ax - oa.p.x, ay - oa.p.y)); }
+        return { drift: d, moved };
+    } };
+}
+
+module.exports = { makeRenderWorld, seamSetup, ROOT };

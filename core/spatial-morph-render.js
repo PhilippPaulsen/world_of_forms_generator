@@ -5,8 +5,10 @@
  * returns, when it returns false the existing code runs line for line. With the switch off (spatialMorph.enabled !== true, core/state.js) it costs one call per frame and one property read.
  *
  * WHAT IT DRAWS (maintainer decisions): the keyframe layers' lines blended across the tessellation, as the prototype does it - the base sheet, the other layers, the timeline's playback layer,
- * the face fills and the net warp are NOT drawn; the node dots, the net-line overlay and the cross-layer fills that draw() adds after drawTessellation() are untouched. Static: no wave, no
- * phase. A keyframe layer's own offset, rotation and scale are IGNORED (its lines are taken in the sheet's own grid, as resolveConnectionsToCoords() reads them), as in the prototype.
+ * the face fills and the net warp are NOT drawn; the node dots, the net-line overlay and the cross-layer fills that draw() adds after drawTessellation() are untouched. No wave.
+ * FOLLOWING THE TIMELINE (stage d): linear and radial with a timeline of two or more keyframes draw the ACTIVE SEGMENT of the timeline's progress (timeline.elapsedMs: the playback, the scrub bar):
+ * the front of core/spatial-morph.js spatialMorphFrontWeight() wanders across the surface in the direction of the angle (radial: from the centre outward), behind it the LATER keyframe, ahead of it
+ * the earlier one; at progress 0 only keyframe i shows, at the end of segment i the frame is the start of segment i + 1. Bilinear, and every case without a timeline, is the STATIC blend of stage c. A keyframe layer's own offset, rotation and scale are IGNORED (its lines are taken in the sheet's own grid, as resolveConnectionsToCoords() reads them), as in the prototype.
  *
  * HOW (no change to the tile loops): the tile functions of core/tiling.js are called ONCE with an empty layer override while drawShapeCell() is temporarily replaced by a recorder, so the
  * lattice, the tile centres, the flips and the mirror axis are exactly the ones the normal frame uses; the recorder is put back in a finally. The recorded tiles are then drawn here: per
@@ -23,17 +25,18 @@
  */
 
 const spatialMorphRenderState = {
-    status: { code: 'off', keyframes: 0, mode: 'linear' },
+    status: { code: 'off', keyframes: 0, mode: 'linear', progress: null, segment: null },
     spanKey: null,
     span: null,
     spanComputes: 0,     // how often the span was (re)computed: the freeze is visible to the tests
     frames: 0,           // morph frames drawn
 };
 
-// The status of the last frame (a copy). { code, keyframes, mode }, code one of spatialMorphStatusCodes.
+// The status of the last frame (a copy). { code, keyframes, mode, progress, segment }, code one of spatialMorphStatusCodes. progress = the local progress of the active segment (0..1, what the front
+// used) and segment = its index, or null for a frame without them (static: bilinear, or no timeline, or no pair). keyframes = the keyframes of the timeline (linear / radial with a timeline) or of the blend.
 function spatialMorphStatus() {
     const s = spatialMorphRenderState.status;
-    return { code: s.code, keyframes: s.keyframes, mode: s.mode };
+    return { code: s.code, keyframes: s.keyframes, mode: s.mode, progress: s.progress, segment: s.segment };
 }
 
 // Forget the frozen span (the key already changes with the lattice, the projection and the canvas; this is for a caller that wants a recompute).
@@ -42,9 +45,20 @@ function spatialMorphInvalidateSpan() {
     spatialMorphRenderState.span = null;
 }
 
-function spatialMorphRenderSetStatus(code, keyframes, mode) {
+function spatialMorphRenderSetStatus(code, keyframes, mode, progress, segment) {
     const s = spatialMorphRenderState.status;
     s.code = code; s.keyframes = keyframes || 0; s.mode = mode || 'linear';
+    s.progress = typeof progress === 'number' ? progress : null; s.segment = typeof segment === 'number' ? segment : null;
+}
+
+// The segment and the local progress the timeline is at now (stage d): the timeline's own resolveTimelineSegment() when the page has it (the single source of the arithmetic), else the pure mirror.
+// elapsedMs is clamped to [0, total] (a playing timeline keeps it so; a stale value never leaves the last segment). -> { segmentIndex, localT } or null
+function spatialMorphRenderSegmentNow() {
+    const durs = timeline.segmentDurationsMs;
+    const total = (typeof totalTimelineDurationMs === 'function') ? totalTimelineDurationMs(timeline) : durs.reduce((a, b) => a + b, 0);
+    const e = (typeof timeline.elapsedMs === 'number' && Number.isFinite(timeline.elapsedMs)) ? timeline.elapsedMs : 0;
+    const elapsed = Math.max(0, Math.min(total, e));
+    return (typeof resolveTimelineSegment === 'function') ? resolveTimelineSegment(timeline, elapsed) : spatialMorphSegmentAt(durs, elapsed);
 }
 
 function spatialMorphRenderLineCount(connList) {
@@ -160,13 +174,32 @@ function spatialMorphRenderDraw(sm) {
     const infos = additionalLayers.map((l) => ({ shape: l.shape, lineCount: spatialMorphRenderLineCount(l.connections), isPlayback: !!l.isTimelinePlayback }));
     const base = { shape: currentShape, lineCount: spatialMorphRenderLineCount(connections) };
     const tlIds = (timeline && Array.isArray(timeline.keyframeLayerIds)) ? timeline.keyframeLayerIds : null;
-    const plan = spatialMorphPlanKeyframes(infos, { mode, timelineIds: tlIds, base });
-    if (!plan.ok) { spatialMorphRenderSetStatus(plan.code, 0, mode); return false; }
-    const aligned = spatialMorphRenderAlign(plan, mode, timeline);
-    if (!aligned.ok || !spatialMorphValidateCorners(aligned.corners).ok) { spatialMorphRenderSetStatus('alignmentFailed', 0, mode); return false; }
+    // Stage d: linear and radial with a timeline of two or more keyframes follow its progress through the ACTIVE SEGMENT (earlier keyframe K_i, later K_i+1, aligned by the timeline's own pairing, flips and
+    // members of that segment). Bilinear, and every case without a timeline, stays the static blend of stage c.
+    let progress = null, segment = null, plan = null, aligned = null, keyframes = 0;
+    if (mode !== 'bilinear' && tlIds && tlIds.length >= 2 && Array.isArray(timeline.segmentDurationsMs) && timeline.segmentDurationsMs.length === tlIds.length - 1) {
+        const seg = spatialMorphRenderSegmentNow();
+        if (seg) {
+            segment = seg.segmentIndex; progress = seg.localT; keyframes = tlIds.length;
+            const a = tlIds[segment], b = tlIds[segment + 1];
+            if (!additionalLayers[a] || !additionalLayers[b]) { spatialMorphRenderSetStatus('alignmentFailed', keyframes, mode, progress, segment); return false; }
+            plan = spatialMorphPlanKeyframes(infos, { mode, timelineIds: [a, b], base });
+            if (!plan.ok) { spatialMorphRenderSetStatus(plan.code, keyframes, mode, progress, segment); return false; }
+            const res = (typeof resolveTimelineKeyframeCoords === 'function') ? resolveTimelineKeyframeCoords(timeline, segment) : null;
+            const ch = (res && res.ok) ? spatialMorphChooseCorners([res.from, res.to], mode) : { ok: false };
+            aligned = ch.ok ? { ok: true, corners: ch, lineIds: spatialMorphRenderLineIds(additionalLayers[a]), keyframeCount: 2 } : { ok: false };
+        }
+    }
+    if (!aligned) {
+        plan = spatialMorphPlanKeyframes(infos, { mode, timelineIds: tlIds, base });
+        if (!plan.ok) { spatialMorphRenderSetStatus(plan.code, 0, mode); return false; }
+        aligned = spatialMorphRenderAlign(plan, mode, timeline);
+        keyframes = aligned.keyframeCount || 0;
+    }
+    if (!aligned.ok || !spatialMorphValidateCorners(aligned.corners).ok) { spatialMorphRenderSetStatus('alignmentFailed', keyframes, mode, progress, segment); return false; }
 
     const tiles = spatialMorphRenderRecordTiles();
-    if (tiles.length === 0) { spatialMorphRenderSetStatus('renderError', aligned.keyframeCount, mode); return false; }
+    if (tiles.length === 0) { spatialMorphRenderSetStatus('renderError', keyframes, mode, progress, segment); return false; }
     const centroids = tiles.map((t) => t.c);
     const center = { x: canvasW / 2, y: canvasH / 2 };
     const key = spatialMorphSpanKey(mode, angleDeg, currentShape, outerCorners, canvasW, canvasH, centroids);
@@ -178,6 +211,10 @@ function spatialMorphRenderDraw(sm) {
     }
     const span = st.span;
     const opts = { angleDeg, center };
+    // the weights at a world point: the front at the segment's progress (linear / radial with a timeline), else the static weights of stage c; either depends only on the POINT, the span and the progress, so two
+    // tiles that share an edge get the same weights for an endpoint that slides on it and the seam stays closed
+    const fopts = { angleDeg, center, progress, band: spatialMorphFrontBand };
+    const weightsAt = progress === null ? (pt) => spatialMorphCornerWeights(mode, pt, span, opts) : (pt) => spatialMorphFrontCornerWeights(mode, pt, span, fopts);
     const prepared = spatialMorphPrepareLines(aligned.corners, outerCorners);
     const lineIds = aligned.lineIds;
     const sym = spatialMorphSymmetryOps(currentShape, symmetryMode);
@@ -189,15 +226,15 @@ function spatialMorphRenderDraw(sm) {
         for (let t = 0; t < tiles.length; t++) {
             const tile = tiles[t];
             const axisDir = sym.hasReflection ? (tile.axis || mirrorAxisDir()) : null;
-            const wTile = spatialMorphCornerWeights(mode, tile.c, span, opts);
+            const wTile = weightsAt(tile.c);
             for (let i = 0; i < prepared.length; i++) {
                 const pl = prepared[i];
                 const id = lineIds[i] || [0, 0];
                 for (let s = 0; s < sym.ops.length; s++) {
                     const op = sym.ops[s];
                     const ends = [pl.a, pl.b].map((d) => {
-                        const wEdge = (d.onBoundary && d.moved) ? spatialMorphCornerWeights(mode, spatialMorphRenderToWorld(d.sample, tile, op, axisDir), span, opts) : null;
-                        return spatialMorphRenderToWorld(spatialMorphAnchoredPoint(d, wTile, wEdge), tile, op, axisDir);
+                        const wEdge = (d.onBoundary && d.moved) ? weightsAt(spatialMorphRenderToWorld(d.sample, tile, op, axisDir)) : null;
+                        return spatialMorphRenderToWorld(spatialMorphAnchoredPoint(d, wTile, wEdge, progress !== null), tile, op, axisDir);
                     });
                     started = true;
                     drawCurvedBezier(ends[0], ends[1], op.reflected ? mirrored : curveType, id[0], id[1]);
@@ -205,11 +242,11 @@ function spatialMorphRenderDraw(sm) {
             }
         }
     } catch (e) {
-        spatialMorphRenderSetStatus('renderError', aligned.keyframeCount, mode);
+        spatialMorphRenderSetStatus('renderError', keyframes, mode, progress, segment);
         return started;   // partly drawn: do not draw the normal frame over it
     }
     st.frames++;
-    spatialMorphRenderSetStatus((typeof netWarpActive === 'function' && netWarpActive()) ? 'netActive' : 'ok', aligned.keyframeCount, mode);
+    spatialMorphRenderSetStatus((typeof netWarpActive === 'function' && netWarpActive()) ? 'netActive' : (mode === 'bilinear' ? 'bilinearStatic' : 'ok'), keyframes, mode, progress, segment);
     return true;
 }
 

@@ -1,6 +1,6 @@
 /*
  * core/spatial-morph.js
- * The weight mathematics (stage a1), the GEOMETRY (stage a2), the PARAMETERS as data (stage b) and the pure helpers of the render hook (stage c) of the STATIC, LINES-ONLY spatial morph: keyframe layers sit at the corners of a region of the 2D tessellation, and every point
+ * The weight mathematics (stage a1), the GEOMETRY (stage a2), the PARAMETERS as data (stage b), the pure helpers of the render hook (stage c) and the FRONT that follows the timeline (stage d) of the STATIC, LINES-ONLY spatial morph: keyframe layers sit at the corners of a region of the 2D tessellation, and every point
  * of it (a tile centroid, or a point on a tile seam) is a blend of them with its own weights. This file turns a point into four corner weights and blends four corner
  * points with them. Nothing else: the keyframes' line alignment and the boundary anchoring come in stage a2, the render hook in stage c.
  * Pure: explicit arguments, plain data in and out, no globals, no p5, no DOM, no timers, no input is changed. Every top-level name starts with spatialMorph (the file is a
@@ -369,11 +369,20 @@ function spatialMorphPrepareLines(corners, poly, options) {
 // The canonical position { x, y } of one prepared endpoint. wTile = the weights at the TILE (its centroid), wEdge = the weights at the world image of desc.sample (the edge midpoint).
 // Not on the boundary: blend with wTile. On the boundary and not moved: the fixed position. On the boundary and moved: blend the edge points with wEdge; without a usable wEdge the
 // fixed position of K00 (never wTile: the tile's weights would open the seam).
-function spatialMorphAnchoredPoint(desc, wTile, wEdge) {
+function spatialMorphAnchoredPoint(desc, wTile, wEdge, exactEnds) {
     const d = desc || { onBoundary: false, moved: false, points: [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }], edgePoints: [{ x: 0, y: 0 }] };
     const okW = (w) => w && typeof w === 'object' && ['w00', 'w10', 'w01', 'w11'].every((k) => typeof w[k] === 'number' && Number.isFinite(w[k]));
     if (!d.onBoundary) return (d.moved && okW(wTile)) ? spatialMorphBlendPoint(d.points[0], d.points[1], d.points[2], d.points[3], wTile) : { x: d.points[0].x, y: d.points[0].y };   // not moved: the position itself (a blend of four equal points could differ by an ulp)
     if (!d.moved || !okW(wEdge)) return { x: d.edgePoints[0].x, y: d.edgePoints[0].y };
+    // exactEnds (stage d, the front that follows the timeline): at weights that ARE one corner (1 for one keyframe, 0 for the others) the endpoint is that keyframe's own position, not its projection on the
+    // edge, so the first frame of a segment is the earlier keyframe and the last the later one even where an endpoint changes the edge it sits on or lies a little off it. Both tiles of a seam read the same
+    // edge weights, so they agree on whether this applies.
+    if (exactEnds === true) {
+        for (let k = 0; k < 4; k++) {
+            const w4 = [wEdge.w00, wEdge.w10, wEdge.w01, wEdge.w11];
+            if (w4[k] === 1 && w4.every((v, i) => i === k || v === 0)) return { x: d.points[k].x, y: d.points[k].y };
+        }
+    }
     return spatialMorphBlendPoint(d.edgePoints[0], d.edgePoints[1], d.edgePoints[2], d.edgePoints[3], wEdge);
 }
 
@@ -419,8 +428,8 @@ function spatialMorphEqual(a, b) {
 // =====================================================================================================================================================================================
 
 // The status codes the render hook reports (read by stage e, no UI text now). 'off': the switch is off. 'ok': the morph was drawn. 'netActive': the morph was drawn WITHOUT the net
-// that is in force (the prototype ignores the net as well). The others: the normal frame was drawn instead ('renderError': something threw).
-const spatialMorphStatusCodes = Object.freeze(['off', 'ok', 'netActive', 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'alignmentFailed', 'renderError']);
+// that is in force (the prototype ignores the net as well). 'bilinearStatic': drawn, bilinear has no front and ignores the progress (stage d). The others: the normal frame was drawn instead ('renderError': something threw).
+const spatialMorphStatusCodes = Object.freeze(['off', 'ok', 'netActive', 'bilinearStatic', 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'alignmentFailed', 'renderError']);
 
 // Which layers are the keyframes AND why not (the pre-conditions of the morph): spatialMorphSelectKeyframeLayers() plus the rule of the maintainers: the keyframes have the SAME shape and
 // the same line count. layers = [{ shape, lineCount, isPlayback }], options as for the selection ({ mode, timelineIds, base }). A layer with no lines is not a keyframe.
@@ -520,6 +529,57 @@ function spatialMorphSpanKey(mode, angleDeg, shape, polygon, canvasW, canvasH, c
     return [m, a, String(shape), poly, r(canvasW), r(canvasH), list.length, r(f.x), r(f.y), r(l.x), r(l.y)].join('|');
 }
 
+// =====================================================================================================================================================================================
+// STAGE d: the front. The transition WANDERS across the surface with the timeline's progress (linear and radial; bilinear stays static).
+//   CONVENTION: the front travels IN THE DIRECTION of the unit coordinate u (0 at the start edge / the nearest tile, 1 at the end / the farthest): behind the front is the LATER keyframe, ahead of it the
+//   EARLIER one. Linear: u grows along the angle (reverse = angle + 180); radial: from the centre outward.
+//   w(u, p) = smooth(clamp01((p (1 + band) - u) / band)) is the weight of the LATER keyframe, band = 1 by default. p = 0 gives 0 for every u (all earlier), p = 1 gives 1 (all later), p = 0.5 gives
+//   smooth(1 - u). u is clamped to [0, 1] first (a point outside the span counts as its nearest end), p to [0, 1]. A band that is not a positive number is a HARD STEP: 0 at p = 0, 1 at p = 1,
+//   in between 1 where u < p and 0 elsewhere. A NaN u or p gives 0. The smoothing is inside this function: pass the RAW unit coordinate, never a smoothed one.
+// =====================================================================================================================================================================================
+const spatialMorphFrontBand = 1;   // the band width: an internal constant, not a session field; the functions take it as an argument
+
+function spatialMorphFrontWeight(u, progress, band) {
+    if (typeof u !== 'number' || typeof progress !== 'number' || Number.isNaN(u) || Number.isNaN(progress)) return 0;
+    const uu = u < 0 ? 0 : (u > 1 ? 1 : u);
+    const p = progress < 0 ? 0 : (progress > 1 ? 1 : progress);
+    const b = band === undefined ? spatialMorphFrontBand : band;
+    if (typeof b !== 'number' || !Number.isFinite(b) || !(b > 0)) return p <= 0 ? 0 : (p >= 1 ? 1 : (uu < p ? 1 : 0));
+    return spatialMorphSmooth(spatialMorphClamp01((p * (1 + b) - uu) / b));
+}
+
+// The corner weights of one point at the progress p for linear and radial: { w00: 1 - w, w10: w, w01: 0, w11: 0 } with w = the front weight of the later keyframe (K10 = the later one, K00 = the
+// earlier one). options = { angleDeg, center, progress, band }. Bilinear has no front: it returns the STATIC corner weights of stage a1 (the caller decides what that means).
+function spatialMorphFrontCornerWeights(mode, point, span, options) {
+    const m = spatialMorphNormalizeMode(mode);
+    const o = options || {};
+    if (m === 'bilinear') return spatialMorphCornerWeights(m, point, span, o);
+    const u = spatialMorphUnitCoords(m, point, span, o).u;
+    const w = spatialMorphFrontWeight(u, o.progress, o.band);
+    return { w00: 1 - w, w10: w, w01: 0, w11: 0 };
+}
+
+// Which segment and which local progress apply at elapsedMs, from the segment durations alone: the arithmetic of sketch.js resolveTimelineSegment(), mirrored (tools/morph/test-spatial-morph-time.js
+// cuts the real function out of sketch.js and compares them for 300 values). -> { segmentIndex, localT } or null (no segments). An elapsed time exactly at the end of segment i belongs to segment
+// i + 1 at localT 0; at or after the end of the last segment it is the last segment at localT 1.
+function spatialMorphSegmentAt(durations, elapsedMs) {
+    if (!Array.isArray(durations)) return null;
+    const segCount = durations.length;
+    if (segCount === 0) return null;
+    let acc = 0;
+    for (let i = 0; i < segCount; i++) {
+        const segDur = durations[i];
+        const segEnd = acc + segDur;
+        if (elapsedMs < segEnd || i === segCount - 1) {
+            const localElapsed = Math.max(0, elapsedMs - acc);
+            const localT = segDur > 0 ? Math.min(1, localElapsed / segDur) : 1;
+            return { segmentIndex: i, localT };
+        }
+        acc = segEnd;
+    }
+    return null;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         spatialMorphModes, spatialMorphClamp01, spatialMorphSmooth, spatialMorphNormalizeMode, spatialMorphDirection, spatialMorphScalar,
@@ -529,5 +589,6 @@ if (typeof module !== 'undefined' && module.exports) {
         spatialMorphPrepareLines, spatialMorphAnchoredPoint, spatialMorphAnchoredLine,
         spatialMorphDefaults, spatialMorphNormalize, spatialMorphEqual,
         spatialMorphStatusCodes, spatialMorphPlanKeyframes, spatialMorphSymmetryOps, spatialMorphSpanFromCentroids, spatialMorphSpanKey,
+        spatialMorphFrontBand, spatialMorphFrontWeight, spatialMorphFrontCornerWeights, spatialMorphSegmentAt,
     };
 }
