@@ -274,16 +274,20 @@ T('seams', () => {
 });
 
 // ---- 5. golden hashes of the ON path ---------------------------------------------------------------------------------------------------------------------------------------------------------
+// Stage d2b re-pinned 16 of the 30 hashes (the rule "commonEdge", core/spatial-morph.js): each changed hash is a frame of a pattern whose active segment contains at least one endpoint that the prototype's "any of
+// the four" rule treated as a boundary endpoint although a keyframe position lies off the common edge (a partner on another edge or inside); the other 14 frames are UNCHANGED: the triangle patterns have no such
+// endpoint, and the five @5000 frames are the last keyframe itself (weights are one corner, every endpoint is its keyframe's own position). Before the new values were pinned a script checked that no changed
+// hash belongs to a frame without such an endpoint. PREVIOUS_CHANGED holds the 16 values before d2b.
 const GOLDEN = {
-  "square/none/linear45@500": '98eca811d2fc60bf',
-  "square/none/linear45@1500": '26a01c44c46b31f0',
-  "square/none/linear45@2500": '8eec3963a5ca97ca',
-  "square/none/linear45@3500": 'b1a3441f3d0ae67f',
+  "square/none/linear45@500": '0ae0d8b02038406a',
+  "square/none/linear45@1500": 'e571ee042a6888a1',
+  "square/none/linear45@2500": '18d2fef235016526',
+  "square/none/linear45@3500": '19c67da24d1dbc0d',
   "square/none/linear45@5000": '73028a7af5bbe573',
-  "square/rotation_reflection3/linear90@500": '10c5775a3604bb05',
-  "square/rotation_reflection3/linear90@1500": '3c747e2e4db3fb9f',
-  "square/rotation_reflection3/linear90@2500": '19f07b552255d3ee',
-  "square/rotation_reflection3/linear90@3500": '6e06b2096a617480',
+  "square/rotation_reflection3/linear90@500": 'c311f1899f768402',
+  "square/rotation_reflection3/linear90@1500": 'f4e968be89c7f588',
+  "square/rotation_reflection3/linear90@2500": 'b8492ad5163f9dad',
+  "square/rotation_reflection3/linear90@3500": '7afd6899d0d60fc3',
   "square/rotation_reflection3/linear90@5000": '37d75d79b659223b',
   "triangle/reflection_only/linear0@500": 'cc0c68da185c7dda',
   "triangle/reflection_only/linear0@1500": '9b96bec7514a850a',
@@ -295,16 +299,34 @@ const GOLDEN = {
   "triangle/none/radial0@2500": '68ccff870c94f18b',
   "triangle/none/radial0@3500": '612213724a7ef4c8',
   "triangle/none/radial0@5000": 'f9adc58930acb2e9',
+  "hex/rotation_reflection3/radial0@500": 'f1b9086c860f3911',
+  "hex/rotation_reflection3/radial0@1500": '9391b69df2609938',
+  "hex/rotation_reflection3/radial0@2500": '0a348fdeebf4ee7a',
+  "hex/rotation_reflection3/radial0@3500": '0005b1600e1577b3',
+  "hex/rotation_reflection3/radial0@5000": '73bc46b99febaa1d',
+  "hex/none/linear315@500": 'f3ddc2ae49475042',
+  "hex/none/linear315@1500": '927b6ad5a8cdaddf',
+  "hex/none/linear315@2500": '33d3d1e0e7625cbd',
+  "hex/none/linear315@3500": '6d27570c69ddf9c9',
+  "hex/none/linear315@5000": 'a28452c6dbfa4df2',
+};
+const PREVIOUS_CHANGED = {
+  "square/none/linear45@500": '98eca811d2fc60bf',
+  "square/none/linear45@1500": '26a01c44c46b31f0',
+  "square/none/linear45@2500": '8eec3963a5ca97ca',
+  "square/none/linear45@3500": 'b1a3441f3d0ae67f',
+  "square/rotation_reflection3/linear90@500": '10c5775a3604bb05',
+  "square/rotation_reflection3/linear90@1500": '3c747e2e4db3fb9f',
+  "square/rotation_reflection3/linear90@2500": '19f07b552255d3ee',
+  "square/rotation_reflection3/linear90@3500": '6e06b2096a617480',
   "hex/rotation_reflection3/radial0@500": '15b3fc7807b3ccc4',
   "hex/rotation_reflection3/radial0@1500": 'a91d6092ae88aef1',
   "hex/rotation_reflection3/radial0@2500": '5fd3b63ba1bc33ad',
   "hex/rotation_reflection3/radial0@3500": 'e26741fd54edcf13',
-  "hex/rotation_reflection3/radial0@5000": '73bc46b99febaa1d',
   "hex/none/linear315@500": '955b6315742063f0',
   "hex/none/linear315@1500": 'bddc717ad0346587',
   "hex/none/linear315@2500": 'ab6d214757669147',
   "hex/none/linear315@3500": '7b6938b6d80e3bc1',
-  "hex/none/linear315@5000": 'a28452c6dbfa4df2',
 };
 function goldenFrames() {
   const out = {};
@@ -320,7 +342,8 @@ if (PRINT) { console.log(JSON.stringify(goldenFrames(), null, 1)); process.exit(
 T('golden', () => {
   const now = goldenFrames();
   const bad = Object.keys(GOLDEN).filter((k) => GOLDEN[k] !== now[k]);
-  check(`${Object.keys(GOLDEN).length} golden frame hashes of the ON path (6 patterns x 5 elapsed values over 2 segments; chords of every drawn segment) are unchanged`, Object.keys(GOLDEN).length === 30 && Object.keys(now).length === 30 && bad.length === 0, bad.slice(0, 3).join(','));
+  check(`16 of the 30 hashes differ from their values before stage d2b (every one has an endpoint that is no longer treated as a boundary endpoint), 14 are the same as before`, Object.keys(PREVIOUS_CHANGED).length === 16 && Object.keys(PREVIOUS_CHANGED).every((k) => GOLDEN[k] !== PREVIOUS_CHANGED[k]) && Object.keys(GOLDEN).filter((k) => !(k in PREVIOUS_CHANGED)).length === 14);
+  check(`${Object.keys(GOLDEN).length} golden frame hashes of the ON path (6 patterns x 5 elapsed values over 2 segments; chords of every drawn segment) are the pinned ones (stage d2b values)`, Object.keys(GOLDEN).length === 30 && Object.keys(now).length === 30 && bad.length === 0, bad.slice(0, 3).join(','));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
