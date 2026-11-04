@@ -264,4 +264,21 @@ function runCase(pat, kcase, nk, seeds, modes, ps) {
     }
     return { rows, inv };
 }
-module.exports = { endpointInvariants, M, makeRenderWorld, rng, dist, MODES, PS, pairsOf, coincident, gaps, maxdiff, at, layerNormal, context, qualify, corpusQualifying, handBuilt, partnerClasses, deformClosed, editEdge, addCoordLayer, linesOf, buildCase, runCase, posOf };
+// The INDEPENDENT oracle of the seam-open check (stage e1): the keyframe layer drawn alone as a normal frame (the real drawn segments), its boundary endpoints of inner tiles looked up for a partner of another
+// tile copy at the same world point. A layer that has the base sheet's size and symmetry mode (the tile list is the base's). -> { open, need, ok }
+function frameSeamOpen(w, id) {
+    const f = layerNormal(w, id);
+    const poly = w.get('outerCorners'), centroid = w.get('centroid'), tiles = w.get('spatialMorphRenderRecordTiles()');
+    const polys = tiles.map((t) => w.get(`outerCorners.map(p => toTileLocal(p, ${JSON.stringify(t.c)}, ${t.flip}, ${t.rot}))`));
+    const Rr = Math.max(...poly.map((p) => dist(p, centroid))), nbr = tiles.map(() => new Set());
+    for (let i = 0; i < tiles.length; i++) for (let j = i + 1; j < tiles.length; j++) {
+        if (dist(tiles[i].c, tiles[j].c) > 2 * Rr + 1e-6) continue;
+        if (polys[i].filter((p) => polys[j].some((q) => dist(p, q) < 1e-6)).length === 2) { nbr[i].add(j); nbr[j].add(i); }
+    }
+    const spt = f.length / tiles.length, P = pairsOf(f, spt, 1e-6), has = new Set();
+    P.cross.forEach(([a, b]) => { has.add(a); has.add(b); });
+    let need = 0, ok = 0;
+    P.pts.forEach((p, i) => { const t = Math.floor(p.k / spt); if (nbr[t].size !== poly.length) return; if (!M.spatialMorphOnEdge({ x: p.x, y: p.y }, polys[t], 1e-6)) return; need++; if (has.has(i)) ok++; });
+    return { open: ok !== need, need, ok };
+}
+module.exports = { frameSeamOpen, endpointInvariants, M, makeRenderWorld, rng, dist, MODES, PS, pairsOf, coincident, gaps, maxdiff, at, layerNormal, context, qualify, corpusQualifying, handBuilt, partnerClasses, deformClosed, editEdge, addCoordLayer, linesOf, buildCase, runCase, posOf };

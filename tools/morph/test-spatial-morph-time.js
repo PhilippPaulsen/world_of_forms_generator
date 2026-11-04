@@ -205,15 +205,15 @@ T('span-status', () => {
   const wb = world('square', 'none', [CONNS.square, ALT.square, ALT2.square, ALT.square]);
   wb.setMorph({ enabled: true, mode: 'bilinear', angleDeg: 0 });
   const hs = new Set(); for (const p of [0, 0.3, 0.7, 1]) { setProgress(wb, p); hs.add(hashOf(wb.frame())); }
-  check("bilinear stays static: four progress values, one frame; status 'bilinearStatic' with progress and segment null", hs.size === 1 && same(wb.status(), { code: 'bilinearStatic', keyframes: 4, mode: 'bilinear', progress: null, segment: null }), J(wb.status()));
+  check("bilinear stays static: four progress values, one frame; status 'bilinearStatic' with progress and segment null (stage e1: seamOpen [2], the keyframe ALT2 is open at the tile edge)", hs.size === 1 && same(wb.status(), { code: 'bilinearStatic', keyframes: 4, mode: 'bilinear', progress: null, segment: null, seamOpen: [2] }), J(wb.status()));
   // status of a followed frame
   w.setMorph({ enabled: true, mode: 'radial', angleDeg: 0 }); setProgress(w, 0.25); w.drawn();
-  check("a followed frame: status 'ok' with the timeline's keyframe count, the mode, the local progress and the segment", same(w.status(), { code: 'ok', keyframes: 2, mode: 'radial', progress: 0.25, segment: 0 }), J(w.status()));
+  check("a followed frame: status 'ok' with the timeline's keyframe count, the mode, the local progress and the segment", same(w.status(), { code: 'ok', keyframes: 2, mode: 'radial', progress: 0.25, segment: 0, seamOpen: [] }), J(w.status()));
   const w3 = world('square', 'none', [CONNS.square, ALT.square, ALT2.square]); w3.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 }); setElapsed(w3, 3000); w3.drawn();
-  check('with 3 keyframes at elapsed 3000 ms: segment 1 at local progress 0.5, keyframes 3', same(w3.status(), { code: 'ok', keyframes: 3, mode: 'linear', progress: 0.5, segment: 1 }), J(w3.status()));
+  check('with 3 keyframes at elapsed 3000 ms: segment 1 at local progress 0.5, keyframes 3', same(w3.status(), { code: 'ok', keyframes: 3, mode: 'linear', progress: 0.5, segment: 1, seamOpen: [2] }), J(w3.status()));
   // no timeline: static, fields null
   const ws = makeRenderWorld('square', 3, 3, 'none'); ws.baseConnections(CONNS.square); ws.addKeyframeLayer(CONNS.square); ws.addKeyframeLayer(ALT.square); ws.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 }); ws.drawn();
-  check('without a timeline linear and radial draw the static blend of stage c: status ok, progress and segment null', same(ws.status(), { code: 'ok', keyframes: 2, mode: 'linear', progress: null, segment: null }), J(ws.status()));
+  check('without a timeline linear and radial draw the static blend of stage c: status ok, progress and segment null', same(ws.status(), { code: 'ok', keyframes: 2, mode: 'linear', progress: null, segment: null, seamOpen: [] }), J(ws.status()));
   // net
   w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 }); setProgress(w, 0.5);
   w.set(`baseNetTransform = ${J({ x: { kind: 'trig', w: 0.3 }, y: 'same', repeat: false, domain: 'field' })};`); w.drawn();
@@ -229,7 +229,7 @@ T('span-status', () => {
   wm = world('square', 'none', [CONNS.square, ALT.square, ALT2.square]); wm.set('additionalLayers[2].connections.pop();'); wm.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 }); setElapsed(wm, 1000); wm.drawn();
   check('the broken keyframe only stops its own segment: at elapsed 1000 (segment 0) the morph is drawn', wm.status().code === 'ok' && wm.status().segment === 0, J(wm.status()));
   const w1 = makeRenderWorld('square', 3, 3, 'none'); w1.baseConnections(CONNS.square); w1.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 }); w1.drawn();
-  check('no keyframe at all: needsTwoKeyframes with progress and segment null', same(w1.status(), { code: 'needsTwoKeyframes', keyframes: 0, mode: 'linear', progress: null, segment: null }), J(w1.status()));
+  check('no keyframe at all: needsTwoKeyframes with progress and segment null', same(w1.status(), { code: 'needsTwoKeyframes', keyframes: 0, mode: 'linear', progress: null, segment: null, seamOpen: null }), J(w1.status()));
   // an exception inside the follower never escapes
   const wr = world('square', 'none', [CONNS.square, ALT.square]); wr.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 }); setProgress(wr, 0.5);
   wr.set('const __r = resolveTimelineKeyframeCoords; let __k = 0; resolveTimelineKeyframeCoords = function () { if (__k++ === 0) throw new Error("boom"); return __r.apply(this, arguments); };');
@@ -241,7 +241,7 @@ T('span-status', () => {
   check('the render uses the real resolveTimelineSegment() when the page has it and the pure mirror when it does not: the same frame', withReal === withMirror && wa.status().segment === 1);
   // the switch off is still the normal frame whatever the timeline does
   wa.setMorph({ enabled: false, mode: 'linear', angleDeg: 0 });
-  check('with the switch OFF nothing of this stage is read: the status is off with progress and segment null', (wa.drawn(), same(wa.status(), { code: 'off', keyframes: 0, mode: 'linear', progress: null, segment: null })), J(wa.status()));
+  check('with the switch OFF nothing of this stage is read: the status is off with progress and segment null', (wa.drawn(), same(wa.status(), { code: 'off', keyframes: 0, mode: 'linear', progress: null, segment: null, seamOpen: null })), J(wa.status()));
 });
 
 // ---- 4. the seams at 7 progress values -------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -121,7 +121,9 @@ T('pins', () => {
   const NAMES = ['applyTimelineFrame', 'applyLayerConnectionsMorphFrame', 'resolveTimelineKeyframeCoords', 'resolveTimelineSegment', 'totalTimelineDurationMs', 'setTimelineProgress', 'toggleTimelinePlayback', 'previewTimelineSegmentMidpoint'];
   const bodies = NAMES.map(grab).join('\n');
   check('the eight functions the protected netwarp tests cut out of sketch.js are byte-identical to c432056c (sha256) and name no morph global', sha(bodies) === PIN.protectedBodies && !/spatialMorph/.test(bodies), sha(bodies).slice(0, 12));
-  check('sketch.js does not mention the morph at all in this stage (the hook lives in core/)', !/spatialMorph/.test(SKETCH_SRC));
+  // stage e1 added the write / read access (setSpatialMorph, getSpatialMorph and their window exports) to sketch.js as ONE block; everything else in it still does not mention the morph
+  const E1_BLOCK = /\/\/ The spatial morph's write and read access[\s\S]*?window\.getSpatialMorph = getSpatialMorph;\n/;
+  check('sketch.js does not mention the morph outside the one stage-e1 access block (setSpatialMorph / getSpatialMorph); the hook lives in core/', E1_BLOCK.test(SKETCH_SRC) && !/spatialMorph/.test(SKETCH_SRC.replace(E1_BLOCK, '')));
   check('the render file has no hotkey, no keyPressed, no event handler, no DOM access and no block comment inside a function body',
     !/keyPressed|keyCode|\bkey\b\s*===|addEventListener|document\.|window\.|localStorage|sessionStorage|setTimeout|setInterval/.test(RENDER_SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')));
   const topLevel = (src) => { const s = src.replace(/\/\*[\s\S]*?\*\//g, (x) => x.replace(/[^\n]/g, ' ')); const out = []; s.split('\n').forEach((line) => { let mm; if ((mm = /^(?:async\s+)?function\s*\*?\s*([\w$]+)/.exec(line)) || (mm = /^(?:const|let|var)\s+([\w$]+)/.exec(line)) || (mm = /^class\s+([\w$]+)/.exec(line))) out.push(mm[1]); }); return out; };
@@ -353,7 +355,7 @@ T('status', () => {
   // ok / netActive / off
   w = mk(); { const a = w.addKeyframeLayer(CONNS.square), b = w.addKeyframeLayer(ALT.square); w.setTimeline([a, b]); }
   w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 }); w.drawn();
-  check("a drawn morph: status 'ok' with the keyframe count and the mode", same(w.status(), { code: 'ok', keyframes: 2, mode: 'linear', progress: 0, segment: 0 }), J(w.status()));
+  check("a drawn morph: status 'ok' with the keyframe count and the mode", same(w.status(), { code: 'ok', keyframes: 2, mode: 'linear', progress: 0, segment: 0, seamOpen: [] }), J(w.status()));
   w.setMorph({ enabled: false, mode: 'linear', angleDeg: 0 }); w.drawn();
   check("switching it off: status 'off'", w.status().code === 'off');
 });
