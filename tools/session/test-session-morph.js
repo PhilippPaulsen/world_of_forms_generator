@@ -212,8 +212,9 @@ console.log('\n== 5. autosave, export, readers ==');
     check('the export JSON does not carry the block (buildExportData is the same with the morph on and off): it describes the pattern, not the morph frame', same(e0, e1) && !J(e0).includes('spatialMorph') && !F.read('core/export.js').includes('spatialMorph'));
     // readers
     const readers = ['gallery.html', 'gallery.js', 'gallery-render.js', 'sketch.js', 'core/export.js', 'core/tiling.js', 'core/orbits.js'];
-    const names = f => /\bspatialMorph\b/.test(F.read(f));   // the block's own name; core/tiling.js names only the render hook spatialMorphTryDraw (stage c)
-    check('the catalog / gallery readers, sketch.js, the export and the tiling do not read the morph block (spatialMorph)', readers.every(f => !names(f)), readers.filter(names).join(','));
+    const E1_BLOCK = /\/\/ The spatial morph's write and read access[\s\S]*?window\.getSpatialMorph = getSpatialMorph;\n/;   // stage e1: setSpatialMorph / getSpatialMorph, the UI's only access, is ONE block in sketch.js
+    const names = f => /\bspatialMorph\b/.test(f === 'sketch.js' ? F.read(f).replace(E1_BLOCK, '') : F.read(f));   // the block's own name; core/tiling.js names only the render hook spatialMorphTryDraw (stage c)
+    check('the catalog / gallery readers, sketch.js (outside the one stage-e1 access block), the export and the tiling do not read the morph block (spatialMorph)', readers.every(f => !names(f)), readers.filter(names).join(','));
     check('the gallery does not load the session code, so it cannot read or write the block', !/core\/session|core\/spatial-morph/.test(F.read('gallery.html')));
     const html = F.read('index.html');
     const tags = [...html.matchAll(/<script src="([^"?]+)\?v=([^"]+)"><\/script>/g)].map(m => m[1]);

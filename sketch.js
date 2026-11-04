@@ -4618,6 +4618,31 @@ function setFaceSelected(sheet, key) {
 }
 window.setFaceSelected = setFaceSelected;
 
+// The spatial morph's write and read access (morph stage e1; the UI of stage e2 is the only caller): setSpatialMorph(patch) merges a partial { enabled, mode, angleDeg } into the project's morph block, normalises the result
+// through spatialMorphNormalize() (an invalid field falls back to its own default, as in the session restore), assigns it and redraws ONLY when the block changed (spatialMorphEqual). Returns whether it changed;
+// a non-object patch or any error is ignored (false). It touches no timeline and no layer. The autosave needs nothing here: draw() ends in markDirty(), the writer compares the snapshot texts.
+// getSpatialMorph() returns a COPY of the block, so a caller never holds a reference into the model.
+function setSpatialMorph(patch) {
+    try {
+        if (patch === null || typeof patch !== 'object' || Array.isArray(patch)) return false;
+        if (typeof spatialMorphNormalize !== 'function' || typeof spatialMorphEqual !== 'function') return false;
+        const merged = Object.assign({}, spatialMorph);
+        for (const k of ['enabled', 'mode', 'angleDeg']) if (Object.prototype.hasOwnProperty.call(patch, k)) merged[k] = patch[k];
+        const next = spatialMorphNormalize(merged);
+        if (spatialMorphEqual(next, spatialMorph)) return false;
+        spatialMorph = next;
+        redraw();
+        return true;
+    } catch (err) {
+        return false;
+    }
+}
+function getSpatialMorph() {
+    return typeof spatialMorphNormalize === 'function' ? spatialMorphNormalize(spatialMorph) : { enabled: false, mode: 'linear', angleDeg: 0 };
+}
+window.setSpatialMorph = setSpatialMorph;
+window.getSpatialMorph = getSpatialMorph;
+
 // Updates #pattern-name-status for whichever sheet is currently active.
 // Called once per draw() (see there for why this is cached rather than
 // unconditional like updateCrossLayerStatus()).

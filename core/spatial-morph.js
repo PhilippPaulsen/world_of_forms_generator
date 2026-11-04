@@ -597,6 +597,65 @@ function spatialMorphSegmentAt(durations, elapsedMs) {
     return null;
 }
 
+// =====================================================================================================================================================================================
+// STAGE e1: the SEAM-OPEN check. A keyframe whose boundary endpoints have no partner on the neighbouring tile cannot be seamless at the tile edge, and a morph that starts or ends in it cannot be
+// either. Definition (the stage d2 one, tools/morph/seam-data.js qualify()): a canonical endpoint on the outer polygon edge (within 1e-6 px) is a BOUNDARY endpoint; the keyframe is SEAMLESS when,
+// drawn over the tiling, every boundary endpoint of an INNER tile (a tile whose every edge is shared with another tile of the list) has a partner endpoint of ANOTHER tile copy at the same world
+// point (within 1e-6 px), under every symmetry operation. A keyframe without boundary endpoints is seamless (nothing to meet).
+//   lines = [{ x1, y1, x2, y2 }] canonical; poly = the outer polygon; world = { tileCount, opCount, toWorld(p, tileIndex, opIndex) -> { x, y } } (the tile transform and the symmetry operation, the render
+//   stage's job). -> { open, boundary (canonical boundary endpoints), checked (world endpoints of inner tiles), unmatched }. Never throws: input that cannot be checked gives open: false, valid: false.
+// =====================================================================================================================================================================================
+function spatialMorphSeamOpen(lines, poly, world) {
+    const none = { open: false, boundary: 0, checked: 0, unmatched: 0, valid: false };
+    try {
+        if (!Array.isArray(lines) || !Array.isArray(poly) || poly.length < 3 || !world || typeof world.toWorld !== 'function') return none;
+        const nT = world.tileCount, nS = world.opCount;
+        if (!Number.isInteger(nT) || !Number.isInteger(nS) || nT < 1 || nS < 1) return none;
+        const bnd = [];
+        for (const l of lines) {
+            if (!spatialMorphIsLine(l)) return none;
+            for (const p of [{ x: l.x1, y: l.y1 }, { x: l.x2, y: l.y2 }]) {
+                if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return none;
+                if (spatialMorphOnEdge(p, poly, 1e-6) !== null) bnd.push(p);
+            }
+        }
+        if (bnd.length === 0) return { open: false, boundary: 0, checked: 0, unmatched: 0, valid: true };
+        // inner tiles: every edge of the tile's world polygon is also an edge of another tile (edges keyed by their rounded world vertices)
+        const vkey = (p) => Math.round(p.x * 1e5) + ',' + Math.round(p.y * 1e5);
+        const edgeCount = new Map(), tileEdges = [];
+        for (let t = 0; t < nT; t++) {
+            const v = poly.map((p) => world.toWorld(p, t, 0));
+            const ks = v.map((p, i) => { const a = vkey(p), b = vkey(v[(i + 1) % v.length]); return a < b ? a + '|' + b : b + '|' + a; });
+            tileEdges.push(ks);
+            ks.forEach((k) => edgeCount.set(k, (edgeCount.get(k) || 0) + 1));
+        }
+        const inner = tileEdges.map((ks) => ks.every((k) => edgeCount.get(k) >= 2));
+        // every world image of every boundary endpoint, in a grid hash of 1e-5 px cells (a partner within 1e-6 is in the 3 x 3 cells around)
+        const cell = new Map(), pts = [];
+        for (let t = 0; t < nT; t++) for (let s = 0; s < nS; s++) for (const p of bnd) {
+            const w = world.toWorld(p, t, s);
+            pts.push({ x: w.x, y: w.y, t });
+            const c = Math.round(w.x * 1e5) + ',' + Math.round(w.y * 1e5);
+            const l = cell.get(c); if (l) l.push(pts.length - 1); else cell.set(c, [pts.length - 1]);
+        }
+        let checked = 0, unmatched = 0;
+        for (const q of pts) {
+            if (!inner[q.t]) continue;
+            checked++;
+            const cx = Math.round(q.x * 1e5), cy = Math.round(q.y * 1e5);
+            let ok = false;
+            for (let dx = -1; dx <= 1 && !ok; dx++) for (let dy = -1; dy <= 1 && !ok; dy++) {
+                const l = cell.get((cx + dx) + ',' + (cy + dy));
+                if (l) for (const j of l) if (pts[j].t !== q.t && Math.hypot(pts[j].x - q.x, pts[j].y - q.y) <= 1e-6) { ok = true; break; }
+            }
+            if (!ok) unmatched++;
+        }
+        return { open: unmatched > 0, boundary: bnd.length, checked, unmatched, valid: true };
+    } catch (e) {
+        return none;
+    }
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         spatialMorphModes, spatialMorphClamp01, spatialMorphSmooth, spatialMorphNormalizeMode, spatialMorphDirection, spatialMorphScalar,
@@ -606,6 +665,6 @@ if (typeof module !== 'undefined' && module.exports) {
         spatialMorphPrepareLines, spatialMorphAnchoredPoint, spatialMorphAnchoredLine,
         spatialMorphDefaults, spatialMorphNormalize, spatialMorphEqual,
         spatialMorphStatusCodes, spatialMorphPlanKeyframes, spatialMorphSymmetryOps, spatialMorphSpanFromCentroids, spatialMorphSpanKey,
-        spatialMorphFrontBand, spatialMorphFrontWeight, spatialMorphFrontCornerWeights, spatialMorphSegmentAt,
+        spatialMorphFrontBand, spatialMorphFrontWeight, spatialMorphFrontCornerWeights, spatialMorphSegmentAt, spatialMorphSeamOpen,
     };
 }

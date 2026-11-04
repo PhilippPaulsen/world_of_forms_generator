@@ -25,18 +25,25 @@
  */
 
 const spatialMorphRenderState = {
-    status: { code: 'off', keyframes: 0, mode: 'linear', progress: null, segment: null },
+    status: { code: 'off', keyframes: 0, mode: 'linear', progress: null, segment: null, seamOpen: null },
     spanKey: null,
     span: null,
     spanComputes: 0,     // how often the span was (re)computed: the freeze is visible to the tests
     frames: 0,           // morph frames drawn
+    seamCheck: true,     // stage e1: switch of the seam-open check (the tests turn it off to prove it changes no frame)
+    seamChecks: 0,       // how often the seam-open check was COMPUTED (not looked up): the cache is visible to the tests
+    seamHits: 0,         // how often it came from the cache
+    seamCache: new Map(),   // content signature -> { open, boundary, checked, unmatched }
+    seamLastMs: 0,       // the duration of the last computation (ms), for the page measurement
 };
 
-// The status of the last frame (a copy). { code, keyframes, mode, progress, segment }, code one of spatialMorphStatusCodes. progress = the local progress of the active segment (0..1, what the front
+// The status of the last frame (a copy). { code, keyframes, mode, progress, segment, seamOpen }, code one of spatialMorphStatusCodes. seamOpen (stage e1): the keyframes that are NOT seamless at the tile edge,
+// as indices into additionalLayers (-1 = the base sheet), [] when every keyframe that takes part is seamless, null when it was not evaluated (the morph is off, or the code is not ok / bilinearStatic / netActive).
+// The old text follows: progress = the local progress of the active segment (0..1, what the front
 // used) and segment = its index, or null for a frame without them (static: bilinear, or no timeline, or no pair). keyframes = the keyframes of the timeline (linear / radial with a timeline) or of the blend.
 function spatialMorphStatus() {
     const s = spatialMorphRenderState.status;
-    return { code: s.code, keyframes: s.keyframes, mode: s.mode, progress: s.progress, segment: s.segment };
+    return { code: s.code, keyframes: s.keyframes, mode: s.mode, progress: s.progress, segment: s.segment, seamOpen: Array.isArray(s.seamOpen) ? s.seamOpen.slice() : null };
 }
 
 // Forget the frozen span (the key already changes with the lattice, the projection and the canvas; this is for a caller that wants a recompute).
@@ -45,10 +52,46 @@ function spatialMorphInvalidateSpan() {
     spatialMorphRenderState.span = null;
 }
 
-function spatialMorphRenderSetStatus(code, keyframes, mode, progress, segment) {
+function spatialMorphRenderSetStatus(code, keyframes, mode, progress, segment, seamOpen) {
     const s = spatialMorphRenderState.status;
     s.code = code; s.keyframes = keyframes || 0; s.mode = mode || 'linear';
     s.progress = typeof progress === 'number' ? progress : null; s.segment = typeof segment === 'number' ? segment : null;
+    s.seamOpen = Array.isArray(seamOpen) ? seamOpen : null;
+}
+
+// Stage e1: which of the keyframes that take part (plan.ids: the active segment's two for linear / radial, up to four corners for bilinear) are NOT seamless at the tile edge. The tiles and the symmetry operations
+// are the ones just recorded for the draw (the keyframes agree among themselves in shape, size and symmetry mode, or the plan would have said parameterMismatch), so nothing is recorded again. Each keyframe's
+// verdict is cached by a signature of its content, shape, size factor, symmetry mode, canvas, polygon and tile count (spatialMorphRenderState.seamCache), so a redraw loop or the playback computes it once.
+// -> an array of indices into additionalLayers (-1 = the base sheet), [] when all are seamless, null when the check is off or anything throws (it never throws and draws nothing).
+function spatialMorphRenderSeamOpen(plan, src, tiles, sym) {
+    const st = spatialMorphRenderState;
+    if (st.seamCheck === false) return null;
+    try {
+        const axes = tiles.map((t) => (sym.hasReflection ? (t.axis || mirrorAxisDir()) : null));
+        const world = { tileCount: tiles.length, opCount: sym.ops.length, toWorld: (p, t, o) => spatialMorphRenderToWorld(p, tiles[t], sym.ops[o], axes[t]) };
+        const r6 = (v) => Math.round(v * 1e6) / 1e6;
+        const open = [];
+        for (const id of plan.ids) {
+            const layer = id === 'base' ? null : additionalLayers[id];
+            if (id !== 'base' && !layer) return null;
+            const lines = resolveConnectionsToCoords(layer || { connections, nodes });
+            const size = layer ? layer.shapeSizeFactor : shapeSizeFactor;
+            const key = [src.shape, size, src.symmetryMode, canvasW, canvasH, tiles.length, src.outerCorners.map((p) => r6(p.x) + ',' + r6(p.y)).join(';'), lines.map((l) => r6(l.x1) + ',' + r6(l.y1) + ',' + r6(l.x2) + ',' + r6(l.y2)).join(';')].join('|');
+            let verdict = st.seamCache.get(key);
+            if (verdict === undefined) {
+                const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                verdict = spatialMorphSeamOpen(lines, src.outerCorners, world);
+                st.seamLastMs = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
+                st.seamChecks++;
+                if (st.seamCache.size >= 64) st.seamCache.clear();
+                st.seamCache.set(key, verdict);
+            } else st.seamHits++;
+            if (verdict.open) open.push(id === 'base' ? -1 : id);
+        }
+        return open;
+    } catch (e) {
+        return null;
+    }
 }
 
 // The segment and the local progress the timeline is at now (stage d): the timeline's own resolveTimelineSegment() when the page has it (the single source of the arithmetic), else the pure mirror.
@@ -257,7 +300,7 @@ function spatialMorphRenderDraw(sm) {
         return started;   // partly drawn: do not draw the normal frame over it
     }
     st.frames++;
-    spatialMorphRenderSetStatus((typeof netWarpActive === 'function' && netWarpActive()) ? 'netActive' : (mode === 'bilinear' ? 'bilinearStatic' : 'ok'), keyframes, mode, progress, segment);
+    spatialMorphRenderSetStatus((typeof netWarpActive === 'function' && netWarpActive()) ? 'netActive' : (mode === 'bilinear' ? 'bilinearStatic' : 'ok'), keyframes, mode, progress, segment, spatialMorphRenderSeamOpen(plan, src, tiles, sym));
     return true;
 }
 
