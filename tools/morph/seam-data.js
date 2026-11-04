@@ -214,10 +214,39 @@ function buildCase(pat, kcase, seeds, nk) {
     w.setTimeline(ids);
     return { w, ids, c, info: K1.info };
 }
+// The endpoint invariants of the boundary rule (stage d2b), on the aligned corners of every segment of a case: for every endpoint the displacement between w = 0 and w = 1e-6 and between w = 1 - 1e-6 and w = 1
+// (static path: exactEnds false; front path: exactEnds true, where w = 0 / 1 are the keyframes' own positions), and for every line the length at w = 0.01 against the shorter of its two keyframe lines.
+// -> { endpoints, jumpLow, jumpHigh, lines, minRatio, below90, below90NotLinear }
+function endpointInvariants(w, nk) {
+    const out = { endpoints: 0, jumpLow: 0, jumpHigh: 0, lines: 0, minRatio: Infinity, below90: 0, below90NotLinear: 0 };
+    const W = (x) => ({ w00: 1 - x, w10: x, w01: 0, w11: 0 }), len = (l) => Math.hypot(l.x2 - l.x1, l.y2 - l.y1);
+    for (let seg = 0; seg < nk - 1; seg++) {
+        const r = w.run(`(function () { const r = resolveTimelineKeyframeCoords(timeline, ${seg}); return { from: r.from, to: r.to }; })()`), poly = w.get('outerCorners');
+        const prep = M.spatialMorphPrepareLines(M.spatialMorphChooseCorners([r.from, r.to], 'linear'), poly);
+        const at = (d, x, exact) => { const x2 = x === 0 || x === 1 ? x : x; const wt = W(x2); return M.spatialMorphAnchoredPoint(d, wt, wt, exact); };
+        prep.forEach((pl, i) => {
+            for (const e of ['a', 'b']) for (const exact of [false, true]) {
+                const d = pl[e]; out.endpoints++;
+                out.jumpLow = Math.max(out.jumpLow, dist(at(d, 0, exact), at(d, 1e-6, exact)));
+                out.jumpHigh = Math.max(out.jumpHigh, dist(at(d, 1 - 1e-6, exact), at(d, 1, exact)));
+            }
+            const wt = W(0.01), line = M.spatialMorphAnchoredLine(pl, wt, wt, wt), shorter = Math.min(len(r.from[i]), len(r.to[i]));
+            out.lines++;
+            if (shorter > 0) {
+                const ratio = len(line) / shorter, a = r.from[i], b = r.to[i];
+                const lin = Math.hypot((a.x2 + 0.01 * (b.x2 - a.x2)) - (a.x1 + 0.01 * (b.x1 - a.x1)), (a.y2 + 0.01 * (b.y2 - a.y2)) - (a.y1 + 0.01 * (b.y1 - a.y1)));   // the plain linear blend of the two keyframe lines
+                out.minRatio = Math.min(out.minRatio, ratio);
+                if (ratio < 0.9) { out.below90++; if (Math.abs(len(line) - lin) > 1e-6) out.below90NotLinear++; }   // a line that is short because the plain linear blend of its two keyframes is short is not the rule's doing
+            }
+        });
+    }
+    return out;
+}
 // M1 / M1c / M2 / M2c / M3 over modes and progress values. rows: { mode, seg, p, m1, m1c, m2, m2c: [broken, n, worst], m3? }
 function runCase(pat, kcase, nk, seeds, modes, ps) {
     const b = buildCase(pat, kcase, seeds, nk); if (b.skip) return { skip: b.skip };
     const { w, ids, c } = b, normals = ids.map((id) => layerNormal(w, id)), rows = [];
+    const inv = endpointInvariants(w, nk);
     for (const [mode, ang] of (modes || MODES)) {
         w.setMorph({ enabled: true, mode, angleDeg: ang });
         const segs = mode === 'bilinear' ? [null] : (nk === 3 ? [0, 1] : [0]);
@@ -233,6 +262,6 @@ function runCase(pat, kcase, nk, seeds, modes, ps) {
             }
         }
     }
-    return { rows };
+    return { rows, inv };
 }
-module.exports = { M, makeRenderWorld, rng, dist, MODES, PS, pairsOf, coincident, gaps, maxdiff, at, layerNormal, context, qualify, corpusQualifying, handBuilt, partnerClasses, deformClosed, editEdge, addCoordLayer, linesOf, buildCase, runCase, posOf };
+module.exports = { endpointInvariants, M, makeRenderWorld, rng, dist, MODES, PS, pairsOf, coincident, gaps, maxdiff, at, layerNormal, context, qualify, corpusQualifying, handBuilt, partnerClasses, deformClosed, editEdge, addCoordLayer, linesOf, buildCase, runCase, posOf };

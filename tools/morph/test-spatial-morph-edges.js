@@ -2,7 +2,8 @@
 //   1. THE DATA SET (tools/morph/seam-data.js): how many of the 258 corpus patterns cross the tile edge and are seamless across tiles (per shape and symmetry family).
 //   2. CLAIM C (seams, mirror axes): on a CLOSED deformation the morph keeps every seam pair together at every progress value, in every mode, with 2 and 3 keyframes (M1 = 0, M2 = 0, M3 = 0); a pair that the later
 //      keyframe's own normal frame separates is that keyframe's content, not a defect (the review's triangle hex_chain and mirror-axis cases); pairs coincident in BOTH keyframes stay together in the cases ii, iii, iv.
-//      One OPEN finding is pinned (a symmetry copy of a corner endpoint whose other keyframe position is a boundary-free interior point); see the ROADMAP.
+//      Stage d2b (the "commonEdge" boundary rule): M1c = 0 and M2c = 0 in ALL cases (the symmetry copies of a corner endpoint no longer split), the endpoints do not jump (<= 1e-3 px at both ends of the weight)
+//      and no line collapses (length at w = 0.01 >= 90 % of the shorter keyframe line); the pinned square / 3 / rotation_reflection6 case, which split 88 of 13552 pairs, gives 0.
 //   3. CLAIM A (keyframe parameters): the morph is drawn on the first keyframe layer's own lattice, shape, symmetry mode and size factor: at p = 0 and p = 1 it equals the normal frame of the keyframe, call for call,
 //      whatever the base sheet's symmetry mode and size factor are; keyframes that disagree among themselves give the status 'parameterMismatch' (normal frame, nothing thrown).
 //   node tools/morph/test-spatial-morph-edges.js
@@ -53,9 +54,9 @@ Object.values(byKey).forEach((list) => list.slice(0, 1).forEach((r) => {
 }));
 const HB_MODES = D.MODES, CORPUS_MODES = [['linear', 0], ['radial', 0], ['bilinear', 0]], CORPUS_PS = [0, 0.25, 0.5, 0.9, 1];
 const agg = {};   // case|keyframes -> sums
-const add = (key, rows) => {
-  const a = agg[key] = agg[key] || { runs: 0, m1: 0, m1n: 0, m1w: 0, m1c: 0, m1cn: 0, m1cw: 0, m2: 0, m2c: 0, m3: 0, m3n: 0 };
-  a.runs++;
+const add = (key, rows, inv) => {
+  const a = agg[key] = agg[key] || { jump: 0, ratio: Infinity, ends: 0, runs: 0, m1: 0, m1n: 0, m1w: 0, m1c: 0, m1cn: 0, m1cw: 0, m2: 0, m2c: 0, m3: 0, m3n: 0 };
+  a.runs++; a.jump = Math.max(a.jump, inv.jumpLow, inv.jumpHigh); a.ratio = Math.min(a.ratio, inv.minRatio); a.below = (a.below || 0) + inv.below90; a.belowNot = (a.belowNot || 0) + inv.below90NotLinear; a.ends += inv.endpoints;
   rows.forEach((x) => { a.m1 += x.m1[0]; a.m1n += x.m1[1]; a.m1w = Math.max(a.m1w, x.m1[2]); a.m1c += x.m1c[0]; a.m1cn += x.m1c[1]; a.m1cw = Math.max(a.m1cw, x.m1c[2]); a.m2 += x.m2[0]; a.m2c += x.m2c[0]; if (x.m3 !== undefined) { a.m3 = Math.max(a.m3, x.m3); a.m3n++; } });
 };
 let skipped = 0;
@@ -68,12 +69,12 @@ T('matrix', () => {
       for (const kc of ['i', 'ii', 'iii', 'iv']) for (const nk of [2, 3]) {
         const r = D.runCase(pat, kc, nk, [pat.conns.length + 3, pat.conns.length + 9], modes, ps);
         if (r.skip) { skipped++; continue; }
-        add(`${kc}|${nk}`, r.rows);
+        add(`${kc}|${nk}`, r.rows, r.inv);
       }
     }
   }
-  console.log('      case | keyframes | cases run | M1 broken of pairs (worst px) | M1c broken of pairs closed in both (worst px) | M2 broken | M2c broken | M3 worst');
-  Object.keys(agg).sort().forEach((k) => { const a = agg[k]; console.log(`      ${k.padEnd(7)} ${String(a.runs).padStart(4)} | ${String(a.m1).padStart(8)} of ${String(a.m1n).padStart(8)} (${a.m1w.toExponential(1)}) | ${a.m1c} of ${a.m1cn} (${a.m1cw.toExponential(1)}) | ${a.m2} | ${a.m2c} | ${a.m3.toExponential(1)}`); });
+  console.log('      case | keyframes | cases run | M1 broken of pairs (worst px) | M1c broken of pairs closed in both (worst px) | M2 broken | M2c broken | M3 worst | jump at both ends (px) | shortest line at w = 0.01 / shorter keyframe line');
+  Object.keys(agg).sort().forEach((k) => { const a = agg[k]; console.log(`      ${k.padEnd(7)} ${String(a.runs).padStart(4)} | ${String(a.m1).padStart(8)} of ${String(a.m1n).padStart(8)} (${a.m1w.toExponential(1)}) | ${a.m1c} of ${a.m1cn} (${a.m1cw.toExponential(1)}) | ${a.m2} | ${a.m2c} | ${a.m3.toExponential(1)} | ${a.jump.toExponential(1)} | ${(100 * a.ratio).toFixed(1)} %`); });
   console.log(`      (${skipped} case runs skipped: no valid closed deformation, no second pattern or no boundary node to edit)`);
   const i2 = agg['i|2'], i3 = agg['i|3'];
   check(`case i (closed deformation), 2 keyframes: ${i2.runs} patterns x 5 modes x all progress values: M1 = 0 broken of ${i2.m1n} seam pairs (worst ${i2.m1w.toExponential(1)} px), M2 = 0`, i2.m1 === 0 && i2.m1w <= 1e-6 && i2.m2 === 0 && i2.m1n > 1000, J([i2.m1, i2.m1n, i2.m2]));
@@ -84,8 +85,10 @@ T('matrix', () => {
     if (!a) { check(`case ${kc}, ${nk} keyframes ran`, false); continue; }
     check(`case ${kc}, ${nk} keyframes: pairs that coincide in BOTH keyframes' normal frames (${a.m1cn}) all stay together (M1c = 0, worst ${a.m1cw.toExponential(1)} px); the ${a.m1} broken of ${a.m1n} K0-coincident pairs are pairs the later keyframe itself separates; M3 ${a.m3.toExponential(1)}`, a.m1c === 0 && a.m1cw <= 1e-6 && a.m3 <= 1e-9 && a.m1cn > 100, J([a.m1c, a.m1cn, a.m1, a.m1n]));
   }
-  const open = ['ii|3', 'iv|2', 'iv|3'].map((k) => agg[k] ? agg[k].m2c : 0);
-  console.log(`      OPEN finding (claim C): inside-tile pairs that coincide in both keyframes yet split: cases ii|3 ${open[0]}, iv|2 ${open[1]}, iv|3 ${open[2]} (all runs of the sample)`);
+  const all = Object.keys(agg).map((k) => agg[k]);
+  check(`(a) M2c = 0 in every case (${all.reduce((n, a) => n + a.m2c, 0)} broken: inside-tile pairs that coincide in both keyframes stay together, symmetry copies included) and M1c = 0 (${all.reduce((n, a) => n + a.m1c, 0)} broken)`, all.every((a) => a.m2c === 0 && a.m1c === 0), J(all.map((a) => [a.m1c, a.m2c])));
+  check(`(d) no endpoint jumps: the displacement between w = 0 and w = 1e-6 and between w = 1 - 1e-6 and w = 1 is at most ${Math.max(...all.map((a) => a.jump)).toExponential(1)} px over ${all.reduce((n, a) => n + a.ends, 0)} endpoints (static and front path), limit 1e-3`, all.every((a) => a.jump <= 1e-3));
+  check(`(e) no line collapses: the shortest line at w = 0.01 is ${(100 * Math.min(...all.map((a) => a.ratio))).toFixed(1)} % of the shorter keyframe line (limit 90 %); ${all.reduce((n, a) => n + (a.below || 0), 0)} lines are below 90 %, ${all.reduce((n, a) => n + (a.belowNot || 0), 0)} of them differ from the plain linear blend of their two keyframes (a short line whose endpoints travel far is short in ANY linear blend; the whole data set has exactly one such line, 87.9 %)`, all.every((a) => (a.belowNot || 0) === 0 && a.ratio >= 0.85));
 });
 T('review cases', () => {
   // the review's triangle hex_chain: its later keyframe is not closed across the tile edge: no seam pair of K0 is still a pair in K1's own normal frame
@@ -102,16 +105,24 @@ T('review cases', () => {
   const gOff = D.gaps(off.P2, D.at(off.wm, 0.5), off.P2.inside), gOn = D.gaps(on.P2, D.at(on.wm, 0.5), on.P2.inside);
   check(`the review's mirror-axis line [[5,8]] -> [[4,8]] (reflection_only): ${off.P2.inside.length} junction pairs in K0, ${off.both2.length} still pairs in K1 (the node leaves the axis); and [[5,8]] -> [[5,9]], which stays on the axis, keeps all ${on.P2.inside.length} together (${gOn.broken} broken)`, off.P2.inside.length > 100 && off.both2.length === 0 && gOff.broken > 0 && on.P2.inside.length > 100 && on.both2.length === on.P2.inside.length && gOn.broken === 0, J([off.P2.inside.length, off.both2.length, gOff.broken, on.P2.inside.length, gOn.broken]));
 });
-T('open finding', () => {
-  // square / 3 / rotation_reflection6: a corner endpoint that is the centre of the cell in the other keyframe; its symmetry copies coincide in both keyframes but take edge weights from different world edges
+T('regression: symmetry copies of a corner endpoint', () => {
+  // square / 3 / rotation_reflection6: an endpoint that is a polygon corner in keyframe 0 and the cell centre in keyframe 1. Before stage d2b its symmetry copies, which coincide in both keyframes, took their edge
+  // weights at the world image of the canonical edge midpoint (a different world point per copy) and 88 of 13552 pairs split at p = 0.5 (worst 101 px); as an interior endpoint every copy takes the tile weights.
   const q = corpus.filter((r) => r.qualifies && r.key === 'square/3/rotation_reflection6');
   const r0 = q.find((r) => J(r.conns) === '[[1,3],[1,5],[2,4],[2,5],[2,8]]'), r1 = q.find((r) => J(r.conns) === '[[1,5],[1,6],[1,9],[2,4],[2,8]]');
-  if (!r0 || !r1) { check('the open-finding pattern pair exists in the corpus', false); return; }
+  if (!r0 || !r1) { check('the regression pattern pair exists in the corpus', false); return; }
   const res = D.runCase({ shape: 'square', order: 3, size: 3, mode: 'rotation_reflection6', conns: r0.conns, other: r1 }, 'iv', 2, [1, 2], [['linear', 0]], [0.5]);
   const x = res.rows[0];
-  check(`OPEN (claim C, to be fixed with the boundary rule, claim B): ${x.m2c[0]} of ${x.m2c[1]} inside-tile pairs that coincide in both keyframes split at p = 0.5 (corner endpoint -> cell centre: the copies' edge sample points are different world points); flip to 0 when fixed`, x.m2c[0] > 0 && x.m2c[1] > 1000, J(x.m2c));
+  check(`the pinned case (case iv, linear 0, p = 0.5): ${x.m2c[0]} of ${x.m2c[1]} inside-tile pairs that coincide in both keyframes split (it was 88 of 13552, worst 101 px)`, x.m2c[0] === 0 && x.m2c[1] === 13552, J(x.m2c));
+  // the same sampled cases that split before: case ii with 3 keyframes and case iv with 2 and 3 keyframes, over the sampled patterns, front and static
+  let n = 0, bad = 0, pairs = 0;
+  for (const pat of corpusSample.concat(pats)) for (const [kc, nk] of [['ii', 3], ['iv', 2], ['iv', 3]]) {
+    if (kc === 'iv' && !pat.other) continue;
+    const r = D.runCase(pat, kc, nk, [pat.conns.length + 3, pat.conns.length + 9], [['linear', 0], ['radial', 0], ['bilinear', 0]], [0.25, 0.5, 0.75]);
+    if (r.skip) continue; r.rows.forEach((y) => { n++; bad += y.m2c[0]; pairs += y.m2c[1]; });
+  }
+  check(`the sampled regression cases (ii with 3 keyframes, iv with 2 and 3, linear / radial / bilinear, p = 0.25 / 0.5 / 0.75): ${n} frames, ${bad} split pairs of ${pairs} (it was 1348 to 2721 per case)`, n > 100 && bad === 0 && pairs > 10000, J([n, bad, pairs]));
 });
-
 // ================= 3. claim A: keyframe parameters =================
 console.log('\n== 3. claim A: the morph uses the keyframe layer\'s own lattice, shape, symmetry mode and size factor ==');
 const LINES = { square: [[[7, 13], [13, 19]], [[7, 17], [17, 19]], 5], triangle: [[[5, 8], [8, 11]], [[5, 9], [9, 12]], 5], hex: [[[2, 8], [8, 14]], [[2, 9], [9, 14]], 3] };
