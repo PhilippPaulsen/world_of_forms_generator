@@ -109,6 +109,7 @@ const INVENTORY = {
     'layer-node-count-input': ['integer (inputmode none)', 'ui.js UI.stepper + sketch.js', 'parseInt'],
     'layer-shape-size-input': ['integer (inputmode none)', 'ui.js UI.stepper + sketch.js', 'parseInt'],
     'farbe-anchor-hue-input': ['integer (inputmode none)', 'ui.js UI.stepper (ui-farbe.js)', 'parseInt'],
+    'morph-angle-input': ['text, readonly display of the morph angle ("135\u00B0"), no typing, inputmode none', 'ui-morph.js UI.stepper with a compute() (45 degree grid, wrap)', 'parseFloat(input.value)'],   // stage e2a
 };
 T('inventory', () => {
     const html = HTML.replace(/<!--[\s\S]*?-->/g, '');
@@ -121,7 +122,7 @@ T('inventory', () => {
     // both stay in the DOM as the carriers bindExact serves (the phone sheet's steppers and programmatic changes still write them)
     const PC = require(process.env.PHONE_CONFIG_JS || path.join(ROOT, 'ui-phone-config.js')), ih = PC.config.surfaces.netz.hosts.inline;
     check('the two exact fields are not typable at 768px and up: the inline host parks net-strength-exact (park), wraps net-focus-exact into a stepper that is noTyping (readonly, no keyboard), and the CSS hides the strength section (#more-netz.ph-sheet-rows > .overlay-section)', (ih.park || []).join() === 'net-strength-exact' && (ih.steppers || []).join() === 'net-focus-exact' && PC.config.overlays.netz.steppers['net-focus-exact'].noTyping === true && /html\.sr-netz #more-netz\.ph-sheet-rows > \.overlay-section, html\.sr-netz #more-netz\.ph-sheet-rows > #net-group \{ display: none; \}/.test(CSS));
-    check('every other field keeps its type="number" and its inputmode exactly as it was: offsets and rotation none given (the iOS pads have no minus), the pairing filter decimal, the integer fields none', Object.keys(INVENTORY).filter(id => !/exact$/.test(id)).every(id => found[id] === 'number') && !/inputmode/.test(tag('layer-offset-x-input') + tag('layer-offset-y-input') + tag('layer-rotation-input')) && /inputmode="decimal"/.test(tag('timeline-pairing-filter')) && ['node-count-input', 'shape-size-input', 'layer-node-count-input', 'layer-shape-size-input', 'farbe-anchor-hue-input'].every(id => /inputmode="none"/.test(tag(id))));
+    check('every other field keeps its type="number" and its inputmode exactly as it was: offsets and rotation none given (the iOS pads have no minus), the pairing filter decimal, the integer fields none', Object.keys(INVENTORY).filter(id => !/exact$/.test(id) && id !== 'morph-angle-input').every(id => found[id] === 'number') && !/inputmode/.test(tag('layer-offset-x-input') + tag('layer-offset-y-input') + tag('layer-rotation-input')) && /inputmode="decimal"/.test(tag('timeline-pairing-filter')) && ['node-count-input', 'shape-size-input', 'layer-node-count-input', 'layer-shape-size-input', 'farbe-anchor-hue-input'].every(id => /inputmode="none"/.test(tag(id))));
     const net = strip(NET);
     check('ui-net.js: the only parse of a typed text goes through the helper; no hand-made comma replacement is left, no other parseFloat / Number() of a field', /parseFloat\(UI\.normalizeNumber\(field\.value\)\)/.test(net) && (net.match(/parseFloat\(/g) || []).length === 1 && !/replace\(','/.test(net) && !/\bNumber\(/.test(net));
     // the fields parsed in sketch.js: not changed by this commit (a field that moves to a UI file must be added to the helper's users)
