@@ -126,20 +126,16 @@ function spatialMorphBlendPoint(p00, p10, p01, p11, w) {
 // A LINE is { x1, y1, x2, y2 } in canvas pixels (the layer's own node coordinates, as resolveConnectionsToCoords() makes them); a LINE SET is an array of lines; the CORNERS are
 // { k00, k10, k01, k11 }, four line sets of the same length (K00 top left, K10 top right, K01 bottom left, K11 bottom right).
 //
-// THE ANCHORING RULE (stage d2b, "commonEdge"; the prototype's rule differed here, see below): an endpoint has four positions, one per corner. It is ON THE BOUNDARY when ALL FOUR lie within tol
-// (1 px) of ONE COMMON edge of the outer polygon (outerCorners: the corners of the base cell, 3 / 4 / 6 of them, consecutive; the lowest-index such edge, so a polygon corner that lies on two common
-// edges gets the lower one); otherwise it is an INTERIOR endpoint, whatever one of its positions does. It is MOVED when its four positions are not all equal (largest pairwise distance > 1e-4 px).
-// WHY: the prototype said "boundary when ANY of the four is within tol of an edge" and projected all four onto the majority edge. An interior position then jumped by up to 200 px at the end of a segment
-// (the other keyframe puts the endpoint on an edge), a line could collapse to a stub, and the symmetry copies of a corner endpoint that is the cell centre in the other keyframe took their edge weights at
-// DIFFERENT world points and split inside one tile (measured in stage d2). 246 of the 2952 golden numbers of the a2 set depart from the prototype for that reason (tools/morph/test-spatial-morph-geometry.js).
+// THE ANCHORING RULE (the prototype's, exact; stage d2b replaced it by "commonEdge" and stage d2c put it back: commonEdge left 30 % of the line ends of a real pattern unconnected, see the ROADMAP): an endpoint has four positions, one per corner. It is ON THE BOUNDARY when any of the four lies within tol (1 px) of an edge of the outer
+// polygon (outerCorners: the corners of the base cell, 3 / 4 / 6 of them, consecutive); it is MOVED when its four positions are not all equal (largest pairwise distance > 1e-4 px).
 //   not on the boundary          -> the four positions are blended with the weights of the TILE (the tile centroid).
 //   on the boundary, not moved   -> it stays at its position (corner K00's).
-//   on the boundary and moved    -> the four positions are first PROJECTED onto the common edge (clamped to the edge; each is within tol of it), then blended with the weights of the EDGE:
+//   on the boundary and moved    -> the four positions are first PROJECTED onto the one edge that contains them (clamped to the edge), then blended with the weights of the EDGE:
 //                                   the weights evaluated at the world image of the MIDPOINT of that edge (under the tile's transform and the symmetry operation being drawn),
 //                                   NOT at the tile centroid and not at the endpoint itself. Two tiles that share an edge see the same world midpoint, so every endpoint that slides
 //                                   on that edge gets the same weights from both sides: the seam stays closed (measured in tools/morph/test-spatial-morph-seams.js).
-// The edge is the common one (above). spatialMorphFindContainingEdge() (the prototype's findContainingOuterEdge: the edge with the most positions within tol; ties go to the edge that holds K00's position,
-// then to the smaller sum of distances, then to the lower index) stays as a pure helper but no longer decides the anchoring.
+// The edge that contains the four positions is the one with the most positions within tol; ties go to the edge that holds K00's position, then to the smaller sum of distances, then
+// to the lower index (findContainingOuterEdge).
 // =====================================================================================================================================================================================
 
 const spatialMorphBoundaryTolerance = 1.0;      // px: how close to an outer edge an endpoint counts as lying on it (the prototype's SPATIAL_MORPH_BOUNDARY_EPS)
@@ -351,16 +347,9 @@ function spatialMorphPrepareEndpoint(points, poly, options) {
     const pts = [0, 1, 2, 3].map((k) => { const p = (Array.isArray(points) && points[k]) || {}; return { x: spatialMorphNumber(p.x), y: spatialMorphNumber(p.y) }; });
     let spread = 0;
     for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) spread = Math.max(spread, Math.hypot(pts[j].x - pts[i].x, pts[j].y - pts[i].y));
-    // commonEdge: on the boundary only when ALL FOUR positions are within tol of ONE edge (the lowest index of those edges); no common edge = an interior endpoint (blended with the tile weights)
-    let edge = null;
-    if (Array.isArray(poly) && poly.length >= 3) {
-        for (let i = 0; i < poly.length && edge === null; i++) {
-            const v = poly[i], w = poly[(i + 1) % poly.length];
-            if (pts.every((p) => { const pr = spatialMorphProjectToSegment(p, v, w); return pr !== null && pr.dist <= tol; })) edge = { edge: i, v: { x: v.x, y: v.y }, w: { x: w.x, y: w.y }, mid: spatialMorphEdgeMidpoint(poly, i) };   // the distance to the edge SEGMENT: its ends count
-        }
-    }
-    const onBoundary = edge !== null;
+    const onBoundary = pts.some((p) => spatialMorphOnEdge(p, poly, tol) !== null);
     const moved = spread > sameTol;
+    const edge = onBoundary ? spatialMorphFindContainingEdge(pts, poly, tol) : null;
     let edgePoints = pts.map((p) => ({ x: p.x, y: p.y }));
     if (edge && moved) edgePoints = pts.map((p) => { const pr = spatialMorphProjectToSegment(p, edge.v, edge.w); return pr ? { x: pr.x, y: pr.y } : { x: p.x, y: p.y }; });
     return { onBoundary, moved, edge, points: pts, edgePoints, sample: edge ? { x: edge.mid.x, y: edge.mid.y } : { x: pts[0].x, y: pts[0].y } };
@@ -385,7 +374,7 @@ function spatialMorphAnchoredPoint(desc, wTile, wEdge, exactEnds) {
     const okW = (w) => w && typeof w === 'object' && ['w00', 'w10', 'w01', 'w11'].every((k) => typeof w[k] === 'number' && Number.isFinite(w[k]));
     if (!d.onBoundary) return (d.moved && okW(wTile)) ? spatialMorphBlendPoint(d.points[0], d.points[1], d.points[2], d.points[3], wTile) : { x: d.points[0].x, y: d.points[0].y };   // not moved: the position itself (a blend of four equal points could differ by an ulp)
     if (!d.moved || !okW(wEdge)) return { x: d.edgePoints[0].x, y: d.edgePoints[0].y };
-    // exactEnds (stage d, the front that follows the timeline): at weights that ARE one corner (1 for one keyframe, 0 for the others) the endpoint is that keyframe's own position, not its projection on the
+    // exactEnds (stage d, the front that follows the timeline; the render stage passes false since stage d2c, the parameter stays for the pure functions and their tests): at weights that ARE one corner (1 for one keyframe, 0 for the others) the endpoint is that keyframe's own position, not its projection on the
     // edge, so the first frame of a segment is the earlier keyframe and the last the later one even where an endpoint changes the edge it sits on or lies a little off it. Both tiles of a seam read the same
     // edge weights, so they agree on whether this applies.
     if (exactEnds === true) {

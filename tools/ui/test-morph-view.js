@@ -281,9 +281,9 @@ T('source', () => {
     check('hotkeys: index.html has no accesskey on the block and the module no key code but Escape and the arrows', !/morph[^>]*accesskey/.test(HTML) && !/e\.key === '[a-zA-Z]'/.test(src));
     // sketch.js and core/ unchanged against the e1 commit
     let diff = null;
-    try { diff = cp.execFileSync('git', ['diff', '--stat', 'b5a300e7', '--', 'sketch.js', 'core'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch (e) { diff = null; }
-    if (diff === null) console.log('NOTE  git or the commit b5a300e7 is not available: the sketch.js / core/ diff pin is skipped');
-    else check('sketch.js and core/ have an EMPTY diff against b5a300e7 (the e1 commit): this stage is UI only', diff.trim() === '', diff.trim().slice(0, 200));
+    try { diff = cp.execFileSync('git', ['diff', '--stat', 'b5a300e7', '--', 'sketch.js', 'core/tiling.js'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch (e) { diff = null; }
+    if (diff === null) console.log('NOTE  git or the commit b5a300e7 is not available: the sketch.js / core/tiling.js diff pin is skipped');
+    else check('sketch.js and core/tiling.js have an EMPTY diff against b5a300e7 (the e1 commit): the UI stage touches neither (stage d2c changed core/spatial-morph*.js, so the pin names the two files that must stay byte-identical)', diff.trim() === '', diff.trim().slice(0, 200));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

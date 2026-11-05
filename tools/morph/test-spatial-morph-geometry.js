@@ -16,7 +16,7 @@ const vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
 const FILE = process.env.SPATIAL_MORPH_JS || path.join(ROOT, 'core', 'spatial-morph.js');
 const GOLDEN_FILE = process.env.SPATIAL_MORPH_A2_GOLDEN || path.join(__dirname, 'spatial-morph-a2-golden.json');
-const GOLDEN_SHA = 'ea85f07352a55620652eeb1194685de34b9b85618ec9711dee9d907ecab071bd';   // the prototype's golden file, not regenerated (stage d2b)
+const GOLDEN_SHA = 'ea85f07352a55620652eeb1194685de34b9b85618ec9711dee9d907ecab071bd';   // the prototype's golden file, never regenerated (pinned since stage d2b, kept by stage d2c)
 const SRC = fs.readFileSync(FILE, 'utf8');
 const M = require(FILE);
 const H = require('./morph-harness.js');
@@ -200,20 +200,14 @@ T('endpoint', () => {
   check('a sliding boundary endpoint: moved; its four positions are projected on the edge (y becomes exactly 0, x stays)', sl.onBoundary && sl.moved && sl.edge.edge === 0 && same(sl.edgePoints, [pt(10, 0), pt(40, 0), pt(70, 0), pt(95, 0)]));
   const inn = E([pt(20, 30), pt(40, 50), pt(60, 40), pt(30, 70)], sq);
   check('an interior endpoint: not on the boundary, moved, no edge; the sample is its first position; positions are kept', inn.onBoundary === false && inn.moved === true && inn.edge === null && same(inn.sample, pt(20, 30)) && same(inn.edgePoints, inn.points));
-  // stage d2b: the rule is "commonEdge": boundary only when ALL FOUR positions lie within tol of ONE common edge; otherwise an INTERIOR endpoint (tile weights, nothing projected)
   const mixed = E([pt(30, 0), pt(30, 20), pt(60, 30), pt(70, 40)], sq);
-  check('one position on the edge and three well inside (the prototype\'s "any of the four" made this a boundary endpoint and projected the three inside onto the edge): now an INTERIOR endpoint: not on the boundary, moved, no edge, positions kept, the sample is the first position', mixed.onBoundary === false && mixed.moved === true && mixed.edge === null && same(mixed.edgePoints, mixed.points) && same(mixed.sample, pt(30, 0)));
+  check('one position on the edge and three well inside (the prototype\'s "any of the four"): on the boundary, moved, edge 0, the three inside are projected on the edge (x kept, y to 0)', mixed.onBoundary && mixed.moved && mixed.edge.edge === 0 && same(mixed.edgePoints, [pt(30, 0), pt(30, 0), pt(60, 0), pt(70, 0)]));
   const late = E([pt(30, 40), pt(30, 30), pt(30, 20), pt(30, 0)], sq);
-  check('"on the boundary" needs ALL four positions on the edge, not only the last one: only the LAST keyframe position on the edge is an interior endpoint (nothing is projected up onto the edge)', late.onBoundary === false && late.moved === true && late.edge === null && same(late.edgePoints, late.points));
-  const outside = E([pt(100.6, 0), pt(40, 0), pt(40, 0), pt(40, 0)], sq);
-  check('a position within the tolerance of the END of the edge still counts, and its projection is clamped to the edge end (t is clamped to 0..1): x 100.6 becomes 100; one 50 px beyond the end (x 150) is NOT within the tolerance of the edge segment: an interior endpoint', outside.onBoundary && outside.edge.edge === 0 && outside.edgePoints[0].x === 100 && outside.edgePoints[0].y === 0 && E([pt(150, 0), pt(40, 0), pt(40, 0), pt(40, 0)], sq).onBoundary === false);
+  check('"on the boundary" looks at all four positions, not only the first: only the LAST keyframe position on the edge still makes a boundary endpoint (edge 0, moved), and the three inside are projected up onto the edge', late.onBoundary && late.moved && late.edge.edge === 0 && same(late.edgePoints, [pt(30, 0), pt(30, 0), pt(30, 0), pt(30, 0)]));
+  const outside = E([pt(150, 0), pt(40, 0), pt(40, 0), pt(40, 0)], sq);
+  check('a position beyond the end of the edge is clamped to the edge end (t is clamped to 0..1): x 150 becomes 100', outside.edgePoints[0].x === 100 && outside.edgePoints[0].y === 0);
   const cross = E([pt(20, 0), pt(80, 0), pt(30, 100), pt(70, 100)], sq);
-  check('keyframes that put the endpoint on DIFFERENT edges (2 on top, 2 on the bottom): no common edge: an interior endpoint (the prototype projected the bottom positions up onto the top edge, a jump of 100 px): positions kept, tile weights', cross.onBoundary === false && cross.edge === null && same(cross.edgePoints, cross.points));
-  const cornerToCentre = E([pt(0, 0), pt(50, 50), pt(0, 0), pt(50, 50)], sq);
-  check('a corner in one keyframe and the cell centre in the other (the stage d2 case whose symmetry copies split): an interior endpoint, so every symmetry copy takes the tile weights and they stay together', cornerToCentre.onBoundary === false && cornerToCentre.edge === null && cornerToCentre.moved === true);
-  const alongEdge = E([pt(10, 0.4), pt(40, -0.3), pt(70, 0), pt(95, 0.9)], sq), cornerSlide = E([pt(0, 0), pt(0, 60), pt(0, 30), pt(0, 100)], sq);
-  check('positions that all lie within 1 px of ONE edge stay a boundary endpoint (sliding along the top edge; along the left edge from corner to corner); a corner that lies on two common edges takes the LOWER index (0, not 3)', alongEdge.onBoundary && alongEdge.edge.edge === 0 && cornerSlide.onBoundary && cornerSlide.edge.edge === 3 && E([pt(0, 0), pt(0, 0), pt(0, 0), pt(0, 0)], sq).edge.edge === 0 && E([pt(0, 0), pt(0, 0.5), pt(0, 0), pt(0, 0)], sq).edge.edge === 0);
-  check('the tolerance decides: 4 px off the edge is interior at 1 px and boundary at tol 5; 0.4 px off is interior at tol 0 and boundary at the default', E([pt(40, 4), pt(40, 4), pt(40, 4), pt(40, 4)], sq).onBoundary === false && E([pt(40, 4), pt(40, 4), pt(40, 4), pt(40, 4)], sq, { tol: 5 }).onBoundary === true && E([pt(40, 0.4), pt(40, 0.4), pt(40, 0.4), pt(40, 0.4)], sq, { tol: 0 }).onBoundary === false && E([pt(40, 0.4), pt(40, 0.4), pt(40, 0.4), pt(40, 0.4)], sq).onBoundary === true);
+  check('keyframes that put the endpoint on DIFFERENT edges: the edge of the first position wins the 2:2 tie (top), the bottom positions are projected up onto the top edge (y 100 becomes 0): there is no seam guarantee for such an endpoint', cross.edge.edge === 0 && same(cross.edgePoints, [pt(20, 0), pt(80, 0), pt(30, 0), pt(70, 0)]));
   check('the spread decides "moved": 3-4-5 apart is not moved with sameTol 5 (the test is strict), moved with 4.999; the default 1e-4: 5e-5 apart is not moved, 2e-4 apart is', E([pt(0, 50), pt(3, 54), pt(0, 50), pt(0, 50)], sq, { sameTol: 5 }).moved === false && E([pt(0, 50), pt(3, 54), pt(0, 50), pt(0, 50)], sq, { sameTol: 4.999 }).moved === true && E([pt(40, 0), pt(40.00005, 0), pt(40, 0), pt(40, 0)], sq).moved === false && E([pt(40, 0), pt(40.0002, 0), pt(40, 0), pt(40, 0)], sq).moved === true);
   check('tolerance 0: a position exactly on the edge is on the boundary, 0.4 px off is not; the default 1 px accepts 0.4 px', E([pt(40, 0), pt(40, 0), pt(40, 0), pt(40, 0)], sq, { tol: 0 }).onBoundary === true && E([pt(40, 0.4), pt(40, 0.4), pt(40, 0.4), pt(40, 0.4)], sq, { tol: 0 }).onBoundary === false && E([pt(40, 0.4), pt(40, 0.4), pt(40, 0.4), pt(40, 0.4)], sq).onBoundary === true);
   const corner = E([pt(0, 0), pt(0, 0), pt(0, 0), pt(0, 0)], sq);
@@ -305,36 +299,10 @@ T('purity', () => {
   check('...and plain objects are equal before and after the calls', J(c1) === before);
 });
 
-console.log('\n== golden segments from the prototype: 2706 numbers unchanged, 246 depart (commonEdge, stage d2b) and are checked against an independent oracle ==');
-// DEPARTS FROM THE PROTOTYPE (stage d2b, maintainer decision): with the rule "boundary only when all four positions lie within 1 px of ONE common edge" the endpoints that the prototype's "any of the four" rule
-// projected onto an edge although a position lies elsewhere are blended as interior endpoints. These are the cases whose numbers differ from the prototype's, how many (of the case's numbers), and the largest difference.
-// The golden FILE keeps the prototype's own values for all 2952 numbers (it is not regenerated).
-const DEPARTS = [
-  ['sq-none-linear45', 4, 72, 81.17], ['sq-none-radial', 3, 72, 33.03], ['sq-none-bilinear4', 8, 72, 115.43], ['sq-refl-linear0', 4, 144, 29.94], ['sq-rr3-bilinear3', 64, 576, 78.94],
-  ['tri-none-bilinear4', 8, 72, 34.04], ['tri-none-linear135', 4, 72, 31.95], ['tri-rr3-linear300', 24, 432, 4.42], ['tri-refl-radial', 8, 144, 14.99],
-  ['hex-none-linear90', 4, 72, 49.03], ['hex-rr6-bilinear4', 96, 864, 64.21], ['hex-rot3-radial', 11, 216, 23.26], ['hex-refl-bilinear2', 8, 144, 25.39],
-];
-// the oracle: plain arithmetic, no function of core/spatial-morph.js. Class of an endpoint from its four canonical positions; the weights of a tile centroid from the documented formulas; the blend of the four positions.
-const oDist = (p, v, w) => { const dx = w.x - v.x, dy = w.y - v.y, l2 = dx * dx + dy * dy, t = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - v.x) * dx + (p.y - v.y) * dy) / l2)); return Math.hypot(p.x - v.x - t * dx, p.y - v.y - t * dy); };
-function oClass(pts, poly) {
-  const near = (p, i) => oDist(p, poly[i], poly[(i + 1) % poly.length]) <= 1;
-  let spread = 0; for (const a of pts) for (const b of pts) spread = Math.max(spread, Math.hypot(a.x - b.x, a.y - b.y));
-  return { any: pts.some((p) => poly.some((_, i) => near(p, i))), common: poly.some((_, i) => pts.every((p) => near(p, i))), moved: spread > 1e-4 };
-}
-function oWeights(c, world, pt) {
-  const smooth = (t) => 0.5 * (1 - Math.cos(Math.PI * Math.min(1, Math.max(0, t))));
-  let su, sv = 0;
-  if (c.mode === 'bilinear') { su = smooth((pt.x - c.span.minX) / (c.span.maxX - c.span.minX)); sv = smooth((pt.y - c.span.minY) / (c.span.maxY - c.span.minY)); }
-  else {
-    const a = (c.angleDeg || 0) * Math.PI / 180;
-    const scalar = c.mode === 'radial' ? Math.hypot(pt.x - world.center.x, pt.y - world.center.y) : pt.x * Math.cos(a) + pt.y * Math.sin(a);
-    su = smooth((scalar - c.span.scalarMin) / (c.span.scalarMax - c.span.scalarMin));
-  }
-  return [(1 - su) * (1 - sv), su * (1 - sv), (1 - su) * sv, su * sv];
-}
+console.log('\n== golden segments from the prototype: ALL 2952 numbers equal ours (stage d2c: the 246 that departed under the commonEdge rule of stage d2b are back) ==');
 T('golden', () => {
   const G = JSON.parse(fs.readFileSync(GOLDEN_FILE, 'utf8'));
-  let numbers = 0, unchanged = 0, exactN = 0, differ = 0, worstUnchanged = 0, worstDepart = 0, oracleN = 0, oracleWorst = 0, outsideClass = 0; const bad = [], perCase = [];
+  let numbers = 0, worst = 0; const bad = [];
   const shapes = new Set(), modes = new Set(), syms = new Set(), counts = new Set();
   G.cases.forEach((c) => {
     const world = H.makeWorld(c.shape, c.order, c.sf, c.W);
@@ -344,39 +312,14 @@ T('golden', () => {
     const v = M.spatialMorphValidateCorners(corners);
     if (!v.ok) { bad.push(c.name + ': ' + v.code); return; }
     const prepared = M.spatialMorphPrepareLines(corners, world.poly);
-    const so = H.symOps(world, c.symMode);
-    const bil = c.mode === 'bilinear', K = c.keyframes.map((k) => k.map((a) => ({ x1: a[0], y1: a[1], x2: a[2], y2: a[3] })));
-    const four = (i, ks) => [K[0][i], K[1][i], bil && K[2] ? K[2][i] : K[0][i], bil && K[3] ? K[3][i] : K[1][i]].map((l) => ({ x: l[ks[0]], y: l[ks[1]] }));
-    let caseDiffer = 0, caseWorst = 0;
     c.tiles.forEach((tile, ti) => {
       const mine = H.morphTile(M, world, { mode: c.mode, angleDeg: c.angleDeg, span: c.span, symMode: c.symMode }, prepared, tile, undefined);
       const exp = c.expect[ti];
       if (mine.length !== exp.length) { bad.push(`${c.name} tile ${ti}: ${mine.length} segments vs ${exp.length}`); return; }
-      const w4 = (pt) => oWeights(c, world, pt), wT = w4(tile.tileC);
-      mine.forEach((s, i) => {
-        [['a', 'x1', 'y1', 0], ['b', 'x2', 'y2', 2]].forEach(([e, kx, ky, off]) => {
-          const pts = four(s.line, [kx, ky]), cls = oClass(pts, world.poly), changedClass = cls.any && cls.moved && !cls.common;
-          const got = [s[e].x, s[e].y], gold = [exp[i][off], exp[i][off + 1]];
-          if (changedClass) {   // the oracle: an interior endpoint, blended from the four positions with the weights of the TILE centroid, then the tile transform and the symmetry operation
-            const q = { x: wT[0] * pts[0].x + wT[1] * pts[1].x + wT[2] * pts[2].x + wT[3] * pts[3].x, y: wT[0] * pts[0].y + wT[1] * pts[1].y + wT[2] * pts[2].y + wT[3] * pts[3].y };
-            const o = H.toWorld(world, tile, so.ops[s.op], so.axisDir, q);
-            [o.x - got[0], o.y - got[1]].forEach((d) => { oracleN++; if (Math.abs(d) > oracleWorst) oracleWorst = Math.abs(d); });
-          }
-          got.forEach((val, j) => {
-            numbers++; const d = Math.abs(val - gold[j]);
-            if (d > 1e-9) { differ++; caseDiffer++; if (d > caseWorst) caseWorst = d; if (d > worstDepart) worstDepart = d; if (!changedClass) outsideClass++; }
-            else { unchanged++; if (d === 0) exactN++; if (d > worstUnchanged) worstUnchanged = d; }
-          });
-        });
-      });
+      mine.forEach((s, i) => [s.a.x, s.a.y, s.b.x, s.b.y].forEach((val, j) => { const d = Math.abs(val - exp[i][j]); numbers++; if (d > worst) worst = d; if (!(d <= 1e-9)) bad.push(`${c.name} tile ${ti} seg ${i}[${j}]: ${val} vs ${exp[i][j]}`); }));
     });
-    if (caseDiffer) perCase.push([c.name, caseDiffer, c.expect.reduce((n, t) => n + t.length * 4, 0), +caseWorst.toFixed(2)]);
   });
-  console.log('      departs from the prototype (case, numbers that differ of the case\'s numbers, largest difference px): ' + perCase.map((x) => `${x[0]} ${x[1]}/${x[2]} ${x[3]}`).join(', '));
-  check(`the prototype's golden numbers: ${numbers} in total, ${unchanged} are UNCHANGED: ${exactN} of them bit for bit equal to the prototype's, the rest within ${worstUnchanged.toExponential(1)} px (the last digit of the double; the SAME figure with the previous rule, so it is not caused by this stage), ${differ} depart from it`, G.cases.length === 13 && numbers === 2952 && unchanged === 2706 && differ === 246 && worstUnchanged <= 3e-14 && bad.length === 0, J({ numbers, unchanged, exactN, differ, worstUnchanged, bad: bad.slice(0, 3) }));
-  check(`the 246 departing numbers are exactly the endpoints the new rule treats as interior (a position within 1 px of an edge, no common edge, moved): none differs outside that class (${outsideClass})`, outsideClass === 0);
-  check(`the INDEPENDENT oracle (plain arithmetic: such an endpoint is the blend of its four keyframe positions with the weights of the tile centroid) equals the implementation on ${oracleN} numbers within 1e-12 (worst ${oracleWorst.toExponential(1)} px)`, oracleN > 200 && oracleWorst <= 1e-12, J([oracleN, oracleWorst]));
-  check('DEPARTS FROM THE PROTOTYPE, the documented list: 13 cases, 246 numbers, the largest difference 115.43 px (sq-none-bilinear4); every case\'s count and largest difference equal the pinned table', same(perCase, DEPARTS.map((d) => [d[0], d[1], d[2], d[3]])) && worstDepart > 115.4 && worstDepart < 115.5, J([perCase.length, worstDepart]));
+  check(`${G.cases.length} cases, ${numbers} golden numbers (segment ends the PROTOTYPE draws; 3 shapes, 3 modes, ${syms.size} symmetry modes, 2 / 3 / 4 keyframes, moving / static / mixed / cross-edge boundary ends) equal ours within 1e-9 (worst ${worst.toExponential(2)})`, G.cases.length === 13 && numbers === 2952 && bad.length === 0, bad.slice(0, 3).join(' | '));
   check('the golden file itself still holds the PROTOTYPE\'s values (it is not regenerated): its sha256 is pinned', require('crypto').createHash('sha256').update(fs.readFileSync(GOLDEN_FILE)).digest('hex') === GOLDEN_SHA || process.env.SPATIAL_MORPH_A2_GOLDEN !== undefined);
   check('the golden set covers square, triangle and hex, linear, radial and bilinear, 2, 3 and 4 keyframes and none, reflection and rotation symmetry', same([...shapes].sort(), ['hex', 'square', 'triangle']) && same([...modes].sort(), ['bilinear', 'linear', 'radial']) && same([...counts].sort(), [2, 3, 4]) && syms.has('none') && syms.has('reflection_only') && syms.has('rotation_reflection3') && syms.has('rotation_reflection6') && syms.has('rotation3'));
 });

@@ -115,6 +115,18 @@ const CONNS = { square: [[1, 5], [2, 8], [3, 7]], triangle: [[1, 5], [2, 6], [3,
 const ALT = { square: [[1, 9], [2, 6], [4, 8]], triangle: [[1, 6], [2, 5], [3, 5]], hex: [[2, 11], [4, 15], [6, 21]] };
 const ALT2 = { square: [[3, 6], [1, 4], [2, 9]], triangle: [[2, 4], [1, 5], [3, 6]], hex: [[3, 12], [5, 16], [1, 8]] };
 const setElapsed = (w, ms) => w.set(`timeline.elapsedMs = ${ms};`);
+// STAGE D2C (exact ends off, the prototype's boundary rule): the frame at p = 0, at the start of a later segment and at the very end is the keyframe with those boundary endpoints PROJECTED onto their edge that change
+// the edge they sit on (or lie off the one they share): the prototype's blend never reaches such a keyframe either. It is the normal frame of the keyframe itself when no endpoint is projected.
+// projectedKeyframe(w, seg, which): the lines of keyframe `which` (0 = the earlier, 1 = the later one of segment seg) as the morph shows them at its end, and how many endpoints are projected (moved by more than 1e-6 px).
+function projectedKeyframe(w, seg, which) {
+  const r = w.run(`(function () { const r = resolveTimelineKeyframeCoords(timeline, ${seg}); return { from: r.from, to: r.to }; })()`);
+  const prep = M.spatialMorphPrepareLines(M.spatialMorphChooseCorners([r.from, r.to], 'linear'), w.get('outerCorners'));
+  let projected = 0;
+  const pick = (d) => { if (!(d.onBoundary && d.moved)) return d.points[which]; const q = d.edgePoints[which]; if (Math.hypot(q.x - d.points[which].x, q.y - d.points[which].y) > 1e-6) projected++; return q; };
+  const lines = prep.map((pl) => { const a = pick(pl.a), b = pick(pl.b); return { x1: a.x, y1: a.y, x2: b.x, y2: b.y }; });
+  return { lines, projected };
+}
+const linesToBase = (w, lines) => { const nd = [], cn = []; lines.forEach((l, i) => { nd.push({ id: 2 * i + 1, x: l.x1, y: l.y1 }, { id: 2 * i + 2, x: l.x2, y: l.y2 }); cn.push([2 * i + 1, 2 * i + 2]); }); w.set(`nodes = ${J(nd)}; connections = ${J(cn)};`); };
 const setProgress = (w, p) => w.set(`timeline.elapsedMs = ${p} * totalTimelineDurationMs(timeline);`);
 function world(shape, sym, kfs, tlExtra) {
   const w = makeRenderWorld(shape, 3, 3, sym);
@@ -146,6 +158,7 @@ T('equivalence', () => {
   check(`how exact: worst difference ${worst.toExponential(1)} px, ${exact} of ${total} frames bit for bit (the others differ in the last digit: the static weight of a reversed scalar is not the double 1 - u, and 1 - smooth(u) is not smooth(1 - u) to the last bit)`, worst <= 1e-9);
 });
 
+let endpointCases = 0, projectedCases = 0;
 T('endpoints', () => {
   for (const shape of ['square', 'triangle', 'hex']) for (const sym of ['none', 'rotation_reflection3']) for (const mode of ['linear', 'radial']) {
     const S = seamSetup(M, H, shape, sym, 1100 + shape.length * 7 + sym.length, ['k00', 'k10', 'k01']);
@@ -153,24 +166,34 @@ T('endpoints', () => {
     const nodesOf = (k) => { const nd = [], cn = []; S.built.corners[k].forEach((l, i) => { nd.push({ id: 2 * i + 1, x: l.x1, y: l.y1 }, { id: 2 * i + 2, x: l.x2, y: l.y2 }); cn.push([2 * i + 1, 2 * i + 2]); }); return [nd, cn]; };
     // the normal frame of each keyframe: the base sheet holds the pattern, switch off
     w.setMorph({ enabled: false, mode: 'linear', angleDeg: 0 });
-    const normal = ['k00', 'k10', 'k01'].map((k) => { const [nd, cn] = nodesOf(k); w.set(`nodes = ${J(nd)}; connections = ${J(cn)};`); return hashOf(w.frame()); });
+    const normalFrames = ['k00', 'k10', 'k01'].map((k) => { const [nd, cn] = nodesOf(k); w.set(`nodes = ${J(nd)}; connections = ${J(cn)};`); return w.frame(); });
+    const normal = normalFrames.map(hashOf);
+    const projHash = (seg, which) => { const pk = projectedKeyframe(w, seg, which); linesToBase(w, pk.lines); return { h: hashOf(w.frame()), n: pk.projected }; };
+    const pr0 = projHash(0, 0), prB = projHash(1, 0), prEnd = projHash(1, 1);
+    projectedCases += (pr0.n + prB.n + prEnd.n > 0) ? 1 : 0; endpointCases++;
     w.setMorph({ enabled: true, mode, angleDeg: 45 });
-    setElapsed(w, 0); const h0 = hashOf(w.frame()), s0 = w.status();
-    setElapsed(w, 4000); const hEnd = hashOf(w.frame()), sEnd = w.status();
-    setElapsed(w, 2000); const hB = hashOf(w.frame()), sB = w.status();
+    setElapsed(w, 0); const f0 = w.frame(), h0 = hashOf(f0), s0 = w.status();
+    setElapsed(w, 4000); const fEnd = w.frame(), hEnd = hashOf(fEnd), sEnd = w.status();
+    setElapsed(w, 2000); const fB = w.frame(), hB = hashOf(fB), sB = w.status();
     setElapsed(w, 2000 - 1e-9); const hBm = hashOf(w.frame()), sBm = w.status();
     setElapsed(w, 1000); const hMid = hashOf(w.frame());
-    check(`${shape}/${sym}/${mode}, 3 keyframes: progress 0 is the normal frame of keyframe 0, the start of segment 1 (elapsed 2000) the normal frame of keyframe 1, the end of the last segment (elapsed 4000) the normal frame of keyframe 2, the middle of segment 0 something else (chords of every drawn segment)`, h0 === normal[0] && hB === normal[1] && hEnd === normal[2] && hMid !== normal[0] && hMid !== normal[1]);
+    check(`${shape}/${sym}/${mode}, 3 keyframes: progress 0 is keyframe 0, the start of segment 1 (elapsed 2000) keyframe 1, the end of the last segment (elapsed 4000) keyframe 2, each with its boundary endpoints that change their edge projected onto it (${pr0.n} / ${prB.n} / ${prEnd.n} endpoints; where none is, the normal frame itself to 1e-9 px: the projection of a point that lies on the edge up to rounding changes its last digits), the middle of segment 0 something else (chords of every drawn segment)`, h0 === pr0.h && hB === prB.h && hEnd === prEnd.h && (pr0.n > 0 || cmpFrames(f0, normalFrames[0]) <= 1e-9) && (prB.n > 0 || cmpFrames(fB, normalFrames[1]) <= 1e-9) && (prEnd.n > 0 || cmpFrames(fEnd, normalFrames[2]) <= 1e-9) && hMid !== pr0.h && hMid !== prB.h, J([pr0.n, prB.n, prEnd.n]));
     check(`${shape}/${sym}/${mode}: the frame 1e-9 ms before the end of segment 0 equals the start of segment 1 (no jump at the boundary); the status says segment ${sB.segment} at progress ${sB.progress} at the boundary, segment ${sBm.segment} just before it, segment ${sEnd.segment} at progress ${sEnd.progress} at the very end`, hBm === hB && s0.segment === 0 && s0.progress === 0 && sEnd.segment === 1 && sEnd.progress === 1 && sB.segment === 1 && sB.progress === 0 && sBm.segment === 0, J([s0, sBm, sB, sEnd]));
   }
-  // endpoints that change the edge they sit on, or lie off it: the first and the last frame of a segment are still the keyframes (the projection onto one edge would move them)
+  // endpoints that change the edge they sit on, or lie off it (stage d2c, the prototype's rule with exact ends off): the first and the last frame of a segment are those keyframes with the endpoints PROJECTED onto the
+  // edge they share, NOT the normal frames (stage d showed the normal frames; that proof holds for aligned keyframes only): the decision is in the ROADMAP, "Spatial morph: staged plan", stage d2c.
   for (const shape of ['square', 'hex']) {
     const kfs = [CONNS[shape], ALT[shape], ALT2[shape]];
-    const w = world(shape, 'rotation_reflection3', kfs); w.setMorph({ enabled: true, mode: 'linear', angleDeg: 20 });
+    const w = world(shape, 'rotation_reflection3', kfs);
     const n = kfs.map((c) => normalHash(shape, 'rotation_reflection3', c));
+    w.setMorph({ enabled: false, mode: 'linear', angleDeg: 0 });
+    const projHash = (seg, which) => { const pk = projectedKeyframe(w, seg, which); linesToBase(w, pk.lines); return { h: hashOf(w.drawn()), n: pk.projected }; };
+    const q0 = projHash(0, 0), q1 = projHash(0, 1), q2 = projHash(1, 0), q3 = projHash(1, 1);
+    w.setMorph({ enabled: true, mode: 'linear', angleDeg: 20 });
     setElapsed(w, 0); const a0 = hashOf(w.drawn()); setElapsed(w, 6000); const a1 = hashOf(w.drawn()); setElapsed(w, 2000); const a2 = hashOf(w.drawn());
-    check(`${shape}: with keyframes whose lines end on DIFFERENT edges in different keyframes (boundary endpoints that cannot slide on one edge) progress 0 and the end are still exactly the normal frames of keyframe 0, 2 and, at the segment boundary, 1`, a0 === n[0] && a1 === n[2] && a2 === n[1]);
+    check(`${shape}: with keyframes whose lines end on DIFFERENT edges in different keyframes (boundary endpoints that cannot slide on one edge: ${q0.n} / ${q3.n} / ${q2.n} endpoints are projected at keyframe 0, 2 and, at the segment boundary, 1) progress 0 and the end are those keyframes with the endpoints projected onto the edge (stage d2c); where an endpoint is projected they are NOT the normal frames (the prototype's blend never reaches them either)`, q0.n + q3.n + q2.n > 0 && a0 === q0.h && a1 === q3.h && a2 === q2.h && (q0.n === 0 || a0 !== n[0]) && (q3.n === 0 || a1 !== n[2]) && (q2.n === 0 || a2 !== n[1]), J([q0.n, q3.n, q2.n]));
   }
+  sec(`      ${projectedCases} of ${endpointCases} sampled keyframe sets have endpoints that change their edge: there the frames at p = 0 and at the end show them projected (stage d2c)`);
 });
 
 T('segments-own', () => {
@@ -274,21 +297,21 @@ T('seams', () => {
 });
 
 // ---- 5. golden hashes of the ON path ---------------------------------------------------------------------------------------------------------------------------------------------------------
-// Stage d2b re-pinned 16 of the 30 hashes (the rule "commonEdge", core/spatial-morph.js): each changed hash is a frame of a pattern whose active segment contains at least one endpoint that the prototype's "any of
-// the four" rule treated as a boundary endpoint although a keyframe position lies off the common edge (a partner on another edge or inside); the other 14 frames are UNCHANGED: the triangle patterns have no such
-// endpoint, and the five @5000 frames are the last keyframe itself (weights are one corner, every endpoint is its keyframe's own position). Before the new values were pinned a script checked that no changed
-// hash belongs to a frame without such an endpoint. PREVIOUS_CHANGED holds the 16 values before d2b.
+// History of these 30 hashes. Stage d pinned them with the prototype's boundary rule and EXACT ends (at weights that are one corner the endpoint is that keyframe's own position). Stage d2b (the rule
+// "commonEdge") re-pinned 16 of them; stage d2c reverted the rule: with it and exact ends still on all 30 are the stage d values again (checked when d2c was made). Stage d2c then switched the exact ends off in
+// the front path (core/spatial-morph-render.js: the pops and the loose ends at intermediate p, see the ROADMAP): 12 of the 30 changed once more, the 12 listed in STAGE_D_CHANGED_BY_D2C with their stage d values,
+// the other 18 are unchanged since stage d. A changed hash is a frame of a pattern whose active segment has an endpoint that changes its edge or lies off it (it is projected now where it was the keyframe's own position).
 const GOLDEN = {
-  "square/none/linear45@500": '0ae0d8b02038406a',
-  "square/none/linear45@1500": 'e571ee042a6888a1',
-  "square/none/linear45@2500": '18d2fef235016526',
-  "square/none/linear45@3500": '19c67da24d1dbc0d',
-  "square/none/linear45@5000": '73028a7af5bbe573',
-  "square/rotation_reflection3/linear90@500": 'c311f1899f768402',
-  "square/rotation_reflection3/linear90@1500": 'f4e968be89c7f588',
-  "square/rotation_reflection3/linear90@2500": 'b8492ad5163f9dad',
-  "square/rotation_reflection3/linear90@3500": '7afd6899d0d60fc3',
-  "square/rotation_reflection3/linear90@5000": '37d75d79b659223b',
+  "square/none/linear45@500": 'b7a321c24a07ef27',
+  "square/none/linear45@1500": '0c34f38690dc261b',
+  "square/none/linear45@2500": '8eec3963a5ca97ca',
+  "square/none/linear45@3500": '3607cb4cf5fece18',
+  "square/none/linear45@5000": '58a6c59426917fec',
+  "square/rotation_reflection3/linear90@500": '8dd5fbfe1ec86618',
+  "square/rotation_reflection3/linear90@1500": '746aa56215a92bf6',
+  "square/rotation_reflection3/linear90@2500": '19f07b552255d3ee',
+  "square/rotation_reflection3/linear90@3500": '47998c6d6cf85bc2',
+  "square/rotation_reflection3/linear90@5000": '103e44a4dd21654d',
   "triangle/reflection_only/linear0@500": 'cc0c68da185c7dda',
   "triangle/reflection_only/linear0@1500": '9b96bec7514a850a',
   "triangle/reflection_only/linear0@2500": '2c67e5b009ef9ddd',
@@ -299,34 +322,30 @@ const GOLDEN = {
   "triangle/none/radial0@2500": '68ccff870c94f18b',
   "triangle/none/radial0@3500": '612213724a7ef4c8',
   "triangle/none/radial0@5000": 'f9adc58930acb2e9',
-  "hex/rotation_reflection3/radial0@500": 'f1b9086c860f3911',
-  "hex/rotation_reflection3/radial0@1500": '9391b69df2609938',
-  "hex/rotation_reflection3/radial0@2500": '0a348fdeebf4ee7a',
-  "hex/rotation_reflection3/radial0@3500": '0005b1600e1577b3',
+  "hex/rotation_reflection3/radial0@500": '15b3fc7807b3ccc4',
+  "hex/rotation_reflection3/radial0@1500": '6280d6de883bed0f',
+  "hex/rotation_reflection3/radial0@2500": '97a17a252ef4178e',
+  "hex/rotation_reflection3/radial0@3500": 'e26741fd54edcf13',
   "hex/rotation_reflection3/radial0@5000": '73bc46b99febaa1d',
-  "hex/none/linear315@500": 'f3ddc2ae49475042',
-  "hex/none/linear315@1500": '927b6ad5a8cdaddf',
-  "hex/none/linear315@2500": '33d3d1e0e7625cbd',
-  "hex/none/linear315@3500": '6d27570c69ddf9c9',
+  "hex/none/linear315@500": '955b6315742063f0',
+  "hex/none/linear315@1500": '7d56232e53b11602',
+  "hex/none/linear315@2500": 'd66baffcee07f48f',
+  "hex/none/linear315@3500": '7b6938b6d80e3bc1',
   "hex/none/linear315@5000": 'a28452c6dbfa4df2',
 };
-const PREVIOUS_CHANGED = {
+const STAGE_D_CHANGED_BY_D2C = {
   "square/none/linear45@500": '98eca811d2fc60bf',
   "square/none/linear45@1500": '26a01c44c46b31f0',
-  "square/none/linear45@2500": '8eec3963a5ca97ca',
   "square/none/linear45@3500": 'b1a3441f3d0ae67f',
+  "square/none/linear45@5000": '73028a7af5bbe573',
   "square/rotation_reflection3/linear90@500": '10c5775a3604bb05',
   "square/rotation_reflection3/linear90@1500": '3c747e2e4db3fb9f',
-  "square/rotation_reflection3/linear90@2500": '19f07b552255d3ee',
   "square/rotation_reflection3/linear90@3500": '6e06b2096a617480',
-  "hex/rotation_reflection3/radial0@500": '15b3fc7807b3ccc4',
+  "square/rotation_reflection3/linear90@5000": '37d75d79b659223b',
   "hex/rotation_reflection3/radial0@1500": 'a91d6092ae88aef1',
   "hex/rotation_reflection3/radial0@2500": '5fd3b63ba1bc33ad',
-  "hex/rotation_reflection3/radial0@3500": 'e26741fd54edcf13',
-  "hex/none/linear315@500": '955b6315742063f0',
   "hex/none/linear315@1500": 'bddc717ad0346587',
   "hex/none/linear315@2500": 'ab6d214757669147',
-  "hex/none/linear315@3500": '7b6938b6d80e3bc1',
 };
 function goldenFrames() {
   const out = {};
@@ -342,8 +361,8 @@ if (PRINT) { console.log(JSON.stringify(goldenFrames(), null, 1)); process.exit(
 T('golden', () => {
   const now = goldenFrames();
   const bad = Object.keys(GOLDEN).filter((k) => GOLDEN[k] !== now[k]);
-  check(`16 of the 30 hashes differ from their values before stage d2b (every one has an endpoint that is no longer treated as a boundary endpoint), 14 are the same as before`, Object.keys(PREVIOUS_CHANGED).length === 16 && Object.keys(PREVIOUS_CHANGED).every((k) => GOLDEN[k] !== PREVIOUS_CHANGED[k]) && Object.keys(GOLDEN).filter((k) => !(k in PREVIOUS_CHANGED)).length === 14);
-  check(`${Object.keys(GOLDEN).length} golden frame hashes of the ON path (6 patterns x 5 elapsed values over 2 segments; chords of every drawn segment) are the pinned ones (stage d2b values)`, Object.keys(GOLDEN).length === 30 && Object.keys(now).length === 30 && bad.length === 0, bad.slice(0, 3).join(','));
+  check(`12 of the 30 hashes differ from their stage d values (the exact ends are off since stage d2c: an endpoint that changes its edge is projected), 18 are the stage d values`, Object.keys(STAGE_D_CHANGED_BY_D2C).length === 12 && Object.keys(STAGE_D_CHANGED_BY_D2C).every((k) => k in GOLDEN && GOLDEN[k] !== STAGE_D_CHANGED_BY_D2C[k]));
+  check(`${Object.keys(GOLDEN).length} golden frame hashes of the ON path (6 patterns x 5 elapsed values over 2 segments; chords of every drawn segment) are the pinned ones (stage d2c)`, Object.keys(GOLDEN).length === 30 && Object.keys(now).length === 30 && bad.length === 0, bad.slice(0, 3).join(','));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
