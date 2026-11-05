@@ -193,11 +193,11 @@ function spatialMorphRenderAlign(plan, mode, realTimeline) {
 
 // The sheet whose lattice, shape and symmetry mode the morph is drawn on (stage d2): the first keyframe layer's OWN persisted outerCorners / centroid / shape / symmetryMode, exactly what core/tiling.js
 // drawTessellation() hands tileFor() when it draws that layer's normal frame (the independent pass), NOT the base sheet's (they differ whenever a keyframe layer has another symmetry mode or size
-// factor than the base). The base sheet itself when the plan is the base fallback or the layer has no persisted grid. -> { outerCorners, centroid, nodes, shape, symmetryMode }
+// factor than the base). The base sheet itself when the plan is the base fallback or the layer has no persisted grid. -> { outerCorners, centroid, nodes, shape, symmetryMode, nodeCount, sizeFactor }
 function spatialMorphRenderSource(plan) {
     const layer = (plan && plan.ids && plan.ids[0] !== 'base') ? additionalLayers[plan.ids[0]] : null;
-    if (!layer || !Array.isArray(layer.outerCorners) || layer.outerCorners.length < 3 || !layer.centroid) return { outerCorners, centroid, nodes, shape: currentShape, symmetryMode };
-    return { outerCorners: layer.outerCorners, centroid: layer.centroid, nodes: layer.nodes || nodes, shape: layer.shape || currentShape, symmetryMode: layer.symmetryMode || symmetryMode };
+    if (!layer || !Array.isArray(layer.outerCorners) || layer.outerCorners.length < 3 || !layer.centroid) return { outerCorners, centroid, nodes, shape: currentShape, symmetryMode, nodeCount, sizeFactor: shapeSizeFactor };
+    return { outerCorners: layer.outerCorners, centroid: layer.centroid, nodes: layer.nodes || nodes, shape: layer.shape || currentShape, symmetryMode: layer.symmetryMode || symmetryMode, nodeCount: layer.nodeCount || nodeCount, sizeFactor: layer.shapeSizeFactor || shapeSizeFactor };
 }
 
 // The tiles the normal frame would draw for a sheet (src, see spatialMorphRenderSource(); default the base sheet), in its order: [{ c, flip, rot, axis, shape, mode }]. The recorder replaces drawShapeCell() for the length of the call only.
@@ -251,31 +251,38 @@ function spatialMorphRenderDraw(sm) {
     }
     if (!aligned.ok || !spatialMorphValidateCorners(aligned.corners).ok) { spatialMorphRenderSetStatus('alignmentFailed', keyframes, mode, progress, segment); return false; }
 
-    const src = spatialMorphRenderSource(plan);
-    const tiles = spatialMorphRenderRecordTiles(src);
-    if (tiles.length === 0) { spatialMorphRenderSetStatus('renderError', keyframes, mode, progress, segment); return false; }
-    const centroids = tiles.map((t) => t.c);
-    const center = { x: canvasW / 2, y: canvasH / 2 };
-    const key = spatialMorphSpanKey(mode, angleDeg, src.shape, src.outerCorners, canvasW, canvasH, centroids);
-    const st = spatialMorphRenderState;
-    if (st.span === null || st.spanKey !== key) {
-        st.span = spatialMorphSpanFromCentroids(mode, centroids, canvasW, canvasH, { angleDeg, center });
-        st.spanKey = key;
-        st.spanComputes++;
+    const s = spatialMorphRenderSource(plan);
+    const hasWarp = typeof activeNetWarp !== 'undefined';
+    const prevWarp = hasWarp ? activeNetWarp : null;
+    if (hasWarp) {
+        activeNetWarp = (typeof netWarpForBase === 'function' && typeof netTransformNow === 'function')
+            ? netWarpForBase(netTransformNow(), s.shape, s.outerCorners, s.nodeCount, s.sizeFactor)
+            : null;
     }
-    const span = st.span;
-    const opts = { angleDeg, center };
-    // the weights at a world point: the front at the segment's progress (linear / radial with a timeline), else the static weights of stage c; either depends only on the POINT, the span and the progress, so two
-    // tiles that share an edge get the same weights for an endpoint that slides on it and the seam stays closed
-    const fopts = { angleDeg, center, progress, band: spatialMorphFrontBand };
-    const weightsAt = progress === null ? (pt) => spatialMorphCornerWeights(mode, pt, span, opts) : (pt) => spatialMorphFrontCornerWeights(mode, pt, span, fopts);
-    const prepared = spatialMorphPrepareLines(aligned.corners, src.outerCorners);
-    const lineIds = aligned.lineIds;
-    const sym = spatialMorphSymmetryOps(src.shape, src.symmetryMode);
-    const mirrored = sym.hasReflection ? mirrorCurveType(curveType) : curveType;
-
-    let started = false;
+    let tiles, sym, started = false;
     try {
+        tiles = spatialMorphRenderRecordTiles(s);
+        if (tiles.length === 0) { spatialMorphRenderSetStatus('renderError', keyframes, mode, progress, segment); return false; }
+        const centroids = tiles.map((t) => t.c);
+        const center = { x: canvasW / 2, y: canvasH / 2 };
+        const key = spatialMorphSpanKey(mode, angleDeg, s.shape, s.outerCorners, canvasW, canvasH, centroids);
+        const st = spatialMorphRenderState;
+        if (st.span === null || st.spanKey !== key) {
+            st.span = spatialMorphSpanFromCentroids(mode, centroids, canvasW, canvasH, { angleDeg, center });
+            st.spanKey = key;
+            st.spanComputes++;
+        }
+        const span = st.span;
+        const opts = { angleDeg, center };
+        // the weights at a world point: the front at the segment's progress (linear / radial with a timeline), else the static weights of stage c; either depends only on the POINT, the span and the progress, so two
+        // tiles that share an edge get the same weights for an endpoint that slides on it and the seam stays closed
+        const fopts = { angleDeg, center, progress, band: spatialMorphFrontBand };
+        const weightsAt = progress === null ? (pt) => spatialMorphCornerWeights(mode, pt, span, opts) : (pt) => spatialMorphFrontCornerWeights(mode, pt, span, fopts);
+        const prepared = spatialMorphPrepareLines(aligned.corners, s.outerCorners);
+        const lineIds = aligned.lineIds;
+        sym = spatialMorphSymmetryOps(s.shape, s.symmetryMode);
+        const mirrored = sym.hasReflection ? mirrorCurveType(curveType) : curveType;
+
         strokeWeight(2);
         for (let t = 0; t < tiles.length; t++) {
             const tile = tiles[t];
@@ -284,8 +291,8 @@ function spatialMorphRenderDraw(sm) {
             for (let i = 0; i < prepared.length; i++) {
                 const pl = prepared[i];
                 const id = lineIds[i] || [0, 0];
-                for (let s = 0; s < sym.ops.length; s++) {
-                    const op = sym.ops[s];
+                for (let k = 0; k < sym.ops.length; k++) {
+                    const op = sym.ops[k];
                     const ends = [pl.a, pl.b].map((d) => {
                         const wEdge = (d.onBoundary && d.moved) ? weightsAt(spatialMorphRenderToWorld(d.sample, tile, op, axisDir)) : null;
                         // exactEnds is OFF (stage d2c, measured): with it the endpoint of a boundary endpoint whose keyframe positions are not on one edge jumps from its keyframe position to its projection on the edge as soon as
@@ -301,9 +308,11 @@ function spatialMorphRenderDraw(sm) {
     } catch (e) {
         spatialMorphRenderSetStatus('renderError', keyframes, mode, progress, segment);
         return started;   // partly drawn: do not draw the normal frame over it
+    } finally {
+        if (hasWarp) activeNetWarp = prevWarp;
     }
-    st.frames++;
-    spatialMorphRenderSetStatus((typeof netWarpActive === 'function' && netWarpActive()) ? 'netActive' : (mode === 'bilinear' ? 'bilinearStatic' : 'ok'), keyframes, mode, progress, segment, spatialMorphRenderSeamOpen(plan, src, tiles, sym));
+    spatialMorphRenderState.frames++;
+    spatialMorphRenderSetStatus((typeof netWarpActive === 'function' && netWarpActive()) ? 'netActive' : (mode === 'bilinear' ? 'bilinearStatic' : 'ok'), keyframes, mode, progress, segment, spatialMorphRenderSeamOpen(plan, s, tiles, sym));
     return true;
 }
 

@@ -28,7 +28,7 @@
     'morph.status.parameterMismatch': 'Keyframes: Größe/Symmetrie verschieden',
     'morph.status.alignmentFailed': 'Zuordnung nicht möglich',
     'morph.status.renderError': 'Morph nicht darstellbar',
-    'morph.status.netActive': 'Netz wird ignoriert',
+    'morph.status.netActive': 'Netz verzerrt Linien; Flächen folgen',
     'morph.status.bilinearStatic': 'Bilinear: ohne Zeitverlauf',
     'morph.status.seamOpen': 'Naht offen: Ebene {layers}',
     'morph.status.base': 'Basis',
