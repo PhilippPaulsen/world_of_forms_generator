@@ -365,12 +365,59 @@ T('interplay', () => {
   // the net
   let w = mk(2, CONNS.square, ALT.square);
   w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 });
-  const noNet = hashOf(w.drawn());
+  const noNet = hashOf(w.drawn()), fNoNet = w.frame();
   w.set(`baseNetTransform = ${J({ x: { kind: 'trig', w: 0.3 }, y: 'same', repeat: false, domain: 'field' })};`);
-  const withNet = hashOf(w.drawn());
-  check("a net warp in force: the morph is drawn WITHOUT the net (the same frame as without it) and the status says 'netActive'", withNet === noNet && w.status().code === 'netActive', w.status().code);
+  const withNet = hashOf(w.drawn()), fWithNet = w.frame();
+  const endMoved = fWithNet.some((s, i) => !fNoNet[i] || Math.hypot(s.x1 - fNoNet[i].x1, s.y1 - fNoNet[i].y1) > 1e-3 || Math.hypot(s.x2 - fNoNet[i].x2, s.y2 - fNoNet[i].y2) > 1e-3);
+  check("a net warp in force: the morph is drawn WITH the net (at least one segment endpoint differs from without net) and the status says 'netActive'", withNet !== noNet && endMoved && w.status().code === 'netActive', w.status().code);
   w.setMorph({ enabled: false, mode: 'linear', angleDeg: 0 });
-  check('...with the switch off the same net warps the normal frame as before (the net is only ignored in morph mode)', hashOf(w.drawn()) !== noNet);
+  check('...with the switch off the same net warps the normal frame as before', hashOf(w.drawn()) !== noNet);
+  // Prüfpunkt 1 & Sabotagen 1-4: activeNetWarp restoration (normal + exception), OFF-path untouched, exact netWarpForBase argument order (order != size)
+  {
+    const wn = makeRenderWorld('square', 4, 5, 'rotation_reflection3');
+    wn.baseConnections(CONNS.square);
+    wn.set(`baseNetTransform = ${J({ x: { kind: 'trig', w: 0.35 }, y: 'same', repeat: false, domain: 'field' })};`);
+    const normalWarped = hashOf(wn.drawn());
+    const ka = wn.addKeyframeLayer(CONNS.square), kb = wn.addKeyframeLayer(CONNS.square); wn.setTimeline([ka, kb]);
+    wn.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 });
+    wn.set('const __sent = { __sentinel: 1 }; activeNetWarp = __sent;');
+    const morphWarped = hashOf(wn.drawn());
+    const restoredNormal = wn.get('activeNetWarp === __sent');
+    wn.set('let __boom = 0; const __origBez = drawCurvedBezier; drawCurvedBezier = function () { if (++__boom === 3) throw new Error("bez"); return __origBez.apply(this, arguments); };');
+    wn.run('spatialMorphTryDraw()');
+    const restoredAfterBezThrow = wn.get('activeNetWarp === __sent') && wn.status().code === 'renderError';
+    wn.set('drawCurvedBezier = __origBez; const __origTS = tileSquare; tileSquare = function () { throw new Error("ts"); };');
+    wn.run('spatialMorphTryDraw()');
+    const restoredAfterTileThrow = wn.get('activeNetWarp === __sent') && wn.status().code === 'renderError';
+    wn.set('tileSquare = __origTS; spatialMorph.enabled = false; let __nwbCalls = 0; const __origNWB = netWarpForBase; netWarpForBase = function () { __nwbCalls++; return __origNWB.apply(this, arguments); };');
+    const offRet = wn.get('spatialMorphTryDraw()');
+    const offUntouched = offRet === false && wn.get('activeNetWarp === __sent && __nwbCalls === 0');
+    wn.set('netWarpForBase = __origNWB; activeNetWarp = null;');
+    check('activeNetWarp is restored to its exact prior value in a finally (normal draw and exceptions in drawCurvedBezier / tileSquare), untouched on the OFF path, and netWarpForBase gets (spec, shape, outerCorners, nodeCount=4, sizeFactor=5) in exact order',
+      morphWarped === normalWarped && restoredNormal && restoredAfterBezThrow && restoredAfterTileThrow && offUntouched,
+      J({ eq: morphWarped === normalWarped, restoredNormal, restoredAfterBezThrow, restoredAfterTileThrow, offUntouched }));
+  }
+  // Prüfpunkt 4: free line ends ('free-seeded' from off-path-specs.json, curveType.kind === 'free') under net warp
+  {
+    const freeSpec = SPECS.find((s) => s.id === 'free-seeded');
+    const wf = makeRenderWorld(freeSpec.shape, freeSpec.order, freeSpec.size, freeSpec.mode);
+    wf.run(offPathScript(freeSpec));
+    const fa = wf.addKeyframeLayer(freeSpec.connections), fb = wf.addKeyframeLayer([[3, 5], [2, 6], [4, 8]]); wf.setTimeline([fa, fb]);
+    wf.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 }); wf.set('timeline.elapsedMs = 1000;');
+    const f0 = wf.frame(), d0 = wf.drawn();
+    const onBorder = (pt) => wf.get(`(function () { const c0 = outerCorners[0], c1 = outerCorners[1], c3 = outerCorners[3], v1 = { x: c1.x - c0.x, y: c1.y - c0.y }, v2 = { x: c3.x - c0.x, y: c3.y - c0.y }, det = v1.x * v2.y - v2.x * v1.y, dx = ${pt.x} - c0.x, dy = ${pt.y} - c0.y, s = (dx * v2.y - dy * v2.x) / det, t = (v1.x * dy - v1.y * dx) / det, ls = s - Math.floor(s), lt = t - Math.floor(t); return Math.min(ls, 1 - ls, lt, 1 - lt) < 1e-3; })()`);
+    const interiorBefore = [];
+    f0.forEach((seg, i) => {
+      if (!onBorder({ x: seg.x1, y: seg.y1 })) interiorBefore.push([i, 1]);
+      if (!onBorder({ x: seg.x2, y: seg.y2 })) interiorBefore.push([i, 2]);
+    });
+    wf.set(`baseNetTransform = ${J({ x: { kind: 'trig', w: -0.4 }, y: 'same', repeat: true, domain: 'tiled' })};`);
+    const f1 = wf.frame(), d1 = wf.drawn();
+    const jumpedToBorder = interiorBefore.filter(([i, e]) => onBorder({ x: f1[i]['x' + e], y: f1[i]['y' + e] })).length;
+    check("free-seeded (curveType.kind: 'free') in morph with net warp: equal endpoint/segment count before and after warp, warped output differs, and 0 interior endpoints jump onto the tile boundary",
+      f0.length === f1.length && d0.length === d1.length && hashOf(d0) !== hashOf(d1) && interiorBefore.length > 0 && jumpedToBorder === 0,
+      `${f0.length}->${f1.length}, interior=${interiorBefore.length}, jumped=${jumpedToBorder}`);
+  }
   // the timeline playing: the playback layer is not drawn, the morph does not depend on the progress
   w = mk(2, CONNS.square, ALT.square);
   w.set(`(function () { const pb = { connections: [], redoStack: [], offsetX: 0, offsetY: 0, rotation: 0, shape: 'square', symmetryMode: 'rotation_reflection3', enabled: true, showFaces: false, nodeCount: 3, shapeSizeFactor: 3, isTimelinePlayback: true };

@@ -227,7 +227,7 @@
     'morph.status.parameterMismatch': { de: 'Keyframes: Größe/Symmetrie verschieden', en: 'Keyframes differ in size or symmetry' },
     'morph.status.alignmentFailed': { de: 'Zuordnung nicht möglich', en: 'Pairing not possible' },
     'morph.status.renderError': { de: 'Morph nicht darstellbar', en: 'Morph cannot be drawn' },
-    'morph.status.netActive': { de: 'Netz wird ignoriert', en: 'Net is ignored' },
+    'morph.status.netActive': { de: 'Netz verzerrt Linien; Flächen folgen', en: 'Net warps lines; faces follow' },
     'morph.status.bilinearStatic': { de: 'Bilinear: ohne Zeitverlauf', en: 'Bilinear: no time progress' },
     'morph.status.seamOpen': { de: 'Naht offen: Ebene {layers}', en: 'Seam open: layer {layers}' },
     'morph.status.base': { de: 'Basis', en: 'base' },
