@@ -20,6 +20,9 @@
  *     layer_sheet_hex      the layer sheet of a hexagon layer (the fold row)
  *     info_card            the Info card opened from the rail's sheet, the Netz section open
  *     netz_sheet_tiled_macro_alt   (Netz tab, last) Geo + Tiled with seven nodes: the macro row and the Alternate row
+ *   Since morph stage e2b (the next reference, phone-5) two more, taken at the START of phone2() (one keyframe: the status line shows 'Zwei Keyframe-Ebenen nötig'), the morph put back off afterwards:
+ *     morph_block          the Morph sheet open, linear: the sheet, the scrim, the controls in it, the three rows, the angle stepper, the status line and the Morph button of the strip
+ *     morph_block_radial   the same, radial (the angle row dimmed, the same rects)
  *
  * Every snapshot but the notice ones is taken with NO notice on screen (UI.hideToast first), so the file does not depend on the speed of the recording. The steps use dispatched events (the shape
  * of a mouse click), never the keyboard.
@@ -118,6 +121,20 @@
   async function esc(sel) { const el = q(sel); if (el) el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await sleep(350); }
   async function phone2(tab, states) {
     const rail = q('#btn-more-rail');
+    // morph stage e2b: the Morph sheet with ONE keyframe (a real tap on the strip's Morph button, the morph on through the project API), linear and radial, then everything put back
+    {
+      await sub('ebenen');
+      const mb = q('#layer-strip .lt-morph');
+      if (mb && window.setSpatialMorph) {
+        const snapMorph = () => Object.assign(snapOpen('#ph-sheet-morph'), { '#morph-group': rect(q('#morph-group')), '#morph-angle': rect(q('#morph-angle')), '#morph-status': rect(q('#morph-status')), '#layer-strip .lt-morph': rect(mb),
+          '#ph-sheet-morph .ph-sheet-row[0]': rect(q('#ph-sheet-morph .ph-sheet-row:nth-child(1)')), '#ph-sheet-morph .ph-sheet-row[1]': rect(q('#ph-sheet-morph .ph-sheet-row:nth-child(2)')), '#ph-sheet-morph .ph-sheet-row[2]': rect(q('#ph-sheet-morph .ph-sheet-row:nth-child(3)')) });
+        realClick(mb); await sleep(500);
+        window.setSpatialMorph({ enabled: true, mode: 'linear', angleDeg: 0 }); await sleep(450); states.morph_block = snapMorph();
+        window.setSpatialMorph({ mode: 'radial' }); await sleep(450); states.morph_block_radial = snapMorph();
+        window.setSpatialMorph({ enabled: false, mode: 'linear', angleDeg: 0 }); await sleep(300);
+        await esc('#ph-sheet-morph'); if (q('#ph-sheet-morph') && !q('#ph-sheet-morph').hidden) { realClick(mb); await sleep(300); }
+      }
+    }
     // Netz: the sheet with Geo and Field (the base net the steps above left)
     if (tab === 'netz') {
       layerApi.select('base'); await sleep(300); await sub('art');

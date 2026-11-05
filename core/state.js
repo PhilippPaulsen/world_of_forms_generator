@@ -212,6 +212,12 @@ let activeNetWarp = null;
 // needed (see rebuildGrid() below).
 let altNetSeed = null;
 
+// Spatial morph (morph stage b): the PARAMETERS of the static, lines-only spatial morph, one project-level object (not per layer, not per segment):
+// { enabled: false, mode: 'linear' | 'radial' | 'bilinear', angleDeg: any finite number (used by linear only) }. Defaults off / linear / 0
+// (core/spatial-morph.js spatialMorphDefaults() is the same value; tools/session pins them equal). Saved by core/session.js only when it differs from the
+// defaults and restored by core/session-apply.js; nothing draws from it yet (the render hook is a later stage). Replaced as a whole, never edited in place.
+let spatialMorph = { enabled: false, mode: 'linear', angleDeg: 0 };
+
 // ----------------- STATE HELPERS ---------------------------------
 // Roadmap 1.12 stage 3: rotationDeg (default 0, byte-identical to
 // before this stage for every pre-existing call site) rotates the
