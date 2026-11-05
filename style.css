@@ -1820,7 +1820,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
    it is left aligned: a changing number of chips or the muted line does not move the stepper row or the group.
    ================================================================================================================================================================ */
   html.sr-trails:not(.ph) #face-colors-group > :not(.sr-host) { display: none; }
-  html.sr-trails:not(.ph) #face-colors-group { box-sizing: border-box; width: var(--canvas-size); max-width: 100%; margin-left: auto; margin-right: auto; padding: 0; align-items: flex-start; text-align: left; }
+  html.sr-trails:not(.ph) #face-colors-group { box-sizing: border-box; width: var(--canvas-size); max-width: 100%; margin-left: max(0px, calc((100% - var(--canvas-size)) / 2)); margin-right: max(0px, calc((100% - var(--canvas-size)) / 2)); padding: 0; align-items: flex-start; text-align: left; }
   html.sr-trails:not(.ph) #face-colors-group > .sr-host { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); box-sizing: border-box; width: 100%; min-width: 0; }
   html.sr-trails:not(.ph) .ph-chips-empty { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
@@ -1866,7 +1866,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
    the list opens (the blocks come in order below the icon row). The keyframe list, the net box, the status span and the text remove button and the old line-pairing editor (#timeline-pairing, the MODEL) are parked hidden by
    the twins above, never removed. The pairing list is capped at 5 rows (the pointer token instead of a fixed 48px), scrolling inside itself; the phone's 80dvh cap does not apply.
    ================================================================================================================================================================ */
-  html.sr-timeline:not(.ph) #timeline-group.ts-open.ph-sheet-rows { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: var(--sp-3); box-sizing: border-box; width: var(--canvas-size); max-width: 100%; margin-left: auto; margin-right: auto; padding: 0; text-align: left; }
+  html.sr-timeline:not(.ph) #timeline-group.ts-open.ph-sheet-rows { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: var(--sp-3); box-sizing: border-box; width: var(--canvas-size); max-width: 100%; margin-left: max(0px, calc((100% - var(--canvas-size)) / 2)); margin-right: max(0px, calc((100% - var(--canvas-size)) / 2)); padding: 0; text-align: left; }
   html.sr-timeline:not(.ph) #timeline-group > .ph-sheet-block { order: -1; align-items: flex-start; }   /* the blocks come before the group's old (parked) children: the icon row, the readout, then the editor or the list */
   html.sr-timeline:not(.ph) .ph-tl-list { max-height: calc(5 * var(--target) + 4 * var(--sp-2)); }
 
@@ -1889,7 +1889,7 @@ html.sr-morph #morph-mode-bilinear::before { -webkit-mask: url("data:image/svg+x
   html.sr-morph.ph #morph-group, html.sr-morph.ph #morph-group:not(.mo-open) { display: contents; }   /* the sheet's content: it takes no box of its own, its blocks are the sheet's flex items */
   html.sr-morph .morph-toggle, html.sr-morph .morph-mode-btn { position: relative; box-sizing: border-box; flex: none; width: var(--target); height: var(--target); min-width: var(--target); padding: 0; border-radius: var(--radius); font-size: 0; line-height: 0; touch-action: manipulation; }
   html.sr-morph #morph-modes { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: var(--sp-2); flex: none; margin: 0; padding: 0; }
-  html.sr-morph .morph-angle[hidden] { display: none; }
+  html.sr-morph .morph-angle[aria-disabled="true"] { opacity: 0.4; pointer-events: none; }   /* radial and bilinear: the row keeps its place and height (nothing moves), dimmed, no pointer, no hover state */
   html.sr-morph .morph-angle input { box-sizing: border-box; flex: none; align-self: stretch; width: var(--target); min-width: 44px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--color-text); font: inherit; font-size: var(--size-base); font-variant-numeric: tabular-nums; text-align: center; cursor: default; }
   html.sr-morph .morph-angle-icon { transform: rotate(var(--morph-angle, 0deg)); }   /* the arrow turns with the angle (a custom property: no layout, no shift) */
   html.sr-morph #morph-status { display: block; box-sizing: border-box; height: 20px; margin: 0; padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; color: var(--color-secondary); }

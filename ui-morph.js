@@ -6,7 +6,7 @@
  *   button    "Morph", an icon button next to "..." in each of the three layer views (the strip: eye, diamond, "...", Morph, x; the rail: the same order in its action group; the table's foot: "+", "...", Morph). Enabled whatever
  *             sheet is active (the morph is a project setting), the dot of the Form "Mehr" button (.nav-more.has-state) while the morph is on. The views are built ONCE by ui-layers.js (their action groups are static cells; only the
  *             layer chips are rebuilt), so the buttons are inserted once; ensureButtons() runs again on every tick and adds one only where a view has none (never twice), and does nothing before the views exist.
- *   block     #morph-group (index.html): row 1 on/off + the three modes (radiogroup), row 2 the angle stepper (linear only: hidden otherwise, the engine collapses the row), row 3 the status line (one line, reserved height).
+ *   block     #morph-group (index.html): row 1 on/off + the three modes (radiogroup), row 2 the angle stepper (ALWAYS there with its height: operable for linear, dimmed and aria-disabled for radial and bilinear, never hidden: nothing below it moves), row 3 the status line (one line, reserved height).
  *             Its open state is the class mo-open on the group (like ts-open of the timeline group): the buttons flip it, the engine's sheet follows it below 768px (config.sheets.morph), the CSS shows the block under the canvas from
  *             768px. Escape inside the block closes it from 768px (below, the sheet does) and gives the focus back to the visible button.
  *   status    one line of at most 40 characters: the error codes first, then "seam open", then "net ignored" / "bilinear without time progress"; nothing for 'off' and 'ok'. The texts are the dictionary's (morph.status.*).
@@ -22,7 +22,7 @@
   const MAX_STATUS = 40;
   // the German texts (the fallback; the dictionary has both languages under the same keys, ui-i18n.js)
   const T = {
-    'morph.status.needsTwoKeyframes': 'Zwei Keyframes nötig',
+    'morph.status.needsTwoKeyframes': 'Zwei Keyframe-Ebenen nötig',
     'morph.status.shapeMismatch': 'Keyframes: Form verschieden',
     'morph.status.lineCountMismatch': 'Keyframes: Linienzahl verschieden',
     'morph.status.parameterMismatch': 'Keyframes: Größe/Symmetrie verschieden',
@@ -34,6 +34,7 @@
     'morph.status.base': 'Basis',
     'morph.button': 'Morph',
     'morph.angle.value': '{deg}°',
+    'morph.angle.linearOnly': 'Winkel: nur bei linear',
   };
   let say = function (key, params) {   // the dictionary's text when it has one (the page loads ui-i18n.js first), else the German fallback above
     const i = root.uiI18n;
@@ -84,6 +85,7 @@
   const toggle = document.getElementById('morph-toggle'), modesEl = document.getElementById('morph-modes'), angleEl = document.getElementById('morph-angle'), angleInput = document.getElementById('morph-angle-input'), statusEl = document.getElementById('morph-status');
   const radios = MODES.map(function (m) { return document.getElementById('morph-mode-' + m); });
   const html = document.documentElement;
+  const angleStops = [angleInput].concat(Array.prototype.slice.call(angleEl.querySelectorAll('.stepper-btn')));   // the three focus stops of the angle row
   function set(patch) { if (typeof window.setSpatialMorph === 'function') window.setSpatialMorph(patch); }
   function blockNow() { return typeof window.getSpatialMorph === 'function' ? window.getSpatialMorph() : { enabled: false, mode: 'linear', angleDeg: 0 }; }
   function statusNow() { return typeof window.spatialMorphStatus === 'function' ? window.spatialMorphStatus() : null; }
@@ -172,7 +174,9 @@
       if (r.getAttribute('tabindex') !== ti) r.setAttribute('tabindex', ti);
     });
     const linear = block.mode === 'linear';
-    if (angleEl.hidden === linear) angleEl.hidden = !linear;
+    // the angle row keeps its place and height in every mode (stage e2b): for radial and bilinear it is aria-disabled (dimmed by the CSS, no pointer, the reason as its title), without a focus stop
+    UI.setDisabled(angleEl, linear ? '' : say('morph.angle.linearOnly'));
+    angleStops.forEach(function (e) { if (linear) { if (e.hasAttribute('tabindex')) e.removeAttribute('tabindex'); } else if (e.getAttribute('tabindex') !== '-1') e.setAttribute('tabindex', '-1'); });
     const label = angleLabel(block.angleDeg);
     if (angleInput.value !== label) angleInput.value = label;
     angleEl.style.setProperty('--morph-angle', (typeof block.angleDeg === 'number' && isFinite(block.angleDeg) ? block.angleDeg : 0) + 'deg');

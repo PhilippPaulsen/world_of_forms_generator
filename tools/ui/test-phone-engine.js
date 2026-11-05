@@ -1686,6 +1686,33 @@ T('surface-flags', () => {
     eng.release();
     check('release() removes the classes (idempotent: a second release changes nothing)', cls(p) === '' && eng.release() === false, cls(p));
 });
+// Morph stage e2b: the MORPH surface (flag sr-morph, #morph-group, config.sheets.morph) through phone -> desktop -> phone with the sheet / block OPEN, and a release. Every check names the morph: a stale flag, a container left
+// behind or a duplicated id of the morph block is reported HERE (before e2b only the whole-tree comparisons failed).
+T('morph-surface', () => {
+    const idsOf = pp => pp.doc.all().map(n => n.id).filter(Boolean);
+    const dups = pp => { const m = {}; idsOf(pp).forEach(i => { m[i] = (m[i] || 0) + 1; }); return Object.keys(m).filter(k => m[k] > 1); };
+    const hasMorph = pp => pp.doc.documentElement.className.split(/\s+/).indexOf('sr-morph') >= 0;
+    const p = formPageUI(), eng = ph(p);
+    const home = p.doc.getElementById('morph-group').parentNode, homeIndex = home.childNodes.indexOf(p.doc.getElementById('morph-group'));
+    check('MORPH: before start() the flag sr-morph is not on <html> and #morph-group sits in the controls container', !hasMorph(p) && home.className.indexOf('controls-container') >= 0);
+    eng.start();
+    check('MORPH: on the phone the flag sr-morph is set (the morph surface is applied) and #morph-group is the content of #ph-sheet-morph, which exists once', hasMorph(p) && p.doc.getElementById('morph-group').parentNode.id !== undefined && p.doc.all().filter(n => n.id === 'ph-sheet-morph').length === 1 && p.doc.getElementById('ph-sheet-morph').contains(p.doc.getElementById('morph-group')));
+    p.doc.getElementById('ls-morph').dispatch('click'); p.win.uiSync();
+    check('MORPH: the Morph button opens the block (mo-open on #morph-group) and the sheet follows it (the host is shown)', p.doc.getElementById('morph-group').classList.contains('mo-open') && !p.doc.getElementById('ph-sheet-morph').hidden);
+    // the round trips with the block open
+    for (let i = 0; i < 3; i++) {
+        p.mq.set(false);
+        check('MORPH round trip ' + (i + 1) + ', desktop width: sr-morph is still set (the surface is inline there), the block is built in place (#morph-group has the class ph-sheet-rows) and is NOT in a sheet, no #ph-sheet-morph is left', hasMorph(p) && p.doc.getElementById('morph-group').classList.contains('ph-sheet-rows') && p.doc.all().filter(n => n.id === 'ph-sheet-morph').length === 0 && p.doc.getElementById('morph-group').parentNode === home, JSON.stringify([hasMorph(p), p.doc.all().filter(n => n.id === 'ph-sheet-morph').length]));
+        check('MORPH round trip ' + (i + 1) + ', desktop width: the three rows are inside the group, each control of the block once, no duplicated id on the page', p.doc.getElementById('morph-group').childNodes.filter(n => /\bph-sheet-block\b/.test(n.className || '')).length === 1 && dups(p).length === 0, dups(p).join());
+        p.mq.set(true);
+        check('MORPH round trip ' + (i + 1) + ', phone width again: sr-morph set, #morph-group back in the ONE #ph-sheet-morph, no block left outside it, no duplicated id', hasMorph(p) && p.doc.all().filter(n => n.id === 'ph-sheet-morph').length === 1 && p.doc.getElementById('ph-sheet-morph').contains(p.doc.getElementById('morph-group')) && dups(p).length === 0, dups(p).join());
+    }
+    check('MORPH: the Morph button of the strip exists once through all of it and keeps its place (the engine never moves or clones it)', p.doc.all().filter(n => n.id === 'ls-morph').length === 1 && p.doc.getElementById('layer-strip').childNodes.some(n => n.id === 'ls-morph'));
+    eng.release();
+    check('MORPH release: sr-morph is REMOVED (and with it every gate class), #ph-sheet-morph is gone', !hasMorph(p) && cls(p) === '' && p.doc.all().filter(n => n.id === 'ph-sheet-morph').length === 0, cls(p));
+    check('MORPH release: #morph-group is back where it was (same parent, same place), without the classes ph-sheet-rows / ph-sheet-row-* and with no .ph-sheet-block or row container left inside it, its own open state (mo-open) untouched', p.doc.getElementById('morph-group').parentNode === home && home.childNodes.indexOf(p.doc.getElementById('morph-group')) === homeIndex && !/ph-sheet-rows/.test(p.doc.getElementById('morph-group').className) && !p.doc.all().some(n => /\bph-sheet-(block|row)\b/.test(n.className || '') && p.doc.getElementById('morph-group').contains(n)), p.doc.getElementById('morph-group').className);
+    check('MORPH release: every control of the block is back in #morph-group directly (toggle, modes, angle, status), one element per id', ['morph-toggle', 'morph-modes', 'morph-angle', 'morph-status'].every(id => p.doc.getElementById(id) && p.doc.getElementById(id).parentNode === p.doc.getElementById('morph-group') && p.doc.all().filter(n => n.id === id).length === 1) && dups(p).length === 0, dups(p).join());
+});
 T('surface-desktop', () => {
     const p = formPageUI(); p.mq.set(false);
     const before = dump(p.doc.documentElement), eng = ph(p, noInline()); eng.start();

@@ -179,8 +179,7 @@
         ]
       },
       // The Morph sheet (morph stage e2a, one more surface): #morph-group is the content; the button that opens it is the Morph button ui-morph.js puts next to "..." in the layer views (the strip's is the trigger), the open state is
-      // the class mo-open of the group, which that button flips (like ts-open). ONE block of three rows: on/off + the three modes (48 + 8 + 160 = 216px), the angle stepper (linear only: the row collapses while #morph-angle
-      // is hidden) and ONE status line of 20px. The controls are in index.html; ui-morph.js wires them.
+      // the class mo-open of the group, which that button flips (like ts-open). ONE block of three rows: on/off + the three modes (48 + 8 + 160 = 216px), the angle stepper (always there: aria-disabled and dimmed for radial and bilinear, so the sheet keeps its height) and ONE status line of 20px. The controls are in index.html; ui-morph.js wires them.
       morph: {
         host: 'ph-sheet-morph', label: 'Morph', i18n: 'morph.sheet', content: 'morph-group', trigger: { within: 'layer-strip', selector: '.lt-morph' }, open: { hasClass: 'mo-open' },
         blocks: [
