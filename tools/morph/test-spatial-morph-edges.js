@@ -2,10 +2,11 @@
 //   1. THE DATA SET (tools/morph/seam-data.js): how many of the 258 corpus patterns cross the tile edge and are seamless across tiles (per shape and symmetry family).
 //   2. CLAIM C (seams, mirror axes): on a CLOSED deformation the morph keeps every seam pair together at every progress value, in every mode, with 2 and 3 keyframes (M1 = 0, M2 = 0, M3 = 0); a pair that the later
 //      keyframe's own normal frame separates is that keyframe's content, not a defect (the review's triangle hex_chain and mirror-axis cases); pairs coincident in BOTH keyframes stay together in the cases ii, iii, iv.
-//      Stage d2b (the "commonEdge" boundary rule): M1c = 0 and M2c = 0 in ALL cases (the symmetry copies of a corner endpoint no longer split), the endpoints do not jump (<= 1e-3 px at both ends of the weight)
-//      and no line collapses (length at w = 0.01 >= 90 % of the shorter keyframe line); the pinned square / 3 / rotation_reflection6 case, which split 88 of 13552 pairs, gives 0.
-//   3. CLAIM A (keyframe parameters): the morph is drawn on the first keyframe layer's own lattice, shape, symmetry mode and size factor: at p = 0 and p = 1 it equals the normal frame of the keyframe, call for call,
-//      whatever the base sheet's symmetry mode and size factor are; keyframes that disagree among themselves give the status 'parameterMismatch' (normal frame, nothing thrown).
+//      Stage d2c (the PROTOTYPE's boundary rule, restored; stage d2b's "commonEdge" rule is gone): M1c = 0 in ALL cases (criterion), the drawn endpoints do not jump. What this rule does NOT achieve is pinned below as
+//      OPEN FINDINGS (the symmetry copies of a corner endpoint that split, lines that collapse to stubs, endpoints that would jump with exact ends): they are MEASURED NUMBERS of the prototype's rule on this data set,
+//      not passing criteria; a better rule flips them on purpose. What the rule must achieve (connected lines, nothing loose) is tested in test-spatial-morph-prototype.js (the dangling-ends metric).
+//   3. CLAIM A (keyframe parameters): the morph is drawn on the first keyframe layer's own lattice, shape, symmetry mode and size factor: at p = 0 and p = 1 it equals the keyframe (its normal frame; the endpoints that
+//      change their edge projected onto it, stage d2c), call for call, whatever the base sheet's symmetry mode and size factor are; keyframes that disagree among themselves give the status 'parameterMismatch' (normal frame, nothing thrown).
 //   node tools/morph/test-spatial-morph-edges.js
 //   SPATIAL_MORPH_RENDER_JS=/path/to/mutated/spatial-morph-render.js node tools/morph/test-spatial-morph-edges.js        (sabotage runs; SPATIAL_MORPH_JS the same for core/spatial-morph.js)
 'use strict';
@@ -56,7 +57,7 @@ const HB_MODES = D.MODES, CORPUS_MODES = [['linear', 0], ['radial', 0], ['biline
 const agg = {};   // case|keyframes -> sums
 const add = (key, rows, inv) => {
   const a = agg[key] = agg[key] || { jump: 0, ratio: Infinity, ends: 0, runs: 0, m1: 0, m1n: 0, m1w: 0, m1c: 0, m1cn: 0, m1cw: 0, m2: 0, m2c: 0, m3: 0, m3n: 0 };
-  a.runs++; a.jump = Math.max(a.jump, inv.jumpLow, inv.jumpHigh); a.ratio = Math.min(a.ratio, inv.minRatio); a.below = (a.below || 0) + inv.below90; a.belowNot = (a.belowNot || 0) + inv.below90NotLinear; a.ends += inv.endpoints;
+  a.runs++; a.jump = Math.max(a.jump, inv.jumpLow, inv.jumpHigh); a.jumpExact = Math.max(a.jumpExact || 0, inv.jumpExactLow, inv.jumpExactHigh); a.ratio = Math.min(a.ratio, inv.minRatio); a.below = (a.below || 0) + inv.below90; a.belowNot = (a.belowNot || 0) + inv.below90NotLinear; a.ends += inv.endpoints;
   rows.forEach((x) => { a.m1 += x.m1[0]; a.m1n += x.m1[1]; a.m1w = Math.max(a.m1w, x.m1[2]); a.m1c += x.m1c[0]; a.m1cn += x.m1c[1]; a.m1cw = Math.max(a.m1cw, x.m1c[2]); a.m2 += x.m2[0]; a.m2c += x.m2c[0]; if (x.m3 !== undefined) { a.m3 = Math.max(a.m3, x.m3); a.m3n++; } });
 };
 let skipped = 0;
@@ -83,12 +84,16 @@ T('matrix', () => {
   for (const kc of ['ii', 'iii', 'iv']) for (const nk of [2, 3]) {
     const a = agg[`${kc}|${nk}`];
     if (!a) { check(`case ${kc}, ${nk} keyframes ran`, false); continue; }
-    check(`case ${kc}, ${nk} keyframes: pairs that coincide in BOTH keyframes' normal frames (${a.m1cn}) all stay together (M1c = 0, worst ${a.m1cw.toExponential(1)} px); the ${a.m1} broken of ${a.m1n} K0-coincident pairs are pairs the later keyframe itself separates; M3 ${a.m3.toExponential(1)}`, a.m1c === 0 && a.m1cw <= 1e-6 && a.m3 <= 1e-9 && a.m1cn > 100, J([a.m1c, a.m1cn, a.m1, a.m1n]));
+    check(`case ${kc}, ${nk} keyframes: pairs that coincide in BOTH keyframes' normal frames (${a.m1cn}) all stay together (M1c = 0, worst ${a.m1cw.toExponential(1)} px); the ${a.m1} broken of ${a.m1n} K0-coincident pairs are pairs the later keyframe itself separates; M3 (p = 0 / 1 against the normal frame: the projected endpoints, measured, not a criterion) ${a.m3.toExponential(1)}`, a.m1c === 0 && a.m1cw <= 1e-6 && a.m1cn > 100, J([a.m1c, a.m1cn, a.m1, a.m1n]));
   }
   const all = Object.keys(agg).map((k) => agg[k]);
-  check(`(a) M2c = 0 in every case (${all.reduce((n, a) => n + a.m2c, 0)} broken: inside-tile pairs that coincide in both keyframes stay together, symmetry copies included) and M1c = 0 (${all.reduce((n, a) => n + a.m1c, 0)} broken)`, all.every((a) => a.m2c === 0 && a.m1c === 0), J(all.map((a) => [a.m1c, a.m2c])));
-  check(`(d) no endpoint jumps: the displacement between w = 0 and w = 1e-6 and between w = 1 - 1e-6 and w = 1 is at most ${Math.max(...all.map((a) => a.jump)).toExponential(1)} px over ${all.reduce((n, a) => n + a.ends, 0)} endpoints (static and front path), limit 1e-3`, all.every((a) => a.jump <= 1e-3));
-  check(`(e) no line collapses: the shortest line at w = 0.01 is ${(100 * Math.min(...all.map((a) => a.ratio))).toFixed(1)} % of the shorter keyframe line (limit 90 %); ${all.reduce((n, a) => n + (a.below || 0), 0)} lines are below 90 %, ${all.reduce((n, a) => n + (a.belowNot || 0), 0)} of them differ from the plain linear blend of their two keyframes (a short line whose endpoints travel far is short in ANY linear blend; the whole data set has exactly one such line, 87.9 %)`, all.every((a) => (a.belowNot || 0) === 0 && a.ratio >= 0.85));
+  // OPEN FINDINGS of the prototype's rule (stage d2c). SOURCE: the prototype's boundary rule (any position within 1 px of an edge, projection on the majority edge, weights of the edge midpoint) as restored in stage d2c,
+  // MEASURED on this data set (the numbers above). They are pinned so that a change of the rule shows up; they are NOT passing criteria: the symmetry copies of a corner endpoint that split inside one tile, lines that
+  // collapse to a stub, and the endpoint jump that exact ends would cause are known weaknesses of the rule, open in the ROADMAP (a rule without them AND without loose line ends is new design work).
+  check(`(a) the drawn endpoints do not jump: the displacement between w = 0 and w = 1e-6 and between w = 1 - 1e-6 and w = 1 is at most ${Math.max(...all.map((a) => a.jump)).toExponential(1)} px over ${all.reduce((n, a) => n + a.ends, 0)} endpoints (limit 1e-3)`, all.every((a) => a.jump <= 1e-3));
+  check(`OPEN FINDING (measured with the prototype's rule, not a criterion): M2c, inside-tile pairs that coincide in both keyframes yet split, cases ii|3 ${agg['ii|3'].m2c}, iv|2 ${agg['iv|2'].m2c}, iv|3 ${agg['iv|3'].m2c} (${all.reduce((n, a) => n + a.m2c, 0)} in all), none in the other cases`, J(['ii|3', 'iv|2', 'iv|3'].map((k) => agg[k].m2c)) === '[6344,2794,25064]' && all.reduce((n, a) => n + a.m2c, 0) === 34202);
+  check(`OPEN FINDING (measured, not a criterion): with EXACT ends (switched off in the front path since stage d2c) an endpoint that changes its edge would jump by ${Math.max(...all.map((a) => a.jumpExact)).toFixed(1)} px between w = 0 and w = 1e-6`, Math.abs(Math.max(...all.map((a) => a.jumpExact)) - 200) < 1e-6);
+  check(`OPEN FINDING (measured, not a criterion): the shortest line at w = 0.01 is ${(100 * Math.min(...all.map((a) => a.ratio))).toFixed(2)} % of the shorter keyframe line; ${all.reduce((n, a) => n + (a.below || 0), 0)} lines are below 90 %, ${all.reduce((n, a) => n + (a.belowNot || 0), 0)} of them differ from the plain linear blend of their two keyframes`, Math.abs(Math.min(...all.map((a) => a.ratio)) - 0.0035406763156079434) < 1e-9 && all.reduce((n, a) => n + (a.below || 0), 0) === 9 && all.reduce((n, a) => n + (a.belowNot || 0), 0) === 9);
 });
 T('review cases', () => {
   // the review's triangle hex_chain: its later keyframe is not closed across the tile edge: no seam pair of K0 is still a pair in K1's own normal frame
@@ -105,23 +110,23 @@ T('review cases', () => {
   const gOff = D.gaps(off.P2, D.at(off.wm, 0.5), off.P2.inside), gOn = D.gaps(on.P2, D.at(on.wm, 0.5), on.P2.inside);
   check(`the review's mirror-axis line [[5,8]] -> [[4,8]] (reflection_only): ${off.P2.inside.length} junction pairs in K0, ${off.both2.length} still pairs in K1 (the node leaves the axis); and [[5,8]] -> [[5,9]], which stays on the axis, keeps all ${on.P2.inside.length} together (${gOn.broken} broken)`, off.P2.inside.length > 100 && off.both2.length === 0 && gOff.broken > 0 && on.P2.inside.length > 100 && on.both2.length === on.P2.inside.length && gOn.broken === 0, J([off.P2.inside.length, off.both2.length, gOff.broken, on.P2.inside.length, gOn.broken]));
 });
-T('regression: symmetry copies of a corner endpoint', () => {
-  // square / 3 / rotation_reflection6: an endpoint that is a polygon corner in keyframe 0 and the cell centre in keyframe 1. Before stage d2b its symmetry copies, which coincide in both keyframes, took their edge
-  // weights at the world image of the canonical edge midpoint (a different world point per copy) and 88 of 13552 pairs split at p = 0.5 (worst 101 px); as an interior endpoint every copy takes the tile weights.
+T('open finding: symmetry copies of a corner endpoint', () => {
+  // square / 3 / rotation_reflection6: an endpoint that is a polygon corner in keyframe 0 and the cell centre in keyframe 1. Its symmetry copies, which coincide in both keyframes, take their edge weights at the world image
+  // of the canonical edge midpoint (a different world point per copy) and split. SOURCE: the prototype's rule, measured here; NOT a passing criterion (stage d2b removed the split by making such an endpoint interior,
+  // which opened the seams of real patterns; its numbers are the ones before it: 88 of 13552 with exact ends, 286 now that p = 0 / 1 are projected).
   const q = corpus.filter((r) => r.qualifies && r.key === 'square/3/rotation_reflection6');
   const r0 = q.find((r) => J(r.conns) === '[[1,3],[1,5],[2,4],[2,5],[2,8]]'), r1 = q.find((r) => J(r.conns) === '[[1,5],[1,6],[1,9],[2,4],[2,8]]');
-  if (!r0 || !r1) { check('the regression pattern pair exists in the corpus', false); return; }
+  if (!r0 || !r1) { check('the open-finding pattern pair exists in the corpus', false); return; }
   const res = D.runCase({ shape: 'square', order: 3, size: 3, mode: 'rotation_reflection6', conns: r0.conns, other: r1 }, 'iv', 2, [1, 2], [['linear', 0]], [0.5]);
   const x = res.rows[0];
-  check(`the pinned case (case iv, linear 0, p = 0.5): ${x.m2c[0]} of ${x.m2c[1]} inside-tile pairs that coincide in both keyframes split (it was 88 of 13552, worst 101 px)`, x.m2c[0] === 0 && x.m2c[1] === 13552, J(x.m2c));
-  // the same sampled cases that split before: case ii with 3 keyframes and case iv with 2 and 3 keyframes, over the sampled patterns, front and static
+  check(`OPEN FINDING (measured with the prototype's rule, not a criterion): the pinned case (case iv, linear 0, p = 0.5): ${x.m2c[0]} of ${x.m2c[1]} inside-tile pairs that coincide in both keyframes split (worst ${x.m2c[2].toFixed(1)} px)`, x.m2c[0] === 286 && x.m2c[1] === 13552 && Math.abs(x.m2c[2] - 141.4213562373095) < 1e-6, J(x.m2c));
   let n = 0, bad = 0, pairs = 0;
   for (const pat of corpusSample.concat(pats)) for (const [kc, nk] of [['ii', 3], ['iv', 2], ['iv', 3]]) {
     if (kc === 'iv' && !pat.other) continue;
     const r = D.runCase(pat, kc, nk, [pat.conns.length + 3, pat.conns.length + 9], [['linear', 0], ['radial', 0], ['bilinear', 0]], [0.25, 0.5, 0.75]);
     if (r.skip) continue; r.rows.forEach((y) => { n++; bad += y.m2c[0]; pairs += y.m2c[1]; });
   }
-  check(`the sampled regression cases (ii with 3 keyframes, iv with 2 and 3, linear / radial / bilinear, p = 0.25 / 0.5 / 0.75): ${n} frames, ${bad} split pairs of ${pairs} (it was 1348 to 2721 per case)`, n > 100 && bad === 0 && pairs > 10000, J([n, bad, pairs]));
+  check(`OPEN FINDING (measured with the prototype's rule, not a criterion): the sampled cases (ii with 3 keyframes, iv with 2 and 3, linear / radial / bilinear, p = 0.25 / 0.5 / 0.75): ${n} frames, ${bad} split pairs of ${pairs}`, n === 528 && bad === 9936 && pairs === 4645537, J([n, bad, pairs]));
 });
 // ================= 3. claim A: keyframe parameters =================
 console.log('\n== 3. claim A: the morph uses the keyframe layer\'s own lattice, shape, symmetry mode and size factor ==');
@@ -137,15 +142,30 @@ function world(shape, base, kf, nk) {
   return { w, ids };
 }
 const normalOf = (w, id) => D.layerNormal(w, id);
+// Stage d2c (the prototype's boundary rule, exact ends off): p = 0 / p = 1 show keyframe 0 / 1 with the boundary endpoints that change their edge (or lie off the one they share) PROJECTED onto the edge. The expected
+// frame is the normal frame of a layer that holds those projected lines (same shape, size and symmetry mode as the keyframe layer, its own outer polygon); it is the keyframe's own normal frame when nothing is projected.
+let projectedEnds = 0, projectedCases = 0;
+function projectedNormal(w, ids, k, kf, shape, order) {
+  const r = w.run('(function () { const r = resolveTimelineKeyframeCoords(timeline, 0); return { from: r.from, to: r.to }; })()');
+  const poly = w.get(`additionalLayers[${ids[0]}].outerCorners`);
+  const prep = D.M.spatialMorphPrepareLines(D.M.spatialMorphChooseCorners([r.from, r.to], 'linear'), poly);
+  let projected = 0;
+  const pick = (d) => { if (!(d.onBoundary && d.moved)) return d.points[k]; const q = d.edgePoints[k]; if (Math.hypot(q.x - d.points[k].x, q.y - d.points[k].y) > 1e-6) projected++; return q; };
+  const nodes = [], conns = [];
+  prep.forEach((pl, i) => { const a = pick(pl.a), b = pick(pl.b); nodes.push({ id: 2 * i + 1, x: a.x, y: a.y }, { id: 2 * i + 2, x: b.x, y: b.y }); conns.push([2 * i + 1, 2 * i + 2]); });
+  const id = w.addKeyframeLayer(conns, { shape, order, size: kf.size, mode: kf.sym }); w.set(`additionalLayers[${id}].nodes = ${J(nodes)};`);
+  projectedEnds += projected; if (projected) projectedCases++;
+  return D.layerNormal(w, id);
+}
 T('equal to the normal frame of the keyframes', () => {
   let n = 0, ok = 0, worst = 0, bad = '', segs = 0;
   for (const shape of ['square', 'triangle', 'hex']) for (const sym of SYMS) for (const [bs, ks] of [[5, 3], [3, 5]]) {
     const baseSym = sym === 'none' ? 'rotation_reflection6' : (sym === 'rotation6' ? 'reflection_only' : 'none');   // never the keyframes' own mode
     const { w, ids } = world(shape, { size: bs, sym: baseSym }, { size: ks, sym }, 2);
-    const nf = ids.map((id) => normalOf(w, id)); w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 });
+    const [kc0, kc1, korder] = LINES[shape]; const nf = [0, 1].map((k) => projectedNormal(w, ids, k, { size: ks, sym }, shape, korder)); w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 });
     for (const [p, k] of [[0, 0], [1, 1]]) { const f = D.at(w, p, 0), st = w.status().code, d = D.maxdiff(f, nf[k]); n++; worst = Math.max(worst, d); segs += f.length; if (d <= 1e-9 && f.length === nf[k].length && st === 'ok') ok++; else bad = bad || `${shape}/${sym}/base ${baseSym} size ${bs}/kf size ${ks} p ${p}: ${f.length} vs ${nf[k].length} segments, diff ${d}, status ${st}`; }
   }
-  check(`p = 0 and p = 1 equal the normal frame of keyframe 0 / 1, call for call, for 3 shapes x 4 symmetry modes x 2 size pairs with a base of another symmetry mode and another size: ${ok}/${n} (${segs} segments, worst ${worst.toExponential(1)} px)`, ok === n && n === 48, bad);
+  check(`p = 0 and p = 1 equal keyframe 0 / 1 (its normal frame; with the endpoints that change their edge projected onto it: ${projectedEnds} endpoints in ${projectedCases} of the cases), call for call, for 3 shapes x 4 symmetry modes x 2 size pairs with a base of another symmetry mode and another size: ${ok}/${n} (${segs} segments, worst ${worst.toExponential(1)} px)`, ok === n && n === 48, bad);
 });
 T('another shape than the base', () => {
   // the keyframes' shape is not the base sheet's: the lattice, the tile function and the symmetry operations are the keyframes' (the planner only requires the keyframes to agree with each other)
@@ -154,10 +174,10 @@ T('another shape than the base', () => {
     const [c0, c1, order] = LINES[kfShape], [, , baseOrder] = LINES[baseShape];
     const w = makeRenderWorld(baseShape, baseOrder, 3, 'rotation6'); w.baseConnections([]);
     const a = w.addKeyframeLayer(c0, { shape: kfShape, order, size: 3, mode: sym }), b = w.addKeyframeLayer(c1, { shape: kfShape, order, size: 3, mode: sym }); w.setTimeline([a, b]);
-    const nf = [D.layerNormal(w, a), D.layerNormal(w, b)]; w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 });
+    const nf = [0, 1].map((k) => projectedNormal(w, [a, b], k, { size: 3, sym }, kfShape, order)); w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 });
     for (const [p, k] of [[0, 0], [1, 1]]) { const f = D.at(w, p, 0), st = w.status().code, d = D.maxdiff(f, nf[k]); n++; segs += f.length; if (d <= 1e-9 && f.length === nf[k].length && st === 'ok') ok++; else bad = bad || `${baseShape} base / ${kfShape} keyframes / ${sym} p ${p}: ${f.length} vs ${nf[k].length} segments, diff ${d}, status ${st}`; }
   }
-  check(`p = 0 and p = 1 equal the normal frame of the keyframes when their SHAPE is not the base's (square / hex / triangle, 2 symmetry modes): ${ok}/${n} (${segs} segments)`, ok === n && n === 12, bad);
+  check(`p = 0 and p = 1 equal the keyframes (projected where an endpoint changes its edge, see above) when their SHAPE is not the base's (square / hex / triangle, 2 symmetry modes): ${ok}/${n} (${segs} segments)`, ok === n && n === 12, bad);
 });
 T('same as a base that matches', () => {
   // the whole morph (span, tiles, symmetry copies, front) must be the one a MATCHING base draws: base (size, mode) = keyframes' (size, mode) gives the same frame as any other base

@@ -8,7 +8,7 @@
  * the face fills and the net warp are NOT drawn; the node dots, the net-line overlay and the cross-layer fills that draw() adds after drawTessellation() are untouched. No wave.
  * FOLLOWING THE TIMELINE (stage d): linear and radial with a timeline of two or more keyframes draw the ACTIVE SEGMENT of the timeline's progress (timeline.elapsedMs: the playback, the scrub bar):
  * the front of core/spatial-morph.js spatialMorphFrontWeight() wanders across the surface in the direction of the angle (radial: from the centre outward), behind it the LATER keyframe, ahead of it
- * the earlier one; at progress 0 only keyframe i shows, at the end of segment i the frame is the start of segment i + 1. Bilinear, and every case without a timeline, is the STATIC blend of stage c. The morph is drawn on the FIRST KEYFRAME LAYER'S OWN grid (stage d2: its persisted outerCorners / centroid / shape / symmetryMode / size, exactly what core/tiling.js hands tileFor() for that layer's normal frame), not the base sheet's; a keyframe layer's own offset and rotation are IGNORED (its lines are taken in its grid as resolveConnectionsToCoords() reads them), as in the prototype.
+ * the earlier one; at progress 0 only keyframe i shows (for keyframes whose boundary endpoints change their edge: with those endpoints projected onto the edge, as in the prototype, stage d2c), at the end of segment i the frame is the start of segment i + 1. Bilinear, and every case without a timeline, is the STATIC blend of stage c. The morph is drawn on the FIRST KEYFRAME LAYER'S OWN grid (stage d2: its persisted outerCorners / centroid / shape / symmetryMode / size, exactly what core/tiling.js hands tileFor() for that layer's normal frame), not the base sheet's; a keyframe layer's own offset and rotation are IGNORED (its lines are taken in its grid as resolveConnectionsToCoords() reads them), as in the prototype.
  *
  * HOW (no change to the tile loops): the tile functions of core/tiling.js are called ONCE with an empty layer override while drawShapeCell() is temporarily replaced by a recorder, so the
  * lattice, the tile centres, the flips and the mirror axis are exactly the ones the normal frame uses; the recorder is put back in a finally. The recorded tiles are then drawn here: per
@@ -288,7 +288,10 @@ function spatialMorphRenderDraw(sm) {
                     const op = sym.ops[s];
                     const ends = [pl.a, pl.b].map((d) => {
                         const wEdge = (d.onBoundary && d.moved) ? weightsAt(spatialMorphRenderToWorld(d.sample, tile, op, axisDir)) : null;
-                        return spatialMorphRenderToWorld(spatialMorphAnchoredPoint(d, wTile, wEdge, progress !== null), tile, op, axisDir);
+                        // exactEnds is OFF (stage d2c, measured): with it the endpoint of a boundary endpoint whose keyframe positions are not on one edge jumps from its keyframe position to its projection on the edge as soon as
+                        // the front reaches it (up to 200 px between two frames), the front at p = 0.5 differs from the prototype's static blend at the canvas edge and loose line ends appear at intermediate p. Without it the
+                        // frames at p = 0 and p = 1 show such endpoints PROJECTED onto the edge, as the prototype's blend does (ROADMAP "Spatial morph: staged plan", stage d2c).
+                        return spatialMorphRenderToWorld(spatialMorphAnchoredPoint(d, wTile, wEdge, false), tile, op, axisDir);
                     });
                     started = true;
                     drawCurvedBezier(ends[0], ends[1], op.reflected ? mirrored : curveType, id[0], id[1]);

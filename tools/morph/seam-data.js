@@ -214,11 +214,12 @@ function buildCase(pat, kcase, seeds, nk) {
     w.setTimeline(ids);
     return { w, ids, c, info: K1.info };
 }
-// The endpoint invariants of the boundary rule (stage d2b), on the aligned corners of every segment of a case: for every endpoint the displacement between w = 0 and w = 1e-6 and between w = 1 - 1e-6 and w = 1
-// (static path: exactEnds false; front path: exactEnds true, where w = 0 / 1 are the keyframes' own positions), and for every line the length at w = 0.01 against the shorter of its two keyframe lines.
-// -> { endpoints, jumpLow, jumpHigh, lines, minRatio, below90, below90NotLinear }
+// The endpoint invariants of the boundary rule (stage d2b, kept by stage d2c), on the aligned corners of every segment of a case: for every endpoint the displacement between w = 0 and w = 1e-6 and between w = 1 - 1e-6 and w = 1
+// as the render draws it (exactEnds false: jumpLow / jumpHigh) and with exact ends (jumpExactLow / jumpExactHigh: what the front path did until stage d2c, where w = 0 / 1 are the keyframes' own positions: the
+// reason they are off), and for every line the length at w = 0.01 against the shorter of its two keyframe lines.
+// -> { endpoints, jumpLow, jumpHigh, jumpExactLow, jumpExactHigh, lines, minRatio, below90, below90NotLinear }
 function endpointInvariants(w, nk) {
-    const out = { endpoints: 0, jumpLow: 0, jumpHigh: 0, lines: 0, minRatio: Infinity, below90: 0, below90NotLinear: 0 };
+    const out = { endpoints: 0, jumpLow: 0, jumpHigh: 0, jumpExactLow: 0, jumpExactHigh: 0, lines: 0, minRatio: Infinity, below90: 0, below90NotLinear: 0 };
     const W = (x) => ({ w00: 1 - x, w10: x, w01: 0, w11: 0 }), len = (l) => Math.hypot(l.x2 - l.x1, l.y2 - l.y1);
     for (let seg = 0; seg < nk - 1; seg++) {
         const r = w.run(`(function () { const r = resolveTimelineKeyframeCoords(timeline, ${seg}); return { from: r.from, to: r.to }; })()`), poly = w.get('outerCorners');
@@ -227,8 +228,9 @@ function endpointInvariants(w, nk) {
         prep.forEach((pl, i) => {
             for (const e of ['a', 'b']) for (const exact of [false, true]) {
                 const d = pl[e]; out.endpoints++;
-                out.jumpLow = Math.max(out.jumpLow, dist(at(d, 0, exact), at(d, 1e-6, exact)));
-                out.jumpHigh = Math.max(out.jumpHigh, dist(at(d, 1 - 1e-6, exact), at(d, 1, exact)));
+                const lo = dist(at(d, 0, exact), at(d, 1e-6, exact)), hi = dist(at(d, 1 - 1e-6, exact), at(d, 1, exact));
+                if (exact) { out.jumpExactLow = Math.max(out.jumpExactLow, lo); out.jumpExactHigh = Math.max(out.jumpExactHigh, hi); }
+                else { out.jumpLow = Math.max(out.jumpLow, lo); out.jumpHigh = Math.max(out.jumpHigh, hi); }
             }
             const wt = W(0.01), line = M.spatialMorphAnchoredLine(pl, wt, wt, wt), shorter = Math.min(len(r.from[i]), len(r.to[i]));
             out.lines++;
