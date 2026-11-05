@@ -11,9 +11,13 @@ The standing rules for every session in this repo, once. Detail and history: `do
 - Use the terms of `docs/terminology.md`; no ad-hoc translations.
 
 ## Proof
-- Before every commit: the full suite, `tools/proof.sh L3 NNN` (about ten minutes). `tools/proof.sh L2 NNN`
-  (the three slow face/inherit suites skipped) only while iterating, never before a commit touching
-  `core/faces.js` or `core/facecolor.js`.
+- At the start: if HEAD equals the commit in `reports/last-green.json`, the run before the change is skipped.
+- Before a commit: the level the task names (`tools/proof.sh Lx NNN`), not automatically the full suite.
+- L3 (the full suite, about ten minutes) only when the task names L3. L2 skips the three slow
+  face/inherit suites, which guard `core/faces.js` and `core/facecolor.js`.
+- `proof.sh` prints only FAILED lines, the protected counts, `files` and `overall`; the line per file is in
+  `reports/logs/NNN-summary.txt`, `VERBOSE=1` prints it. A PASS at L2 / L3 on a clean tree writes
+  `reports/last-green.json` (local, ignored).
 - `tools/proof.sh L1 NNN`: `test-p5-names.js` and the two protected netwarp tests (61 and 57, each alone).
 - `tools/guard.sh BASIS` when a task says `sketch.js` and `core/` stay unchanged.
 - A new test is a `tools/<dir>/test-*.js` that exits non-zero on failure; the glob picks it up.
