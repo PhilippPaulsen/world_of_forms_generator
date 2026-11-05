@@ -13,8 +13,8 @@ engine. This repo is the canonical generator (`sketch.js` UI shell, portable `co
 - `docs/terminology.md` - German/English terms and naming.
 
 ## Proof
-- `tools/proof.sh L0|L1|L2|L3 NNN` - L0 syntax, L1 p5 names + protected tests (61, 57), L2 fast, L3 full
-  (mandatory before every commit). Logs in `reports/logs/`, one line per file, `overall: PASS|FAIL`.
+- `tools/proof.sh L0|L1|L2|L3 NNN` - L0 syntax, L1 p5 names + protected tests (61, 57), L2 fast, L3 full.
+  Before a commit: the level the task names. Short output; `VERBOSE=1` and `reports/logs/` have the rest.
 - `tools/guard.sh BASIS` - `sketch.js` and `core/` unchanged against BASIS.
 - Last full run: 2026-11-05, tree `1d393eda`, 95 files (91 `tools/` + 4 Farborgel), 0 failed.
 
