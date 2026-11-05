@@ -33,6 +33,9 @@
  *                       addToTimeline()), the functions the table, the rail, the strip and the
  *                       diamonds call - the old hidden #btn-add-layer / #btn-add-to-timeline are
  *                       only the FALLBACK of a tree that has no layerApi. The same state results.
+ *   morph_block / morph_block_radial   (morph stage e2b) right after the first keyframe: the Morph block opened by a real click on the Morph button of the visible layer view, the morph on (linear, then radial;
+ *                       with one keyframe the status line shows 'Zwei Keyframe-Ebenen nötig'): the three rows, the toggle, the mode radios, the angle stepper and the status line (TRACKED_MORPH, tracked in these two
+ *                       snapshots only); the Morph buttons of the three views and #morph-group are tracked everywhere; block closed and morph off afterwards
  *   timeline_more       the timeline strip's "Mehr" opened (real clicks) and closed again; since patterns commit C0b-6b also timeline_editor (the pairing toggle on) and timeline_list (the list icon), tracked with
  *                       TRACKED_PAIRING, in the cells where the pairing view is shown (768px and up of that commit on)
  *   layer_more          the layer "Mehr" opened (layerApi.toggleMore) and closed again
@@ -88,6 +91,8 @@
     '#layer-strip [data-key="chip:base"]', '#layer-strip [data-key="add"]', '#layer-strip [data-key="more"]', '#layer-strip [data-key^="dia:"]',
     '#timeline-strip .ts-play', '#timeline-strip .ts-range', '#timeline-strip .ts-net', '#timeline-strip .ts-more',
     '#timeline-group', '#layer-more-panel',
+    // morph stage e2b: the Morph button of each layer view (one shows per width, the others are null) and the Morph block (#morph-group, null while closed); the block's own parts are TRACKED_MORPH
+    '#layer-table .lt-morph', '#layer-rail .lt-morph', '#layer-strip .lt-morph', '#morph-group',
     // the net chapter: the Netz row (kind buttons, strength stepper, its Mehr trigger) and its overlay; #net-group is the (hidden) control group inside the overlay
     '#nav-netz',
     '#net-strength-value',
@@ -112,6 +117,10 @@
   // fix F2 (baseline-cleanup-10.json): the Farbe nav row (#nav-farbe) with the anchor views, the first harmony button, the two anchor steppers and the anchor-colour swatch. Tracked in the snapshots taken while the Farbe tab is
   // shown (data-tab="farbe"): elsewhere the row is hidden (null) and the file stays small.
   const TRACKED_FARBEROW = ['#nav-farbe', '#nav-anchor-views', '#farbe-family-circle', '#btn-harmony-2', '#farbe-anchor-hue-stepper', '#farbe-anchor-register-stepper', '#farbe-anchor-preview'];
+
+  // morph stage e2b: the parts of the Morph block - its three rows, the on/off toggle, the mode group and its three radios, the angle stepper (field and both chevrons) and the status line. Tracked ONLY in the two
+  // morph snapshots (morph_block, morph_block_radial): elsewhere the block is closed (null) and the file stays small.
+  const TRACKED_MORPH = ['#morph-group .ph-sheet-block > .ph-sheet-row:nth-child(1)', '#morph-group .ph-sheet-block > .ph-sheet-row:nth-child(2)', '#morph-group .ph-sheet-block > .ph-sheet-row:nth-child(3)', '#morph-toggle', '#morph-modes', '#morph-mode-linear', '#morph-mode-radial', '#morph-mode-bilinear', '#morph-angle', '#morph-angle-input', '#morph-angle .stepper-btn[data-dir="1"]', '#morph-angle .stepper-btn[data-dir="-1"]', '#morph-status'];
 
   // patterns commit C0b-6a (baseline-cleanup-8.json): the compact timeline group (#timeline-group, opened by the strip's "Mehr"): the icon row, its three buttons and the readout line. Tracked ONLY in the snapshot of the open
   // group (timeline_more), like TRACKED_TRAILS: elsewhere they would be null (the holder is hidden) and the file stays small.
@@ -174,10 +183,10 @@
     return (el.id ? '#' + el.id : el.tagName.toLowerCase() + (el.className ? '.' + String(el.className).split(' ')[0] : ''));
   }
 
-  function snap(withTrails, withTimeline, withPairing) {
+  function snap(withTrails, withTimeline, withPairing, withMorph) {
     const out = {};
     const farbeRow = document.documentElement.getAttribute('data-tab') === 'farbe';
-    TRACKED.concat(withTrails ? TRACKED_TRAILS : [], withTimeline ? TRACKED_TIMELINE : [], withPairing ? TRACKED_PAIRING : [], farbeRow ? TRACKED_FARBEROW : []).forEach((sel) => { const el = document.querySelector(sel); out[sel] = sel.indexOf('#ui-notices') === 0 ? rectViewport(el) : rect(el); });
+    TRACKED.concat(withTrails ? TRACKED_TRAILS : [], withTimeline ? TRACKED_TIMELINE : [], withPairing ? TRACKED_PAIRING : [], farbeRow ? TRACKED_FARBEROW : [], withMorph ? TRACKED_MORPH : []).forEach((sel) => { const el = document.querySelector(sel); out[sel] = sel.indexOf('#ui-notices') === 0 ? rectViewport(el) : rect(el); });
     const root = document.documentElement;
     out.scrollWidth = root.scrollWidth;
     out.clientWidth = root.clientWidth;
@@ -198,12 +207,12 @@
 
   // Every snapshot but the notice one is taken with NO notice showing: a notice that an earlier step raised (the net chapter's "Sin und Tan brauchen mindestens 4 Knoten" one) would still be
   // on screen in a fast recording and gone in a slow one. UI.hideToast() closes the non-sticky notices; one frame (or 80 ms where the page is hidden and no frame comes) lets the layout settle.
-  async function snapQ(keepNotices, withTrails, withTimeline, withPairing) {
+  async function snapQ(keepNotices, withTrails, withTimeline, withPairing, withMorph) {
     if (!keepNotices && window.UI && UI.hideToast) {
       UI.hideToast();
       await new Promise((r) => { let done = false; const fin = () => { if (!done) { done = true; r(); } }; if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fin); setTimeout(fin, 80); });
     }
-    return snap(withTrails, withTimeline, withPairing);
+    return snap(withTrails, withTimeline, withPairing, withMorph);
   }
 
   async function measureLayout(opts) {
@@ -333,6 +342,18 @@
     lt.layer_1_added = await snapQ();
     if (addToTimeline) { doAddToTimeline(); await sleep(wait); }
     lt.timeline_1_keyframe = await snapQ();
+    // morph stage e2b: the Morph block with ONE keyframe (the status line really shows 'Zwei Keyframe-Ebenen nötig'), linear and radial; opened by a real click on the visible Morph button, the morph switched on through the
+    // project API, everything put back afterwards (block closed, morph off, mode linear). A tree without ui-morph.js has no button and no snapshot.
+    {
+      const mbtn = [...document.querySelectorAll('.lt-morph')].find((b) => b.offsetParent !== null), mg = document.querySelector('#morph-group');
+      if (mbtn && mg && window.setSpatialMorph) {
+        if (!mg.classList.contains('mo-open')) { realClick(mbtn); await sleep(wait); }
+        window.setSpatialMorph({ enabled: true, mode: 'linear', angleDeg: 0 }); await sleep(wait); result.morph_block = await snapQ(false, false, false, false, true);
+        window.setSpatialMorph({ mode: 'radial' }); await sleep(wait); result.morph_block_radial = await snapQ(false, false, false, false, true);
+        window.setSpatialMorph({ enabled: false, mode: 'linear', angleDeg: 0 }); await sleep(wait);
+        if (mg.classList.contains('mo-open')) { realClick(mbtn); await sleep(wait); }
+      }
+    }
     if (addLayer) { doAddLayer(); await sleep(wait); }
     await drawLine();
     lt.layer_2_added = await snapQ();

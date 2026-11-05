@@ -54,6 +54,7 @@ function build(o) {
     const toggle = mk('morph-toggle', 'button', 'icon-btn morph-toggle', group), modes = mk('morph-modes', 'div', 'morph-modes', group);
     const radios = ['linear', 'radial', 'bilinear'].map(m => mk('morph-mode-' + m, 'button', 'icon-btn morph-mode-btn', modes));
     const angle = mk('morph-angle', 'div', 'stepper morph-angle', group), input = mk('morph-angle-input', 'input', '', angle), status = mk('morph-status', 'p', 'morph-status', group);
+    const chev = [1, -1].map((d) => { const c = doc.createElement('button'); c.className = 'stepper-btn'; angle.appendChild(c); return c; });
     const view = (id, groupCls, cells) => { const host = mk(id, 'div', '', doc.body), g = doc.createElement('div'); g.className = groupCls; host.appendChild(g); cells.forEach(c => { const b = doc.createElement('button'); b.className = c; g.appendChild(b); }); return host; };
     const views = o.views || [];
     const strip = views.includes('strip') ? view('layer-strip', 'lr-g2', ['lr-eye', 'lr-diamond', 'lr-more', 'lr-x']) : null;
@@ -65,6 +66,7 @@ function build(o) {
         onSync: fn => { syncs.push(fn); },
         name: (el, text) => { el.setAttribute('aria-label', text); el.title = text; },
         stepper: (root, opts) => { UI.stepperOpts = opts; UI.stepperRoot = root; },
+        setDisabled: (el, reason) => { if (reason) { el.setAttribute('aria-disabled', 'true'); el.title = reason; } else if (el.getAttribute('aria-disabled') === 'true') { el.removeAttribute('aria-disabled'); el.title = ''; } },
     };
     const ctx = vm.createContext({ console, document: doc, UI, additionalLayers: o.layers || [] });
     ctx.window = ctx;
@@ -74,7 +76,7 @@ function build(o) {
     if (o.i18n) vm.runInContext(I18N_SRC, ctx, { filename: 'ui-i18n.js' });
     if (o.layerTable) ctx.layerTable = o.layerTable;
     vm.runInContext(SRC, ctx, { filename: 'ui-morph.js' });
-    return { ctx, doc, byId, group, toggle, modes, radios, angle, input, status, strip, rail, table, model, syncs, UI, M: ctx.uiMorph,
+    return { ctx, doc, byId, group, toggle, modes, radios, angle, chev, input, status, strip, rail, table, model, syncs, UI, M: ctx.uiMorph,
         tick: () => syncs.forEach(f => f()),
         morphButtons: () => [strip, rail, table].map(h => h ? h.all().filter(e => e.cls.has('lt-morph')) : null),
         stepAngle: dir => { const r = UI.stepperOpts.compute(dir); input.value = UI.stepperOpts.format(r.to); input.dispatch('change'); } };
@@ -99,7 +101,7 @@ T('model', () => {
     check('...each error code has its own text, all different', (() => { const t = M.ERROR_CODES.map(c => M.statusText(st(c))); return t.every(x => x.length > 0) && new Set(t).size === t.length; })());
     check('...netActive and bilinearStatic: their notes', M.statusText(st('netActive')) === 'Netz wird ignoriert' && M.statusText(st('bilinearStatic')) === 'Bilinear: ohne Zeitverlauf');
     check('...seamOpen alone (code ok): "Naht offen: Ebene 1, 3" with the layer numbers (index + 1 without a layer table), the base sheet (-1) as "Basis"', M.statusText(st('ok', [0, 2])) === 'Naht offen: Ebene 1, 3' && M.statusText(st('ok', [-1, 0])) === 'Naht offen: Ebene Basis, 1');
-    check('PRIORITY: an error code beats seamOpen (needsTwoKeyframes + seamOpen: the error)', M.statusText(st('needsTwoKeyframes', [0])) === 'Zwei Keyframes nötig' && M.statusText(st('shapeMismatch', [1])) === 'Keyframes: Form verschieden');
+    check('PRIORITY: an error code beats seamOpen (needsTwoKeyframes + seamOpen: the error)', M.statusText(st('needsTwoKeyframes', [0])) === 'Zwei Keyframe-Ebenen nötig' && M.statusText(st('shapeMismatch', [1])) === 'Keyframes: Form verschieden');
     check('PRIORITY: seamOpen beats netActive and bilinearStatic (a seam open AND a net ignored shows the seam)', M.statusText(st('netActive', [0])) === 'Naht offen: Ebene 1' && M.statusText(st('bilinearStatic', [2])) === 'Naht offen: Ebene 3');
     check('...an empty seamOpen lets the note show', M.statusText(st('netActive', [])) === 'Netz wird ignoriert');
     check('layerName: with the layer table the running number it shows (layerDisplayNumber), without it index + 1; the base is "Basis"', (() => {
@@ -200,12 +202,17 @@ T('controls', () => {
 T('refresh', () => {
     const b = build({ views: ['strip', 'rail', 'table'] });
     b.model.block = { enabled: true, mode: 'radial', angleDeg: 90 }; b.tick();
-    check('a tick shows the block: the toggle pressed and active, only the selected mode checked, the angle row hidden for radial, "90°" in the field', b.toggle.getAttribute('aria-pressed') === 'true' && b.toggle.cls.has('active') && b.radios.map(r => r.getAttribute('aria-checked')).join() === 'false,true,false' && b.radios[1].cls.has('active') && !b.radios[0].cls.has('active') && b.angle.hidden === true && b.input.value === '90°');
+    check('a tick shows the block: the toggle pressed and active, only the selected mode checked, the angle row aria-disabled (not hidden) for radial, "90°" in the field', b.toggle.getAttribute('aria-pressed') === 'true' && b.toggle.cls.has('active') && b.radios.map(r => r.getAttribute('aria-checked')).join() === 'false,true,false' && b.radios[1].cls.has('active') && !b.radios[0].cls.has('active') && b.angle.getAttribute('aria-disabled') === 'true' && b.angle.hidden === false && b.input.value === '90°');
     check('the modes are ONE tab stop (roving tabindex): only the selected radio has tabindex 0, the others -1', b.radios.map(r => r.getAttribute('tabindex')).join() === '-1,0,-1');
     b.model.block.mode = 'linear'; b.tick();
-    check('linear shows the angle row (not hidden)', b.angle.hidden === false);
+    const stops = () => [b.input, ...b.chev].map((e) => e.getAttribute('tabindex')).join();
+    check('linear: the angle row is operable: not aria-disabled, no title, no tabindex on the field or the two chevrons', !b.angle.hasAttribute('aria-disabled') && b.angle.title === '' && stops() === ',,' && b.angle.hidden === false, stops());
     b.model.block.mode = 'bilinear'; b.tick();
-    check('bilinear hides it again', b.angle.hidden === true);
+    check('bilinear: the row is STILL THERE (never hidden), aria-disabled with the title "Winkel: nur bei linear", and has no focus stop (tabindex -1 on the field and both chevrons)', b.angle.hidden === false && b.angle.getAttribute('aria-disabled') === 'true' && b.angle.title === 'Winkel: nur bei linear' && stops() === '-1,-1,-1', stops());
+    b.model.block.mode = 'radial'; b.tick();
+    check('radial: the same; back to linear gives the operable row again (the focus stops and the title are taken away)', b.angle.getAttribute('aria-disabled') === 'true' && stops() === '-1,-1,-1' && (b.model.block.mode = 'linear', b.tick(), !b.angle.hasAttribute('aria-disabled') && b.angle.title === '' && stops() === ',,'));
+    check('the row is never hidden in any mode and the module never writes `hidden` (the row keeps its height, nothing below it moves)', ['linear', 'radial', 'bilinear', 'linear'].every((m) => { b.model.block.mode = m; b.tick(); return b.angle.hidden === false; }) && !/angleEl\.hidden/.test(SRC.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')));
+    { const e = build({ i18n: true, views: ['strip'] }); e.ctx.uiI18n.setLang('en'); e.model.block = { enabled: true, mode: 'radial', angleDeg: 0 }; e.tick(); check('in English the reason reads "Angle: linear only"', e.angle.title === 'Angle: linear only', e.angle.title); }
     // refresh only on a changed signature
     const count = () => [b.toggle, b.status, b.input, b.angle, ...b.radios, ...b.morphButtons().map(a => a[0])].reduce((a, e) => a + e.writes, 0) + b.input.writes;
     b.tick(); const w0 = count();
@@ -255,6 +262,33 @@ T('escape', () => {
     check('...the focus goes to the button that has a box (offsetParent), not to a hidden one', c.doc.activeElement === c.morphButtons()[2][0]);
 });
 
+// ================= 3b. the status texts for their REAL causes (morph stage e2b) =================
+// No stubbed status: each case builds real layers in the render harness (tools/morph/render-harness.js, the real core files) and draws a real frame; the text is the one the view shows for what spatialMorphStatus() reports.
+console.log('\n== the status texts for their real causes ==');
+T('real causes', () => {
+    const { makeRenderWorld } = require('../morph/render-harness.js');
+    const real = (w, mode) => { w.setMorph({ enabled: true, mode: mode || 'linear', angleDeg: 0 }); w.frame(); return w.status(); };
+    const K0 = [[2, 3], [3, 6], [6, 14], [14, 13], [13, 7], [7, 2]], K1 = [[4, 6], [6, 10], [10, 14], [14, 12], [12, 7], [7, 4]];
+    const mk = (shape, order, size, sym) => { const w = makeRenderWorld(shape, order, size, sym); w.baseConnections([]); return w; };
+    const cases = [
+        ['needsTwoKeyframes: ONE keyframe layer, an empty base', () => { const w = mk('triangle', 3, 5, 'rotation_reflection6'); w.addKeyframeLayer([[1, 5]]); return real(w); }, 'needsTwoKeyframes', 'Zwei Keyframe-Ebenen nötig'],
+        ['needsTwoKeyframes: the base has another line count than the ONE layer (the base is no keyframe)', () => { const w = mk('triangle', 3, 5, 'rotation_reflection6'); w.baseConnections([[2, 3]]); w.addKeyframeLayer([[1, 5], [2, 3]]); return real(w); }, 'needsTwoKeyframes', 'Zwei Keyframe-Ebenen nötig'],
+        ['shapeMismatch: a triangle layer and a square layer', () => { const w = mk('triangle', 3, 5, 'rotation_reflection6'); w.addKeyframeLayer([[1, 5]]); w.addKeyframeLayer([[1, 4]], { shape: 'square', order: 3 }); return real(w); }, 'shapeMismatch', 'Keyframes: Form verschieden'],
+        ['lineCountMismatch: 1 line against 2', () => { const w = mk('triangle', 3, 5, 'rotation_reflection6'); w.addKeyframeLayer([[1, 5]]); w.addKeyframeLayer([[1, 4], [2, 3]]); return real(w); }, 'lineCountMismatch', 'Keyframes: Linienzahl verschieden'],
+        ['parameterMismatch: another symmetry mode', () => { const w = mk('triangle', 3, 5, 'rotation_reflection6'); w.addKeyframeLayer([[1, 5]]); w.addKeyframeLayer([[1, 4]], { mode: 'rotation6' }); return real(w); }, 'parameterMismatch', 'Keyframes: Größe/Symmetrie verschieden'],
+        ['parameterMismatch: another size factor', () => { const w = mk('triangle', 3, 5, 'rotation_reflection6'); w.addKeyframeLayer([[1, 5]]); w.addKeyframeLayer([[1, 4]], { size: 4 }); return real(w); }, 'parameterMismatch', 'Keyframes: Größe/Symmetrie verschieden'],
+        ['bilinearStatic: two keyframes, bilinear', () => { const w = mk('triangle', 3, 5, 'rotation_reflection6'); w.addKeyframeLayer([[1, 5]]); w.addKeyframeLayer([[1, 4]]); return real(w, 'bilinear'); }, 'bilinearStatic', 'Bilinear: ohne Zeitverlauf'],
+        ['netActive: a net on the (square) base', () => { const w = mk('square', 4, 5, 'rotation_reflection6'); w.addKeyframeLayer([[1, 5]]); w.addKeyframeLayer([[1, 6]]); w.run('baseNetTransform = { x: { kind: "trig", w: -0.5 }, y: "same", repeat: false, domain: "field" };'); return real(w); }, 'netActive', 'Netz wird ignoriert'],
+        ['seamOpen: two open keyframe layers (order 5, symmetry none)', () => { const w = mk('triangle', 5, 3, 'none'); w.addKeyframeLayer(K0); w.addKeyframeLayer(K1); return real(w); }, 'ok', 'Naht offen: Ebene 1, 2'],
+        ['seamOpen with the base fallback: an open base and ONE layer', () => { const w = mk('triangle', 5, 3, 'none'); w.baseConnections(K1); w.addKeyframeLayer(K0); return real(w); }, 'ok', 'Naht offen: Ebene Basis, 1'],
+    ];
+    cases.forEach(([name, run, code, text]) => {
+        const stt = run(), shown = M.statusText(stt, []);
+        check(`real cause - ${name}: spatialMorphStatus().code is ${code} and the line reads "${text}" (${text.length} characters)`, stt.code === code && shown === text && shown.length <= 40, J([stt.code, shown]));
+    });
+    check('the codes alignmentFailed and renderError have no real cause the UI can produce (changing a keyframe layer cleans the timeline or gives lineCountMismatch / parameterMismatch; nothing throws): they are covered by their text only', M.statusText({ code: 'alignmentFailed' }, []) === 'Zuordnung nicht möglich' && M.statusText({ code: 'renderError' }, []) === 'Morph nicht darstellbar');
+});
+
 // ================= 4. the source =================
 console.log('\n== the source text ==');
 T('source', () => {
@@ -275,6 +309,12 @@ T('source', () => {
     check('closed means gone: #morph-group:not(.mo-open) is display none (the first rule), and the sheet under the phone layout takes it as display: contents', /#morph-group:not\(\.mo-open\) \{ display: none; \}/.test(region) && /html\.sr-morph\.ph #morph-group[^{]*\{ display: contents; \}/.test(region));
     check('the status line has a RESERVED height (height: 20px, one line, ellipsis) so a text never shifts a neighbour', /#morph-status \{[^}]*height: 20px[^}]*white-space: nowrap[^}]*text-overflow: ellipsis/.test(region));
     check('the angle field is never narrower than the longest label "315\u00B0" (39 px at 16 px; found clipped at the fine pointer\'s 36 px): min-width 44px next to width var(--target)', /\.morph-angle input \{[^}]*width: var\(--target\)[^}]*min-width: 44px/.test(region));
+    const dimRule = /\.morph-angle\[aria-disabled="true"\] \{([^}]*)\}/.exec(region);
+    check('the dimmed angle row (aria-disabled, radial and bilinear) changes ONLY its look: opacity and pointer-events, nothing that takes space (no display, height, width, margin, padding, visibility, position, transform, overflow); there is no [hidden] rule for it', !!dimRule && /opacity:\s*0\.4/.test(dimRule[1]) && /pointer-events:\s*none/.test(dimRule[1]) && !/(^|;|\s)(display|height|width|margin|padding|visibility|position|transform|overflow|min-height|max-height)\s*:/.test(dimRule[1]) && !/morph-angle\[hidden\]/.test(region));
+    // the recorders (stage e2b): the Morph buttons of the three views and the block with its parts, and the two snapshots
+    const ML = fs.readFileSync(path.join(ROOT, 'tools/ui/measure-layout.js'), 'utf8'), MP = fs.readFileSync(path.join(ROOT, 'tools/ui/measure-phone.js'), 'utf8');
+    check('tools/ui/measure-layout.js tracks the Morph button of the strip, the rail and the table, #morph-group, and (in TRACKED_MORPH) its three rows, the toggle, the modes and the three radios, the angle stepper with its field and both chevrons and the status line; it takes the snapshots morph_block and morph_block_radial', ['#layer-table .lt-morph', '#layer-rail .lt-morph', '#layer-strip .lt-morph', "'#morph-group'"].every((x) => ML.indexOf(x) >= 0) && ['nth-child(1)', 'nth-child(2)', 'nth-child(3)', '#morph-toggle', '#morph-modes', '#morph-mode-linear', '#morph-mode-radial', '#morph-mode-bilinear', "'#morph-angle'", '#morph-angle-input', 'data-dir="1"', 'data-dir="-1"', '#morph-status'].every((x) => /const TRACKED_MORPH = \[.*\];/.exec(ML)[0].indexOf(x) >= 0) && /result\.morph_block = await snapQ\(false, false, false, false, true\)/.test(ML) && /result\.morph_block_radial = await snapQ\(false, false, false, false, true\)/.test(ML));
+    check('tools/ui/measure-phone.js takes the states morph_block and morph_block_radial (the Morph sheet open, the three rows, the angle row, the status line, the strip\'s Morph button), at the start of phone2(), and puts the morph back off', /states\.morph_block = snapMorph\(\)/.test(MP) && /states\.morph_block_radial = snapMorph\(\)/.test(MP) && ['#ph-sheet-morph .ph-sheet-row[0]', '#ph-sheet-morph .ph-sheet-row[2]', "'#morph-angle'", "'#morph-status'", "'#layer-strip .lt-morph'"].every((x) => MP.indexOf(x) >= 0) && /setSpatialMorph\(\{ enabled: false, mode: 'linear', angleDeg: 0 \}\)/.test(MP));
     check('the arrow turns by a custom property (--morph-angle), not by layout', /\.morph-angle-icon \{ transform: rotate\(var\(--morph-angle, 0deg\)\); \}/.test(region));
     check('the region is gated: every selector of it starts with html.sr-morph, .lt-morph, .layer-table .lt-morph or #morph-group (nothing above the region mentions sr-morph)', rules.every(r => /^(html\.sr-morph|\.lt-morph|\.layer-table \.lt-morph|#morph-group|@media|html\.sr-morph\.ph)/.test(r.replace(/^\s+/, ''))) && !/sr-morph/.test(CSS.slice(0, at - 200)), rules.filter(r => !/^(html\.sr-morph|\.lt-morph|\.layer-table \.lt-morph|#morph-group|@media|html\.sr-morph\.ph)/.test(r.replace(/^\s+/, ''))).map(r => r.slice(0, 50)).join(' || '));
     check('the dot: the Morph button is a .nav-more, so the existing .nav-more.has-state::after rule draws it (no copy of the dot in the region)', /nav-more'/.test(SRC) || /className = 'icon-btn lt-morph nav-more/.test(SRC)) ;
