@@ -37,7 +37,6 @@ const spatialMorphRenderState = {
     seamLastMs: 0,       // the duration of the last computation (ms), for the page measurement
     colorCache: new Map(),   // morph stage 006b: corner key -> { sig, value } (the colour field of a corner keyframe)
     colorBuilds: 0,          // how often a corner field was BUILT (not looked up): the cache is visible to the tests
-    paletteLin: [],          // the default corner palettes in linear light (built on first use)
     faceStats: null,     // morph stage f1: { tiles, tilesWithFaces, faces } of the last morph frame (all 0 when no face was asked for or the net is no FIELD warp)
 };
 
@@ -267,12 +266,13 @@ function spatialMorphRenderTileFaces(lines, s, sheet) {
     }
 }
 
-// ---- FACE COLOUR (morph stage 006b) --------------------------------------------------------------------------------------------------------------------------------------------------------
-// The prototype's way (_buildCornerColorReferences / _sampleCornerColorForFace / drawSpatialMorphFaceFillsAtTile): every CORNER keyframe has a colour FIELD (its faces in the cell, each in its colour); a morph face is sampled
-// in each corner's field at its centroid and 6 inner points, and the tile mixes the corner colours with ITS corner weights (weightsAt(tile centre)) in LINEAR LIGHT. A corner whose weight is 0 is not sampled
-// (at progress 0 the frame is keyframe 0's colours exactly). A corner keyframe WITHOUT a colour of its own (no harmony applied, no assignment except the default grays) takes the prototype's default palette of its
-// corner, by area rank. NOTHING is written to a keyframe's store: the faces come from computeCellFaces() with NO store (so no reconciliation and no ensureDefaultGrayFill()), the store is only READ
-// (applyFaceAssignments() reads it, the store object is read straight from the layer, faceAssignmentsFor() would create a missing one), and the fields are cached here, not in the layer.
+// ---- FACE COLOUR (morph stages 006b / 010) ----------------------------------------------------------------------------------------------------------------------------------------------------
+// The prototype's way (_buildCornerColorReferences / drawSpatialMorphFaceFillsAtTile), with the fill of the NORMAL image: every CORNER keyframe (a sheet: the base or a layer) has a colour FIELD, the faces of its cell
+// each in the colour the normal frame fills them with (computeCellFaces() with the sheet's face store: the assigned colours, and the default grays ensureDefaultGrayFill() gives every other trail; stage 010: a
+// gray IS a fill, there is no replacement palette). A morph face takes the mean of that field over the face (area weighted, spatialMorphFaceSamples() on a raster of the field: a face that moves across a field
+// boundary glides from one colour to the other instead of jumping), and the tile mixes the corner colours with ITS corner weights (weightsAt(tile centre)) in LINEAR LIGHT. A corner whose weight is 0 is not
+// sampled (at progress 0 the frame is keyframe 0's colours). NOTHING is written to a keyframe's store: computeCellFaces() gets a COPY of the store (the reconciliation and the gray fill it does land in the copy),
+// the store object itself is only read, straight from the layer (faceAssignmentsFor() would create a missing one), and the fields are cached here, not in the layer.
 
 // The sheet ids of the four corners [K00, K10, K01, K11] ('base' or an index into additionalLayers), the way spatialMorphChooseCorners() fills them: two keyframes repeat on the 01 / 11 corners.
 function spatialMorphRenderCornerIds(plan, mode, keyframeCount) {
@@ -289,26 +289,12 @@ function spatialMorphRenderColorSheet(id) {
     return { connections: layer.connections, nodes: layer.nodes, store: layer.faceAssignments || null, sheet: (typeof faceSheetOverrideOfLayer === 'function') ? faceSheetOverrideOfLayer(layer) : null, id };
 }
 
-// Does this corner sheet have a colour of its own? A harmony applied (lastHarmonyTypeFor), or a store entry that is not the default gray fill (rule 'max-contrast-gray') - the prototype's test.
-function spatialMorphRenderHasColor(cs) {
-    if (typeof lastHarmonyTypeFor === 'function' && lastHarmonyTypeFor(cs.id) !== null) return true;
-    if (cs.store && cs.store.size > 0) for (const e of cs.store.values()) if (e && e.rule !== 'max-contrast-gray') return true;
-    return false;
-}
-
-const spatialMorphRenderPaletteLin = (cornerIdx) => spatialMorphRenderState.paletteLin[cornerIdx % 4] || (spatialMorphRenderState.paletteLin[cornerIdx % 4] = spatialMorphDefaultCornerPalettes[cornerIdx % 4].map((c) => cssColorToLinear('#' + c.map((x) => x.toString(16).padStart(2, '0')).join(''))));
-
-// The colour field of one corner: { colored, field: [{ poly, minX, maxX, minY, maxY, lin }] } (lin = linear light), cached by a signature of everything it depends on. null when it cannot be built.
-// A COLOURED corner (a harmony or an assignment): the faces of the keyframe layer's own cell (the store's keys are the trail keys of THESE faces), coloured by its store. An UNCOLOURED corner: the faces of the
-// corner's lines as the morph draws them (geo.lines[cornerIdx], projected endpoints included, so at p = 0 and p = 1 the field IS the morph's own faces), by area rank from the corner's default palette
-// (the prototype builds this field from the interpolated corner geometry too).
-function spatialMorphRenderCornerField(id, cornerIdx, geo) {
+// The colour field of one corner as a raster: { raster } (cells hold linear-light colours), cached by a signature of everything it depends on (the lines, the store's content, the grid). null when it cannot be built.
+function spatialMorphRenderCornerField(id, cornerIdx) {
     const cs = spatialMorphRenderColorSheet(id);
     if (!cs || typeof computeCellFaces !== 'function' || typeof cssColorToLinear !== 'function') return null;
-    const colored = spatialMorphRenderHasColor(cs);
     const lay = cs.sheet || { shape: currentShape, symmetryMode, outerCorners };
-    const cornerLines = (!colored && geo && geo.lines) ? geo.lines[cornerIdx] : null;
-    const sig = JSON.stringify([colored ? cs.connections : cornerLines, colored && cs.store ? [...cs.store] : null, colored, cornerIdx, lay.shape, lay.symmetryMode, cs.nodes.length, lay.outerCorners && lay.outerCorners[0]]);
+    const sig = JSON.stringify([cs.connections, cs.store ? [...cs.store] : null, lay.shape, lay.symmetryMode, cs.nodes.length, lay.outerCorners && lay.outerCorners[0]]);
     const st = spatialMorphRenderState;
     const key = String(id) + '#' + cornerIdx;
     const hit = st.colorCache.get(key);
@@ -319,34 +305,27 @@ function spatialMorphRenderCornerField(id, cornerIdx, geo) {
     try {
         activeNetWarp = null;
         if (typeof segmentCollector !== 'undefined') segmentCollector = null;
-        let res;
-        if (colored) {
-            // the cell closed by a border polygon of the sheet's outer corners (as the morph's own faces are, spatialMorphRenderTileFaces()), so every region has a colour; NO store: nothing is reconciled or filled in
-            const gridNodes = cs.nodes.slice();
-            const conns = cs.connections.filter((c) => Array.isArray(c) && c.length === 2).map((c) => c.slice());
-            const oc = cs.sheet ? cs.sheet.outerCorners : outerCorners;
-            const border = oc.map((p, k) => ({ id: -1000001 - k, x: p.x, y: p.y, free: true }));
-            border.forEach((n, k) => { gridNodes.push(n); conns.push([n.id, border[(k + 1) % border.length].id]); });
-            res = computeCellFaces(conns, gridNodes, null, null, cs.sheet);
-            if (cs.store && typeof sheetGroupElements === 'function' && typeof applyFaceAssignments === 'function') {
-                const group = sheetGroupElements(cs.nodes, cs.sheet);
-                if (group) applyFaceAssignments(res, cs.store, group);   // reads the store, recolours the fresh faces
-            }
-        } else {
-            res = geo && cornerLines ? spatialMorphRenderTileFaces(cornerLines, geo.s, geo.sheet) : { nodes: [], faces: [] };
-        }
+        // the cell closed by a border polygon of the sheet's outer corners (as the morph's own faces are, spatialMorphRenderTileFaces()), so every region has a colour
+        const gridNodes = cs.nodes.slice();
+        const conns = cs.connections.filter((c) => Array.isArray(c) && c.length === 2).map((c) => c.slice());
+        const oc = cs.sheet ? cs.sheet.outerCorners : outerCorners;
+        const border = oc.map((p, k) => ({ id: -1000001 - k, x: p.x, y: p.y, free: true }));
+        border.forEach((n, k) => { gridNodes.push(n); conns.push([n.id, border[(k + 1) % border.length].id]); });
+        // a COPY of the store: the normal frame's fill, the real store is not touched. First the NORMAL frame's own call (no border): it gives the sheet's trails their fill (assigned colour, or the default gray whose
+        // value depends on how many trails there are), so a layer that was never drawn gets the grays its normal image would show; then the border-closed cell on the same copy (fill only: the new trails get theirs)
+        const copy = new Map(cs.store || []);
+        computeCellFaces(cs.connections, cs.nodes, copy, null, cs.sheet);
+        const res = computeCellFaces(conns, gridNodes, copy, null, cs.sheet);
         const nodeById = new Map(res.nodes.map((n) => [n.id, n]));
-        const ranks = spatialMorphFaceRanks(res.faces.map((f) => f.area));
-        const pal = spatialMorphRenderPaletteLin(cornerIdx);
-        const field = [];
-        res.faces.forEach((f, i) => {
+        const entries = [];
+        res.faces.forEach((f) => {
             const poly = f.nodeIds.map((nid) => nodeById.get(nid)).filter(Boolean).map((n) => ({ x: n.x, y: n.y }));
-            if (poly.length < 3) return;
-            const lin = colored ? cssColorToLinear(f.color) : pal[(ranks[i] + (f.connIndex || 0)) % pal.length];
-            const xs = poly.map((p) => p.x), ys = poly.map((p) => p.y);
-            field.push({ poly, minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys), lin });
+            if (poly.length >= 3) entries.push({ poly, lin: cssColorToLinear(f.color) });
         });
-        value = { colored, field };
+        const xs = oc.map((p) => p.x), ys = oc.map((p) => p.y);
+        const box = { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+        const n = Math.max(32, Math.min(256, Math.ceil(Math.max(box.maxX - box.minX, box.maxY - box.minY) / 1.5)));   // about 1.5 px per texel
+        value = { raster: spatialMorphRasterizeField(entries, box, n) };
     } catch (e) {
         value = null;
     } finally {
@@ -358,43 +337,31 @@ function spatialMorphRenderCornerField(id, cornerIdx, geo) {
     return value;
 }
 
-// The four corner fields of a frame [K00, K10, K01, K11] (a corner that repeats another sheet shares its field; one that cannot be built is null).
-function spatialMorphRenderCornerFields(cornerIds, keyframeCount, mode, geo) {
+// The four corner fields of a frame [K00, K10, K01, K11] (a corner that repeats another sheet is not built: its weight is 0; one that cannot be built is null).
+function spatialMorphRenderCornerFields(cornerIds, keyframeCount, mode) {
     const bil = spatialMorphNormalizeMode(mode) === 'bilinear';
-    const needed = [true, true, bil && keyframeCount >= 3, bil && keyframeCount >= 4];   // the 01 / 11 corners of a two-keyframe blend repeat 00 / 10 with weight 0: no field is built for them
-    return cornerIds.map((id, k) => (id === undefined || !needed[k] ? null : spatialMorphRenderCornerField(id, k, geo)));
+    const needed = [true, true, bil && keyframeCount >= 3, bil && keyframeCount >= 4];
+    return cornerIds.map((id, k) => (id === undefined || !needed[k] ? null : spatialMorphRenderCornerField(id, k)));
 }
 
-// A corner field sampled at the points of one face: the mean linear colour of the points that fall in a field face, or null when none does.
-function spatialMorphRenderSampleField(cf, samples) {
-    if (!cf) return null;
-    const acc = [0, 0, 0];
-    let n = 0;
-    for (const p of samples) {
-        for (const e of cf.field) {
-            if (p.x < e.minX || p.x > e.maxX || p.y < e.minY || p.y > e.maxY) continue;
-            if (pointInPolygon(p, e.poly)) { acc[0] += e.lin[0]; acc[1] += e.lin[1]; acc[2] += e.lin[2]; n++; break; }
-        }
-    }
-    return n ? [acc[0] / n, acc[1] / n, acc[2] / n] : null;
-}
-
-// The colours of the faces of one tile: ['#rrggbb', ...] parallel to res.faces, or null when nothing can be said (the caller then keeps the faces' own colours). w = the tile's corner weights.
+// The colours of the faces of one tile: ['#rrggbb', ...] parallel to res.faces, or null when nothing can be said (the caller then keeps the faces' own colours). w = the tile's corner weights. A corner whose field
+// has no colour under the face (no texel is in a face) takes no part in that face's mix.
 function spatialMorphRenderFaceColors(res, fields, w) {
     try {
         if (!res || !res.faces || res.faces.length === 0) return null;
         const weights = [w.w00, w.w10, w.w01, w.w11];
         const nodeById = new Map(res.nodes.map((n) => [n.id, n]));
-        const ranks = spatialMorphFaceRanks(res.faces.map((f) => f.area));
-        return res.faces.map((face, i) => {
-            const pts = face.nodeIds.map((nid) => nodeById.get(nid)).filter(Boolean);
-            const samples = spatialMorphFaceSamplePoints(pts);
+        return res.faces.map((face) => {
+            const samples = spatialMorphFaceSamples(face.nodeIds.map((nid) => nodeById.get(nid)).filter(Boolean));
             const cols = weights.map((wk, k) => {
-                if (!(wk > 0)) return null;
-                const lin = spatialMorphRenderSampleField(fields[k], samples);
-                if (lin) return lin;
-                const pal = spatialMorphRenderPaletteLin(k);   // a miss (a sample outside the corner's field): the corner's default palette by rank
-                return pal[(ranks[i] + (face.connIndex || 0)) % pal.length];
+                if (!(wk > 0) || !fields[k]) return null;
+                const acc = [0, 0, 0];
+                let sum = 0;
+                for (const s of samples) {
+                    const lin = spatialMorphRasterSample(fields[k].raster, s.x, s.y);
+                    if (lin) { acc[0] += s.w * lin[0]; acc[1] += s.w * lin[1]; acc[2] += s.w * lin[2]; sum += s.w; }
+                }
+                return sum > 0 ? [acc[0] / sum, acc[1] / sum, acc[2] / sum] : null;
             });
             const mix = spatialMorphMixLinear(cols, weights);
             return mix ? linearToHex(mix) : face.color;
@@ -498,10 +465,7 @@ function spatialMorphRenderDraw(sm) {
         const faceSheet = (plan.ids && plan.ids[0] !== 'base') ? { shape: s.shape, symmetryMode: s.symmetryMode, centroid: s.centroid, outerCorners: s.outerCorners, gridMatchesBase: true } : null;   // the field warp in force was built for THIS grid, so its faces are exact
         const faceStats = { tiles: 0, tilesWithFaces: 0, faces: 0 };
         spatialMorphRenderState.faceStats = faceStats;
-        // morph stage 006b: the colour fields of the corner keyframes; geo = the corners' own lines (unit weights: the keyframe's lines as the morph draws them at p = 0 / p = 1), for an uncoloured corner
-        const unit = [{ w00: 1, w10: 0, w01: 0, w11: 0 }, { w00: 0, w10: 1, w01: 0, w11: 0 }, { w00: 0, w10: 0, w01: 1, w11: 0 }, { w00: 0, w10: 0, w01: 0, w11: 1 }];
-        const geoOf = () => ({ s, sheet: faceSheet, lines: unit.map((wk) => prepared.map((pl) => [pl.a, pl.b].map((d) => spatialMorphAnchoredPoint(d, wk, (d.onBoundary && d.moved) ? wk : null, false)))) });
-        const cornerFields = facesDrawn ? spatialMorphRenderCornerFields(spatialMorphRenderCornerIds(plan, mode, aligned.keyframeCount), aligned.keyframeCount, mode, geoOf()) : null;
+        const cornerFields = facesDrawn ? spatialMorphRenderCornerFields(spatialMorphRenderCornerIds(plan, mode, aligned.keyframeCount), aligned.keyframeCount, mode) : null;   // morph stages 006b / 010: the colour fields of the corner keyframes
 
         strokeWeight(2);
         for (let t = 0; t < tiles.length; t++) {

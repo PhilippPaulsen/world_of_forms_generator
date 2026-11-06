@@ -1,14 +1,16 @@
-// Guard for the COLOUR of the faces of the spatial morph (morph stage 006b): core/spatial-morph-render.js spatialMorphRenderCornerField() / FaceColors() and the pure helpers of core/spatial-morph.js
-// (spatialMorphDefaultCornerPalettes, FaceSamplePoints, FaceRanks, MixLinear). Runs the REAL core files in a vm (tools/morph/render-harness.js) with p5 stand-ins that record every fill.
+// Guard for the COLOUR of the faces of the spatial morph (morph stages 006b / 010): core/spatial-morph-render.js spatialMorphRenderCornerField() / FaceColors() and the pure helpers of core/spatial-morph.js
+// (spatialMorphFaceSamples, PolygonContains, RasterizeField, RasterSample, MixLinear). Runs the REAL core files in a vm (tools/morph/render-harness.js) with p5 stand-ins that record every fill.
 // The measures (not "the polygon is closed"; every one is a check below):
 //   a. COLOURED keyframes (one assignment per face, a hue each): every tile of the frame at p = 0.5 has MORE THAN ONE distinct fill colour;
 //   b. the colours at p = 0 and p = 1 are the colours of the keyframe layers: for every face the distance (largest channel difference, sRGB bytes) to the nearest colour of that keyframe's field; the
-//      threshold is stated at the check (a rounding error of the linear-light mix is 1, a face that lies across two keyframe faces mixes both colours: only a share of the faces may exceed it);
-//   c. the gradient over 21 values of p is CONTINUOUS: the largest jump of the frame's area-weighted mean colour between neighbouring values of p is reported and bounded by the total change / 4;
-//   d. UNCOLOURED keyframes give the default palettes of their corners, not a uniform gray: at p = 0 every fill is a colour of palette 0 (or the mix of two of them), at p = 1 of palette 1;
-//   plus: the mixing space is LINEAR LIGHT (uniform fields A and B, a tile with 0 < w < 1: the fill is linearToHex((1 - t) A + t B), which is not the sRGB mean); no keyframe store is written or created,
-//   faceAssignmentsFor / applyAssignmentsLazily / ensureDefaultGrayFill are never called; the corner fields are cached (no rebuild for the same frame) and rebuilt when an assignment changes;
-//   the pure helpers; Single / Tiled nets stay without faces; the status text "Morph faces: field net only" is unchanged; new top-level names carry the prefix spatialMorph[A-Z].
+//      threshold is stated at the check;
+//   c. the gradient over 21 values of p is CONTINUOUS (mean colour), and (stage 010) no face JUMPS: tools/morph/measure-color-jumps.js follows the faces of every tile from p to p + 0.02; the number of
+//      faces with a jump above 12 and the largest jump are bounded by the measurement (thresholds at the checks);
+//   e. (stage 010) a GRAY IS A FILL: with keyframes whose fill is the default gray (a store filled by a normal frame, or a layer that was never drawn), the colour of every face at p = 0 and p = 1 equals the colour
+//      of the NORMAL image of that layer (computeCellFaces() with the layer's store), and there is no replacement palette;
+//   plus: the mixing space is LINEAR LIGHT (uniform fields A and B, a tile with 0 < w < 1: the fill is linearToHex((1 - t) A + t B), which is not the sRGB mean); no keyframe store is written or created, no
+//   store function ever gets a REAL store (only copies), faceAssignmentsFor is never called; the corner fields are cached and rebuilt when an assignment changes; the pure helpers; Single / Tiled nets stay
+//   without faces; the status text "Morph faces: field net only" is unchanged; new top-level names carry the prefix spatialMorph[A-Z].
 //   node tools/morph/test-spatial-morph-color.js            (--print prints the measured numbers)
 //   SPATIAL_MORPH_RENDER_JS=/path/to/sabotaged-copy.js node tools/morph/test-spatial-morph-color.js        (sabotage runs)
 'use strict';
@@ -17,6 +19,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..', '..');
 const { makeRenderWorld } = require('./render-harness.js');
 const M = require(path.join(ROOT, 'core', 'spatial-morph.js'));
+const { measureJumps } = require('./measure-color-jumps.js');
 
 let failures = 0, checks = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
@@ -36,11 +39,13 @@ const STUB = `
   endShape = (m) => { __polys.push({ fill: __fill, pts: __cur }); __cur = null; };
   var CLOSE = 'close';
   { const f = spatialMorphRenderFillFaces; spatialMorphRenderFillFaces = function () { const a = __polys.length; const r = f.apply(this, arguments); __tiles.push({ a, b: __polys.length }); return r; }; }
-  var __gray = 0, __lazy = 0, __assign = 0, __cf = computeCellFaces, __cfStores = [];
-  { const g = ensureDefaultGrayFill; ensureDefaultGrayFill = function () { __gray++; return g.apply(this, arguments); }; }
-  { const l = applyAssignmentsLazily; applyAssignmentsLazily = function () { __lazy++; return l.apply(this, arguments); }; }
+  var __gray = 0, __lazy = 0, __assign = 0, __real = 0, __cf = computeCellFaces, __cap = [];
+  const __isReal = (st) => st === baseFaceAssignments || additionalLayers.some((l) => l.faceAssignments === st);   // the base's or a layer's OWN store object (not a copy)
+  { const g = ensureDefaultGrayFill; ensureDefaultGrayFill = function (st) { __gray++; if (__isReal(st)) __real++; return g.apply(this, arguments); }; }
+  { const l = applyAssignmentsLazily; applyAssignmentsLazily = function (r, st) { __lazy++; if (__isReal(st)) __real++; return l.apply(this, arguments); }; }
   { const a = faceAssignmentsFor; faceAssignmentsFor = function () { __assign++; return a.apply(this, arguments); }; }
-  computeCellFaces = function (c, n, st) { if (st) __cfStores.push(1); return __cf.apply(this, arguments); };
+  computeCellFaces = function (c, n, st) { if (st && __isReal(st)) __real++; return __cf.apply(this, arguments); };
+  { const f = spatialMorphRenderFaceColors; spatialMorphRenderFaceColors = function (res, fields, w) { const r = f.apply(this, arguments); __cap.push({ res: { nodes: res.nodes, faces: res.faces.map((q) => ({ nodeIds: q.nodeIds, color: q.color })) }, colors: r }); return r; }; }
 `;
 // colours a keyframe layer: one assignment per face of its cell (the keys are the faces' trail keys), hue = base + face number; `uniform` gives every face the SAME hue
 const COLOR = (layer, hue0, uniform) => `(function () {
@@ -99,8 +104,8 @@ T('b', () => {
     const dOther = fills.map((f) => Math.min(...other.map((c) => dist(f, c))));
     const exact = dOwn.filter((d) => d <= 2).length / fills.length;
     say('p', p, 'faces', fills.length, 'share within 2:', exact.toFixed(4), 'max distance to own', Math.max(...dOwn), 'median', dOwn.slice().sort((a, b) => a - b)[Math.floor(dOwn.length / 2)], 'nearest other-keyframe colour mean', (dOther.reduce((a, b) => a + b, 0) / dOther.length).toFixed(1));
-    check(`p = ${p}: at least 85 % of the faces are within 2 (largest channel difference, sRGB bytes) of a colour of keyframe ${p} (2 = the rounding of the linear mix with margin; the rest straddle two faces of the keyframe's cell and mix neighbouring colours, measured 100 % at p = 0 and 90 % at p = 1)`, exact >= 0.85, (exact * 100).toFixed(1) + ' %');
-    check(`p = ${p}: no face is further than 6 from a colour of keyframe ${p} (measured 0 and 3: a straddling face mixes colours that are 1 hue step apart; anything above 6 would be a colour of another corner or the default gray)`, Math.max(...dOwn) <= 6, 'max ' + Math.max(...dOwn));
+    check(`p = ${p}: at least ${p === 0 ? 95 : 65} % of the faces are within 2 (largest channel difference, sRGB bytes) of a colour of keyframe ${p} (2 = the rounding of the linear mix with margin; the face colour is the AREA MEAN of the field, so a face that does not coincide with a face of the keyframe mixes its neighbours: measured 100 % at p = 0, 70 % at p = 1, where the morph projects boundary endpoints onto the edge, stage d2c)`, exact >= (p === 0 ? 0.95 : 0.65), (exact * 100).toFixed(1) + ' %');
+    check(`p = ${p}: no face is further than 12 from a colour of keyframe ${p} (measured 0 and 9: a straddling face mixes colours a few hue steps apart; 12 is the floor of the jump test below; a colour of another corner is 45 away on average)`, Math.max(...dOwn) <= 12, 'max ' + Math.max(...dOwn));
     const nearOther = fills.filter((f, i) => dOther[i] <= 2 && dOwn[i] > 2).length;
     check(`p = ${p}: and (almost) none sits on a colour of the OTHER keyframe only`, nearOther / fills.length < 0.02, nearOther + ' of ' + fills.length);
   });
@@ -121,56 +126,83 @@ T('c', () => {
   check('...and every step moves in one direction on the channel that changes most (no flicker)', (() => { const k = [0, 1, 2].sort((a, b) => Math.abs(means[20][b] - means[0][b]) - Math.abs(means[20][a] - means[0][a]))[0]; const sg = Math.sign(means[20][k] - means[0][k]); return means.slice(1).every((m, i) => (m[k] - means[i][k]) * sg > -1.5); })());
 });
 
-// ---- d. uncoloured keyframes: the default palettes ------------------------------------------------------------------------------------------------------------------------------------------------------
-console.log('== d. uncoloured keyframes: the default palettes, not gray ==');
-T('d', () => {
-  const w = mk({ colored: false, net: null });
-  const hex = (c) => '#' + c.map((x) => x.toString(16).padStart(2, '0')).join('');
-  const pal = M.spatialMorphDefaultCornerPalettes.map((p) => p.map(hex));
-  [0, 1].forEach((p) => {
-    w.at(p);
-    const fills = w.get('__polys').map((q) => q.fill);
-    const inPal = fills.filter((f) => pal[p].includes(f)).length / fills.length;
-    const nearPal = fills.filter((f) => Math.min(...pal[p].map((c) => dist(f, c))) <= 2).length / fills.length;
-    const gray = fills.filter((f) => rgb(f)[0] === rgb(f)[1] && rgb(f)[1] === rgb(f)[2]).length;
-    say('p', p, 'in palette', inPal.toFixed(3), 'near', nearPal.toFixed(3), 'gray', gray, 'distinct', new Set(fills).size);
-    check(`p = ${p}: at least 90 % of the fills are exactly a colour of the default palette ${p} (corner ${p})`, inPal >= 0.9, (inPal * 100).toFixed(1) + ' %');
-    check(`p = ${p}: no fill is a gray (r = g = b) and the frame has several colours`, gray === 0 && new Set(fills).size > 2, J({ gray, distinct: new Set(fills).size }));
+// ---- c2. no face jumps (the pair with few, large faces) -----------------------------------------------------------------------------------------------------------------------------------------------
+console.log('== c2. the faces do not jump between neighbouring values of p ==');
+T('c2', () => {
+  // THRESHOLD, from the measurement (tools/morph/measure-color-jumps.js, step 0.02, all 121 tiles, reports/010.md): with UNIFORM corner fields the largest jump of a face in one step is 11 (the legitimate change of
+  // the mix: the front moves the weight of a tile by up to ~0.07 per step between two colours that are 165 apart), so 12 is the line. Before the stage-010 fix the coloured pair had faces above it (linear 0,
+  // radial 3-4, largest jump 12 / 16); after it none, the largest jump is 8. Dense pairs (8 to 16 lines, order 4) are NOT bounded here: see reports/010.md, their residue is open.
+  ['linear', 'radial'].forEach((mode) => {
+    const r = measureJumps('coloured', mode, 0.02);
+    say(mode, J(r));
+    check(`coloured pair, ${mode}, 50 steps of 0.02: no face jumps by more than 12 (the floor of the mix is 11), the largest jump is ${r.maxJump}`, r.over12 === 0 && r.maxJump <= 12, J({ over12: r.over12, maxJump: r.maxJump, worstP: r.worstP }));
   });
-  const mid = mk({ colored: false, net: null }); mid.at(0.5);
-  check('p = 0.5: the default palettes blend (fills that are in neither palette exist), still no gray', mid.get('__polys').some((q) => !pal[0].includes(q.fill) && !pal[1].includes(q.fill)) && mid.get('__polys').every((q) => !(rgb(q.fill)[0] === rgb(q.fill)[1] && rgb(q.fill)[1] === rgb(q.fill)[2])));
-  const mixed = mk({ colored: false, net: null }); mixed.run(COLOR(1, 12, false)); mixed.at(0);
-  check('one keyframe coloured, the other not: the uncoloured one (corner 0) still gives its default palette at p = 0', mixed.get('__polys').filter((q) => pal[0].includes(q.fill)).length / mixed.get('__polys').length >= 0.9);
+  const lin = measureJumps('coloured', 'linear', 0.02);
+  check('coloured pair, linear: a tile whose polygons did not move between two steps does not change colour (0 faces changed by more than 2)', lin.stillFaces > 1000 && lin.stillJumps === 0, J({ still: lin.stillJumps + ' of ' + lin.stillFaces }));
+});
+
+// ---- e. a gray is a fill ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+console.log('== e. a gray is a fill: p = 0 / p = 1 are the NORMAL image of the layer ==');
+const KG = [[[2, 6], [6, 8], [8, 4], [4, 2], [2, 8], [4, 6]], [[2, 6], [6, 8], [8, 4], [4, 2], [2, 5], [5, 8]]];   // a diamond with a cross (four bounded faces in the cell) / with two spokes (two); no endpoint changes its edge, so the morph faces at p = 0 and p = 1 are the layers' own
+// the normal frame's faces of a layer: computeCellFaces() with the layer's store (drawn = the real store, as the app does it; else a throwaway copy) -> [{ poly, color }] in cell coordinates
+const NORMAL = (i, drawn) => `(function () { const L = additionalLayers[${i}]; const st = ${drawn ? '(L.faceAssignments = L.faceAssignments || new Map())' : 'new Map(L.faceAssignments || [])'};
+  const r = computeCellFaces(L.connections, L.nodes, st, null, faceSheetOverrideOfLayer(L)); const by = new Map(r.nodes.map((n) => [n.id, n]));
+  return r.faces.map((f) => ({ poly: f.nodeIds.map((id) => by.get(id)).map((n) => [n.x, n.y]), color: f.color })); })()`;
+const gray = (h) => { const c = rgb(h); return c[0] === c[1] && c[1] === c[2]; };
+const inPoly = (pt, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) if ((poly[i][1] > pt[1]) !== (poly[j][1] > pt[1]) && pt[0] < (poly[j][0] - poly[i][0]) * (pt[1] - poly[i][1]) / (poly[j][1] - poly[i][1]) + poly[i][0]) c = !c; return c; };
+T('e', () => {
+  [['stores filled by a normal frame', true], ['layers never drawn', false]].forEach(([what, drawn]) => {
+    const w = mk({ colored: false, K: KG });
+    const normal = [0, 1].map((i) => w.run(NORMAL(i, drawn)));
+    if (drawn) normal.forEach((n, i) => w.run(NORMAL(i, true)));   // (the first pass above already filled the stores when drawn)
+    [0, 1].forEach((p) => {
+      w.set('__cap.length = 0;'); w.at(p);
+      const cap = w.get('__cap[0]');   // the first tile: the faces of the cell and the colours the morph gave them
+      const by = new Map(cap.res.nodes.map((n) => [n.id, n]));
+      let compared = 0, worst = 0, grays = 0;
+      cap.res.faces.forEach((f, i) => {
+        const pts = f.nodeIds.map((id) => by.get(id)).map((n) => [n.x, n.y]);
+        const m = [pts.reduce((a, q) => a + q[0], 0) / pts.length, pts.reduce((a, q) => a + q[1], 0) / pts.length];
+        const nf = normal[p].find((q) => inPoly(m, q.poly));
+        if (!nf) return;
+        compared++; worst = Math.max(worst, dist(cap.colors[i], nf.color)); if (gray(cap.colors[i])) grays++;
+      });
+      say(what, 'p', p, 'normal faces', normal[p].length, 'morph faces inside them', compared, 'worst distance', worst, 'gray', grays);
+      check(`${what}, p = ${p}: the layer has ${normal[p].length} bounded faces in the normal image, every morph face inside one has ITS colour (largest channel difference ${worst} <= 2; the rounding of the mix)`, normal[p].length >= 2 && compared >= normal[p].length && worst <= 2, J({ compared, worst }));
+      check(`${what}, p = ${p}: those colours are grays (r = g = b): the default fill of the layer, no palette colour`, compared > 0 && grays === compared, grays + ' of ' + compared);
+    });
+  });
+  check('the prototype palette is gone: core/spatial-morph.js no longer exports spatialMorphDefaultCornerPalettes', M.spatialMorphDefaultCornerPalettes === undefined);
+  // a gray layer keeps its gray when the other keyframe is coloured; the coloured one is not turned gray
+  const mix = mk({ colored: false, K: KG }); mix.run(COLOR(1, 12, false)); mix.at(0);
+  const f0 = mix.get('__polys').map((q) => q.fill);
+  check('one keyframe gray, the other coloured: at p = 0 every face is gray (keyframe 0), at p = 1 not all faces are gray (keyframe 1 is coloured)', f0.every(gray) && (mix.at(1), mix.get('__polys').some((q) => !gray(q.fill))));
 });
 
 // ---- the mixing space is linear light --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 console.log('== the mixing space ==');
 T('linear', () => {
   const w = mk({ colored: false, net: null });
-  // uniform fields: every face of keyframe 0 is A, every face of keyframe 1 is B (replace the fields the renderer samples)
+  // uniform fields: every texel of corner 0 is A, of corner 1 is B (replace the fields the renderer samples)
   const A = '#d97742', B = '#347ea8';
-  w.set(`{ const orig = spatialMorphRenderCornerField; spatialMorphRenderCornerField = function (id, k) { const v = orig.apply(this, arguments); if (!v) return v; const col = ${J([A, B])}[k]; return { colored: true, field: v.field.map((e) => Object.assign({}, e, { lin: cssColorToLinear(col) })) }; }; }`);
+  w.set(`{ const orig = spatialMorphRenderCornerField; spatialMorphRenderCornerField = function (id, k) { const v = orig.apply(this, arguments); if (!v) return v; const lin = cssColorToLinear(${J([A, B])}[k]); return { raster: Object.assign({}, v.raster, { cells: v.raster.cells.map(() => lin) }) }; }; }`);
   const lin = (h) => w.run(`cssColorToLinear('${h}')`);
-  // the tile weights are not exposed: derive t from the fill itself and compare with the linear and the sRGB mix at that t
   let nLin = 0, nMid = 0, nSrgb = 0;
   const seen = new Set();
   [0.3, 0.5, 0.7].forEach((p) => { w.at(p); w.get('__polys').forEach((q) => seen.add(q.fill)); });   // three progress values: tiles inside the front band show different t
-  const fills = [...seen];
-  // find t by least squares in linear light on one channel and check all three channels agree with linear (not with sRGB)
   const a = lin(A), b = lin(B);
-  fills.forEach((f) => {
+  [...seen].forEach((f) => {
     if (f === A || f === B) return;
     const c = rgb(f);
     const t = (w.run(`srgbToLinear(${c[0]})`) - a[0]) / (b[0] - a[0]);
     if (t <= 0.02 || t >= 0.98) return;
     nMid++;
-    const mixLin = a.map((v, k) => (1 - t) * v + t * b[k]);
-    const hexLin = w.run(`linearToHex(${J(mixLin)})`);
+    const hexLin = w.run(`linearToHex(${J(a.map((v, k) => (1 - t) * v + t * b[k]))})`);
     const hexSrgb = '#' + rgb(A).map((v, k) => Math.round((1 - t) * v + t * rgb(B)[k]).toString(16).padStart(2, '0')).join('');
     if (dist(f, hexLin) <= 1) nLin++;
     if (dist(f, hexSrgb) <= 1) nSrgb++;
   });
-  say('fills', fills.length, 'between A and B', nMid, 'match the linear mix', nLin, 'match the sRGB mix', nSrgb);
+  say('fills', seen.size, 'between A and B', nMid, 'match the linear mix', nLin, 'match the sRGB mix', nSrgb);
   check('uniform fields A and B: the fills between them lie on the LINEAR-light mix (all three channels within 1 of linearToHex((1 - t) A + t B))', nMid >= 3 && nLin === nMid, nLin + ' of ' + nMid);
   check('...and they are not on the sRGB mean (the two differ by more than 1 for these colours)', nSrgb < nMid, nSrgb + ' of ' + nMid);
 });
@@ -183,11 +215,11 @@ T('stores', () => {
   const before = snap();
   w.at(0.3); w.at(0.7);
   check('coloured keyframes: the stores (and the key sets of the layer objects) are deep-equal before and after two frames', snap() === before);
-  check('...faceAssignmentsFor, applyAssignmentsLazily and ensureDefaultGrayFill are never called, computeCellFaces never gets a store', w.get('__assign') === 0 && w.get('__lazy') === 0 && w.get('__gray') === 0 && w.get('__cfStores.length') === 0, J({ a: w.get('__assign'), l: w.get('__lazy'), g: w.get('__gray'), s: w.get('__cfStores.length') }));
+  check('...faceAssignmentsFor is never called and no store function (computeCellFaces, applyAssignmentsLazily, ensureDefaultGrayFill) ever gets a REAL store: only copies', w.get('__assign') === 0 && w.get('__real') === 0, J({ assign: w.get('__assign'), real: w.get('__real'), lazy: w.get('__lazy'), gray: w.get('__gray') }));
   const u = mk({ colored: false, net: null });
   const sb = u.run(`JSON.stringify([additionalLayers.map((l) => Object.keys(l)), baseFaceAssignments.size, additionalLayers.map((l) => 'faceAssignments' in l)])`);
   u.at(0.5);
-  check('uncoloured keyframes: no store is created on the layers (no faceAssignments key appears), the base store stays empty', u.run(`JSON.stringify([additionalLayers.map((l) => Object.keys(l)), baseFaceAssignments.size, additionalLayers.map((l) => 'faceAssignments' in l)])`) === sb);
+  check('uncoloured keyframes (the gray fill is computed on a copy): no store is created on the layers (no faceAssignments key appears), the base store stays empty', u.run(`JSON.stringify([additionalLayers.map((l) => Object.keys(l)), baseFaceAssignments.size, additionalLayers.map((l) => 'faceAssignments' in l)])`) === sb && u.get('__real') === 0);
   const c = mk({ net: null });
   c.at(0.2); const b1 = c.get('spatialMorphRenderState.colorBuilds');
   c.at(0.4); c.at(0.9);
@@ -199,11 +231,15 @@ T('stores', () => {
 // ---- the pure helpers -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 console.log('== the pure helpers ==');
 T('helpers', () => {
-  const P = M.spatialMorphDefaultCornerPalettes;
-  check('four palettes of five sRGB byte triples (the prototype\'s _DEFAULT_CORNER_PALETTES), frozen', P.length === 4 && P.every((p) => p.length === 5 && p.every((c) => c.length === 3 && c.every((x) => Number.isInteger(x) && x >= 0 && x <= 255))) && Object.isFrozen(P) && Object.isFrozen(P[0]) && Object.isFrozen(P[0][0]) && J(P[0][0]) === '[217,119,66]' && J(P[3][4]) === '[142,88,136]');
-  const s = M.spatialMorphFaceSamplePoints([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }]);
-  check('face sample points: the vertex mean first, then 35 % of the way to every vertex (5 points)', s.length === 5 && J(s[0]) === '{"x":5,"y":5}' && Math.abs(s[1].x - (0.65 * 5)) < 1e-12 && Math.abs(s[3].x - (0.65 * 5 + 3.5)) < 1e-12 && M.spatialMorphFaceSamplePoints([]).length === 0 && M.spatialMorphFaceSamplePoints([{ x: NaN, y: 0 }]).length === 0);
-  check('face ranks: largest area first, ties keep their order, junk counts as 0', J(M.spatialMorphFaceRanks([4, 9, 4])) === '[1,0,2]' && J(M.spatialMorphFaceRanks([NaN, 1])) === '[1,0]' && J(M.spatialMorphFaceRanks(null)) === '[]');
+  const sq = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }];
+  const s = M.spatialMorphFaceSamples(sq);
+  const mean = (f) => s.reduce((a, q) => a + q.w * f(q), 0);
+  check('face samples: 4 triangles x 3 points, weights sum to 1, the weighted mean is the centre and the weighted mean of x^2 is that of the square (the 3-point rule is exact for degree 2: 100/3)', s.length === 12 && Math.abs(s.reduce((a, q) => a + q.w, 0) - 1) < 1e-12 && Math.abs(mean((q) => q.x) - 5) < 1e-9 && Math.abs(mean((q) => q.x * q.x) - 100 / 3) < 1e-9);
+  check('face samples: a polygon without area gives its vertex mean, junk gives none', J(M.spatialMorphFaceSamples([{ x: 1, y: 1 }, { x: 2, y: 2 }, { x: 3, y: 3 }])) === '[{"x":2,"y":2,"w":1}]' && M.spatialMorphFaceSamples([]).length === 0 && M.spatialMorphFaceSamples([{ x: NaN, y: 0 }, sq[1], sq[2]]).length === 0);
+  check('polygon contains: inside / outside / concave notch', M.spatialMorphPolygonContains(sq, 5, 5) && !M.spatialMorphPolygonContains(sq, 11, 5) && !M.spatialMorphPolygonContains([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 5, y: 2 }, { x: 0, y: 10 }], 5, 8));
+  const box = { minX: 0, minY: 0, maxX: 10, maxY: 10 };
+  const r = M.spatialMorphRasterizeField([{ poly: [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 10 }, { x: 0, y: 10 }], lin: [1, 0, 0] }, { poly: [{ x: 5, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 5 }, { x: 5, y: 5 }], lin: [0, 1, 0] }], box, 10);
+  check('raster: left half red, upper right green, lower right empty (null); a point outside is clamped to the nearest texel; no extent gives null', J(M.spatialMorphRasterSample(r, 2, 2)) === '[1,0,0]' && J(M.spatialMorphRasterSample(r, 7, 2)) === '[0,1,0]' && M.spatialMorphRasterSample(r, 7, 8) === null && J(M.spatialMorphRasterSample(r, -5, 2)) === '[1,0,0]' && M.spatialMorphRasterizeField([], { minX: 0, minY: 0, maxX: 0, maxY: 1 }, 10) === null && M.spatialMorphRasterSample(null, 1, 1) === null);
   const c = [[0, 0, 0], [1, 1, 1], null, [0.5, 0, 0]];
   check('mix: weights normalised over the entries that have a colour and a weight above 0; none -> null; inputs unchanged', J(M.spatialMorphMixLinear(c, [0.5, 0.5, 0, 0])) === '[0.5,0.5,0.5]' && J(M.spatialMorphMixLinear(c, [0, 1, 0.3, 0])) === '[1,1,1]' && M.spatialMorphMixLinear(c, [0, 0, 1, 0]) === null && M.spatialMorphMixLinear(null, []) === null && J(c) === '[[0,0,0],[1,1,1],null,[0.5,0,0]]');
 });

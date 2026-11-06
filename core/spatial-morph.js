@@ -646,41 +646,68 @@ function spatialMorphSeamOpen(lines, poly, world) {
 }
 
 // =====================================================================================================================================================================================
-// FACE COLOUR (morph stage 006b): the pure helpers. The colours of a morph face come from the colour FIELDS of the corner keyframes (built in core/spatial-morph-render.js), sampled at the face and mixed with the
-// tile's corner weights in LINEAR LIGHT (the mixing space of core/facecolor.js crossfadeFaceColors()).
+// FACE COLOUR (morph stages 006b / 010): the pure helpers. The colour of a morph face is the mean of the corner keyframes' colour FIELDS over the face (area weighted, so it glides when the face moves across a field
+// boundary instead of jumping), mixed with the tile's corner weights in LINEAR LIGHT (the mixing space of core/facecolor.js crossfadeFaceColors()).
 // =====================================================================================================================================================================================
 
-// The prototype's fallback palettes (_DEFAULT_CORNER_PALETTES), sRGB bytes: used for a corner keyframe that has no colour of its own (no harmony applied, no assignment but the default grays). Index = the corner
-// (0 = K00, 1 = K10, 2 = K01, 3 = K11); a face takes entry (rank + connIndex) % 5, rank = its place when the faces of the keyframe are sorted by area, largest first.
-const spatialMorphDefaultCornerPalettes = Object.freeze([
-    Object.freeze([[217, 119, 66], [234, 170, 86], [184, 82, 58], [242, 208, 142], [156, 98, 64]].map((c) => Object.freeze(c))),
-    Object.freeze([[52, 126, 168], [78, 168, 163], [38, 86, 138], [136, 198, 195], [68, 112, 148]].map((c) => Object.freeze(c))),
-    Object.freeze([[76, 148, 104], [134, 182, 118], [52, 108, 78], [184, 212, 158], [98, 134, 82]].map((c) => Object.freeze(c))),
-    Object.freeze([[124, 92, 164], [168, 116, 172], [88, 64, 132], [198, 164, 208], [142, 88, 136]].map((c) => Object.freeze(c))),
-]);
-
-// The points a face is sampled at (the prototype's _sampleCornerColorForFace): the mean of its vertices, then for every vertex the point 35 % of the way from that mean to the vertex. pts = [{ x, y }, ...].
-// -> [{ x, y }] (1 + pts.length points); [] when there are no finite vertices.
-function spatialMorphFaceSamplePoints(pts) {
-    if (!Array.isArray(pts) || pts.length === 0) return [];
+// Quadrature points of a face polygon pts = [{ x, y }, ...] (the vertex mean fans the polygon into triangles; every triangle gets the 3-point rule, barycentres (2/3, 1/6, 1/6) and permutations): [{ x, y, w }], the
+// weights are the triangles' area shares and sum to 1. A polygon without area gives its vertex mean with weight 1; junk (fewer than 3 finite vertices) gives [].
+function spatialMorphFaceSamples(pts) {
+    if (!Array.isArray(pts) || pts.length < 3) return [];
     let cx = 0, cy = 0;
     for (let i = 0; i < pts.length; i++) {
         if (!pts[i] || !Number.isFinite(pts[i].x) || !Number.isFinite(pts[i].y)) return [];
         cx += pts[i].x; cy += pts[i].y;
     }
     cx /= pts.length; cy /= pts.length;
-    const out = [{ x: cx, y: cy }];
-    for (let i = 0; i < pts.length; i++) out.push({ x: 0.65 * cx + 0.35 * pts[i].x, y: 0.65 * cy + 0.35 * pts[i].y });
+    const out = [];
+    let total = 0;
+    for (let i = 0; i < pts.length; i++) {
+        const a = pts[i], b = pts[(i + 1) % pts.length];
+        const A = Math.abs((a.x - cx) * (b.y - cy) - (b.x - cx) * (a.y - cy)) / 2;
+        if (!(A > 0)) continue;
+        total += A;
+        [[2 / 3, 1 / 6, 1 / 6], [1 / 6, 2 / 3, 1 / 6], [1 / 6, 1 / 6, 2 / 3]].forEach((l) => out.push({ x: l[0] * cx + l[1] * a.x + l[2] * b.x, y: l[0] * cy + l[1] * a.y + l[2] * b.y, w: A / 3 }));
+    }
+    if (!(total > 0)) return [{ x: cx, y: cy, w: 1 }];
+    out.forEach((s) => { s.w /= total; });
     return out;
 }
 
-// The rank of every area in the list sorted largest first (ties keep their order): [4, 9, 4] -> [1, 0, 2]. A non-finite area counts as 0.
-function spatialMorphFaceRanks(areas) {
-    const a = Array.isArray(areas) ? areas.map((v) => (Number.isFinite(v) ? v : 0)) : [];
-    const order = a.map((v, i) => i).sort((i, j) => (a[j] - a[i]) || (i - j));
-    const rank = new Array(a.length);
-    order.forEach((idx, r) => { rank[idx] = r; });
-    return rank;
+// Is the point inside the polygon (even-odd)?
+function spatialMorphPolygonContains(poly, x, y) {
+    let c = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        if ((poly[i].y > y) !== (poly[j].y > y) && x < (poly[j].x - poly[i].x) * (y - poly[i].y) / (poly[j].y - poly[i].y) + poly[i].x) c = !c;
+    }
+    return c;
+}
+
+// A colour field as a raster: entries = [{ poly: [{ x, y }], lin: [r, g, b] }] (disjoint faces), box = { minX, minY, maxX, maxY }, n = texels along the longer side. A texel takes the colour of the face its centre is in
+// (null = no face). -> { minX, minY, dx, nx, ny, cells } or null for a box without extent. Looking a point up is then O(1) whatever the number of faces.
+function spatialMorphRasterizeField(entries, box, n) {
+    if (!box || !(box.maxX > box.minX) || !(box.maxY > box.minY) || !(n >= 1)) return null;
+    const dx = Math.max(box.maxX - box.minX, box.maxY - box.minY) / n;
+    const nx = Math.max(1, Math.ceil((box.maxX - box.minX) / dx)), ny = Math.max(1, Math.ceil((box.maxY - box.minY) / dx));
+    const cells = new Array(nx * ny).fill(null);
+    (entries || []).forEach((e) => {
+        if (!e || !Array.isArray(e.poly) || e.poly.length < 3 || !Array.isArray(e.lin)) return;
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+        e.poly.forEach((p) => { if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x; if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y; });
+        const i0 = Math.max(0, Math.floor((x0 - box.minX) / dx)), i1 = Math.min(nx - 1, Math.floor((x1 - box.minX) / dx));
+        const j0 = Math.max(0, Math.floor((y0 - box.minY) / dx)), j1 = Math.min(ny - 1, Math.floor((y1 - box.minY) / dx));
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+            if (spatialMorphPolygonContains(e.poly, box.minX + (i + 0.5) * dx, box.minY + (j + 0.5) * dx)) cells[j * nx + i] = e.lin;
+        }
+    });
+    return { minX: box.minX, minY: box.minY, dx, nx, ny, cells };
+}
+
+// The colour of the raster at a point (the texel it lies in; a point outside is clamped to the nearest texel), or null.
+function spatialMorphRasterSample(r, x, y) {
+    if (!r) return null;
+    const i = Math.min(r.nx - 1, Math.max(0, Math.floor((x - r.minX) / r.dx))), j = Math.min(r.ny - 1, Math.max(0, Math.floor((y - r.minY) / r.dx)));
+    return r.cells[j * r.nx + i];
 }
 
 // The mix of colours c[k] = [r, g, b] (LINEAR light, null = none) with the weights w[k]: sum(w[k] * c[k]) / sum(w[k]) over the entries that have a colour and a weight above 0. A corner with weight 0 takes no part
@@ -708,6 +735,6 @@ if (typeof module !== 'undefined' && module.exports) {
         spatialMorphDefaults, spatialMorphNormalize, spatialMorphEqual,
         spatialMorphStatusCodes, spatialMorphPlanKeyframes, spatialMorphSymmetryOps, spatialMorphSpanFromCentroids, spatialMorphSpanKey,
         spatialMorphFrontBand, spatialMorphFrontWeight, spatialMorphFrontCornerWeights, spatialMorphSegmentAt, spatialMorphSeamOpen,
-        spatialMorphDefaultCornerPalettes, spatialMorphFaceSamplePoints, spatialMorphFaceRanks, spatialMorphMixLinear,
+        spatialMorphFaceSamples, spatialMorphPolygonContains, spatialMorphRasterizeField, spatialMorphRasterSample, spatialMorphMixLinear,
     };
 }
