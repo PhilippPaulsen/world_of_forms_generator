@@ -99,11 +99,12 @@ T('model', () => {
     const st = (c, seam) => ({ code: c, keyframes: [0, 1], mode: 'linear', progress: 0, segment: 0, seamOpen: seam || [] });
     check('statusText: nothing for off and ok (even with an empty seamOpen); nothing for no status', ['off', 'ok'].every(c => M.statusText(st(c)) === '') && M.statusText(null) === '' && M.statusText(undefined) === '' && M.statusText('x') === '');
     check('...each error code has its own text, all different', (() => { const t = M.ERROR_CODES.map(c => M.statusText(st(c))); return t.every(x => x.length > 0) && new Set(t).size === t.length; })());
-    check('...netActive and bilinearStatic: their notes', M.statusText(st('netActive')) === 'Netz verzerrt Linien; Flächen folgen' && M.statusText(st('bilinearStatic')) === 'Bilinear: ohne Zeitverlauf');
+    check('...netActive and bilinearStatic: their notes', M.statusText(st('netActive')) === 'Netz verzerrt Linien' && M.statusText(st('bilinearStatic')) === 'Bilinear: ohne Zeitverlauf');
+    check('...netFacesNeedField (stage f1: faces asked for, Single or Tiled net): its note, at most 40 characters; "Flächen folgen" is gone from every status text', M.statusText(st('netFacesNeedField')) === 'Flächen im Morph nur bei Feld-Netz' && M.statusText(st('netFacesNeedField')).length <= 40 && !/Flächen folgen/.test(M.statusText(st('netActive'))));
     check('...seamOpen alone (code ok): "Naht offen: Ebene 1, 3" with the layer numbers (index + 1 without a layer table), the base sheet (-1) as "Basis"', M.statusText(st('ok', [0, 2])) === 'Naht offen: Ebene 1, 3' && M.statusText(st('ok', [-1, 0])) === 'Naht offen: Ebene Basis, 1');
     check('PRIORITY: an error code beats seamOpen (needsTwoKeyframes + seamOpen: the error)', M.statusText(st('needsTwoKeyframes', [0])) === 'Zwei Keyframe-Ebenen nötig' && M.statusText(st('shapeMismatch', [1])) === 'Keyframes: Form verschieden');
     check('PRIORITY: seamOpen beats netActive and bilinearStatic (a seam open AND a net warp note shows the seam)', M.statusText(st('netActive', [0])) === 'Naht offen: Ebene 1' && M.statusText(st('bilinearStatic', [2])) === 'Naht offen: Ebene 3');
-    check('...an empty seamOpen lets the note show', M.statusText(st('netActive', [])) === 'Netz verzerrt Linien; Flächen folgen');
+    check('...an empty seamOpen lets the note show', M.statusText(st('netActive', [])) === 'Netz verzerrt Linien');
     check('layerName: with the layer table the running number it shows (layerDisplayNumber), without it index + 1; the base is "Basis"', (() => {
         const saved = mctx.layerTable; mctx.layerTable = { layerDisplayNumber: (layers, i) => 10 + i };
         const withT = M.layerName(1, [{}, {}]) === '11'; mctx.layerTable = saved;
@@ -224,7 +225,7 @@ T('refresh', () => {
     b.model.block.angleDeg = 180; b.tick();
     check('a changed angle writes again (the field "180°")', count() > w0 && b.input.value === '180°');
     const w1 = count(); b.model.status = { code: 'netActive', seamOpen: [] }; b.tick();
-    check('a changed status writes the text (and the title with the full text); back to ok clears both', b.status.textContent === 'Netz verzerrt Linien; Flächen folgen' && b.status.title === 'Netz verzerrt Linien; Flächen folgen' && count() > w1 && (b.model.status = { code: 'ok', seamOpen: [] }, b.tick(), b.status.textContent === '' && !b.status.hasAttribute('title')));
+    check('a changed status writes the text (and the title with the full text); back to ok clears both', b.status.textContent === 'Netz verzerrt Linien' && b.status.title === 'Netz verzerrt Linien' && count() > w1 && (b.model.status = { code: 'ok', seamOpen: [] }, b.tick(), b.status.textContent === '' && !b.status.hasAttribute('title')));
     // a status longer than 40 characters is cut with an ellipsis, the full text stays in the title
     const longText = 'Naht offen: Ebene ' + Array.from({ length: 12 }, (_, i) => i + 1).join(', ');
     b.model.status = { code: 'ok', seamOpen: Array.from({ length: 12 }, (_, i) => i) }; b.tick();
@@ -278,7 +279,7 @@ T('real causes', () => {
         ['parameterMismatch: another symmetry mode', () => { const w = mk('triangle', 3, 5, 'rotation_reflection6'); w.addKeyframeLayer([[1, 5]]); w.addKeyframeLayer([[1, 4]], { mode: 'rotation6' }); return real(w); }, 'parameterMismatch', 'Keyframes: Größe/Symmetrie verschieden'],
         ['parameterMismatch: another size factor', () => { const w = mk('triangle', 3, 5, 'rotation_reflection6'); w.addKeyframeLayer([[1, 5]]); w.addKeyframeLayer([[1, 4]], { size: 4 }); return real(w); }, 'parameterMismatch', 'Keyframes: Größe/Symmetrie verschieden'],
         ['bilinearStatic: two keyframes, bilinear', () => { const w = mk('triangle', 3, 5, 'rotation_reflection6'); w.addKeyframeLayer([[1, 5]]); w.addKeyframeLayer([[1, 4]]); return real(w, 'bilinear'); }, 'bilinearStatic', 'Bilinear: ohne Zeitverlauf'],
-        ['netActive: a net on the (square) base', () => { const w = mk('square', 4, 5, 'rotation_reflection6'); w.addKeyframeLayer([[1, 5]]); w.addKeyframeLayer([[1, 6]]); w.run('baseNetTransform = { x: { kind: "trig", w: -0.5 }, y: "same", repeat: false, domain: "field" };'); return real(w); }, 'netActive', 'Netz verzerrt Linien; Flächen folgen'],
+        ['netActive: a net on the (square) base', () => { const w = mk('square', 4, 5, 'rotation_reflection6'); w.addKeyframeLayer([[1, 5]]); w.addKeyframeLayer([[1, 6]]); w.run('baseNetTransform = { x: { kind: "trig", w: -0.5 }, y: "same", repeat: false, domain: "field" };'); return real(w); }, 'netActive', 'Netz verzerrt Linien'],
         ['seamOpen: two open keyframe layers (order 5, symmetry none)', () => { const w = mk('triangle', 5, 3, 'none'); w.addKeyframeLayer(K0); w.addKeyframeLayer(K1); return real(w); }, 'ok', 'Naht offen: Ebene 1, 2'],
         ['seamOpen with the base fallback: an open base and ONE layer', () => { const w = mk('triangle', 5, 3, 'none'); w.baseConnections(K1); w.addKeyframeLayer(K0); return real(w); }, 'ok', 'Naht offen: Ebene Basis, 1'],
     ];
