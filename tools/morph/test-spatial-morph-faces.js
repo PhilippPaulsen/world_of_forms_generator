@@ -5,7 +5,7 @@
 //      BEFORE this stage (pinned hashes LINES_BEFORE); stage f1b: WITHOUT a net the faces ARE drawn (square, faces on, straight lines), unwarped;
 //   2. switch OFF: the morph code adds nothing (no computeCellFaces call, no fill) and the whole call log of the normal frame is the one of the tree before (pinned hash OFF_BEFORE); the 30 patterns
 //      of the OFF proof are checked by test-spatial-morph-render.js (OFF_GOLDEN);
-//   3. FIELD net on: every tile has faces (> 0), every face is a closed polygon (CLOSE, >= 3 distinct vertices, finite, non-zero area), the fills are the default grays (no colour yet);
+//   3. FIELD net on: every tile has faces (> 0), every face is a closed polygon (CLOSE, >= 3 distinct vertices, finite, non-zero area), the fills are colours (stage 006b: the default palettes for uncoloured keyframes, see test-spatial-morph-color.js);
 //   4. free line ends: the lines are not touched by the face pass (deep-equal before / after), the number of free ends of a frame is the same with faces on and off, and a free end is cut regularly;
 //   5. activeNetWarp, the p5 style stack and segmentCollector are exactly as before the draw, also when an exception is thrown (in a fill, in computeCellFaces);
 //   6. core/tiling.js and core/faces.js are byte-identical to the tree before this stage (sha256);
@@ -137,7 +137,7 @@ T('field faces', () => {
     if (p.close !== 'close' || p.pts.length < 3 || distinct < 3 || !p.pts.every((q) => Number.isFinite(q[0]) && Number.isFinite(q[1])) || area(p.pts) < 1e-6) bad = bad || `#${i} ${J(p)}`;
   });
   check('every face is a closed polygon: endShape(CLOSE), at least 3 distinct finite vertices, non-zero area', ps.length > 0 && bad === '', bad.slice(0, 200));
-  check('the fills are the default Ostwald grays (r = g = b), no colour yet', ps.every((p) => /^#([0-9a-f]{2})\1\1$/i.test(p.fill) || p.fill === 'hsl(0, 0%, 70%)'), [...new Set(ps.map((p) => p.fill))].join(' '));
+  check('the fills are #rrggbb colours of the default palettes (stage 006b), not one uniform gray', ps.every((p) => /^#[0-9a-f]{6}$/i.test(p.fill)) && new Set(ps.map((p) => p.fill)).size > 1 && !ps.every((p) => /^#([0-9a-f]{2})\1\1$/i.test(p.fill)), [...new Set(ps.map((p) => p.fill))].join(' '));
   check("the status is 'netActive' (faces drawn: no 'Flächen folgen')", w.status().code === 'netActive');
   // the sweep: the square (the only shape with a net warp) in every symmetry family and two sizes; triangle and hex have no net warp, so no Field and no faces
   let sweepBad = '', cases = 0;
@@ -153,7 +153,7 @@ T('field faces', () => {
   for (const shape of ['triangle', 'hex']) { const s3 = mk({ net: 'field', shape, sym: 'none', K: KF[shape] }); s3.drawn(); if (s3.get('__cfCalls') !== 0 || polys(s3).length !== 0) noShape += ' ' + shape; }
   check('triangle and hex have no net warp (netWarpForBase is square only): no Field, no face is computed', noShape === '', noShape);
   // the polygons are warped at the END: the same cell without the warp has other vertices, and computeCellFaces saw REGULAR coordinates
-  check('computeCellFaces runs on regular coordinates: activeNetWarp is null during every call', w.get('__cfCalls') === st.tiles && w.get('__cfWarpNull.every(Boolean)'), J({ calls: w.get('__cfCalls'), tiles: st.tiles }));
+  check('computeCellFaces runs on regular coordinates: activeNetWarp is null during every call', w.get('__cfCalls') === st.tiles + w.get('spatialMorphRenderState.colorBuilds') && w.get('__cfWarpNull.every(Boolean)'), J({ calls: w.get('__cfCalls'), tiles: st.tiles, builds: w.get('spatialMorphRenderState.colorBuilds') }));
   const regular = w.get(`(function () { const s = spatialMorphRenderSource({ ids: [0] }); return s.outerCorners.map((p) => [p.x, p.y]); })()`);
   const inside = ps.every((p) => p.pts.every((q) => q[0] >= -1e-6 && q[0] <= 600 + 1e-6 && q[1] >= -1e-6 && q[1] <= 600 + 1e-6));
   check('the warped polygons stay on the canvas', inside && regular.length >= 3);
@@ -165,8 +165,8 @@ T('no net faces', () => {
   const w = SCENES['nonet-faces-on'](); const h = hashOf(w.drawn());
   const st = stats(w), ps = polys(w);
   check('no net: every tile has faces (> 0) and there are more faces than tiles, one fill per face', st.tiles > 0 && st.tilesWithFaces === st.tiles && st.faces > st.tiles && ps.length === st.faces, J(st));
-  check('...every face is a closed polygon (CLOSE, >= 3 distinct finite vertices, non-zero area) in the default grays', ps.length > 0 && ps.every((p) => p.close === 'close' && p.pts.length >= 3 && new Set(p.pts.map((q) => q[0].toFixed(6) + ',' + q[1].toFixed(6))).size >= 3 && p.pts.every((q) => Number.isFinite(q[0]) && Number.isFinite(q[1])) && area(p.pts) > 1e-6 && (/^#([0-9a-f]{2})\1\1$/i.test(p.fill) || p.fill === 'hsl(0, 0%, 70%)')));
-  check('...computeCellFaces ran once per tile on regular coordinates (activeNetWarp null), no net was installed, the status is ok', w.get('__cfCalls') === st.tiles && w.get('__cfWarpNull.every(Boolean)') && w.status().code === 'ok' && w.get('activeNetWarp') === null, w.status().code);
+  check('...every face is a closed polygon (CLOSE, >= 3 distinct finite vertices, non-zero area), filled with #rrggbb colours', ps.length > 0 && ps.every((p) => p.close === 'close' && p.pts.length >= 3 && new Set(p.pts.map((q) => q[0].toFixed(6) + ',' + q[1].toFixed(6))).size >= 3 && p.pts.every((q) => Number.isFinite(q[0]) && Number.isFinite(q[1])) && area(p.pts) > 1e-6 && /^#[0-9a-f]{6}$/i.test(p.fill)));
+  check('...computeCellFaces ran once per tile on regular coordinates (activeNetWarp null), no net was installed, the status is ok', w.get('__cfCalls') === st.tiles + w.get('spatialMorphRenderState.colorBuilds') && w.get('__cfWarpNull.every(Boolean)') && w.status().code === 'ok' && w.get('activeNetWarp') === null, w.status().code);
   check('...the lines are those of the tree before (the fills come in addition)', h === LINES_BEFORE['nonet-faces-on'], h);
   // UNWARPED: the faces of a cell tile the cell exactly, so the polygons sum to tiles x cell area and span exactly the union of the tile cells; any distortion (scale or shift) breaks one of the two
   const geo = w.get(`(function () { const tl = spatialMorphRenderRecordTiles(); const cells = tl.map((t) => outerCorners.map((p) => toTileLocal(p, t.c, t.flip, t.rot))); return { n: tl.length, cells: cells.map((c) => c.map((p) => [p.x, p.y])) }; })()`);
@@ -220,7 +220,7 @@ T('restore', () => {
   e.run('spatialMorphTryDraw()');
   check('an exception while a face is filled: renderError, activeNetWarp is the same object, the style stack is empty and the style is as before', e.status().code === 'renderError' && e.get('activeNetWarp === __sent') && e.get('__depth') === 0 && e.get('JSON.stringify(__style)') === styleE, J({ code: e.status().code, depth: e.get('__depth') }));
   const c = mk({ net: 'field' });
-  c.set('const __sent = { __sentinel: 1 }; activeNetWarp = __sent; __cfThrowAt = 1;');
+  c.set('const __sent = { __sentinel: 1 }; activeNetWarp = __sent; __cfThrowAt = 3;');   // calls 1 and 2 build the two corner colour fields, call 3 is the first tile
   c.run('spatialMorphTryDraw()');
   const ref = mk({ net: 'field' }); ref.drawn();
   const refPolys = polys(ref), cPolys = polys(c);

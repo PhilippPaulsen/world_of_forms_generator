@@ -645,6 +645,59 @@ function spatialMorphSeamOpen(lines, poly, world) {
     }
 }
 
+// =====================================================================================================================================================================================
+// FACE COLOUR (morph stage 006b): the pure helpers. The colours of a morph face come from the colour FIELDS of the corner keyframes (built in core/spatial-morph-render.js), sampled at the face and mixed with the
+// tile's corner weights in LINEAR LIGHT (the mixing space of core/facecolor.js crossfadeFaceColors()).
+// =====================================================================================================================================================================================
+
+// The prototype's fallback palettes (_DEFAULT_CORNER_PALETTES), sRGB bytes: used for a corner keyframe that has no colour of its own (no harmony applied, no assignment but the default grays). Index = the corner
+// (0 = K00, 1 = K10, 2 = K01, 3 = K11); a face takes entry (rank + connIndex) % 5, rank = its place when the faces of the keyframe are sorted by area, largest first.
+const spatialMorphDefaultCornerPalettes = Object.freeze([
+    Object.freeze([[217, 119, 66], [234, 170, 86], [184, 82, 58], [242, 208, 142], [156, 98, 64]].map((c) => Object.freeze(c))),
+    Object.freeze([[52, 126, 168], [78, 168, 163], [38, 86, 138], [136, 198, 195], [68, 112, 148]].map((c) => Object.freeze(c))),
+    Object.freeze([[76, 148, 104], [134, 182, 118], [52, 108, 78], [184, 212, 158], [98, 134, 82]].map((c) => Object.freeze(c))),
+    Object.freeze([[124, 92, 164], [168, 116, 172], [88, 64, 132], [198, 164, 208], [142, 88, 136]].map((c) => Object.freeze(c))),
+]);
+
+// The points a face is sampled at (the prototype's _sampleCornerColorForFace): the mean of its vertices, then for every vertex the point 35 % of the way from that mean to the vertex. pts = [{ x, y }, ...].
+// -> [{ x, y }] (1 + pts.length points); [] when there are no finite vertices.
+function spatialMorphFaceSamplePoints(pts) {
+    if (!Array.isArray(pts) || pts.length === 0) return [];
+    let cx = 0, cy = 0;
+    for (let i = 0; i < pts.length; i++) {
+        if (!pts[i] || !Number.isFinite(pts[i].x) || !Number.isFinite(pts[i].y)) return [];
+        cx += pts[i].x; cy += pts[i].y;
+    }
+    cx /= pts.length; cy /= pts.length;
+    const out = [{ x: cx, y: cy }];
+    for (let i = 0; i < pts.length; i++) out.push({ x: 0.65 * cx + 0.35 * pts[i].x, y: 0.65 * cy + 0.35 * pts[i].y });
+    return out;
+}
+
+// The rank of every area in the list sorted largest first (ties keep their order): [4, 9, 4] -> [1, 0, 2]. A non-finite area counts as 0.
+function spatialMorphFaceRanks(areas) {
+    const a = Array.isArray(areas) ? areas.map((v) => (Number.isFinite(v) ? v : 0)) : [];
+    const order = a.map((v, i) => i).sort((i, j) => (a[j] - a[i]) || (i - j));
+    const rank = new Array(a.length);
+    order.forEach((idx, r) => { rank[idx] = r; });
+    return rank;
+}
+
+// The mix of colours c[k] = [r, g, b] (LINEAR light, null = none) with the weights w[k]: sum(w[k] * c[k]) / sum(w[k]) over the entries that have a colour and a weight above 0. A corner with weight 0 takes no part
+// (its colour is not even needed); no entry left gives null. The inputs are not changed.
+function spatialMorphMixLinear(colors, weights) {
+    if (!Array.isArray(colors) || !Array.isArray(weights)) return null;
+    const acc = [0, 0, 0];
+    let sum = 0;
+    for (let k = 0; k < colors.length; k++) {
+        const w = weights[k];
+        const c = colors[k];
+        if (!(w > 0) || !Array.isArray(c) || c.length < 3) continue;
+        acc[0] += w * c[0]; acc[1] += w * c[1]; acc[2] += w * c[2]; sum += w;
+    }
+    return sum > 0 ? [acc[0] / sum, acc[1] / sum, acc[2] / sum] : null;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         spatialMorphModes, spatialMorphClamp01, spatialMorphSmooth, spatialMorphNormalizeMode, spatialMorphDirection, spatialMorphScalar,
@@ -655,5 +708,6 @@ if (typeof module !== 'undefined' && module.exports) {
         spatialMorphDefaults, spatialMorphNormalize, spatialMorphEqual,
         spatialMorphStatusCodes, spatialMorphPlanKeyframes, spatialMorphSymmetryOps, spatialMorphSpanFromCentroids, spatialMorphSpanKey,
         spatialMorphFrontBand, spatialMorphFrontWeight, spatialMorphFrontCornerWeights, spatialMorphSegmentAt, spatialMorphSeamOpen,
+        spatialMorphDefaultCornerPalettes, spatialMorphFaceSamplePoints, spatialMorphFaceRanks, spatialMorphMixLinear,
     };
 }
