@@ -428,8 +428,8 @@ function spatialMorphEqual(a, b) {
 // =====================================================================================================================================================================================
 
 // The status codes the render hook reports (read by stage e, no UI text now). 'off': the switch is off. 'ok': the morph was drawn. 'netActive': the morph was drawn and a net warp is in force
-// (the net warps the lines, see core/spatial-morph-render.js; faces and colour are not yet part of the morph). 'bilinearStatic': drawn, bilinear has no front and ignores the progress (stage d). The others: the normal frame was drawn instead ('renderError': something threw).
-const spatialMorphStatusCodes = Object.freeze(['off', 'ok', 'netActive', 'bilinearStatic', 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'parameterMismatch', 'alignmentFailed', 'renderError']);
+// (the net warps the lines; with a FIELD warp the faces are drawn too when the keyframes show faces, see core/spatial-morph-render.js; colour is not yet part of the morph). 'netFacesNeedField': like 'netActive', but the keyframes show faces and the warp is Single or Tiled: lines only, no faces (stage f1). 'bilinearStatic': drawn, bilinear has no front and ignores the progress (stage d). The others: the normal frame was drawn instead ('renderError': something threw).
+const spatialMorphStatusCodes = Object.freeze(['off', 'ok', 'netActive', 'netFacesNeedField', 'bilinearStatic', 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'parameterMismatch', 'alignmentFailed', 'renderError']);
 
 // Which layers are the keyframes AND why not (the pre-conditions of the morph): spatialMorphSelectKeyframeLayers() plus the rule of the maintainers: the keyframes have the SAME shape and
 // the same line count, and (stage d2) the same symmetry mode and size factor, the parameters the lattice and the symmetry copies are drawn from (a field that is missing on either side is not compared).

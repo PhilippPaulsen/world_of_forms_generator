@@ -9,7 +9,7 @@
  *   block     #morph-group (index.html): row 1 on/off + the three modes (radiogroup), row 2 the angle stepper (ALWAYS there with its height: operable for linear, dimmed and aria-disabled for radial and bilinear, never hidden: nothing below it moves), row 3 the status line (one line, reserved height).
  *             Its open state is the class mo-open on the group (like ts-open of the timeline group): the buttons flip it, the engine's sheet follows it below 768px (config.sheets.morph), the CSS shows the block under the canvas from
  *             768px. Escape inside the block closes it from 768px (below, the sheet does) and gives the focus back to the visible button.
- *   status    one line of at most 40 characters: the error codes first, then "seam open", then "net warps lines; faces follow" / "bilinear without time progress"; nothing for 'off' and 'ok'. The texts are the dictionary's (morph.status.*).
+ *   status    one line of at most 40 characters: the error codes first, then "seam open", then "net warps lines" / "faces in the morph only with a field net" / "bilinear without time progress"; nothing for 'off' and 'ok'. The texts are the dictionary's (morph.status.*).
  *
  * The pure model (the status text and its priority, the angle step and wrap, the angle label, the signature) loads without a DOM (tools/ui/test-morph-view.js).
  */
@@ -18,7 +18,7 @@
   const MODES = ['linear', 'radial', 'bilinear'];
   const ANGLE_STEP = 45;
   const ERROR_CODES = ['needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'parameterMismatch', 'alignmentFailed', 'renderError'];
-  const NOTE_CODES = ['netActive', 'bilinearStatic'];
+  const NOTE_CODES = ['netActive', 'netFacesNeedField', 'bilinearStatic'];
   const MAX_STATUS = 40;
   // the German texts (the fallback; the dictionary has both languages under the same keys, ui-i18n.js)
   const T = {
@@ -28,7 +28,8 @@
     'morph.status.parameterMismatch': 'Keyframes: Größe/Symmetrie verschieden',
     'morph.status.alignmentFailed': 'Zuordnung nicht möglich',
     'morph.status.renderError': 'Morph nicht darstellbar',
-    'morph.status.netActive': 'Netz verzerrt Linien; Flächen folgen',
+    'morph.status.netActive': 'Netz verzerrt Linien',
+    'morph.status.netFacesNeedField': 'Flächen im Morph nur bei Feld-Netz',
     'morph.status.bilinearStatic': 'Bilinear: ohne Zeitverlauf',
     'morph.status.seamOpen': 'Naht offen: Ebene {layers}',
     'morph.status.base': 'Basis',
