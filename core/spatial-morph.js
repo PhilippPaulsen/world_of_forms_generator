@@ -645,6 +645,86 @@ function spatialMorphSeamOpen(lines, poly, world) {
     }
 }
 
+// =====================================================================================================================================================================================
+// FACE COLOUR (morph stages 006b / 010): the pure helpers. The colour of a morph face is the mean of the corner keyframes' colour FIELDS over the face (area weighted, so it glides when the face moves across a field
+// boundary instead of jumping), mixed with the tile's corner weights in LINEAR LIGHT (the mixing space of core/facecolor.js crossfadeFaceColors()).
+// =====================================================================================================================================================================================
+
+// Quadrature points of a face polygon pts = [{ x, y }, ...] (the vertex mean fans the polygon into triangles; every triangle gets the 3-point rule, barycentres (2/3, 1/6, 1/6) and permutations): [{ x, y, w }], the
+// weights are the triangles' area shares and sum to 1. A polygon without area gives its vertex mean with weight 1; junk (fewer than 3 finite vertices) gives [].
+function spatialMorphFaceSamples(pts) {
+    if (!Array.isArray(pts) || pts.length < 3) return [];
+    let cx = 0, cy = 0;
+    for (let i = 0; i < pts.length; i++) {
+        if (!pts[i] || !Number.isFinite(pts[i].x) || !Number.isFinite(pts[i].y)) return [];
+        cx += pts[i].x; cy += pts[i].y;
+    }
+    cx /= pts.length; cy /= pts.length;
+    const out = [];
+    let total = 0;
+    for (let i = 0; i < pts.length; i++) {
+        const a = pts[i], b = pts[(i + 1) % pts.length];
+        const A = Math.abs((a.x - cx) * (b.y - cy) - (b.x - cx) * (a.y - cy)) / 2;
+        if (!(A > 0)) continue;
+        total += A;
+        [[2 / 3, 1 / 6, 1 / 6], [1 / 6, 2 / 3, 1 / 6], [1 / 6, 1 / 6, 2 / 3]].forEach((l) => out.push({ x: l[0] * cx + l[1] * a.x + l[2] * b.x, y: l[0] * cy + l[1] * a.y + l[2] * b.y, w: A / 3 }));
+    }
+    if (!(total > 0)) return [{ x: cx, y: cy, w: 1 }];
+    out.forEach((s) => { s.w /= total; });
+    return out;
+}
+
+// Is the point inside the polygon (even-odd)?
+function spatialMorphPolygonContains(poly, x, y) {
+    let c = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        if ((poly[i].y > y) !== (poly[j].y > y) && x < (poly[j].x - poly[i].x) * (y - poly[i].y) / (poly[j].y - poly[i].y) + poly[i].x) c = !c;
+    }
+    return c;
+}
+
+// A colour field as a raster: entries = [{ poly: [{ x, y }], lin: [r, g, b] }] (disjoint faces), box = { minX, minY, maxX, maxY }, n = texels along the longer side. A texel takes the colour of the face its centre is in
+// (null = no face). -> { minX, minY, dx, nx, ny, cells } or null for a box without extent. Looking a point up is then O(1) whatever the number of faces.
+function spatialMorphRasterizeField(entries, box, n) {
+    if (!box || !(box.maxX > box.minX) || !(box.maxY > box.minY) || !(n >= 1)) return null;
+    const dx = Math.max(box.maxX - box.minX, box.maxY - box.minY) / n;
+    const nx = Math.max(1, Math.ceil((box.maxX - box.minX) / dx)), ny = Math.max(1, Math.ceil((box.maxY - box.minY) / dx));
+    const cells = new Array(nx * ny).fill(null);
+    (entries || []).forEach((e) => {
+        if (!e || !Array.isArray(e.poly) || e.poly.length < 3 || !Array.isArray(e.lin)) return;
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+        e.poly.forEach((p) => { if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x; if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y; });
+        const i0 = Math.max(0, Math.floor((x0 - box.minX) / dx)), i1 = Math.min(nx - 1, Math.floor((x1 - box.minX) / dx));
+        const j0 = Math.max(0, Math.floor((y0 - box.minY) / dx)), j1 = Math.min(ny - 1, Math.floor((y1 - box.minY) / dx));
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+            if (spatialMorphPolygonContains(e.poly, box.minX + (i + 0.5) * dx, box.minY + (j + 0.5) * dx)) cells[j * nx + i] = e.lin;
+        }
+    });
+    return { minX: box.minX, minY: box.minY, dx, nx, ny, cells };
+}
+
+// The colour of the raster at a point (the texel it lies in; a point outside is clamped to the nearest texel), or null.
+function spatialMorphRasterSample(r, x, y) {
+    if (!r) return null;
+    const i = Math.min(r.nx - 1, Math.max(0, Math.floor((x - r.minX) / r.dx))), j = Math.min(r.ny - 1, Math.max(0, Math.floor((y - r.minY) / r.dx)));
+    return r.cells[j * r.nx + i];
+}
+
+// The mix of colours c[k] = [r, g, b] (LINEAR light, null = none) with the weights w[k]: sum(w[k] * c[k]) / sum(w[k]) over the entries that have a colour and a weight above 0. A corner with weight 0 takes no part
+// (its colour is not even needed); no entry left gives null. The inputs are not changed.
+function spatialMorphMixLinear(colors, weights) {
+    if (!Array.isArray(colors) || !Array.isArray(weights)) return null;
+    const acc = [0, 0, 0];
+    let sum = 0;
+    for (let k = 0; k < colors.length; k++) {
+        const w = weights[k];
+        const c = colors[k];
+        if (!(w > 0) || !Array.isArray(c) || c.length < 3) continue;
+        acc[0] += w * c[0]; acc[1] += w * c[1]; acc[2] += w * c[2]; sum += w;
+    }
+    return sum > 0 ? [acc[0] / sum, acc[1] / sum, acc[2] / sum] : null;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         spatialMorphModes, spatialMorphClamp01, spatialMorphSmooth, spatialMorphNormalizeMode, spatialMorphDirection, spatialMorphScalar,
@@ -655,5 +735,6 @@ if (typeof module !== 'undefined' && module.exports) {
         spatialMorphDefaults, spatialMorphNormalize, spatialMorphEqual,
         spatialMorphStatusCodes, spatialMorphPlanKeyframes, spatialMorphSymmetryOps, spatialMorphSpanFromCentroids, spatialMorphSpanKey,
         spatialMorphFrontBand, spatialMorphFrontWeight, spatialMorphFrontCornerWeights, spatialMorphSegmentAt, spatialMorphSeamOpen,
+        spatialMorphFaceSamples, spatialMorphPolygonContains, spatialMorphRasterizeField, spatialMorphRasterSample, spatialMorphMixLinear,
     };
 }
