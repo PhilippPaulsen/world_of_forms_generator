@@ -8,3 +8,6 @@
 006a3,K/L2,ClaudeCode,,,,1,STOP (Ursache core/faces.js)
 007,M/L3,ClaudeCode,,32,34,2,OK (STOP durch Fehler im Auftrag)
 008,R,ClaudeCode,,34,34,1,OK (AUS-Pfad-Golden 30/30)
+009,K/L2,ClaudeCode,,2,15,1,OK
+010,K/L2,ClaudeCode,,17,27,1,OK (Ursache belegt, dichte Muster Rest)
+011,M/L3,ClaudeCode,,29,30,1,OK (AUS-Pfad-Golden 30/30)
