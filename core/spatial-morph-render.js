@@ -5,7 +5,7 @@
  * returns, when it returns false the existing code runs line for line. With the switch off (spatialMorph.enabled !== true, core/state.js) it costs one call per frame and one property read.
  *
  * WHAT IT DRAWS (maintainer decisions): the keyframe layers' lines blended across the tessellation, as the prototype does it - the base sheet, the other layers, the timeline's playback layer,
- * the face fills are drawn ONLY with a FIELD net, straight lines and faces on for the keyframes (stage f1, see FACES below; in the default grays, no colour yet), otherwise NOT; the net warp IS applied to the lines; the node dots, the net-line overlay and the cross-layer fills that draw() adds after drawTessellation() are untouched. No wave.
+ * the face fills are drawn when the keyframes show faces, the lines are straight, the sheet is a square and there is NO net or a FIELD net (stages f1 / f1b, see FACES below; in the default grays, no colour yet), with a Single or Tiled net NOT; the net warp IS applied to the lines; the node dots, the net-line overlay and the cross-layer fills that draw() adds after drawTessellation() are untouched. No wave.
  * FOLLOWING THE TIMELINE (stage d): linear and radial with a timeline of two or more keyframes draw the ACTIVE SEGMENT of the timeline's progress (timeline.elapsedMs: the playback, the scrub bar):
  * the front of core/spatial-morph.js spatialMorphFrontWeight() wanders across the surface in the direction of the angle (radial: from the centre outward), behind it the LATER keyframe, ahead of it
  * the earlier one; at progress 0 only keyframe i shows (for keyframes whose boundary endpoints change their edge: with those endpoints projected onto the edge, as in the prototype, stage d2c), at the end of segment i the frame is the start of segment i + 1. Bilinear, and every case without a timeline, is the STATIC blend of stage c. The morph is drawn on the FIRST KEYFRAME LAYER'S OWN grid (stage d2: its persisted outerCorners / centroid / shape / symmetryMode / size, exactly what core/tiling.js hands tileFor() for that layer's normal frame), not the base sheet's; a keyframe layer's own offset and rotation are IGNORED (its lines are taken in its grid as resolveConnectionsToCoords() reads them), as in the prototype.
@@ -17,7 +17,7 @@
  *
  * PRE-CONDITIONS and the STATUS: with the switch on, the morph needs two keyframe layers of the same shape and line count (the timeline's, else the layers in index order, else the base sheet
  * and one layer). If they are not there the normal frame is drawn and spatialMorphStatus().code says why: 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'parameterMismatch' (the keyframes differ in symmetry mode or size factor; the timeline requires them equal), 'alignmentFailed'
- * (resolveTimelineKeyframeCoords() refused), 'renderError' (something threw; nothing escapes). 'ok' = drawn, 'netActive' = drawn and a net warp is in force (the net warps the LINES: activeNetWarp is set around the draw and restored in the finally; with a FIELD net the faces are drawn too, stage f1, without colour), 'netFacesNeedField' = the same with a Single or Tiled net while the keyframes show faces (lines only, no faces),
+ * (resolveTimelineKeyframeCoords() refused), 'renderError' (something threw; nothing escapes). 'ok' = drawn, 'netActive' = drawn and a net warp is in force (the net warps the LINES: activeNetWarp is set around the draw and restored in the finally; with no net or a FIELD net the faces are drawn too, stages f1 / f1b, without colour), 'netFacesNeedField' = the same with a Single or Tiled net while the keyframes show faces (lines only, no faces),
  * 'off' = the switch is off. The status is read-only data for the UI of a later stage; this file writes no text. The SVG export (svgPathCollector set) always gets the normal pattern.
  *
  * Depends on (call-time, all optional-checked): core/state.js globals, core/tiling.js tileFor(), core/symmetry.js, core/curves.js, core/spatial-morph.js, and from sketch.js
@@ -226,7 +226,7 @@ function spatialMorphRenderToWorld(p, tile, op, axisDir) {
 // The faces of a tile's morphed cell, found the way the prototype does it (_runSafeComputeCellFaces): the tile's interpolated lines become synthetic nodes and connections, a border polygon of the
 // sheet's outer corners closes every region at the cell edge, computeCellFaces() runs on REGULAR coordinates (activeNetWarp = null for the call) with NO assignment store (null: nothing is read from or
 // written to a keyframe's store, ensureDefaultGrayFill() is never reached) so the faces carry the default orbit grays, and the polygons are warped when they are drawn (a FIELD warp is affine inside
-// every tile: spatialMorphRenderFillFaces()). Faces exist ONLY when the keyframes show faces, the curve type is straight and a FIELD warp is in force; anything else draws lines only, as before.
+// every tile: spatialMorphRenderFillFaces()). Faces exist ONLY when the keyframes show faces, the curve type is straight, the sheet is a square and no net is in force or a FIELD warp is (without a net the polygons are drawn unwarped); anything else (a Single or Tiled net, other shapes) draws lines only, as before.
 // Whether the keyframe sheets of the plan all show faces (the base sheet: showFaces, a layer: its own showFaces).
 function spatialMorphRenderFacesWanted(plan) {
     if (typeof showFaces === 'undefined' || typeof additionalLayers === 'undefined') return false;
@@ -350,9 +350,10 @@ function spatialMorphRenderDraw(sm) {
         const lineIds = aligned.lineIds;
         sym = spatialMorphSymmetryOps(s.shape, s.symmetryMode);
         const mirrored = sym.hasReflection ? mirrorCurveType(curveType) : curveType;
-        facesAsked = spatialMorphRenderFacesWanted(plan) && curveType.kind === 'straight';
+        facesAsked = spatialMorphRenderFacesWanted(plan) && curveType.kind === 'straight' && s.shape === 'square';   // the faces are a square-sheet feature (the net warp is too)
         warpField = !!(hasWarp && activeNetWarp && activeNetWarp.field);
-        const facesDrawn = facesAsked && warpField;
+        const noNet = hasWarp && !activeNetWarp;   // no net in force: the polygons are drawn as computed (activeNetWarp stays null)
+        const facesDrawn = facesAsked && (noNet || warpField);   // a Single or Tiled net: lines only (status netFacesNeedField)
         const faceSheet = (plan.ids && plan.ids[0] !== 'base') ? { shape: s.shape, symmetryMode: s.symmetryMode, centroid: s.centroid, outerCorners: s.outerCorners, gridMatchesBase: true } : null;   // the field warp in force was built for THIS grid, so its faces are exact
         const faceStats = { tiles: 0, tilesWithFaces: 0, faces: 0 };
         spatialMorphRenderState.faceStats = faceStats;

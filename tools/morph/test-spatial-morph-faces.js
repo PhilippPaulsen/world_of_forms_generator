@@ -1,7 +1,8 @@
-// Guard for the FACES of the spatial morph (morph stage f1, no colour yet): core/spatial-morph-render.js spatialMorphRenderFacesWanted() / TileFaces() / FillFaces() and the status code 'netFacesNeedField'.
+// Guard for the FACES of the spatial morph (morph stage f1 / f1b, no colour yet): core/spatial-morph-render.js spatialMorphRenderFacesWanted() / TileFaces() / FillFaces() and the status code 'netFacesNeedField'.
 // Everything runs on the REAL core files in a vm (tools/morph/render-harness.js) with p5 stand-ins that record the fills (push / pop depth and style, noStroke / fill / beginShape / vertex / endShape).
 // The oracles of the task (every one is a check below):
-//   1. faces OFF, or the net is not a FIELD net: no face is computed or drawn (computeCellFaces is never called), and the lines are the lines of the tree BEFORE this stage (pinned hashes LINES_BEFORE);
+//   1. faces OFF, or a Single / Tiled net, or a curved line type, or a shape that is not a square: no face is computed or drawn (computeCellFaces is never called), and the lines are the lines of the tree
+//      BEFORE this stage (pinned hashes LINES_BEFORE); stage f1b: WITHOUT a net the faces ARE drawn (square, faces on, straight lines), unwarped;
 //   2. switch OFF: the morph code adds nothing (no computeCellFaces call, no fill) and the whole call log of the normal frame is the one of the tree before (pinned hash OFF_BEFORE); the 30 patterns
 //      of the OFF proof are checked by test-spatial-morph-render.js (OFF_GOLDEN);
 //   3. FIELD net on: every tile has faces (> 0), every face is a closed polygon (CLOSE, >= 3 distinct vertices, finite, non-zero area), the fills are the default grays (no colour yet);
@@ -99,7 +100,7 @@ if (PRINT) {
 // ---- 1. faces off / no field net: nothing is computed or drawn, the lines are the lines of before -------------------------------------------------------------------------------------------
 console.log('== 1. no faces unless: keyframes show faces, straight curve, FIELD net ==');
 T('no-faces cases', () => {
-  const cases = [['field-faces-off', 'faces OFF on the keyframes (field net)'], ['tiled-faces-on', 'a Tiled net'], ['single-faces-on', 'a Single net'], ['nonet-faces-on', 'no net'], ['curve-field-faces-on', 'a curved line type (field net)']];
+  const cases = [['field-faces-off', 'faces OFF on the keyframes (field net)'], ['tiled-faces-on', 'a Tiled net'], ['single-faces-on', 'a Single net'], ['curve-field-faces-on', 'a curved line type (field net)']];
   cases.forEach(([id, what]) => {
     const w = SCENES[id](); const h = hashOf(w.drawn());
     check(`${what}: no face is computed (computeCellFaces never called) or drawn, no fill`, w.get('__cfCalls') === 0 && polys(w).length === 0 && stats(w).faces === 0, J({ calls: w.get('__cfCalls'), polys: polys(w).length, stats: stats(w) }));
@@ -156,6 +157,33 @@ T('field faces', () => {
   const regular = w.get(`(function () { const s = spatialMorphRenderSource({ ids: [0] }); return s.outerCorners.map((p) => [p.x, p.y]); })()`);
   const inside = ps.every((p) => p.pts.every((q) => q[0] >= -1e-6 && q[0] <= 600 + 1e-6 && q[1] >= -1e-6 && q[1] <= 600 + 1e-6));
   check('the warped polygons stay on the canvas', inside && regular.length >= 3);
+});
+
+// ---- 3b. no net: faces too, unwarped (stage f1b) -------------------------------------------------------------------------------------------------------------------------------------------------
+console.log('== 3b. NO net: faces in every tile, drawn as computed ==');
+T('no net faces', () => {
+  const w = SCENES['nonet-faces-on'](); const h = hashOf(w.drawn());
+  const st = stats(w), ps = polys(w);
+  check('no net: every tile has faces (> 0) and there are more faces than tiles, one fill per face', st.tiles > 0 && st.tilesWithFaces === st.tiles && st.faces > st.tiles && ps.length === st.faces, J(st));
+  check('...every face is a closed polygon (CLOSE, >= 3 distinct finite vertices, non-zero area) in the default grays', ps.length > 0 && ps.every((p) => p.close === 'close' && p.pts.length >= 3 && new Set(p.pts.map((q) => q[0].toFixed(6) + ',' + q[1].toFixed(6))).size >= 3 && p.pts.every((q) => Number.isFinite(q[0]) && Number.isFinite(q[1])) && area(p.pts) > 1e-6 && (/^#([0-9a-f]{2})\1\1$/i.test(p.fill) || p.fill === 'hsl(0, 0%, 70%)')));
+  check('...computeCellFaces ran once per tile on regular coordinates (activeNetWarp null), no net was installed, the status is ok', w.get('__cfCalls') === st.tiles && w.get('__cfWarpNull.every(Boolean)') && w.status().code === 'ok' && w.get('activeNetWarp') === null, w.status().code);
+  check('...the lines are those of the tree before (the fills come in addition)', h === LINES_BEFORE['nonet-faces-on'], h);
+  // UNWARPED: the faces of a cell tile the cell exactly, so the polygons sum to tiles x cell area and span exactly the union of the tile cells; any distortion (scale or shift) breaks one of the two
+  const geo = w.get(`(function () { const tl = spatialMorphRenderRecordTiles(); const cells = tl.map((t) => outerCorners.map((p) => toTileLocal(p, t.c, t.flip, t.rot))); return { n: tl.length, cells: cells.map((c) => c.map((p) => [p.x, p.y])) }; })()`);
+  const cellArea = geo.cells.map((c) => area(c)).reduce((a, b) => a + b, 0);
+  const sum = ps.reduce((a, p) => a + area(p.pts), 0);
+  const box = (list) => { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; list.forEach((q) => { x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]); }); return [x0, y0, x1, y1]; };
+  const bp = box([].concat(...ps.map((p) => p.pts))), bc = box([].concat(...geo.cells));
+  check('no net: the polygons are NOT distorted - their areas sum to the cell areas and their extent is the extent of the tile cells', geo.n === st.tiles && Math.abs(sum - cellArea) < 1e-6 * cellArea && bp.every((v, i) => Math.abs(v - bc[i]) < 1e-6), J({ sum: Math.round(sum), cellArea: Math.round(cellArea), bp, bc }));
+  // activeNetWarp / style restored as for the field net
+  const r = SCENES['nonet-faces-on'](); r.set("const __sent = { __sentinel: 1 }; activeNetWarp = __sent; __style = { fill: 'F0', stroke: 'S0' };"); const sty = r.get('JSON.stringify(__style)'); r.run('spatialMorphTryDraw()');
+  check('no net: activeNetWarp, the p5 style stack and the style are as before the draw', r.get('activeNetWarp === __sent') && r.get('__depth') === 0 && r.get('JSON.stringify(__style)') === sty);
+  const nf = mk({ net: null, faces: false }); nf.drawn();
+  check('no net, faces OFF on the keyframes: no face', nf.get('__cfCalls') === 0 && polys(nf).length === 0);
+  let noShape = '';
+  for (const shape of ['triangle', 'hex']) { const s3 = mk({ net: null, shape, sym: 'none', K: KF[shape] }); s3.drawn(); if (s3.get('__cfCalls') !== 0 || polys(s3).length !== 0) noShape += ' ' + shape; }
+  check('no net, triangle and hex: no face (a square-sheet feature)', noShape === '', noShape);
+  check('Single and Tiled stay without faces and say netFacesNeedField (the Field net, netActive, is checked in section 3)', ['single', 'tiled'].every((n) => { const x = mk({ net: n }); x.drawn(); return x.status().code === 'netFacesNeedField' && x.get('__cfCalls') === 0 && polys(x).length === 0; }));
 });
 
 // ---- 4. free line ends ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
