@@ -102,7 +102,7 @@ T('model', () => {
     check('...netActive and bilinearStatic: their notes', M.statusText(st('netActive')) === 'Netz verzerrt Linien; Flächen folgen' && M.statusText(st('bilinearStatic')) === 'Bilinear: ohne Zeitverlauf');
     check('...seamOpen alone (code ok): "Naht offen: Ebene 1, 3" with the layer numbers (index + 1 without a layer table), the base sheet (-1) as "Basis"', M.statusText(st('ok', [0, 2])) === 'Naht offen: Ebene 1, 3' && M.statusText(st('ok', [-1, 0])) === 'Naht offen: Ebene Basis, 1');
     check('PRIORITY: an error code beats seamOpen (needsTwoKeyframes + seamOpen: the error)', M.statusText(st('needsTwoKeyframes', [0])) === 'Zwei Keyframe-Ebenen nötig' && M.statusText(st('shapeMismatch', [1])) === 'Keyframes: Form verschieden');
-    check('PRIORITY: seamOpen beats netActive and bilinearStatic (a seam open AND a net ignored shows the seam)', M.statusText(st('netActive', [0])) === 'Naht offen: Ebene 1' && M.statusText(st('bilinearStatic', [2])) === 'Naht offen: Ebene 3');
+    check('PRIORITY: seamOpen beats netActive and bilinearStatic (a seam open AND a net warp note shows the seam)', M.statusText(st('netActive', [0])) === 'Naht offen: Ebene 1' && M.statusText(st('bilinearStatic', [2])) === 'Naht offen: Ebene 3');
     check('...an empty seamOpen lets the note show', M.statusText(st('netActive', [])) === 'Netz verzerrt Linien; Flächen folgen');
     check('layerName: with the layer table the running number it shows (layerDisplayNumber), without it index + 1; the base is "Basis"', (() => {
         const saved = mctx.layerTable; mctx.layerTable = { layerDisplayNumber: (layers, i) => 10 + i };
@@ -233,7 +233,7 @@ T('refresh', () => {
     b.model.status = { code: 'shapeMismatch', seamOpen: [0] }; b.tick();
     check('priority in the view: an error code is shown, not the seam', b.status.textContent === 'Keyframes: Form verschieden');
     b.model.status = { code: 'netActive', seamOpen: [0, 1] }; b.tick();
-    check('...a seam open beats "net ignored"', b.status.textContent === 'Naht offen: Ebene 1, 2');
+    check('...a seam open beats the net warp note', b.status.textContent === 'Naht offen: Ebene 1, 2');
     // no reference into the model: the view reads copies
     b.tick(); b.input.dispatch('change');
     check('writing goes only through setSpatialMorph: a change event writes { angleDeg } (parsed from the field), nothing else', J(b.model.setCalls.slice(-1)) === J(['{"angleDeg":180}']));
