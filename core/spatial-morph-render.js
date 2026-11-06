@@ -5,7 +5,7 @@
  * returns, when it returns false the existing code runs line for line. With the switch off (spatialMorph.enabled !== true, core/state.js) it costs one call per frame and one property read.
  *
  * WHAT IT DRAWS (maintainer decisions): the keyframe layers' lines blended across the tessellation, as the prototype does it - the base sheet, the other layers, the timeline's playback layer,
- * the face fills are drawn when the keyframes show faces, the lines are straight, the sheet is a square and there is NO net or a FIELD net (stages f1 / f1b, see FACES below; in the default grays, no colour yet), with a Single or Tiled net NOT; the net warp IS applied to the lines; the node dots, the net-line overlay and the cross-layer fills that draw() adds after drawTessellation() are untouched. No wave.
+ * the face fills are drawn when the keyframes show faces, the lines are straight, the sheet is a square and there is NO net or a FIELD net (stages f1 / f1b, see FACES below; coloured from the corner keyframes' colour fields, stage 006b, see FACE COLOUR), with a Single or Tiled net NOT; the net warp IS applied to the lines; the node dots, the net-line overlay and the cross-layer fills that draw() adds after drawTessellation() are untouched. No wave.
  * FOLLOWING THE TIMELINE (stage d): linear and radial with a timeline of two or more keyframes draw the ACTIVE SEGMENT of the timeline's progress (timeline.elapsedMs: the playback, the scrub bar):
  * the front of core/spatial-morph.js spatialMorphFrontWeight() wanders across the surface in the direction of the angle (radial: from the centre outward), behind it the LATER keyframe, ahead of it
  * the earlier one; at progress 0 only keyframe i shows (for keyframes whose boundary endpoints change their edge: with those endpoints projected onto the edge, as in the prototype, stage d2c), at the end of segment i the frame is the start of segment i + 1. Bilinear, and every case without a timeline, is the STATIC blend of stage c. The morph is drawn on the FIRST KEYFRAME LAYER'S OWN grid (stage d2: its persisted outerCorners / centroid / shape / symmetryMode / size, exactly what core/tiling.js hands tileFor() for that layer's normal frame), not the base sheet's; a keyframe layer's own offset and rotation are IGNORED (its lines are taken in its grid as resolveConnectionsToCoords() reads them), as in the prototype.
@@ -17,7 +17,7 @@
  *
  * PRE-CONDITIONS and the STATUS: with the switch on, the morph needs two keyframe layers of the same shape and line count (the timeline's, else the layers in index order, else the base sheet
  * and one layer). If they are not there the normal frame is drawn and spatialMorphStatus().code says why: 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'parameterMismatch' (the keyframes differ in symmetry mode or size factor; the timeline requires them equal), 'alignmentFailed'
- * (resolveTimelineKeyframeCoords() refused), 'renderError' (something threw; nothing escapes). 'ok' = drawn, 'netActive' = drawn and a net warp is in force (the net warps the LINES: activeNetWarp is set around the draw and restored in the finally; with no net or a FIELD net the faces are drawn too, stages f1 / f1b, without colour), 'netFacesNeedField' = the same with a Single or Tiled net while the keyframes show faces (lines only, no faces),
+ * (resolveTimelineKeyframeCoords() refused), 'renderError' (something threw; nothing escapes). 'ok' = drawn, 'netActive' = drawn and a net warp is in force (the net warps the LINES: activeNetWarp is set around the draw and restored in the finally; with no net or a FIELD net the faces are drawn too, stages f1 / f1b, coloured by stage 006b), 'netFacesNeedField' = the same with a Single or Tiled net while the keyframes show faces (lines only, no faces),
  * 'off' = the switch is off. The status is read-only data for the UI of a later stage; this file writes no text. The SVG export (svgPathCollector set) always gets the normal pattern.
  *
  * Depends on (call-time, all optional-checked): core/state.js globals, core/tiling.js tileFor(), core/symmetry.js, core/curves.js, core/spatial-morph.js, and from sketch.js
@@ -35,6 +35,8 @@ const spatialMorphRenderState = {
     seamHits: 0,         // how often it came from the cache
     seamCache: new Map(),   // content signature -> { open, boundary, checked, unmatched }
     seamLastMs: 0,       // the duration of the last computation (ms), for the page measurement
+    colorCache: new Map(),   // morph stage 006b: corner key -> { sig, value } (the colour field of a corner keyframe)
+    colorBuilds: 0,          // how often a corner field was BUILT (not looked up): the cache is visible to the tests
     faceStats: null,     // morph stage f1: { tiles, tilesWithFaces, faces } of the last morph frame (all 0 when no face was asked for or the net is no FIELD warp)
 };
 
@@ -222,7 +224,7 @@ function spatialMorphRenderToWorld(p, tile, op, axisDir) {
     return w;
 }
 
-// ---- FACES (morph stage f1: no colour yet) -------------------------------------------------------------------------------------------------------------------------------------------------
+// ---- FACES (morph stage f1; their colour: FACE COLOUR below) -------------------------------------------------------------------------------------------------------------------------------------------------
 // The faces of a tile's morphed cell, found the way the prototype does it (_runSafeComputeCellFaces): the tile's interpolated lines become synthetic nodes and connections, a border polygon of the
 // sheet's outer corners closes every region at the cell edge, computeCellFaces() runs on REGULAR coordinates (activeNetWarp = null for the call) with NO assignment store (null: nothing is read from or
 // written to a keyframe's store, ensureDefaultGrayFill() is never reached) so the faces carry the default orbit grays, and the polygons are warped when they are drawn (a FIELD warp is affine inside
@@ -264,16 +266,122 @@ function spatialMorphRenderTileFaces(lines, s, sheet) {
     }
 }
 
-// Fills the faces of one tile (the same tile transform as its lines, then the warp of the field net) -> the number of faces drawn. ONE push() with its pop() in a finally: the p5 style is back whatever happens.
-function spatialMorphRenderFillFaces(res, tile, warp) {
+// ---- FACE COLOUR (morph stages 006b / 010) ----------------------------------------------------------------------------------------------------------------------------------------------------
+// The prototype's way (_buildCornerColorReferences / drawSpatialMorphFaceFillsAtTile), with the fill of the NORMAL image: every CORNER keyframe (a sheet: the base or a layer) has a colour FIELD, the faces of its cell
+// each in the colour the normal frame fills them with (computeCellFaces() with the sheet's face store: the assigned colours, and the default grays ensureDefaultGrayFill() gives every other trail; stage 010: a
+// gray IS a fill, there is no replacement palette). A morph face takes the mean of that field over the face (area weighted, spatialMorphFaceSamples() on a raster of the field: a face that moves across a field
+// boundary glides from one colour to the other instead of jumping), and the tile mixes the corner colours with ITS corner weights (weightsAt(tile centre)) in LINEAR LIGHT. A corner whose weight is 0 is not
+// sampled (at progress 0 the frame is keyframe 0's colours). NOTHING is written to a keyframe's store: computeCellFaces() gets a COPY of the store (the reconciliation and the gray fill it does land in the copy),
+// the store object itself is only read, straight from the layer (faceAssignmentsFor() would create a missing one), and the fields are cached here, not in the layer.
+
+// The sheet ids of the four corners [K00, K10, K01, K11] ('base' or an index into additionalLayers), the way spatialMorphChooseCorners() fills them: two keyframes repeat on the 01 / 11 corners.
+function spatialMorphRenderCornerIds(plan, mode, keyframeCount) {
+    const ids = (plan && Array.isArray(plan.ids)) ? plan.ids : [];
+    const bil = spatialMorphNormalizeMode(mode) === 'bilinear';
+    return [ids[0], ids[1], bil && keyframeCount >= 3 ? ids[2] : ids[0], bil && keyframeCount >= 4 ? ids[3] : ids[1]];
+}
+
+// The cell a corner sheet colours: its connections, nodes, face store (read only, may be missing) and the sheet override computeCellFaces() needs (null for the base).
+function spatialMorphRenderColorSheet(id) {
+    if (id === 'base') return { connections, nodes, store: (typeof baseFaceAssignments !== 'undefined') ? baseFaceAssignments : null, sheet: null, id };
+    const layer = additionalLayers[id];
+    if (!layer || !Array.isArray(layer.connections) || !Array.isArray(layer.nodes)) return null;
+    return { connections: layer.connections, nodes: layer.nodes, store: layer.faceAssignments || null, sheet: (typeof faceSheetOverrideOfLayer === 'function') ? faceSheetOverrideOfLayer(layer) : null, id };
+}
+
+// The colour field of one corner as a raster: { raster } (cells hold linear-light colours), cached by a signature of everything it depends on (the lines, the store's content, the grid). null when it cannot be built.
+function spatialMorphRenderCornerField(id, cornerIdx) {
+    const cs = spatialMorphRenderColorSheet(id);
+    if (!cs || typeof computeCellFaces !== 'function' || typeof cssColorToLinear !== 'function') return null;
+    const lay = cs.sheet || { shape: currentShape, symmetryMode, outerCorners };
+    const sig = JSON.stringify([cs.connections, cs.store ? [...cs.store] : null, lay.shape, lay.symmetryMode, cs.nodes.length, lay.outerCorners && lay.outerCorners[0]]);
+    const st = spatialMorphRenderState;
+    const key = String(id) + '#' + cornerIdx;
+    const hit = st.colorCache.get(key);
+    if (hit && hit.sig === sig) return hit.value;
+    const savedWarp = activeNetWarp;
+    const savedCollector = (typeof segmentCollector !== 'undefined') ? segmentCollector : null;
+    let value = null;
+    try {
+        activeNetWarp = null;
+        if (typeof segmentCollector !== 'undefined') segmentCollector = null;
+        // the cell closed by a border polygon of the sheet's outer corners (as the morph's own faces are, spatialMorphRenderTileFaces()), so every region has a colour
+        const gridNodes = cs.nodes.slice();
+        const conns = cs.connections.filter((c) => Array.isArray(c) && c.length === 2).map((c) => c.slice());
+        const oc = cs.sheet ? cs.sheet.outerCorners : outerCorners;
+        const border = oc.map((p, k) => ({ id: -1000001 - k, x: p.x, y: p.y, free: true }));
+        border.forEach((n, k) => { gridNodes.push(n); conns.push([n.id, border[(k + 1) % border.length].id]); });
+        // a COPY of the store: the normal frame's fill, the real store is not touched. First the NORMAL frame's own call (no border): it gives the sheet's trails their fill (assigned colour, or the default gray whose
+        // value depends on how many trails there are), so a layer that was never drawn gets the grays its normal image would show; then the border-closed cell on the same copy (fill only: the new trails get theirs)
+        const copy = new Map(cs.store || []);
+        computeCellFaces(cs.connections, cs.nodes, copy, null, cs.sheet);
+        const res = computeCellFaces(conns, gridNodes, copy, null, cs.sheet);
+        const nodeById = new Map(res.nodes.map((n) => [n.id, n]));
+        const entries = [];
+        res.faces.forEach((f) => {
+            const poly = f.nodeIds.map((nid) => nodeById.get(nid)).filter(Boolean).map((n) => ({ x: n.x, y: n.y }));
+            if (poly.length >= 3) entries.push({ poly, lin: cssColorToLinear(f.color) });
+        });
+        const xs = oc.map((p) => p.x), ys = oc.map((p) => p.y);
+        const box = { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+        const n = Math.max(32, Math.min(256, Math.ceil(Math.max(box.maxX - box.minX, box.maxY - box.minY) / 1.5)));   // about 1.5 px per texel
+        value = { raster: spatialMorphRasterizeField(entries, box, n) };
+    } catch (e) {
+        value = null;
+    } finally {
+        activeNetWarp = savedWarp;
+        if (typeof segmentCollector !== 'undefined') segmentCollector = savedCollector;
+    }
+    st.colorBuilds++;
+    st.colorCache.set(key, { sig, value });
+    return value;
+}
+
+// The four corner fields of a frame [K00, K10, K01, K11] (a corner that repeats another sheet is not built: its weight is 0; one that cannot be built is null).
+function spatialMorphRenderCornerFields(cornerIds, keyframeCount, mode) {
+    const bil = spatialMorphNormalizeMode(mode) === 'bilinear';
+    const needed = [true, true, bil && keyframeCount >= 3, bil && keyframeCount >= 4];
+    return cornerIds.map((id, k) => (id === undefined || !needed[k] ? null : spatialMorphRenderCornerField(id, k)));
+}
+
+// The colours of the faces of one tile: ['#rrggbb', ...] parallel to res.faces, or null when nothing can be said (the caller then keeps the faces' own colours). w = the tile's corner weights. A corner whose field
+// has no colour under the face (no texel is in a face) takes no part in that face's mix.
+function spatialMorphRenderFaceColors(res, fields, w) {
+    try {
+        if (!res || !res.faces || res.faces.length === 0) return null;
+        const weights = [w.w00, w.w10, w.w01, w.w11];
+        const nodeById = new Map(res.nodes.map((n) => [n.id, n]));
+        return res.faces.map((face) => {
+            const samples = spatialMorphFaceSamples(face.nodeIds.map((nid) => nodeById.get(nid)).filter(Boolean));
+            const cols = weights.map((wk, k) => {
+                if (!(wk > 0) || !fields[k]) return null;
+                const acc = [0, 0, 0];
+                let sum = 0;
+                for (const s of samples) {
+                    const lin = spatialMorphRasterSample(fields[k].raster, s.x, s.y);
+                    if (lin) { acc[0] += s.w * lin[0]; acc[1] += s.w * lin[1]; acc[2] += s.w * lin[2]; sum += s.w; }
+                }
+                return sum > 0 ? [acc[0] / sum, acc[1] / sum, acc[2] / sum] : null;
+            });
+            const mix = spatialMorphMixLinear(cols, weights);
+            return mix ? linearToHex(mix) : face.color;
+        });
+    } catch (e) {
+        return null;
+    }
+}
+
+// Fills the faces of one tile (the same tile transform as its lines, then the warp of the field net) -> the number of faces drawn. colors (optional) = the fill of every face, parallel to the faces; without it the face's
+// own colour (the default orbit color). ONE push() with its pop() in a finally: the p5 style is back whatever happens.
+function spatialMorphRenderFillFaces(res, tile, warp, colors) {
     const faces = res && res.faces;
     if (!faces || faces.length === 0) return 0;
     const byId = new Map(res.nodes.map((n) => [n.id, n]));
     push();
     try {
         noStroke();
-        faces.forEach((face) => {
-            fill(face.color);
+        faces.forEach((face, fi) => {
+            fill(colors && colors[fi] ? colors[fi] : face.color);
             beginShape();
             face.nodeIds.forEach((id) => {
                 const p = toTileLocal(byId.get(id), tile.c, tile.flip, tile.rot);
@@ -357,6 +465,7 @@ function spatialMorphRenderDraw(sm) {
         const faceSheet = (plan.ids && plan.ids[0] !== 'base') ? { shape: s.shape, symmetryMode: s.symmetryMode, centroid: s.centroid, outerCorners: s.outerCorners, gridMatchesBase: true } : null;   // the field warp in force was built for THIS grid, so its faces are exact
         const faceStats = { tiles: 0, tilesWithFaces: 0, faces: 0 };
         spatialMorphRenderState.faceStats = faceStats;
+        const cornerFields = facesDrawn ? spatialMorphRenderCornerFields(spatialMorphRenderCornerIds(plan, mode, aligned.keyframeCount), aligned.keyframeCount, mode) : null;   // morph stages 006b / 010: the colour fields of the corner keyframes
 
         strokeWeight(2);
         for (let t = 0; t < tiles.length; t++) {
@@ -369,7 +478,8 @@ function spatialMorphRenderDraw(sm) {
                     const wEdge = (d.onBoundary && d.moved) ? weightsAt(spatialMorphRenderToWorld(d.sample, tile, sym.ops[0], null)) : null;
                     return spatialMorphAnchoredPoint(d, wTile, wEdge, false);
                 }));
-                const n = spatialMorphRenderFillFaces(spatialMorphRenderTileFaces(cellLines, s, faceSheet), tile, activeNetWarp);
+                const tileFaces = spatialMorphRenderTileFaces(cellLines, s, faceSheet);
+                const n = spatialMorphRenderFillFaces(tileFaces, tile, activeNetWarp, spatialMorphRenderFaceColors(tileFaces, cornerFields, wTile));
                 faceStats.tiles++;
                 if (n > 0) { faceStats.tilesWithFaces++; faceStats.faces += n; }
             }
