@@ -427,8 +427,8 @@ function spatialMorphEqual(a, b) {
 // STAGE c: pure helpers for the render hook (core/spatial-morph-render.js does the drawing; everything here is data in, data out).
 // =====================================================================================================================================================================================
 
-// The status codes the render hook reports (read by stage e, no UI text now). 'off': the switch is off. 'ok': the morph was drawn. 'netActive': the morph was drawn WITHOUT the net
-// that is in force (the prototype ignores the net as well). 'bilinearStatic': drawn, bilinear has no front and ignores the progress (stage d). The others: the normal frame was drawn instead ('renderError': something threw).
+// The status codes the render hook reports (read by stage e, no UI text now). 'off': the switch is off. 'ok': the morph was drawn. 'netActive': the morph was drawn and a net warp is in force
+// (the net warps the lines, see core/spatial-morph-render.js; faces and colour are not yet part of the morph). 'bilinearStatic': drawn, bilinear has no front and ignores the progress (stage d). The others: the normal frame was drawn instead ('renderError': something threw).
 const spatialMorphStatusCodes = Object.freeze(['off', 'ok', 'netActive', 'bilinearStatic', 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'parameterMismatch', 'alignmentFailed', 'renderError']);
 
 // Which layers are the keyframes AND why not (the pre-conditions of the morph): spatialMorphSelectKeyframeLayers() plus the rule of the maintainers: the keyframes have the SAME shape and
