@@ -152,8 +152,11 @@ T('field faces', () => {
   }
   check(`square, every symmetry family x sizes 3 and 5 (${cases} cases): faces in every tile, only closed polygons`, sweepBad === '', sweepBad.slice(0, 300));
   let noShape = '';
-  for (const shape of ['triangle', 'hex']) { const s3 = mk({ net: 'field', shape, sym: 'none', K: KF[shape] }); s3.drawn(); if (s3.get('__cfCalls') !== 0 || polys(s3).length !== 0) noShape += ' ' + shape; }
-  check('triangle and hex have no net warp (netWarpForBase is square only): no Field, no face is computed', noShape === '', noShape);
+  for (const shape of ['hex', 'triangle']) {
+    const a = mk({ net: 'field', shape, sym: 'none', K: KF[shape] }); a.drawn();
+    const b = mk({ net: null, shape, sym: 'none', K: KF[shape] }); b.drawn();
+    check(`${shape} (task 013): no net warp on this shape (netWarpForBase is square only), so a Field net changes nothing: the same status ok, the same number of faces, faces in every tile`, a.status().code === 'ok' && b.status().code === 'ok' && polys(a).length === polys(b).length && polys(a).length > 0 && stats(a).tilesWithFaces === stats(a).tiles, J({ s: a.status().code, n: polys(a).length, m: polys(b).length }));
+  }
   // the polygons are warped at the END: the same cell without the warp has other vertices, and computeCellFaces saw REGULAR coordinates
   check('computeCellFaces runs on regular coordinates: activeNetWarp is null during every call', w.get('__cfCalls') === st.tiles + 2 * w.get('spatialMorphRenderState.colorBuilds') && w.get('__cfWarpNull.every(Boolean)'), J({ calls: w.get('__cfCalls'), tiles: st.tiles, builds: w.get('spatialMorphRenderState.colorBuilds') }));
   const regular = w.get(`(function () { const s = spatialMorphRenderSource({ ids: [0] }); return s.outerCorners.map((p) => [p.x, p.y]); })()`);
@@ -183,8 +186,9 @@ T('no net faces', () => {
   const nf = mk({ net: null, faces: false }); nf.drawn();
   check('no net, faces OFF on the keyframes: no face', nf.get('__cfCalls') === 0 && polys(nf).length === 0);
   let noShape = '';
-  for (const shape of ['triangle', 'hex']) { const s3 = mk({ net: null, shape, sym: 'none', K: KF[shape] }); s3.drawn(); if (s3.get('__cfCalls') !== 0 || polys(s3).length !== 0) noShape += ' ' + shape; }
-  check('no net, triangle and hex: no face (a square-sheet feature)', noShape === '', noShape);
+  noShape = '';   // task 013: all three shapes have faces; the curved line type is the only shape-independent exclusion
+  for (const shape of ['triangle', 'hex']) { const s3 = mk({ net: null, shape, sym: 'none', K: KF[shape] }); s3.set("curveType = { kind: 'fold', fold: 1, leaning: 0.5 };"); s3.drawn(); if (s3.get('__cfCalls') !== 0 || polys(s3).length !== 0) noShape += ' ' + shape; }
+  check('no net, triangle and hex with a curved line type: no face (as for the square)', noShape === '', noShape);
   check('Single and Tiled stay without faces and say netFacesNeedField (the Field net, netActive, is checked in section 3)', ['single', 'tiled'].every((n) => { const x = mk({ net: n }); x.drawn(); return x.status().code === 'netFacesNeedField' && x.get('__cfCalls') === 0 && polys(x).length === 0; }));
 });
 
