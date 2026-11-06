@@ -11,3 +11,6 @@
 009,K/L2,ClaudeCode,,2,15,1,OK
 010,K/L2,ClaudeCode,,17,27,1,OK (Ursache belegt, dichte Muster Rest)
 011,M/L3,ClaudeCode,,29,30,1,OK (AUS-Pfad-Golden 30/30)
+012,R,Antigravity,,,,1,OK (Ausschluss war Entscheidung aus 006a)
+013,K/L2,ClaudeCode,,34,45,1,OK (Hexagon und Dreieck, Frame-Zeit offen)
+014,M/L3,ClaudeCode,,0,2,1,OK (AUS-Pfad-Golden 30/30)
