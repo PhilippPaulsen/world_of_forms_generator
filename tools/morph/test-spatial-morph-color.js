@@ -19,7 +19,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..', '..');
 const { makeRenderWorld } = require('./render-harness.js');
 const M = require(path.join(ROOT, 'core', 'spatial-morph.js'));
-const { measureJumps } = require('./measure-color-jumps.js');
+const { measureJumps, measureCoverage } = require('./measure-color-jumps.js');
 
 let failures = 0, checks = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
@@ -60,7 +60,7 @@ const COLOR = (layer, hue0, uniform) => `(function () {
 })()`;
 function mk(o) {
   o = Object.assign({ net: null, colored: true, uniform: false, K: [K0, K1], sym: 'none' }, o);   // no symmetry: every face is its own trail, so a store can give every face its own colour
-  const w = makeRenderWorld('square', 3, 3, o.sym);
+  const w = makeRenderWorld(o.shape || 'square', o.N || 3, 3, o.sym);
   w.set(STUB);
   w.baseConnections(o.K[0]);
   const ids = o.K.map((k) => w.addKeyframeLayer(k));
@@ -243,6 +243,79 @@ T('helpers', () => {
   const c = [[0, 0, 0], [1, 1, 1], null, [0.5, 0, 0]];
   check('mix: weights normalised over the entries that have a colour and a weight above 0; none -> null; inputs unchanged', J(M.spatialMorphMixLinear(c, [0.5, 0.5, 0, 0])) === '[0.5,0.5,0.5]' && J(M.spatialMorphMixLinear(c, [0, 1, 0.3, 0])) === '[1,1,1]' && M.spatialMorphMixLinear(c, [0, 0, 1, 0]) === null && M.spatialMorphMixLinear(null, []) === null && J(c) === '[[0,0,0],[1,1,1],null,[0.5,0,0]]');
 });
+
+// ---- shapes: faces and colour for the hexagon (task 013) and the triangle -------------------------------------------------------------------------------------------------------------------------------
+console.log('== shapes: faces and colour on the hexagon ==');
+// the pairs: every line runs from a node ON the cell's edge (the same node in both keyframes, so no boundary endpoint changes its edge and the morph faces at p = 0 and p = 1 are the layers' own) to an INTERIOR node
+// (a different one in each keyframe); every line touches the edge, so the cell has no isolated island (a region with a hole would be traced by its outer boundary only, a limit of core/faces.js findFaces()). Seeded.
+const rngT = (a) => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+function interiorPair(shape, N, seed, n) {
+  const w = makeRenderWorld(shape, N, 3, 'none');
+  const oc = w.get('outerCorners'), nd = w.get('nodes.filter((q) => !q.free)');
+  const onEdge = (q) => oc.some((a, i) => { const b = oc[(i + 1) % oc.length], L2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2, t = Math.max(0, Math.min(1, ((q.x - a.x) * (b.x - a.x) + (q.y - a.y) * (b.y - a.y)) / L2)); return Math.hypot(q.x - (a.x + t * (b.x - a.x)), q.y - (a.y + t * (b.y - a.y))) < 1.5; });
+  const inner = nd.filter((q) => !onEdge(q)).map((q) => q.id), edge = nd.filter(onEdge).map((q) => q.id);
+  const r = rngT(seed), pick = (arr) => arr.splice(Math.floor(r() * arr.length), 1)[0];
+  const e = edge.slice(), K0 = [], K1 = [];
+  for (let i = 0; i < n && e.length; i++) { const b = pick(e); K0.push([b, inner[Math.floor(r() * inner.length)]]); K1.push([b, inner[Math.floor(r() * inner.length)]]); }
+  return [K0, K1];
+}
+const BIG_FACE = 400;   // px2: 180 texels of the 1.5 px raster; below it the area mean reaches over the face's edge (measured: faces of 786 / 806 / 999 px2 exact, 184 px2 off by 8, 63 by 15, 39 by 27)
+const SHAPE_SPECS = {
+  hex: { N: 3, interiorN: 3, seed: 2, lines: 8, coloured: 'hex-coloured', dense: 'hex-dense-8', coverageMin: 0.995, jumpMax: 12 },
+};
+Object.keys(SHAPE_SPECS).forEach((shape) => T('shape ' + shape, () => {
+  const sp = SHAPE_SPECS[shape];
+  const K = interiorPair(shape, sp.interiorN, sp.seed, sp.lines);
+  const w = mk({ shape, N: sp.interiorN, K, colored: true });
+  w.at(0.5);
+  const tiles = byTile(w), st = w.get('spatialMorphRenderState.faceStats');
+  const closed = w.get('__polys').every((q) => q.pts.length >= 3 && new Set(q.pts.map((a) => a[0].toFixed(5) + ',' + a[1].toFixed(5))).size >= 3 && q.pts.every((a) => Number.isFinite(a[0]) && Number.isFinite(a[1])) && polyArea(q.pts) > 1e-6 && /^#[0-9a-f]{6}$/i.test(q.fill));
+  say(shape, 'tiles', st.tiles, 'with faces', st.tilesWithFaces, 'faces', st.faces, 'status', w.status().code);
+  check(`${shape}: a frame at p = 0.5 has faces in EVERY tile (${st.tiles} tiles), every face is a closed polygon with area and a #rrggbb fill, the status is ok`, st.tiles > 0 && st.tilesWithFaces === st.tiles && tiles.length === st.tiles && closed && w.status().code === 'ok', J(st));
+  check(`${shape}: coloured keyframes give more than one colour in every tile`, tiles.every((t) => new Set(t.map((q) => q.fill)).size > 1));
+  // every face lies in ITS tile: within the circumradius of the tile centre (+ 1 px)
+  const tcs = w.get('spatialMorphRenderRecordTiles()').map((t) => t.c), R = w.get('Math.max(...outerCorners.map((p) => Math.hypot(p.x - centroid.x, p.y - centroid.y)))');
+  const inTile = tiles.every((t, ti) => t.every((q) => q.pts.every((a) => Math.hypot(a[0] - tcs[ti].x, a[1] - tcs[ti].y) <= R + 1)));
+  check(`${shape}: every face lies in its own tile (all vertices within the circumradius ${R.toFixed(1)} of the tile centre): the tile transform is applied`, tcs.length === tiles.length && inTile);
+  const wn = mk({ shape, N: sp.interiorN, K, colored: true, net: 'field' }); wn.at(0.5);
+  check(`${shape}: a net (Field) changes nothing (it has no warp on this shape): same status, same number of faces, same fills as without`, wn.status().code === w.status().code && wn.get('__polys').length === w.get('__polys').length && J(wn.get('__polys').map((q) => q.fill)) === J(w.get('__polys').map((q) => q.fill)));
+  const off = mk({ shape, N: sp.interiorN, K, colored: true }); off.setMorph({ enabled: false, mode: 'linear', angleDeg: 0 }); off.at(0.5);
+  check(`${shape}: switch off: no corner field is built, no morph face is drawn (status off)`, off.get('spatialMorphRenderState.colorBuilds') === 0 && off.status().code === 'off');
+  // coverage: sum of the face areas / the cell, 11 values of p; the same lines through the NORMAL path give the same number for the worst tile
+  const cov = measureCoverage(sp.dense, 'radial');
+  say(shape, 'coverage', J(cov));
+  check(`${shape}: coverage of the cell (${sp.dense}, radial, 11 values of p, ${cov.tiles} tiles): smallest ${cov.min} >= ${sp.coverageMin} (measured 0.9974 .. 1 on all hexagon pairs; the gap is the known FACE_EPSILON limit of core/faces.js), no tile without faces`, cov.min >= sp.coverageMin && cov.noFaces === 0, J({ min: cov.min, noFaces: cov.noFaces }));
+  check(`${shape}: ...and the same lines of the worst tile through the normal path (computeCellFaces) cover the same: ${cov.coverageNormal} = ${cov.min}`, Math.abs(cov.coverageNormal - cov.min) < 1e-3);
+  // end colours = the normal image (a gray is a fill), both stores filled by a normal frame and never drawn
+  [['stores filled by a normal frame', true], ['layers never drawn', false]].forEach(([what, drawn]) => {
+    const g = mk({ shape, N: sp.interiorN, K, colored: false });
+    const normal = [0, 1].map((i) => g.run(NORMAL(i, drawn)));
+    [0, 1].forEach((p) => {
+      g.set('__cap.length = 0;'); g.at(p);
+      const cap = g.get('__cap[0]'), by = new Map(cap.res.nodes.map((n) => [n.id, n]));
+      let compared = 0, big = 0, worst = 0, worstAll = 0, grays = 0;
+      cap.res.faces.forEach((f, i) => {
+        const pts = f.nodeIds.map((id) => by.get(id)).map((n) => [n.x, n.y]);
+        const m = [pts.reduce((a, q) => a + q[0], 0) / pts.length, pts.reduce((a, q) => a + q[1], 0) / pts.length];
+        const ar = polyArea(pts);
+        const nf = normal[p].find((q) => inPoly(m, q.poly) && Math.abs(polyArea(q.poly) / ar - 1) < 0.02);   // the same face: its vertex mean lies in it and the area agrees
+        if (!nf) return;
+        const d = dist(cap.colors[i], nf.color);
+        compared++; worstAll = Math.max(worstAll, d); if (gray(cap.colors[i])) grays++;
+        if (ar >= BIG_FACE) { big++; worst = Math.max(worst, d); }
+      });
+      say(shape, what, 'p', p, 'normal faces', normal[p].length, 'compared', compared, 'of them >= ' + BIG_FACE + ' px2', big, 'worst (big)', worst, 'worst (all)', worstAll, 'gray', grays);
+      check(`${shape}, ${what}, p = ${p}: all ${normal[p].length} bounded faces of the normal image are found in the morph (same face: vertex mean inside, area within 2 %), and the ${big} of them with an area >= ${BIG_FACE} px2 have ITS colour (largest channel difference ${worst} <= 2); the smaller ones are the area mean of a raster of 1.5 px texels and mix their neighbours (largest difference of all ${worstAll}, reported, not bounded)`, compared === normal[p].length && big >= 2 && worst <= 2, J({ compared, big, worst, worstAll }));
+      check(`${shape}, ${what}, p = ${p}: those colours are grays (the default fill), no palette`, compared > 0 && grays === compared, grays + ' of ' + compared);
+    });
+  });
+  // no face jumps (the pair with few, large faces); the floor is measured on THIS shape with uniform corner fields
+  ['linear', 'radial'].forEach((mode) => {
+    const r = measureJumps(sp.coloured, mode, 0.02);
+    say(shape, mode, J(r));
+    check(`${shape}, coloured pair, ${mode}, 50 steps of 0.02: no face jumps by more than ${sp.jumpMax} (the floor of the mix on this shape is 11, uniform corner fields; measured largest jump ${r.maxJump}, not assignable ${(r.unmatchedShare * 100).toFixed(1)} %)`, r.over12 === 0 && r.maxJump <= sp.jumpMax && r.stillJumps === 0, J({ over12: r.over12, maxJump: r.maxJump, still: r.stillJumps }));
+  });
+}));
 
 // ---- unchanged: Single / Tiled, status text, names -------------------------------------------------------------------------------------------------------------------------------------------------
 console.log('== unchanged behaviour ==');
