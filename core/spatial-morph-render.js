@@ -5,7 +5,7 @@
  * returns, when it returns false the existing code runs line for line. With the switch off (spatialMorph.enabled !== true, core/state.js) it costs one call per frame and one property read.
  *
  * WHAT IT DRAWS (maintainer decisions): the keyframe layers' lines blended across the tessellation, as the prototype does it - the base sheet, the other layers, the timeline's playback layer,
- * the face fills are NOT drawn (faces and colour in the morph: not yet implemented); the net warp IS applied to the lines (see NET WARP below); the node dots, the net-line overlay and the cross-layer fills that draw() adds after drawTessellation() are untouched. No wave.
+ * the face fills are drawn ONLY with a FIELD net, straight lines and faces on for the keyframes (stage f1, see FACES below; in the default grays, no colour yet), otherwise NOT; the net warp IS applied to the lines; the node dots, the net-line overlay and the cross-layer fills that draw() adds after drawTessellation() are untouched. No wave.
  * FOLLOWING THE TIMELINE (stage d): linear and radial with a timeline of two or more keyframes draw the ACTIVE SEGMENT of the timeline's progress (timeline.elapsedMs: the playback, the scrub bar):
  * the front of core/spatial-morph.js spatialMorphFrontWeight() wanders across the surface in the direction of the angle (radial: from the centre outward), behind it the LATER keyframe, ahead of it
  * the earlier one; at progress 0 only keyframe i shows (for keyframes whose boundary endpoints change their edge: with those endpoints projected onto the edge, as in the prototype, stage d2c), at the end of segment i the frame is the start of segment i + 1. Bilinear, and every case without a timeline, is the STATIC blend of stage c. The morph is drawn on the FIRST KEYFRAME LAYER'S OWN grid (stage d2: its persisted outerCorners / centroid / shape / symmetryMode / size, exactly what core/tiling.js hands tileFor() for that layer's normal frame), not the base sheet's; a keyframe layer's own offset and rotation are IGNORED (its lines are taken in its grid as resolveConnectionsToCoords() reads them), as in the prototype.
@@ -17,7 +17,7 @@
  *
  * PRE-CONDITIONS and the STATUS: with the switch on, the morph needs two keyframe layers of the same shape and line count (the timeline's, else the layers in index order, else the base sheet
  * and one layer). If they are not there the normal frame is drawn and spatialMorphStatus().code says why: 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'parameterMismatch' (the keyframes differ in symmetry mode or size factor; the timeline requires them equal), 'alignmentFailed'
- * (resolveTimelineKeyframeCoords() refused), 'renderError' (something threw; nothing escapes). 'ok' = drawn, 'netActive' = drawn and a net warp is in force (the net warps the LINES: activeNetWarp is set around the draw and restored in the finally; faces and colour are not yet part of the morph),
+ * (resolveTimelineKeyframeCoords() refused), 'renderError' (something threw; nothing escapes). 'ok' = drawn, 'netActive' = drawn and a net warp is in force (the net warps the LINES: activeNetWarp is set around the draw and restored in the finally; with a FIELD net the faces are drawn too, stage f1, without colour), 'netFacesNeedField' = the same with a Single or Tiled net while the keyframes show faces (lines only, no faces),
  * 'off' = the switch is off. The status is read-only data for the UI of a later stage; this file writes no text. The SVG export (svgPathCollector set) always gets the normal pattern.
  *
  * Depends on (call-time, all optional-checked): core/state.js globals, core/tiling.js tileFor(), core/symmetry.js, core/curves.js, core/spatial-morph.js, and from sketch.js
@@ -35,6 +35,7 @@ const spatialMorphRenderState = {
     seamHits: 0,         // how often it came from the cache
     seamCache: new Map(),   // content signature -> { open, boundary, checked, unmatched }
     seamLastMs: 0,       // the duration of the last computation (ms), for the page measurement
+    faceStats: null,     // morph stage f1: { tiles, tilesWithFaces, faces } of the last morph frame (all 0 when no face was asked for or the net is no FIELD warp)
 };
 
 // The status of the last frame (a copy). { code, keyframes, mode, progress, segment, seamOpen }, code one of spatialMorphStatusCodes. seamOpen (stage e1): the keyframes that are NOT seamless at the tile edge,
@@ -221,6 +222,72 @@ function spatialMorphRenderToWorld(p, tile, op, axisDir) {
     return w;
 }
 
+// ---- FACES (morph stage f1: no colour yet) -------------------------------------------------------------------------------------------------------------------------------------------------
+// The faces of a tile's morphed cell, found the way the prototype does it (_runSafeComputeCellFaces): the tile's interpolated lines become synthetic nodes and connections, a border polygon of the
+// sheet's outer corners closes every region at the cell edge, computeCellFaces() runs on REGULAR coordinates (activeNetWarp = null for the call) with NO assignment store (null: nothing is read from or
+// written to a keyframe's store, ensureDefaultGrayFill() is never reached) so the faces carry the default orbit grays, and the polygons are warped when they are drawn (a FIELD warp is affine inside
+// every tile: spatialMorphRenderFillFaces()). Faces exist ONLY when the keyframes show faces, the curve type is straight and a FIELD warp is in force; anything else draws lines only, as before.
+// Whether the keyframe sheets of the plan all show faces (the base sheet: showFaces, a layer: its own showFaces).
+function spatialMorphRenderFacesWanted(plan) {
+    if (typeof showFaces === 'undefined' || typeof additionalLayers === 'undefined') return false;
+    const ids = (plan && Array.isArray(plan.ids)) ? plan.ids : [];
+    return ids.length > 0 && ids.every((id) => (id === 'base' ? !!showFaces : !!(additionalLayers[id] && additionalLayers[id].showFaces)));
+}
+
+// The faces of one cell from its morphed lines [[{x,y}, {x,y}], ...] (canonical cell coordinates) -> { nodes, faces } ({ nodes: [], faces: [] } when there is nothing to say). Never throws, always puts
+// activeNetWarp and segmentCollector back, never touches the inputs (s.nodes is copied, the lines are read only).
+function spatialMorphRenderTileFaces(lines, s, sheet) {
+    const none = { nodes: [], faces: [] };
+    if (typeof computeCellFaces !== 'function' || !Array.isArray(lines) || lines.length === 0) return none;
+    const savedWarp = activeNetWarp;
+    const savedCollector = (typeof segmentCollector !== 'undefined') ? segmentCollector : null;
+    try {
+        activeNetWarp = null;
+        if (typeof segmentCollector !== 'undefined') segmentCollector = null;
+        // free: true keeps the synthetic nodes out of the symmetry group of the grid nodes (core/orbits.js filters them), so the real nodes alone fix the group
+        const gridNodes = s.nodes.slice();
+        const conns = [];
+        lines.forEach((ln, i) => {
+            if (Math.hypot(ln[1].x - ln[0].x, ln[1].y - ln[0].y) < 1e-9) return;   // a line that collapsed to a point has no face to bound
+            const a = { id: -1 - 2 * i, x: ln[0].x, y: ln[0].y, free: true }, b = { id: -2 - 2 * i, x: ln[1].x, y: ln[1].y, free: true };
+            gridNodes.push(a, b);
+            conns.push([a.id, b.id]);
+        });
+        const border = s.outerCorners.map((p, k) => ({ id: -1000001 - k, x: p.x, y: p.y, free: true }));
+        border.forEach((n, k) => { gridNodes.push(n); conns.push([n.id, border[(k + 1) % border.length].id]); });
+        return computeCellFaces(conns, gridNodes, null, null, sheet) || none;
+    } catch (e) {
+        return none;
+    } finally {
+        activeNetWarp = savedWarp;
+        if (typeof segmentCollector !== 'undefined') segmentCollector = savedCollector;
+    }
+}
+
+// Fills the faces of one tile (the same tile transform as its lines, then the warp of the field net) -> the number of faces drawn. ONE push() with its pop() in a finally: the p5 style is back whatever happens.
+function spatialMorphRenderFillFaces(res, tile, warp) {
+    const faces = res && res.faces;
+    if (!faces || faces.length === 0) return 0;
+    const byId = new Map(res.nodes.map((n) => [n.id, n]));
+    push();
+    try {
+        noStroke();
+        faces.forEach((face) => {
+            fill(face.color);
+            beginShape();
+            face.nodeIds.forEach((id) => {
+                const p = toTileLocal(byId.get(id), tile.c, tile.flip, tile.rot);
+                const q = warp ? applyNetWarp(warp, p) : p;
+                vertex(q.x, q.y);
+            });
+            endShape(CLOSE);
+        });
+    } finally {
+        pop();
+    }
+    return faces.length;
+}
+
 function spatialMorphRenderDraw(sm) {
     const mode = spatialMorphNormalizeMode(sm.mode);
     const angleDeg = spatialMorphNumber(sm.angleDeg);
@@ -260,6 +327,7 @@ function spatialMorphRenderDraw(sm) {
             : null;
     }
     let tiles, sym, started = false;
+    let facesAsked = false, warpField = false;   // faces wanted (keyframes show faces, straight curve) / the warp in force is a FIELD warp: both needed for faces
     try {
         tiles = spatialMorphRenderRecordTiles(s);
         if (tiles.length === 0) { spatialMorphRenderSetStatus('renderError', keyframes, mode, progress, segment); return false; }
@@ -282,12 +350,28 @@ function spatialMorphRenderDraw(sm) {
         const lineIds = aligned.lineIds;
         sym = spatialMorphSymmetryOps(s.shape, s.symmetryMode);
         const mirrored = sym.hasReflection ? mirrorCurveType(curveType) : curveType;
+        facesAsked = spatialMorphRenderFacesWanted(plan) && curveType.kind === 'straight';
+        warpField = !!(hasWarp && activeNetWarp && activeNetWarp.field);
+        const facesDrawn = facesAsked && warpField;
+        const faceSheet = (plan.ids && plan.ids[0] !== 'base') ? { shape: s.shape, symmetryMode: s.symmetryMode, centroid: s.centroid, outerCorners: s.outerCorners, gridMatchesBase: true } : null;   // the field warp in force was built for THIS grid, so its faces are exact
+        const faceStats = { tiles: 0, tilesWithFaces: 0, faces: 0 };
+        spatialMorphRenderState.faceStats = faceStats;
 
         strokeWeight(2);
         for (let t = 0; t < tiles.length; t++) {
             const tile = tiles[t];
             const axisDir = sym.hasReflection ? (tile.axis || mirrorAxisDir()) : null;
             const wTile = weightsAt(tile.c);
+            if (facesDrawn) {
+                // the cell's lines in canonical coordinates (the identity operation: symmetry copies are made by computeCellFaces()), behind this tile's lines
+                const cellLines = prepared.map((pl) => [pl.a, pl.b].map((d) => {
+                    const wEdge = (d.onBoundary && d.moved) ? weightsAt(spatialMorphRenderToWorld(d.sample, tile, sym.ops[0], null)) : null;
+                    return spatialMorphAnchoredPoint(d, wTile, wEdge, false);
+                }));
+                const n = spatialMorphRenderFillFaces(spatialMorphRenderTileFaces(cellLines, s, faceSheet), tile, activeNetWarp);
+                faceStats.tiles++;
+                if (n > 0) { faceStats.tilesWithFaces++; faceStats.faces += n; }
+            }
             for (let i = 0; i < prepared.length; i++) {
                 const pl = prepared[i];
                 const id = lineIds[i] || [0, 0];
@@ -312,7 +396,8 @@ function spatialMorphRenderDraw(sm) {
         if (hasWarp) activeNetWarp = prevWarp;
     }
     spatialMorphRenderState.frames++;
-    spatialMorphRenderSetStatus((typeof netWarpActive === 'function' && netWarpActive()) ? 'netActive' : (mode === 'bilinear' ? 'bilinearStatic' : 'ok'), keyframes, mode, progress, segment, spatialMorphRenderSeamOpen(plan, s, tiles, sym));
+    const netOn = typeof netWarpActive === 'function' && netWarpActive();
+    spatialMorphRenderSetStatus(netOn ? ((facesAsked && !warpField) ? 'netFacesNeedField' : 'netActive') : (mode === 'bilinear' ? 'bilinearStatic' : 'ok'), keyframes, mode, progress, segment, spatialMorphRenderSeamOpen(plan, s, tiles, sym));
     return true;
 }
 

@@ -272,6 +272,16 @@ T('phone-labels', () => {
     check('every label of ui-phone-config.js uses a key from the list above (sub-tabs: subtab.<id>; sheets: layers.more / timeline.more; names: phone.tools / phone.subtabs)', Object.keys(cfg.subtabs).every(k => cfg.subtabs[k].i18n === 'subtab.' + k) && cfg.sheets.layer.i18n === 'layers.more' && cfg.sheets.timeline.i18n === 'timeline.more' && cfg.names.tools.i18n === 'phone.tools' && cfg.names.subtabs.i18n === 'phone.subtabs');
 });
 
+console.log('== the Morph status texts (morph stage f1) ==');
+T('morph-status', () => {
+    const codes = ['needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'parameterMismatch', 'alignmentFailed', 'renderError', 'netActive', 'netFacesNeedField', 'bilinearStatic'];
+    check('every status code of the Morph line has a de and an en text, none longer than 40 characters', codes.every(c => DICT['morph.status.' + c] && DICT['morph.status.' + c].de.length <= 40 && DICT['morph.status.' + c].en.length <= 40), codes.filter(c => !DICT['morph.status.' + c] || DICT['morph.status.' + c].de.length > 40 || DICT['morph.status.' + c].en.length > 40).join());
+    check('netFacesNeedField (Single / Tiled net with faces on): "Flächen im Morph nur bei Feld-Netz" / "Morph faces: field net only"', DICT['morph.status.netFacesNeedField'].de === 'Flächen im Morph nur bei Feld-Netz' && DICT['morph.status.netFacesNeedField'].en === 'Morph faces: field net only');
+    check('netActive (a Field net: the faces are drawn): "Netz verzerrt Linien" / "Net warps lines", no "Flächen folgen" / "faces follow" anywhere in the dictionary', DICT['morph.status.netActive'].de === 'Netz verzerrt Linien' && DICT['morph.status.netActive'].en === 'Net warps lines' && !keys.some(k => /Flächen folgen|faces follow/.test(DICT[k].de + DICT[k].en)));
+    const ui = rd('ui-morph.js');
+    check('the German fallbacks of ui-morph.js equal the dictionary German, key by key', codes.every(c => ui.includes("'morph.status." + c + "': '" + DICT['morph.status.' + c].de + "'")), codes.filter(c => !ui.includes("'morph.status." + c + "': '" + DICT['morph.status.' + c].de + "'")).join());
+});
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 console.log(failures ? 'FAIL' : 'PASS');
 process.exit(failures ? 1 : 0);
