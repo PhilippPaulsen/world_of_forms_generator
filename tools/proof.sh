@@ -21,7 +21,7 @@
 set -u
 level="${1:-}"; nnn="${2:-}"
 case "$level" in L0|L1|L2|L3) ;; *) echo "usage: tools/proof.sh L0|L1|L2|L3 NNN" >&2; exit 2;; esac
-case "$nnn" in [0-9][0-9][0-9]) ;; *) echo "NNN must be three digits, e.g. 001" >&2; exit 2;; esac
+case "$nnn" in [0-9][0-9][0-9]|[0-9][0-9][0-9][a-z0-9]*) ;; *) echo "NNN must be three digits, optionally with a suffix, e.g. 001 or 006a2" >&2; exit 2;; esac
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root" || exit 2

@@ -34,5 +34,5 @@ engine. This repo is the canonical generator (`sketch.js` UI shell, portable `co
 
 ## Now
 State and next steps: `ROADMAP.md` ("Spatial morph - STATUS", "Patterns block - STATUS",
-"Sheets redesign - STATUS", "Merge readiness"). Open from the morph block: faces and colour in
-the morph (the net is done, task 004), the base as a keyframe, d3, export.
+"Sheets redesign - STATUS", "Merge readiness"). Open from the morph block: colour in the morph
+(net: task 004, faces on a Field net: task 006a), the base as a keyframe, d3, export.
