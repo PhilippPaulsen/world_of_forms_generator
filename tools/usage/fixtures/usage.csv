@@ -1,0 +1,9 @@
+Nr,Typ/Stufe,Werkzeug,Dauer,vorher,nachher,Iterationen,Ergebnis
+001,L0,ClaudeCode,,10,15,1,OK
+002,L0,ClaudeCode,,20,25,1,OK
+003,L1,ClaudeCode,,30,40,1,OK
+004,L1,Antigravity,,,,1,STOP
+005,R,ClaudeCode,,40,50,1,OK
+006,R,ClaudeCode,,,,1,OK
+007,M,Antigravity,,50,55,1,OK
+008,R,Antigravity,,10,15,1,OK
