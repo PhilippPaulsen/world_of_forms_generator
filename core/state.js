@@ -27,6 +27,11 @@ let curveType = { kind: 'straight' };
 let symmetryMode = "rotation_reflection6"; // Roadmap 1.11: initial default, now driven by sketch.js's Spiegeling/Drehling + fold button group (index.html) - matches this same value, so reactivating the control changed nothing about the default starting pattern. Was a raw <select id="symmetry-dropdown"> removed from the UI in an earlier flattening pass (commit 33411895); that markup is gone for good, not reintroduced - see sketch.js's own button-group wiring for the real control.
 let lineColor = "#000000"; // fixed default - #line-color-picker removed from UI, logic below stays wired for later reuse
 let showNodes = true;
+// Task 024: the line style. visible=false: drawCurvedBezier() (core/curves.js, the single drawing sink) emits nothing to the canvas or the SVG
+// collector (the segment collector stays untouched, so face detection never sees the switch); weight = strokeWeight of a line, LINE_WEIGHT.def (2) is
+// what drawConnectionWithSymmetry() and the morph render always set. Session: settings.lineStyle, written only when it differs from the default.
+const LINE_WEIGHT = Object.freeze({ min: 0.5, max: 8, step: 0.5, def: 2 });
+let lineStyle = { visible: true, weight: LINE_WEIGHT.def };
 let currentShape = 'triangle';
 let freeEndpointsEnabled = false; // toggled via #btn-toggle-free-endpoints
 

@@ -485,6 +485,10 @@ function drawCurvedBezier(p1, p2, curveType, id1, id2) {
         else segmentCollector.push({ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y });
         return;
     }
+    // Task 024: lines off - nothing is drawn or collected (after the segment collector: face detection is not affected).
+    // (feature-tested: harnesses that load curves.js without core/state.js have no lineStyle - lines stay on, weight stays 2)
+    const lineSt = (typeof lineStyle !== 'undefined') ? lineStyle : null;
+    if (lineSt && !lineSt.visible) return;
 
     const pieces = polyline ? polyline.slice(1).map(q => ({ type: 'line', to: q })) : buildCurvePieces(p1, p2, curveType, id1, id2);
 
@@ -513,6 +517,8 @@ function drawCurvedBezier(p1, p2, curveType, id1, id2) {
 
     // Die Linien sollen immer ungefüllt sein, aber noFill() nicht global setzen!
     // Wir setzen fill/stroke im draw() global, daher hier keine Änderung.
+    // Task 024: the caller set strokeWeight(2); only a changed weight is applied here (the default path stays untouched).
+    if (lineSt && lineSt.weight !== 2) strokeWeight(lineSt.weight);
     let cur = p1;
     pieces.forEach(piece => {
         if (piece.type === 'moveto') {

@@ -27,7 +27,7 @@
   // mirrors that class into aria-pressed on every UI.onSync tick (draw() calls it), so a screen reader hears the state; it writes an attribute only when the value changed and it
   // does not read the 'disabled' state (Curve and Free stay pressed or not while a net transform disables them). Not toggles, so without aria-pressed: Undo, Redo, Random, Clear,
   // Download, Paste Pattern, "Neu anfangen" (actions), Info and Mehr (they open something: aria-expanded), the two catalog links.
-  const TOGGLES = ['btn-toggle-nodes', 'btn-toggle-curve', 'btn-toggle-faces', 'btn-toggle-free', 'btn-toggle-free-endpoints', 'btn-alternative-net'].map(function (id) { return document.getElementById(id); }).filter(Boolean);
+  const TOGGLES = ['btn-toggle-nodes', 'btn-toggle-lines', 'btn-toggle-curve', 'btn-toggle-faces', 'btn-toggle-free', 'btn-toggle-free-endpoints', 'btn-alternative-net'].map(function (id) { return document.getElementById(id); }).filter(Boolean);
   // Curve, Free and Fill are locked while a net transform is active (sketch.js: UI.setDisabled, aria-disabled, focusable). A tap, a click or a long press on a locked one shows the reason as a notice;
   // an unlocked one is not touched here (sketch.js's own handler toggles it).
   ['btn-toggle-curve', 'btn-toggle-free', 'btn-toggle-faces'].forEach(function (id) { const b = document.getElementById(id); if (b) UI.guard(b, function () { }); });

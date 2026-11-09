@@ -417,9 +417,13 @@ function generateSVGString() {
 
     let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n`;
     svg += `  <rect x="0" y="0" width="${w}" height="${h}" fill="${bgColor.trim() || '#ffffff'}" />\n`;
-    svg += `  <g stroke="${lineColor}" stroke-width="2" fill="none">\n`;
-    paths.forEach(d => { svg += `    <path d="${d}" />\n`; });
-    svg += `  </g>\n`;
+    // Task 024: lines off - no line group at all (paths is empty then); the weight follows lineStyle (2 = unchanged output).
+    const lineSt = (typeof lineStyle !== 'undefined') ? lineStyle : { visible: true, weight: 2 };
+    if (lineSt.visible) {
+        svg += `  <g stroke="${lineColor}" stroke-width="${lineSt.weight}" fill="none">\n`;
+        paths.forEach(d => { svg += `    <path d="${d}" />\n`; });
+        svg += `  </g>\n`;
+    }
     if (showNodes) {
         svg += `  <g fill="#000000">\n`;
         // Roadmap 1.6: node dots sit where the canvas draws them - through the warp when one is in force.
