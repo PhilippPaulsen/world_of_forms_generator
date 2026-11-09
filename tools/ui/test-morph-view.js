@@ -320,11 +320,11 @@ T('source', () => {
     check('the region is gated: every selector of it starts with html.sr-morph, .lt-morph, .layer-table .lt-morph or #morph-group (nothing above the region mentions sr-morph)', rules.every(r => /^(html\.sr-morph|\.lt-morph|\.layer-table \.lt-morph|#morph-group|@media|html\.sr-morph\.ph)/.test(r.replace(/^\s+/, ''))) && !/sr-morph/.test(CSS.slice(0, at - 200)), rules.filter(r => !/^(html\.sr-morph|\.lt-morph|\.layer-table \.lt-morph|#morph-group|@media|html\.sr-morph\.ph)/.test(r.replace(/^\s+/, ''))).map(r => r.slice(0, 50)).join(' || '));
     check('the dot: the Morph button is a .nav-more, so the existing .nav-more.has-state::after rule draws it (no copy of the dot in the region)', /nav-more'/.test(SRC) || /className = 'icon-btn lt-morph nav-more/.test(SRC)) ;
     check('hotkeys: index.html has no accesskey on the block and the module no key code but Escape and the arrows', !/morph[^>]*accesskey/.test(HTML) && !/e\.key === '[a-zA-Z]'/.test(src));
-    // sketch.js and core/ unchanged against the e1 commit
+    // sketch.js and core/ unchanged against the commit of task 018 (d3 K3 list helpers; was b5a300e7, the e1 commit, before)
     let diff = null;
-    try { diff = cp.execFileSync('git', ['diff', '--stat', 'b5a300e7', '--', 'sketch.js', 'core/tiling.js'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch (e) { diff = null; }
-    if (diff === null) console.log('NOTE  git or the commit b5a300e7 is not available: the sketch.js / core/tiling.js diff pin is skipped');
-    else check('sketch.js and core/tiling.js have an EMPTY diff against b5a300e7 (the e1 commit): the UI stage touches neither (stage d2c changed core/spatial-morph*.js, so the pin names the two files that must stay byte-identical)', diff.trim() === '', diff.trim().slice(0, 200));
+    try { diff = cp.execFileSync('git', ['diff', '--stat', 'd7d66d1f', '--', 'sketch.js', 'core/tiling.js'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch (e) { diff = null; }
+    if (diff === null) console.log('NOTE  git or the commit d7d66d1f is not available: the sketch.js / core/tiling.js diff pin is skipped');
+    else check('sketch.js and core/tiling.js have an EMPTY diff against d7d66d1f (the commit that added the d3 K3 list helpers; the e1 commit was b5a300e7): the UI stage touches neither (stage d2c changed core/spatial-morph*.js, so the pin names the two files that must stay byte-identical)', diff.trim() === '', diff.trim().slice(0, 200));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
