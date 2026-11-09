@@ -55,18 +55,19 @@
         groups: [['btn-undo', 'btn-redo', 'btn-random'], ['btn-toggle-nodes', 'btn-toggle-faces']],
         end: ['btn-more-rail'],
         // the rail's other buttons: the rail's "Mehr" sheet (#more-rail) receives them as a second icon row, above its name line
-        sheet: { id: 'more-rail', before: 'more-name', opener: 'btn-more-rail', items: ['btn-gallery', 'btn-paste-pattern', 'btn-info', 'btn-save', 'btn-clear'],
+        sheet: { id: 'more-rail', before: 'more-name', opener: 'btn-more-rail', items: ['btn-toggle-lines', 'btn-gallery', 'btn-paste-pattern', 'btn-info', 'btn-save', 'btn-clear'],
           // the contextual groups that sketch.js shows under the page while Curve or Free is on (the strength slider, the roughness, ...): they follow their toggles into this sheet and stay hidden until sketch.js shows them
-          settings: ['curve-fold-group', 'curve-strength-group', 'free-roughness-group', 'free-controls-group'] }
+          settings: ['curve-fold-group', 'curve-strength-group', 'free-roughness-group', 'free-controls-group', 'line-weight-group'] }
       },
       // Farbe (commit 2): Fill | the four distribution strategies (the radiogroup wrapper: 4 icons, `icons`) | More. Today's Farbe rail minus Undo / Redo / Random / Clear / the Formorgel link / the Curve-Free popover
-      // (hidden in Farbe by style.css) - what is left of it goes into the sheet: Reset Color, Nodes, the Farborgel link, Info, Download. The sheet's own first row (Curve, Free, ... Neu anfangen) is Form's and stays
+      // (hidden in Farbe by style.css) - what is left of it goes into the sheet: Reset Color, Nodes, Lines (task 024), the Farborgel link, Info, Download. The sheet's own first row (Curve, Free, ... Neu anfangen) is Form's and stays
       // hidden in Farbe (the phone CSS). openerLabel: the name More has while this tool row is on (its own says "Kurve, Frei, ...").
       farbe: {
         groups: [['btn-toggle-faces'], ['farbe-strategy-group']],
         icons: { 'farbe-strategy-group': 4 },
         end: ['btn-more-rail'],
-        sheet: { id: 'more-rail', before: 'more-name', opener: 'btn-more-rail', items: ['btn-face-colors-reset', 'btn-toggle-nodes', 'btn-farborgel', 'btn-info', 'btn-save'],
+        sheet: { id: 'more-rail', before: 'more-name', opener: 'btn-more-rail', items: ['btn-face-colors-reset', 'btn-toggle-nodes', 'btn-toggle-lines', 'btn-farborgel', 'btn-info', 'btn-save'],
+          settings: ['line-weight-group'],
           openerLabel: { text: 'Mehr: Farben zurücksetzen, Knoten, Farborgel, Info, Download', i18n: 'more.farbe.button' } }
       },
       // Netz (commit 3): Undo, Redo | Nodes, Net lines, Fill | More. Net lines is a text button in #more-netz at 768px and up; the phone CSS draws it as an icon in this row. Random, the Formorgel link, Info,
@@ -76,8 +77,8 @@
         labels: { 'net-lines-btn': { text: 'Netzlinien zeigen', i18n: 'netz.lines.button' } },
         groups: [['btn-undo', 'btn-redo'], ['btn-toggle-nodes', 'net-lines-btn', 'btn-toggle-faces']],
         end: ['btn-more-rail'],
-        sheet: { id: 'more-rail', before: 'more-name', opener: 'btn-more-rail', items: ['btn-random', 'btn-gallery', 'btn-info', 'btn-save', 'btn-clear'],
-          settings: ['curve-fold-group', 'curve-strength-group', 'free-roughness-group', 'free-controls-group'] }
+        sheet: { id: 'more-rail', before: 'more-name', opener: 'btn-more-rail', items: ['btn-toggle-lines', 'btn-random', 'btn-gallery', 'btn-info', 'btn-save', 'btn-clear'],
+          settings: ['curve-fold-group', 'curve-strength-group', 'free-roughness-group', 'free-controls-group', 'line-weight-group'] }
       }
     },
     // follow: follower id -> the id of the block it left (sketch.js still shows and hides that block as a whole), on apply and on every UI tick, only while the layout is on. A string copies the block's `hidden`

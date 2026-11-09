@@ -125,6 +125,16 @@ function _snapSheet(o) {
 
 // The spatial morph parameters (core/spatial-morph.js): {} while they are the defaults - so a snapshot of a pattern without a morph is byte-for-byte the one
 // written before the block existed - else { spatialMorph: { enabled, mode, angleDeg } } (normalised). Feature-tested: without core/spatial-morph.js nothing is written.
+// Task 024: the line style, same pattern: {} at the default (visible, weight 2), else { lineStyle: { visible, weight } }.
+function _lineStyleNormalize(l) {
+    const LW = (typeof LINE_WEIGHT !== 'undefined') ? LINE_WEIGHT : { min: 0.5, max: 8, def: 2 };
+    const w = l && typeof l.weight === 'number' && isFinite(l.weight) ? Math.min(LW.max, Math.max(LW.min, l.weight)) : LW.def;
+    return { visible: !(l && l.visible === false), weight: w };
+}
+function _snapLines(l) {
+    const n = _lineStyleNormalize(l);
+    return n.visible && n.weight === 2 ? {} : { lineStyle: n };
+}
 function _snapMorph(m) {
     if (typeof spatialMorphNormalize !== 'function' || typeof spatialMorphEqual !== 'function') return {};
     return spatialMorphEqual(m, undefined) ? {} : { spatialMorph: spatialMorphNormalize(m) };
@@ -161,7 +171,7 @@ function buildSessionSnapshot(s, now) {
             lineColor: s.lineColor, showNodes: !!s.showNodes, showFaces: !!s.showFaces, freeEndpointsEnabled: !!s.freeEndpointsEnabled,
             altNetSeed: s.altNetSeed ? JSON.parse(JSON.stringify(s.altNetSeed)) : null,
             netTransform: s.baseNetTransform ? JSON.parse(JSON.stringify(s.baseNetTransform)) : null,
-        }, _snapMorph(s.spatialMorph)),
+        }, _snapMorph(s.spatialMorph), _snapLines(s.lineStyle)),
         base,
         layers,
         activeLayer: s.activeLayer,
@@ -342,6 +352,12 @@ function validateSession(input) {
         if (st.spatialMorph !== undefined && typeof spatialMorphNormalize === 'function' && typeof spatialMorphEqual === 'function') {
             const m = spatialMorphNormalize(st.spatialMorph);
             if (!spatialMorphEqual(m, undefined)) settings.spatialMorph = m;
+        }
+
+        // line style (task 024): additive, optional; absent or default -> no key (the restore sets the default), a bad field falls back to its default.
+        if (st.lineStyle !== undefined) {
+            const l = _lineStyleNormalize(st.lineStyle);
+            if (!l.visible || l.weight !== 2) settings.lineStyle = l;
         }
 
         const base = _vSheet(raw.base, 'base');

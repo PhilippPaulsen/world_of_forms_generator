@@ -44,7 +44,7 @@ const SESSION_APPLY_CAPTURED = Object.freeze([
     'nodes', 'centroid', 'outerCorners', 'altNetSeed',
     'connections', 'redoStack', 'baseFaceAssignments', 'baseFacePalette', 'baseFaceAnchor', 'baseLastHarmonyType', 'baseLastSelection', 'baseDistributionStrategy',
     'additionalLayers', 'timeline', 'activeLayer',
-    'baseNetTransform', 'baseNetAnimation', 'faceHover', 'spatialMorph',
+    'baseNetTransform', 'baseNetAnimation', 'faceHover', 'spatialMorph', 'lineStyle',
 ]);
 // the `let`s of core/state.js apply deliberately leaves alone (faceSelected: the chip view's outline of the selected trail, UI state it re-derives from the restored trails on its next tick; a rollback must not bring back a key of the old pattern)
 const SESSION_APPLY_UNTOUCHED = Object.freeze(['canvasW', 'canvasH', 'svgPathCollector', 'segmentCollector', 'activeNetWarp', 'faceSelected']);
@@ -56,7 +56,7 @@ function captureSessionGlobals() {
         nodes, centroid, outerCorners, altNetSeed,
         connections, redoStack, baseFaceAssignments, baseFacePalette, baseFaceAnchor, baseLastHarmonyType, baseLastSelection, baseDistributionStrategy,
         additionalLayers, timeline, activeLayer,
-        baseNetTransform, baseNetAnimation, faceHover, spatialMorph,
+        baseNetTransform, baseNetAnimation, faceHover, spatialMorph, lineStyle,
     };
 }
 function _restoreSessionGlobals(c) {
@@ -66,7 +66,7 @@ function _restoreSessionGlobals(c) {
     connections = c.connections; redoStack = c.redoStack; baseFaceAssignments = c.baseFaceAssignments; baseFacePalette = c.baseFacePalette;
     baseFaceAnchor = c.baseFaceAnchor; baseLastHarmonyType = c.baseLastHarmonyType; baseLastSelection = c.baseLastSelection; baseDistributionStrategy = c.baseDistributionStrategy;
     additionalLayers = c.additionalLayers; timeline = c.timeline; activeLayer = c.activeLayer;
-    baseNetTransform = c.baseNetTransform; baseNetAnimation = c.baseNetAnimation; faceHover = c.faceHover; spatialMorph = c.spatialMorph;
+    baseNetTransform = c.baseNetTransform; baseNetAnimation = c.baseNetAnimation; faceHover = c.faceHover; spatialMorph = c.spatialMorph; lineStyle = c.lineStyle;
 }
 
 // The build size of a layer's nodes. A layer animation overwrites layer.shapeSizeFactor frame by frame WITHOUT rebuilding the nodes
@@ -123,7 +123,7 @@ function collectSessionState(symmetryUi, opts) {
         currentShape, nodeCount, shapeSizeFactor, canvasW, canvasH, symmetryMode,
         symmetryCategory: symmetryUi && typeof symmetryUi.category === 'function' ? symmetryUi.category() : null,
         symmetryFold: symmetryUi && typeof symmetryUi.fold === 'function' ? symmetryUi.fold() : null,
-        curveType, lineColor, showNodes, showFaces, freeEndpointsEnabled, altNetSeed, baseNetTransform, spatialMorph,
+        curveType, lineColor, showNodes, showFaces, freeEndpointsEnabled, altNetSeed, baseNetTransform, spatialMorph, lineStyle,
         connections, redoStack, nodes, baseFaceAssignments, baseFacePalette, baseFaceAnchor, baseLastHarmonyType, baseLastSelection, baseDistributionStrategy,
         additionalLayers: layers, timeline, activeLayer,
     };
@@ -182,6 +182,7 @@ function _buildSessionObjects(snap, plan, step) {
     built.altNetSeed = st.altNetSeed ? JSON.parse(JSON.stringify(st.altNetSeed)) : null;
     built.netTransform = st.netTransform ? JSON.parse(JSON.stringify(st.netTransform)) : null;
     // the morph parameters: the saved block, or the DEFAULTS when the snapshot has none (an old snapshot must not keep the morph of the page it is restored into)
+    built.lineStyle = typeof _lineStyleNormalize === 'function' ? _lineStyleNormalize(st.lineStyle) : { visible: true, weight: 2 };
     built.spatialMorph = typeof spatialMorphNormalize === 'function' ? spatialMorphNormalize(st.spatialMorph) : { enabled: false, mode: 'linear', angleDeg: 0 };
     return built;
 }
@@ -233,7 +234,7 @@ function applySessionSnapshot(snapshot, plan, hooks, opts) {
         step('B:layers');
         additionalLayers = built.layers; timeline = built.timeline; activeLayer = snapshot.activeLayer;
         step('B:net');
-        baseNetTransform = built.netTransform; baseNetAnimation = null; faceHover = null; spatialMorph = built.spatialMorph;
+        baseNetTransform = built.netTransform; baseNetAnimation = null; faceHover = null; spatialMorph = built.spatialMorph; lineStyle = built.lineStyle;
         // the state the hooks are told to show: the globals as they now are, with the snapshot's own (category, fold) - the live
         // symmetryUi still holds the OLD ones until the 'symmetry' hook sets them
         const shown = collectSessionState();
