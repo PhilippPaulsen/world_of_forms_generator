@@ -110,6 +110,8 @@
     // ---- strings of the scripts of the phone layout that carry a key ----
     'notice.close': { de: 'Hinweis schließen', en: 'Close notice' },
     'more.farbe.button': { de: 'Mehr: Farben zurücksetzen, Knoten, Farborgel, Info, Download', en: 'More: reset colors, nodes, Farborgel, info, download' },
+    'lines.button': { de: 'Linien: an/aus, Linienstärke', en: 'Lines: on/off, line width' },
+    'lines.weight': { de: 'Linienstärke', en: 'Line width' },
     'netz.lines.button': { de: 'Netzlinien zeigen', en: 'Show net lines' },
     'netz.reverse': { de: 'Richtung umkehren', en: 'Reverse direction' },
     'net.axes.both': { de: 'Beide Achsen', en: 'Both axes' },

@@ -55,6 +55,8 @@ var ceil = Math.ceil;
 // point 6).
 var segmentCollector = null;
 var svgPathCollector = null;
+// Task 024: the app's line style (core/state.js); the gallery always draws its lines (default, never switched here).
+var lineStyle = { visible: true, weight: 2 };
 var centroid = null;
 var curveType = { kind: 'straight' }; // catalog is straight-line-only, matching renderSingleCellSVG.js
 var symmetryMode = null;
