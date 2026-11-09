@@ -27,7 +27,7 @@ function makeRenderWorld(shape, order, size, symmetryMode, files) {
     files = Object.assign({}, files);
     if (process.env.TILING_JS && !files['core/tiling.js']) files['core/tiling.js'] = process.env.TILING_JS;   // sabotage runs
     // the real core + state.js + export.js in a vm (files can replace a core file: a sabotage copy, or the tree before the hook), the grid built
-    const ctx = S.reset(F.makeContext({ state: true, export: true, coreOverrides: files && files['core/tiling.js'] ? { 'core/tiling.js': files['core/tiling.js'] } : undefined }), shape, order, size, symmetryMode || 'none');
+    const ctx = S.reset(F.makeContext({ state: true, export: true, coreOverrides: (function () { const o = {}; Object.keys(files || {}).forEach((k) => { if (/^core\//.test(k) && k !== 'core/spatial-morph-render.js' && k !== 'core/spatial-morph.js') o[k] = files[k]; }); return Object.keys(o).length ? o : undefined; })() }), shape, order, size, symmetryMode || 'none');
     const sb = ctx.sb;
     Object.assign(sb, { width: 600, height: 600, floor: Math.floor, ceil: Math.ceil, min: Math.min, max: Math.max, millis: () => 1e6, setTimelineStatus: () => { }, lerp: (a, b, t) => t * (b - a) + a,
         line: (...a) => sb.__calls.push(['line', ...a]), bezier: (...a) => sb.__calls.push(['bezier', ...a]), __calls: [] });
