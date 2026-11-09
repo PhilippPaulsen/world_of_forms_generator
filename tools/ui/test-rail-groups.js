@@ -47,7 +47,7 @@ T('markup', () => {
     check('the groups are, in DOM order: A, B, More, C, D, E, the strategies, Reset Color', JSON.stringify(G.map(g => g.id)) === JSON.stringify(['rail-group-a', 'rail-group-b', 'rail-group-more', 'rail-group-c', 'rail-group-d', 'rail-group-e', 'farbe-strategy-group', 'rail-group-reset']), G.map(g => g.id).join(' '));
     const want = {
         'rail-group-a': ['btn-undo', 'btn-redo', 'btn-random'],
-        'rail-group-b': ['btn-toggle-nodes', 'btn-toggle-faces'],   // Toggle Curve is in the More popover since commit 2
+        'rail-group-b': ['btn-toggle-nodes', 'btn-toggle-lines', 'btn-toggle-faces'],   // Toggle Curve is in the More popover since commit 2
         'rail-group-more': ['btn-more-rail'],
         'rail-group-c': ['btn-gallery', 'btn-farborgel', 'btn-paste-pattern'],
         'rail-group-d': ['btn-info', 'btn-save'],
@@ -131,9 +131,9 @@ T('visibility', () => {
         return out;
     };
     const flat = tab => visible(tab).map(g => g.join(' ')).join(' | ');
-    check('Form: A | B | C (Formorgel, Paste Pattern) | D | E | More (More is the last item on the desktop through CSS order)', flat('form') === 'btn-undo btn-redo btn-random | btn-toggle-nodes btn-toggle-faces | btn-more-rail | btn-gallery btn-paste-pattern | btn-info btn-save | btn-clear', flat('form'));
-    check('Netz: as Form, without Paste Pattern', flat('netz') === 'btn-undo btn-redo btn-random | btn-toggle-nodes btn-toggle-faces | btn-more-rail | btn-gallery | btn-info btn-save | btn-clear', flat('netz'));
-    check('Farbe: points, fill | Farborgel (in the link\'s place) | info, download | the strategies | Reset Color; A, E, More (with the popover: Curve, Free, Neu anfangen) and the Formorgel link are hidden', flat('farbe') === 'btn-toggle-nodes btn-toggle-faces | btn-farborgel | btn-info btn-save | btn-strategy-cyclic btn-strategy-area btn-strategy-symmetry btn-strategy-rings | btn-face-colors-reset', flat('farbe'));
+    check('Form: A | B | C (Formorgel, Paste Pattern) | D | E | More (More is the last item on the desktop through CSS order)', flat('form') === 'btn-undo btn-redo btn-random | btn-toggle-nodes btn-toggle-lines btn-toggle-faces | btn-more-rail | btn-gallery btn-paste-pattern | btn-info btn-save | btn-clear', flat('form'));
+    check('Netz: as Form, without Paste Pattern', flat('netz') === 'btn-undo btn-redo btn-random | btn-toggle-nodes btn-toggle-lines btn-toggle-faces | btn-more-rail | btn-gallery | btn-info btn-save | btn-clear', flat('netz'));
+    check('Farbe: points, fill | Farborgel (in the link\'s place) | info, download | the strategies | Reset Color; A, E, More (with the popover: Curve, Free, Neu anfangen) and the Formorgel link are hidden', flat('farbe') === 'btn-toggle-nodes btn-toggle-lines btn-toggle-faces | btn-farborgel | btn-info btn-save | btn-strategy-cyclic btn-strategy-area btn-strategy-symmetry btn-strategy-rings | btn-face-colors-reset', flat('farbe'));
     check('the Formorgel link is shown in Form and Netz, the Farborgel link only in Farbe; Paste Pattern only in Form', ['form', 'netz'].every(t => flat(t).includes('btn-gallery') && !flat(t).includes('btn-farborgel')) && flat('farbe').includes('btn-farborgel') && !flat('farbe').includes('btn-gallery') && flat('form').includes('btn-paste-pattern') && !flat('netz').includes('btn-paste-pattern') && !flat('farbe').includes('btn-paste-pattern'));
     check('Farbe still hides Undo, Redo, Random, Clear and More (as a whole group each: a hidden group leaves no gap)', ['rail-group-a', 'rail-group-e', 'rail-group-more'].every(id => hiddenInFarbe.has(id)) && !hiddenInFarbe.has('btn-toggle-curve'));
 });
