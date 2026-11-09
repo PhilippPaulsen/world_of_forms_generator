@@ -11,6 +11,7 @@ const ROOT = path.join(__dirname, '..', '..');
 const SKETCH = fs.readFileSync(process.env.SKETCH_JS || path.join(ROOT, 'sketch.js'), 'utf8');
 const CORE = fs.readFileSync(process.env.SPATIAL_MORPH_JS || path.join(ROOT, 'core', 'spatial-morph.js'), 'utf8');
 const rd = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
+const M = require(process.env.SPATIAL_MORPH_JS || path.join(ROOT, 'core', 'spatial-morph.js'));
 
 let failures = 0, checks = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
@@ -20,7 +21,7 @@ const layer = (nodes, connections, outerCorners) => ({ nodes: nodes.map(([id, x,
 const perms = (n) => n <= 1 ? [[0]] : perms(n - 1).flatMap((p) => Array.from({ length: n }, (_, k) => [...p.slice(0, k), n - 1, ...p.slice(k)]));
 
 const cut = (name) => { const m = SKETCH.match(new RegExp(`function ${name}\\([\\s\\S]*?\\n\\}\\n`)); return m ? m[0] : null; };
-const NAMES = ['timelineEnrichPairingCandidates', 'timelineConclusiveContext', 'timelineConclusiveView', 'resolveTimelineKeyframeCoords', 'resolveConnectionsToCoords', 'getSegmentPairing', 'isValidPairing', 'isValidFlips', 'getSegmentFlips',
+const NAMES = ['timelineEnrichPairingCandidates', 'timelineConclusiveContext', 'timelineConclusiveFree', 'timelineConclusiveRowVariants', 'timelineConclusiveStep', 'timelineConclusiveView', 'resolveTimelineKeyframeCoords', 'resolveConnectionsToCoords', 'getSegmentPairing', 'isValidPairing', 'isValidFlips', 'getSegmentFlips',
   'applyFlipsToCoords', 'memberImageLines', 'sanitizeMembers', 'isValidMemberArray'];
 function world(layers, tl, ge) {
   const sb = { additionalLayers: layers, timeline: tl, layerGroupElements: () => ge || null };
@@ -111,13 +112,36 @@ T('poly', () => {
 console.log('\n== 7. source pins ==');
 T('pins', () => {
   const HTML = rd('index.html'), I18N = rd('ui-i18n.js');
-  check('the switch: a button with aria-pressed="false" in the markup (a reload cannot restore it), its text is the German label and carries the i18n key; no label / checkbox (the netwarp test forbids them in the timeline group)', /<button type="button" id="timeline-pairing-conclusive" class="layer-btn" aria-pressed="false" data-i18n="timeline\.conclusiveOnly">Nur schlüssige Zuordnungen<\/button>/.test(HTML) && !/id="timeline-pairing-conclusive"[^>]*type="checkbox"/.test(HTML));
-  check('the state lives in the button\'s attribute only and is set OFF at load: nothing in sketch.js stores it (no session field, no export, no storage call near it)', /setAttribute\('aria-pressed', 'false'\)/.test(SKETCH) && !/(localStorage|sessionStorage)[^\n]*conclusive/i.test(SKETCH) && !/conclusive[^\n]*(session|exportJson|serialize)/i.test(SKETCH.replace(/\/\/[^\n]*/g, '')));
+  check('the model\'s button: aria-pressed="true" in the markup (ON at load), its text is the German label and carries the i18n key; no label / checkbox (the netwarp test forbids them in the timeline group)', /<button type="button" id="timeline-pairing-conclusive" class="layer-btn" aria-pressed="true" data-i18n="timeline\.conclusiveOnly">Nur schlüssige Zuordnungen<\/button>/.test(HTML) && !/id="timeline-pairing-conclusive"[^>]*type="checkbox"/.test(HTML));
+  check('ONE state variable, ON at load, nothing stores it (no session field, no export, no storage call near it); the button only mirrors it and a click flips it', /let timelinePairingConclusive = true;/.test(SKETCH) && /timelinePairingConclusive = !timelinePairingConclusive;/.test(SKETCH) && (SKETCH.match(/let timelinePairingConclusive\b/g) || []).length === 1 && !/(localStorage|sessionStorage)[^\n]*onclusive/i.test(SKETCH) && !/onclusive[^\n]*(session|exportJson|serialize)/i.test(SKETCH.replace(/\/\/[^\n]*/g, '')) && /setAttribute\('aria-pressed', timelinePairingConclusive \? 'true' : 'false'\)/.test(SKETCH));
+  check('the button is disabled when the filter cannot apply (no context: the segment does not resolve; free line ends)', /conclusiveBox\.elt\.disabled = !conclusiveCtx \|\| conclusiveFree;/.test(SKETCH));
+  const upDown = SKETCH.slice(SKETCH.indexOf("const up = document.createElement('button');"), SKETCH.indexOf("const flip = document.createElement('button');"));
+  check('▲ ▼ are NOT touched by the filter: their disabled state is still only the position (first / last row) and no filter name appears in their code', /up\.disabled = row === 0;/.test(upDown) && /down\.disabled = row === info\.n - 1;/.test(upDown) && !/onclusive/.test(upDown) && upDown.length > 400);
+  check('‹ › are filtered: the stepper takes the conclusive targets (prev / next of timelineConclusiveStep), is disabled without one, and the count shows k (– for 0) of c', /timelineConclusiveRowVariants\(conclusiveCtx, info\.perm, info\.flips, info\.members, endIdx, variants\)/.test(SKETCH) && /if \(stp\) prevBtn\.disabled = prevTarget < 0;/.test(SKETCH) && /if \(stp\) nextBtn\.disabled = nextTarget < 0;/.test(SKETCH) && /variants\[prevTarget\]/.test(SKETCH) && /variants\[nextTarget\]/.test(SKETCH) && /stp\.k > 0 \? stp\.k : '\\u2013'/.test(SKETCH));
   const keys = ['timeline.conclusiveOnly', 'timeline.conclusiveCount', 'timeline.conclusiveNone', 'timeline.conclusiveFree'];
   check('the four texts exist in de and en; the German "none" text is the brief\'s', keys.every((k) => new RegExp(`'${k.replace('.', '\\.')}': \\{ de: '[^']+', en: '[^']+' \\}`).test(I18N)) && /Keine schlüssige Zuordnung\. Filter ausschalten, um alle zu sehen\./.test(I18N) && /Ebene hat freie Linienenden, Filter nicht anwendbar/.test(I18N));
   check('the list code uses the view\'s own order for state "ok" and sorts as before otherwise', /conclusiveView\.state === 'ok'\s*\n?\s*\? shown/.test(SKETCH) && /shown\.sort\(\(a, b\) => \(a\.displacement - b\.displacement\) \* dir \|\| cmpPerm\(a\.perm, b\.perm\)\)/.test(SKETCH));
-  const bodies = NAMES.slice(0, 3).map(cut).join('\n');
-  check('the three new functions touch no store and no DOM (no write to timeline / additionalLayers, no document / window / select)', !/\b(document|window|select|additionalLayers|segmentPairings\s*=|\.segmentFlips\s*=|\.segmentMembers\s*=)\b/.test(bodies.replace(/\/\/[^\n]*/g, '')));
+  const bodies = NAMES.slice(0, 6).map(cut).join('\n');
+  check('the six new functions touch no store and no DOM (no write to timeline / additionalLayers, no document / window / select)', !/\b(document|window|select|additionalLayers|segmentPairings\s*=|\.segmentFlips\s*=|\.segmentMembers\s*=)\b/.test(bodies.replace(/\/\/[^\n]*/g, '')));
+});
+
+console.log('\n== 8. the row stepper (‹ k/c ›) over the conclusive variants ==');
+T('step', () => {
+  const w = world([A, B], tl());
+  const st = (ok, cur) => w.run(`timelineConclusiveStep(${J(ok)}, ${cur})`);
+  check('4 variants, 1 not conclusive: at 2 of 3 (current = index 2) the neighbours skip the index 1', J(st([true, false, true, true], 2)) === J({ k: 2, c: 3, prev: 0, next: 3 }));
+  check('the current variant is not conclusive: k is 0 ("–"), ‹ goes to the previous conclusive one, › to the next, both in the row\'s own order, cyclic', J(st([true, false, true, true], 1)) === J({ k: 0, c: 3, prev: 0, next: 2 }) && J(st([false, true, true, false], 3)) === J({ k: 0, c: 2, prev: 2, next: 1 }));
+  check('wrap-around: from the last conclusive one › goes to the first and ‹ from the first to the last', J(st([true, false, true], 2)) === J({ k: 2, c: 2, prev: 0, next: 0 }) && J(st([true, false, true], 0)).includes('"prev":2') && J(st([true, false, true], 0)).includes('"next":2'));
+  check('the only conclusive one is the current one: c 1, no target either way; none conclusive: c 0, k 0, no target', J(st([false, true, false], 1)) === J({ k: 1, c: 1, prev: -1, next: -1 }) && J(st([false, false], 0)) === J({ k: 0, c: 0, prev: -1, next: -1 }));
+  const ge = { groupOrder: 2, perms: [new Map(), new Map([[1, 1], [2, 3], [3, 2]])] };
+  const w2 = world([A, B], tl(), ge); const ctx = w2.run('timelineConclusiveContext(0)');
+  w2.sb.CTX = ctx;
+  const ok = w2.run('timelineConclusiveRowVariants(CTX, [0, 1, 2], [false, false, false], [0, 0, 0], 0, [{ g: 0, f: false }, { g: 0, f: true }, { g: 1, f: false }])');
+  const want = [{ g: 0, f: false }, { g: 0, f: true }, { g: 1, f: false }].map((v) => { const s = M.spatialMorphScorePairing(A, B, [0, 1, 2], [v.f, false, false], [v.g, 0, 0], { poly: ctx.poly, groupElements: ge }); return s.dangling === 0 && s.nodeMiss === 0 && s.boundaryMiss === 0; });
+  check('timelineConclusiveRowVariants: reversing only End line 0 splits a node (not conclusive), the unchanged variant is; the booleans equal the score of the whole pairing with that variant set (incl. a group element)', J(ok) === J(want) && ok[0] === true && ok[1] === false, J(ok));
+  check('the context always carries the group elements when the layer has them (a variant may name an element although the segment has no members yet)', !!ctx.groupElements && ctx.members === null);
+  const before = J([A, B]); w2.run('timelineConclusiveRowVariants(CTX, [0, 1, 2], [false, false, false], [0, 0, 0], 0, [{ g: 0, f: true }])');
+  check('pure: the layers and the arguments are unchanged', J([A, B]) === before);
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

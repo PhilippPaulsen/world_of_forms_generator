@@ -75,7 +75,8 @@
       up: { enabled: !!row && !row.upOff },
       down: { enabled: !!row && !row.downOff },
       flip: { enabled: !!row },
-      variant: { enabled: !!v, prevEnabled: !!v && !v.prevOff, nextEnabled: !!v && !v.nextOff, text: v ? v.k + '/' + v.c : (row ? '1/1' : '–') },
+      variant: { enabled: !!v, prevEnabled: !!v && !v.prevOff, nextEnabled: !!v && !v.nextOff, text: v ? (v.k > 0 ? v.k : '\u2013') + '/' + v.c : (row ? '1/1' : '–') },   // k 0: the current variant is not a conclusive one (task 019)
+      conclusive: { shown: !!m.conclusive, pressed: !!(m.conclusive && m.conclusive.pressed), enabled: !!(m.conclusive && !m.conclusive.off), reason: m.conclusive && m.conclusive.off ? 'timeline.conclusiveFree' : null },
       reset: row ? (m.resetHidden ? { enabled: false, reason: 'timeline.pairingDefault' } : { enabled: true, reason: null }) : { enabled: false, reason: null },
     };
   }
@@ -90,7 +91,7 @@
     return clamp(selected + (action === 'up' ? -1 : 1), 0, Math.max(0, count - 1));
   }
   function modelSignature(vm, lang) {
-    return JSON.stringify([lang || '', vm.open, vm.list, vm.count, vm.selected, vm.segment, vm.up, vm.down, vm.flip, vm.variant, vm.reset]);
+    return JSON.stringify([lang || '', vm.open, vm.list, vm.count, vm.selected, vm.segment, vm.up, vm.down, vm.flip, vm.variant, vm.reset, vm.conclusive]);
   }
 
   // ---- the list: the pure part ----
@@ -105,10 +106,11 @@
     return {
       shown: inp.shown === undefined ? rows.length : inp.shown,
       total: inp.total === undefined ? rows.length : inp.total,
+      note: String(inp.note || ''),   // the model's filter line ("4 von 6 schlüssig", or the message of an empty / not applicable filter): shown in the header instead of the count
       rows: sorted.map(function (r) { return { key: r.key, order: Array.isArray(r.perm) ? r.perm.map(function (j) { return j + 1; }).join(' ') : String(r.text || ''), sum: r.sum, sumText: formatSum(r.sum, lang), current: !!r.current, isDefault: !!r.isDefault }; }),
     };
   }
-  function listSignature(lv, lang) { return JSON.stringify([lang || '', lv.shown, lv.total, lv.rows]); }
+  function listSignature(lv, lang) { return JSON.stringify([lang || '', lv.shown, lv.total, lv.note, lv.rows]); }
 
   // ---- the DOM part ---------------------------------------------------------------------------------------------------------------------------------
   const ICON = {
@@ -118,6 +120,7 @@
     left: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 7 L9 12 L14 17"/></svg>',
     right: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 7 L15 12 L10 17"/></svg>',
     reset: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8 A7 7 0 1 1 5 12"/><path d="M6 4 V8 H10"/></svg>',
+    filter: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6 H20 L14 13 V19 L10 17 V13 Z"/></svg>',
     list: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7 H20 M4 12 H20 M4 17 H20"/></svg>',
   };
 
@@ -155,10 +158,11 @@
     function readModel(withRows) {
       const sel = segSelect(), panel = doc.getElementById('timeline-pairing'), reset = doc.getElementById('btn-timeline-pairing-reset');
       const segCount = sel ? (sel.options ? sel.options.length : kids(sel).length) : 0;
-      const m = { segCount: panel && panel.hidden ? 0 : segCount, segValue: sel ? parseInt(sel.value, 10) || 0 : 0, rows: [], resetHidden: !reset || !!reset.hidden };
+      const cb = doc.getElementById('timeline-pairing-conclusive');   // the model's filter button (task 019): this view's icon mirrors and forwards to it
+      const m = { segCount: panel && panel.hidden ? 0 : segCount, segValue: sel ? parseInt(sel.value, 10) || 0 : 0, rows: [], resetHidden: !reset || !!reset.hidden, conclusive: cb && !(panel && panel.hidden) ? { pressed: cb.getAttribute('aria-pressed') === 'true', off: isOff(cb) } : null };
       if (withRows && !(panel && panel.hidden)) m.rows = modelRows().map(function (row) {   // sketch.js hides the panel without clearing its rows when there is no segment: stale rows are no rows
         const cnt = pick(row, 'count'), prev = pick(row, 'prev'), next = pick(row, 'next');
-        return { upOff: isOff(pick(row, 'up')), downOff: isOff(pick(row, 'down')), variant: cnt ? { k: parseInt(cnt.dataset ? cnt.dataset.k : '1', 10) || 1, c: parseInt(cnt.dataset ? cnt.dataset.c : '1', 10) || 1, prevOff: isOff(prev), nextOff: isOff(next) } : null };
+        return { upOff: isOff(pick(row, 'up')), downOff: isOff(pick(row, 'down')), variant: cnt ? { k: (function (v) { return isNaN(v) ? 1 : v; })(parseInt(cnt.dataset ? cnt.dataset.k : '1', 10)), c: parseInt(cnt.dataset ? cnt.dataset.c : '1', 10) || 1, prevOff: isOff(prev), nextOff: isOff(next) } : null };
       });
       return m;
     }
@@ -189,13 +193,15 @@
     seg.hidden = true;
     const listBtn = iconButton('ph-tl-listbtn', 'ph-tl-listicon', 'timeline.listAll', ICON.list);
     listBtn.hidden = true;
+    const conclBtn = iconButton('ph-tl-conclusive', 'ph-tl-conclusive', 'timeline.conclusiveOnly', ICON.filter);   // the filter switch, between the list icon and the reset (task 019)
+    conclBtn.setAttribute('aria-pressed', 'false');
     const listHead = el('div', 'ph-tl-listhead', { id: 'ph-tl-listhead' });
     const backBtn = iconButton(null, 'ph-tl-back', 'timeline.listBack', ICON.left);
     const countEl = el('span', 'ph-tl-listcount', { 'aria-live': 'polite' });
     listHead.appendChild(backBtn); listHead.appendChild(countEl);
     const listEl = el('div', 'ph-tl-list', { id: 'ph-tl-list', role: 'group', 'data-i18n': 'timeline.listAll' });
     name(listEl, 'timeline.listAll');
-    [chips, moves, variant, listBtn, resetBtn, listHead, listEl].forEach(function (n) { home.appendChild(n); });
+    [chips, moves, variant, listBtn, conclBtn, resetBtn, listHead, listEl].forEach(function (n) { home.appendChild(n); });
     const icons = doc.getElementById('ph-tl-icons'), toggle = icons && kids(icons).filter(function (c) { return /\bph-tl-pairing\b/.test(c.className || ''); })[0];
     if (icons && toggle) icons.insertBefore(seg, toggle.nextSibling); else home.appendChild(seg);
 
@@ -221,6 +227,13 @@
       refresh(true);
       return true;
     }
+    function forwardConclusive() {   // ONE click on the model's filter button; it flips the model's own state and re-renders
+      const b = doc.getElementById('timeline-pairing-conclusive');
+      if (!b || isOff(b)) return false;
+      b.click();
+      refresh(true);
+      return true;
+    }
     function selectChip(i) { selected = i; refresh(true); }
     function chooseSegment() {
       const m = segSelect();
@@ -237,6 +250,7 @@
     guard(prevBtn, function () { forward('prev'); });
     guard(nextBtn, function () { forward('next'); });
     guard(resetBtn, forwardReset);
+    guard(conclBtn, forwardConclusive);
     seg.addEventListener('change', chooseSegment);
 
     // ---- the list: the model's own list is opened with a click on its Browse all button and read afresh; it is closed again whenever the list view is left ----
@@ -253,7 +267,8 @@
         const d = b.dataset || {}, parts = kids(b), orient = d.flip !== undefined, perm = orient ? null : String(d.perm || '').split('').map(Number);
         return { key: rowKey(b), idx: idx, perm: perm, text: orient ? String(parts[0] ? parts[0].textContent : '').replace(/\s*\(as clicked\)\s*$/, '') : '', sum: parseInt(String(parts[1] ? parts[1].textContent : '').replace(/\D/g, ''), 10) || 0, current: /\bcurrent\b/.test(b.className || ''), isDefault: orient ? (d.flip === '0' && d.member === '0') : perm.every(function (j, i) { return j === i; }) };
       });
-      return { rows: rows, shown: mt ? +mt[1] : rows.length, total: mt ? +mt[2] : rows.length };
+      const nt = doc.getElementById('timeline-pairing-conclusive-note');
+      return { rows: rows, shown: mt ? +mt[1] : rows.length, total: mt ? +mt[2] : rows.length, note: nt && !nt.hidden ? String(nt.textContent || '') : '' };
     }
     function clickModel(b) { busy = true; try { b.click(); } finally { busy = false; } }
     function enterList() {
@@ -332,10 +347,10 @@
       if (seg.value !== vm.segment.value) seg.value = vm.segment.value;
     }
     function renderList() {
-      const lang = win.UI && win.UI.lang, rd = readList(), lv = phoneListModel({ rows: rd.rows, shown: rd.shown, total: rd.total, lang: lang }), lsig = listSignature(lv, lang);
+      const lang = win.UI && win.UI.lang, rd = readList(), lv = phoneListModel({ rows: rd.rows, shown: rd.shown, total: rd.total, lang: lang, note: rd.note }), lsig = listSignature(lv, lang);
       if (lsig === listSig) return false;
       listSig = lsig; listVm = lv;
-      const t = text('timeline.pairingCount', { shown: lv.shown, total: lv.total });
+      const t = lv.note ? lv.note : text('timeline.pairingCount', { shown: lv.shown, total: lv.total });
       if (countEl.textContent !== t) countEl.textContent = t;
       kids(listEl).forEach(function (c) { listEl.removeChild(c); });
       lv.rows.forEach(function (r) {
@@ -362,6 +377,10 @@
       setOff(prevBtn, !vm.variant.prevEnabled); setOff(nextBtn, !vm.variant.nextEnabled);
       if (count.textContent !== vm.variant.text) count.textContent = vm.variant.text;
       setOff(resetBtn, !vm.reset.enabled, vm.reset.reason);
+      conclBtn.hidden = !vm.conclusive.shown;
+      conclBtn.setAttribute('aria-pressed', vm.conclusive.pressed ? 'true' : 'false');
+      if (vm.conclusive.pressed) { if (conclBtn.className.indexOf(' active') < 0) conclBtn.className += ' active'; } else conclBtn.className = conclBtn.className.replace(/\s*\bactive\b/, '');
+      setOff(conclBtn, !vm.conclusive.enabled, vm.conclusive.reason);
     }
     // sync(): on every UI.onSync tick and after every click on the document (a cheap signature compare); refresh(force): after a tap of this view
     function refresh(force) {
