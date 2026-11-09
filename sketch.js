@@ -1459,7 +1459,7 @@ function setup() {
             r.appendChild(flip);
             if (vCount > 1) {
                 // d3 K3 (task 019): with the filter active only the variants that make the WHOLE pairing conclusive are stepped over; k counts those (0 = the current one is not conclusive: "\u2013")
-                const okRow = conclusiveActive ? timelineConclusiveRowVariants(conclusiveCtx, info.perm, info.flips, info.members, endIdx, variants) : null;
+                const okRow = conclusiveActive ? timelineConclusiveRowImage(conclusiveCtx, info.perm, info.flips, info.members, endIdx, variants, timelineConclusiveRowVariants(conclusiveCtx, info.perm, info.flips, info.members, endIdx, variants)) : null;
                 const stp = okRow ? timelineConclusiveStep(okRow, vIdx) : null;
                 const prevTarget = stp ? stp.prev : (vIdx - 1 + vCount) % vCount;
                 const nextTarget = stp ? stp.next : (vIdx + 1) % vCount;
@@ -1502,6 +1502,7 @@ function setup() {
             : `Displacement \u03A3d\u00B2: ${fmt(info.displacement)} px\u00B2 (default: ${fmt(info.defaultDisplacement)})`);
         timelinePairingResetBtn.elt.hidden = info.isDefault;
         renderTimelinePairingBrowser(info, seg);
+        timelineImageCheckSchedule(setTimeout, () => performance.now(), renderTimelinePairingEditor);   // task 022: the image test continues in portions (a no-op when nothing waits)
     }
     window.renderTimelinePairingEditor = renderTimelinePairingEditor;
 
@@ -1532,16 +1533,21 @@ function setup() {
         const maxRaw = parseFloat(timelinePairingFilterInput.elt.value);
         const hasMax = Number.isFinite(maxRaw);
         const cmpPerm = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; };
-        const conclusiveView = timelineConclusiveView(cand, timelinePairingConclusive, timelinePairingConclusive ? timelineConclusiveContext(seg) : null);
-        const shown = conclusiveView.items.filter(it => !hasMax || Math.round(it.displacement) <= maxRaw);
+        const conclusiveCtxB = timelinePairingConclusive ? timelineConclusiveContext(seg) : null;
+        const conclusiveView = timelineConclusiveView(cand, timelinePairingConclusive, conclusiveCtxB);
+        const conclusiveStage = conclusiveCtxB ? timelineConclusiveImageStage(conclusiveView, conclusiveCtxB) : { items: conclusiveView.items, pending: 0, done: 0, total: 0 };   // task 022: the image test narrows the score's list
+        const conclusiveEmpty = conclusiveView.state === 'empty' || (conclusiveView.state === 'ok' && conclusiveStage.pending === 0 && conclusiveStage.items.length === 0);
+        const shown = conclusiveStage.items.filter(it => !hasMax || Math.round(it.displacement) <= maxRaw);
         const rows = conclusiveView.state === 'ok'
             ? shown   // the filter's own order (best score first) stands
             : shown.sort((a, b) => (a.displacement - b.displacement) * dir || cmpPerm(a.perm, b.perm));
         if (conclusiveNote) {
             conclusiveNote.elt.hidden = conclusiveView.state === 'off';
-            conclusiveNote.elt.textContent = conclusiveView.state === 'ok'
-                ? (window.UI && UI.t ? UI.t('timeline.conclusiveCount', { kept: conclusiveView.kept, total: conclusiveView.total }) : `${conclusiveView.kept} von ${conclusiveView.total} schl\u00FCssig`)
-                : conclusiveView.state === 'empty'
+            conclusiveNote.elt.textContent = conclusiveView.state === 'ok' && !conclusiveEmpty
+                ? (conclusiveStage.pending > 0
+                    ? (window.UI && UI.t ? UI.t('timeline.conclusiveChecking', { done: conclusiveStage.done, total: conclusiveStage.total }) : `wird gepr\u00FCft ${conclusiveStage.done} von ${conclusiveStage.total}`)
+                    : (window.UI && UI.t ? UI.t('timeline.conclusiveCount', { kept: conclusiveStage.items.length, total: conclusiveView.total }) : `${conclusiveStage.items.length} von ${conclusiveView.total} schl\u00FCssig`))
+                : conclusiveEmpty
                     ? (window.UI && UI.t ? UI.t('timeline.conclusiveNone') : 'Keine schl\u00FCssige Zuordnung. Filter ausschalten, um alle zu sehen.')
                     : conclusiveView.state === 'free'
                         ? (window.UI && UI.t ? UI.t('timeline.conclusiveFree') : 'Ebene hat freie Linienenden, Filter nicht anwendbar')
@@ -3869,6 +3875,95 @@ function timelineConclusiveStep(ok, cur) {
     const k = ok[cur] ? ok.slice(0, cur + 1).filter(Boolean).length : 0;
     const find = dir => { for (let d = 1; d < len; d++) { const i = (((cur + dir * d) % len) + len) % len; if (ok[i]) return i; } return -1; };
     return { k, c, prev: find(-1), next: find(1) };
+}
+// ---- task 022: the IMAGE test of the conclusive filter (stage 2). A pairing that the score passes can still show loose ends or open seams in a part of the transition; the test draws the frame the morph
+// draws (core/spatial-morph.js spatialMorphPairingFrame, the render's own building blocks) at five times and counts them. It runs for the candidates the editor SHOWS (the list, the rows' steppers) only,
+// in portions of at most timelineImageBudgetMs, between two timer ticks, never per frame; results are cached by picture key and cleared when the layers, the segment or the morph mode change.
+const timelineImageBudgetMs = 25;
+// The page state the test needs, read once per layer pair and mode: the start layer's sheet, its tiles, the span, the symmetry operations, the seam layout. null when a piece is missing.
+function timelineImageEnv(ctx) {
+    if (typeof spatialMorphRenderSource !== 'function' || typeof spatialMorphRenderRecordTiles !== 'function' || typeof spatialMorphRenderToWorld !== 'function') return null;
+    const sm = typeof spatialMorph !== 'undefined' ? spatialMorph : null;
+    const mode = spatialMorphNormalizeMode(sm ? sm.mode : 'linear'), angleDeg = spatialMorphNumber(sm ? sm.angleDeg : 0);
+    const at = additionalLayers.indexOf(ctx.layerA);
+    const src = spatialMorphRenderSource({ ids: [at >= 0 ? at : 'base'] });
+    const tiles = spatialMorphRenderRecordTiles(src);
+    if (!tiles.length) return null;
+    const center = { x: canvasW / 2, y: canvasH / 2 };
+    const sym = spatialMorphSymmetryOps(src.shape, src.symmetryMode);
+    const tilePolys = tiles.map(t => src.outerCorners.map(p => toTileLocal(p, t.c, t.flip, t.rot)));
+    return {
+        mode, angleDeg, poly: src.outerCorners, tiles, sym, center, toWorld: spatialMorphRenderToWorld,
+        axisFor: tile => (sym.hasReflection ? (tile.axis || mirrorAxisDir()) : null),
+        span: spatialMorphSpanFromCentroids(mode, tiles.map(t => t.c), canvasW, canvasH, { angleDeg, center }),
+        w: canvasW, h: canvasH, layout: spatialMorphFrameLayout(tiles, tilePolys, src.outerCorners, src.centroid),
+        times: mode === 'bilinear' ? [null] : [0.1, 0.25, 0.5, 0.75, 0.9],
+    };
+}
+function timelineImageCheckNew() {
+    return { sig: null, ctx: null, env: undefined, cache: new Map(), pending: new Map(), job: { queue: [], i: 0 }, timer: null, done: 0, total: 0, tested: 0 };
+}
+let timelineImageCheck = timelineImageCheckNew();
+// What the cached results depend on: both layers' lines, nodes, sheet and the morph's mode / angle / canvas.
+function timelineImageSignature(ctx) {
+    const sm = typeof spatialMorph !== 'undefined' ? spatialMorph : null;
+    const lay = l => [l.connections, l.nodes.map(n => [n.id, n.x, n.y]), l.symmetryMode, l.shape, l.shapeSizeFactor, l.outerCorners];
+    return JSON.stringify([lay(ctx.layerA), lay(ctx.layerB), sm ? [sm.mode, sm.angleDeg] : null, typeof canvasW !== 'undefined' ? [canvasW, canvasH] : null]);
+}
+function timelineImageCheckStop() {
+    const C = timelineImageCheck;
+    if (C.timer !== null && typeof clearTimeout === 'function') clearTimeout(C.timer);
+    C.timer = null;
+}
+// The result for one candidate ({ perm, flips, members }): true / false when known, undefined while it waits for its turn (it is queued once per picture).
+function timelineImageResult(ctx, cand) {
+    let C = timelineImageCheck;
+    const sig = ctx.imageSig || (ctx.imageSig = timelineImageSignature(ctx));   // once per context, not once per candidate
+    if (sig !== C.sig) { timelineImageCheckStop(); C = timelineImageCheck = timelineImageCheckNew(); C.sig = sig; }
+    C.ctx = ctx;
+    const paired = spatialMorphPairedLines(ctx.layerA, ctx.layerB, cand.perm, cand.flips, cand.members, ctx.groupElements);
+    if (!paired) return false;
+    const key = spatialMorphImageKey(ctx.layerA, ctx.layerB, cand.perm, cand.flips, cand.members, ctx.groupElements);
+    if (C.cache.has(key)) return C.cache.get(key);
+    if (!C.pending.has(key)) { C.pending.set(key, paired); C.job.queue.push(key); C.total++; }
+    return undefined;
+}
+// One queued picture: the test itself. Without an environment (a piece of the page missing) the test is off and every picture passes.
+function timelineImageCheckStep(key) {
+    const C = timelineImageCheck, paired = C.pending.get(key);
+    let pass = true;
+    try {
+        if (C.env === undefined) C.env = timelineImageEnv(C.ctx);
+        pass = C.env === null ? true : spatialMorphTestPairingImage(C.env, paired, { stopAtFirst: true }).pass;
+    } catch (err) { C.env = null; }   // the page changed under the test (a layer is gone): the test is off for this signature, nothing is excluded
+    C.cache.set(key, pass); C.pending.delete(key); C.done++; C.tested++;
+}
+// One portion (budget ms of now()), then, while work is left, the next one after a timer tick; onProgress() after every portion (the editor shows the new state).
+function timelineImageCheckSchedule(setTimer, now, onProgress) {
+    const C = timelineImageCheck;
+    if (C.timer !== null || C.job.i >= C.job.queue.length) return false;
+    const mine = C;
+    C.timer = setTimer(() => {
+        mine.timer = null;
+        if (mine !== timelineImageCheck) return;   // the cache was cleared meanwhile: this job is gone
+        const r = spatialMorphRunPortion(mine.job, timelineImageCheckStep, timelineImageBudgetMs, now);
+        onProgress();
+        if (!r.done) timelineImageCheckSchedule(setTimer, now, onProgress);
+    }, 0);
+    return true;
+}
+// The candidates of a view that pass the image test, in the view's order; while results are missing only the checked ones count. -> { items, pending, done, total }.
+function timelineConclusiveImageStage(view, ctx) {
+    if (view.state !== 'ok') return { items: view.items, pending: 0, done: 0, total: 0 };
+    const items = [];
+    let pending = 0;
+    view.items.forEach(it => { const r = timelineImageResult(ctx, it); if (r === true) items.push(it); else if (r === undefined) pending++; });
+    const C = timelineImageCheck;
+    return { items, pending, done: C.done, total: C.total };
+}
+// One row's variants: ok (the score's booleans) narrowed to the pictures that pass the image test; a variant whose test is still waiting does not count (yet).
+function timelineConclusiveRowImage(ctx, perm, flips, members, endIdx, variants, ok) {
+    return ok.map((v, i) => v && timelineImageResult(ctx, { perm, flips: flips.map((f, j) => (j === endIdx ? !!variants[i].f : f)), members: members.map((g, j) => (j === endIdx ? variants[i].g : g)) }) === true);
 }
 // The list to show: { state: 'off' | 'ok' | 'empty' | 'free', items, kept, total }. Off (or no context): cand.items itself, untouched. 'free': a layer has free line ends, so no pairing could be
 // conclusive: the unfiltered list. Otherwise the filter's list, best first ('empty': no substitute list).
