@@ -322,9 +322,9 @@ T('source', () => {
     check('hotkeys: index.html has no accesskey on the block and the module no key code but Escape and the arrows', !/morph[^>]*accesskey/.test(HTML) && !/e\.key === '[a-zA-Z]'/.test(src));
     // sketch.js and core/ unchanged against the commit of task 018 (d3 K3 list helpers; was b5a300e7, the e1 commit, before)
     let diff = null;
-    try { diff = cp.execFileSync('git', ['diff', '--stat', '28d610fa', '--', 'sketch.js', 'core/tiling.js'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch (e) { diff = null; }
-    if (diff === null) console.log('NOTE  git or the commit 28d610fa is not available: the sketch.js / core/tiling.js diff pin is skipped');
-    else check('sketch.js and core/tiling.js have an EMPTY diff against 28d610fa (the commit that added the d3 K3 list helpers; the e1 commit was b5a300e7): the UI stage touches neither (stage d2c changed core/spatial-morph*.js, so the pin names the two files that must stay byte-identical)', diff.trim() === '', diff.trim().slice(0, 200));
+    try { diff = cp.execFileSync('git', ['diff', '--stat', '92dee30c', '--', 'sketch.js', 'core/tiling.js'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch (e) { diff = null; }
+    if (diff === null) console.log('NOTE  git or the commit 92dee30c is not available: the sketch.js / core/tiling.js diff pin is skipped');
+    else check('sketch.js and core/tiling.js have an EMPTY diff against 92dee30c (the commit that added the d3 K3 list helpers; the e1 commit was b5a300e7): the UI stage touches neither (stage d2c changed core/spatial-morph*.js, so the pin names the two files that must stay byte-identical)', diff.trim() === '', diff.trim().slice(0, 200));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
