@@ -3901,7 +3901,7 @@ function timelineImageEnv(ctx) {
     };
 }
 function timelineImageCheckNew() {
-    return { sig: null, ctx: null, env: undefined, cache: new Map(), pending: new Map(), job: { queue: [], i: 0 }, timer: null, done: 0, total: 0, tested: 0 };
+    return { sig: null, ctx: null, env: undefined, cache: new Map(), pending: new Map(), keys: new Map(), appear: new Map(), job: { queue: [], i: 0 }, timer: null, done: 0, total: 0, tested: 0 };
 }
 let timelineImageCheck = timelineImageCheckNew();
 // What the cached results depend on: both layers' lines, nodes, sheet and the morph's mode / angle / canvas.
@@ -3915,17 +3915,19 @@ function timelineImageCheckStop() {
     if (C.timer !== null && typeof clearTimeout === 'function') clearTimeout(C.timer);
     C.timer = null;
 }
+function timelineImageCandKey(c) { return JSON.stringify([c.perm, c.flips, c.members]); }
 // The result for one candidate ({ perm, flips, members }): true / false when known, undefined while it waits for its turn (it is queued once per picture).
 function timelineImageResult(ctx, cand) {
     let C = timelineImageCheck;
     const sig = ctx.imageSig || (ctx.imageSig = timelineImageSignature(ctx));   // once per context, not once per candidate
     if (sig !== C.sig) { timelineImageCheckStop(); C = timelineImageCheck = timelineImageCheckNew(); C.sig = sig; }
     C.ctx = ctx;
-    const paired = spatialMorphPairedLines(ctx.layerA, ctx.layerB, cand.perm, cand.flips, cand.members, ctx.groupElements);
-    if (!paired) return false;
-    const key = spatialMorphImageKey(ctx.layerA, ctx.layerB, cand.perm, cand.flips, cand.members, ctx.groupElements);
+    const ck = timelineImageCandKey(cand);
+    let key = C.keys.get(ck);   // the picture key of a candidate once (the editor asks for every candidate at every render)
+    if (key === undefined) { key = spatialMorphImageKey(ctx.layerA, ctx.layerB, cand.perm, cand.flips, cand.members, ctx.groupElements); C.keys.set(ck, key); }
+    if (key === null) return false;
     if (C.cache.has(key)) return C.cache.get(key);
-    if (!C.pending.has(key)) { C.pending.set(key, paired); C.job.queue.push(key); C.total++; }
+    if (!C.pending.has(key)) { C.pending.set(key, spatialMorphPairedLines(ctx.layerA, ctx.layerB, cand.perm, cand.flips, cand.members, ctx.groupElements)); C.job.queue.push(key); C.total++; }
     return undefined;
 }
 // One queued picture: the test itself. Without an environment (a piece of the page missing) the test is off and every picture passes.
@@ -3959,6 +3961,11 @@ function timelineConclusiveImageStage(view, ctx) {
     let pending = 0;
     view.items.forEach(it => { const r = timelineImageResult(ctx, it); if (r === true) items.push(it); else if (r === undefined) pending++; });
     const C = timelineImageCheck;
+    // A long list (> 100) must not jump while the test runs: the hits keep the order they first appeared in (new ones are appended below); when the test is through they take the score's order.
+    if (pending > 0 && view.items.length > 100) {
+        items.forEach(it => { const k = timelineImageCandKey(it); if (!C.appear.has(k)) C.appear.set(k, C.appear.size); });
+        items.sort((a, b) => C.appear.get(timelineImageCandKey(a)) - C.appear.get(timelineImageCandKey(b)));
+    }
     return { items, pending, done: C.done, total: C.total };
 }
 // One row's variants: ok (the score's booleans) narrowed to the pictures that pass the image test; a variant whose test is still waiting does not count (yet).
