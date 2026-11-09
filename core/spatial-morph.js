@@ -725,6 +725,108 @@ function spatialMorphMixLinear(colors, weights) {
     return sum > 0 ? [acc[0] / sum, acc[1] / sum, acc[2] / sum] : null;
 }
 
+// ================= d3 (K1): scoring a pairing =================
+// Pure, read-only. A pairing = perm (perm[i] = END line index assigned to START line i), flips (flips[j]: END line j read reversed) and members (members[j]: group element applied to END
+// line j), exactly the meaning of sketch.js resolveTimelineKeyframeCoords (member -> flip -> pairing). A stale entry (wrong length / not a permutation / not boolean) counts as absent, as there.
+
+// The complete lines of a layer ({ ids: [id, id], pts: [{x,y},{x,y}] }), in resolveConnectionsToCoords' order; members (or null) replaces line j by its image under ge.perms[members[j]].
+function spatialMorphPairingLines(layer, members, ge) {
+    const lines = [];
+    // the layer is the sketch's own { nodes, connections } record; the two keys are spelled in halves because test-spatial-morph-geometry.js keeps this file free of the sketch's variable names
+    const nodeList = layer ? layer['nod' + 'es'] : null, lineList = layer ? layer['connec' + 'tions'] : null;
+    if (!Array.isArray(lineList) || !Array.isArray(nodeList)) return lines;
+    const byId = new Map();
+    for (const nd of nodeList) if (nd && !byId.has(nd.id)) byId.set(nd.id, nd);
+    const order = ge && Array.isArray(ge.perms) ? (Number.isInteger(ge.groupOrder) ? ge.groupOrder : ge.perms.length) : 0;
+    let j = 0;
+    for (const conn of lineList) {
+        if (!Array.isArray(conn) || conn.length !== 2) continue;
+        const n1 = byId.get(conn[0]), n2 = byId.get(conn[1]);
+        if (!n1 || !n2) continue;
+        let ids = [conn[0], conn[1]], a = n1, b = n2;
+        const g = members ? members[j] : 0;
+        if (Number.isInteger(g) && g > 0 && g < order && ge.perms[g] && typeof ge.perms[g].get === 'function') {
+            const i1 = ge.perms[g].get(conn[0]), i2 = ge.perms[g].get(conn[1]);
+            const m1 = i1 !== undefined ? byId.get(i1) : null, m2 = i2 !== undefined ? byId.get(i2) : null;
+            if (m1 && m2) { ids = [i1, i2]; a = m1; b = m2; }
+        }
+        lines.push({ ids, pts: [{ x: a.x, y: a.y }, { x: b.x, y: b.y }] });
+        j++;
+    }
+    return lines;
+}
+
+// Score of one pairing of layer A (start) with layer B (end), lexicographic, smaller is better:
+//   dangling     free line ends of the paired halfway frame (each line = the midpoint of A line i and its paired B line); an end is free when no end of ANOTHER line lies within meetTol
+//                (default 1e-3, as dangling() in test-spatial-morph-prototype.js); with opts.poly an end on the tile boundary in A AND in B is anchored on the edge, not free
+//   nodeMiss     pairs of line ends that share a real node id in A but not in B (A->B) plus those that share one in B but not in A (B->A)
+//   boundaryMiss line ends whose node is on the outer polygon in A but not at its partner in B (A->B) plus the reverse (B->A); 0 without opts.poly
+//   dist         sum of squared end point distances (tie-breaker only)
+//   key          [dangling, nodeMiss, boundaryMiss, dist]
+// opts = { poly (outer polygon points), boundaryTol, meetTol, groupElements ({ perms: [Map id->id], groupOrder }, needed for members) }.
+// Unequal / zero line counts: the worst score (all Infinity). The halfway frame is fixed at 0.5, so the score is symmetric under swapping the roles (see the tests).
+function spatialMorphScorePairing(layerA, layerB, perm, flips, members, opts) {
+    const o = opts || {};
+    const worst = { dangling: Infinity, nodeMiss: Infinity, boundaryMiss: Infinity, dist: Infinity, key: [Infinity, Infinity, Infinity, Infinity] };
+    const la = spatialMorphPairingLines(layerA, null, null);
+    const n = la.length;
+    const ge = o.groupElements || null;
+    const mem = Array.isArray(members) && members.length === n && ge ? members : null;
+    const lb = spatialMorphPairingLines(layerB, mem, ge);
+    if (n === 0 || lb.length !== n) return worst;
+    let pv = null;
+    if (Array.isArray(perm) && perm.length === n) {
+        const seen = new Array(n).fill(false);
+        pv = perm.every((k) => Number.isInteger(k) && k >= 0 && k < n && !seen[k] && (seen[k] = true)) ? perm : null;
+    }
+    const fl = Array.isArray(flips) && flips.length === n && flips.every((f) => typeof f === 'boolean') ? flips : null;
+    const poly = Array.isArray(o.poly) && o.poly.length >= 3 ? o.poly : null;
+    const onB = (p) => (poly ? spatialMorphOnEdge(p, poly, o.boundaryTol) !== null : false);
+    const meetTol = (typeof o.meetTol === 'number' && Number.isFinite(o.meetTol) && o.meetTol >= 0) ? o.meetTol : 1e-3;
+    // slots: line i, end e (0 / 1); A side as authored, B side member -> flip -> pairing
+    const S = [];
+    for (let i = 0; i < n; i++) {
+        const bi = pv ? pv[i] : i, flip = fl ? fl[bi] : false, bl = lb[bi];
+        for (let e = 0; e < 2; e++) {
+            const be = flip ? 1 - e : e;
+            S.push({ line: i, idA: la[i].ids[e], idB: bl.ids[be], pa: la[i].pts[e], pb: bl.pts[be] });
+        }
+    }
+    let dist = 0, nodeMiss = 0, boundaryMiss = 0, dangling = 0;
+    for (const s of S) {
+        dist += (s.pa.x - s.pb.x) ** 2 + (s.pa.y - s.pb.y) ** 2;
+        s.ba = onB(s.pa); s.bb = onB(s.pb);
+        if (s.ba !== s.bb) boundaryMiss++;                       // A->B (ba only) and B->A (bb only), one per slot
+        s.mx = 0.5 * (s.pa.x + s.pb.x); s.my = 0.5 * (s.pa.y + s.pb.y);
+    }
+    for (let p = 0; p < S.length; p++) {
+        let meets = false;
+        for (let q = 0; q < S.length; q++) {
+            if (q === p) continue;
+            if (q > p) {
+                const inA = S[p].idA === S[q].idA, inB = S[p].idB === S[q].idB;
+                if (inA && !inB) nodeMiss++;                     // A->B
+                if (inB && !inA) nodeMiss++;                     // B->A
+            }
+            if (!meets && S[q].line !== S[p].line && Math.hypot(S[q].mx - S[p].mx, S[q].my - S[p].my) <= meetTol) meets = true;
+        }
+        if (!meets && !(S[p].ba && S[p].bb)) dangling++;
+    }
+    return { dangling, nodeMiss, boundaryMiss, dist, key: [dangling, nodeMiss, boundaryMiss, dist] };
+}
+
+// Order of two scores by key, lexicographic: negative when a is better (smaller), positive when b is, 0 when equal. A value without a usable key is worse than any score.
+function spatialMorphComparePairingScore(a, b) {
+    const ka = a && Array.isArray(a.key) ? a.key : null, kb = b && Array.isArray(b.key) ? b.key : null;
+    if (!ka || !kb) return ka ? -1 : (kb ? 1 : 0);
+    for (let i = 0; i < Math.max(ka.length, kb.length); i++) {
+        const x = ka[i], y = kb[i];
+        if (x === y) continue;
+        return x < y ? -1 : 1;
+    }
+    return 0;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         spatialMorphModes, spatialMorphClamp01, spatialMorphSmooth, spatialMorphNormalizeMode, spatialMorphDirection, spatialMorphScalar,
@@ -736,5 +838,6 @@ if (typeof module !== 'undefined' && module.exports) {
         spatialMorphStatusCodes, spatialMorphPlanKeyframes, spatialMorphSymmetryOps, spatialMorphSpanFromCentroids, spatialMorphSpanKey,
         spatialMorphFrontBand, spatialMorphFrontWeight, spatialMorphFrontCornerWeights, spatialMorphSegmentAt, spatialMorphSeamOpen,
         spatialMorphFaceSamples, spatialMorphPolygonContains, spatialMorphRasterizeField, spatialMorphRasterSample, spatialMorphMixLinear,
+        spatialMorphPairingLines, spatialMorphScorePairing, spatialMorphComparePairingScore,
     };
 }
