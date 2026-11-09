@@ -162,6 +162,7 @@
     'timeline.listBack': { de: 'Zurück zur Zuordnung', en: 'Back to the pairing' },
     'timeline.conclusiveOnly': { de: 'Nur schlüssige Zuordnungen', en: 'Only conclusive pairings' },
     'timeline.conclusiveCount': { de: '{kept} von {total} schlüssig', en: '{kept} of {total} conclusive' },
+    'timeline.conclusiveChecking': { de: 'wird geprüft {done} von {total}', en: 'checking {done} of {total}' },
     'timeline.conclusiveNone': { de: 'Keine schlüssige Zuordnung. Filter ausschalten, um alle zu sehen.', en: 'No conclusive pairing. Switch the filter off to see all.' },
     'timeline.conclusiveFree': { de: 'Ebene hat freie Linienenden, Filter nicht anwendbar', en: 'A layer has free line ends, the filter does not apply' },
     'timeline.pairingCount': { de: '{shown} von {total} Zuordnungen', en: '{shown} of {total} pairings' },
