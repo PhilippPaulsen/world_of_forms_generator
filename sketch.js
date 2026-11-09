@@ -3850,9 +3850,9 @@ function timelineConclusiveContext(segmentIndex) {
     if (!r.ok) return null;
     return { layerA: r.layerFrom, layerB: r.layerTo, flips: r.flips, members: r.members, groupElements: r.groupElements || layerGroupElements(r.layerTo), poly: r.layerFrom.outerCorners || null };
 }
-// A layer with free line ends (no end of another line within the tolerance, the tile boundary aside) can never give a conclusive pairing: the filter does not apply.
+// A layer with free line ends (no end of another line within the tolerance, the tile boundary aside; counted on the lines under every group element too, task 021) can never give a conclusive pairing: the filter does not apply.
 function timelineConclusiveFree(ctx) {
-    return [ctx.layerA, ctx.layerB].some(l => spatialMorphScorePairing(l, l, null, null, null, { poly: ctx.poly }).dangling > 0);
+    return [ctx.layerA, ctx.layerB].some(l => spatialMorphScorePairing(l, l, null, null, null, { poly: ctx.poly, groupElements: ctx.groupElements }).dangling > 0);
 }
 // One row (End line endIdx) of a pairing: which of its variants ({ g, f }) make the WHOLE pairing conclusive, the other End lines keeping their flips / members. -> one boolean per variant.
 function timelineConclusiveRowVariants(ctx, perm, flips, members, endIdx, variants) {
