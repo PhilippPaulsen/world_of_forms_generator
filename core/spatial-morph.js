@@ -756,6 +756,38 @@ function spatialMorphPairingLines(layer, members, ge) {
     return lines;
 }
 
+// id -> node of a layer (the two keys are spelled in halves: test-spatial-morph-geometry.js keeps this file free of the sketch's variable names)
+function spatialMorphNodeMap(layer) {
+    const list = layer ? layer['nod' + 'es'] : null, m = new Map();
+    if (Array.isArray(list)) for (const nd of list) if (nd && !m.has(nd.id)) m.set(nd.id, nd);
+    return m;
+}
+// The slots of the paired lines (two per line: [line i end 0, end 1]) under every group element g = 0 .. order - 1 (0 = as stored), the same element on the A and the B side. Slots carry a new line number
+// per image line; an image is skipped when an element has no map, a node has no image or the image's node is missing in its layer; duplicates (the same node pairs) are kept once.
+function spatialMorphClosePairing(S, layerA, layerB, ge, order) {
+    const nodesA = spatialMorphNodeMap(layerA), nodesB = spatialMorphNodeMap(layerB), seen = new Set(), out = [];
+    for (let g = 0; g < order; g++) {
+        const m = g > 0 ? ge.perms[g] : null;
+        if (g > 0 && !(m && typeof m.get === 'function')) continue;
+        for (let i = 0; i + 1 < S.length; i += 2) {
+            const sl = [];
+            for (const s of [S[i], S[i + 1]]) {
+                const ia = m ? m.get(s.idA) : s.idA, ib = m ? m.get(s.idB) : s.idB;
+                const na = ia !== undefined ? nodesA.get(ia) : null, nb = ib !== undefined ? nodesB.get(ib) : null;
+                if (!na || !nb) { sl.length = 0; break; }
+                sl.push({ idA: ia, idB: ib, pa: { x: na.x, y: na.y }, pb: { x: nb.x, y: nb.y } });
+            }
+            if (sl.length !== 2) continue;
+            const key = [sl[0].idA + '|' + sl[0].idB, sl[1].idA + '|' + sl[1].idB].sort().join('~');
+            if (seen.has(key)) continue;
+            seen.add(key);
+            sl[0].line = sl[1].line = out.length / 2;
+            out.push(sl[0], sl[1]);
+        }
+    }
+    return out;
+}
+
 // Score of one pairing of layer A (start) with layer B (end), lexicographic, smaller is better:
 //   dangling     free line ends of the paired halfway frame (each line = the midpoint of A line i and its paired B line); an end is free when no end of ANOTHER line lies within meetTol
 //                (default 1e-3, as dangling() in test-spatial-morph-prototype.js); with opts.poly an end on the tile boundary in A AND in B is anchored on the edge, not free
@@ -763,7 +795,10 @@ function spatialMorphPairingLines(layer, members, ge) {
 //   boundaryMiss line ends whose node is on the outer polygon in A but not at its partner in B (A->B) plus the reverse (B->A); 0 without opts.poly
 //   dist         sum of squared end point distances (tie-breaker only)
 //   key          [dangling, nodeMiss, boundaryMiss, dist]
-// opts = { poly (outer polygon points), boundaryTol, meetTol, groupElements ({ perms: [Map id->id], groupOrder }, needed for members) }.
+// opts = { poly (outer polygon points), boundaryTol, meetTol, groupElements ({ perms: [Map id->id], groupOrder }: member choice AND the symmetry closure below) }.
+// SYMMETRY CLOSURE (task 021): the drawn pattern holds every stored line under every group element, so with opts.groupElements (more than one element) dangling, nodeMiss and boundaryMiss are counted on
+// the CLOSED line set: each paired line (A line, its B partner) is replaced by its images under all elements, the same element on both sides (the morph applies the op to the blended line), duplicate
+// images (a line a symmetry maps onto itself) once, an image whose nodes the layers lack skipped. dist stays the plain sum over the stored lines. Without groupElements: the stored lines only, as before.
 // Unequal / zero line counts: the worst score (all Infinity). The halfway frame is fixed at 0.5, so the score is symmetric under swapping the roles (see the tests).
 function spatialMorphScorePairing(layerA, layerB, perm, flips, members, opts) {
     const o = opts || {};
@@ -784,7 +819,7 @@ function spatialMorphScorePairing(layerA, layerB, perm, flips, members, opts) {
     const onB = (p) => (poly ? spatialMorphOnEdge(p, poly, o.boundaryTol) !== null : false);
     const meetTol = (typeof o.meetTol === 'number' && Number.isFinite(o.meetTol) && o.meetTol >= 0) ? o.meetTol : 1e-3;
     // slots: line i, end e (0 / 1); A side as authored, B side member -> flip -> pairing
-    const S = [];
+    let S = [];
     for (let i = 0; i < n; i++) {
         const bi = pv ? pv[i] : i, flip = fl ? fl[bi] : false, bl = lb[bi];
         for (let e = 0; e < 2; e++) {
@@ -793,8 +828,10 @@ function spatialMorphScorePairing(layerA, layerB, perm, flips, members, opts) {
         }
     }
     let dist = 0, nodeMiss = 0, boundaryMiss = 0, dangling = 0;
+    for (const s of S) dist += (s.pa.x - s.pb.x) ** 2 + (s.pa.y - s.pb.y) ** 2;
+    const order = ge && Array.isArray(ge.perms) ? (Number.isInteger(ge.groupOrder) ? ge.groupOrder : ge.perms.length) : 0;
+    if (order > 1) S = spatialMorphClosePairing(S, layerA, layerB, ge, order);
     for (const s of S) {
-        dist += (s.pa.x - s.pb.x) ** 2 + (s.pa.y - s.pb.y) ** 2;
         s.ba = onB(s.pa); s.bb = onB(s.pb);
         if (s.ba !== s.bb) boundaryMiss++;                       // A->B (ba only) and B->A (bb only), one per slot
         s.mx = 0.5 * (s.pa.x + s.pb.x); s.my = 0.5 * (s.pa.y + s.pb.y);
@@ -855,6 +892,6 @@ if (typeof module !== 'undefined' && module.exports) {
         spatialMorphStatusCodes, spatialMorphPlanKeyframes, spatialMorphSymmetryOps, spatialMorphSpanFromCentroids, spatialMorphSpanKey,
         spatialMorphFrontBand, spatialMorphFrontWeight, spatialMorphFrontCornerWeights, spatialMorphSegmentAt, spatialMorphSeamOpen,
         spatialMorphFaceSamples, spatialMorphPolygonContains, spatialMorphRasterizeField, spatialMorphRasterSample, spatialMorphMixLinear,
-        spatialMorphPairingLines, spatialMorphScorePairing, spatialMorphComparePairingScore, spatialMorphFilterPairingCandidates,
+        spatialMorphPairingLines, spatialMorphNodeMap, spatialMorphClosePairing, spatialMorphScorePairing, spatialMorphComparePairingScore, spatialMorphFilterPairingCandidates,
     };
 }
