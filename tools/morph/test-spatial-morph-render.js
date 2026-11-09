@@ -123,7 +123,9 @@ T('pins', () => {
   check('the eight functions the protected netwarp tests cut out of sketch.js are byte-identical to c432056c (sha256) and name no morph global', sha(bodies) === PIN.protectedBodies && !/spatialMorph/.test(bodies), sha(bodies).slice(0, 12));
   // stage e1 added the write / read access (setSpatialMorph, getSpatialMorph and their window exports) to sketch.js as ONE block; everything else in it still does not mention the morph
   const E1_BLOCK = /\/\/ The spatial morph's write and read access[\s\S]*?window\.getSpatialMorph = getSpatialMorph;\n/;
-  check('sketch.js does not mention the morph outside the one stage-e1 access block (setSpatialMorph / getSpatialMorph); the hook lives in core/', E1_BLOCK.test(SKETCH_SRC) && !/spatialMorph/.test(SKETCH_SRC.replace(E1_BLOCK, '')));
+  // d3 K3 (task 018) added ONE block of pure list helpers that call the pairing score / filter of core/spatial-morph.js; the render hook is still not in sketch.js
+  const D3_BLOCK = /\/\/ d3 \(K3\): "only conclusive pairings"[\s\S]*?\nfunction timelineConclusiveView\([\s\S]*?\n\}\n/;
+  check('sketch.js does not mention the morph outside the stage-e1 access block (setSpatialMorph / getSpatialMorph) and the d3 K3 list helpers (spatialMorphScorePairing / spatialMorphFilterPairingCandidates); the hook lives in core/', E1_BLOCK.test(SKETCH_SRC) && D3_BLOCK.test(SKETCH_SRC) && !/spatialMorph/.test(SKETCH_SRC.replace(E1_BLOCK, '').replace(D3_BLOCK, '')));
   check('the render file has no hotkey, no keyPressed, no event handler, no DOM access and no block comment inside a function body',
     !/keyPressed|keyCode|\bkey\b\s*===|addEventListener|document\.|window\.|localStorage|sessionStorage|setTimeout|setInterval/.test(RENDER_SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')));
   const topLevel = (src) => { const s = src.replace(/\/\*[\s\S]*?\*\//g, (x) => x.replace(/[^\n]/g, ' ')); const out = []; s.split('\n').forEach((line) => { let mm; if ((mm = /^(?:async\s+)?function\s*\*?\s*([\w$]+)/.exec(line)) || (mm = /^(?:const|let|var)\s+([\w$]+)/.exec(line)) || (mm = /^class\s+([\w$]+)/.exec(line))) out.push(mm[1]); }); return out; };
