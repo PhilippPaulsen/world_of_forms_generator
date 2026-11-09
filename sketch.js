@@ -1046,9 +1046,9 @@ function setup() {
     const timelinePairingBrowserCount = select('#timeline-pairing-browser-count');
     const timelinePairingBrowserList = select('#timeline-pairing-browser-list');
     let timelinePairingBrowseOpen = false;
-    const conclusiveBox = select('#timeline-pairing-conclusive');       // d3 K3: "only conclusive pairings" button (aria-pressed); session-only, always OFF at load (not saved, not exported)
+    const conclusiveBox = select('#timeline-pairing-conclusive');       // d3 K3: the model's "only conclusive pairings" button; it MIRRORS the one state variable below (the phone view forwards its icon's click to it)
     const conclusiveNote = select('#timeline-pairing-conclusive-note');
-    if (conclusiveBox) conclusiveBox.elt.setAttribute('aria-pressed', 'false');
+    let timelinePairingConclusive = true;                                // the filter switch: ON at load, session-only (not saved, not exported)
     let timelinePairingBrowseJustOpened = false; // scroll the current row into view only when the list was just opened
     const offsetXGroup = select('#layer-offset-x-group');
     const offsetYGroup = select('#layer-offset-y-group');
@@ -1374,6 +1374,11 @@ function setup() {
         if (segCount === 0) return;
         timelinePairingSegment = Math.max(0, Math.min(segCount - 1, timelinePairingSegment));
         const seg = timelinePairingSegment;
+        // the filter switch: one state, mirrored by the model's button (pressed = on; disabled = it cannot apply: the segment does not resolve or a layer has free line ends)
+        const conclusiveCtx = timelineConclusiveContext(seg);
+        const conclusiveFree = !!conclusiveCtx && timelineConclusiveFree(conclusiveCtx);
+        const conclusiveActive = timelinePairingConclusive && !!conclusiveCtx && !conclusiveFree;
+        if (conclusiveBox) { conclusiveBox.elt.setAttribute('aria-pressed', timelinePairingConclusive ? 'true' : 'false'); conclusiveBox.elt.disabled = !conclusiveCtx || conclusiveFree; }
 
         const sel = timelinePairingSegmentSelect.elt;
         sel.innerHTML = '';
@@ -1453,29 +1458,36 @@ function setup() {
             r.appendChild(down);
             r.appendChild(flip);
             if (vCount > 1) {
+                // d3 K3 (task 019): with the filter active only the variants that make the WHOLE pairing conclusive are stepped over; k counts those (0 = the current one is not conclusive: "\u2013")
+                const okRow = conclusiveActive ? timelineConclusiveRowVariants(conclusiveCtx, info.perm, info.flips, info.members, endIdx, variants) : null;
+                const stp = okRow ? timelineConclusiveStep(okRow, vIdx) : null;
+                const prevTarget = stp ? stp.prev : (vIdx - 1 + vCount) % vCount;
+                const nextTarget = stp ? stp.next : (vIdx + 1) % vCount;
                 const stepper = document.createElement('span');
                 stepper.className = 'pairing-variant';
                 const prevBtn = document.createElement('button');
                 prevBtn.className = 'layer-btn pairing-move-btn pairing-variant-prev';
                 prevBtn.innerHTML = pairingStepIcon('left');
                 UI.name(prevBtn, 'Previous variant of this End line (distinct pictures against this row\'s Start line)');
+                if (stp) prevBtn.disabled = prevTarget < 0;
                 prevBtn.addEventListener('click', () => {
-                    const v = variants[(vIdx - 1 + vCount) % vCount];
-                    setTimelineMember(seg, endIdx, v.g, v.f);
+                    const v = variants[prevTarget];
+                    if (v) setTimelineMember(seg, endIdx, v.g, v.f);
                 });
                 const countEl = document.createElement('span');
                 countEl.className = 'pairing-variant-count';
-                countEl.textContent = `${vIdx + 1}/${vCount}`;
-                countEl.dataset.k = String(vIdx + 1);
-                countEl.dataset.c = String(vCount);
+                countEl.textContent = stp ? `${stp.k > 0 ? stp.k : '\u2013'}/${stp.c}` : `${vIdx + 1}/${vCount}`;
+                countEl.dataset.k = String(stp ? stp.k : vIdx + 1);
+                countEl.dataset.c = String(stp ? stp.c : vCount);
                 countEl.title = `End line variant ${vIdx + 1} of ${vCount} distinct pictures for this row's current Start\u2194End pairing`;
                 const nextBtn = document.createElement('button');
                 nextBtn.className = 'layer-btn pairing-move-btn pairing-variant-next';
                 nextBtn.innerHTML = pairingStepIcon('right');
                 UI.name(nextBtn, 'Next variant of this End line (distinct pictures against this row\'s Start line)');
+                if (stp) nextBtn.disabled = nextTarget < 0;
                 nextBtn.addEventListener('click', () => {
-                    const v = variants[(vIdx + 1) % vCount];
-                    setTimelineMember(seg, endIdx, v.g, v.f);
+                    const v = variants[nextTarget];
+                    if (v) setTimelineMember(seg, endIdx, v.g, v.f);
                 });
                 stepper.appendChild(prevBtn);
                 stepper.appendChild(countEl);
@@ -1520,8 +1532,7 @@ function setup() {
         const maxRaw = parseFloat(timelinePairingFilterInput.elt.value);
         const hasMax = Number.isFinite(maxRaw);
         const cmpPerm = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; };
-        const conclusiveOn = !!conclusiveBox && conclusiveBox.elt.getAttribute('aria-pressed') === 'true';
-        const conclusiveView = timelineConclusiveView(cand, conclusiveOn, conclusiveOn ? timelineConclusiveContext(seg) : null);
+        const conclusiveView = timelineConclusiveView(cand, timelinePairingConclusive, timelinePairingConclusive ? timelineConclusiveContext(seg) : null);
         const shown = conclusiveView.items.filter(it => !hasMax || Math.round(it.displacement) <= maxRaw);
         const rows = conclusiveView.state === 'ok'
             ? shown   // the filter's own order (best score first) stands
@@ -1593,7 +1604,7 @@ function setup() {
     }
     if (timelinePairingSortSelect) timelinePairingSortSelect.elt.addEventListener('change', () => renderTimelinePairingEditor());
     if (conclusiveBox) conclusiveBox.elt.addEventListener('click', () => {
-        conclusiveBox.elt.setAttribute('aria-pressed', conclusiveBox.elt.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+        timelinePairingConclusive = !timelinePairingConclusive;
         renderTimelinePairingEditor();
     });
     if (timelinePairingFilterInput) timelinePairingFilterInput.elt.addEventListener('input', () => renderTimelinePairingEditor());
@@ -3837,15 +3848,34 @@ function timelineConclusiveContext(segmentIndex) {
     if (!timeline) return null;
     const r = resolveTimelineKeyframeCoords(timeline, segmentIndex);
     if (!r.ok) return null;
-    return { layerA: r.layerFrom, layerB: r.layerTo, flips: r.flips, members: r.members, groupElements: r.groupElements, poly: r.layerFrom.outerCorners || null };
+    return { layerA: r.layerFrom, layerB: r.layerTo, flips: r.flips, members: r.members, groupElements: r.groupElements || layerGroupElements(r.layerTo), poly: r.layerFrom.outerCorners || null };
+}
+// A layer with free line ends (no end of another line within the tolerance, the tile boundary aside) can never give a conclusive pairing: the filter does not apply.
+function timelineConclusiveFree(ctx) {
+    return [ctx.layerA, ctx.layerB].some(l => spatialMorphScorePairing(l, l, null, null, null, { poly: ctx.poly }).dangling > 0);
+}
+// One row (End line endIdx) of a pairing: which of its variants ({ g, f }) make the WHOLE pairing conclusive, the other End lines keeping their flips / members. -> one boolean per variant.
+function timelineConclusiveRowVariants(ctx, perm, flips, members, endIdx, variants) {
+    const cands = variants.map((v, i) => ({ perm, flips: flips.map((f, j) => (j === endIdx ? !!v.f : f)), members: members.map((g, j) => (j === endIdx ? v.g : g)), vi: i }));
+    const res = spatialMorphFilterPairingCandidates(ctx.layerA, ctx.layerB, cands, { poly: ctx.poly, groupElements: ctx.groupElements });
+    const ok = variants.map(() => false);
+    res.kept.forEach(c => { ok[c.vi] = true; });
+    return ok;
+}
+// The row's stepper over the conclusive variants only (ok = the booleans above, cur = the current variant's index): { k, c, prev, next }. c = how many are conclusive; k = the current one's place among them,
+// 0 when the current one is not conclusive; prev / next = the index of the previous / next conclusive variant in the row's own order (cyclic, the current one excluded), -1 when there is none.
+function timelineConclusiveStep(ok, cur) {
+    const len = ok.length, c = ok.filter(Boolean).length;
+    const k = ok[cur] ? ok.slice(0, cur + 1).filter(Boolean).length : 0;
+    const find = dir => { for (let d = 1; d < len; d++) { const i = (((cur + dir * d) % len) + len) % len; if (ok[i]) return i; } return -1; };
+    return { k, c, prev: find(-1), next: find(1) };
 }
 // The list to show: { state: 'off' | 'ok' | 'empty' | 'free', items, kept, total }. Off (or no context): cand.items itself, untouched. 'free': a layer has free line ends, so no pairing could be
 // conclusive: the unfiltered list. Otherwise the filter's list, best first ('empty': no substitute list).
 function timelineConclusiveView(cand, on, ctx) {
     const all = cand ? cand.items : [];
     if (!on || !cand || !ctx) return { state: 'off', items: all, kept: all.length, total: all.length };
-    const free = [ctx.layerA, ctx.layerB].some(l => spatialMorphScorePairing(l, l, null, null, null, { poly: ctx.poly }).dangling > 0);
-    if (free) return { state: 'free', items: all, kept: all.length, total: all.length };
+    if (timelineConclusiveFree(ctx)) return { state: 'free', items: all, kept: all.length, total: all.length };
     const res = spatialMorphFilterPairingCandidates(ctx.layerA, ctx.layerB, timelineEnrichPairingCandidates(all, ctx.flips, ctx.members), { poly: ctx.poly, groupElements: ctx.groupElements });
     return { state: res.empty ? 'empty' : 'ok', items: res.kept, kept: res.kept.length, total: res.total };
 }
