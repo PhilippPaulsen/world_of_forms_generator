@@ -102,7 +102,10 @@ T('extra', () => {
   check('extra fields pass through unchanged (same values; nested objects are the same references)', r.kept.length === 1 && r.kept[0].displacement === 12.5 && r.kept[0].key === 'k' && r.kept[0].ids === x.ids && r.kept[0].nested === x.nested);
   const BP = [{ x: -100, y: -100 }, { x: 100, y: -100 }, { x: 100, y: 100 }, { x: -100, y: 100 }];
   const edgeA = layer([[1, 0, 0], [2, 100, 0], [3, 0, 100]], [[1, 2], [2, 3], [3, 1]]), edgeB = layer([[1, 0, 0], [2, 50, 0], [3, 0, 50]], [[1, 2], [2, 3], [3, 1]]);
-  check('opts.poly is passed on: a boundary node (node 2 on the polygon edge in A, inside in B) drops the candidate only when the polygon is given', filter(edgeA, edgeB, [{ perm: [0, 1, 2] }], { poly: BP }).kept.length === 0 && filter(edgeA, edgeB, [{ perm: [0, 1, 2] }], {}).kept.length === 1);
+  const all6 = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]].map((perm) => ({ perm }));
+  const withPoly = filter(edgeA, edgeB, all6, { poly: BP }), noPoly = filter(edgeA, edgeB, all6, {}), danglingOk = all6.filter((c) => score(edgeA, edgeB, c.perm, null, null, { poly: BP }).dangling === 0).length;
+  check('opts.poly is passed on (task 023: boundaryMiss no longer excludes, it only orders): with the polygon a pairing that moves boundary node 2 into the tile stays in the list (boundaryMiss > 0, ordered by the score); without the polygon boundaryMiss is 0 everywhere; dangling > 0 still drops out', withPoly.kept.length === danglingOk && withPoly.kept.length > 0 && withPoly.kept.every((c) => c.score.boundaryMiss > 0) && withPoly.kept.every((c, k) => k === 0 || cmp(withPoly.kept[k - 1].score, c.score) <= 0) && noPoly.kept.every((c) => c.score.boundaryMiss === 0), J([withPoly.kept.length, danglingOk, noPoly.kept.length]));
+  check('task 023: a candidate with a loose end (dangling > 0) is dropped whatever its boundaryMiss', filter(layer([[1, 0, 0], [2, 10, 0], [3, 5, 8]], [[1, 2]]), layer([[1, 0, 0], [2, 10, 0], [3, 5, 8]], [[1, 2]]), [{ perm: [0] }], { poly: BP }).kept.length === 0);
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

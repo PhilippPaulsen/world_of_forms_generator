@@ -1,7 +1,7 @@
 // Morph stage d3 (task 022): the IMAGE test of the conclusive filter. core/spatial-morph.js spatialMorphPairingFrame (the frame of a pairing from the render's building blocks, no globals, no drawing),
 // spatialMorphFrameDangling / FrameSeamGaps, spatialMorphImageKey, spatialMorphTestPairingImage, spatialMorphRunPortion; and sketch.js' wiring (timelineImage*), cut out of the real file and run in a vm.
 //   1. EQUALITY with the real render: the pure frame equals the frame core/spatial-morph-render.js draws (1e-6 px), for all 512 pairings of square / order 4 / D4, 11+19 against 5+11, at t = 0.1 .. 0.9, in two modes
-//   2. the numbers of the case: 128 pass the score, the image test keeps exactly the 64 without loose ends (nodeMiss > 0 for all of them: the old strictness would have kept none)
+//   2. the numbers of the case (task 023: the score stage only drops loose ends): 400 of 512 pass it, the image test keeps 336, the 64 with loose ends at t = 0.1 / 0.9 fall; boundaryMiss > 0 stays, clean or not decided by the image
 //   3. seam gaps are counted (synthetic: no real case has one)   4. deduplication (a picture is tested once)   5. portions (clock stub), cache and restart   6. free line ends: no image test   7. texts and pins
 //   node tools/morph/test-spatial-morph-pairing-image.js
 //   SPATIAL_MORPH_JS / SKETCH_JS=/path/to/mutated/file.js node tools/morph/test-spatial-morph-pairing-image.js        (sabotage runs)
@@ -19,7 +19,7 @@ const T = (name, fn) => { try { fn(); } catch (e) { check(name + ' (threw)', fal
 const J = (x) => JSON.stringify(x);
 const cut = (name) => { const m = SK.match(new RegExp(`function ${name}\\([\\s\\S]*?\\n\\}\\n`)); if (!m) throw new Error('not in sketch.js: ' + name); return m[0]; };
 const NAMES = ['getSpatialMorph', 'timelineEnrichPairingCandidates', 'timelineConclusiveContext', 'timelineConclusiveFree', 'timelineConclusiveView', 'timelineImageEnv', 'timelineImageCheckNew', 'timelineImageSignature', 'timelineImageCheckStop',
-  'timelineImageResult', 'timelineImageCheckStep', 'timelineImageCheckSchedule', 'timelineConclusiveImageStage', 'timelineConclusiveRowImage'];
+  'timelineImageCandKey', 'timelineImageResult', 'timelineImageCheckStep', 'timelineImageCheckSchedule', 'timelineConclusiveImageStage', 'timelineConclusiveRowImage'];
 const BUDGET_LINE = (SK.match(/const timelineImageBudgetMs = [^;]+;/) || [''])[0];
 const TS = [0.1, 0.25, 0.5, 0.75, 0.9];
 const MODES = [['linear', 0], ['radial', 0]];
@@ -71,15 +71,16 @@ T('numbers', () => {
   const ms = Number(process.hrtime.bigint() - t0) / 1e6;
   const pass = res.filter((x) => x.r.pass), fail = res.filter((x) => !x.r.pass);
   console.log(`      score stage keeps ${kept.kept.length} of ${cands.length}; image test (no early stop): ${pass.length} pass, ${fail.length} fail; ${frames} frames in ${ms.toFixed(0)} ms = ${(ms / frames).toFixed(2)} ms per frame, ${(ms / res.length).toFixed(1)} ms per candidate`);
-  check('stage 1 (score: dangling and boundaryMiss only) keeps 128 of the 512', kept.kept.length === 128 && kept.dropped === 384);
-  check('the image test keeps exactly 64 of those 128 and drops 64', pass.length === 64 && fail.length === 64);
-  check('the 64 that fall have 24 loose ends at t = 0.1 and 0.9 and none at 0.25, 0.5, 0.75 (a test at t = 0.5 alone keeps all 128); no frame has a seam gap', fail.every((x) => x.r.dangling.join() === '24,0,0,0,24' && x.r.gaps.every((g) => g === 0)) && pass.every((x) => x.r.dangling.every((d) => d === 0)));
-  check('every one of the 64 that stay has nodeMiss > 0 (12): the old strictness, "nodeMiss must be 0", would have kept none', pass.every((x) => x.c.score.nodeMiss === 12 && x.c.score.dangling === 0 && x.c.score.boundaryMiss === 0));
+  check('stage 1 (score: only dangling > 0 excludes; boundaryMiss and nodeMiss order) keeps 400 of the 512 (112 have loose ends in the stored lines under the group)', kept.kept.length === 400 && kept.dropped === 112 && kept.kept.every((c) => c.score.dangling === 0));
+  check('the image test keeps 336 of those 400 and drops exactly the 64 with loose ends at t = 0.1 and 0.9', pass.length === 336 && fail.length === 64);
+  check('the 64 that fall have 24 loose ends at t = 0.1 and 0.9 and none at 0.25, 0.5, 0.75 (a test at t = 0.5 alone would keep all 400); no frame has a seam gap; every pass has none at any time', fail.every((x) => x.r.dangling.join() === '24,0,0,0,24' && x.r.gaps.every((g) => g === 0)) && pass.every((x) => x.r.dangling.every((d) => d === 0) && x.r.gaps.every((g) => g === 0)));
+  check('boundaryMiss > 0 no longer excludes: among the 336 that pass, those with boundaryMiss > 0 stay (the morph anchors a moving boundary end on the edge), and the ones with boundaryMiss 0 and nodeMiss 12 are among them, ordered first by the score', pass.some((x) => x.c.score.boundaryMiss > 0) && pass.some((x) => x.c.score.boundaryMiss === 0 && x.c.score.nodeMiss === 12) && kept.kept.every((c, k) => k === 0 || M.spatialMorphComparePairingScore(kept.kept[k - 1].score, c.score) <= 0));
   const one = M.spatialMorphTestPairingImage(env, M.spatialMorphPairedLines(ctx.layerA, ctx.layerB, fail[0].c.perm, fail[0].c.flips, fail[0].c.members, GE), { stopAtFirst: true });
   check('stopAtFirst stops at the first bad frame (t = 0.1: one frame)', !one.pass && one.frames === 1);
-  // the real render agrees: the same counts on the REAL frames of the 128
-  let agree = 0; for (const x of res) { setPairing(x.c); w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 }); const d = TS.map((t) => { w.set(`timeline.elapsedMs = ${t * 2000};`); return M.spatialMorphFrameDangling(w.frame(), 600, 600).n; }); if (J(d) === J(x.r.dangling)) agree++; }
-  check('on the real frames of the 128 the loose ends equal the pure frames\' counts at every time (128 of 128)', agree === 128, agree);
+  // the real render agrees: loose ends and seam gaps counted on the REAL frames of all survivors equal the pure frames' counts, and every pairing that passes has none at any of the five times
+  let agree = 0, realClean = 0; w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 });
+  for (const x of res) { setPairing(x.c); const d = [], g = []; TS.forEach((t) => { w.set(`timeline.elapsedMs = ${t * 2000};`); const f = w.frame(); d.push(M.spatialMorphFrameDangling(f, 600, 600).n); g.push(M.spatialMorphFrameSeamGaps(f, env.layout).gaps); }); if (J(d) === J(x.r.dangling) && J(g) === J(x.r.gaps)) agree++; if (x.r.pass && d.every((v) => v === 0) && g.every((v) => v === 0)) realClean++; }
+  check('on the real frames of all 400 survivors the loose ends and seam gaps equal the pure frames\' counts at every time (400 of 400), and all 336 that pass are clean on the real render at the five times', agree === 400 && realClean === 336, `${agree}, ${realClean}`);
 });
 
 console.log('\n== 3. seam gaps are counted (synthetic: no real case has one) ==');
@@ -113,7 +114,51 @@ T('dedupe', () => {
   const r = w.get('CANDS.map((c) => timelineImageResult(CTXQ, c))'), c2 = w.get('({ tested: timelineImageCheck.tested, cache: timelineImageCheck.cache.size })');
   check('after the run every candidate has a result, the image test ran 128 times (not 512), and equal pictures share the result', r.every((x) => x === true || x === false) && c2.tested === 128 && c2.cache === 128);
   const stagePass = w.get('(function () { const v = timelineConclusiveView({ n: 2, orientation: false, items: CANDS }, true, CTXQ); const s = timelineConclusiveImageStage(v, CTXQ); return { state: v.state, kept: v.kept, shown: s.items.length, pending: s.pending }; })()');
-  check('the editor\'s stage with the cache full: score state "ok", 128 kept by the score, 64 shown, nothing pending', stagePass.state === 'ok' && stagePass.kept === 128 && stagePass.shown === 64 && stagePass.pending === 0, J(stagePass));
+  check('the editor\'s stage with the cache full: score state "ok", 400 kept by the score, 336 shown, nothing pending', stagePass.state === 'ok' && stagePass.kept === 400 && stagePass.shown === 336 && stagePass.pending === 0, J(stagePass));
+});
+
+console.log('\n== 4b. boundaryMiss > 0: the image decides (real cases of the same lattice) ==');
+T('boundary', () => {
+  const v = makeRenderWorld('square', 4, 3, 'rotation_reflection6'); v.baseConnections([]);
+  const tb = v.get("computeThemeLineOrbitTable('rotation_reflection6')"), pr = (id) => tb.orbits[id].pairs[0];
+  v.set(['getSpatialMorph', 'timelineConclusiveContext', 'timelineImageEnv'].map(cut).join('\n')); v.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 });
+  const run = (Bo, perm) => {
+    const a = v.addKeyframeLayer([11, 19].map(pr)), b = v.addKeyframeLayer(Bo.map(pr)); v.setTimeline([a, b]);
+    const c = v.get('timelineConclusiveContext(0)'), env = v.get('timelineImageEnv(timelineConclusiveContext(0))'), ge = c.groupElements;
+    const s = M.spatialMorphScorePairing(c.layerA, c.layerB, perm, null, null, { poly: c.poly, groupElements: ge });
+    const kept = M.spatialMorphFilterPairingCandidates(c.layerA, c.layerB, [{ perm }], { poly: c.poly, groupElements: ge });
+    const r = M.spatialMorphTestPairingImage(env, M.spatialMorphPairedLines(c.layerA, c.layerB, perm, null, null, ge), {});
+    return { s, kept: kept.kept.length, r };
+  };
+  const clean = run([0, 1], [0, 1]), bad = run([0, 20], [1, 0]);
+  check('11+19 against 0+1, identity: boundaryMiss 24 > 0, dangling 0: stage 1 keeps it, the frames are clean at all five times: it STAYS', clean.s.boundaryMiss > 0 && clean.s.dangling === 0 && clean.kept === 1 && clean.r.pass, J([clean.s.key, clean.r.dangling]));
+  check('11+19 against 0+20, pairing 2 1: boundaryMiss 16 > 0, dangling 0: stage 1 keeps it, but 24 loose ends at t = 0.1 and 0.9: the image test drops it', bad.s.boundaryMiss > 0 && bad.s.dangling === 0 && bad.kept === 1 && !bad.r.pass && bad.r.dangling.join() === '24,0,0,0,24', J([bad.s.key, bad.r.dangling]));
+});
+
+console.log('\n== 4c. a long list does not jump while the test runs ==');
+T('order', () => {
+  w.set('timelineImageCheck = timelineImageCheckNew();');
+  w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 }); setPairing(cands[0]);
+  const c5 = ctxNow(); w.sb.CTXQ = c5; w.sb.CANDS = cands;
+  w.set('VIEW = timelineConclusiveView({ n: 2, orientation: false, items: CANDS }, true, CTXQ);');
+  const n = w.get('VIEW.items.length');
+  let stage = w.get('timelineConclusiveImageStage(VIEW, CTXQ)');
+  check('the stage over the 400 candidates the score keeps queues the pictures of those only (100 pictures; the 112 with a loose end in the stored lines never reach the image test), nothing is shown yet, all pending', n === 400 && w.get('timelineImageCheck.total') === 100 && stage.items.length === 0 && stage.pending === 400, J([n, w.get('timelineImageCheck.total'), stage.items.length, stage.pending]));
+  const ck = (it) => J([it.perm, it.flips, it.members]), seen = []; let prefixOk = true, grew = 0, last = [];
+  while (w.get('timelineImageCheck.job.i < timelineImageCheck.job.queue.length')) {
+    for (let k = 0; k < 3 && w.get('timelineImageCheck.job.i < timelineImageCheck.job.queue.length'); k++) w.set('timelineImageCheckStep(timelineImageCheck.job.queue[timelineImageCheck.job.i++]);');
+    const st = w.get('timelineConclusiveImageStage(VIEW, CTXQ)'), now = st.items.map(ck);
+    if (st.pending > 0) { if (J(now.slice(0, last.length)) !== J(last)) prefixOk = false; if (now.length > last.length) grew++; last = now; }
+  }
+  const fin = w.get('timelineConclusiveImageStage(VIEW, CTXQ)'), want = w.get('VIEW.items').filter((it) => w.get('timelineImageResult(CTXQ, ' + J(it) + ')') === true);
+  check('while pictures are pending each state of the list starts with the previous one (rows only get new ones appended below, nothing moves), and the list grew in several steps', prefixOk && grew > 3, `${grew} growth steps`);
+  check('when the test is through nothing is pending, 336 are shown, and they are in the score\'s order (the one re-sort at the end)', fin.pending === 0 && fin.items.length === 336 && J(fin.items.map(ck)) === J(w.get('VIEW.items').filter((it) => fin.items.some((x) => ck(x) === ck(it))).map(ck)));
+  // a short list (<= 100) is always in the score's order
+  w.set('timelineImageCheck = timelineImageCheckNew();');
+  w.set('VIEW2 = { state: "ok", items: VIEW.items.slice(0, 60), kept: 60, total: 60 };');
+  const s0 = w.get('timelineConclusiveImageStage(VIEW2, CTXQ)'); w.set('while (timelineImageCheck.job.i < timelineImageCheck.job.queue.length) timelineImageCheckStep(timelineImageCheck.job.queue[timelineImageCheck.job.i++]);');
+  const s1 = w.get('timelineConclusiveImageStage(VIEW2, CTXQ)');
+  check('a list of 60 or fewer takes the score\'s order throughout (no appearance order is kept)', s0.pending === 60 && s1.pending === 0 && J(s1.items.map(ck)) === J(w.get('VIEW2.items').filter((it) => s1.items.some((x) => ck(x) === ck(it))).map(ck)) && w.get('timelineImageCheck.appear.size') === 0);
 });
 
 console.log('\n== 5. portions, cache, restart ==');
