@@ -18,7 +18,7 @@ const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log
 const T = (name, fn) => { try { fn(); } catch (e) { check(name + ' (threw)', false, String(e && e.stack).slice(0, 300)); } };
 const J = (x) => JSON.stringify(x);
 const cut = (name) => { const m = SK.match(new RegExp(`function ${name}\\([\\s\\S]*?\\n\\}\\n`)); if (!m) throw new Error('not in sketch.js: ' + name); return m[0]; };
-const NAMES = ['timelineEnrichPairingCandidates', 'timelineConclusiveContext', 'timelineConclusiveFree', 'timelineConclusiveView', 'timelineImageEnv', 'timelineImageCheckNew', 'timelineImageSignature', 'timelineImageCheckStop',
+const NAMES = ['getSpatialMorph', 'timelineEnrichPairingCandidates', 'timelineConclusiveContext', 'timelineConclusiveFree', 'timelineConclusiveView', 'timelineImageEnv', 'timelineImageCheckNew', 'timelineImageSignature', 'timelineImageCheckStop',
   'timelineImageResult', 'timelineImageCheckStep', 'timelineImageCheckSchedule', 'timelineConclusiveImageStage', 'timelineConclusiveRowImage'];
 const BUDGET_LINE = (SK.match(/const timelineImageBudgetMs = [^;]+;/) || [''])[0];
 const TS = [0.1, 0.25, 0.5, 0.75, 0.9];
@@ -179,7 +179,7 @@ T('pins', () => {
   check('the editor shows "checking" while pictures are pending and the count afterwards: the note takes the stage\'s pending / done / total and its kept items', /conclusiveStage\.pending > 0/.test(SK) && /UI\.t\('timeline\.conclusiveChecking', \{ done: conclusiveStage\.done, total: conclusiveStage\.total \}\)/.test(SK) && /UI\.t\('timeline\.conclusiveCount', \{ kept: conclusiveStage\.items\.length, total: conclusiveView\.total \}\)/.test(SK));
   check('the steppers use the image test (the score\'s booleans narrowed by timelineConclusiveRowImage), the list its stage; after every portion the editor re-renders (the schedule gets renderTimelinePairingEditor)', /timelineConclusiveRowImage\(conclusiveCtx, info\.perm/.test(SK) && /timelineConclusiveImageStage\(conclusiveView, conclusiveCtxB\)/.test(SK) && /timelineImageCheckSchedule\(setTimeout, \(\) => performance\.now\(\), renderTimelinePairingEditor\)/.test(SK));
   const draw = SK.slice(SK.indexOf('function draw()'), SK.indexOf('function draw()') + 6000);
-  const imgSrc = NAMES.slice(4).map(cut).join('\n');
+  const imgSrc = NAMES.slice(5).map(cut).join('\n');
   check('draw() and the render path are not touched: no image-test name in draw(), none in the render file; the test code has no timer of its own except the injected one', !/timelineImage|spatialMorphTestPairingImage/.test(draw) && !/timelineImage|spatialMorphTestPairingImage|spatialMorphPairingFrame/.test(rd('core/spatial-morph-render.js')) && !/setTimeout\(|requestIdleCallback/.test(imgSrc.replace(/\/\/[^\n]*/g, '')));
 });
 

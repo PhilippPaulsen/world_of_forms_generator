@@ -11,7 +11,7 @@ const cut = (n) => SK.match(new RegExp(`function ${n}\\([\\s\\S]*?\\n\\}\\n`))[0
 const w = makeRenderWorld('square', 4, 3, 'rotation_reflection6'); w.baseConnections([]);
 const table = w.get("computeThemeLineOrbitTable('rotation_reflection6')"), pair = (id) => table.orbits[id].pairs[0];
 const a = w.addKeyframeLayer([11, 19].map(pair)), b = w.addKeyframeLayer([5, 11].map(pair)); w.setTimeline([a, b]);
-['timelineConclusiveContext', 'timelineImageEnv'].forEach((n) => w.set(cut(n)));
+['getSpatialMorph', 'timelineConclusiveContext', 'timelineImageEnv'].forEach((n) => w.set(cut(n)));
 w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 });
 const ctx = w.get('timelineConclusiveContext(0)'), GE = ctx.groupElements;
 const cands = []; for (const perm of [[0, 1], [1, 0]]) for (const f0 of [false, true]) for (const f1 of [false, true]) for (let g0 = 0; g0 < 8; g0++) for (let g1 = 0; g1 < 8; g1++) cands.push({ perm, flips: [f0, f1], members: [g0, g1] });

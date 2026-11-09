@@ -3883,7 +3883,7 @@ const timelineImageBudgetMs = 25;
 // The page state the test needs, read once per layer pair and mode: the start layer's sheet, its tiles, the span, the symmetry operations, the seam layout. null when a piece is missing.
 function timelineImageEnv(ctx) {
     if (typeof spatialMorphRenderSource !== 'function' || typeof spatialMorphRenderRecordTiles !== 'function' || typeof spatialMorphRenderToWorld !== 'function') return null;
-    const sm = typeof spatialMorph !== 'undefined' ? spatialMorph : null;
+    const sm = getSpatialMorph();   // the e1 accessor: a copy of the block, the UI's only way to read it
     const mode = spatialMorphNormalizeMode(sm ? sm.mode : 'linear'), angleDeg = spatialMorphNumber(sm ? sm.angleDeg : 0);
     const at = additionalLayers.indexOf(ctx.layerA);
     const src = spatialMorphRenderSource({ ids: [at >= 0 ? at : 'base'] });
@@ -3906,7 +3906,7 @@ function timelineImageCheckNew() {
 let timelineImageCheck = timelineImageCheckNew();
 // What the cached results depend on: both layers' lines, nodes, sheet and the morph's mode / angle / canvas.
 function timelineImageSignature(ctx) {
-    const sm = typeof spatialMorph !== 'undefined' ? spatialMorph : null;
+    const sm = getSpatialMorph();
     const lay = l => [l.connections, l.nodes.map(n => [n.id, n.x, n.y]), l.symmetryMode, l.shape, l.shapeSizeFactor, l.outerCorners];
     return JSON.stringify([lay(ctx.layerA), lay(ctx.layerB), sm ? [sm.mode, sm.angleDeg] : null, typeof canvasW !== 'undefined' ? [canvasW, canvasH] : null]);
 }
