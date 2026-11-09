@@ -420,6 +420,7 @@ body.dark {
   .pairing-browse-row:hover { background: #f0f0f0; }
 }
 .pairing-browse-row.current { background: #000; color: #fff; }
+#timeline-pairing-conclusive[aria-pressed="true"] { background: #000; color: #fff; }   /* d3 K3: the switch is on */
 
 /* Roadmap 1.8 Stage D phase (iii): per-row End-line orientation toggle */
 .pairing-flip-btn.active { background: #000; color: #fff; }
