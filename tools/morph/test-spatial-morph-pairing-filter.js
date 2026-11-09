@@ -21,7 +21,7 @@ const A = layer([[1, 0, 0], [2, 10, 0], [3, 0, 10]], [[1, 2], [2, 3], [3, 1]]);
 const B = layer([[1, 0, 0], [2, 0, 12], [3, -7, 0]], [[1, 2], [2, 3], [3, 1]]);
 const ALL = []; for (const p of perms(3)) for (let f = 0; f < 8; f++) ALL.push({ perm: p, flips: [0, 1, 2].map((j) => !!(f >> j & 1)), members: null, tag: ALL.length });
 const PRISTINE = J([A, B, ALL]);   // taken before any call: a mutation of a shared fixture by an earlier test cannot hide in the purity snapshots
-const keep = (c) => { const s = score(A, B, c.perm, c.flips, c.members, {}); return s.dangling === 0 && s.nodeMiss === 0 && s.boundaryMiss === 0; };
+const keep = (c) => { const s = score(A, B, c.perm, c.flips, c.members, {}); return s.dangling === 0 && s.boundaryMiss === 0; };
 
 console.log('== 1. a separating pairing drops out although its dist is smaller ==');
 T('separating', () => {
@@ -32,7 +32,8 @@ T('separating', () => {
   check('kept = [good] only, dropped 1, total 2, empty false', r.kept.length === 1 && r.kept[0].tag === 'good' && r.dropped === 1 && r.total === 2 && r.empty === false, J(r.kept.map((c) => c.tag)));
   // same coordinates, different ids: geometrically closed (dangling 0), but node 1 is two nodes in B, so only nodeMiss sees it
   const Bsplit = layer([[1, 0, 0], [2, 0, 12], [3, -7, 0], [4, 0, 0]], [[1, 2], [2, 3], [3, 4]]), sp = score(A, Bsplit, [0, 1, 2], null, null, {});
-  check('a pairing that only nodeMiss rejects (dangling 0, boundaryMiss 0, nodeMiss > 0) drops out too', sp.dangling === 0 && sp.boundaryMiss === 0 && sp.nodeMiss > 0 && filter(A, Bsplit, [{ perm: [0, 1, 2] }], {}).kept.length === 0 && filter(A, B, [{ perm: [0, 1, 2] }], {}).kept.length === 1, J(sp.key));
+  const rsp = filter(A, Bsplit, [{ perm: [0, 1, 2] }, { perm: [1, 2, 0] }], {});
+  check('task 022: a pairing that only nodeMiss objects to (dangling 0, boundaryMiss 0, nodeMiss > 0) STAYS in the list (nodeMiss only orders the kept ones); a separating one still drops out', sp.dangling === 0 && sp.boundaryMiss === 0 && sp.nodeMiss > 0 && filter(A, Bsplit, [{ perm: [0, 1, 2] }], {}).kept.length === 1 && rsp.kept.every((c) => c.score.dangling === 0 && c.score.boundaryMiss === 0) && rsp.kept.every((c, k) => k === 0 || cmp(rsp.kept[k - 1].score, c.score) <= 0), J(sp.key));
   check('the kept candidate carries its score (key [0, 0, 0, dist])', J(r.kept[0].score) === J(sg) && J(r.kept[0].score.key) === J([0, 0, 0, sg.dist]));
 });
 
