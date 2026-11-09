@@ -865,7 +865,7 @@ function spatialMorphComparePairingScore(a, b) {
 }
 
 // d3 (K2): the conclusive candidates of a list. candidates = [{ perm, flips, members, ...extra }] (the shape of sketch.js timelinePairingCandidates' items; extra fields pass through unchanged).
-// Each is scored with spatialMorphScorePairing (opts as there, e.g. opts.poly); only dangling === 0 && nodeMiss === 0 && boundaryMiss === 0 is kept, sorted best first by
+// Each is scored with spatialMorphScorePairing (opts as there, e.g. opts.poly); only dangling === 0 && boundaryMiss === 0 is kept (task 022: nodeMiss no longer excludes, two patterns of different topology always differ in it; it only orders the kept ones), sorted best first by
 // spatialMorphComparePairingScore (stable: equal scores keep the input order). Returns { kept: [copy of the candidate + score], dropped, total, empty }; none conclusive: kept [], empty true,
 // no substitute list. Invalid / unequal layers or a non-array list: kept [] (every score is the worst one). Reads only; the input list and its candidates are not changed (kept holds shallow copies).
 function spatialMorphFilterPairingCandidates(layerA, layerB, candidates, opts) {
@@ -874,7 +874,7 @@ function spatialMorphFilterPairingCandidates(layerA, layerB, candidates, opts) {
     list.forEach((c, idx) => {
         if (!c || typeof c !== 'object') return;
         const sc = spatialMorphScorePairing(layerA, layerB, c.perm, c.flips, c.members, opts);
-        if (sc.dangling === 0 && sc.nodeMiss === 0 && sc.boundaryMiss === 0) scored.push({ idx, item: Object.assign({}, c, { score: sc }) });
+        if (sc.dangling === 0 && sc.boundaryMiss === 0) scored.push({ idx, item: Object.assign({}, c, { score: sc }) });
     });
     scored.sort((x, y) => spatialMorphComparePairingScore(x.item.score, y.item.score) || x.idx - y.idx);
     const kept = scored.map((x) => x.item);
