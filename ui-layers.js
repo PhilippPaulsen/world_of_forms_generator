@@ -29,36 +29,46 @@
  */
 (function (root) {
   'use strict';
+  // a sentence of the bilingual dictionary (ui-i18n.js) in the current language, else the German text written here
+  const tr = function (key, params, fallback) { const i = root.uiI18n; return i && i.has(key) ? i.t(key, params) : fallback; };
   const T = {
     'layers.table': 'Ebenen',
     'layers.rail': 'Ebenen',
     'layers.strip': 'Ebenen',
     'layers.eye.none': 'Ebene sichtbar',
-    'layers.dia.add': function (n) { return 'Ebene ' + n + ' zur Zeitleiste hinzufügen'; },
-    'layers.dia.remove': function (n) { return 'Ebene ' + n + ' aus der Zeitleiste entfernen'; },
-    'layers.dia.none': 'Ebene zur Zeitleiste hinzufügen',
-    'layers.dia.in': 'in der Zeitleiste',
-    'layers.dia.out': 'nicht in der Zeitleiste',
-    'layers.x.none': 'Ebene entfernen',
+    'layers.dia.add': function (n) { return tr('layers.dia.add', { n: n }, 'Ebene ' + n + ' zur Zeitleiste hinzufügen'); },
+    'layers.dia.remove': function (n) { return tr('layers.dia.remove', { n: n }, 'Ebene ' + n + ' aus der Zeitleiste entfernen'); },
+    get 'layers.dia.none'() { return tr('layers.dia.none', null, 'Ebene zur Zeitleiste hinzufügen'); },
+    get 'layers.dia.in'() { return tr('layers.dia.in', null, 'in der Zeitleiste'); },
+    get 'layers.dia.out'() { return tr('layers.dia.out', null, 'nicht in der Zeitleiste'); },
+    get 'layers.x.none'() { return tr('layers.x.none', null, 'Ebene entfernen'); },
     'layers.base': 'Basis',
     'layers.layer': function (n) { return 'Ebene ' + n; },
     'layers.chip.active': 'aktiv',
-    'layers.chip.inactive': 'nicht aktiv',
+    get 'layers.chip.inactive'() { return tr('layers.chip.inactive', null, 'nicht aktiv'); },
     'layers.eye.name': function (n) { return 'Ebene ' + n + ' sichtbar'; },
     'layers.eye.on': 'sichtbar',
     'layers.eye.off': 'ausgeblendet',
     'layers.eye.kf.off': 'Keyframe, ausgeblendet',
-    'layers.eye.kf.on': 'Keyframe, zusätzlich sichtbar',
-    'layers.x.name': function (n) { return 'Ebene ' + n + ' entfernen'; },
-    'layers.add': 'Ebene hinzufügen',
+    get 'layers.eye.kf.on'() { return tr('layers.eye.kf.on', null, 'Keyframe, zusätzlich sichtbar'); },
+    'layers.x.name': function (n) { return tr('layers.x.name', { n: n }, 'Ebene ' + n + ' entfernen'); },
+    get 'layers.add'() { return tr('layers.add', null, 'Ebene hinzufügen'); },
     get 'layers.more'() { const i = root.uiI18n; return i && i.has('layers.more') ? i.t('layers.more') : 'Ebenen-Einstellungen'; },
     'layers.more.open': 'offen',
     'layers.more.closed': 'geschlossen',
     get 'layers.more.none'() { const i = root.uiI18n; return i && i.has('common.noLayer') ? i.t('common.noLayer') : 'Keine Ebene aktiv.'; },
     'layers.hint': 'Symbol antippen',
-    'layers.remove.title': function (n) { return 'Ebene ' + n + ' entfernen?'; },
-    'layers.remove.lines': function (k) { return (k === 1 ? 'Die eine Linie dieser Ebene geht' : 'Die ' + k + ' Linien dieser Ebene gehen') + ' verloren. Das lässt sich nicht rückgängig machen.'; },
-    'layers.remove.keyframe': function (k) { return 'Diese Ebene ist ein Keyframe der Timeline' + (k ? ' und hat ' + (k === 1 ? 'eine Linie' : k + ' Linien') : '') + '. Sie wird entfernt, ihr Keyframe verlässt die Timeline, und die Linienzuordnungen der angrenzenden Segmente gehen verloren. Das lässt sich nicht rückgängig machen.'; },
+    'layers.remove.title': function (n) { return tr('layers.remove.title.n', { n: n }, 'Ebene ' + n + ' entfernen?'); },
+    'layers.remove.lines': function (k) {
+      return k === 1 ? tr('layers.remove.lines.one', {}, 'Die eine Linie dieser Ebene geht verloren. Das lässt sich nicht rückgängig machen.')
+        : tr('layers.remove.lines.other', { k: k }, 'Die ' + k + ' Linien dieser Ebene gehen verloren. Das lässt sich nicht rückgängig machen.');
+    },
+    'layers.remove.keyframe': function (k) {
+      const tail = '. Sie wird entfernt, ihr Keyframe verlässt die Timeline, und die Linienzuordnungen der angrenzenden Segmente gehen verloren. Das lässt sich nicht rückgängig machen.';
+      if (!k) return tr('layers.remove.keyframe.none', {}, 'Diese Ebene ist ein Keyframe der Timeline' + tail);
+      return k === 1 ? tr('layers.remove.keyframe.one', {}, 'Diese Ebene ist ein Keyframe der Timeline und hat eine Linie' + tail)
+        : tr('layers.remove.keyframe.other', { k: k }, 'Diese Ebene ist ein Keyframe der Timeline und hat ' + k + ' Linien' + tail);
+    },
   };
 
   // ---- the pure model ---------------------------------------------------------------------------------------------------------------------------

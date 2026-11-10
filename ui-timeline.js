@@ -18,25 +18,31 @@
  */
 (function (root) {
   'use strict';
+  // a sentence of the bilingual dictionary (ui-i18n.js) in the current language, else the German text written here
+  const tr = function (key, params, fallback) { const i = root.uiI18n; return i && i.has(key) ? i.t(key, params) : fallback; };
   const T = {
     'timeline.strip': 'Zeitleiste',
     'timeline.play': 'Abspielen',
     'timeline.pause': 'Pause',
-    'timeline.scrub': 'Zeitleiste',
+    get 'timeline.scrub'() { return tr('timeline.strip', null, 'Zeitleiste'); },
     'timeline.need2': 'Mindestens zwei Keyframes nötig',
-    'timeline.net.auto.on': 'Netz aufnehmen: automatisch (an)',
-    'timeline.net.auto.off': 'Netz aufnehmen: automatisch (aus)',
-    'timeline.net.always': 'Netz aufnehmen: immer',
-    'timeline.net.never': 'Netz aufnehmen: nie',
-    'timeline.net.still': 'das Netz bewegt sich nicht mit der Zeitleiste',
+    get 'timeline.net.auto.on'() { return tr('timeline.net.auto.on', null, 'Netz aufnehmen: automatisch (an)'); },
+    get 'timeline.net.auto.off'() { return tr('timeline.net.auto.off', null, 'Netz aufnehmen: automatisch (aus)'); },
+    get 'timeline.net.always'() { return tr('timeline.net.always', null, 'Netz aufnehmen: immer'); },
+    get 'timeline.net.never'() { return tr('timeline.net.never', null, 'Netz aufnehmen: nie'); },
+    get 'timeline.net.still'() { return tr('timeline.net.still', null, 'das Netz bewegt sich nicht mit der Zeitleiste'); },
     get 'timeline.more'() { const i = root.uiI18n; return i && i.has('timeline.more') ? i.t('timeline.more') : 'Zeitleiste: Mehr'; },
     'timeline.clear': 'Zeitleiste entfernen',
     'timeline.confirm.cancel': 'Abbrechen',
     'timeline.confirm.remove': 'Entfernen',
-    'timeline.clear.title': 'Zeitleiste entfernen?',
-    'timeline.clear.text': 'Alle Keyframes, Linienzuordnungen und Netz-Schnappschüsse der Zeitleiste werden verworfen. Die Ebenen selbst bleiben erhalten. Das lässt sich nicht rückgängig machen.',
-    'timeline.dia.title': function (n) { return 'Ebene ' + n + ' aus der Zeitleiste entfernen?'; },
-    'timeline.dia.text': function (k) { return 'Die Linienzuordnung ' + (k === 1 ? 'des angrenzenden Segments geht' : 'von ' + k + ' angrenzenden Segmenten geht') + ' verloren (Zuordnung, Umkehrung und Symmetrie-Variante der Linien). Die Ebene selbst bleibt erhalten. Das lässt sich nicht rückgängig machen.'; },
+    get 'timeline.clear.title'() { return tr('timeline.confirm.title', null, 'Zeitleiste entfernen?'); },
+    get 'timeline.clear.text'() { return tr('timeline.clear.text', null, 'Alle Keyframes, Linienzuordnungen und Netz-Schnappschüsse der Zeitleiste werden verworfen. Die Ebenen selbst bleiben erhalten. Das lässt sich nicht rückgängig machen.'); },
+    'timeline.dia.title': function (n) { return tr('timeline.dia.title', { n: n }, 'Ebene ' + n + ' aus der Zeitleiste entfernen?'); },
+    'timeline.dia.text': function (k) {
+      const rest = ' verloren (Zuordnung, Umkehrung und Symmetrie-Variante der Linien). Die Ebene selbst bleibt erhalten. Das lässt sich nicht rückgängig machen.';
+      return k === 1 ? tr('timeline.dia.text.one', {}, 'Die Linienzuordnung des angrenzenden Segments geht' + rest)
+        : tr('timeline.dia.text.other', { k: k }, 'Die Linienzuordnung von ' + k + ' angrenzenden Segmenten geht' + rest);
+    },
   };
 
   // ---- the pure model ---------------------------------------------------------------------------------------------------------------------------
