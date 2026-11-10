@@ -450,13 +450,16 @@ function _svgCollectFacePolygons() {
         vertex: (x, y) => { if (cur) cur.push([x, y]); },
         endShape: () => { if (cur && curFill !== null && cur.length >= 3) polys.push({ fill: curFill, pts: cur }); cur = null; }
     };
+    // Task 036: p5 (global mode) turns a plain assignment to one of its functions into the console warning "You just changed the value of ... which was a p5 function".
+    // Object.defineProperty replaces the property without that setter; the original descriptor (accessor or value) is put back in the finally, a missing name is deleted again.
     const g = globalThis, names = Object.keys(hooks);
-    const had = names.map(n => Object.prototype.hasOwnProperty.call(g, n)), saved = names.map(n => g[n]);
+    const orig = names.map(n => Object.getOwnPropertyDescriptor(g, n));
+    const put = (n, d) => { try { Object.defineProperty(g, n, d); } catch (e) { g[n] = d.get ? d.get.call(g) : d.value; } };
     try {
-        names.forEach(n => { g[n] = hooks[n]; });
+        names.forEach(n => put(n, { value: hooks[n], writable: true, configurable: true, enumerable: true }));
         drawTessellation();
     } finally {
-        names.forEach((n, i) => { if (had[i]) g[n] = saved[i]; else delete g[n]; });   // a page without p5 (test world) gets its absence back
+        names.forEach((n, i) => { if (orig[i]) put(n, orig[i]); else delete g[n]; });   // a page without p5 (test world) gets its absence back
     }
     return polys;
 }
