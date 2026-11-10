@@ -270,7 +270,7 @@ function timing(rig, p) {
   return out;
 }
 
-if (RUN_MAIN && !['--stages', '--edge', '--explain', '--v3', '--hyst', '--spatial'].some((a) => process.argv.includes(a))) {
+if (RUN_MAIN && !['--stages', '--edge', '--explain', '--v3', '--hyst', '--spatial', '--hexjump', '--s4', '--tri', '--four', '--four-explain'].some((a) => process.argv.includes(a))) {
 const which = arg('--case', 'all');
 const keys = which === 'all' ? Object.keys(CASES) : [which];
 const rigs = {};
@@ -725,16 +725,26 @@ function sollPure(f, kfA, kfB) {
   }
   return c0;
 }
+function OLD_METRIC_EARLY() { return process.argv.includes('--old-metric'); }
 // 032: faces below MIN_AREA px^2 (sub-pixel slivers of the dense patterns: area 1 to 5) are left out of the jump and error figures and counted instead (--min-area 0 counts all)
-const MIN_AREA = +arg('--min-area', '10');
-const S_THR = [0.01, 0.02, 0.05], S_VARS = ['old', 's1', 's2_1', 's2_2', 's2_5', 's3'];
+const MIN_AREA = OLD_METRIC_EARLY() ? 0 : +arg('--min-area', '10');
+// 033: s4 = a soft transition instead of the hard threshold: the raster weight wr = clamp((a1 - a) / (a1 - a0)) of a face of area a (px^2), colour = wr * raster + (1 - wr) * s1;
+// s4a (30, 150), s4b (60, 300), s4c (100, 600). --old-metric: the metric of task 030 (sollUniform, all faces) once, for comparison with the figures of 030 / 032.
+const OLD_METRIC = process.argv.includes('--old-metric');
+const S4 = { s4a: [30, 150], s4b: [60, 300], s4c: [100, 600] };
+// 033 s4: the weight g against the large face that contains a small polygon: g3 = partner window 1/3..3 (instead of 1/8..8), gp = g times the area ratio min(a/pa, pa/a), g3p = both
+const G_VARS = { g3: { win: 3, pen: 0 }, gp: { win: 8, pen: 1 }, g3p: { win: 3, pen: 1 } };
+const S_THR = [0.01, 0.02, 0.05]; let S_VARS = ['old', 's1', 's2_1', 's2_2', 's2_5', 's3'];
+if (process.argv.includes('--s4')) S_VARS = ['old', 's1', 'g3', 'gp', 'g3p', 's2_5', 's4a'];
 function spatialFrames(rig, ts, withRef) {
   const cell = rig.kf.spatial.A.reduce((a, f) => a + f.a, 0);
-  prodInfos(rig, rig.kf.spatial, 'T'); if (withRef) { buildRef(rig); prodInfos(rig, rig.kfRef, 'R'); }
+  rig.w.run(FOUR_FN); prodInfos(rig, rig.kf.spatial, 'T'); if (withRef) { buildRef(rig); prodInfos(rig, rig.kfRef, 'R'); }
   return ts.map((t) => {
     const fr = frame(rig, 'spatial', t), m = fr.morph, s1l = prodLins(rig, 'T', m, t).lins, s3l = withRef ? prodLins(rig, 'R', m, t).lins : s1l;
     const col = { old: m.map((f) => f.old), s1: m.map((f, i) => s1l[i] || f.old), s3: m.map((f, i) => s3l[i] || f.old) };
+    Object.keys(G_VARS).forEach((g) => { const lins = rig.w.run(`(function(){ __G.win = ${G_VARS[g].win}; __G.pen = ${G_VARS[g].pen}; var polys = ${J(m.map((f) => f.verts))}, iA = __iA_T, iB = __iB_T; var live = polys.map(function (p) { return _faceInfo(p, null); }); _setOrbits(live, iA.ctr, iA.span); var r = live.map(function (f) { return _faceLinN(f, [iA, iB], [${1 - t}, ${t}]); }); __G.win = 8; __G.pen = 0; return r; })()`); col[g] = m.map((f, i) => lins[i] || f.old); });
     S_THR.forEach((thr, k) => { col['s2_' + [1, 2, 5][k]] = m.map((f, i) => (f.a < thr * cell ? f.old : col.s1[i])); });
+    Object.keys(S4).forEach((k) => { const [a0, a1] = S4[k]; col[k] = m.map((f, i) => { const wr = Math.max(0, Math.min(1, (a1 - f.a) / (a1 - a0))); return [0, 1, 2].map((c) => wr * f.old[c] + (1 - wr) * col.s1[i][c]); }); });
     return { morph: m, col, ms: fr.ms, cell };
   });
 }
@@ -749,7 +759,7 @@ function spatialRun(key, cfg, step) {
     const best = predOf(fr[k - 1].morph, f);
     S_VARS.forEach((v) => { const r = R[v]; r.faces++; if (best === null) { r.unassign++; return; } const j = cdist(fr[k].col[v][i], fr[k - 1].col[v][best]); if (j > 12) r.over12++; if (j > r.jumpMax) { r.jumpMax = j; r.jumpAt = ts[k]; } });
   });
-  ts.forEach((t, k) => fu[k].morph.forEach((f, i) => { if (f.a < MIN_AREA) return; const soll = sollPure(f, uni.kf.spatial.A, uni.kf.spatial.B); if (!soll) return; S_VARS.forEach((v) => { const d = lin2l(fu[k].col[v][i], soll), r = R[v]; r.dFaces++; if (d > r.dMax) r.dMax = d; if (d > 0.02) r.dBad++; }); }));
+  ts.forEach((t, k) => fu[k].morph.forEach((f, i) => { if (f.a < MIN_AREA) return; const soll = OLD_METRIC ? sollUniform(f, uni.kf.spatial.A, uni.kf.spatial.B) : sollPure(f, uni.kf.spatial.A, uni.kf.spatial.B); if (!soll) return; S_VARS.forEach((v) => { const d = lin2l(fu[k].col[v][i], soll), r = R[v]; r.dFaces++; if (d > r.dMax) r.dMax = d; if (d > 0.02) r.dBad++; }); }));
   if (cfg.truth) { const K = nat.kf.playback, tA = { star: K.A.find((f) => role(f, nat.geo) === 'star').color, diamond: K.A.find((f) => role(f, nat.geo) === 'diamond').color };
     ts.forEach((t, k) => fr[k].morph.forEach((f, i) => { const r = role(f, nat.geo); if (!r) return; S_VARS.forEach((v) => { R[v].sd = Math.max(R[v].sd, lin2l(fr[k].col[v][i], tA[r])); }); })); }
   // time per frame (ms, Node): the raster sampling (measured in the world) against the correspondence, mean of 10 runs at t = 0.25 / 0.5 / 0.75
@@ -796,7 +806,7 @@ function explainBad(key, cfg) {
     const d1 = Math.max(lin2l(e.col.s1[i], soll), lin2l(e.col.old[i], soll)); if (d1 <= 0.02) return;
     const ovA = overlapShares(f, uni.kf.spatial.A), ovB = overlapShares(f, uni.kf.spatial.B), cov = (ov) => { let c = 0; ov.shares.forEach((v) => { c += v; }); return ov.tot ? c / ov.tot : 0; };
     const lin = prodLins(uni, 'T', [f], ts[k]).lins[0];
-    rows.push({ t: ts[k], n: f.n, a: f.a, d1: lin2l(e.col.s1[i], soll), d0: lin2l(e.col.old[i], soll), covA: cov(ovA), covB: cov(ovB), fb: lin === null });
+    rows.push({ f, t: ts[k], n: f.n, a: f.a, d1: lin2l(e.col.s1[i], soll), d0: lin2l(e.col.old[i], soll), covA: cov(ovA), covB: cov(ovB), fb: lin === null });
   }));
   if (rows.length) {   // the first bad face under the production functions: the colours under its samples, its partners and the weight g
     const r0 = rows[0], k0 = ts.indexOf(r0.t), f0 = fr[k0].morph.find((f) => f.n === r0.n && Math.abs(f.a - r0.a) < 1e-6);
@@ -810,14 +820,221 @@ function explainBad(key, cfg) {
     console.log('  first bad face (production functions): ' + J(info));
   }
   console.log(`${key}: ${rows.length} faces with s1 error > 0.02 (of the uniform test); fallback to the raster: ${rows.filter((r) => r.fb).length}`);
+  rows.slice(0, 4).forEach((r) => {   // the raster's own view of the face: which colours its samples hit in the two corner fields (a pure face should hit only X)
+    const hits = uni.w.run(`(function(){ var s = spatialMorphFaceSamples(${J(r.f.verts)}), cf = spatialMorphRenderCornerFields([${uni.idA}, ${uni.idB}, ${uni.idA}, ${uni.idB}], 2, 'linear'), out = [];
+      [0, 1].forEach(function (k) { var h = {}; s.forEach(function (q) { var l = spatialMorphRasterSample(cf[k].raster, q.x, q.y); var x = l ? linearToHex(l) : 'none'; h[x] = (h[x] || 0) + q.w; }); out.push(h); }); return out; })()`);
+    const fm = (h) => Object.keys(h).map((x) => `${x} ${(100 * h[x]).toFixed(0)} %`).join(', ');
+    console.log(`  raster view t=${r.t} n=${r.n} area=${r.a.toFixed(0)} Schwerpunkt (${r.f.c.x.toFixed(0)}, ${r.f.c.y.toFixed(0)}): A ${fm(hits[0])}; B ${fm(hits[1])}`);
+  });
   rows.slice(0, 8).forEach((r) => console.log(`  t=${r.t} n=${r.n} area=${r.a.toFixed(0)} s1 ${r.d1.toFixed(4)} raster ${r.d0.toFixed(4)} coverage A ${(100 * r.covA).toFixed(0)} % B ${(100 * r.covB).toFixed(0)} % ${r.fb ? '(no correspondence colour: raster)' : ''}`));
 }
 if (RUN_MAIN && process.argv.includes('--spatial') && process.argv.includes('--bad')) { const cases = buildCases(true); explainBad(arg('--case', 'hex'), cases[arg('--case', 'hex')]); process.exit(0); }
-if (RUN_MAIN && process.argv.includes('--spatial')) {
+
+// =============================================================================================================================================================================================
+// 033. `node tools/morph/measure-face-match.js --hexjump [--case hex|tri]`: the worst s1 jump of a dense case with the production functions opened up (partners, weights, side colours);
+//      `--s4`: variants of the weight g against s1 / s2_5; `--tri`: the faces that hold the triangle error; `--four`: bilinear tiles (four corner fields).
+// =============================================================================================================================================================================================
+function prodDetail(rig, tag, verts, t) {   // the pieces of _faceLinByCorrespondence for one face (production helpers in the render world)
+  return rig.w.run(`(function(){
+    var f = _faceInfo(${J(verts)}, null), iA = __iA_${tag}, iB = __iB_${tag}; _setOrbits([f], iA.ctr, iA.span);
+    var hx = function (l) { return l ? linearToHex(l) : null; };
+    var sA = _overlapSide(f, iA), sB = _overlapSide(f, iB), pA = _partnerOf(f, iA), pB = _partnerOf(f, iB);
+    var side = function (g, sh) { var k = 0, o = 0; for (var i = 0; i < g.samples.length; i++) if (_inFace(g.samples[i], f)) k++; for (var j = 0; j < sh.owners.length; j++) if (sh.owners[j] === g) o++; return { shareIn: o * sh.w, partnerIn: g.samples.length ? k / g.samples.length : 0 }; };
+    var dA = pA ? side(pA, sA) : null, dB = pB ? side(pB, sB) : null;
+    var wA = (1 - ${t}) * sA.cov, wB = ${t} * sB.cov;
+    return { n: f.n, a: f.a, orb: f.orb, covA: sA.cov, covB: sB.cov, colA: hx(sA.lin), colB: hx(sB.lin), wA: wA, wB: wB,
+      pA: pA && { n: pA.n, a: pA.a, col: hx(pA.lin), d: dA }, pB: pB && { n: pB.n, a: pB.a, col: hx(pB.lin), d: dB },
+      lin: hx(_faceLinByCorrespondence(f, iA, iB, ${t})) };
+  })()`);
+}
+function hexJump(key, cfg) {
+  const rig = setup(cfg), ts = []; for (let k = 0; k <= 20; k++) ts.push(+(k * 0.05).toFixed(2));
+  const fr = spatialFrames(rig, ts, false); let worst = null;
+  for (let k = 1; k < ts.length; k++) fr[k].morph.forEach((f, i) => { if (f.a < MIN_AREA) return; const b = predOf(fr[k - 1].morph, f); if (b === null || fr[k - 1].morph[b].a < MIN_AREA) return; const j = cdist(fr[k].col.s1[i], fr[k - 1].col.s1[b]); if (!worst || j > worst.j) worst = { j, k, i, b, jo: cdist(fr[k].col.old[i], fr[k - 1].col.old[b]) }; });
+  const hex = (lin) => '#' + lin.map((v) => Math.round(255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055)).toString(16).padStart(2, '0')).join('');
+  console.log(`${key}: groesster s1-Sprung ${worst.j} Byte (heute an derselben Flaeche ${worst.jo}) bei t ${ts[worst.k - 1]} -> ${ts[worst.k]}`);
+  [[fr[worst.k - 1].morph[worst.b], ts[worst.k - 1], fr[worst.k - 1], worst.b], [fr[worst.k].morph[worst.i], ts[worst.k], fr[worst.k], worst.i]].forEach(([f, t, e, i]) => {
+    const d = prodDetail(rig, 'T', f.verts, t);
+    console.log(`  t=${t}: n=${d.n} A=${d.a.toFixed(0)} Orbit ${d.orb}; Bedeckung A ${(100 * d.covA).toFixed(0)} % ${d.colA}, B ${(100 * d.covB).toFixed(0)} % ${d.colB}`);
+    const pf = (p) => (p ? `n=${p.n} A=${p.a.toFixed(0)} ${p.col}, Anteil Flaeche im Partner ${(100 * p.d.shareIn).toFixed(0)} %, Partner in Flaeche ${(100 * p.d.partnerIn).toFixed(0)} %` : 'kein Partner');
+    console.log(`    Partner A: ${pf(d.pA)}`); console.log(`    Partner B: ${pf(d.pB)}`);
+    console.log(`    s1 ${hex(e.col.s1[i])}, Raster ${hex(e.col.old[i])}, Ueberlappungsmischung allein ${d.lin}`);
+  });
+}
+if (RUN_MAIN && process.argv.includes('--hexjump')) { const cases = buildCases(true); const k = arg('--case', 'hex'); hexJump(k, cases[k]); process.exit(0); }
+
+
+// ---- 033 stage 3: bilinear tiles (four corner fields) ---------------------------------------------------------------------------------------------------------------------------------------------
+// The tile weights of a point (u, v) of the bilinear square: w00 = (1-u)(1-v), w10 = u(1-v), w01 = (1-u)v, w11 = uv. Four keyframe layers, no timeline (the static blend of morph stage c, mode 'bilinear'); the faces of a tile
+// come from spatialMorphRenderTileFaces() on the lines anchored with these weights; the colours today from spatialMorphRenderFaceColors() with the four corner rasters. N-field correspondence (_faceLinN, defined in the render
+// world from the production helpers of core/facecolor.js): per corner k with weight w_k a side (overlap mean, coverage) and a partner; fallback mix sum w_k cov_k c_k / sum w_k cov_k, partner mix sum w_k c(partner_k) with the
+// weight g = the smallest of the sides' g, as in the two-field function.
+const FOUR_FN = `
+var __G = { win: 8, pen: 0 };
+function _partnerOfW(f, info, win) {
+  var grp = info.groups.get(f.n + '|' + f.orb); if (!grp || f.a <= 0) return null;
+  var best = -1, bd2 = Infinity, near2 = 2.25;
+  for (var i = 0; i < grp.a.length; i++) { var a = grp.a[i]; if (a <= 0) continue; var q = f.a / a; if (q > win || q < 1 / win) continue;
+    var dx = f.c.x - grp.x[i], dy = f.c.y - grp.y[i], d2 = dx * dx + dy * dy; if (d2 >= bd2) continue;
+    if (d2 > near2 * (f.a > a ? f.a : a) && !_inFace(f.c, grp.list[i]) && !_inFace(grp.list[i].c, f)) continue; bd2 = d2; best = i; }
+  return best < 0 ? null : grp.list[best];
+}
+function _faceLinN(f, infos, ws) {
+  var sides = [], parts = [], W = 0, acc = [0, 0, 0], active = [];
+  for (var k = 0; k < infos.length; k++) if (ws[k] > 0) active.push(k);
+  active.forEach(function (k) { var sd = _overlapSide(f, infos[k]); sides[k] = sd; var w = ws[k] * sd.cov; if (sd.lin && w > 0) { W += w; for (var c = 0; c < 3; c++) acc[c] += w * sd.lin[c]; } });
+  var fb = W > 1e-9 ? [acc[0] / W, acc[1] / W, acc[2] / W] : null, ok = true, gw = 1, pm = [0, 0, 0];
+  active.forEach(function (k) {
+    var p = _partnerOfW(f, infos[k], __G.win); if (!p || !p.lin) { ok = false; return; }
+    var o = 0, kin = 0; for (var i = 0; i < sides[k].owners.length; i++) if (sides[k].owners[i] === p) o++;
+    for (var j = 0; j < p.samples.length; j++) if (_inFace(p.samples[j], f)) kin++;
+    gw = Math.min(gw, Math.max(o * sides[k].w, p.samples.length ? kin / p.samples.length : 0) * (__G.pen ? Math.pow(Math.min(f.a / p.a, p.a / f.a), __G.pen) : 1));
+    for (var c = 0; c < 3; c++) pm[c] += ws[k] * p.lin[c];
+  });
+  if (!ok) return fb;
+  if (!fb) return pm;
+  return [0, 1, 2].map(function (c) { return gw * pm[c] + (1 - gw) * fb[c]; });
+}`;
+function setup4(cfg4) {
+  const w = makeRenderWorld(cfg4.shape || 'square', cfg4.n, 3, cfg4.sym || 'rotation_reflection6'); w.set(STUB); w.run(FOUR_FN);
+  const ids = cfg4.conns.map((c) => w.addKeyframeLayer(c, { showFaces: true }));
+  ids.forEach((id, k) => w.run(`(function(){
+    var L = additionalLayers[${id}], sh = faceSheetOverrideOfLayer(L);
+    var res = computeCellFaces(L.connections, L.nodes, null, null, sh), grp = sheetGroupElements(L.nodes, sh);
+    var keys = computeFaceTrailKeys(res, grp), trails = computeFaceTrails(res, grp);
+    L.faceAssignments = new Map(); var fn = ${cfg4.colour[k].toString()}, done = {};
+    trails.forEach(function (tr, i) { var fi = keys.indexOf(tr.key), f0 = res.faces[fi]; var spec = fn({ key: tr.key, n: f0 ? f0.nodeIds.length : 0, faceCount: tr.faceCount, i: i, done: done }); if (spec) setFaceAssignment(L.faceAssignments, tr.key, spec); });
+  })()`));
+  w.set('timeline = null;');
+  const geo = w.run(`(function(){ var L = additionalLayers[${ids[0]}], sh = faceSheetOverrideOfLayer(L); var xs = sh.outerCorners.map(function (p) { return p.x; }); return { ctr: sh.centroid, span: Math.max.apply(null, xs) - Math.min.apply(null, xs) }; })()`);
+  const ops = w.run(`(function(){ var L = additionalLayers[${ids[0]}], sh = faceSheetOverrideOfLayer(L), c = sh.centroid; var ge = getGroupElementsCached(L.nodes, c, sh.shape, sh.symmetryMode, sh.outerCorners);
+    return ge.ops.map(function (op) { var p0 = op({ x: c.x, y: c.y }, c), p1 = op({ x: c.x + 100, y: c.y }, c), p2 = op({ x: c.x, y: c.y + 100 }, c); return { x0: p0.x, y0: p0.y, ax: (p1.x - p0.x) / 100, ay: (p1.y - p0.y) / 100, bx: (p2.x - p0.x) / 100, by: (p2.y - p0.y) / 100 }; }); })()`);
+  geo.ops = ops;
+  const rig = { w, ids, geo, cfg: cfg4 };
+  // the setup of the blend once: the corner layer ids, the border-closed keyframe faces of the four corners and the production fields
+  const info = w.run(`(function(){
+    var infos = additionalLayers.map(function (l) { return { shape: l.shape, lineCount: spatialMorphRenderLineCount(l.connections), isPlayback: !!l.isTimelinePlayback, symmetryMode: l.symmetryMode, sizeFactor: l.shapeSizeFactor }; });
+    var base = { shape: currentShape, lineCount: spatialMorphRenderLineCount(connections), symmetryMode: symmetryMode, sizeFactor: shapeSizeFactor };
+    var plan = spatialMorphPlanKeyframes(infos, { mode: 'bilinear', timelineIds: null, base: base }); if (!plan.ok) return { code: plan.code };
+    var aligned = spatialMorphRenderAlign(plan, 'bilinear', timeline); if (!aligned.ok) return { code: 'align' };
+    return { code: 'ok', cornerIds: spatialMorphRenderCornerIds(plan, 'bilinear', aligned.keyframeCount), count: aligned.keyframeCount };
+  })()`);
+  if (info.code !== 'ok') throw new Error('four corners: ' + info.code);
+  rig.cornerIds = info.cornerIds; rig.count = info.count;
+  rig.kf4 = rig.cornerIds.map((id) => annotate(w.run(`(function(){
+    var L = additionalLayers[${id}], sh = faceSheetOverrideOfLayer(L), copy = new Map(faceAssignmentsFor(${id}));
+    var gridNodes = L.nodes.slice(), conns = L.connections.map(function (c) { return c.slice(); });
+    var border = sh.outerCorners.map(function (p, k) { return { id: -1000001 - k, x: p.x, y: p.y, free: true }; });
+    border.forEach(function (n, k) { gridNodes.push(n); conns.push([n.id, border[(k + 1) % border.length].id]); });
+    computeCellFaces(L.connections, L.nodes, copy, null, sh);
+    var res = computeCellFaces(conns, gridNodes, copy, null, sh), by = new Map(res.nodes.map(function (n) { return [n.id, n]; }));
+    return res.faces.map(function (f) { return { verts: f.nodeIds.map(function (i) { return by.get(i); }).filter(Boolean).map(function (n) { return { x: n.x, y: n.y }; }), color: cssColorToLinear(f.color) }; }).filter(function (f) { return f.verts.length >= 3; });
+  })()`), geo.ctr, geo.span, ops));
+  const mk = (list) => list.map((f) => ({ poly: f.verts, lin: f.color }));
+  w.run(`(function(){
+    var mkF = function (L) { return L.map(function (e) { var xs = e.poly.map(function (p) { return p.x; }), ys = e.poly.map(function (p) { return p.y; }); return { poly: e.poly, minX: Math.min.apply(null, xs), maxX: Math.max.apply(null, xs), minY: Math.min.apply(null, ys), maxY: Math.max.apply(null, ys), lin: e.lin }; }); };
+    var lists = ${J(rig.kf4.map(mk))}; globalThis.__i4 = lists.map(function (L) { var F = mkF(L); F.ctr = ${J(geo.ctr)}; F.span = ${geo.span}; return _fieldInfo(F); });
+  })()`);
+  return rig;
+}
+const bilinW = (u, v) => ({ w00: (1 - u) * (1 - v), w10: u * (1 - v), w01: (1 - u) * v, w11: u * v });
+function frame4(rig, u, v, reps) {
+  const wt = bilinW(u, v);
+  rig.w.sb.process_hrtime = () => Number(process.hrtime.bigint()) / 1e6;
+  const r = rig.w.run(`(function(){
+    var infos = additionalLayers.map(function (l) { return { shape: l.shape, lineCount: spatialMorphRenderLineCount(l.connections), isPlayback: !!l.isTimelinePlayback, symmetryMode: l.symmetryMode, sizeFactor: l.shapeSizeFactor }; });
+    var base = { shape: currentShape, lineCount: spatialMorphRenderLineCount(connections), symmetryMode: symmetryMode, sizeFactor: shapeSizeFactor };
+    var plan = spatialMorphPlanKeyframes(infos, { mode: 'bilinear', timelineIds: null, base: base }), aligned = spatialMorphRenderAlign(plan, 'bilinear', timeline);
+    var s = spatialMorphRenderSource(plan), faceSheet = (plan.ids && plan.ids[0] !== 'base') ? { shape: s.shape, symmetryMode: s.symmetryMode, centroid: s.centroid, outerCorners: s.outerCorners, gridMatchesBase: true } : null;
+    var prepared = spatialMorphPrepareLines(aligned.corners, s.outerCorners), wTile = ${J(wt)};
+    var cellLines = prepared.map(function (pl) { return [pl.a, pl.b].map(function (d) { return spatialMorphAnchoredPoint(d, wTile, wTile, false); }); });
+    var tf = spatialMorphRenderTileFaces(cellLines, s, faceSheet);
+    var cf = spatialMorphRenderCornerFields(${J(rig.cornerIds)}, ${rig.count}, 'bilinear');
+    var t0 = process_hrtime(); var colors = spatialMorphRenderFaceColors(tf, cf, wTile); var msOld = process_hrtime() - t0;
+    var by = new Map(tf.nodes.map(function (n) { return [n.id, n]; }));
+    var polys = tf.faces.map(function (f) { return f.nodeIds.map(function (id) { return by.get(id); }).filter(Boolean).map(function (n) { return { x: n.x, y: n.y }; }); });
+    var ws = [wTile.w00, wTile.w10, wTile.w01, wTile.w11], infos4 = __i4;
+    var one = function () { var live = polys.map(function (p) { return _faceInfo(p, null); }); _setOrbits(live, infos4[0].ctr, infos4[0].span); return live.map(function (f) { return _faceLinN(f, infos4, ws); }); };
+    var lins = one(); var gl = {}; ${J(Object.keys(G_VARS))}.forEach(function (g) { var G = ${J(G_VARS)}[g]; __G.win = G.win; __G.pen = G.pen; gl[g] = one(); }); __G.win = 8; __G.pen = 0; var msNew = 0, R = ${reps || 0}; if (R) { var t1 = process_hrtime(); for (var i = 0; i < R; i++) one(); msNew = (process_hrtime() - t1) / R; }
+    return { msOld: msOld, msNew: msNew, faces: tf.faces.map(function (f, i) { return { verts: polys[i], old: cssColorToLinear(colors && colors[i] ? colors[i] : f.color), nw: lins[i], g3: gl.g3[i], gp: gl.gp[i], g3p: gl.g3p[i] }; }) };
+  })()`);
+  const morph = annotate(r.faces.map((f) => ({ verts: f.verts })), rig.geo.ctr, rig.geo.span, rig.geo.ops);
+  morph.forEach((f, i) => { f.old = r.faces[i].old; f.nw = r.faces[i].nw; f.g3 = r.faces[i].g3; f.gp = r.faces[i].gp; f.g3p = r.faces[i].g3p; });
+  return { morph, msOld: r.msOld, msNew: r.msNew };
+}
+function sollPureN(f, lists) {
+  const pts = []; for (let i = 0; i < 10; i++) for (let j = 0; j < 10; j++) { const q = { x: f.bb.x0 + (i + 0.5) / 10 * (f.bb.x1 - f.bb.x0), y: f.bb.y0 + (j + 0.5) / 10 * (f.bb.y1 - f.bb.y0) }; if (inside(q, f.verts)) pts.push(q); }
+  if (!pts.length) return null; let c0 = null;
+  for (const q of pts) for (const kf of lists) { const g = kf.find((h) => h.color && inBBq(q, h.bb) && inside(q, h.verts)); if (!g) return null; if (!c0) c0 = g.color; else if (lin2l(g.color, c0) > 1e-3) return null; }
+  return c0;
+}
+const inBBq = (q, bb) => q.x >= bb.x0 && q.x <= bb.x1 && q.y >= bb.y0 && q.y <= bb.y1;
+const SAT_HUE = (shift) => new Function('return ' + `(function (info) { return { hue: (info.i * 5 + ${shift}) % 24, w: 0.2, s: 0.3, rule: 'test', params: null }; })`)();
+function curatedFour(shape, order, token, mode) {   // the first four count-2 entries of the manifest (8..40 faces) of a group
+  const fs = require('fs'); const man = fs.readFileSync(path.join(__dirname, '..', '..', 'gallery', 'manifest.jsonl'), 'utf8').split('\n').filter(Boolean).map(JSON.parse).filter((e) => e.shape === shape && e.order === order && e.groupToken === token && e.count === 2).slice(0, 40);
+  const w = makeRenderWorld(shape, order, 3, mode); const table = w.run('computeThemeLineOrbits(nodes, centroid, currentShape, symmetryMode, outerCorners)'); const out = [];
+  for (const e of man) { const conns = e.orbitIds.map((id) => table.orbits[id].pairs[0]); const id = w.addKeyframeLayer(conns, { showFaces: true });
+    const faces = w.run(`(function(){ var L = additionalLayers[${id}]; return computeCellFaces(L.connections, L.nodes, null, null, faceSheetOverrideOfLayer(L)).faces.length; })()`);
+    if (faces >= 8 && faces <= 40) out.push({ conns, name: e.path.split('/').pop() }); if (out.length === 4) break; }
+  return out;
+}
+function cases4() {
+  const hexF = curatedFour('hex', 2, 'D6', 'rotation_reflection6');
+  return {
+    sq4: { name: 'SYNTHETISCH Quadrat N=4 D4: vier Eckkeyframes [[1,12]], [[1,8]], [[1,7]], [[1,15]]', n: 4, conns: [[[1, 12]], [[1, 8]], [[1, 7]], [[1, 15]]], colour: [0, 7, 14, 19].map(SAT_HUE) },
+    hex4: { name: 'Galerie Hexagon 2 D6, erste vier passende Eintraege (' + hexF.map((x) => x.name).join(', ') + ')', shape: 'hex', n: 2, conns: hexF.map((x) => x.conns), colour: [0, 7, 14, 19].map(SAT_HUE) }
+  };
+}
+const UNIF = () => (info) => ({ hue: 8, w: 0.2, s: 0.3, rule: 'test', params: null });
+function fourRun(key, cfg4, pathName) {
+  const nat = setup4(cfg4), uni = setup4(Object.assign({}, cfg4, { colour: cfg4.colour.map(() => UNIFORM) }));
+  const pts = []; for (let k = 0; k <= 20; k++) { const t = k / 20; pts.push(pathName === 'diag' ? [t, t] : [t, 0.5]); }
+  const cell = nat.kf4[0].reduce((a, f) => a + f.a, 0);
+  const fr = pts.map(([u, v]) => frame4(nat, u, v)), fu = pts.map(([u, v]) => frame4(uni, u, v));
+  const V = ['old', 's1', 'g3', 'gp', 'g3p', 's2_5']; const R = {}; V.forEach((x) => { R[x] = { jumpMax: 0, jumpAt: null, over12: 0, faces: 0, unassign: 0, dMax: 0, dBad: 0, dFaces: 0 }; });
+  const colOf = (e, i) => ({ old: e.morph[i].old, s1: e.morph[i].nw || e.morph[i].old, g3: e.morph[i].g3 || e.morph[i].old, gp: e.morph[i].gp || e.morph[i].old, g3p: e.morph[i].g3p || e.morph[i].old, s2_5: e.morph[i].a < 0.05 * cell ? e.morph[i].old : (e.morph[i].nw || e.morph[i].old) });
+  let slivers = 0;
+  for (let k = 1; k < pts.length; k++) fr[k].morph.forEach((f, i) => {
+    if (f.a < MIN_AREA) { slivers++; return; }
+    const b = predOf(fr[k - 1].morph, f); const c1 = colOf(fr[k], i);
+    V.forEach((x) => { const r = R[x]; r.faces++; if (b === null) { r.unassign++; return; } const j = cdist(c1[x], colOf(fr[k - 1], b)[x]); if (j > 12) r.over12++; if (j > r.jumpMax) { r.jumpMax = j; r.jumpAt = pts[k][0]; } });
+  });
+  fu.forEach((e) => e.morph.forEach((f, i) => { if (f.a < MIN_AREA) return; const soll = sollPureN(f, uni.kf4); if (!soll) return; const c1 = colOf(e, i); V.forEach((x) => { const d = lin2l(c1[x], soll), r = R[x]; r.dFaces++; if (d > r.dMax) r.dMax = d; if (d > 0.02) r.dBad++; }); }));
+  let nw = 0, od = 0, n = 0; [[0.25, 0.25], [0.5, 0.5], [0.75, 0.75]].forEach(([u, v]) => { const f = frame4(nat, u, v, 10); nw += f.msNew; od += f.msOld; n++; });
+  return { key, pathName, R, slivers, faces: fr.reduce((a, e) => a + e.morph.length, 0) / fr.length, ms: { nw: nw / n, od: od / n }, V };
+}
+if (RUN_MAIN && process.argv.includes('--four') && !process.argv.includes('--four-explain')) {
+  const C = cases4(); const which = arg('--case', 'all');
+  Object.keys(C).filter((k) => which === 'all' || which === k).forEach((k) => ['diag', 'mid'].forEach((pn) => {
+    const o = fourRun(k, C[k], pn); console.log(`\n=== ${C[k].name} (Pfad ${pn === 'diag' ? '(u,v) = (t,t)' : '(u,v) = (t,0.5)'}, 21 Schritte; Flaechen je Frame ${o.faces.toFixed(1)}; ${o.slivers} Flaechenschritte < ${MIN_AREA} px^2 nicht gezaehlt) ===`);
+    console.log('   Variante | max Sprung (bei u) | Spruenge > 12 / Flaechen | dLin gleiche Farben max (Flaechen > 0.02 von n)');
+    o.V.forEach((x) => { const r = o.R[x]; console.log(`   ${x.padEnd(8)} | ${String(r.jumpMax).padStart(3)} (${fmt(r.jumpAt, 2)}) | ${String(r.over12).padStart(4)} / ${r.faces} | ${r.dMax.toFixed(4)} (${r.dBad} von ${r.dFaces})`); });
+    console.log(`   Zeit je Frame (ms): Raster mit vier Eckfeldern ${o.ms.od.toFixed(2)}, Zuordnung je Eckfeld ${o.ms.nw.toFixed(2)}`);
+  }));
+  process.exit(0);
+}
+
+if (RUN_MAIN && (process.argv.includes('--spatial') || process.argv.includes('--s4'))) {
   const cases = buildCases(true); const which = arg('--case', 'all');
   if (process.argv.includes('--explain')) explainFine(cases.sq);
   else if (process.argv.includes('--fine')) printSpatial(spatialRun('sq', cases.sq, 0.01));
   else Object.keys(cases).filter((k) => which === 'all' || which === k).forEach((k) => printSpatial(spatialRun(k, cases[k], +arg('--step', '0.05'))));
+}
+
+
+// --four-explain: the worst s1 jump of the synthetic square along the diagonal, with the four corner colours under the face
+if (RUN_MAIN && process.argv.includes('--four-explain')) {
+  const cfg = cases4().sq4, nat = setup4(cfg), pts = []; for (let k = 0; k <= 20; k++) pts.push(k / 20);
+  const fr = pts.map((t) => frame4(nat, t, t)); let worst = null;
+  const hex = (lin) => '#' + lin.map((v) => Math.round(255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055)).toString(16).padStart(2, '0')).join('');
+  for (let k = 1; k < pts.length; k++) fr[k].morph.forEach((f, i) => { if (f.a < MIN_AREA) return; const b = predOf(fr[k - 1].morph, f); if (b === null) return; const j = cdist(f.nw || f.old, fr[k - 1].morph[b].nw || fr[k - 1].morph[b].old); if (!worst || j > worst.j) worst = { j, k, i, b, jo: cdist(f.old, fr[k - 1].morph[b].old) }; });
+  console.log(`groesster s1-Sprung ${worst.j} Byte (Raster derselben Flaeche ${worst.jo}) bei u = v ${pts[worst.k - 1]} -> ${pts[worst.k]}`);
+  [[fr[worst.k - 1].morph[worst.b], pts[worst.k - 1]], [fr[worst.k].morph[worst.i], pts[worst.k]]].forEach(([f, t]) => {
+    const wt = bilinW(t, t), cols = nat.kf4.map((kf) => { const ov = overlapShares(f, kf); const L = []; ov.shares.forEach((v, gi) => L.push(`${hex(kf[gi].color)} n=${kf[gi].n} a=${kf[gi].a.toFixed(0)} ${(100 * v / ov.tot).toFixed(0)} %`)); return L.join('; ') || 'keine'; });
+    console.log(`  u=v=${t}: n=${f.n} A=${f.a.toFixed(0)} Gewichte ${Object.values(wt).map((x) => x.toFixed(2)).join('/')}; s1 ${f.nw ? hex(f.nw) : 'Raster'}, Raster ${hex(f.old)}`);
+    cols.forEach((c, k) => console.log(`    Eckfeld ${k} (w=${[wt.w00, wt.w10, wt.w01, wt.w11][k].toFixed(2)}): ${c}`));
+  });
+  process.exit(0);
 }
 
 module.exports = { mkStarDiamond, setup, buildCases, withUniform, sollUniform, annotate, predOf, role, cdist, lin2l, setNear(k) { NEAR_K = k; } };
