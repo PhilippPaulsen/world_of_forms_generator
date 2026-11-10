@@ -260,7 +260,7 @@ function timing(rig, p) {
   return out;
 }
 
-if (!['--stages', '--edge', '--explain'].some((a) => process.argv.includes(a))) {
+if (!['--stages', '--edge', '--explain', '--v3'].some((a) => process.argv.includes(a))) {
 const which = arg('--case', 'all');
 const keys = which === 'all' ? Object.keys(CASES) : [which];
 const rigs = {};
@@ -282,12 +282,41 @@ keys.forEach((k) => { ['playback', 'spatial'].forEach((p) => { if (k === 'topo2'
 //   v2ab   both: one side unique -> window blend of that partner's colour into the v2b fallback; otherwise the v2b fallback
 // =============================================================================================================================================================================================
 const W_WIN = 0.1, DOM_SHARE = 0.4;
-const VARIANTS = ['old', 'v027', 'v1', 'v2a', 'v2b', 'v2ab'];
+const VARIANTS = ['old', 'v027', 'v1', 'v2a', 'v2b', 'v2ab', 'v3', 'v3r', 'v3c', 'v3cb', 'v3cbr', 'vg'];
+let SHOW = VARIANTS;   // the variants a table prints
 const lin2 = (a, b, k) => [0, 1, 2].map((i) => (1 - k) * a[i] + k * b[i]);
 function dominantColour(f, kf) {
   const { shares, tot } = overlapShares(f, kf); let best = -1, bs = 0;
   shares.forEach((v, gi) => { if (v > bs) { bs = v; best = gi; } });
   return best >= 0 && tot > 0 && bs / tot >= DOM_SHARE && kf[best].color ? kf[best].color : null;
+}
+
+// 029: v3 = continuous weighting. g = min(share of the face's samples inside its partner polygon in A, the same in B) (a side without a candidate: 0); colour = g * (1-t, t) mix of the partner colours + (1-g) * today's
+// location sampling. No hard decision. v3r = v3 against the REFERENCE faces at the border (spatial path; the playback path has no such edge case, v3r = v3 there).
+function shareIn(f, g) { const S = M.spatialMorphFaceSamples(f.verts); let a = 0, tot = 0; S.forEach((q) => { tot += q.w; if (inside(q, g.verts)) a += q.w; }); return tot ? a / tot : 0; }
+// extension (not in the 029 order, labelled as such): v3c = g from CONTAINMENT, the larger of "share of the face inside the partner" and "share of the partner inside the face" (a face that grows or shrinks along the morph
+// stays the same face); v3cb = v3c with the fallback of stage 2b (dominant keyframe face) instead of today's sampling; v3cbr = v3cb against the reference faces (spatial).
+function shareOfPartnerIn(f, g) { g._S = g._S || M.spatialMorphFaceSamples(g.verts); let a = 0, tot = 0; g._S.forEach((q) => { tot += q.w; if (inside(q, f.verts)) a += q.w; }); return tot ? a / tot : 0; }
+function v3Eval(morph, kfA, kfB, t, mA, mB, opt) {
+  opt = opt || {}; const col = [], gs = [];
+  morph.forEach((f, i) => {
+    const a = mA[i].idx, b = mB[i].idx;
+    let fb = f.old;
+    if (opt.fbDom) { const dA = dominantColour(f, kfA), dB = dominantColour(f, kfB); fb = dA && dB ? lin2(dA, dB, t) : (dA || dB || f.old); }
+    if (a === null || b === null || !kfA[a].color || !kfB[b].color) { col.push(fb); gs.push(0); return; }
+    const sh = (g) => opt.contain ? Math.max(shareIn(f, g), shareOfPartnerIn(f, g)) : shareIn(f, g);
+    const g = Math.min(sh(kfA[a]), sh(kfB[b]));
+    const pm = lin2(kfA[a].color, kfB[b].color, t);
+    col.push([0, 1, 2].map((k) => g * pm[k] + (1 - g) * fb[k])); gs.push(g);
+  });
+  return { col, g: gs };
+}
+// the reference faces of the spatial path (028 point 5): the tile faces of the same anchored lines at weight (1,0) / (0,1), colours from the true keyframe faces (dominant overlap)
+function buildRef(rig) {
+  if (rig.kfRef) return;
+  const trueKf = rig.kf.spatial, ref = {};
+  ['A', 'B'].forEach((side) => { const { morph } = frame(rig, 'spatial', side === 'A' ? 0 : 1); ref[side] = annotate(morph.map((f) => ({ verts: f.verts, color: dominantColour(f, trueKf[side]) })).filter((f) => f.color), rig.geo.ctr, rig.geo.span, rig.geo.ops); });
+  rig.kfRef = ref;
 }
 function evaluate2(rig, path_, t) {
   const { morph, ms } = frame(rig, path_, t);
@@ -318,8 +347,17 @@ function evaluate2(rig, path_, t) {
     else if (bOnly) { col.v2ab.push(lin2(fb, kfB[gB[i].idx].color, wB)); via.v2ab.push(wB > 0 ? 'blend' : 'fallback'); }
     else { col.v2ab.push(fb); via.v2ab.push('fallback'); }
   });
+  const e3 = v3Eval(morph, kfA, kfB, t, gA, gB); col.v3 = e3.col; via.v3 = e3.g.map((g) => g > 0.5 ? 'partner' : 'fallback');
+  let e3r = e3;
+  if (path_ === 'spatial' && rig.kfRef) e3r = v3Eval(morph, rig.kfRef.A, rig.kfRef.B, t, matchFaces(morph, rig.kfRef.A, 'group'), matchFaces(morph, rig.kfRef.B, 'group'));
+  col.v3r = e3r.col; via.v3r = e3r.g.map((g) => g > 0.5 ? 'partner' : 'fallback');
+  const e3c = v3Eval(morph, kfA, kfB, t, gA, gB, { contain: true }), e3cb = v3Eval(morph, kfA, kfB, t, gA, gB, { contain: true, fbDom: true });
+  let e3cbr = e3cb; if (path_ === 'spatial' && rig.kfRef) e3cbr = v3Eval(morph, rig.kfRef.A, rig.kfRef.B, t, matchFaces(morph, rig.kfRef.A, 'group'), matchFaces(morph, rig.kfRef.B, 'group'), { contain: true, fbDom: true });
+  [['v3c', e3c], ['v3cb', e3cb], ['v3cbr', e3cbr]].forEach(([v, e]) => { col[v] = e.col; via[v] = e.g.map((g) => g > 0.5 ? 'partner' : 'fallback'); });
+  // 029 option check: the gate "only quadrat-like cases": per FRAME v1 when at least 40 % of the faces have both partners unique, else today's colours
+  const gateOn = count(gA, (m, i) => u(m) && u(gB[i])) / (morph.length || 1) >= 0.4; col.vg = gateOn ? col.v1 : col.old; via.vg = gateOn ? via.v1 : via.old;
   const uniq = (m1, m2) => count(m1, (m, i) => u(m) && u(m2[i]));
-  return { morph, kfA, kfB, col, via, n: morph.length, bothPoly: uniq(pA, pB), bothGroup: uniq(gA, gB), gA, gB, pA, pB };
+  return { morph, kfA, kfB, col, via, g3: e3.g, g3r: e3r.g, gx: { v3c: e3c.g, v3cb: e3cb.g, v3cbr: e3cbr.g }, oldMs: ms, n: morph.length, bothPoly: uniq(pA, pB), bothGroup: uniq(gA, gB), gA, gB, pA, pB };
 }
 const TGRID = []; for (let k = 0; k <= 20; k++) TGRID.push(+(k * 0.05).toFixed(2));
 const hexOf = (c) => c;   // linear stays linear: dLin is taken in linear light
@@ -343,15 +381,36 @@ function galleryPair(shape, order, token, mode) {
   let best = null; for (const a of items) for (const b of items) { if (a === b) continue; const q = Math.min(a.faces, b.faces) / Math.max(a.faces, b.faces); if (a.faces >= 5 && b.faces >= 5 && (!best || q < best.q)) best = { a, b, q }; }
   return { A: best.a.conns, B: best.b.conns, name: `${best.a.e.path.split('/').pop()} (${best.a.faces} Fl.) -> ${best.b.e.path.split('/').pop()} (${best.b.faces} Fl.)` };
 }
+
+// a CURATED gallery pair (not random): among the first 80 count-2 entries of (shape, order, group) with 8..40 faces, the pair that shares exactly one orbit line (an edit of one pattern, as a user makes it) and has the most similar
+// face count (ties: the first in manifest order); deterministic.
+function curatedPair(shape, order, token, mode) {
+  const fs = require('fs'); const man = fs.readFileSync(path.join(__dirname, '..', '..', 'gallery', 'manifest.jsonl'), 'utf8').split('\n').filter(Boolean).map(JSON.parse)
+    .filter((e) => e.shape === shape && e.order === order && e.groupToken === token && e.count === 2).slice(0, 80);
+  const w = makeRenderWorld(shape, order, 3, mode);
+  const table = w.run('computeThemeLineOrbits(nodes, centroid, currentShape, symmetryMode, outerCorners)');
+  const items = man.map((e) => { const conns = e.orbitIds.map((id) => table.orbits[id].pairs[0]); const id = w.addKeyframeLayer(conns, { showFaces: true });
+    const faces = w.run(`(function(){ var L = additionalLayers[${id}]; return computeCellFaces(L.connections, L.nodes, null, null, faceSheetOverrideOfLayer(L)).faces.length; })()`); return { e, conns, faces }; }).filter((x) => x.faces >= 8 && x.faces <= 40);
+  let best = null;
+  for (const a of items) for (const b of items) {
+    if (a === b || a.e.path >= b.e.path) continue; const shared = a.e.orbitIds.filter((o) => b.e.orbitIds.includes(o)).length; if (shared !== 1) continue;
+    const q = Math.abs(a.faces - b.faces); if (!best || q < best.q) best = { a, b, q };
+  }
+  return { A: best.a.conns, B: best.b.conns, name: `${best.a.e.path.split('/').pop()} (${best.a.faces} Fl.) -> ${best.b.e.path.split('/').pop()} (${best.b.faces} Fl.)` };
+}
 function buildCases() {
   const hexP = randomPair('hex', 3, 'rotation_reflection6', 1, 5), triP = randomPair('triangle', 5, 'rotation_reflection3', 1, 5), gal = galleryPair('square', 4, 'D4', 'rotation_reflection6');
-  return {
+  const hexK = process.argv.includes('--v3') ? curatedPair('hex', 2, 'D6', 'rotation_reflection6') : null, triK = process.argv.includes('--v3') ? curatedPair('triangle', 4, 'D3', 'rotation_reflection6') : null;
+  const extra = hexK ? {
+    hexK: { name: 'Galerie Hexagon 2 D6 (kuratiert): ' + hexK.name, shape: 'hex', n: 2, sym: 'rotation_reflection6', connsA: hexK.A, connsB: hexK.B, colourA: RAINBOW, colourB: RAINBOW_B },
+    triK: { name: 'Galerie Dreieck 4 D3 (kuratiert): ' + triK.name, shape: 'triangle', n: 4, sym: 'rotation_reflection6', connsA: triK.A, connsB: triK.B, colourA: RAINBOW, colourB: RAINBOW_B } } : {};
+  return Object.assign({
     sq: { name: 'Quadrat N=4 D4 (026): [[1,12]] -> [[1,8]] (Stern violett, Raute gelb)', n: 4, connsA: [[1, 12]], connsB: [[1, 8]], colourA: mkStarDiamond(12, 0), colourB: mkStarDiamond(12, 0), truth: true },
     topoSq: { name: 'Quadrat, Aufspaltung: [[1,7]] (5 Fl.) -> [[1,12]] (17 Fl.)', n: 4, connsA: [[1, 7]], connsB: [[1, 12]], colourA: RAINBOW, colourB: RAINBOW_B },
     hex: { name: 'Hexagon N=3 D6 (jumps-Paar hex-typical, 5 Linien, Seed 1)', shape: 'hex', n: 3, sym: 'rotation_reflection6', connsA: hexP.A, connsB: hexP.B, colourA: RAINBOW, colourB: RAINBOW_B },
     tri: { name: 'Dreieck N=5 D3 (jumps-Paar tri-typical, 5 Linien, Seed 1)', shape: 'triangle', n: 5, sym: 'rotation_reflection3', connsA: triP.A, connsB: triP.B, colourA: RAINBOW, colourB: RAINBOW_B },
     gal: { name: 'Galerie Quadrat 4 D4: ' + gal.name, n: 4, connsA: gal.A, connsB: gal.B, colourA: RAINBOW, colourB: RAINBOW_B }
-  };
+  }, extra);
 }
 const withUniform = (cfg) => Object.assign({}, cfg, { colourA: UNIFORM, colourB: UNIFORM, truth: false });
 // Soll of the uniform test: the colour every overlapped keyframe face has, if all of them have the same one on both sides (else undefined: the face is left out)
@@ -362,14 +421,14 @@ function sollUniform(f, kfA, kfB) {
 
 function stageRun(key, cfg) {
   const out = { key, name: cfg.name, paths: {} };
-  const nat = setup(cfg), uni = setup(withUniform(cfg));
+  const nat = setup(cfg), uni = setup(withUniform(cfg)); buildRef(nat); buildRef(uni);
   const paths = ['playback', 'spatial'];
   paths.forEach((p) => {
-    const row = {}; VARIANTS.forEach((v) => { row[v] = { jumpMax: 0, jumpAt: null, over12: 0, jumpFaces: 0, unassign: 0, switches: 0, dMax: 0, dFaces: 0, dBad: 0, pJump: 0 }; });
+    const row = {}; VARIANTS.forEach((v) => { row[v] = { jumpMax: 0, jumpAt: null, over12: 0, jumpFaces: 0, unassign: 0, switches: 0, dMax: 0, dFaces: 0, dBad: 0, pJump: 0, gHi: 0, gN: 0 }; });
     let uniqShareP = 0, uniqShareG = 0, nFaces = 0, nFrames = 0, bothP = 0, bothG = 0;
     // jumps: natural colours, step 0.05
     const frames = TGRID.map((t) => evaluate2(nat, p, t));
-    frames.forEach((e) => { bothP += e.bothPoly; bothG += e.bothGroup; nFaces += e.n; });
+    frames.forEach((e) => { bothP += e.bothPoly; bothG += e.bothGroup; nFaces += e.n; e.g3.forEach((g) => { row.v3.gN++; if (g > 0.5) row.v3.gHi++; }); e.g3r.forEach((g) => { row.v3r.gN++; if (g > 0.5) row.v3r.gHi++; }); Object.keys(e.gx).forEach((v) => e.gx[v].forEach((g) => { row[v].gN++; if (g > 0.5) row[v].gHi++; })); });
     for (let k = 1; k < frames.length; k++) {
       const P = frames[k - 1], C = frames[k];
       C.morph.forEach((f, i) => {
@@ -405,6 +464,12 @@ function stageRun(key, cfg) {
       const K = nat.kf.playback, tA = { star: K.A.find((f) => role(f, nat.geo) === 'star').color, diamond: K.A.find((f) => role(f, nat.geo) === 'diamond').color };
       frames.forEach((e, k) => e.morph.forEach((f, i) => { const r = role(f, nat.geo); if (!r) return; const soll = tA[r]; VARIANTS.forEach((v) => { sd[v] = Math.max(sd[v], lin2l(e.col[v][i], soll)); }); }));
     }
+    { // time per frame (ms): today's location sampling (measured inside the world) against the matching + v3 colours (Node), mean of 20 runs at t = 0.25 / 0.5 / 0.75
+      let nw = 0, od = 0, k = 0;
+      [0.25, 0.5, 0.75].forEach((t) => { const { morph, ms } = frame(nat, p, t); const kfA = nat.kf[p].A, kfB = nat.kf[p].B;
+        for (let r = 0; r < 20; r++) { const t0 = process.hrtime.bigint(); const mA = matchFaces(morph, kfA, 'group'), mB = matchFaces(morph, kfB, 'group'); v3Eval(morph, kfA, kfB, t, mA, mB); nw += Number(process.hrtime.bigint() - t0) / 1e6; od += ms; k++; } });
+      row.time = { nw: nw / k, od: od / k };
+    }
     row.share = { poly: bothP / nFaces, group: bothG / nFaces, faces: nFaces / frames.length };
     row.sd = sd; out.paths[p] = row;
   });
@@ -417,8 +482,14 @@ function printStage(out) {
     const r = out.paths[p];
     console.log(`-- Pfad ${p}: Flaechen je Frame ${r.share.faces.toFixed(1)}; beide Partner eindeutig, Mittel ueber t = 0..1 (Schritt 0.05): Orbit aus Polygonen ${(100 * r.share.poly).toFixed(0)} % -> aus Gruppe ${(100 * r.share.group).toFixed(0)} % (Stufe 1)`);
     console.log('   Variante | max Sprung/Flaeche (bei t) | Spruenge > 12 | Wechsel Partner/Fallback | nicht zuordenbar | dLin bei gleichen Farben: max (Flaechen > 0.02 von n)' + (r.sd ? ' | Stern/Raute dLin max' : ''));
-    VARIANTS.forEach((v) => { const x = r[v]; console.log(`   ${v.padEnd(8)} | ${String(x.jumpMax).padStart(3)} (${fmt(x.jumpAt, 2)}) | ${String(x.over12).padStart(4)} / ${x.jumpFaces} | ${String(x.switches).padStart(4)} | ${String(x.unassign).padStart(4)} | ${x.dMax.toFixed(4)} (${x.dBad} von ${x.dFaces})${r.sd ? ' | ' + r.sd[v].toFixed(4) : ''}`); });
+    SHOW.forEach((v) => { const x = r[v]; console.log(`   ${v.padEnd(8)} | ${String(x.jumpMax).padStart(3)} (${fmt(x.jumpAt, 2)}) | ${String(x.over12).padStart(4)} / ${x.jumpFaces} | ${String(x.switches).padStart(4)} | ${String(x.unassign).padStart(4)} | ${x.dMax.toFixed(4)} (${x.dBad} von ${x.dFaces})${r.sd ? ' | ' + r.sd[v].toFixed(4) : ''}${x.gN ? ' | g>0.5: ' + (100 * x.gHi / x.gN).toFixed(0) + ' %' : ''}`); });
+    console.log(`   Zeit je Frame: heutige Ortsabtastung ${r.time.od.toFixed(2)} ms, Zuordnung + v3 ${r.time.nw.toFixed(2)} ms`);
   });
+}
+if (process.argv.includes('--v3')) {
+  NEAR_K = 1.5; SHOW = ['old', 'v1', 'v2b', 'v3', 'v3r', 'v3c', 'v3cb', 'v3cbr', 'vg']; const cases = buildCases(); const which = arg('--case', 'all');
+  console.log('######## 029: Nähekriterium 1.5; v3 = stetige Gewichtung, v3r = v3 + Referenzflaechen am Rand ########');
+  Object.keys(cases).filter((k) => which === 'all' || which === k).forEach((k) => printStage(stageRun(k, cases[k])));
 }
 if (process.argv.includes('--stages')) {
   const cases = buildCases(); const which = arg('--case', 'all');
