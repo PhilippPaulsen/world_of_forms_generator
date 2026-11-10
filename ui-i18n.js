@@ -131,6 +131,17 @@
     'index.weiss': { de: 'Weiß', en: 'White' },
     'index.wert': { de: 'Wert', en: 'Value' },
     'index.anker-register-dreieck-aktue': { de: 'Anker: Register (Dreieck, aktueller Farbton)', en: 'Anchor: register (triangle, current hue)' },
+    // ---- index.html follow-up (task 042): the black isotints, the anchor widgets' names, the circle overlay, and the short visible texts of the net kind buttons (Aus, Geo; the long names are net.kind.*) ----
+    'index.schwarz-schwarzgleiche': { de: 'Schwarz (Schwarzgleiche)', en: 'Black (isotints)' },
+    'index.anker-ansicht': { de: 'Anker-Ansicht', en: 'Anchor view' },
+    'index.anker-farbton': { de: 'Anker Farbton', en: 'Anchor hue' },
+    'index.anker-register': { de: 'Anker Register', en: 'Anchor register' },
+    'index.anker-vorschau': { de: 'Anker-Vorschau', en: 'Anchor preview' },
+    'index.kreis': { de: 'Kreis', en: 'Circle' },
+    'index.anker-farbton-kreis': { de: 'Anker: Farbton (Kreis)', en: 'Anchor: hue (circle)' },
+    'index.schwarz': { de: 'Schwarz', en: 'Black' },
+    'net.kind.off.short': { de: 'Aus', en: 'Off' },
+    'net.kind.geometric.short': { de: 'Geo', en: 'Geo' },
     // ---- strings of the scripts of the phone layout that carry a key ----
     'notice.close': { de: 'Hinweis schließen', en: 'Close notice' },
     'more.farbe.button': { de: 'Mehr: Farben zurücksetzen, Knoten, Farborgel, Info, Download', en: 'More: reset colors, nodes, Farborgel, info, download' },

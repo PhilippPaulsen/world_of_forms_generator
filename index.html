@@ -8,7 +8,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20261110ihtml">
+  <link rel="stylesheet" href="style.css?v=20261110ihtb">
   <!-- Cache-busting for the ES-module graph behind core/farborgel-selection.mjs (below). The <script src> tags in
        this file carry ?v= by hand-bump (CLAUDE.md), but a module's own `import ... from './x.mjs'` cannot: this
        import map is the one place that gives every module in that graph the same ?v= as everything else (bump it
@@ -19,11 +19,11 @@
   <script type="importmap">
     {
     "imports": {
-      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20261110ihtml",
-      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20261110ihtml",
-      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20261110ihtml",
-      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20261110ihtml",
-      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20261110ihtml"
+      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20261110ihtb",
+      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20261110ihtb",
+      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20261110ihtb",
+      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20261110ihtb",
+      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20261110ihtb"
     }
     }
   </script>
@@ -545,7 +545,7 @@
          anchor preview swatch sits last - Farborgel's own calibrated display color
          (window.farborgelAnchorDisplayColor()), not core/color.js's resolveColor(). -->
     <div id="nav-farbe" class="nav-row nav-farbe" role="group" aria-labelledby="tab-farbe" hidden>
-      <div id="nav-anchor-views" class="nav-cluster nav-anchor-views" role="group" aria-label="Anker-Ansicht">
+      <div id="nav-anchor-views" class="nav-cluster nav-anchor-views" role="group" aria-label="Anker-Ansicht" data-i18n-label="index.anker-ansicht">
         <button id="btn-open-kreis" class="icon-btn active" type="button" aria-haspopup="dialog" aria-controls="overlay-kreis" title="Kreis: Gegenfarben, Dreier, Vierer (erneut tippen: Farbton wählen)" aria-label="Kreis: Gegenfarben, Dreier, Vierer (erneut tippen: Farbton wählen)" data-i18n-label="index.kreis-gegenfarben-dreier-vie">
           <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9" /></svg>
         </button>
@@ -560,30 +560,30 @@
         <button id="btn-harmony-4" class="icon-btn" type="button" title="Vierer (4 Farben)" aria-label="Vierer (4 Farben)" data-i18n-label="index.vierer-4-farben">4</button>
       </div>
       <div class="nav-cluster nav-harmony-family" id="farbe-family-triangle" role="group" aria-label="Dreieck-Harmonien: Reihen" hidden data-i18n-label="index.dreieck-harmonien-reihen">
-        <button id="btn-harmony-b" class="icon-btn" type="button" title="Schwarz (Schwarzgleiche)" aria-label="Schwarz (Schwarzgleiche)">B</button>
+        <button id="btn-harmony-b" class="icon-btn" type="button" title="Schwarz (Schwarzgleiche)" aria-label="Schwarz (Schwarzgleiche)" data-i18n-label="index.schwarz-schwarzgleiche">B</button>
         <button id="btn-harmony-w" class="icon-btn" type="button" title="Weiß (Weißgleiche)" aria-label="Weiß (Weißgleiche)" data-i18n-label="index.weiss-weissgleiche">W</button>
         <button id="btn-harmony-s" class="icon-btn" type="button" title="Schatten (Schattenreihe)" aria-label="Schatten (Schattenreihe)">S</button>
         <button id="btn-harmony-v" class="icon-btn" type="button" title="Wert (Wertgleich)" aria-label="Wert (Wertgleich)" data-i18n-label="index.wert-wertgleich">V</button>
       </div>
       <span class="nav-divider nav-divider-b" aria-hidden="true"></span>
-      <div class="stepper" id="farbe-anchor-hue-stepper" role="group" aria-label="Anker Farbton">
+      <div class="stepper" id="farbe-anchor-hue-stepper" role="group" aria-label="Anker Farbton" data-i18n-label="index.anker-farbton">
         <svg class="ico stepper-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9" /></svg>
-        <input type="number" id="farbe-anchor-hue-input" min="1" max="24" value="1" inputmode="none" aria-label="Anker Farbton">
+        <input type="number" id="farbe-anchor-hue-input" min="1" max="24" value="1" inputmode="none" aria-label="Anker Farbton" data-i18n-label="index.anker-farbton">
         <div class="stepper-chevrons">
           <button class="stepper-btn" type="button" data-dir="1" title="Farbton weiter" aria-label="Farbton weiter" data-i18n-label="index.farbton-weiter"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15 L12 9 L18 15" /></svg></button>
           <button class="stepper-btn" type="button" data-dir="-1" title="Farbton zurück" aria-label="Farbton zurück" data-i18n-label="index.farbton-zurueck"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9 L12 15 L18 9" /></svg></button>
         </div>
       </div>
-      <div class="stepper" id="farbe-anchor-register-stepper" role="group" aria-label="Anker Register">
+      <div class="stepper" id="farbe-anchor-register-stepper" role="group" aria-label="Anker Register" data-i18n-label="index.anker-register">
         <svg class="ico stepper-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" /></svg>
-        <span id="farbe-anchor-register-display" class="stepper-display" role="spinbutton" tabindex="0" aria-label="Anker Register" aria-valuemin="0" aria-valuemax="27">ca</span>
+        <span id="farbe-anchor-register-display" class="stepper-display" role="spinbutton" tabindex="0" aria-label="Anker Register" aria-valuemin="0" aria-valuemax="27" data-i18n-label="index.anker-register">ca</span>
         <input type="range" id="farbe-anchor-register-input" min="0" max="27" step="1" value="0" hidden tabindex="-1" aria-hidden="true">
         <div class="stepper-chevrons">
           <button class="stepper-btn" type="button" data-dir="1" title="Register weiter" aria-label="Register weiter" data-i18n-label="index.register-weiter"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15 L12 9 L18 15" /></svg></button>
           <button class="stepper-btn" type="button" data-dir="-1" title="Register zurück" aria-label="Register zurück" data-i18n-label="index.register-zurueck"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9 L12 15 L18 9" /></svg></button>
         </div>
       </div>
-      <span id="farbe-anchor-preview" class="fc-swatch" title="Anker-Vorschau" role="img" aria-label="Anker-Vorschau"></span>
+      <span id="farbe-anchor-preview" class="fc-swatch" title="Anker-Vorschau" role="img" aria-label="Anker-Vorschau" data-i18n-label="index.anker-vorschau"></span>
       <span class="nav-break" aria-hidden="true"></span>
       <select id="face-colors-rule" hidden tabindex="-1" aria-hidden="true"></select>
       <!-- Group D Phase B4 follow-up: the old rule row's UI (the 4 rule-choice buttons, formerly in
@@ -605,10 +605,10 @@
          #net-strength-value): sketch.js's initNetControls() still owns them. -->
     <div id="nav-netz" class="nav-row nav-netz" role="group" aria-labelledby="tab-netz" hidden>
       <div id="nav-kinds" class="nav-cluster nav-kinds" role="radiogroup" aria-label="Netzart" data-i18n="group.netKind">
-        <button class="icon-btn net-kind-btn active" data-kind="regular" type="button" role="radio" aria-checked="true" title="Aus, regelmäßiges Netz" aria-label="Aus, regelmäßiges Netz" data-i18n-label="net.kind.off">Aus</button>
+        <button class="icon-btn net-kind-btn active" data-kind="regular" type="button" role="radio" aria-checked="true" title="Aus, regelmäßiges Netz" aria-label="Aus, regelmäßiges Netz" data-i18n-label="net.kind.off" data-i18n="net.kind.off.short">Aus</button>
         <button class="icon-btn net-kind-btn" data-kind="sinus" type="button" role="radio" aria-checked="false" title="Sinus" aria-label="Sinus" data-i18n-label="net.kind.sinus">Sin</button>
         <button class="icon-btn net-kind-btn" data-kind="tangens" type="button" role="radio" aria-checked="false" title="Tangens" aria-label="Tangens" data-i18n-label="net.kind.tangens">Tan</button>
-        <button class="icon-btn net-kind-btn" data-kind="geometric" type="button" role="radio" aria-checked="false" title="Geometrisch" aria-label="Geometrisch" data-i18n-label="net.kind.geometric">Geo</button>
+        <button class="icon-btn net-kind-btn" data-kind="geometric" type="button" role="radio" aria-checked="false" title="Geometrisch" aria-label="Geometrisch" data-i18n-label="net.kind.geometric" data-i18n="net.kind.geometric.short">Geo</button>
       </div>
       <span class="nav-divider nav-divider-a" aria-hidden="true"></span>
       <div id="net-strength-stepper" class="stepper" role="group" aria-label="Stärke" data-i18n="net.strength.group">
@@ -767,7 +767,7 @@
         <option value="3">Dreier</option>
         <option value="4">Vierer</option>
         <option value="W" data-i18n="index.weiss">Weiß</option>
-        <option value="B">Schwarz</option>
+        <option value="B" data-i18n="index.schwarz">Schwarz</option>
         <option value="S">Schatten</option>
         <option value="V" data-i18n="index.wert">Wert</option>
       </select>
@@ -1466,12 +1466,12 @@
        source of truth; a selection here does NOT close the overlay (matching #more-form's symmetry-selection
        precedent: clicking a choice updates state and stays open, only Escape/outside-click/the trigger again
        closes it - see ui-farbe.js). -->
-  <div id="overlay-kreis" class="overlay" role="dialog" aria-label="Kreis" hidden>
-    <span id="farbe-anchor-preview-kreis" class="fc-swatch" title="Anker-Vorschau" role="img" aria-label="Anker-Vorschau"></span>
-    <svg id="farbe-anchor-kreis" class="anchor-widget-svg" viewBox="0 0 240 240" role="radiogroup" aria-label="Anker: Farbton (Kreis)"></svg>
+  <div id="overlay-kreis" class="overlay" role="dialog" aria-label="Kreis" hidden data-i18n-label="index.kreis">
+    <span id="farbe-anchor-preview-kreis" class="fc-swatch" title="Anker-Vorschau" role="img" aria-label="Anker-Vorschau" data-i18n-label="index.anker-vorschau"></span>
+    <svg id="farbe-anchor-kreis" class="anchor-widget-svg" viewBox="0 0 240 240" role="radiogroup" aria-label="Anker: Farbton (Kreis)" data-i18n-label="index.anker-farbton-kreis"></svg>
   </div>
   <div id="overlay-dreieck" class="overlay" role="dialog" aria-label="Dreieck" hidden data-i18n-label="layer.shape.triangle">
-    <span id="farbe-anchor-preview-dreieck" class="fc-swatch" title="Anker-Vorschau" role="img" aria-label="Anker-Vorschau"></span>
+    <span id="farbe-anchor-preview-dreieck" class="fc-swatch" title="Anker-Vorschau" role="img" aria-label="Anker-Vorschau" data-i18n-label="index.anker-vorschau"></span>
     <p id="farbe-anchor-hue-context-dreieck" class="overlay-hint"></p>
     <svg id="farbe-anchor-dreieck" class="anchor-widget-svg" viewBox="0 0 240 200" role="radiogroup" aria-label="Anker: Register (Dreieck, aktueller Farbton)" data-i18n-label="index.anker-register-dreieck-aktue"></svg>
   </div>
@@ -1565,54 +1565,54 @@
   <div id="ui-notices" class="notices" role="status" aria-live="polite"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20261110ihtml"></script>
-  <script src="core/state.js?v=20261110ihtml"></script>
-  <script src="core/symmetry.js?v=20261110ihtml"></script>
-  <script src="core/curves.js?v=20261110ihtml"></script>
-  <script src="core/netwarp.js?v=20261110ihtml"></script>
-  <script src="core/tiling.js?v=20261110ihtml"></script>
-  <script src="core/faces.js?v=20261110ihtml"></script>
-  <script src="core/orbits.js?v=20261110ihtml"></script>
-  <script src="core/color.js?v=20261110ihtml"></script>
-  <script src="core/facecolor.js?v=20261110ihtml"></script>
-  <script src="core/farborgel-bridge.js?v=20261110ihtml"></script>
-  <script src="core/export.js?v=20261110ihtml"></script>
-  <script src="core/symmetry-toggles.js?v=20261110ihtml"></script>
-  <script src="core/spatial-morph.js?v=20261110ihtml"></script>
-  <script src="core/spatial-morph-render.js?v=20261110ihtml"></script>
-  <script src="core/session.js?v=20261110ihtml"></script>
-  <script src="core/session-apply.js?v=20261110ihtml"></script>
-  <script src="core/session-store.js?v=20261110ihtml"></script>
-  <script src="core/session-writer.js?v=20261110ihtml"></script>
-  <script src="core/pointer-tap.js?v=20261110ihtml"></script>
-  <script src="core/pick-node.js?v=20261110ihtml"></script>
-  <script src="sketch.js?v=20261110ihtml"></script>
-  <script src="nav.js?v=20261110ihtml"></script>
-  <script src="ui-i18n.js?v=20261110ihtml"></script>
-  <script src="ui.js?v=20261110ihtml"></script>
-  <script src="ui-form.js?v=20261110ihtml"></script>
-  <script src="ui-layer.js?v=20261110ihtml"></script>
-  <script src="ui-timeline.js?v=20261110ihtml"></script>
-  <script src="ui-layers.js?v=20261110ihtml"></script>
-  <script src="ui-morph.js?v=20261110ihtml"></script>
-  <script src="ui-net-readout.js?v=20261110ihtml"></script>
-  <script src="ui-net.js?v=20261110ihtml"></script>
-  <script src="ui-farbe.js?v=20261110ihtml"></script>
-  <script src="ui-rail.js?v=20261110ihtml"></script>
-  <script src="ui-lines.js?v=20261110ihtml"></script>
+  <script src="core/forms.js?v=20261110ihtb"></script>
+  <script src="core/state.js?v=20261110ihtb"></script>
+  <script src="core/symmetry.js?v=20261110ihtb"></script>
+  <script src="core/curves.js?v=20261110ihtb"></script>
+  <script src="core/netwarp.js?v=20261110ihtb"></script>
+  <script src="core/tiling.js?v=20261110ihtb"></script>
+  <script src="core/faces.js?v=20261110ihtb"></script>
+  <script src="core/orbits.js?v=20261110ihtb"></script>
+  <script src="core/color.js?v=20261110ihtb"></script>
+  <script src="core/facecolor.js?v=20261110ihtb"></script>
+  <script src="core/farborgel-bridge.js?v=20261110ihtb"></script>
+  <script src="core/export.js?v=20261110ihtb"></script>
+  <script src="core/symmetry-toggles.js?v=20261110ihtb"></script>
+  <script src="core/spatial-morph.js?v=20261110ihtb"></script>
+  <script src="core/spatial-morph-render.js?v=20261110ihtb"></script>
+  <script src="core/session.js?v=20261110ihtb"></script>
+  <script src="core/session-apply.js?v=20261110ihtb"></script>
+  <script src="core/session-store.js?v=20261110ihtb"></script>
+  <script src="core/session-writer.js?v=20261110ihtb"></script>
+  <script src="core/pointer-tap.js?v=20261110ihtb"></script>
+  <script src="core/pick-node.js?v=20261110ihtb"></script>
+  <script src="sketch.js?v=20261110ihtb"></script>
+  <script src="nav.js?v=20261110ihtb"></script>
+  <script src="ui-i18n.js?v=20261110ihtb"></script>
+  <script src="ui.js?v=20261110ihtb"></script>
+  <script src="ui-form.js?v=20261110ihtb"></script>
+  <script src="ui-layer.js?v=20261110ihtb"></script>
+  <script src="ui-timeline.js?v=20261110ihtb"></script>
+  <script src="ui-layers.js?v=20261110ihtb"></script>
+  <script src="ui-morph.js?v=20261110ihtb"></script>
+  <script src="ui-net-readout.js?v=20261110ihtb"></script>
+  <script src="ui-net.js?v=20261110ihtb"></script>
+  <script src="ui-farbe.js?v=20261110ihtb"></script>
+  <script src="ui-rail.js?v=20261110ihtb"></script>
+  <script src="ui-lines.js?v=20261110ihtb"></script>
   <!-- The phone layout (phone layout, commit 1a): the DATA, then the ENGINE. Both load after every ui-*.js (the strips are built, the handlers are bound) and before the window load event, which is when p5 runs setup().
        The engine applies on the first 'tabchange' (nav.js, on DOMContentLoaded) and re-parents existing controls below 768px; see ui-phone.js. -->
   <!-- Commit 2 (the Farbe tab): the chip view of the face trails (the "Spuren" sub-tab). It reads the hidden model #face-colors-list and makes #ph-trail-chips / #ph-trail-stepper in a hidden holder; the engine moves them
        into the panel. It must load after ui-farbe.js (UI.onSync order: the model rows are rebuilt first) and before ui-phone-config.js. -->
-  <script src="ui-phone-chips.js?v=20261110ihtml"></script>
-  <script src="ui-phone-timeline.js?v=20261110ihtml"></script>
-  <script src="ui-phone-pairing.js?v=20261110ihtml"></script>
-  <script src="ui-phone-config.js?v=20261110ihtml"></script>
-  <script src="ui-phone.js?v=20261110ihtml"></script>
+  <script src="ui-phone-chips.js?v=20261110ihtb"></script>
+  <script src="ui-phone-timeline.js?v=20261110ihtb"></script>
+  <script src="ui-phone-pairing.js?v=20261110ihtb"></script>
+  <script src="ui-phone-config.js?v=20261110ihtb"></script>
+  <script src="ui-phone.js?v=20261110ihtb"></script>
   <!-- Group D Phase B4: exposes window.farborgelBuildHarmonySelection (core/farborgel-selection.mjs)
        for ui-farbe.js/sketch.js (classic scripts) to call - a module script coexists fine with the
        classic p5-bootstrap scripts above (real-browser verified, no conflicts). -->
-  <script type="module" src="core/farborgel-selection.mjs?v=20261110ihtml"></script>
+  <script type="module" src="core/farborgel-selection.mjs?v=20261110ihtb"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides
