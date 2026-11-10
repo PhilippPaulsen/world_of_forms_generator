@@ -443,6 +443,33 @@ function spatialMorphRenderFillFaces(res, tile, warp, colors) {
     return faces.length;
 }
 
+// Task 038: the faces and the colours of a tile depend ONLY on the tile's cell lines in canonical coordinates (spatialMorphRenderTileFaces: s and the face sheet are constant within a frame, the net warp is set to null
+// inside) and, for the colours, on the tile's corner weights and the mode (the corner fields are constant within a frame); the tile position / flip / rotation and the net warp act LATER, per tile, in
+// spatialMorphRenderFillFaces. So tiles with exactly the same cell lines (the tiles in front of / behind the front share them: 5 to 20 distinct inputs for 121 to 420 tiles, reports/037.md) share ONE result, read only.
+// The memo lives for ONE frame: spatialMorphRenderDraw makes it, drops it in its finally; nothing is kept between frames. The keys are the exact numbers (no rounding: rounding could merge different inputs).
+function spatialMorphRenderTileMemo() {
+    let faces = new Map(), colors = new Map();
+    return {
+        faces(lines, s, sheet) {
+            const key = JSON.stringify(lines.map((ln) => [ln[0].x, ln[0].y, ln[1].x, ln[1].y]));
+            if (faces.has(key)) return faces.get(key);
+            const r = spatialMorphRenderTileFaces(lines, s, sheet);
+            if (r && r.faces && r.faces.length > 0) faces.set(key, r);   // an empty result (nothing to say, or a failure that was caught) is NOT shared: every tile asks again, as before the memo
+            return r;
+        },
+        colors(res, fields, w, mode) {
+            let per = colors.get(res);
+            if (!per) { per = new Map(); colors.set(res, per); }
+            const key = JSON.stringify([w.w00, w.w10, w.w01, w.w11, mode]);
+            if (per.has(key)) return per.get(key);
+            const r = spatialMorphRenderFaceColors(res, fields, w, mode);
+            if (r) per.set(key, r);   // null (nothing can be said, or a caught failure) is not shared either
+            return r;
+        },
+        clear() { faces = new Map(); colors = new Map(); },
+    };
+}
+
 function spatialMorphRenderDraw(sm) {
     const mode = spatialMorphNormalizeMode(sm.mode);
     const angleDeg = spatialMorphNumber(sm.angleDeg);
@@ -481,7 +508,7 @@ function spatialMorphRenderDraw(sm) {
             ? netWarpForBase(netTransformNow(), s.shape, s.outerCorners, s.nodeCount, s.sizeFactor)
             : null;
     }
-    let tiles, sym, started = false;
+    let tiles, sym, started = false, tileMemo = null;
     let facesAsked = false, warpField = false;   // faces wanted (keyframes show faces, straight curve) / the warp in force is a FIELD warp: both needed for faces
     try {
         tiles = spatialMorphRenderRecordTiles(s);
@@ -514,6 +541,7 @@ function spatialMorphRenderDraw(sm) {
         spatialMorphRenderState.faceStats = faceStats;
         const cornerFields = facesDrawn ? spatialMorphRenderCornerFields(spatialMorphRenderCornerIds(plan, mode, aligned.keyframeCount), aligned.keyframeCount, mode) : null;   // morph stages 006b / 010: the colour fields of the corner keyframes
 
+        tileMemo = facesDrawn ? spatialMorphRenderTileMemo() : null;   // task 038: one frame only
         strokeWeight(2);
         for (let t = 0; t < tiles.length; t++) {
             const tile = tiles[t];
@@ -525,8 +553,8 @@ function spatialMorphRenderDraw(sm) {
                     const wEdge = (d.onBoundary && d.moved) ? weightsAt(spatialMorphRenderToWorld(d.sample, tile, sym.ops[0], null)) : null;
                     return spatialMorphAnchoredPoint(d, wTile, wEdge, false);
                 }));
-                const tileFaces = spatialMorphRenderTileFaces(cellLines, s, faceSheet);
-                const n = spatialMorphRenderFillFaces(tileFaces, tile, activeNetWarp, spatialMorphRenderFaceColors(tileFaces, cornerFields, wTile, mode));
+                const tileFaces = tileMemo.faces(cellLines, s, faceSheet);
+                const n = spatialMorphRenderFillFaces(tileFaces, tile, activeNetWarp, tileMemo.colors(tileFaces, cornerFields, wTile, mode));
                 faceStats.tiles++;
                 if (n > 0) { faceStats.tilesWithFaces++; faceStats.faces += n; }
             }
@@ -551,6 +579,7 @@ function spatialMorphRenderDraw(sm) {
         spatialMorphRenderSetStatus('renderError', keyframes, mode, progress, segment);
         return started;   // partly drawn: do not draw the normal frame over it
     } finally {
+        if (tileMemo) tileMemo.clear();
         if (hasWarp) activeNetWarp = prevWarp;
     }
     spatialMorphRenderState.frames++;
