@@ -32,7 +32,7 @@ const inside = (pt, pts) => { let c = false; for (let i = 0, j = pts.length - 1;
 // faces: [{ verts: [{x,y}], color?: linear rgb }] -> annotated [{ verts, c, a, n, orb, color }]
 function annotate(faces, ctr, span, ops) {
   const out = faces.map((f) => ({ verts: f.verts, c: centroidOf(f.verts), a: Math.abs(area2(f.verts)), n: f.verts.length, color: f.color || null, orb: 1 }));
-  out.forEach((f) => { f.r = Math.hypot(f.c.x - ctr.x, f.c.y - ctr.y); });
+  out.forEach((f) => { f.r = Math.hypot(f.c.x - ctr.x, f.c.y - ctr.y); const xs = f.verts.map((q) => q.x), ys = f.verts.map((q) => q.y); f.bb = { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) }; });
   out.forEach((f) => { f.orb = out.filter((g) => g.n === f.n && Math.abs(g.a - f.a) <= 1e-3 * f.a && Math.abs(g.r - f.r) <= 1e-3 * span).length; });
   // 028 stage 1: the orbit from the symmetry group (the elements core/orbits.js:getGroupElementsCached() gives, as affine maps about the cell centre): the faces the images of the centroid land on
   if (ops) out.forEach((f) => {
@@ -43,9 +43,18 @@ function annotate(faces, ctr, span, ops) {
   });
   return out;
 }
+// 030: BBOX = true prefilters by bounding boxes (the same result, fewer polygon tests; measured in the time table); the samples of a face are computed once
+let BBOX = true;
+const inBB = (q, bb) => q.x >= bb.x0 && q.x <= bb.x1 && q.y >= bb.y0 && q.y <= bb.y1;
+const inside2 = (pt, g) => (!BBOX || (g.bb && inBB(pt, g.bb))) && inside(pt, g.verts);
 function overlapShares(f, kf) {   // share of the face's samples that lie in each keyframe face (any corner count)
-  const S = M.spatialMorphFaceSamples(f.verts), shares = new Map(); let tot = 0;
-  S.forEach((q) => { tot += q.w; kf.forEach((g, gi) => { if (inside(q, g.verts)) shares.set(gi, (shares.get(gi) || 0) + q.w); }); });
+  f._S = f._S || M.spatialMorphFaceSamples(f.verts); const shares = new Map(); let tot = 0;
+  f._S.forEach((q) => { tot += q.w; });
+  kf.forEach((g, gi) => {
+    if (BBOX && g.bb && f.bb && (g.bb.x1 < f.bb.x0 || g.bb.x0 > f.bb.x1 || g.bb.y1 < f.bb.y0 || g.bb.y0 > f.bb.y1)) return;
+    let a = 0; for (const q of f._S) { if (BBOX && g.bb && !inBB(q, g.bb)) continue; if (inside(q, g.verts)) a += q.w; }
+    if (a > 0) shares.set(gi, a);
+  });
   return { shares, tot };
 }
 // morph, kf: annotated lists -> [{ idx, status, passed }] parallel to morph
@@ -57,7 +66,7 @@ function matchFaces(morph, kf, mode) {
       if (g.n !== f.n || g[ok] !== f[ok]) return;
       const q = f.a / g.a; if (q > RATIO || q < 1 / RATIO) return;
       const dd = Math.hypot(f.c.x - g.c.x, f.c.y - g.c.y);
-      if (!inside(f.c, g.verts) && !inside(g.c, f.verts) && !(NEAR_K > 0 && dd <= NEAR_K * Math.sqrt(Math.max(f.a, g.a)))) return;
+      if (!inside2(f.c, g) && !inside2(g.c, f) && !(NEAR_K > 0 && dd <= NEAR_K * Math.sqrt(Math.max(f.a, g.a)))) return;
       passed.push({ gi, d: dd });
     });
     passed.sort((p, q) => p.d - q.d);
@@ -260,7 +269,7 @@ function timing(rig, p) {
   return out;
 }
 
-if (!['--stages', '--edge', '--explain', '--v3'].some((a) => process.argv.includes(a))) {
+if (!['--stages', '--edge', '--explain', '--v3', '--hyst'].some((a) => process.argv.includes(a))) {
 const which = arg('--case', 'all');
 const keys = which === 'all' ? Object.keys(CASES) : [which];
 const rigs = {};
@@ -400,7 +409,7 @@ function curatedPair(shape, order, token, mode) {
 }
 function buildCases() {
   const hexP = randomPair('hex', 3, 'rotation_reflection6', 1, 5), triP = randomPair('triangle', 5, 'rotation_reflection3', 1, 5), gal = galleryPair('square', 4, 'D4', 'rotation_reflection6');
-  const hexK = process.argv.includes('--v3') ? curatedPair('hex', 2, 'D6', 'rotation_reflection6') : null, triK = process.argv.includes('--v3') ? curatedPair('triangle', 4, 'D3', 'rotation_reflection6') : null;
+  const hexK = (process.argv.includes('--v3') || process.argv.includes('--hyst')) ? curatedPair('hex', 2, 'D6', 'rotation_reflection6') : null, triK = (process.argv.includes('--v3') || process.argv.includes('--hyst')) ? curatedPair('triangle', 4, 'D3', 'rotation_reflection6') : null;
   const extra = hexK ? {
     hexK: { name: 'Galerie Hexagon 2 D6 (kuratiert): ' + hexK.name, shape: 'hex', n: 2, sym: 'rotation_reflection6', connsA: hexK.A, connsB: hexK.B, colourA: RAINBOW, colourB: RAINBOW_B },
     triK: { name: 'Galerie Dreieck 4 D3 (kuratiert): ' + triK.name, shape: 'triangle', n: 4, sym: 'rotation_reflection6', connsA: triK.A, connsB: triK.B, colourA: RAINBOW, colourB: RAINBOW_B } } : {};
@@ -550,4 +559,126 @@ if (process.argv.includes('--edge')) {
     console.log(`   eindeutig (beide Seiten) bei t = 0 / 0.05 / 0.5 / 0.95 / 1: gegen die echten Keyframe-Flaechen ${row(trueKf)} (Mittel ${mean(trueKf)}); gegen Referenzflaechen ${row({ A: ref.A, B: ref.B })} (Mittel ${mean({ A: ref.A, B: ref.B })})`);
     rig.kf.spatial = trueKf;
   });
+}
+
+// =============================================================================================================================================================================================
+// 030 - hysteresis. `node tools/morph/measure-face-match.js --hyst [--case sq|topoSq|hex|tri|gal|hexK|triK|all] [--step 0.05] [--fine]`   (--fine: only the Stern/Raute case at step 0.01)
+//   v3cb  029: containment weight g, fallback = the dominant keyframe polygon per side (>= 40 % of the face's samples), mixed (1-t, t)
+//   h1    v3cb with HYSTERESIS: a face keeps the dominant polygon it had in the step before (found by the matchTile criteria) while that polygon still holds >= 25 % of its samples and the new candidate does not exceed
+//         it by the factor 1.25; the state runs through the sequence t = 0..1 (forward) and is run again 1..0 (backward) to show the path dependence
+//   h2    no decision: the fallback of a side = the colours of ALL polygons it overlaps, weighted by the overlap share (normalised); mixed (1-t, t); the weight g and the partner mix as in v3cb
+// =============================================================================================================================================================================================
+function predOf(prevMorph, f) {   // the face of the step before (matchTile criteria of measure-color-jumps.js: area ratio 0.5..2, centroid inclusion, half of the samples inside), or null
+  let best = null, bd = Infinity;
+  prevMorph.forEach((g, gi) => {
+    if (f.a / g.a > 2 || f.a / g.a < 0.5) return;
+    if (!inside2(f.c, g) && !inside2(g.c, f)) return;
+    if (shareIn(f, g) < 0.5) return;
+    const d = Math.hypot(f.c.x - g.c.x, f.c.y - g.c.y); if (d < bd) { bd = d; best = gi; }
+  });
+  return best;
+}
+const shareOf = (ov, gi) => (ov.tot && gi >= 0 ? (ov.shares.get(gi) || 0) / ov.tot : 0);
+function bestOf(ov) { let best = -1, bs = 0; ov.shares.forEach((v, gi) => { if (v > bs) { bs = v; best = gi; } }); return best; }
+function plainDom(ov, kf) { const b = bestOf(ov); return b >= 0 && shareOf(ov, b) >= DOM_SHARE && kf[b].color ? b : -1; }
+const HYST = 1.25, KEEP = 0.25;
+function hystDom(ov, kf, prevDom) {
+  const b = bestOf(ov);
+  if (prevDom !== null && prevDom >= 0) { const sp = shareOf(ov, prevDom); if (sp >= KEEP && kf[prevDom].color && (b === prevDom || shareOf(ov, b) < HYST * sp)) return prevDom; }
+  return plainDom(ov, kf);
+}
+function smoothSide(ov, kf) { let a = [0, 0, 0], w = 0; ov.shares.forEach((v, gi) => { if (!kf[gi].color) return; const x = v / ov.tot; w += x; for (let k = 0; k < 3; k++) a[k] += x * kf[gi].color[k]; }); return w > 0 ? a.map((v) => v / w) : null; }
+// h2c (extension, labelled): like h2, but the two sides are weighted by how much of the face they cover: ((1-t) covA cA + t covB cB) / ((1-t) covA + t covB); no side switches on or off
+function coverSide(ov, kf) { let w = 0; ov.shares.forEach((v, gi) => { if (kf[gi].color) w += v / ov.tot; }); return w; }
+const combineCov = (a, wa, b, wb, t, old) => { const A = (1 - t) * wa, B = t * wb; return A + B > 1e-9 ? [0, 1, 2].map((k) => ((a ? A * a[k] : 0) + (b ? B * b[k] : 0)) / (A + B)) : old; };
+const combine = (a, b, t, old) => (a && b ? lin2(a, b, t) : (a || b || old));
+// one frame of the variants plain (v3cb attribution), h1 and h2. e = evaluate2 result; prev = { morph, domA, domB } of the step before in the processing order, or null
+function hFrame(e, t, prev) {
+  const { morph, kfA, kfB } = e, h1 = [], h2 = [], h2c = [], domA = [], domB = [], plainA = [], plainB = [];
+  morph.forEach((f, i) => {
+    const ovA = overlapShares(f, kfA), ovB = overlapShares(f, kfB), pi = prev ? predOf(prev.morph, f) : null;
+    plainA.push(plainDom(ovA, kfA)); plainB.push(plainDom(ovB, kfB));
+    const dA = hystDom(ovA, kfA, pi === null ? null : prev.domA[pi]), dB = hystDom(ovB, kfB, pi === null ? null : prev.domB[pi]); domA.push(dA); domB.push(dB);
+    const fb1 = combine(dA >= 0 ? kfA[dA].color : null, dB >= 0 ? kfB[dB].color : null, t, f.old);
+    const sA = smoothSide(ovA, kfA), sB = smoothSide(ovB, kfB), fb2 = combine(sA, sB, t, f.old), fb2c = combineCov(sA, coverSide(ovA, kfA), sB, coverSide(ovB, kfB), t, f.old);
+    const a = e.gA[i].idx, b = e.gB[i].idx, g = e.gx.v3cb[i];
+    const pm = a !== null && b !== null && kfA[a].color && kfB[b].color ? lin2(kfA[a].color, kfB[b].color, t) : null;
+    h1.push(pm ? [0, 1, 2].map((k) => g * pm[k] + (1 - g) * fb1[k]) : fb1);
+    h2.push(pm ? [0, 1, 2].map((k) => g * pm[k] + (1 - g) * fb2[k]) : fb2);
+    h2c.push(pm ? [0, 1, 2].map((k) => g * pm[k] + (1 - g) * fb2c[k]) : fb2c);
+  });
+  return { h1, h2, h2c, domA, domB, plainA, plainB, morph };
+}
+function chain(frames, ts, order) {   // order: indices in processing order; returns h frames by index
+  const out = []; let prev = null;
+  order.forEach((k) => { const h = hFrame(frames[k], ts[k], prev); out[k] = h; prev = h; });
+  return out;
+}
+const H_VARIANTS = ['old', 'v3', 'v3cb', 'h1', 'h2', 'h2c'];
+function hystRun(key, cfg, step) {
+  const nat = setup(cfg), uni = setup(withUniform(cfg));
+  const ts = []; for (let k = 0; k * step <= 1 + 1e-9; k++) ts.push(+(k * step).toFixed(4));
+  const idx = ts.map((_, k) => k), rev = idx.slice().reverse();
+  const out = { key, name: cfg.name, paths: {} };
+  ['playback', 'spatial'].forEach((p) => {
+    const fr = ts.map((t) => evaluate2(nat, p, t)); const fw = chain(fr, ts, idx), bw = chain(fr, ts, rev);
+    const colOf = (v, k, h) => (v === 'h1' ? h[k].h1 : v === 'h2' ? h[k].h2 : v === 'h2c' ? h[k].h2c : fr[k].col[v]);
+    const R = {}; H_VARIANTS.forEach((v) => { R[v] = { jumpMax: 0, jumpAt: null, over12: 0, faces: 0, unassign: 0, dMax: 0, dBad: 0, dFaces: 0, sd: 0 }; });
+    const attr = { over12: 0, dom: 0, partner: 0, both: 0, none: 0 };
+    for (let k = 1; k < ts.length; k++) {
+      const P = fr[k - 1], C = fr[k];
+      C.morph.forEach((f, i) => {
+        const best = predOf(P.morph, f);
+        H_VARIANTS.forEach((v) => {
+          const r = R[v]; r.faces++; if (best === null) { r.unassign++; return; }
+          const j = cdist(colOf(v, k, fw)[i], colOf(v, k - 1, fw)[best]);
+          if (j > 12) r.over12++; if (j > r.jumpMax) { r.jumpMax = j; r.jumpAt = ts[k]; r.worst = `Flaeche n=${f.n} A=${f.a.toFixed(0)} (Vorgaenger ${P.morph[best].a.toFixed(0)}), g ${fr[k - 1].gx.v3cb[best].toFixed(2)} -> ${C.gx.v3cb[i].toFixed(2)}, Partner A ${P.gA[best].idx} -> ${C.gA[i].idx}, B ${P.gB[best].idx} -> ${C.gB[i].idx}, dominant A ${fw[k - 1].plainA[best]} -> ${fw[k].plainA[i]}, B ${fw[k - 1].plainB[best]} -> ${fw[k].plainB[i]}, h1 dom A ${fw[k - 1].domA[best]} -> ${fw[k].domA[i]}, B ${fw[k - 1].domB[best]} -> ${fw[k].domB[i]}`; }
+          if (v === 'v3cb' && j > 12) {   // attribution: did the dominant polygon (either side) or the partner (either side) change between the steps?
+            attr.over12++;
+            const dom = fw[k].plainA[i] !== fw[k - 1].plainA[best] || fw[k].plainB[i] !== fw[k - 1].plainB[best];
+            const par = C.gA[i].idx !== P.gA[best].idx || C.gB[i].idx !== P.gB[best].idx;
+            if (dom && par) attr.both++; else if (dom) attr.dom++; else if (par) attr.partner++; else attr.none++;
+          }
+        });
+      });
+    }
+    // path dependence of h1 / h2: the colour of the same face at the same t, forward chain against backward chain (byte channel maximum)
+    let pdMax = 0, pdN = 0, pdAll = 0; const hd = { h1: 0, h2: 0 };
+    ['h1', 'h2'].forEach((v) => ts.forEach((t, k) => fr[k].morph.forEach((f, i) => { const d = cdist(colOf(v, k, fw)[i], colOf(v, k, bw)[i]); if (v === 'h1') { pdAll++; if (d > pdMax) pdMax = d; if (d > 2) pdN++; } hd[v] = Math.max(hd[v], d); })));
+    // uniform colours: dLin against the Soll colour (all faces, all t)
+    const fu = ts.map((t) => evaluate2(uni, p, t)), hu = chain(fu, ts, idx);
+    ts.forEach((t, k) => fu[k].morph.forEach((f, i) => { const soll = sollUniform(f, fu[k].kfA, fu[k].kfB); if (!soll) return;
+      H_VARIANTS.forEach((v) => { const c = v === 'h1' ? hu[k].h1[i] : v === 'h2' ? hu[k].h2[i] : v === 'h2c' ? hu[k].h2c[i] : fu[k].col[v][i]; const d = lin2l(c, soll), r = R[v]; r.dFaces++; if (d > r.dMax) r.dMax = d; if (d > 0.02) r.dBad++; }); }));
+    // Stern / Raute (case sq): the star and the corner diamonds against their colour
+    if (cfg.truth) { const K = nat.kf.playback, tA = { star: K.A.find((f) => role(f, nat.geo) === 'star').color, diamond: K.A.find((f) => role(f, nat.geo) === 'diamond').color };
+      ts.forEach((t, k) => fr[k].morph.forEach((f, i) => { const r = role(f, nat.geo); if (!r) return; H_VARIANTS.forEach((v) => { R[v].sd = Math.max(R[v].sd, lin2l(colOf(v, k, fw)[i], tA[r])); }); })); }
+    // time per frame (ms) at t = 0.25 / 0.5 / 0.75: matching (both sides) + v3cb colours + h1 + h2, with and without the bounding-box prefilter; against today's sampling (measured in the world)
+    const timeOf = (bb) => { BBOX = bb; let nw = 0, od = 0, n = 0;
+      [0.25, 0.5, 0.75].forEach((t) => { const { morph, ms } = frame(nat, p, t), pm = frame(nat, p, t - 0.05).morph, kfA = nat.kf[p].A, kfB = nat.kf[p].B;
+        for (let r = 0; r < 5; r++) { const t0 = process.hrtime.bigint(); morph.forEach((f) => { f._S = null; }); pm.forEach((f) => { f._S = null; });
+          const gA = matchFaces(morph, kfA, 'group'), gB = matchFaces(morph, kfB, 'group'); const x = v3Eval(morph, kfA, kfB, t, gA, gB, { contain: true, fbDom: true });
+          hFrame({ morph, kfA, kfB, gA, gB, gx: { v3cb: x.g } }, t, { morph: pm, domA: pm.map(() => -1), domB: pm.map(() => -1) }); nw += Number(process.hrtime.bigint() - t0) / 1e6; od += ms; n++; } });
+      BBOX = true; return { nw: nw / n, od: od / n }; };
+    const tOn = timeOf(true), tOff = timeOf(false);
+    out.paths[p] = { R, attr, pd: { max: pdMax, n: pdN, all: pdAll, h1: hd.h1, h2: hd.h2 }, tOn, tOff, faces: fr.reduce((a, e) => a + e.n, 0) / fr.length };
+  });
+  return out;
+}
+function printHyst(o, step) {
+  console.log(`\n=== ${o.name} (Schritt ${step}) ===`);
+  Object.keys(o.paths).forEach((p) => {
+    const r = o.paths[p];
+    console.log(`-- Pfad ${p}: Flaechen je Frame ${r.faces.toFixed(1)}`);
+    console.log('   Variante | max Sprung (bei t) | Sprünge > 12 / Flaechen | dLin gleiche Farben max (Flaechen > 0.02 von n)' + (r.R.old.sd || r.R.h1.sd ? ' | Stern/Raute dLin max' : ''));
+    H_VARIANTS.forEach((v) => { const x = r.R[v]; console.log(`   ${v.padEnd(8)} | ${String(x.jumpMax).padStart(3)} (${fmt(x.jumpAt, 2)}) | ${String(x.over12).padStart(4)} / ${x.faces} | ${x.dMax.toFixed(4)} (${x.dBad} von ${x.dFaces})${x.sd ? ' | ' + x.sd.toFixed(4) : ''}`); });
+    if (process.argv.includes('--worst')) H_VARIANTS.forEach((v) => console.log(`   groesster Sprung ${v}: ${r.R[v].worst || '-'}`));
+    const a = r.attr; console.log(`   Quelle der v3cb-Spruenge > 12 (${a.over12}): nur dominantes Polygon gewechselt ${a.dom}, nur Partner gewechselt ${a.partner}, beides ${a.both}, keins von beiden ${a.none}`);
+    console.log(`   Pfadabhaengigkeit h1 vorwaerts gegen rueckwaerts (gleiche Flaeche, gleiches t): max ${r.pd.max} Byte, ${r.pd.n} von ${r.pd.all} Flaechen > 2 Byte; h2 ${r.pd.h2} Byte (zustandslos)`);
+    console.log(`   Zeit je Frame (ms): heutige Abtastung ${r.tOn.od.toFixed(2)}; Zuordnung + v3cb + h1 + h2 mit Bounding-Box ${r.tOn.nw.toFixed(2)}, ohne ${r.tOff.nw.toFixed(2)}`);
+  });
+}
+if (process.argv.includes('--hyst')) {
+  NEAR_K = 1.5; const cases = buildCases(); const which = arg('--case', 'all');
+  if (process.argv.includes('--fine')) printHyst(hystRun('sq', cases.sq, 0.01), 0.01);
+  else Object.keys(cases).filter((k) => which === 'all' || which === k).forEach((k) => printHyst(hystRun(k, cases[k], +arg('--step', '0.05')), +arg('--step', '0.05')));
 }
