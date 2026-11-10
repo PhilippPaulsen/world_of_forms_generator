@@ -21,6 +21,7 @@ const M = require(path.join(__dirname, '..', '..', 'core', 'spatial-morph.js'));
 const J = JSON.stringify;
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i >= 0 ? process.argv[i + 1] : d; };
 const VERBOSE = process.argv.includes('--verbose');
+const RUN_MAIN = require.main === module;   // task 031: the script can be required (tools/color/test-crossfade-match.js) without running a measurement
 
 // ---------------------------------------------------------------------------------------------------------------- the prototype (pure)
 const RATIO = 8, DOM = 1.5;
@@ -152,7 +153,7 @@ function frame(rig, path_, t) {
       var pb = additionalLayers[${pbId}], sh = faceSheetOverrideOfLayer(pb);
       var res = computeCellFaces(pb._morphConnections || pb.connections, pb._morphNodes || pb.nodes, null, null, sh);
       var by = new Map(res.nodes.map(function (n) { return [n.id, n]; }));
-      var t0 = process_hrtime(); var colors = playbackCrossfadeColors(res); var ms = process_hrtime() - t0;
+      var cf = timeline.currentFrame; var t0 = process_hrtime(); var colors = typeof crossfadeFaceColorsSampled === 'function' ? crossfadeFaceColorsSampled(res, keyframeFieldFor(timeline.keyframeLayerIds[cf.segmentIndex]), keyframeFieldFor(timeline.keyframeLayerIds[cf.segmentIndex + 1]), cf.localT) : playbackCrossfadeColors(res); var ms = process_hrtime() - t0;   // task 031: 'old' of the playback path = the location sampling kept as crossfadeFaceColorsSampled()
       return { ms: ms, faces: res.faces.map(function (f, i) { return { verts: f.nodeIds.map(function (id) { return by.get(id); }).filter(Boolean).map(function (n) { return { x: n.x, y: n.y }; }), old: cssColorToLinear(colors && colors[i] ? colors[i] : f.color) }; }) };
     })()` : `(function(){
       var seg = resolveTimelineKeyframeCoords(timeline, 0), ch = spatialMorphChooseCorners([seg.from, seg.to], 'linear');
@@ -269,7 +270,7 @@ function timing(rig, p) {
   return out;
 }
 
-if (!['--stages', '--edge', '--explain', '--v3', '--hyst'].some((a) => process.argv.includes(a))) {
+if (RUN_MAIN && !['--stages', '--edge', '--explain', '--v3', '--hyst'].some((a) => process.argv.includes(a))) {
 const which = arg('--case', 'all');
 const keys = which === 'all' ? Object.keys(CASES) : [which];
 const rigs = {};
@@ -407,9 +408,9 @@ function curatedPair(shape, order, token, mode) {
   }
   return { A: best.a.conns, B: best.b.conns, name: `${best.a.e.path.split('/').pop()} (${best.a.faces} Fl.) -> ${best.b.e.path.split('/').pop()} (${best.b.faces} Fl.)` };
 }
-function buildCases() {
+function buildCases(curated) {
   const hexP = randomPair('hex', 3, 'rotation_reflection6', 1, 5), triP = randomPair('triangle', 5, 'rotation_reflection3', 1, 5), gal = galleryPair('square', 4, 'D4', 'rotation_reflection6');
-  const hexK = (process.argv.includes('--v3') || process.argv.includes('--hyst')) ? curatedPair('hex', 2, 'D6', 'rotation_reflection6') : null, triK = (process.argv.includes('--v3') || process.argv.includes('--hyst')) ? curatedPair('triangle', 4, 'D3', 'rotation_reflection6') : null;
+  const hexK = (curated || process.argv.includes('--v3') || process.argv.includes('--hyst')) ? curatedPair('hex', 2, 'D6', 'rotation_reflection6') : null, triK = (curated || process.argv.includes('--v3') || process.argv.includes('--hyst')) ? curatedPair('triangle', 4, 'D3', 'rotation_reflection6') : null;
   const extra = hexK ? {
     hexK: { name: 'Galerie Hexagon 2 D6 (kuratiert): ' + hexK.name, shape: 'hex', n: 2, sym: 'rotation_reflection6', connsA: hexK.A, connsB: hexK.B, colourA: RAINBOW, colourB: RAINBOW_B },
     triK: { name: 'Galerie Dreieck 4 D3 (kuratiert): ' + triK.name, shape: 'triangle', n: 4, sym: 'rotation_reflection6', connsA: triK.A, connsB: triK.B, colourA: RAINBOW, colourB: RAINBOW_B } } : {};
@@ -495,12 +496,12 @@ function printStage(out) {
     console.log(`   Zeit je Frame: heutige Ortsabtastung ${r.time.od.toFixed(2)} ms, Zuordnung + v3 ${r.time.nw.toFixed(2)} ms`);
   });
 }
-if (process.argv.includes('--v3')) {
+if (RUN_MAIN && process.argv.includes('--v3')) {
   NEAR_K = 1.5; SHOW = ['old', 'v1', 'v2b', 'v3', 'v3r', 'v3c', 'v3cb', 'v3cbr', 'vg']; const cases = buildCases(); const which = arg('--case', 'all');
   console.log('######## 029: Nähekriterium 1.5; v3 = stetige Gewichtung, v3r = v3 + Referenzflaechen am Rand ########');
   Object.keys(cases).filter((k) => which === 'all' || which === k).forEach((k) => printStage(stageRun(k, cases[k])));
 }
-if (process.argv.includes('--stages')) {
+if (RUN_MAIN && process.argv.includes('--stages')) {
   const cases = buildCases(); const which = arg('--case', 'all');
   [0, +arg('--near', '1.5')].forEach((K) => { NEAR_K = K; console.log(`\n######## Zuordnungskriterium: ${K ? 'Schwerpunkt-Einschluss ODER Naehe <= ' + K + ' x sqrt(Flaeche) (Stufe 1b)' : 'Schwerpunkt-Einschluss (wie 027)'} ########`);
     Object.keys(cases).filter((k) => which === 'all' || which === k).forEach((k) => printStage(stageRun(k, cases[k]))); });
@@ -508,7 +509,7 @@ if (process.argv.includes('--stages')) {
 
 // --explain: why a morph face finds no unique partner. For one case and path, at the given t, per face and side the FIRST criterion that rejects the nearest same-corner-count candidate
 // (orbit size by group, area ratio, centroid inclusion) or "no candidate with this corner count".
-if (process.argv.includes('--explain')) {
+if (RUN_MAIN && process.argv.includes('--explain')) {
   const cases = buildCases(); const k = arg('--case', 'sq'), p = arg('--path', 'playback'); const rig = setup(cases[k]);
   arg('--t', '0.25,0.5').split(',').forEach((ts) => {
     const t = +ts, e = evaluate2(rig, p, t); const why = { A: {}, B: {} };
@@ -537,7 +538,7 @@ if (process.argv.includes('--explain')) {
 // other; spatialMorphAnchoredPoint(d, w, wEdge, false) (exactEnds off, stage d2c) puts it on the BORDER projection of its keyframe position at EVERY weight incl. p = 0 / 1, so the frame at t = 0 is not the keyframe's own lines.
 // Measured here: per case the number of such endpoints and their displacement at t = 0 / 1 against the keyframe position; the share of morph faces with unique partners at t = 0 / 1 and over t, once against the TRUE keyframe
 // faces (as spatialMorphRenderCornerField builds them) and once against the REFERENCE faces (the tile faces of the same anchored lines at weight (1,0) / (0,1), colours taken from the true faces): the proposal.
-if (process.argv.includes('--edge')) {
+if (RUN_MAIN && process.argv.includes('--edge')) {
   NEAR_K = +arg('--near', '1.5');
   const cases = buildCases();
   ['sq', 'topoSq', 'gal', 'hex'].forEach((k) => {
@@ -677,8 +678,10 @@ function printHyst(o, step) {
     console.log(`   Zeit je Frame (ms): heutige Abtastung ${r.tOn.od.toFixed(2)}; Zuordnung + v3cb + h1 + h2 mit Bounding-Box ${r.tOn.nw.toFixed(2)}, ohne ${r.tOff.nw.toFixed(2)}`);
   });
 }
-if (process.argv.includes('--hyst')) {
+if (RUN_MAIN && process.argv.includes('--hyst')) {
   NEAR_K = 1.5; const cases = buildCases(); const which = arg('--case', 'all');
   if (process.argv.includes('--fine')) printHyst(hystRun('sq', cases.sq, 0.01), 0.01);
   else Object.keys(cases).filter((k) => which === 'all' || which === k).forEach((k) => printHyst(hystRun(k, cases[k], +arg('--step', '0.05')), +arg('--step', '0.05')));
 }
+
+module.exports = { mkStarDiamond, setup, buildCases, withUniform, sollUniform, annotate, predOf, role, cdist, lin2l, setNear(k) { NEAR_K = k; } };
