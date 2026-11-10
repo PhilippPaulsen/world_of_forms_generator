@@ -646,7 +646,7 @@ function applyAssignmentsLazily(facesResult, store, gridNodes, sheet = null) {
 
 // A keyframe's coloring as a field: [{poly, minX, maxX, minY, maxY, lin}] from a
 // computeCellFaces() result (assigned faces carry their hex, others the default hsl).
-function keyframeColorField(facesResult) {
+function keyframeColorField(facesResult, sheet = null) {
     const nodeById = new Map(facesResult.nodes.map(n => [n.id, n]));
     const field = [];
     facesResult.faces.forEach(f => {
@@ -655,6 +655,13 @@ function keyframeColorField(facesResult) {
         const xs = poly.map(p => p.x), ys = poly.map(p => p.y);
         field.push({ poly, minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys), lin: cssColorToLinear(f.color) });
     });
+    // The polygon list for the face correspondence below: the same entries (bounding box, linear colour); the cell centre and width of the sheet
+    // (null without a sheet: _fieldInfo() then takes the bounding box of the field itself). Properties of the array, so every existing use of the field is unchanged.
+    if (sheet && sheet.centroid && sheet.outerCorners && sheet.outerCorners.length) {
+        const oxs = sheet.outerCorners.map(p => p.x);
+        field.ctr = { x: sheet.centroid.x, y: sheet.centroid.y };
+        field.span = Math.max(...oxs) - Math.min(...oxs);
+    }
     return field;
 }
 
@@ -675,22 +682,146 @@ function _lookupField(field, p) {
 // face's own default color. At t=0 / t=1 a face that IS a keyframe face gets exactly that
 // face's color. Sample-based, so the "area weighting" is the uniform average over the
 // face's samples, not an exact area integral.
-function crossfadeFaceColors(facesResult, fieldA, fieldB, t) {
+function _sampledFaceLin(poly, fieldA, fieldB, t) {
+    const acc = [0, 0, 0];
+    let n = 0;
+    for (const p of faceSamplePoints(poly)) {
+        const a = _lookupField(fieldA, p), b = _lookupField(fieldB, p);
+        let c;
+        if (a && b) c = [0, 1, 2].map(k => (1 - t) * a[k] + t * b[k]);
+        else c = a || b;
+        if (!c) continue;
+        acc[0] += c[0]; acc[1] += c[1]; acc[2] += c[2]; n++;
+    }
+    return n ? acc.map(v => v / n) : null;
+}
+// The location-sampled colours of every face (the behaviour before the face correspondence): kept as the fallback of crossfadeFaceColors() and as the reference of the tests.
+function crossfadeFaceColorsSampled(facesResult, fieldA, fieldB, t) {
     const nodeById = new Map(facesResult.nodes.map(n => [n.id, n]));
     return facesResult.faces.map(face => {
         const poly = face.nodeIds.map(id => nodeById.get(id)).filter(Boolean).map(n => ({ x: n.x, y: n.y }));
         if (poly.length < 3) return null;
-        const acc = [0, 0, 0];
-        let n = 0;
-        for (const p of faceSamplePoints(poly)) {
-            const a = _lookupField(fieldA, p), b = _lookupField(fieldB, p);
-            let c;
-            if (a && b) c = [0, 1, 2].map(k => (1 - t) * a[k] + t * b[k]);
-            else c = a || b;
-            if (!c) continue;
-            acc[0] += c[0]; acc[1] += c[1]; acc[2] += c[2]; n++;
+        const lin = _sampledFaceLin(poly, fieldA, fieldB, t);
+        return lin ? linearToHex(lin) : null;
+    });
+}
+
+// ----------------- FACE CORRESPONDENCE (task 031; measured as "h2c" in tools/morph/measure-face-match.js) ------------------
+// Sampling the two STATIC keyframe fields at the positions of a face that has grown or moved hits the NEIGHBOURING faces of the other keyframe: a face that is violet in A and in B turns pastel
+// in between (measured: error up to 0.25 in linear light). Instead each live face is matched to its partner face in A and in B (same corner count, same orbit size, centroid inside the other
+// polygon or near it, area ratio within 1/8 .. 8) and takes the mix of the partner colours, weighted by how much of the face lies in (or covers) the partners (g); the rest comes from the
+// overlap with all polygons of each keyframe (share-weighted mean per side, the two sides weighted by their coverage, (1-t, t)). A face nothing of the keyframes lies under keeps the sampled
+// colour. Stateless: the colour of a face depends on this frame only. All mixing in LINEAR LIGHT.
+const FACE_MATCH_RATIO = 8, FACE_MATCH_NEAR = 1.5;
+function _polyArea(poly) { let a = 0; for (let i = 0; i < poly.length; i++) { const p = poly[i], q = poly[(i + 1) % poly.length]; a += p.x * q.y - q.x * p.y; } return a / 2; }
+function _polyCentroid(poly) {
+    let x = 0, y = 0, a = 0;
+    for (let i = 0; i < poly.length; i++) { const p = poly[i], q = poly[(i + 1) % poly.length], c = p.x * q.y - q.x * p.y; a += c; x += (p.x + q.x) * c; y += (p.y + q.y) * c; }
+    return a ? { x: x / (3 * a), y: y / (3 * a) } : { x: poly[0].x, y: poly[0].y };
+}
+// bounding box, area, centroid, corner count and interior samples of a polygon entry (entry = { poly, minX.. } or a live face); orb = the orbit size, set by _setOrbits()
+function _faceInfo(poly, lin) {
+    const xs = poly.map(p => p.x), ys = poly.map(p => p.y);
+    return { poly, minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys), a: Math.abs(_polyArea(poly)), c: _polyCentroid(poly), n: poly.length, samples: faceSamplePoints(poly), lin, orb: 1 };
+}
+// the orbit of a face from the polygons themselves: faces of one sheet with the same corner count, area (1e-3) and distance of the centroid from the cell centre (1e-3 of the width)
+// (measured identical to the orbit from the symmetry group in every case of tasks 028 to 030)
+function _setOrbits(list, ctr, span) {
+    const byN = new Map();
+    list.forEach(f => { f.r = Math.hypot(f.c.x - ctr.x, f.c.y - ctr.y); if (!byN.has(f.n)) byN.set(f.n, []); byN.get(f.n).push(f); });
+    byN.forEach(arr => {
+        arr.sort((p, q) => p.a - q.a);   // by area: the candidates of a face are the window of equal area
+        for (let i = 0; i < arr.length; i++) {
+            const f = arr[i]; let k = 0;
+            for (let j = i; j >= 0 && arr[j].a >= f.a * (1 - 1e-3); j--) if (Math.abs(arr[j].a - f.a) <= 1e-3 * f.a && Math.abs(arr[j].r - f.r) <= 1e-3 * span) k++;
+            for (let j = i + 1; j < arr.length && arr[j].a <= f.a * (1 + 1e-3); j++) if (Math.abs(arr[j].a - f.a) <= 1e-3 * f.a && Math.abs(arr[j].r - f.r) <= 1e-3 * span) k++;
+            f.orb = k;
         }
-        return n ? linearToHex(acc.map(v => v / n)) : null;
+    });
+}
+const _fieldPrep = new WeakMap();
+function _fieldInfo(field) {
+    let hit = _fieldPrep.get(field);
+    if (hit && hit.len === field.length) return hit;
+    const list = field.map(e => _faceInfo(e.poly, e.lin));
+    let ctr = field.ctr, span = field.span;
+    if (!ctr && list.length) {
+        const x0 = Math.min(...list.map(f => f.minX)), x1 = Math.max(...list.map(f => f.maxX)), y0 = Math.min(...list.map(f => f.minY)), y1 = Math.max(...list.map(f => f.maxY));
+        ctr = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 }; span = Math.max(x1 - x0, y1 - y0);
+    }
+    if (list.length) _setOrbits(list, ctr, span || 1);
+    const groups = new Map();
+    list.forEach(f => { const k = f.n + '|' + f.orb; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); });
+    groups.forEach((arr, k) => groups.set(k, { list: arr, a: Float64Array.from(arr, g => g.a), x: Float64Array.from(arr, g => g.c.x), y: Float64Array.from(arr, g => g.c.y) }));
+    // a grid over the field's bounding box (about 16 x 16 cells): a sample point then only meets the polygons of its own cell
+    let grid = null;
+    if (list.length) {
+        const x0 = Math.min(...list.map(f => f.minX)), y0 = Math.min(...list.map(f => f.minY)), x1 = Math.max(...list.map(f => f.maxX)), y1 = Math.max(...list.map(f => f.maxY));
+        const N = 16, cw = Math.max((x1 - x0) / N, 1e-9), ch = Math.max((y1 - y0) / N, 1e-9), cells = new Array(N * N).fill(null);
+        const cx = x => Math.min(N - 1, Math.max(0, Math.floor((x - x0) / cw))), cy = y => Math.min(N - 1, Math.max(0, Math.floor((y - y0) / ch)));
+        list.forEach(f => { for (let i = cx(f.minX); i <= cx(f.maxX); i++) for (let j = cy(f.minY); j <= cy(f.maxY); j++) { const k = i * N + j; if (!cells[k]) cells[k] = []; cells[k].push(f); } });
+        grid = { x0, y0, x1, y1, N, cw, ch, cells, cx, cy };
+    }
+    hit = { len: field.length, list, groups, grid, ctr, span };
+    _fieldPrep.set(field, hit);
+    return hit;
+}
+function _inBox(p, f) { return p.x >= f.minX && p.x <= f.maxX && p.y >= f.minY && p.y <= f.maxY; }
+function _inFace(p, f) { return _inBox(p, f) && pointInPolygon(p, f.poly); }
+function _shareIn(f, g) { let k = 0; for (const p of f.samples) if (_inFace(p, g)) k++; return f.samples.length ? k / f.samples.length : 0; }
+// the partner of face f among the faces of one keyframe: the nearest candidate that passes every criterion, or null
+function _partnerOf(f, info) {
+    const grp = info.groups.get(f.n + '|' + f.orb);   // the faces with this corner count and orbit size (areas and centroids as typed arrays)
+    if (!grp || f.a <= 0) return null;
+    let best = -1, bd2 = Infinity;
+    const near2 = FACE_MATCH_NEAR * FACE_MATCH_NEAR, fa = f.a, fx = f.c.x, fy = f.c.y, ga = grp.a, gx = grp.x, gy = grp.y;
+    for (let i = 0; i < ga.length; i++) {
+        const a = ga[i]; if (a <= 0) continue;
+        const q = fa / a;
+        if (q > FACE_MATCH_RATIO || q < 1 / FACE_MATCH_RATIO) continue;
+        const dx = fx - gx[i], dy = fy - gy[i], d2 = dx * dx + dy * dy;
+        if (d2 >= bd2) continue;   // only a nearer candidate can replace the best one: the (costly) inclusion tests run for those only, and only when the nearness test fails
+        if (d2 > near2 * (fa > a ? fa : a) && !_inFace(f.c, grp.list[i]) && !_inFace(grp.list[i].c, f)) continue;
+        bd2 = d2; best = i;
+    }
+    return best < 0 ? null : grp.list[best];
+}
+// per side: the share-weighted mean colour of the keyframe polygons the face overlaps, and how much of the face they cover
+function _ownerOf(grid, p) {   // the polygon of the field a point lies in (the first hit, like _lookupField()), or null
+    if (!grid || p.x < grid.x0 || p.x > grid.x1 || p.y < grid.y0 || p.y > grid.y1) return null;
+    const cell = grid.cells[grid.cx(p.x) * grid.N + grid.cy(p.y)];
+    if (cell) for (let i = 0; i < cell.length; i++) { const g = cell[i]; if (g.lin && p.x >= g.minX && p.x <= g.maxX && p.y >= g.minY && p.y <= g.maxY && pointInPolygon(p, g.poly)) return g; }
+    return null;
+}
+function _overlapSide(f, info) {
+    const acc = [0, 0, 0], w = f.samples.length ? 1 / f.samples.length : 0, owners = []; let cov = 0;
+    for (let i = 0; i < f.samples.length; i++) { const g = _ownerOf(info.grid, f.samples[i]); if (!g) continue; owners.push(g); cov += w; acc[0] += w * g.lin[0]; acc[1] += w * g.lin[1]; acc[2] += w * g.lin[2]; }
+    return cov > 0 ? { lin: [acc[0] / cov, acc[1] / cov, acc[2] / cov], cov, owners, w } : { lin: null, cov: 0, owners, w };
+}
+function _faceLinByCorrespondence(f, infoA, infoB, t) {
+    const sA = _overlapSide(f, infoA), sB = _overlapSide(f, infoB);
+    const wA = (1 - t) * sA.cov, wB = t * sB.cov;
+    const fb = wA + wB > 1e-9 ? [0, 1, 2].map(k => ((sA.lin ? wA * sA.lin[k] : 0) + (sB.lin ? wB * sB.lin[k] : 0)) / (wA + wB)) : null;
+    const pA = _partnerOf(f, infoA), pB = _partnerOf(f, infoB);
+    if (!pA || !pB || !pA.lin || !pB.lin) return fb;
+    // g: how much of the face lies in its partner, or of the partner in the face (the larger of the two: a face that grows or shrinks stays the same face); the smaller of the two sides
+    const side = (g, sh) => { let k = 0, o = 0; for (const p of g.samples) if (_inFace(p, f)) k++; for (const x of sh.owners) if (x === g) o++; return Math.max(o * sh.w, g.samples.length ? k / g.samples.length : 0); };
+    const gw = Math.min(side(pA, sA), side(pB, sB));
+    const pm = [0, 1, 2].map(k => (1 - t) * pA.lin[k] + t * pB.lin[k]);
+    if (!fb) return pm;
+    return [0, 1, 2].map(k => gw * pm[k] + (1 - gw) * fb[k]);
+}
+function crossfadeFaceColors(facesResult, fieldA, fieldB, t) {
+    const nodeById = new Map(facesResult.nodes.map(n => [n.id, n]));
+    const infoA = _fieldInfo(fieldA), infoB = _fieldInfo(fieldB);
+    const polys = facesResult.faces.map(face => face.nodeIds.map(id => nodeById.get(id)).filter(Boolean).map(n => ({ x: n.x, y: n.y })));
+    const live = polys.map(poly => (poly.length < 3 ? null : _faceInfo(poly, null)));
+    const ctr = infoA.ctr || infoB.ctr, span = infoA.span || infoB.span || 1;
+    if (ctr) _setOrbits(live.filter(Boolean), ctr, span);
+    return live.map((f, i) => {
+        if (!f) return null;
+        const lin = _faceLinByCorrespondence(f, infoA, infoB, t) || _sampledFaceLin(polys[i], fieldA, fieldB, t);
+        return lin ? linearToHex(lin) : null;
     });
 }
 
@@ -850,7 +981,8 @@ function keyframeFieldFor(layerIndex) {
     const sigOf = () => JSON.stringify([layer.connections, [...store], layer.shape, layer.symmetryMode, layer.nodes.length, layer.outerCorners[0]]);
     const hit = _keyframeFieldCache.get(layer);
     if (hit && hit.sig === sigOf()) return hit.field;
-    const field = keyframeColorField(computeCellFaces(layer.connections, layer.nodes, store, null, faceSheetOverrideOfLayer(layer)));
+    const sheet = faceSheetOverrideOfLayer(layer);
+    const field = keyframeColorField(computeCellFaces(layer.connections, layer.nodes, store, null, sheet), sheet);
     // computeCellFaces() may have reconciled the keyframe's store against an edit (inheritance), so the
     // signature is taken AFTER it: the next frame then hits the cache instead of rebuilding once more.
     _keyframeFieldCache.set(layer, { sig: sigOf(), field });
