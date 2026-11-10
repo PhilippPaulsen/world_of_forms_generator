@@ -18,7 +18,7 @@
  * PRE-CONDITIONS and the STATUS: with the switch on, the morph needs two keyframe layers of the same shape and line count (the timeline's, else the layers in index order, else the base sheet
  * and one layer). If they are not there the normal frame is drawn and spatialMorphStatus().code says why: 'needsTwoKeyframes', 'shapeMismatch', 'lineCountMismatch', 'parameterMismatch' (the keyframes differ in symmetry mode or size factor; the timeline requires them equal), 'alignmentFailed'
  * (resolveTimelineKeyframeCoords() refused), 'renderError' (something threw; nothing escapes). 'ok' = drawn, 'netActive' = drawn and a net warp is in force (the net warps the LINES: activeNetWarp is set around the draw and restored in the finally; with no net or a FIELD net the faces are drawn too, stages f1 / f1b, coloured by stage 006b), 'netFacesNeedField' = the same with a Single or Tiled net while the keyframes show faces (lines only, no faces),
- * 'off' = the switch is off. The status is read-only data for the UI of a later stage; this file writes no text. The SVG export (svgPathCollector set) always gets the normal pattern.
+ * 'off' = the switch is off. The status is read-only data for the UI of a later stage; this file writes no text. Task 036: the SVG export (svgPathCollector set) gets the morph frame of the current progress too (lines through the drawCurvedBezier sink, faces through the polygon collector of core/export.js); the status, the frame counter and the face statistics are put back afterwards, so an export never changes what the UI reads.
  *
  * Depends on (call-time, all optional-checked): core/state.js globals, core/tiling.js tileFor(), core/symmetry.js, core/curves.js, core/spatial-morph.js, and from sketch.js
  * resolveTimelineKeyframeCoords() / resolveConnectionsToCoords(). Every top-level name starts with spatialMorph.
@@ -566,7 +566,10 @@ function spatialMorphTryDraw() {
         if (spatialMorphRenderState.status.code !== 'off') spatialMorphRenderSetStatus('off', 0, 'linear');
         return false;
     }
-    if (typeof svgPathCollector !== 'undefined' && svgPathCollector) return false;   // the SVG export draws the normal pattern
+    // Task 036: the SVG export draws the morph frame as well; what it writes to the state (status, frame counter, face statistics) is restored in the finally.
+    const exporting = typeof svgPathCollector !== 'undefined' && !!svgPathCollector;
+    const rs = spatialMorphRenderState;
+    const keep = exporting ? { status: Object.assign({}, rs.status), frames: rs.frames, faceStats: rs.faceStats } : null;
     try {
         if (typeof tileFor !== 'function' || typeof drawCurvedBezier !== 'function' || typeof spatialMorphPlanKeyframes !== 'function' || typeof additionalLayers === 'undefined') {
             spatialMorphRenderSetStatus('renderError', 0, 'linear');
@@ -576,5 +579,7 @@ function spatialMorphTryDraw() {
     } catch (e) {
         spatialMorphRenderSetStatus('renderError', 0, 'linear');
         return false;
+    } finally {
+        if (keep) { rs.status = keep.status; rs.frames = keep.frames; rs.faceStats = keep.faceStats; }
     }
 }
