@@ -270,7 +270,7 @@ function timing(rig, p) {
   return out;
 }
 
-if (RUN_MAIN && !['--stages', '--edge', '--explain', '--v3', '--hyst'].some((a) => process.argv.includes(a))) {
+if (RUN_MAIN && !['--stages', '--edge', '--explain', '--v3', '--hyst', '--spatial'].some((a) => process.argv.includes(a))) {
 const which = arg('--case', 'all');
 const keys = which === 'all' ? Object.keys(CASES) : [which];
 const rigs = {};
@@ -509,7 +509,7 @@ if (RUN_MAIN && process.argv.includes('--stages')) {
 
 // --explain: why a morph face finds no unique partner. For one case and path, at the given t, per face and side the FIRST criterion that rejects the nearest same-corner-count candidate
 // (orbit size by group, area ratio, centroid inclusion) or "no candidate with this corner count".
-if (RUN_MAIN && process.argv.includes('--explain')) {
+if (RUN_MAIN && process.argv.includes('--explain') && !process.argv.includes('--spatial')) {
   const cases = buildCases(); const k = arg('--case', 'sq'), p = arg('--path', 'playback'); const rig = setup(cases[k]);
   arg('--t', '0.25,0.5').split(',').forEach((ts) => {
     const t = +ts, e = evaluate2(rig, p, t); const why = { A: {}, B: {} };
@@ -682,6 +682,142 @@ if (RUN_MAIN && process.argv.includes('--hyst')) {
   NEAR_K = 1.5; const cases = buildCases(); const which = arg('--case', 'all');
   if (process.argv.includes('--fine')) printHyst(hystRun('sq', cases.sq, 0.01), 0.01);
   else Object.keys(cases).filter((k) => which === 'all' || which === k).forEach((k) => printHyst(hystRun(k, cases[k], +arg('--step', '0.05')), +arg('--step', '0.05')));
+}
+
+
+// =============================================================================================================================================================================================
+// 032 - the spatial path. `node tools/morph/measure-face-match.js --spatial [--case sq|topoSq|hex|tri|gal|hexK|triK|all] [--step 0.05] [--fine] [--explain]`
+//   old   today: spatialMorphRenderFaceColors (the corner-raster sampling)
+//   s1    the correspondence of task 031 (core/facecolor.js _faceLinByCorrespondence, run in the render world: the REAL implementation) on the spatial faces; the keyframe faces are those the corner field is
+//         built from (border-closed cell, copy of the store); a face nothing lies under keeps the raster colour
+//   s2    s1 with the raster colour (old) for faces smaller than a threshold (1 %, 2 %, 5 % of the cell area): s2_1, s2_2, s2_5
+//   s3    s1 against the REFERENCE faces at the border (tile faces at weight (1,0) / (0,1), colours from the true faces; 028 point 5)
+// --fine: only the Stern/Raute case at step 0.01.  --explain: the worst fine-step jump of s1 in that case, side by side with the raster sampling.
+// =============================================================================================================================================================================================
+function prodInfos(rig, set, tag) {   // the keyframe fields of a face set as production fields (core/facecolor.js _fieldInfo), kept in the render world
+  const mk = (list) => list.map((f) => ({ poly: f.verts, lin: f.color }));
+  rig.w.run(`(function(){
+    var mkF = function (L) { return L.map(function (e) { var xs = e.poly.map(function (p) { return p.x; }), ys = e.poly.map(function (p) { return p.y; }); return { poly: e.poly, minX: Math.min.apply(null, xs), maxX: Math.max.apply(null, xs), minY: Math.min.apply(null, ys), maxY: Math.max.apply(null, ys), lin: e.lin }; }); };
+    var A = mkF(${J(mk(set.A))}), B = mkF(${J(mk(set.B))});
+    A.ctr = B.ctr = ${J(rig.geo.ctr)}; A.span = B.span = ${rig.geo.span};
+    globalThis.__iA_${tag} = _fieldInfo(A); globalThis.__iB_${tag} = _fieldInfo(B);
+  })()`);
+}
+function prodLins(rig, tag, morph, t, reps) {   // the correspondence colour (linear, or null) of every face; reps > 0: also the mean ms per call
+  rig.w.sb.process_hrtime = () => Number(process.hrtime.bigint()) / 1e6;
+  return rig.w.run(`(function(){
+    var polys = ${J(morph.map((f) => f.verts))}, iA = __iA_${tag}, iB = __iB_${tag};
+    var one = function () { var live = polys.map(function (p) { return _faceInfo(p, null); }); _setOrbits(live, iA.ctr, iA.span); return live.map(function (f) { return _faceLinByCorrespondence(f, iA, iB, ${t}); }); };
+    var lins = one(), ms = 0, R = ${reps || 0};
+    if (R) { var t0 = process_hrtime(); for (var i = 0; i < R; i++) one(); ms = (process_hrtime() - t0) / R; }
+    return { lins: lins, ms: ms };
+  })()`);
+}
+
+// 032: the Soll of the uniform-colour test on the border-closed cell: the colour X only for a face that lies COMPLETELY in polygons of that colour in A and in B (a 10 x 10 grid inside the face, no point in another colour or in no
+// polygon). The border-closed cell holds faces of the border that are not X (they get their default fill), and a face that overlaps one a little can legitimately differ from X.
+function sollPure(f, kfA, kfB) {
+  const pts = []; for (let i = 0; i < 10; i++) for (let j = 0; j < 10; j++) { const q = { x: f.bb.x0 + (i + 0.5) / 10 * (f.bb.x1 - f.bb.x0), y: f.bb.y0 + (j + 0.5) / 10 * (f.bb.y1 - f.bb.y0) }; if (inside(q, f.verts)) pts.push(q); }
+  if (!pts.length) return null; let c0 = null;
+  for (const q of pts) for (const kf of [kfA, kfB]) {
+    const g = kf.find((h) => h.color && q.x >= h.bb.x0 && q.x <= h.bb.x1 && q.y >= h.bb.y0 && q.y <= h.bb.y1 && inside(q, h.verts));
+    if (!g) return null; if (!c0) c0 = g.color; else if (lin2l(g.color, c0) > 1e-3) return null;
+  }
+  return c0;
+}
+// 032: faces below MIN_AREA px^2 (sub-pixel slivers of the dense patterns: area 1 to 5) are left out of the jump and error figures and counted instead (--min-area 0 counts all)
+const MIN_AREA = +arg('--min-area', '10');
+const S_THR = [0.01, 0.02, 0.05], S_VARS = ['old', 's1', 's2_1', 's2_2', 's2_5', 's3'];
+function spatialFrames(rig, ts, withRef) {
+  const cell = rig.kf.spatial.A.reduce((a, f) => a + f.a, 0);
+  prodInfos(rig, rig.kf.spatial, 'T'); if (withRef) { buildRef(rig); prodInfos(rig, rig.kfRef, 'R'); }
+  return ts.map((t) => {
+    const fr = frame(rig, 'spatial', t), m = fr.morph, s1l = prodLins(rig, 'T', m, t).lins, s3l = withRef ? prodLins(rig, 'R', m, t).lins : s1l;
+    const col = { old: m.map((f) => f.old), s1: m.map((f, i) => s1l[i] || f.old), s3: m.map((f, i) => s3l[i] || f.old) };
+    S_THR.forEach((thr, k) => { col['s2_' + [1, 2, 5][k]] = m.map((f, i) => (f.a < thr * cell ? f.old : col.s1[i])); });
+    return { morph: m, col, ms: fr.ms, cell };
+  });
+}
+function spatialRun(key, cfg, step) {
+  const nat = setup(cfg), uni = setup(withUniform(cfg));
+  const ts = []; for (let k = 0; k * step <= 1 + 1e-9; k++) ts.push(+(k * step).toFixed(4));
+  const fr = spatialFrames(nat, ts, true), fu = spatialFrames(uni, ts, true);
+  const R = {}; S_VARS.forEach((v) => { R[v] = { jumpMax: 0, jumpAt: null, over12: 0, faces: 0, unassign: 0, dMax: 0, dBad: 0, dFaces: 0, sd: 0 }; });
+  let slivers = 0;
+  for (let k = 1; k < ts.length; k++) fr[k].morph.forEach((f, i) => {
+    if (f.a < MIN_AREA) { slivers++; return; }
+    const best = predOf(fr[k - 1].morph, f);
+    S_VARS.forEach((v) => { const r = R[v]; r.faces++; if (best === null) { r.unassign++; return; } const j = cdist(fr[k].col[v][i], fr[k - 1].col[v][best]); if (j > 12) r.over12++; if (j > r.jumpMax) { r.jumpMax = j; r.jumpAt = ts[k]; } });
+  });
+  ts.forEach((t, k) => fu[k].morph.forEach((f, i) => { if (f.a < MIN_AREA) return; const soll = sollPure(f, uni.kf.spatial.A, uni.kf.spatial.B); if (!soll) return; S_VARS.forEach((v) => { const d = lin2l(fu[k].col[v][i], soll), r = R[v]; r.dFaces++; if (d > r.dMax) r.dMax = d; if (d > 0.02) r.dBad++; }); }));
+  if (cfg.truth) { const K = nat.kf.playback, tA = { star: K.A.find((f) => role(f, nat.geo) === 'star').color, diamond: K.A.find((f) => role(f, nat.geo) === 'diamond').color };
+    ts.forEach((t, k) => fr[k].morph.forEach((f, i) => { const r = role(f, nat.geo); if (!r) return; S_VARS.forEach((v) => { R[v].sd = Math.max(R[v].sd, lin2l(fr[k].col[v][i], tA[r])); }); })); }
+  // time per frame (ms, Node): the raster sampling (measured in the world) against the correspondence, mean of 10 runs at t = 0.25 / 0.5 / 0.75
+  let nw = 0, od = 0, nf = 0, kk = 0;
+  [0.25, 0.5, 0.75].forEach((t) => { const f1 = frame(nat, 'spatial', t); const p = prodLins(nat, 'T', f1.morph, t, 10); nw += p.ms; od += f1.ms; nf += f1.morph.length; kk++; });
+  return { key, name: cfg.name, R, step, faces: nf / kk, slivers, ms: { nw: nw / kk, od: od / kk } };
+}
+function printSpatial(o) {
+  console.log(`\n=== ${o.name} (Spatial, Schritt ${o.step}; Flaechen je Frame ${o.faces.toFixed(1)}; ${o.slivers} Flaechenschritte < ${MIN_AREA} px^2 nicht gezaehlt) ===`);
+  console.log('   Variante | max Sprung (bei t) | Spruenge > 12 / Flaechen | dLin gleiche Farben max (Flaechen > 0.02 von n)' + (o.R.old.sd ? ' | Stern/Raute dLin max' : ''));
+  S_VARS.forEach((v) => { const x = o.R[v]; console.log(`   ${v.padEnd(8)} | ${String(x.jumpMax).padStart(3)} (${fmt(x.jumpAt, 2)}) | ${String(x.over12).padStart(4)} / ${x.faces} | ${x.dMax.toFixed(4)} (${x.dBad} von ${x.dFaces})${x.sd ? ' | ' + x.sd.toFixed(4) : ''}`); });
+  console.log(`   Zeit je Frame (ms): Rasterabtastung ${o.ms.od.toFixed(2)}, Zuordnung ${o.ms.nw.toFixed(2)}`);
+}
+// the worst fine-step jump of s1 in the Stern/Raute case, side by side with the raster sampling: the face, the step, the overlap with the polygons of A and of B before and after, and the raster's own side colours
+function explainFine(cfg) {
+  const rig = setup(cfg), step = 0.01, ts = []; for (let k = 0; k * step <= 1 + 1e-9; k++) ts.push(+(k * step).toFixed(4));
+  const fr = spatialFrames(rig, ts, false); let worst = null;
+  for (let k = 1; k < ts.length; k++) fr[k].morph.forEach((f, i) => { const b = predOf(fr[k - 1].morph, f); if (b === null) return; const j = cdist(fr[k].col.s1[i], fr[k - 1].col.s1[b]); if (!worst || j > worst.j) worst = { j, k, i, b, jo: cdist(fr[k].col.old[i], fr[k - 1].col.old[b]) }; });
+  const hex = (lin) => '#' + lin.map((v) => Math.round(255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055)).toString(16).padStart(2, '0')).join('');
+  const side = (kf, f) => { const ov = overlapShares(f, kf); const L = []; ov.shares.forEach((v, gi) => L.push(`#${gi} n=${kf[gi].n} a=${kf[gi].a.toFixed(0)} ${hex(kf[gi].color)} ${(100 * v / ov.tot).toFixed(0)} %`)); return L.join('; ') || 'keine'; };
+  const raster = (f, t) => rig.w.run(`(function(){
+    var s = spatialMorphFaceSamples(${J(f.verts)}), cf = spatialMorphRenderCornerFields([${rig.idA}, ${rig.idB}, ${rig.idA}, ${rig.idB}], 2, 'linear'), out = [];
+    [0, 1].forEach(function (k) { var acc = [0, 0, 0], sum = 0, hits = {}; s.forEach(function (q) { var l = spatialMorphRasterSample(cf[k].raster, q.x, q.y); if (l) { acc[0] += q.w * l[0]; acc[1] += q.w * l[1]; acc[2] += q.w * l[2]; sum += q.w; var h = linearToHex(l); hits[h] = (hits[h] || 0) + q.w; } }); out.push({ mean: sum > 0 ? [acc[0] / sum, acc[1] / sum, acc[2] / sum] : null, sum: sum, hits: hits }); });
+    return out; })()`);
+  const f1 = fr[worst.k].morph[worst.i], f0 = fr[worst.k - 1].morph[worst.b], t1 = ts[worst.k], t0 = ts[worst.k - 1];
+  console.log(`groesster Sprung s1 (Stern/Raute, Spatial, Schritt 0.01): ${worst.j} Byte bei t ${t0} -> ${t1} (Rasterabtastung derselben Flaeche: ${worst.jo})`);
+  [[f0, t0], [f1, t1]].forEach(([f, t]) => {
+    const r = raster(f, t); const fmtHits = (h) => Object.keys(h).map((x) => `${x} ${(100 * h[x]).toFixed(0)} %`).join(', ');
+    console.log(`  t=${t}: Flaeche n=${f.n} A=${f.a.toFixed(0)} Schwerpunkt (${f.c.x.toFixed(0)}, ${f.c.y.toFixed(0)})`);
+    console.log(`    A-Polygone unter der Flaeche: ${side(rig.kf.spatial.A, f)}`);
+    console.log(`    B-Polygone unter der Flaeche: ${side(rig.kf.spatial.B, f)}`);
+    console.log(`    Raster A: Bedeckung ${(100 * r[0].sum).toFixed(0)} %, Treffer ${fmtHits(r[0].hits)}; Raster B: Bedeckung ${(100 * r[1].sum).toFixed(0)} %, Treffer ${fmtHits(r[1].hits)}`);
+    const k = f === f0 ? worst.k - 1 : worst.k, i = f === f0 ? worst.b : worst.i;
+    console.log(`    Farben: s1 ${hex(fr[k].col.s1[i])}, Raster (heute) ${hex(fr[k].col.old[i])}`);
+  });
+}
+
+// --bad: the faces of the uniform-colour test (every polygon one colour) whose s1 error exceeds 0.02: why (no coverage -> raster fallback, partial coverage, the partner mix against the leaked neighbours)
+function explainBad(key, cfg) {
+  const uni = setup(withUniform(cfg)); const ts = []; for (let k = 0; k <= 20; k++) ts.push(+(k * 0.05).toFixed(2));
+  const fr = spatialFrames(uni, ts, false); const rows = [];
+  fr.forEach((e, k) => e.morph.forEach((f, i) => {
+    const soll = sollPure(f, uni.kf.spatial.A, uni.kf.spatial.B); if (!soll) return;
+    const d1 = Math.max(lin2l(e.col.s1[i], soll), lin2l(e.col.old[i], soll)); if (d1 <= 0.02) return;
+    const ovA = overlapShares(f, uni.kf.spatial.A), ovB = overlapShares(f, uni.kf.spatial.B), cov = (ov) => { let c = 0; ov.shares.forEach((v) => { c += v; }); return ov.tot ? c / ov.tot : 0; };
+    const lin = prodLins(uni, 'T', [f], ts[k]).lins[0];
+    rows.push({ t: ts[k], n: f.n, a: f.a, d1: lin2l(e.col.s1[i], soll), d0: lin2l(e.col.old[i], soll), covA: cov(ovA), covB: cov(ovB), fb: lin === null });
+  }));
+  if (rows.length) {   // the first bad face under the production functions: the colours under its samples, its partners and the weight g
+    const r0 = rows[0], k0 = ts.indexOf(r0.t), f0 = fr[k0].morph.find((f) => f.n === r0.n && Math.abs(f.a - r0.a) < 1e-6);
+    const info = uni.w.run(`(function(){
+      var f = _faceInfo(${J(f0.verts)}, null), iA = __iA_T, iB = __iB_T; _setOrbits([f], iA.ctr, iA.span);
+      var hx = function (l) { return l ? linearToHex(l) : null; };
+      var side = function (info) { var cols = {}; f.samples.forEach(function (p) { var g = _ownerOf(info.grid, p); var h = g ? hx(g.lin) : 'none'; cols[h] = (cols[h] || 0) + 1; }); return cols; };
+      var pA = _partnerOf(f, iA), pB = _partnerOf(f, iB);
+      return { orb: f.orb, samples: f.samples.length, underA: side(iA), underB: side(iB), pA: pA && { n: pA.n, a: pA.a, col: hx(pA.lin) }, pB: pB && { n: pB.n, a: pB.a, col: hx(pB.lin) } };
+    })()`);
+    console.log('  first bad face (production functions): ' + J(info));
+  }
+  console.log(`${key}: ${rows.length} faces with s1 error > 0.02 (of the uniform test); fallback to the raster: ${rows.filter((r) => r.fb).length}`);
+  rows.slice(0, 8).forEach((r) => console.log(`  t=${r.t} n=${r.n} area=${r.a.toFixed(0)} s1 ${r.d1.toFixed(4)} raster ${r.d0.toFixed(4)} coverage A ${(100 * r.covA).toFixed(0)} % B ${(100 * r.covB).toFixed(0)} % ${r.fb ? '(no correspondence colour: raster)' : ''}`));
+}
+if (RUN_MAIN && process.argv.includes('--spatial') && process.argv.includes('--bad')) { const cases = buildCases(true); explainBad(arg('--case', 'hex'), cases[arg('--case', 'hex')]); process.exit(0); }
+if (RUN_MAIN && process.argv.includes('--spatial')) {
+  const cases = buildCases(true); const which = arg('--case', 'all');
+  if (process.argv.includes('--explain')) explainFine(cases.sq);
+  else if (process.argv.includes('--fine')) printSpatial(spatialRun('sq', cases.sq, 0.01));
+  else Object.keys(cases).filter((k) => which === 'all' || which === k).forEach((k) => printSpatial(spatialRun(k, cases[k], +arg('--step', '0.05'))));
 }
 
 module.exports = { mkStarDiamond, setup, buildCases, withUniform, sollUniform, annotate, predOf, role, cdist, lin2l, setNear(k) { NEAR_K = k; } };
