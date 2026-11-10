@@ -25,7 +25,7 @@ const deToKey = {};
 Object.keys(DICT).forEach(k => { if (!(DICT[k].de in deToKey)) deToKey[DICT[k].de] = k; });
 const norm = s => s.replace(/\s+/g, ' ').trim();
 const STOP = 'der die das den dem des ein eine einen einem einer und oder nicht kein keine nur mit ohne für von zu zur zum im in am an auf aus bei nach über unter als wie wird werden ist sind hat haben kann können noch schon auch alle alles jede jeder dann wenn bis gilt zeigen zeigt aktiv aus an ein hinzufügen entfernen löschen speichern laden zurück weiter wählen farbe farben form formen netz netze ebene ebenen knoten linie linien fläche flächen herunterladen hilfe schließen öffnen mehr weniger breite höhe größe drehung versatz zufall muster raster'.split(' ');
-const VOCAB = new Set(STOP);
+const VOCAB = new Set(STOP.concat('schwarz anker kreis'.split(' ')));   // task 042: words without umlaut that the dictionary did not know yet
 Object.keys(DICT).forEach(k => (DICT[k].de.toLowerCase().match(/[a-zäöüß]{3,}/g) || []).forEach(w => VOCAB.add(w)));
 const EN_WORDS = new Set(); Object.keys(DICT).forEach(k => (DICT[k].en.toLowerCase().match(/[a-z]{3,}/g) || []).forEach(w => EN_WORDS.add(w)));
 const EN_ONLY = /\b(the|is|are|must|does|not|and|for|with|of|to|has|have|can|be|from|when|only|each|every|no|or|this|that|per)\b/i;
@@ -35,6 +35,7 @@ const AMBIG = new Set(['form', 'info', 'name', 'status', 'mode', 'zoom', 'start'
 function isGerman(s) {
     if (!/[A-Za-zÄÖÜäöüß]/.test(s)) return false;
     if (/[äöüÄÖÜß]/.test(s)) return true;
+    if (/^(Aus|Geo)$/.test(s)) return true;   // task 042: short German texts (net kind buttons)
     const words = (s.toLowerCase().match(/[a-zäöüß]{2,}/g) || []);
     if (!words.length) return false;
     if (EN_ONLY.test(s) && !DE_STRONG.test(s)) return false;
@@ -132,7 +133,9 @@ function htmlItems(src, baseOffset) {
         const el = { tag, attrs, skip: /^(script|style|noscript|svg|template)$/.test(tag) && tag !== 'template' };
         const attr = nm => { const r = new RegExp('(?:^|\\s)' + nm + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\')'); const x = r.exec(attrs); return x ? (x[1] !== undefined ? x[1] : x[2]) : null; };
         const hasKey = nm => new RegExp('(?:^|\\s)' + nm + '(?=[\\s=]|$)').test(attrs);
-        const covered = { title: hasKey('data-i18n-title') || (hasKey('data-i18n') ), 'aria-label': hasKey('data-i18n-label') || hasKey('data-i18n'), placeholder: hasKey('data-i18n') };
+        // data-i18n-label sets aria-label AND title (when the element has one), data-i18n without own text does the same, data-i18n-title only the title (ui-i18n.js applyEl)
+        const named = hasKey('data-i18n-label') || hasKey('data-i18n');
+        const covered = { title: named || hasKey('data-i18n-title'), 'aria-label': named, placeholder: hasKey('data-i18n'), alt: named };
         [['title', 'title'], ['aria-label', 'aria'], ['placeholder', 'placeholder'], ['alt', 'title']].forEach(([a, kind]) => {
             const v = attr(a); if (v === null) return; const text = norm(v);
             if (!text || !isGerman(text)) return;
