@@ -21,11 +21,11 @@
   const tr = function (key, fallback, params) { const i = window.uiI18n; return i && i.has(key) ? i.t(key, params) : fallback; };
   const T = {
     get 'reason.none'() { return tr('common.noLayer', 'Keine Ebene aktiv.'); },
-    'reason.node.min': 'Mindestens 1 Knoten.',
+    get 'reason.node.min'() { return tr('reason.node.min', 'Mindestens 1 Knoten.'); },
     'reason.node.max.square': function (n) { return tr('reason.node.max.square', 'Höchstens ' + n + ' Knoten beim Quadrat.', { n: n }); },
     'reason.node.max.other': function (n) { return tr('reason.node.max.other', 'Höchstens ' + n + ' Knoten bei Dreieck und Sechseck.', { n: n }); },
-    'reason.size.min': 'Kleinste Größe: 1.',
-    'reason.size.max': 'Größte Größe: 9.',
+    get 'reason.size.min'() { return tr('reason.size.min', 'Kleinste Größe: 1.'); },
+    get 'reason.size.max'() { return tr('reason.size.max', 'Größte Größe: 9.'); },
   };
   const $ = function (s) { return document.querySelector(s); };
   const nodeInput = $('#layer-node-count-input'), sizeInput = $('#layer-shape-size-input');
