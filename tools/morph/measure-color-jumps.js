@@ -33,7 +33,9 @@ const STUB = `
   fill = (c) => { __fill = c; }; beginShape = () => { __cur = []; }; vertex = (x, y) => { __cur.push([x, y]); };
   endShape = () => { __polys.push({ fill: __fill, pts: __cur }); __cur = null; }; var CLOSE = 'close';
   var __lines = [];
-  { const tf = spatialMorphRenderTileFaces; spatialMorphRenderTileFaces = function (lines) { __lines.push(lines.map((l) => [{ x: l[0].x, y: l[0].y }, { x: l[1].x, y: l[1].y }])); return tf.apply(this, arguments); }; }
+  { const cap = (lines) => { __lines.push(lines.map((l) => [{ x: l[0].x, y: l[0].y }, { x: l[1].x, y: l[1].y }])); };
+    if (typeof spatialMorphRenderTileMemo === 'function') { const mk = spatialMorphRenderTileMemo; spatialMorphRenderTileMemo = function () { const m = mk.apply(this, arguments), f = m.faces; m.faces = function (lines) { cap(lines); return f.apply(this, arguments); }; return m; }; }   // task 038: ONE capture per tile, as before the frame memo (the memo's hits do not reach spatialMorphRenderTileFaces)
+    else { const tf = spatialMorphRenderTileFaces; spatialMorphRenderTileFaces = function (lines) { cap(lines); return tf.apply(this, arguments); }; } }
   { const f = spatialMorphRenderFillFaces; spatialMorphRenderFillFaces = function () { const a = __polys.length; const r = f.apply(this, arguments); __tiles.push({ a, b: __polys.length }); return r; }; }
 `;
 const COLOR = (layer, hue0) => `(function () {

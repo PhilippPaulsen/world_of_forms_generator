@@ -136,7 +136,7 @@ console.log('\n== 4. stateless, wiring, globals ==');
   const ts = [0, 0.15, 0.4, 0.7, 1], run = (order) => { const o = {}; order.forEach((t) => { o[t] = J(prodFrame(sqRig, t, 'linear').morph.map((f) => f.nwHex)); }); return o; };
   const a = run(ts), b = run(ts.slice().reverse());
   check('stateless: t = 0..1 and t = 1..0 give exactly the same colours per face and t', ts.every((t) => a[t] === b[t]));
-  check('the draw call passes the normalised mode to the colours', /spatialMorphRenderFaceColors\(tileFaces, cornerFields, wTile, mode\)/.test(RENDER));
+  check('the draw call passes the normalised mode to the colours (task 038: through the frame memo, which hands it on)', /tileMemo\.colors\(tileFaces, cornerFields, wTile, mode\)/.test(RENDER) && /spatialMorphRenderFaceColors\(res, fields, w, mode\)/.test(RENDER));
   const top = (src) => new Set([...src.matchAll(/^(?:function|const|let|var)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]));
   // the names of the tree before the task (task/033-spatial-vier-ecken)
   const base = require('child_process').execSync('git show task/033-spatial-vier-ecken:core/spatial-morph-render.js', { cwd: ROOT, maxBuffer: 1 << 26 }).toString();
