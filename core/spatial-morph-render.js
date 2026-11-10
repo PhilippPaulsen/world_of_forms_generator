@@ -454,7 +454,7 @@ function spatialMorphRenderTileMemo() {
             const key = JSON.stringify(lines.map((ln) => [ln[0].x, ln[0].y, ln[1].x, ln[1].y]));
             if (faces.has(key)) return faces.get(key);
             const r = spatialMorphRenderTileFaces(lines, s, sheet);
-            faces.set(key, r);
+            if (r && r.faces && r.faces.length > 0) faces.set(key, r);   // an empty result (nothing to say, or a failure that was caught) is NOT shared: every tile asks again, as before the memo
             return r;
         },
         colors(res, fields, w, mode) {
@@ -463,7 +463,7 @@ function spatialMorphRenderTileMemo() {
             const key = JSON.stringify([w.w00, w.w10, w.w01, w.w11, mode]);
             if (per.has(key)) return per.get(key);
             const r = spatialMorphRenderFaceColors(res, fields, w, mode);
-            per.set(key, r);
+            if (r) per.set(key, r);   // null (nothing can be said, or a caught failure) is not shared either
             return r;
         },
         clear() { faces = new Map(); colors = new Map(); },
