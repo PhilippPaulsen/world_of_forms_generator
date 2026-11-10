@@ -18,6 +18,8 @@
  */
 (function (root) {
   'use strict';
+  // a sentence of the bilingual dictionary (ui-i18n.js) in the current language, else the German text written here
+  const tr = function (key, params, fallback) { const i = root.uiI18n; return i && i.has(key) ? i.t(key, params) : fallback; };
   const T = {
     'timeline.strip': 'Zeitleiste',
     'timeline.play': 'Abspielen',
@@ -36,7 +38,11 @@
     'timeline.clear.title': 'Zeitleiste entfernen?',
     'timeline.clear.text': 'Alle Keyframes, Linienzuordnungen und Netz-Schnappschüsse der Zeitleiste werden verworfen. Die Ebenen selbst bleiben erhalten. Das lässt sich nicht rückgängig machen.',
     'timeline.dia.title': function (n) { return 'Ebene ' + n + ' aus der Zeitleiste entfernen?'; },
-    'timeline.dia.text': function (k) { return 'Die Linienzuordnung ' + (k === 1 ? 'des angrenzenden Segments geht' : 'von ' + k + ' angrenzenden Segmenten geht') + ' verloren (Zuordnung, Umkehrung und Symmetrie-Variante der Linien). Die Ebene selbst bleibt erhalten. Das lässt sich nicht rückgängig machen.'; },
+    'timeline.dia.text': function (k) {
+      const rest = ' verloren (Zuordnung, Umkehrung und Symmetrie-Variante der Linien). Die Ebene selbst bleibt erhalten. Das lässt sich nicht rückgängig machen.';
+      return k === 1 ? tr('timeline.dia.text.one', {}, 'Die Linienzuordnung des angrenzenden Segments geht' + rest)
+        : tr('timeline.dia.text.other', { k: k }, 'Die Linienzuordnung von ' + k + ' angrenzenden Segmenten geht' + rest);
+    },
   };
 
   // ---- the pure model ---------------------------------------------------------------------------------------------------------------------------
