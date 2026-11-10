@@ -24,20 +24,22 @@
  * The German texts below are the reasons/notes for now; the dictionary (data-i18n keys) comes in a later phase.
  */
 (function () {
-  // reasons and notes (key -> text); moved into the dictionary later
+  // reasons and notes (key -> text); the whole sentences with a number go through the dictionary (task 043), the others move later
+  // a sentence of the bilingual dictionary (ui-i18n.js) in the current language, else the German text written here
+  const tr = function (key, params, fallback) { const i = window.uiI18n; return i && i.has(key) ? i.t(key, params) : fallback; };
   const T = {
-    'reason.node.min': 'Mindestens 1 Knoten.',
-    'reason.node.min.trig': 'Sin und Tan brauchen mindestens 4 Knoten.',
-    'reason.node.max.square': function (n) { return 'Höchstens ' + n + ' Knoten beim Quadrat.'; },
-    'reason.node.max.other': function (n) { return 'Höchstens ' + n + ' Knoten bei Dreieck und Sechseck.'; },
-    'reason.size.min': 'Kleinste Größe: 1.',
-    'reason.size.max': 'Größte Größe: 9.',
-    'reason.size.field.min': 'Im Feld-Netz sind nur ungerade Größen von 3 bis 9 möglich; 3 ist die kleinste.',
-    'note.size.field': function (from, to) { return 'Feld-Netz: nur ungerade Größen, deshalb ' + from + ' → ' + to + '.'; },
-    'reason.fold.hex': 'Die Zähligkeit (3 oder 6) gilt nur beim Sechseck.',
-    'reason.fold.rotation': 'Die Zähligkeit gilt nur mit Drehung.',
-    'more.label': 'Mehr',
-    'more.label.fold3': 'Mehr – aktive Zähligkeit: 3',
+    get 'reason.node.min'() { return tr('reason.node.min', null, 'Mindestens 1 Knoten.'); },
+    get 'reason.node.min.trig'() { return tr('reason.node.min.trig', null, 'Sin und Tan brauchen mindestens 4 Knoten.'); },
+    'reason.node.max.square': function (n) { return tr('reason.node.max.square', { n: n }, 'Höchstens ' + n + ' Knoten beim Quadrat.'); },
+    'reason.node.max.other': function (n) { return tr('reason.node.max.other', { n: n }, 'Höchstens ' + n + ' Knoten bei Dreieck und Sechseck.'); },
+    get 'reason.size.min'() { return tr('reason.size.min', null, 'Kleinste Größe: 1.'); },
+    get 'reason.size.max'() { return tr('reason.size.max', null, 'Größte Größe: 9.'); },
+    get 'reason.size.field.min'() { return tr('reason.size.field.min', null, 'Im Feld-Netz sind nur ungerade Größen von 3 bis 9 möglich; 3 ist die kleinste.'); },
+    'note.size.field': function (from, to) { return tr('note.size.field', { from: from, to: to }, 'Feld-Netz: nur ungerade Größen, deshalb ' + from + ' → ' + to + '.'); },
+    get 'reason.fold.hex'() { return tr('reason.fold.hex', null, 'Die Zähligkeit (3 oder 6) gilt nur beim Sechseck.'); },
+    get 'reason.fold.rotation'() { return tr('reason.fold.rotation', null, 'Die Zähligkeit gilt nur mit Drehung.'); },
+    get 'more.label'() { return tr('more.form', null, 'Mehr'); },
+    get 'more.label.fold3'() { return tr('more.label.fold3', null, 'Mehr – aktive Zähligkeit: 3'); },
   };
 
   const $ = function (s) { return document.querySelector(s); };

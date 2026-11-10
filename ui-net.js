@@ -21,15 +21,17 @@
  * The German texts below are the reasons for now; the dictionary (data-i18n keys) comes in a later phase.
  */
 (function () {
+  // a text of the bilingual dictionary (ui-i18n.js) in the current language, else the German text written here
+  const tr = function (key, params, fallback) { const i = window.uiI18n; return i && i.has(key) ? i.t(key, params) : fallback; };
   const T = {
-    'reason.net.notApplicable': 'Netz gilt für das Quadrat, Basis-Ebene.',
-    'reason.net.needsKind': 'Die Stärke gilt für Sin, Tan und Geo.',
-    'reason.strength.max': 'Größte Stärke: 1,0.',
-    'reason.strength.min': 'Kleinste Stärke: 0,0.',
-    'reason.strength.exact': 'Die Stärke liegt zwischen 0,00 und 1,00.',
-    'reason.focus.max': 'Größter Fokus: 1,0.',
-    'reason.focus.min': 'Kleinster Fokus: −1,0.',
-    'reason.focus.exact': 'Der Fokus liegt zwischen −1,00 und 1,00.',
+    get 'reason.net.notApplicable'() { return tr('reason.net.notApplicable', null, 'Netz gilt für das Quadrat, Basis-Ebene.'); },
+    get 'reason.net.needsKind'() { return tr('reason.net.needsKind', null, 'Die Stärke gilt für Sin, Tan und Geo.'); },
+    get 'reason.strength.max'() { return tr('reason.strength.max', null, 'Größte Stärke: 1,0.'); },
+    get 'reason.strength.min'() { return tr('reason.strength.min', null, 'Kleinste Stärke: 0,0.'); },
+    get 'reason.strength.exact'() { return tr('reason.strength.exact', null, 'Die Stärke liegt zwischen 0,00 und 1,00.'); },
+    get 'reason.focus.max'() { return tr('reason.focus.max', null, 'Größter Fokus: 1,0.'); },
+    get 'reason.focus.min'() { return tr('reason.focus.min', null, 'Kleinster Fokus: −1,0.'); },
+    get 'reason.focus.exact'() { return tr('reason.focus.exact', null, 'Der Fokus liegt zwischen −1,00 und 1,00.'); },
   };
   const $ = function (s) { return document.querySelector(s); };
 
