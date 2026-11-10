@@ -1037,4 +1037,4 @@ if (RUN_MAIN && process.argv.includes('--four-explain')) {
   process.exit(0);
 }
 
-module.exports = { mkStarDiamond, setup, buildCases, withUniform, sollUniform, annotate, predOf, role, cdist, lin2l, setNear(k) { NEAR_K = k; } };
+module.exports = { sollPure, spatialFrames, setup4, cases4, bilinW, mkStarDiamond, setup, buildCases, withUniform, sollUniform, annotate, predOf, role, cdist, lin2l, setNear(k) { NEAR_K = k; } };
