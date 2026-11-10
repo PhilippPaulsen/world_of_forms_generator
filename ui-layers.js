@@ -29,6 +29,8 @@
  */
 (function (root) {
   'use strict';
+  // a sentence of the bilingual dictionary (ui-i18n.js) in the current language, else the German text written here
+  const tr = function (key, params, fallback) { const i = root.uiI18n; return i && i.has(key) ? i.t(key, params) : fallback; };
   const T = {
     'layers.table': 'Ebenen',
     'layers.rail': 'Ebenen',
@@ -56,9 +58,17 @@
     'layers.more.closed': 'geschlossen',
     get 'layers.more.none'() { const i = root.uiI18n; return i && i.has('common.noLayer') ? i.t('common.noLayer') : 'Keine Ebene aktiv.'; },
     'layers.hint': 'Symbol antippen',
-    'layers.remove.title': function (n) { return 'Ebene ' + n + ' entfernen?'; },
-    'layers.remove.lines': function (k) { return (k === 1 ? 'Die eine Linie dieser Ebene geht' : 'Die ' + k + ' Linien dieser Ebene gehen') + ' verloren. Das lässt sich nicht rückgängig machen.'; },
-    'layers.remove.keyframe': function (k) { return 'Diese Ebene ist ein Keyframe der Timeline' + (k ? ' und hat ' + (k === 1 ? 'eine Linie' : k + ' Linien') : '') + '. Sie wird entfernt, ihr Keyframe verlässt die Timeline, und die Linienzuordnungen der angrenzenden Segmente gehen verloren. Das lässt sich nicht rückgängig machen.'; },
+    'layers.remove.title': function (n) { return tr('layers.remove.title.n', { n: n }, 'Ebene ' + n + ' entfernen?'); },
+    'layers.remove.lines': function (k) {
+      return k === 1 ? tr('layers.remove.lines.one', {}, 'Die eine Linie dieser Ebene geht verloren. Das lässt sich nicht rückgängig machen.')
+        : tr('layers.remove.lines.other', { k: k }, 'Die ' + k + ' Linien dieser Ebene gehen verloren. Das lässt sich nicht rückgängig machen.');
+    },
+    'layers.remove.keyframe': function (k) {
+      const tail = '. Sie wird entfernt, ihr Keyframe verlässt die Timeline, und die Linienzuordnungen der angrenzenden Segmente gehen verloren. Das lässt sich nicht rückgängig machen.';
+      if (!k) return tr('layers.remove.keyframe.none', {}, 'Diese Ebene ist ein Keyframe der Timeline' + tail);
+      return k === 1 ? tr('layers.remove.keyframe.one', {}, 'Diese Ebene ist ein Keyframe der Timeline und hat eine Linie' + tail)
+        : tr('layers.remove.keyframe.other', { k: k }, 'Diese Ebene ist ein Keyframe der Timeline und hat ' + k + ' Linien' + tail);
+    },
   };
 
   // ---- the pure model ---------------------------------------------------------------------------------------------------------------------------
