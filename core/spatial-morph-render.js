@@ -324,8 +324,19 @@ function spatialMorphRenderCornerField(id, cornerIdx) {
         });
         const xs = oc.map((p) => p.x), ys = oc.map((p) => p.y);
         const box = { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+        // task 034: the polygon list of the field (bounding box, linear colour; the cell centre and width as properties) for the face correspondence of core/facecolor.js, and the cell's area (the faces of the
+        // border-closed cell tile it). Built with the raster, cached with it: the same signature.
+        const polyField = entries.map((e) => {
+            const px = e.poly.map((q) => q.x), py = e.poly.map((q) => q.y);
+            return { poly: e.poly, minX: Math.min(...px), maxX: Math.max(...px), minY: Math.min(...py), maxY: Math.max(...py), lin: e.lin };
+        });
+        // the cell centre = the sheet's centroid (the orbits of the faces are read off their distance from it; for a triangle it is not the middle of the bounding box)
+        const ctrC = (cs.sheet && cs.sheet.centroid) || ((typeof centroid !== 'undefined' && centroid) ? centroid : null);
+        polyField.ctr = ctrC ? { x: ctrC.x, y: ctrC.y } : { x: (box.minX + box.maxX) / 2, y: (box.minY + box.maxY) / 2 };
+        polyField.span = box.maxX - box.minX;
+        const cellArea = entries.reduce((a, e) => { let q = 0; for (let i = 0; i < e.poly.length; i++) { const p0 = e.poly[i], p1 = e.poly[(i + 1) % e.poly.length]; q += p0.x * p1.y - p1.x * p0.y; } return a + Math.abs(q / 2); }, 0);
         const n = Math.max(32, Math.min(256, Math.ceil(Math.max(box.maxX - box.minX, box.maxY - box.minY) / 1.5)));   // about 1.5 px per texel
-        value = { raster: spatialMorphRasterizeField(entries, box, n) };
+        value = { raster: spatialMorphRasterizeField(entries, box, n), field: polyField, cellArea };
     } catch (e) {
         value = null;
     } finally {
@@ -344,14 +355,50 @@ function spatialMorphRenderCornerFields(cornerIds, keyframeCount, mode) {
     return cornerIds.map((id, k) => (id === undefined || !needed[k] ? null : spatialMorphRenderCornerField(id, k)));
 }
 
+// Task 034: the face correspondence of core/facecolor.js (measured as "s2_5" in tools/morph/measure-face-match.js --spatial) for the Linear and Radial modes (two corner keyframes, weights (1-t, t)), instead of the
+// raster sampling: a face that grew or moved no longer picks up the colours of the NEIGHBOURING faces of the other keyframe (the star that is violet in both keyframes stays violet). Faces smaller than
+// spatialMorphFaceRasterShare of the cell keep the raster (their colours are the raster's own; measured: the correspondence jumps more on them at colour-field borders). Everything else (Bilinear, a mode that is not
+// given, a corner without a polygon list, core/facecolor.js not loaded, a face nothing lies under, an error) is the raster path of before, face by face. Stateless. The only dependency of this file on core/facecolor.js: the
+// helpers _fieldInfo, _faceInfo, _setOrbits and _faceLinByCorrespondence, each behind a typeof guard.
+const spatialMorphFaceRasterShare = 0.05;
+function spatialMorphRenderCorrespondence(fields, w, mode) {
+    if (mode !== 'linear' && mode !== 'radial') return null;
+    if (typeof _fieldInfo !== 'function' || typeof _faceInfo !== 'function' || typeof _setOrbits !== 'function' || typeof _faceLinByCorrespondence !== 'function') return null;
+    if (!w || !(w.w00 >= 0) || !(w.w10 >= 0) || w.w01 > 0 || w.w11 > 0 || !(w.w00 + w.w10 > 0)) return null;
+    const a = fields && fields[0], b = fields && fields[1];
+    if (!a || !b || !a.field || !b.field || !(a.cellArea > 0)) return null;
+    return { infoA: _fieldInfo(a.field), infoB: _fieldInfo(b.field), t: w.w10 / (w.w00 + w.w10), minArea: spatialMorphFaceRasterShare * a.cellArea };
+}
+function spatialMorphRenderFaceColors(res, fields, w, mode) {
+    let corr = null, lins = null;
+    try { corr = (res && res.faces && res.faces.length) ? spatialMorphRenderCorrespondence(fields, w, mode) : null; } catch (e) { corr = null; }
+    if (!corr) return spatialMorphRenderFaceColorsRaster(res, fields, w);
+    try {
+        const nodeById = new Map(res.nodes.map((n) => [n.id, n]));
+        const polys = res.faces.map((face) => face.nodeIds.map((nid) => nodeById.get(nid)).filter(Boolean).map((n) => ({ x: n.x, y: n.y })));
+        const live = polys.map((poly) => (poly.length < 3 ? null : _faceInfo(poly, null)));
+        const ctr = corr.infoA.ctr || corr.infoB.ctr, span = corr.infoA.span || corr.infoB.span || 1;
+        if (ctr) _setOrbits(live.filter(Boolean), ctr, span);
+        lins = live.map((f) => (f && f.a >= corr.minArea ? _faceLinByCorrespondence(f, corr.infoA, corr.infoB, corr.t) : null));
+    } catch (e) {
+        return spatialMorphRenderFaceColorsRaster(res, fields, w);
+    }
+    // the raster only for the faces the correspondence did not colour (small faces, nothing under the face); none left: it is not run at all
+    const need = lins.map((l) => !l);
+    const raster = need.some(Boolean) ? spatialMorphRenderFaceColorsRaster(res, fields, w, need) : null;
+    return res.faces.map((face, fi) => (lins[fi] ? linearToHex(lins[fi]) : (raster ? raster[fi] : face.color)));
+}
+
 // The colours of the faces of one tile: ['#rrggbb', ...] parallel to res.faces, or null when nothing can be said (the caller then keeps the faces' own colours). w = the tile's corner weights. A corner whose field
 // has no colour under the face (no texel is in a face) takes no part in that face's mix.
-function spatialMorphRenderFaceColors(res, fields, w) {
+// want (optional, task 034): an array parallel to the faces; a face with a false entry is skipped (its own colour is returned in its place)
+function spatialMorphRenderFaceColorsRaster(res, fields, w, want) {
     try {
         if (!res || !res.faces || res.faces.length === 0) return null;
         const weights = [w.w00, w.w10, w.w01, w.w11];
         const nodeById = new Map(res.nodes.map((n) => [n.id, n]));
-        return res.faces.map((face) => {
+        return res.faces.map((face, fi) => {
+            if (want && !want[fi]) return face.color;
             const samples = spatialMorphFaceSamples(face.nodeIds.map((nid) => nodeById.get(nid)).filter(Boolean));
             const cols = weights.map((wk, k) => {
                 if (!(wk > 0) || !fields[k]) return null;
@@ -479,7 +526,7 @@ function spatialMorphRenderDraw(sm) {
                     return spatialMorphAnchoredPoint(d, wTile, wEdge, false);
                 }));
                 const tileFaces = spatialMorphRenderTileFaces(cellLines, s, faceSheet);
-                const n = spatialMorphRenderFillFaces(tileFaces, tile, activeNetWarp, spatialMorphRenderFaceColors(tileFaces, cornerFields, wTile));
+                const n = spatialMorphRenderFillFaces(tileFaces, tile, activeNetWarp, spatialMorphRenderFaceColors(tileFaces, cornerFields, wTile, mode));
                 faceStats.tiles++;
                 if (n > 0) { faceStats.tilesWithFaces++; faceStats.faces += n; }
             }

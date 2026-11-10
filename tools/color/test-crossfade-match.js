@@ -10,7 +10,7 @@
  *  2. The 7 cases of tasks 029/030 (square, split, hexagon, triangle, gallery square, curated gallery hexagon and triangle), playback path: jump <= sampling + 3 bytes, error with equal colours in A and B < 0.02.
  *  3. Different colours in A and B: exactly the keyframe colours at t = 0 and 1, within 0.1 of the interval the partner colours span in between.
  *  4. Equal colours: exactly that colour (1e-9, linear light) wherever every polygon under a face has it; Stern/Raute with different NEIGHBOUR colours below 0.1.
- *  5. Stateless: forward and backward runs give the same colours; the fields carry the polygon list; faces nothing lies under keep the sampled path (null); the playback path only (the spatial path is untouched).
+ *  5. Stateless: forward and backward runs give the same colours; the fields carry the polygon list; faces nothing lies under keep the sampled path (null); the playback path colours; the spatial path's use of the helpers is guarded by typeof (task 034).
  *  6. Cost: the dense hexagon pattern (three frames together) at most three times the sampling.
  */
 'use strict';
@@ -152,7 +152,8 @@ console.log('\n== 5. stateless, fields, fallback ==');
   })()`);
   check('a face that no keyframe polygon lies under keeps the sampled path (null: the face\'s own colour); a hand-built field (no sheet) works and mixes in linear light', sample.far === null && sample.inner === sample.expect, JSON.stringify(sample));
   const core = fs.readFileSync(FACECOLOR, 'utf8'), rend = fs.readFileSync(path.join(ROOT, 'core', 'spatial-morph-render.js'), 'utf8');
-  check('the spatial path does not use the correspondence (spatial-morph-render.js has none of its names)', !/crossfadeFaceColors|_faceLinByCorrespondence|keyframeColorField|_fieldInfo/.test(rend));
+  // task 034 gives the spatial path the correspondence on purpose (tools/morph/test-spatial-morph-correspondence.js); this file only guards that the render file reaches it through typeof-guarded helpers
+  check('spatial-morph-render.js uses the correspondence only through typeof-guarded helpers, and not crossfadeFaceColors / keyframeColorField', ['_fieldInfo', '_faceInfo', '_setOrbits', '_faceLinByCorrespondence'].every(n => new RegExp('typeof ' + n + " !== 'function'").test(rend)) && !/crossfadeFaceColors|keyframeColorField/.test(rend));
   check('crossfadeFaceColorsSampled() still returns the sampled colours (the fallback and the reference of these tests)', /function crossfadeFaceColorsSampled\(/.test(core));
 }
 
