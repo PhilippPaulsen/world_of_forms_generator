@@ -406,17 +406,86 @@ function exportJSON(crossLayerData) {
 // see plan discussion) by reusing drawTessellation() unchanged in SVG
 // collection mode, so the vector output can never drift from what's
 // actually on screen.
+// Task 035: CSS colour string (hex / rgb(a) / hsl(a), what face.color and the tilers use) -> {hex, opacity}.
+// Anything unparsable is handed through unchanged (opacity 1), so an unexpected value still lands in the SVG.
+function _svgColorSpec(c) {
+    const h2 = n => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+    if (typeof c !== 'string') return { hex: String(c), opacity: 1 };
+    const s = c.trim();
+    let m = /^#([0-9a-f]{3,8})$/i.exec(s);
+    if (m) {
+        let t = m[1];
+        if (t.length === 3 || t.length === 4) t = t.split('').map(ch => ch + ch).join('');
+        if (t.length === 6) return { hex: '#' + t.toLowerCase(), opacity: 1 };
+        if (t.length === 8) return { hex: '#' + t.slice(0, 6).toLowerCase(), opacity: parseInt(t.slice(6), 16) / 255 };
+    }
+    m = /^rgba?\(([^)]*)\)$/i.exec(s);
+    if (m) {
+        const v = m[1].split(/[\s,\/]+/).filter(Boolean).map(parseFloat);
+        if (v.length >= 3 && v.slice(0, 3).every(isFinite)) return { hex: '#' + h2(v[0]) + h2(v[1]) + h2(v[2]), opacity: v.length > 3 && isFinite(v[3]) ? v[3] : 1 };
+    }
+    m = /^hsla?\(([^)]*)\)$/i.exec(s);
+    if (m) {
+        const v = m[1].split(/[\s,\/]+/).filter(Boolean).map(parseFloat);
+        if (v.length >= 3 && v.slice(0, 3).every(isFinite)) {
+            const hh = ((v[0] % 360) + 360) % 360, ss = v[1] / 100, ll = v[2] / 100;
+            const k = n => (n + hh / 30) % 12, a = ss * Math.min(ll, 1 - ll);
+            const f = n => ll - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+            return { hex: '#' + h2(f(0) * 255) + h2(f(8) * 255) + h2(f(4) * 255), opacity: v.length > 3 && isFinite(v[3]) ? v[3] : 1 };
+        }
+    }
+    return { hex: s, opacity: 1 };
+}
+
+// Task 035: runs drawTessellation() with fill/noFill/beginShape/vertex/endShape swapped for collectors (restored in
+// finally, also on an exception), so the face fills are gathered as polygons in draw order and nothing reaches the canvas.
+// The highlight outline (noFill + stroke) is not collected: it is hover feedback, not part of the pattern.
+function _svgCollectFacePolygons() {
+    const polys = [];
+    let curFill = null, cur = null;
+    const hooks = {
+        fill: c => { curFill = c; },
+        noFill: () => { curFill = null; },
+        beginShape: () => { cur = []; },
+        vertex: (x, y) => { if (cur) cur.push([x, y]); },
+        endShape: () => { if (cur && curFill !== null && cur.length >= 3) polys.push({ fill: curFill, pts: cur }); cur = null; }
+    };
+    const g = globalThis, names = Object.keys(hooks);
+    const had = names.map(n => Object.prototype.hasOwnProperty.call(g, n)), saved = names.map(n => g[n]);
+    try {
+        names.forEach(n => { g[n] = hooks[n]; });
+        drawTessellation();
+    } finally {
+        names.forEach((n, i) => { if (had[i]) g[n] = saved[i]; else delete g[n]; });   // a page without p5 (test world) gets its absence back
+    }
+    return polys;
+}
+
 function generateSVGString() {
     svgPathCollector = [];
-    drawTessellation();
-    const paths = svgPathCollector;
-    svgPathCollector = null;
+    let polys, paths;
+    try {
+        polys = _svgCollectFacePolygons();
+    } finally {
+        paths = svgPathCollector;
+        svgPathCollector = null;
+    }
 
     const w = width, h = height;
     const bgColor = getComputedStyle(document.body).getPropertyValue('--panel-bg-color') || '#ffffff';
 
     let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n`;
     svg += `  <rect x="0" y="0" width="${w}" height="${h}" fill="${bgColor.trim() || '#ffffff'}" />\n`;
+    // Task 035: face fills between background and lines; no group when no face was drawn (showFaces off: output unchanged).
+    if (polys.length) {
+        svg += `  <g stroke="none">\n`;
+        polys.forEach(pl => {
+            const sp = _svgColorSpec(pl.fill);
+            const op = sp.opacity < 1 ? ` fill-opacity="${+sp.opacity.toFixed(3)}"` : '';
+            svg += `    <polygon points="${pl.pts.map(q => q[0].toFixed(2) + ',' + q[1].toFixed(2)).join(' ')}" fill="${sp.hex}"${op} />\n`;
+        });
+        svg += `  </g>\n`;
+    }
     // Task 024: lines off - no line group at all (paths is empty then); the weight follows lineStyle (2 = unchanged output).
     const lineSt = (typeof lineStyle !== 'undefined') ? lineStyle : { visible: true, weight: 2 };
     if (lineSt.visible) {
