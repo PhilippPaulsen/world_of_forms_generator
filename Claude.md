@@ -33,6 +33,6 @@ engine. This repo is the canonical generator (`sketch.js` UI shell, portable `co
 5. Save as a NEW `baseline-*.json` with a `before` note; never edit an old one (`docs/baselines.md`).
 
 ## Now
-State and next steps: `ROADMAP.md` ("Spatial morph - STATUS", "Patterns block - STATUS",
-"Sheets redesign - STATUS", "Merge readiness"). Open from the morph block: colour in the morph
-(net: task 004, faces on a Field net: task 006a), the base as a keyframe, d3, export.
+State and next steps: `ROADMAP.md` ("Spatial morph: staged plan" > "Stand 2026-11-10", "Patterns block - STATUS",
+"Sheets redesign - STATUS", "Merge readiness"). Morph state after task 038: d3 filter, line switch, playback and
+spatial colours, SVG export and the frame memo are done; open: d3 relaxation, small items, Browser timing (ROADMAP).
