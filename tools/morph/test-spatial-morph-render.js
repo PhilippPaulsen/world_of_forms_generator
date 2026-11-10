@@ -442,8 +442,10 @@ T('interplay', () => {
   Object.assign(w.sb, { document: { body: {} }, getComputedStyle: () => ({ getPropertyValue: () => '#ffffff' }) });
   const svgOff = w.get('generateSVGString()');
   w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 });
+  const stBefore = J(w.status());
   const svgOn = w.get('generateSVGString()');
-  check('the SVG export with the switch on is the normal pattern (the same SVG as with the switch off), and it does not touch the status', svgOn === svgOff && svgOn.includes('<path') && w.status().code !== 'ok');
+  // Task 036: the export draws the morph frame (it was the normal pattern before); the status stays as the last live frame left it
+  check('the SVG export with the switch on is the MORPH frame (differs from the switch-off SVG, has paths), and it does not touch the status', svgOn !== svgOff && svgOn.includes('<path') && J(w.status()) === stBefore);
   // JSON export
   const strip = (d) => { delete d.exportedAt; return d; };
   w.setMorph({ enabled: false, mode: 'linear', angleDeg: 0 }); const jOff = J(strip(w.get('buildExportData(null)')));
