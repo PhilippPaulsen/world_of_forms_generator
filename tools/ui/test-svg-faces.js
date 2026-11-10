@@ -28,7 +28,7 @@ const BASE = '1e635820';   // the tree before the task
 const oldExport = execSync(`git show ${BASE}:core/export.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString();
 let newExport = fs.readFileSync(path.join(ROOT, 'core/export.js'), 'utf8');
 const mustReplace = (s, a, b) => { if (!s.includes(a)) throw new Error('sabotage anchor missing: ' + a); return s.replace(a, b); };
-if (SAB === 'restore') newExport = mustReplace(newExport, 'names.forEach((n, i) => { if (had[i]) g[n] = saved[i]; else delete g[n]; });', '');
+if (SAB === 'restore') newExport = mustReplace(newExport, 'names.forEach((n, i) => { if (orig[i]) put(n, orig[i]); else delete g[n]; });', '');
 if (SAB === 'order') {
     // lines before faces: move the face group after the line group
     const a = newExport.indexOf('    // Task 035: face fills between'), b = newExport.indexOf('    // Task 024: lines off');
