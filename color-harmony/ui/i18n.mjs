@@ -35,7 +35,7 @@ const pairs = {
   chooseReplacement:['Ersatzgruppe wählen','Choose a replacement group'],
   connectionHint:['Gruppe A bleibt erhalten. Jetzt mit 2/3/4 eine zweite Atlasgruppe bilden oder verändern; anschließend verbinden.','Group A is retained. Use 2/3/4 to form or edit a second atlas group, then connect.'],
   previousAlternative:['Vorige Struktur','Previous structure'], nextAlternative:['Nächste Struktur','Next structure'],
-  alternatives:['Weitere Strukturen','Alternative structures'], pair:['Zweier','Pairs'], memberCount:['Glieder','Members'],
+  alternatives:['Weitere Strukturen','Alternative structures'], pair:['Zweier','Pairs'], pairOne:['Zweier','Pair'], threeOne:['Dreier','Triple'], fourOne:['Vierer','Quadruple'], memberCount:['Glieder','Members'],
   hueProjection:['Farbton-Geometrie','Hue geometry'], differentRegisters:['Verschiedene Register · keine Wertgleiche','Different registers · no equal values'],
   oppositePairs:['Gegenüberliegende Glieder','Opposite members'], previousStructure:['Vorheriger Aufbau','Previous construction'],
   compoundAtlasOnly:['Compound-Aktionen gelten für unterstützte Atlasgruppen. Vollfarben und Verlauf bleiben eigenständige Farben.','Compound actions apply to supported atlas groups. Full colors and samples remain distinct colors.'],

@@ -7,7 +7,7 @@ import {activeColor,substitutionCandidates,connectionResult} from '../compositio
 import {HarmonyView} from '../views/HarmonyView.mjs';
 export function compositionTitle(state) {
   const a=state.composition.activeHarmony,n=a.members.length;
-  return n===1?fieldLabel(a.members[0],state.locale):a.classification.compound?t('compound',state.locale):t(n===2?'pair':n===3?'three':n===4?'four':'harmony',state.locale);
+  return n===1?fieldLabel(a.members[0],state.locale):a.classification.compound?t('compound',state.locale):t(n===2?'pairOne':n===3?'threeOne':n===4?'fourOne':'harmony',state.locale);
 }
 const nameKey={Gegenfarben:'complementary',Triade:'triad',Tetrade:'tetrad'};
 /** The message line for the return handoff (handoff.mjs status objects). Pure; every branch is translated. */
