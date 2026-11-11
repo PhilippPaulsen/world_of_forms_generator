@@ -47,7 +47,7 @@ const OFF_GOLDEN = {
   'corpus-0': 'e343be8f86931b24', 'corpus-10': '9b147512407b68bd', 'corpus-38': 'aad3411535e0abfe', 'corpus-63': '5714242a4189e783', 'corpus-89': '6e36170e63ad9b79', 'corpus-119': 'e88892575374fe58', 'corpus-144': 'b21a7aee8f618373', 'corpus-172': '7eb2f8f4bc01565b', 'corpus-201': '40ca93a30130d4ca',
   'corpus-230': '266f25836f2f5479', 'corpus-5': '6d6b4adf1e1e0dc7', 'corpus-100': 'a76a14d0c915db5d', 'layers-offset': '21bdd633105ff203', 'layers-rotated': 'e9453a0a7402586f', 'layers-scaled': '91ecb6192a18de3b', 'layers-hex-on-square': '2d948bddee3a3eb4', 'layers-two': 'd8b3c32db0ae4b68',
   'layers-triangle-on-hex': '14facb6171f3dfc0', 'timeline-2kf-start': '084b6d392eb97213', 'timeline-3kf-paused-05': '66cc09fd1d12eff1', 'timeline-2kf-play-25': 'e911f67779c336d0', 'timeline-2kf-play-50': '6075ac4506d12b55', 'timeline-3kf-play-60': 'f15c32786a36bf02',
-  'timeline-3kf-play-90': 'bab1fff6669c4964', 'net-sin-field': '42478f528dbb6f01', 'net-tiled': '67333a2973ad283d', 'net-geo': '2e0014a254d58cfa', 'curve-fold2': '1c7e84fa3fe6af89', 'curve-fold1-sym': '9161d68fec71f7d2', 'free-seeded': '4581b0a793e10509',
+  'timeline-3kf-play-90': 'bab1fff6669c4964', 'net-sin-field': '42478f528dbb6f01', 'net-tiled': '67333a2973ad283d', 'net-geo': '2e0014a254d58cfa', 'curve-fold2': '1c7e84fa3fe6af89', 'curve-fold1-sym': '4ba67083ffa2efb5', 'free-seeded': '4581b0a793e10509',
 };
 
 // ---- 1. the pure helpers --------------------------------------------------------------------------------------------------------------------------------------------------------------------------

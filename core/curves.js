@@ -531,10 +531,11 @@ function drawCurvedBezier(p1, p2, curveType, id1, id2) {
         if (piece.type === 'line') {
             line(cur.x, cur.y, piece.to.x, piece.to.y);
         } else if (piece.type === 'quad') {
-            // Same "cubic with both control points collapsed to one
-            // point == quadratic" equivalence the pre-1.4-A code relied
-            // on (p5 has no native quadratic bezier() call).
-            bezier(cur.x, cur.y, piece.control.x, piece.control.y, piece.control.x, piece.control.y, piece.to.x, piece.to.y);
+            // Task 053: p5 has no native quadratic bezier() call, so the quad piece is drawn as its EXACT cubic equivalent
+            // (C1 = P0 + 2/3 (Q - P0), C2 = P2 + 2/3 (Q - P2)): the same curve the SVG writes as "Q control to". (The earlier
+            // bezier(cur, Q, Q, to) is a different curve: its control weight at t = 0.5 is 0.75, not 0.5.)
+            const q = piece.control, e = piece.to;
+            bezier(cur.x, cur.y, cur.x + 2 / 3 * (q.x - cur.x), cur.y + 2 / 3 * (q.y - cur.y), e.x + 2 / 3 * (q.x - e.x), e.y + 2 / 3 * (q.y - e.y), e.x, e.y);
         } else if (piece.type === 'cubic') {
             bezier(cur.x, cur.y, piece.c1.x, piece.c1.y, piece.c2.x, piece.c2.y, piece.to.x, piece.to.y);
         }
