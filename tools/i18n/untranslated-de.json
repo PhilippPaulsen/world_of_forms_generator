@@ -2,30 +2,32 @@
  "generator": "tools/i18n/export-untranslated.js",
  "note": "Heuristic export (task 040): review before use. Placeholders ({n}, ${...}) and composed strings (composed: true) must be translated whole, with the same placeholders. needsCode: the English needs a code change (hard string in JS), not only an entry in ui-i18n.js.",
  "summary": {
-  "total": 14,
+  "total": 13,
   "byGroup": {
-   "main": 14
+   "main": 13
   },
   "byFile": {
    "sketch.js": 2,
    "ui-farbe.js": 4,
-   "ui-layers.js": 3,
+   "ui-layers.js": 1,
+   "ui-rail.js": 1,
    "ui-timeline.js": 1,
    "core/color.js": 4
   },
   "byKind": {
-   "other": 9,
-   "text": 5
+   "other": 7,
+   "text": 5,
+   "status": 1
   },
-  "uniqueTexts": 14,
+  "uniqueTexts": 13,
   "duplicateEntries": 0,
   "withPlaceholders": 2,
-  "composed": 3,
-  "needsCodeChange": 14,
+  "composed": 2,
+  "needsCodeChange": 13,
   "markupOnly": 0,
-  "existingKey": 0,
-  "coveredFallbackLiterals": 146,
-  "tableKeyNotInDict": 2,
+  "existingKey": 1,
+  "coveredFallbackLiterals": 156,
+  "tableKeyNotInDict": 0,
   "viaI18nNearby": 0
  },
  "entries": [
@@ -111,33 +113,6 @@
    "maxLen": null
   },
   {
-   "id": "layers.eye.none",
-   "de": "Ebene sichtbar",
-   "file": "ui-layers.js",
-   "line": 38,
-   "group": "main",
-   "function": "tr",
-   "kind": "other",
-   "context": "string in code, visibility to check in ui-layers.js",
-   "needsCode": true,
-   "tableKey": "layers.eye.none",
-   "maxLen": null
-  },
-  {
-   "id": "layers.eye.name",
-   "de": "sichtbar",
-   "file": "ui-layers.js",
-   "line": 49,
-   "group": "main",
-   "function": "tr",
-   "kind": "other",
-   "context": "string in code, visibility to check in ui-layers.js",
-   "composed": true,
-   "needsCode": true,
-   "tableKey": "layers.eye.name",
-   "maxLen": null
-  },
-  {
    "id": "layers.sie-wird-entfernt-ihr-keyfra",
    "de": ". Sie wird entfernt, ihr Keyframe verlässt die Timeline, und die Linienzuordnungen der angrenzenden Segmente gehen verloren. Das lässt sich nicht rückgängig machen.",
    "file": "ui-layers.js",
@@ -147,6 +122,19 @@
    "kind": "other",
    "context": "string in code, visibility to check in ui-layers.js",
    "needsCode": true,
+   "maxLen": null
+  },
+  {
+   "id": "rail.symbol-antippen",
+   "de": "Symbol antippen",
+   "file": "ui-rail.js",
+   "line": 55,
+   "group": "main",
+   "function": "syncDot",
+   "kind": "status",
+   "context": "status / hint message in ui-rail.js",
+   "needsCode": true,
+   "existingKey": "layers.hint",
    "maxLen": null
   },
   {
