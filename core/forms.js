@@ -517,6 +517,7 @@ function toLegacy(spec, opts) {
 }
 
 // view = {sizeFactor, canvasW, canvasH, center?}. -> { grid: {shape, ordnung, lage}, nodes, centroid, outerCorners }.
+// opts.numbered (task 059): every node also carries u, v and its semantic node number zahl (numberGridNodes), for lage 1 as well as lage 2.
 // Lage 1: exactly the output of the three builders (no extra fields). Lage 2 (only with opts.allowLage2): the lage-1 nodes
 // unchanged (same ids, x, y, order), then the centres of the smallest meshes appended with the next ids; every node of a lage-2
 // grid also carries u, v (see buildGridNodes).
@@ -528,13 +529,14 @@ function buildGrid(spec, view, opts) {
     const g = build(c, view.sizeFactor, view.canvasW, view.canvasH, view.center);
     const grid = { shape: spec.shape, ordnung: spec.ordnung, lage: spec.lage };
     if (spec.legacyC1 === true) grid.legacyC1 = true;
-    if (spec.lage !== 2) return { grid, nodes: g.nodes, centroid: g.centroid, outerCorners: g.outerCorners };
+    if (spec.lage !== 2 && !(opts && opts.numbered === true)) return { grid, nodes: g.nodes, centroid: g.centroid, outerCorners: g.outerCorners };
     const uv = buildGridNodes(spec, opts);
     const n1 = g.nodes.length;
     if (uv.length < n1 || uv.some((p, i) => i < n1 && p.id !== g.nodes[i].id)) throw new Error('buildGrid: lage-1 node order does not match the lattice order');
     const nodes = g.nodes.map((nd, i) => ({ id: nd.id, x: nd.x, y: nd.y, u: uv[i].u, v: uv[i].v }));
     const extra = projectGridNodes(uv.slice(n1), { shape: spec.shape, ordnung: spec.ordnung, outerCorners: g.outerCorners, centroid: g.centroid });
     extra.forEach(nd => nodes.push(nd));
+    if (opts && opts.numbered === true) return { grid, nodes: numberGridNodes(nodes, grid).nodes, centroid: g.centroid, outerCorners: g.outerCorners };
     return { grid, nodes, centroid: g.centroid, outerCorners: g.outerCorners };
 }
 
@@ -604,4 +606,44 @@ function projectGridNodes(uvNodes, geometry) {
     else if (geometry.shape === 'square') { base = oc[0]; e1 = { x: (oc[1].x - oc[0].x) / n, y: (oc[1].y - oc[0].y) / n }; e2 = { x: (oc[3].x - oc[0].x) / n, y: (oc[3].y - oc[0].y) / n }; }
     else { base = ctr; e1 = { x: (oc[2].x - ctr.x) / n, y: (oc[2].y - ctr.y) / n }; e2 = { x: (oc[1].x - ctr.x) / n, y: (oc[1].y - ctr.y) / n }; }
     return uvNodes.map(p => ({ id: p.id, x: base.x + p.u * e1.x + p.v * e2.x, y: base.y + p.u * e1.y + p.v * e2.y, u: p.u, v: p.v }));
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Semantic node numbers (task 059, G4). The node number (Knotenzahl, "zahl") is the rank of the node ORBIT under the main group (3*/4*/6*,
+// core/symmetry.js mainGroupSpec) by x = the distance from the centre perpendicular to the side (projection on the M ray of the shaded sector S0),
+// ties by y (from the M axis towards the corner axis). Reference implementation: tools/gitter/measure-name-rule.js buildGrid(); ids stay the builders' ids.
+// Everything works in the CANONICAL frame (y up, smallest mesh edge = 1):
+//   gridCanonicalPoint(shape, n, u, v)  the canonical point of lattice coordinates (u, v) - exactly the point canonicalGridFrame() gives the canvas node
+//   _gridOraclePoints(nodes, grid, opts)  per node its canonical point: from opts.geometry ({ shape, ordnung, centroid, outerCorners } - the canvas
+//                                         position, screen handedness kept) or else from the node's u, v; null for free nodes and nodes without either
+function gridCanonicalPoint(shape, n, u, v) {
+    if (shape === 'triangle') { const R = n / Math.sqrt(3), c = [0, 1, 2].map(k => [R * Math.cos(2 * Math.PI * k / 3), R * Math.sin(2 * Math.PI * k / 3)]);
+        return { X: c[0][0] + (u / n) * (c[1][0] - c[0][0]) + (v / n) * (c[2][0] - c[0][0]), Y: c[0][1] + (u / n) * (c[1][1] - c[0][1]) + (v / n) * (c[2][1] - c[0][1]) }; }
+    if (shape === 'square') return { X: u - n / 2, Y: n / 2 - v };
+    if (shape === 'hex') return { X: u + v / 2, Y: v * Math.sqrt(3) / 2 };
+    throw new Error('gridCanonicalPoint: unknown shape: ' + String(shape));
+}
+function _gridOraclePoints(nodes, grid, opts) {
+    const geo = opts && opts.geometry, fr = geo ? canonicalGridFrame({ shape: grid.shape, ordnung: grid.ordnung, centroid: geo.centroid, outerCorners: geo.outerCorners }) : null;
+    return nodes.map(nd => {
+        if (nd.free) return null;
+        if (fr) { const o = fr.toOracle(nd.x, nd.y); return { x: o.X, y: o.Y }; }
+        if (typeof nd.u !== 'number' || typeof nd.v !== 'number') return null;
+        const o = gridCanonicalPoint(grid.shape, grid.ordnung, nd.u, nd.v); return { x: o.X, y: o.Y };
+    });
+}
+// -> { nodes: copies of the input with zahl added (free / unplaced nodes copied without), orbits: [{ zahl, size, r, t, x, y }], points }
+function numberGridNodes(nodes, grid, opts) {
+    const v = validateGridSpec(grid, { allowLage2: true });
+    if (!v.ok) throw new Error('numberGridNodes: ' + v.error);
+    const points = _gridOraclePoints(nodes, grid, opts), w = mainGroupSpec(grid.shape).w, orbits = new Map(), keyOf = new Array(nodes.length);
+    nodes.forEach((nd, i) => {
+        const p = points[i]; if (!p) return;
+        const f = mainGroupFold(grid.shape, p.x, p.y), k = Math.round(f.r * 1e6) + '|' + Math.round(f.t * 1e6);
+        if (!orbits.has(k)) orbits.set(k, { r: f.r, t: f.t, size: 0, x: f.r * Math.cos(w - f.t), y: f.r * Math.sin(w - f.t) });
+        orbits.get(k).size++; keyOf[i] = k;
+    });
+    const list = [...orbits.values()].sort((a, b) => (Math.round(a.x * 1e6) - Math.round(b.x * 1e6)) || (Math.round(a.y * 1e6) - Math.round(b.y * 1e6)));
+    list.forEach((o, i) => { o.zahl = i + 1; });
+    return { nodes: nodes.map((nd, i) => keyOf[i] === undefined ? Object.assign({}, nd) : Object.assign({}, nd, { zahl: orbits.get(keyOf[i]).zahl })), orbits: list.map(o => ({ zahl: o.zahl, size: o.size, r: o.r, t: o.t, x: o.x, y: o.y })), points };
 }
