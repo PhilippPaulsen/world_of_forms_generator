@@ -475,9 +475,17 @@ function alignLayerToBase(baseShapeSizeFactor, baseNodeCount, layerCurrentShapeS
 const GRID_SHAPES = ['triangle', 'square', 'hex'];
 
 // -> { ok: true } | { ok: false, error: <message> }. opts.enforceMax: also reject ordnung > maxOrdnungFor(shape, lage).
+// opts.allowLage2 (task 058, G3): internal switch for the pure builders and their tests only - the app (setGrid, rebuildGrid) never
+// passes it, so lage 2 stays rejected there until a later task releases it.
 function validateGridSpec(spec, opts) {
     if (!spec || typeof spec !== 'object') return { ok: false, error: 'GridSpec must be an object' };
     if (GRID_SHAPES.indexOf(spec.shape) < 0) return { ok: false, error: 'unknown shape: ' + String(spec.shape) };
+    if (spec.lage === 2 && opts && opts.allowLage2 === true) {
+        if (!Number.isInteger(spec.ordnung) || spec.ordnung < 1) return { ok: false, error: 'ordnung must be an integer >= 1, got ' + String(spec.ordnung) };
+        if (spec.legacyC1 !== undefined) return { ok: false, error: 'legacyC1 belongs to lage 1 only' };
+        if (opts.enforceMax && spec.ordnung > maxOrdnungFor(spec.shape, spec.lage)) return { ok: false, error: 'ordnung ' + spec.ordnung + ' exceeds ' + maxOrdnungFor(spec.shape, spec.lage) + ' for ' + spec.shape + ' lage 2' };
+        return { ok: true };
+    }
     if (spec.lage !== 1) return { ok: false, error: spec.lage === 2 ? 'lage 2 is not available yet' : 'invalid lage: ' + String(spec.lage) };
     if (!Number.isInteger(spec.ordnung) || spec.ordnung < 1) return { ok: false, error: 'ordnung must be an integer >= 1, got ' + String(spec.ordnung) };
     if (spec.legacyC1 !== undefined && !(spec.legacyC1 === true && spec.shape !== 'hex' && spec.ordnung === 1)) return { ok: false, error: 'legacyC1 is only valid for triangle/square at ordnung 1' };
@@ -500,21 +508,100 @@ function fromLegacy(shape, c) {
     return { shape, ordnung: c - 1, lage: 1 };
 }
 
-function toLegacy(spec) {
-    const v = validateGridSpec(spec);
+// The legacy count c of the LAGE-1 grid a spec is built on (lage 2 extends exactly that grid). opts as validateGridSpec.
+function toLegacy(spec, opts) {
+    const v = validateGridSpec(spec, opts);
     if (!v.ok) throw new Error('toLegacy: ' + v.error);
     if (spec.shape === 'hex') return spec.ordnung;
     return spec.legacyC1 === true ? 1 : spec.ordnung + 1;
 }
 
 // view = {sizeFactor, canvasW, canvasH, center?}. -> { grid: {shape, ordnung, lage}, nodes, centroid, outerCorners }.
-function buildGrid(spec, view) {
-    const v = validateGridSpec(spec);
+// Lage 1: exactly the output of the three builders (no extra fields). Lage 2 (only with opts.allowLage2): the lage-1 nodes
+// unchanged (same ids, x, y, order), then the centres of the smallest meshes appended with the next ids; every node of a lage-2
+// grid also carries u, v (see buildGridNodes).
+function buildGrid(spec, view, opts) {
+    const v = validateGridSpec(spec, opts);
     if (!v.ok) throw new Error('buildGrid: ' + v.error);
-    const c = toLegacy(spec);
+    const c = toLegacy(spec, opts);
     const build = spec.shape === 'triangle' ? buildTriangleGrid : spec.shape === 'square' ? buildSquareGrid : buildHexGrid;
     const g = build(c, view.sizeFactor, view.canvasW, view.canvasH, view.center);
     const grid = { shape: spec.shape, ordnung: spec.ordnung, lage: spec.lage };
     if (spec.legacyC1 === true) grid.legacyC1 = true;
-    return { grid, nodes: g.nodes, centroid: g.centroid, outerCorners: g.outerCorners };
+    if (spec.lage !== 2) return { grid, nodes: g.nodes, centroid: g.centroid, outerCorners: g.outerCorners };
+    const uv = buildGridNodes(spec, opts);
+    const n1 = g.nodes.length;
+    if (uv.length < n1 || uv.some((p, i) => i < n1 && p.id !== g.nodes[i].id)) throw new Error('buildGrid: lage-1 node order does not match the lattice order');
+    const nodes = g.nodes.map((nd, i) => ({ id: nd.id, x: nd.x, y: nd.y, u: uv[i].u, v: uv[i].v }));
+    const extra = projectGridNodes(uv.slice(n1), { shape: spec.shape, ordnung: spec.ordnung, outerCorners: g.outerCorners, centroid: g.centroid });
+    extra.forEach(nd => nodes.push(nd));
+    return { grid, nodes, centroid: g.centroid, outerCorners: g.outerCorners };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Lage 2 (task 058, G3): the lattice of a grid in dimensionless coordinates u, v (units of ONE smallest mesh edge), pure - no
+// canvas, no pixels. Keys are integers scaled by LAGE2_DEN = 6 (u6 = 6u): the mesh centres sit at thirds (triangle meshes) or
+// halves (square meshes) of an edge, so equality is exact integer equality, never a rounded pixel comparison.
+//   triangle: P = A + u (B - A) / n + v (C - A) / n   (A, B, C = outerCorners[0..2]); 0 <= u, v, u + v <= n
+//   square:   P = c0 + u (c1 - c0) / n + v (c3 - c0) / n; 0 <= u, v <= n
+//   hex:      P = centre + u D2 + v D1, D_k = (outerCorners[k] - centre) / n (axial); |u|, |v|, |u + v| <= n
+// Lage 1 comes first, in exactly the order and with exactly the ids the lage-1 builders produce (1..N1); lage 2 appends the mesh
+// centres (up meshes, then down meshes; hex: scanned by q, r) with the following ids, duplicates dropped by their integer key.
+const LAGE2_DEN = 6;
+const _HEX_DIRS = [[-1, 1], [0, 1], [1, 0], [1, -1], [0, -1], [-1, 0]];   // axial direction of outerCorners[k] (k = 0..5)
+
+// -> [{ id, u6, v6, u, v }]; opts as validateGridSpec (lage 2 needs { allowLage2: true }).
+function buildGridNodes(spec, opts) {
+    const v = validateGridSpec(spec, opts);
+    if (!v.ok) throw new Error('buildGridNodes: ' + v.error);
+    const n = spec.ordnung, D = LAGE2_DEN, out = [], seen = new Set();
+    const add = (U, V) => {
+        const k = U + ',' + V;
+        if (seen.has(k)) return;
+        seen.add(k);
+        out.push({ id: out.length + 1, u6: U, v6: V, u: U / D, v: V / D });
+    };
+    // ---- lage 1, in the legacy builders' order
+    if (spec.shape === 'triangle') {
+        if (spec.legacyC1 === true) { add(0, 0); add(D, 0); add(0, D); }
+        else for (let i = 0; i <= n; i++) for (let j = 0; j <= i; j++) add((i - j) * D, j * D);
+    } else if (spec.shape === 'square') {
+        if (spec.legacyC1 === true) { add(0, 0); add(D, 0); add(D, D); add(0, D); }
+        else for (let i = 0; i <= n; i++) for (let j = 0; j <= n; j++) add(i * D, j * D);
+    } else {
+        for (let r = n; r >= 1; r--) {
+            for (let k = 0; k < 6; k++) add(r * _HEX_DIRS[k][0] * D, r * _HEX_DIRS[k][1] * D);
+            for (let k = 0; k < 6; k++) {
+                const a = _HEX_DIRS[k], b = _HEX_DIRS[(k + 1) % 6];
+                for (let seg = 1; seg <= r - 1; seg++) add((r * a[0] + seg * (b[0] - a[0])) * D, (r * a[1] + seg * (b[1] - a[1])) * D);
+            }
+        }
+        add(0, 0);
+    }
+    if (spec.lage !== 2) return out;
+    // ---- lage 2: the centres of the smallest meshes
+    if (spec.shape === 'triangle') {
+        for (let i = 0; i < n; i++) for (let j = 0; i + j < n; j++) add(i * D + 2, j * D + 2);            // up mesh (i,j),(i+1,j),(i,j+1): centre (i+1/3, j+1/3)
+        for (let i = 0; i < n; i++) for (let j = 0; i + j < n - 1; j++) add(i * D + 4, j * D + 4);        // down mesh (i+1,j),(i,j+1),(i+1,j+1): centre (i+2/3, j+2/3)
+    } else if (spec.shape === 'square') {
+        for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) add(i * D + 3, j * D + 3);
+    } else {
+        const inside = (a, b) => Math.abs(a) <= n && Math.abs(b) <= n && Math.abs(a + b) <= n;
+        for (let q = -n - 1; q <= n; q++) for (let r = -n - 1; r <= n; r++) {
+            if (inside(q, r) && inside(q + 1, r) && inside(q, r + 1)) add(q * D + 2, r * D + 2);
+            if (inside(q + 1, r) && inside(q, r + 1) && inside(q + 1, r + 1)) add(q * D + 4, r * D + 4);
+        }
+    }
+    return out;
+}
+
+// u, v -> x, y for a grid whose outer corners are given (any regular polygon of that shape: default, layerGrid, alt-net).
+// geometry = { shape, ordnung, outerCorners, centroid }; nodes as buildGridNodes returns them. Keeps id, u, v and adds x, y.
+function projectGridNodes(uvNodes, geometry) {
+    const oc = geometry.outerCorners, n = geometry.ordnung, ctr = geometry.centroid;
+    let base, e1, e2;
+    if (geometry.shape === 'triangle') { base = oc[0]; e1 = { x: (oc[1].x - oc[0].x) / n, y: (oc[1].y - oc[0].y) / n }; e2 = { x: (oc[2].x - oc[0].x) / n, y: (oc[2].y - oc[0].y) / n }; }
+    else if (geometry.shape === 'square') { base = oc[0]; e1 = { x: (oc[1].x - oc[0].x) / n, y: (oc[1].y - oc[0].y) / n }; e2 = { x: (oc[3].x - oc[0].x) / n, y: (oc[3].y - oc[0].y) / n }; }
+    else { base = ctr; e1 = { x: (oc[2].x - ctr.x) / n, y: (oc[2].y - ctr.y) / n }; e2 = { x: (oc[1].x - ctr.x) / n, y: (oc[1].y - ctr.y) / n }; }
+    return uvNodes.map(p => ({ id: p.id, x: base.x + p.u * e1.x + p.v * e2.x, y: base.y + p.u * e1.y + p.v * e2.y, u: p.u, v: p.v }));
 }

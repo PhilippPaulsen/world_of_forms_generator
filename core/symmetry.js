@@ -209,3 +209,42 @@ function drawConnectionWithSymmetry(p1, p2, center, id1, id2, mirrorAxisOverride
         }
     }
 }
+
+// ----------------- CANONICAL GRID FRAME (task 058, G3) ---------------------
+// The Orakel of tools/gitter/measure-name-rule.js works in a canonical frame: y UP, lengths in units of ONE smallest mesh edge,
+// angles counter-clockwise, centre at the origin; its corner 0 lies at 0 degrees (triangle: corners at 0/120/240; hex: corners at 0/60/...)
+// resp. 45 degrees (square: corners (+-n/2, +-n/2)). The canvas is y DOWN, in pixels, and its outerCorners start at a different corner
+// (triangle apex at the top, square top-left, hex top-left): this frame is the one place that converts between the two.
+// Pure (no p5 call), so it also runs headless. gridGeometry = { shape, ordnung, centroid, outerCorners } (any regular polygon of that
+// shape in any position, size, rotation and winding: default grid, layerGrid(), completeEdgeToRegularPolygon()).
+//   frame.toOracle(x, y)   canvas pixel -> { X, Y } in the Orakel frame
+//   frame.toCanvas(X, Y)   Orakel point  -> { x, y }
+// Canonical sequence of the Orakel corners that outerCorners[k] correspond to (angle of corner 0 in degrees, winding, circumradius):
+//   triangle 0 deg, counter-clockwise, n/sqrt(3); square 135 deg, clockwise, n/sqrt(2); hex 120 deg, clockwise, n.
+// The frame is ALWAYS an orientation-preserving similarity (rotation about the centre, uniform scale, y flip of the axes): a pair that runs
+// counter-clockwise on screen runs counter-clockwise in the Orakel frame. A grid whose outerCorners wind the other way round than the
+// canonical sequence (frame.mirrored = true, e.g. a vertically mirrored canvas or a polygon from completeEdgeToRegularPolygon with side -1)
+// still lands on the same Orakel point set - the node sets are invariant under the group, which contains reflections - only the node
+// that corner k stands for differs.
+function canonicalGridFrame(gridGeometry) {
+    const shape = gridGeometry.shape, n = gridGeometry.ordnung, oc = gridGeometry.outerCorners, c = gridGeometry.centroid;
+    const spec = { triangle: { a0: 0, wind: 1, R: n / Math.sqrt(3) }, square: { a0: 3 * Math.PI / 4, wind: -1, R: n / Math.sqrt(2) }, hex: { a0: 2 * Math.PI / 3, wind: -1, R: n } }[shape];
+    if (!spec) throw new Error('canonicalGridFrame: unknown shape: ' + String(shape));
+    const v0 = { x: oc[0].x - c.x, y: -(oc[0].y - c.y) }, v1 = { x: oc[1].x - c.x, y: -(oc[1].y - c.y) };   // y-up vectors
+    const scale = Math.hypot(v0.x, v0.y) / spec.R;
+    const phi0 = Math.atan2(v0.y, v0.x);
+    const wind = (v0.x * v1.y - v0.y * v1.x) > 0 ? 1 : -1;
+    const mirrored = wind !== spec.wind;
+    const rot = phi0 - spec.a0, cr = Math.cos(rot), sr = Math.sin(rot);
+    return {
+        shape, ordnung: n, scale, mirrored,
+        toCanvas(X, Y) {
+            const vx = cr * X - sr * Y, vy = sr * X + cr * Y;
+            return { x: c.x + scale * vx, y: c.y - scale * vy };
+        },
+        toOracle(x, y) {
+            const vx = (x - c.x) / scale, vy = -(y - c.y) / scale;
+            return { X: cr * vx + sr * vy, Y: -sr * vx + cr * vy };
+        },
+    };
+}
