@@ -49,6 +49,9 @@ These terms describe structures and operations, independent of any specific patt
 | Farborgel | Color Organ | proper name (the color tool), visible text only, US spelling; not in file, function or variable names |
 | Formorgel | Form Organ | proper name (the pattern catalog), visible text only, US spelling; not in file, function or variable names |
 | Netzorgel | Net Organ | proper name, visible text only, US spelling; not in file, function or variable names |
+| Atlas | Atlas | proper name / view of the Farborgel page (the 28 registers x 24 hues); "Atlasfarben" = atlas colors; not translated further |
+| Weißgleiche / Schwarzgleiche | isotints / Black (isotints) | UI text on the main page and the Farborgel page ("White (isotints)", "Black (isotints)"); core/color.js still says "Isotones (Schwarzgleiche)" - to be unified (type K) |
+| Wertgleich / Wertgleiche | Value (equal value) | UI text; "isovalent" stays only in code identifiers (relation keys), not in visible English |
 
 ---
 
