@@ -249,7 +249,14 @@ function toTileLocal(n, tileC, flip180, rotationDeg = 0) {
     return { x: tileC.x + x, y: tileC.y + y };
 }
 
+// Task 057 (G2): bumped by every rebuild of the base grid (rebuildGrid, setGrid, rebuildGridFromConstruction) so later consumers
+// can tell a stale derived value from a current one. Nothing reads it yet.
+let gridRevision = 0;
+
+// Legacy signature kept: shape + the global nodeCount (the derived bridge) -> GridSpec facade (core/forms.js).
 function rebuildGrid(shape) {
+    // built first: an invalid shape/nodeCount throws before any state is touched
+    const grid = buildGrid(fromLegacy(shape, nodeCount), { sizeFactor: shapeSizeFactor, canvasW, canvasH });
     connections = [];
     additionalLayers = [];
     baseFaceAssignments = new Map(); // keys are geometry of the OLD grid
@@ -258,12 +265,18 @@ function rebuildGrid(shape) {
     timeline = null; // Roadmap 1.8 Stage C: its keyframeLayerIds/playbackLayerIndex would dangle the same way activeLayer would
     baseNetAnimation = null; // the captured Start/End nets belong to the old grid setup (Shape Size decides what a Field is)
     altNetSeed = null; // Roadmap 1.2-C: an ordinary shape/order rebuild is never an alt-net construction
-    let grid;
-    if (shape === 'triangle') grid = buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH);
-    else if (shape === 'square') grid = buildSquareGrid(nodeCount, shapeSizeFactor, canvasW, canvasH);
-    else grid = buildHexGrid(nodeCount, shapeSizeFactor, canvasW, canvasH);
 
     nodes = grid.nodes; centroid = grid.centroid; outerCorners = grid.outerCorners;
+    gridRevision++;
+}
+
+// Task 057 (G2): the GridSpec entry point. Validates, sets currentShape and the derived nodeCount, rebuilds like rebuildGrid().
+function setGrid(spec) {
+    const v = validateGridSpec(spec);
+    if (!v.ok) throw new Error('setGrid: ' + v.error);
+    currentShape = spec.shape;
+    nodeCount = toLegacy(spec);
+    rebuildGrid(spec.shape);
 }
 
 // Roadmap 1.2-C: the "combiner" 1.2-A's own design deliberately held
@@ -310,4 +323,5 @@ function rebuildGridFromConstruction(p, q, n, side) {
     centroid = center;
     outerCorners = vertices;
     altNetSeed = { p, q, side, n };
+    gridRevision++;
 }

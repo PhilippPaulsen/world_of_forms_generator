@@ -244,7 +244,9 @@ console.log('\n== 6. source check ==');
     check('sketch.js: updateActiveLayerGrid() calls layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.nodeCount, layer.shape, canvasW, canvasH)',
         /function updateActiveLayerGrid[\s\S]{0,4000}?layerGrid\(outerCorners, centroid, currentShape, shapeSizeFactor, layer\.shapeSizeFactor, layer\.nodeCount, layer\.shape, canvasW, canvasH\)/.test(sk));
     check('sketch.js: the timeline playback layer is built with the same layerGrid() arguments', /layerGrid\(outerCorners, centroid, currentShape, shapeSizeFactor, playbackLayer\.shapeSizeFactor, playbackLayer\.nodeCount, playbackLayer\.shape, canvasW, canvasH\)/.test(sk));
-    check('core/state.js: rebuildGrid() builds with (nodeCount, shapeSizeFactor, canvasW, canvasH)', /buildTriangleGrid\(nodeCount, shapeSizeFactor, canvasW, canvasH\)/.test(st) && /buildSquareGrid\(nodeCount, shapeSizeFactor, canvasW, canvasH\)/.test(st) && /buildHexGrid\(nodeCount, shapeSizeFactor, canvasW, canvasH\)/.test(st));
+    const fm = F.read('core/forms.js');   // 057 (G2): rebuildGrid() builds through the GridSpec facade; the facade hands the same four arguments to the three builders
+    check('core/state.js: rebuildGrid() builds with (nodeCount, shapeSizeFactor, canvasW, canvasH) through buildGrid(fromLegacy(shape, nodeCount), { sizeFactor: shapeSizeFactor, canvasW, canvasH })', /buildGrid\(fromLegacy\(shape, nodeCount\), \{ sizeFactor: shapeSizeFactor, canvasW, canvasH \}\)/.test(st)
+        && /build = spec\.shape === 'triangle' \? buildTriangleGrid : spec\.shape === 'square' \? buildSquareGrid : buildHexGrid;\s*const g = build\(c, view\.sizeFactor, view\.canvasW, view\.canvasH, view\.center\)/.test(fm) && /const c = toLegacy\(spec\)/.test(fm));
 }
 
 // ---- 7. differential fuzz: accepted by validate AND plan => must build, resolve its palette and paint without throwing --------------------------
