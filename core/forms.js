@@ -461,3 +461,60 @@ function alignLayerToBase(baseShapeSizeFactor, baseNodeCount, layerCurrentShapeS
     }
     return { achievable: false };
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// GridSpec facade (task 057, G2). A GridSpec {shape, ordnung, lage} names a grid by its order (mesh divisions per edge for
+// triangle/square, rings for hex) and position (lage). This is a thin wrapper over the three Lage-1 builders above; their
+// output is unchanged. `nodeCount` (the legacy count c) stays as the derived internal bridge (core/tiling.js still reads it).
+//   hex:               ordnung = c,     toLegacy = ordnung
+//   triangle/square:   c >= 2 -> ordnung = c - 1, toLegacy = ordnung + 1
+//   triangle/square c = 1 is NOT invertible: it yields the same corner nodes as c = 2 but behaves differently (alignLayerToBase
+//   refuses it, the square net has E = 0 instead of 1). It stays a legacy special case, carried as the marker legacyC1:true on
+//   an ordnung-1 spec, so fromLegacy/toLegacy/buildGrid reproduce it exactly. Lage 2 is never derived from legacy and is
+//   rejected by validateGridSpec until a later task builds it.
+const GRID_SHAPES = ['triangle', 'square', 'hex'];
+
+// -> { ok: true } | { ok: false, error: <message> }. opts.enforceMax: also reject ordnung > maxOrdnungFor(shape, lage).
+function validateGridSpec(spec, opts) {
+    if (!spec || typeof spec !== 'object') return { ok: false, error: 'GridSpec must be an object' };
+    if (GRID_SHAPES.indexOf(spec.shape) < 0) return { ok: false, error: 'unknown shape: ' + String(spec.shape) };
+    if (spec.lage !== 1) return { ok: false, error: spec.lage === 2 ? 'lage 2 is not available yet' : 'invalid lage: ' + String(spec.lage) };
+    if (!Number.isInteger(spec.ordnung) || spec.ordnung < 1) return { ok: false, error: 'ordnung must be an integer >= 1, got ' + String(spec.ordnung) };
+    if (spec.legacyC1 !== undefined && !(spec.legacyC1 === true && spec.shape !== 'hex' && spec.ordnung === 1)) return { ok: false, error: 'legacyC1 is only valid for triangle/square at ordnung 1' };
+    if (opts && opts.enforceMax && spec.ordnung > maxOrdnungFor(spec.shape, spec.lage)) return { ok: false, error: 'ordnung ' + spec.ordnung + ' exceeds ' + maxOrdnungFor(spec.shape, spec.lage) + ' for ' + spec.shape };
+    return { ok: true };
+}
+
+// Largest admissible ordnung for shape/lage; 0 = none (unknown shape, or a lage that is not available).
+function maxOrdnungFor(shape, lage) {
+    if (GRID_SHAPES.indexOf(shape) < 0 || (lage === undefined ? 1 : lage) !== 1) return 0;
+    const c = maxNodeCountFor(shape);
+    return shape === 'hex' ? c : c - 1;
+}
+
+function fromLegacy(shape, c) {
+    if (GRID_SHAPES.indexOf(shape) < 0) throw new Error('fromLegacy: unknown shape: ' + String(shape));
+    if (!Number.isInteger(c) || c < 1) throw new Error('fromLegacy: nodeCount must be an integer >= 1, got ' + String(c));
+    if (shape === 'hex') return { shape, ordnung: c, lage: 1 };
+    if (c === 1) return { shape, ordnung: 1, lage: 1, legacyC1: true };
+    return { shape, ordnung: c - 1, lage: 1 };
+}
+
+function toLegacy(spec) {
+    const v = validateGridSpec(spec);
+    if (!v.ok) throw new Error('toLegacy: ' + v.error);
+    if (spec.shape === 'hex') return spec.ordnung;
+    return spec.legacyC1 === true ? 1 : spec.ordnung + 1;
+}
+
+// view = {sizeFactor, canvasW, canvasH, center?}. -> { grid: {shape, ordnung, lage}, nodes, centroid, outerCorners }.
+function buildGrid(spec, view) {
+    const v = validateGridSpec(spec);
+    if (!v.ok) throw new Error('buildGrid: ' + v.error);
+    const c = toLegacy(spec);
+    const build = spec.shape === 'triangle' ? buildTriangleGrid : spec.shape === 'square' ? buildSquareGrid : buildHexGrid;
+    const g = build(c, view.sizeFactor, view.canvasW, view.canvasH, view.center);
+    const grid = { shape: spec.shape, ordnung: spec.ordnung, lage: spec.lage };
+    if (spec.legacyC1 === true) grid.legacyC1 = true;
+    return { grid, nodes: g.nodes, centroid: g.centroid, outerCorners: g.outerCorners };
+}
