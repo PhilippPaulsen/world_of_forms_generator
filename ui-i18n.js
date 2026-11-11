@@ -152,6 +152,13 @@
     'reason.node.max.square': { de: 'Höchstens {n} Knoten beim Quadrat.', en: 'At most {n} nodes for the square.' },
     'reason.node.max.other': { de: 'Höchstens {n} Knoten bei Dreieck und Sechseck.', en: 'At most {n} nodes for triangle and hexagon.' },
     'note.size.field': { de: 'Feld-Netz: nur ungerade Größen, deshalb {from} \u2192 {to}.', en: 'Field net: odd sizes only, so {from} \u2192 {to}.' },
+    // ---- core (task 050): the two net-kind notes of sketch.js ({from} {size} {kept}) and the harmony-rule texts of core/color.js (the German is the label there, character for character) ----
+    'note.net.minNodes': { de: 'Sin und Tan brauchen mindestens 4 Knoten; Knoten von {from} auf 4 gesetzt.', en: 'Sin and Tan need at least 4 nodes; nodes changed from {from} to 4.' },
+    'note.net.fieldOddSize': { de: 'Feld braucht eine ungerade Größe (3, 5, 7, 9); {size} passt nicht, deshalb Einzelnetz. Die Größe bleibt {kept}.', en: 'Field needs an odd size (3, 5, 7, 9); {size} does not fit, so single net. The size stays {kept}.' },
+    'rule.isotint': { de: 'Isotints (Weißgleiche)', en: 'Isotints' },
+    'rule.isotone': { de: 'Isotones (Schwarzgleiche)', en: 'Black (isotints)' },
+    'rule.shadowSeries': { de: 'Shadow series (Schattenreihe)', en: 'Shadow series' },
+    'rule.axis.direction': { de: 'Richtung', en: 'Direction' },
     'layers.remove.title.n': { de: 'Ebene {n} entfernen?', en: 'Remove layer {n}?' },
     'layers.remove.lines.one': { de: 'Die eine Linie dieser Ebene geht verloren. Das lässt sich nicht rückgängig machen.', en: 'The one line of this layer will be lost. This cannot be undone.' },
     'layers.remove.lines.other': { de: 'Die {k} Linien dieser Ebene gehen verloren. Das lässt sich nicht rückgängig machen.', en: 'The {k} lines of this layer will be lost. This cannot be undone.' },
