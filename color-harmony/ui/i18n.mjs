@@ -62,7 +62,7 @@ const pairs = {
   chromaticComparison:['Chromatische Register · neue Anker · ca / ic / nl / pn','Chromatic registers · new anchors · ca / ic / nl / pn'],
   back:['Zum Instrument','Back to instrument'],
 
-  title:['Farborgel','Color organ'], subtitle:['Ein Instrument für Farbbeziehungen','An instrument for color relationships'],
+  title:['Farborgel','Color Organ'], subtitle:['Ein Instrument für Farbbeziehungen','An instrument for color relationships'],
   circle:['Kreis','Circle'], triangle:['Dreieck','Triangle'], register:['Register','Register'], harmony:['Harmonie','Harmony'],
   complementary:['Gegenfarben','Complementary'], three:['Dreier','Three-color group'], four:['Vierer','Four-color group'],
   triad:['Triade','Triad'], tetrad:['Tetrade','Tetrad'],

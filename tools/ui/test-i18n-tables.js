@@ -390,6 +390,9 @@ console.log('== the organ names (task 046): visible English text says Color Orga
     check('rail.farborgel / rail.formorgel / more.farbe.button: English uses Color Organ / Form Organ, German keeps the old name',
         /^Color Organ \(/.test(D['rail.farborgel'].en) && /^Form Organ \(/.test(D['rail.formorgel'].en) && /Color Organ/.test(D['more.farbe.button'].en) &&
         /^Farborgel/.test(D['rail.farborgel'].de) && /^Formorgel/.test(D['rail.formorgel'].de) && /Farborgel/.test(D['more.farbe.button'].de));
+    // the Farborgel page (color-harmony/ui, its own mechanism i18n.mjs): title pair, and no other spelling of the name
+    const cm = fs.readFileSync(process.env.COLOR_HARMONY_I18N_MJS || path.join(ROOT, 'color-harmony', 'ui', 'i18n.mjs'), 'utf8');
+    check('color-harmony/ui/i18n.mjs: title is Farborgel / Color Organ, and no "Color organ" is left', cm.indexOf("title:['Farborgel','Color Organ']") >= 0 && !/Color organ|colour organ/i.test(cm.replace(/Color Organ/g, '')), '');
 })();
 
 console.log('\n' + (failures ? 'FAIL' : 'PASS') + ': ' + (checks - failures) + '/' + checks + ' checks passed');
