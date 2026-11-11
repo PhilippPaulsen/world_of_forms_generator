@@ -132,7 +132,7 @@ console.log('\n== 5. Farborgel readiness signal ==');
     check('locked: the 7 harmony buttons and the dropdown (any sheet)', /UI\.setDisabled\(harmonyBtns\[type\], loadingAny\)/.test(farbeJs) && /harmonySelect\.disabled = !!loadingAny/.test(farbeJs));
     check('locked on a regenerable sheet: the strategy icons, the anchor steppers (also their compute(), which the arrow keys use) and the anchor points', /UI\.setDisabled\(r, loadingSheet\)/.test(farbeJs) && /UI\.setDisabled\(b, loadingSheet\)/.test(farbeJs) && count(farbeJs, 'const lock = moduleWhy(true);') === 2 && /UI\.setDisabled\(r, moduleWhy\(true\)\)/.test(farbeJs));
     check('NOT locked by it: Reset Color and the Kreis/Dreieck triggers', /UI\.setDisabled\(resetBtn, why\)/.test(farbeJs) && /UI\.setDisabled\(b, why\); \}\);\n    Object\.keys\(harmonyBtns\)/.test(farbeJs));
-    check('the reason text exists under its key', /'reason\.farborgel\.loading': 'Farborgel lädt noch\.'/.test(farbeJs));
+    check('the reason text exists under its key', /get 'reason\.farborgel\.loading'\(\) \{ return tr\('farbe\.reason\.organLoading', null, 'Farborgel lädt noch\.'\); \}/.test(farbeJs));
 }
 
 // ---- 6. the autosave writer (P2) ----------------------------------------------------------------------------------------------------------

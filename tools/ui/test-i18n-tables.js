@@ -1,13 +1,13 @@
-// Guard for the plain table texts that go through the dictionary (tasks 044 and 045): ui-form.js, ui-layer.js, ui-layers.js, ui-net.js, ui-timeline.js. The German stays CHARACTER-EQUAL to the old tables
+// Guard for the plain table texts that go through the dictionary (tasks 044 to 046): ui-form.js, ui-layer.js, ui-layers.js, ui-net.js, ui-timeline.js. The German stays CHARACTER-EQUAL to the old tables
 // (OLD below = the tables as they were before task 044; a function entry for n = 0, 1, 2, 5), with the dictionary (German), after a language switch to English (a getter, not a frozen string) and
 // without the dictionary (the fallback written in the script); the English reads as specified.
 //   node tools/ui/test-i18n-tables.js
-//   UI_I18N_JS=... UI_FORM_JS=... UI_LAYER_JS=... UI_LAYERS_JS=... UI_NET_JS=... UI_TIMELINE_JS=... node tools/ui/test-i18n-tables.js      (sabotage runs)
+//   UI_I18N_JS=... UI_FORM_JS=... UI_LAYER_JS=... UI_LAYERS_JS=... UI_NET_JS=... UI_TIMELINE_JS=... UI_RAIL_JS=... UI_FARBE_JS=... node tools/ui/test-i18n-tables.js      (sabotage runs)
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
-const ENVS = { 'ui-form.js': 'UI_FORM_JS', 'ui-layer.js': 'UI_LAYER_JS', 'ui-layers.js': 'UI_LAYERS_JS', 'ui-net.js': 'UI_NET_JS', 'ui-timeline.js': 'UI_TIMELINE_JS' };
+const ENVS = { 'ui-form.js': 'UI_FORM_JS', 'ui-layer.js': 'UI_LAYER_JS', 'ui-layers.js': 'UI_LAYERS_JS', 'ui-net.js': 'UI_NET_JS', 'ui-timeline.js': 'UI_TIMELINE_JS', 'ui-rail.js': 'UI_RAIL_JS', 'ui-farbe.js': 'UI_FARBE_JS' };
 const src = (env, rel) => fs.readFileSync(process.env[env] || path.join(ROOT, rel), 'utf8');
 let failures = 0, checks = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
@@ -183,6 +183,69 @@ const OLD = {
   "timeline.need2": "Mindestens zwei Keyframes nötig",
   "timeline.confirm.cancel": "Abbrechen",
   "timeline.confirm.remove": "Entfernen"
+ },
+ "ui-rail.js": {
+  "more.state.on": "an",
+  "more.state.off": "aus",
+  "more.hint": "Symbol antippen"
+ },
+ "ui-farbe.js": {
+  "reason.fill.off": "Fläche füllen einschalten",
+  "reason.farborgel.loading": "Farborgel lädt noch.",
+  "anchor.hue.title": [
+   [
+    0,
+    "Farbton 0"
+   ],
+   [
+    1,
+    "Farbton 1"
+   ],
+   [
+    2,
+    "Farbton 2"
+   ],
+   [
+    5,
+    "Farbton 5"
+   ]
+  ],
+  "anchor.hue.context": [
+   [
+    0,
+    "für Farbton 0/24"
+   ],
+   [
+    1,
+    "für Farbton 1/24"
+   ],
+   [
+    2,
+    "für Farbton 2/24"
+   ],
+   [
+    5,
+    "für Farbton 5/24"
+   ]
+  ],
+  "organ.error": [
+   [
+    0,
+    "Farborgel: 0"
+   ],
+   [
+    1,
+    "Farborgel: 1"
+   ],
+   [
+    2,
+    "Farborgel: 2"
+   ],
+   [
+    5,
+    "Farborgel: 5"
+   ]
+  ]
  }
 };
 const EN = {
@@ -254,6 +317,18 @@ const EN = {
   "timeline.need2": "At least two keyframes needed",
   "timeline.confirm.cancel": "Cancel",
   "timeline.confirm.remove": "Remove"
+ },
+ "ui-rail.js": {
+  "more.state.on": "on",
+  "more.state.off": "off",
+  "more.hint": "Tap an icon"
+ },
+ "ui-farbe.js": {
+  "reason.fill.off": "Turn on face fill",
+  "reason.farborgel.loading": "Color Organ is still loading.",
+  "anchor.hue.title": "Hue 2",
+  "anchor.hue.context": "for hue 2/24",
+  "organ.error": "Color Organ: 2"
  }
 };   // a function entry is read at n = 2
 
@@ -304,6 +379,17 @@ Object.keys(EN).forEach(file => {
     const T = vm.runInContext('(function (window, root) {\n' + text.slice(a, b + 5) + '\nreturn T;\n})(this, this)', ctx);
     const de = T['reason.focus.min']; ctx.uiI18n.setLang('en'); const en = T['reason.focus.min']; ctx.uiI18n.setLang('de');
     check('ui-net.js: one T object gives German, then English after setLang, then German again', de === OLD['ui-net.js']['reason.focus.min'] && en === 'Smallest focus: \u22121.0.' && T['reason.focus.min'] === de, de + ' / ' + en);
+})();
+
+console.log('== the organ names (task 046): visible English text says Color Organ / Form Organ / Net Organ ==');
+(function () {
+    const ctx = vm.createContext({ console }); ctx.window = ctx;
+    vm.runInContext(src('UI_I18N_JS', 'ui-i18n.js'), ctx, { filename: 'ui-i18n.js' });
+    const D = ctx.uiI18n.DICT, keys = Object.keys(D);
+    check('no English dictionary text still says Farborgel, Formorgel or Netzorgel', keys.every(k => !/Farborgel|Formorgel|Netzorgel/.test(D[k].en)), keys.filter(k => /Farborgel|Formorgel|Netzorgel/.test(D[k].en)).join(', '));
+    check('rail.farborgel / rail.formorgel / more.farbe.button: English uses Color Organ / Form Organ, German keeps the old name',
+        /^Color Organ \(/.test(D['rail.farborgel'].en) && /^Form Organ \(/.test(D['rail.formorgel'].en) && /Color Organ/.test(D['more.farbe.button'].en) &&
+        /^Farborgel/.test(D['rail.farborgel'].de) && /^Formorgel/.test(D['rail.formorgel'].de) && /Farborgel/.test(D['more.farbe.button'].de));
 })();
 
 console.log('\n' + (failures ? 'FAIL' : 'PASS') + ': ' + (checks - failures) + '/' + checks + ' checks passed');
