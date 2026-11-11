@@ -661,10 +661,10 @@ function setup() {
                 ui.axes = 'both';
                 const R = shapeSizeFactor;
                 if (netDomainEffective({ domain: 'field' }, R).ignored === null) setDomain('field');
-                else { setDomain('single'); notes.push(`Feld braucht eine ungerade Größe (3, 5, 7, 9); ${R} passt nicht, deshalb Einzelnetz. Die Größe bleibt ${R}.`); }
+                else { setDomain('single'); notes.push(window.UI && UI.t ? UI.t('note.net.fieldOddSize', { size: R, kept: R }) : `Feld braucht eine ungerade Größe (3, 5, 7, 9); ${R} passt nicht, deshalb Einzelnetz. Die Größe bleibt ${R}.`); }
             }
             if ((kind === 'sinus' || kind === 'tangens') && nodeCount < 4) {
-                notes.push(`Sin und Tan brauchen mindestens 4 Knoten; Knoten von ${nodeCount} auf 4 gesetzt.`);
+                notes.push(window.UI && UI.t ? UI.t('note.net.minNodes', { from: nodeCount }) : `Sin und Tan brauchen mindestens 4 Knoten; Knoten von ${nodeCount} auf 4 gesetzt.`);
                 if (nodeInput) { nodeInput.value(4); nodeInput.elt.dispatchEvent(new Event('input', { bubbles: true })); }
             }
             if (notes.length && window.UI) UI.toast(notes.join(' '), 6000);
@@ -4566,6 +4566,8 @@ function renderFaceColorsPanel() {
     const unassignedEl = document.getElementById('face-colors-unassigned');
     const unassignedText = document.getElementById('face-colors-unassigned-text');
     if (!statusEl || !ruleSel || !axesEl || !noteEl || !listEl || !resetBtn || !unassignedEl || !unassignedText) return;
+    // task 050: a rule or axis that carries an i18n key (core/color.js, data only) is shown through the dictionary; the label in core stays the German/fallback text
+    const ruleText = o => (o.i18n && window.UI && UI.t ? UI.t(o.i18n) : o.label);
     unassignedEl.hidden = true;
     const kfNote = document.getElementById('face-colors-timeline-note');
     if (kfNote) kfNote.hidden = !isTimelineKeyframe(sheet);
@@ -4621,7 +4623,7 @@ function renderFaceColorsPanel() {
     listHarmonyRules().forEach(r => {
         const o = document.createElement('option');
         o.value = r.id;
-        o.textContent = r.label + (r.verified === false ? ' – unverified' : '');
+        o.textContent = ruleText(r) + (r.verified === false ? ' – unverified' : '');
         ruleSel.appendChild(o);
     });
     ruleSel.value = palette.ruleId || '';
@@ -4670,12 +4672,13 @@ function renderFaceColorsPanel() {
             row.className = 'fc-axis';
             const lab = document.createElement('span');
             lab.className = 'fc-axis-label';
-            lab.textContent = axis.label;
+            const axisLabel = ruleText(rule.params.find(q => q.id === axis.id) || axis);
+            lab.textContent = axisLabel;
             const val = document.createElement('span');
             val.className = 'fc-axis-value';
             val.textContent = faceColorsAxisValue(rule, axis, palette.idx[a]);
             row.appendChild(lab);
-            row.appendChild(faceColorsStepper(palette.idx[a], axis.count, `Step ${axis.label}`, delta => {
+            row.appendChild(faceColorsStepper(palette.idx[a], axis.count, `Step ${axisLabel}`, delta => {
                 palette.idx[a] = (palette.idx[a] + delta + axis.count) % axis.count;
                 applyFaceColorsPalette();
             }));
