@@ -248,3 +248,44 @@ function canonicalGridFrame(gridGeometry) {
         },
     };
 }
+
+// ----------------- MAIN GROUP SPEC (task 059, G4) ---------------------------
+// The main groups of the naming rule (reports/052 part A, measured in tools/gitter/measure-name-rule.js): 3* (triangle, D3), 4* (square, D4),
+// 6* (hexagon, D6): K rotations and K mirror lines, 2K sectors ("Teildreiecke") of width w = pi / K, in the CANONICAL frame of
+// canonicalGridFrame() (y up, lengths in smallest mesh edges, counter-clockwise). alpha0 = angle of the clockwise edge of the shaded
+// sector S0 (a corner axis: the "C ray"); its counter-clockwise edge (alpha0 + w) is a side-middle axis (the "M ray").
+// All names are prefixed _MG_ / mainGroup: this file shares the global scope with every other core script.
+const _MG_TAU = 2 * Math.PI, _MG_EPS = 1e-9;
+const _MG_SPECS = {
+    triangle: { name: '3*', K: 3, alpha0: 0, modes: ['rotation_reflection3', 'rotation_reflection6'] },                  // corners at 0, 120, 240 degrees
+    square: { name: '4*', K: 4, alpha0: Math.PI / 4, modes: ['rotation_reflection3', 'rotation_reflection6'] },          // axis-parallel: corners (C rays) at 45 degrees
+    hex: { name: '6*', K: 6, alpha0: 0, modes: ['rotation_reflection6'] },                                                // corners at 0, 60, ... degrees
+};
+// -> { shape, name, K, alpha0, w, modes } (modes = the symmetryMode values that ARE the full main group on that shape); throws for an unknown shape
+function mainGroupSpec(shape) {
+    const s = Object.prototype.hasOwnProperty.call(_MG_SPECS, shape) ? _MG_SPECS[shape] : null;
+    if (!s) throw new Error('mainGroupSpec: unknown shape: ' + String(shape));
+    return { shape, name: s.name, K: s.K, alpha0: s.alpha0, w: Math.PI / s.K, modes: s.modes.slice() };
+}
+// true when symmetryMode is the whole main group of the shape (a reduced mode - rotation only, a mirror only, hex 3-fold - has no systematic name)
+function isMainGroupMode(shape, symmetryMode) {
+    return Object.prototype.hasOwnProperty.call(_MG_SPECS, shape) && _MG_SPECS[shape].modes.indexOf(symmetryMode) >= 0;
+}
+// the 2K group elements acting on canonical points: [{ mirror, f(x, y) -> [x', y'] }], rotations first, then the mirrors
+function mainGroupElements(shape) {
+    const { K, alpha0 } = mainGroupSpec(shape), els = [];
+    for (let k = 0; k < K; k++) { const c = Math.cos(_MG_TAU * k / K), s = Math.sin(_MG_TAU * k / K); els.push({ mirror: false, f: (x, y) => [c * x - s * y, s * x + c * y] }); }
+    for (let j = 0; j < K; j++) { const p = alpha0 + j * Math.PI / K, c = Math.cos(2 * p), s = Math.sin(2 * p); els.push({ mirror: true, f: (x, y) => [c * x + s * y, s * x - c * y] }); }
+    return els;
+}
+// the representative of (x, y) in S0: { r, t } (t = angle from the C ray, 0..w)
+function mainGroupFold(shape, x, y) {
+    const { K, alpha0, w } = mainGroupSpec(shape), r = Math.hypot(x, y);
+    if (r < _MG_EPS) return { r: 0, t: 0 };
+    let t = (((Math.atan2(y, x) - alpha0) % _MG_TAU) + _MG_TAU) % _MG_TAU; t = t % (2 * w);
+    if (t > w) t = 2 * w - t;
+    if (t < 1e-12) t = 0;
+    return { r, t };
+}
+// distance of a side from the centre, in smallest mesh edges, for a grid of the given ordnung
+function mainGroupApothem(shape, n) { return shape === 'triangle' ? n / (2 * Math.sqrt(3)) : shape === 'square' ? n / 2 : n * Math.sqrt(3) / 2; }
