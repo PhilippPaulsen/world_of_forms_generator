@@ -52,7 +52,13 @@
   // aria-pressed; none for an action such as "Neu anfangen") and the name (the aria-label) of the last icon that got a pointerdown (mouse, pen or touch: iOS Safari does not focus a
   // button on a tap), a focusin (keyboard) or a mouse pointerover, and is refreshed on every tick, so a tap that toggles the state shows the new state. Nothing depends on hover
   // or focus alone. The words are keyed (the dictionary comes in a later phase).
-  const T = { 'more.state.on': 'an', 'more.state.off': 'aus', 'more.hint': 'Symbol antippen' };
+  // a text of the bilingual dictionary (ui-i18n.js) in the current language, else the German text written here
+  const tr = function (key, params, fallback) { const i = window.uiI18n; return i && i.has(key) ? i.t(key, params) : fallback; };
+  const T = {
+    get 'more.state.on'() { return tr('more.state.on', null, 'an'); },
+    get 'more.state.off'() { return tr('more.state.off', null, 'aus'); },
+    get 'more.hint'() { return tr('layers.hint', null, 'Symbol antippen'); },
+  };
   // Which buttons of the second row close the sheet on the mousedown and which on the click. Clear, Paste Pattern and Download are wired by p5 on the mousedown (their handlers run on it), so a click may never
   // come: close on the mousedown. Reset Color (Farbe) is wired on the CLICK (sketch.js addEventListener('click')): closing the sheet on its mousedown would cancel the click and the button would do nothing, so it
   // closes on the click like Info. Nodes is wired on the mousedown too (p5) and its handler REPLACES the button's svg (nodeBtn.html(...) in updateNodeToggleIcon): the element the mousedown hit is gone when the finger

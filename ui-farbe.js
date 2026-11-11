@@ -31,7 +31,15 @@
  * The German texts below are the reasons for now; the dictionary (data-i18n keys) comes in a later phase.
  */
 (function () {
-  const T = { 'reason.fill.off': 'Fläche füllen einschalten', 'reason.farborgel.loading': 'Farborgel lädt noch.' };
+  // a text of the bilingual dictionary (ui-i18n.js) in the current language, else the German text written here
+  const tr = function (key, params, fallback) { const i = window.uiI18n; return i && i.has(key) ? i.t(key, params) : fallback; };
+  const T = {
+    get 'reason.fill.off'() { return tr('farbe.reason.fillOff', null, 'Fläche füllen einschalten'); },
+    get 'reason.farborgel.loading'() { return tr('farbe.reason.organLoading', null, 'Farborgel lädt noch.'); },
+    'anchor.hue.title': function (n) { return tr('farbe.anchor.hueTitle', { n: n }, 'Farbton ' + n); },
+    'anchor.hue.context': function (n) { return tr('farbe.anchor.hueContext', { n: n }, 'für Farbton ' + n + '/24'); },
+    'organ.error': function (message) { return tr('farbe.organ.error', { message: message }, 'Farborgel: ' + message); },
+  };
   const $ = function (s) { return document.querySelector(s); };
 
   // The Farborgel module (core/farborgel-selection.mjs) arrives AFTER setup() - it fetches its engine - while a restored session can
@@ -261,7 +269,7 @@
     hueRingPoints(120, 120, 95).forEach(function (p) {
       const g = anchorPoint(p.x, p.y, String(p.hueIndex), 15, 11);
       g.dataset.hueIndex = String(p.hueIndex);
-      const title = svgEl('title'); title.textContent = 'Farbton ' + p.hueIndex; g.appendChild(title);
+      const title = svgEl('title'); title.textContent = T['anchor.hue.title'](p.hueIndex); g.appendChild(title);
       anchorKreisSvg.appendChild(g);
     });
     anchorKreisGroup = UI.radiogroup(anchorKreisSvg, function (r) {
@@ -301,7 +309,7 @@
     if (!anchorKreisGroup) return;
     const a = anchorFor(activeLayer);
 
-    anchorHueContextDreieck.textContent = a ? 'für Farbton ' + a.hueIndex + '/24' : '';
+    anchorHueContextDreieck.textContent = a ? T['anchor.hue.context'](a.hueIndex) : '';
 
     if (!a) { anchorKreisGroup.set(null); anchorDreieckGroup.set(null); return; }
 
@@ -374,7 +382,7 @@
     if (!a) return;
     let selection;
     try { selection = window.farborgelBuildHarmonySelection(a, type); }
-    catch (e) { UI.toast('Farborgel: ' + e.message); return; }
+    catch (e) { UI.toast(T['organ.error'](e.message)); return; }
     applySelection(selection, type);
   }
   // P3: the selection currently behind a Farborgel-colored sheet - the stored one for a 'custom' sheet (it has no
