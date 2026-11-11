@@ -204,8 +204,9 @@ console.log('\n== 6. markup, i18n, position ==');
     const need = (n) => n * S_.target + (n - 1) * S_.rowGap;
     check(`phone width 390: the rows hold 6 keys (${need(6)}px of ${avail}px); a 7th key makes ${need(7)}px > ${avail}px, so Lines goes to Mehr`, need(6) <= avail && need(7) > avail && ['form', 'netz'].every(t => keys(t) === 6), `${need(6)} / ${need(7)} / ${avail}`);
     check('the rail mirrors aria-pressed for the new toggle (ui-rail.js TOGGLES)', /const TOGGLES = \[[^\]]*'btn-toggle-lines'/.test(read('ui-rail.js')));
+    // task 050 changed sketch.js on purpose (two notes through UI.t, commit 80deee88): sketch.js is pinned against that commit, the other files still against BASE
     // task 031 changes core/facecolor.js on purpose (the playback colours); this check guards what task 024 itself must leave alone, so that file is no longer in the list
-  check('sketch.js is untouched by the task (it is pinned by the morph tests) and gallery.html still loads without core/state.js: the gallery shim defines lineStyle', execSync(`git diff --stat ${BASE} -- sketch.js core/tiling.js core/faces.js tools/morph/off-path-golden.json`, { cwd: ROOT }).toString().trim() === '' && /var lineStyle = \{ visible: true, weight: 2 \}/.test(read('gallery-render.js')));
+  check('sketch.js is untouched by the task (it is pinned by the morph tests) and gallery.html still loads without core/state.js: the gallery shim defines lineStyle', execSync(`git diff --stat ${BASE} -- core/tiling.js core/faces.js tools/morph/off-path-golden.json`, { cwd: ROOT }).toString().trim() === '' && execSync('git diff --stat 80deee88 -- sketch.js', { cwd: ROOT }).toString().trim() === '' && /var lineStyle = \{ visible: true, weight: 2 \}/.test(read('gallery-render.js')));
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });
