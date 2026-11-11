@@ -1,4 +1,4 @@
-// Guard for the plain table texts that go through the dictionary (task 044): ui-form.js, ui-layer.js, ui-layers.js, ui-net.js, ui-timeline.js. The German stays CHARACTER-EQUAL to the old tables
+// Guard for the plain table texts that go through the dictionary (tasks 044 and 045): ui-form.js, ui-layer.js, ui-layers.js, ui-net.js, ui-timeline.js. The German stays CHARACTER-EQUAL to the old tables
 // (OLD below = the tables as they were before task 044; a function entry for n = 0, 1, 2, 5), with the dictionary (German), after a language switch to English (a getter, not a frozen string) and
 // without the dictionary (the fallback written in the script); the English reads as specified.
 //   node tools/ui/test-i18n-tables.js
@@ -90,7 +90,55 @@ const OLD = {
     "Ebene 5 entfernen"
    ]
   ],
-  "layers.add": "Ebene hinzufügen"
+  "layers.add": "Ebene hinzufügen",
+  "layers.table": "Ebenen",
+  "layers.rail": "Ebenen",
+  "layers.strip": "Ebenen",
+  "layers.eye.none": "Ebene sichtbar",
+  "layers.base": "Basis",
+  "layers.layer": [
+   [
+    0,
+    "Ebene 0"
+   ],
+   [
+    1,
+    "Ebene 1"
+   ],
+   [
+    2,
+    "Ebene 2"
+   ],
+   [
+    5,
+    "Ebene 5"
+   ]
+  ],
+  "layers.chip.active": "aktiv",
+  "layers.eye.name": [
+   [
+    0,
+    "Ebene 0 sichtbar"
+   ],
+   [
+    1,
+    "Ebene 1 sichtbar"
+   ],
+   [
+    2,
+    "Ebene 2 sichtbar"
+   ],
+   [
+    5,
+    "Ebene 5 sichtbar"
+   ]
+  ],
+  "layers.eye.on": "sichtbar",
+  "layers.eye.off": "ausgeblendet",
+  "layers.eye.kf.off": "Keyframe, ausgeblendet",
+  "layers.more.open": "offen",
+  "layers.more.closed": "geschlossen",
+  "layers.hint": "Symbol antippen"
  },
  "ui-net.js": {
   "reason.net.notApplicable": "Netz gilt für das Quadrat, Basis-Ebene.",
@@ -128,7 +176,13 @@ const OLD = {
     5,
     "Ebene 5 aus der Zeitleiste entfernen?"
    ]
-  ]
+  ],
+  "timeline.strip": "Zeitleiste",
+  "timeline.play": "Abspielen",
+  "timeline.pause": "Pause",
+  "timeline.need2": "Mindestens zwei Keyframes nötig",
+  "timeline.confirm.cancel": "Abbrechen",
+  "timeline.confirm.remove": "Entfernen"
  }
 };
 const EN = {
@@ -158,7 +212,21 @@ const EN = {
   "layers.chip.inactive": "not active",
   "layers.eye.kf.on": "Keyframe, also visible",
   "layers.x.name": "Remove layer 2",
-  "layers.add": "Add layer"
+  "layers.add": "Add layer",
+  "layers.table": "Layers",
+  "layers.rail": "Layers",
+  "layers.strip": "Layers",
+  "layers.eye.none": "Layer visible",
+  "layers.base": "Base",
+  "layers.layer": "Layer 2",
+  "layers.chip.active": "active",
+  "layers.eye.name": "Layer 2 visible",
+  "layers.eye.on": "visible",
+  "layers.eye.off": "hidden",
+  "layers.eye.kf.off": "Keyframe, not additionally visible",
+  "layers.more.open": "open",
+  "layers.more.closed": "closed",
+  "layers.hint": "Tap an icon"
  },
  "ui-net.js": {
   "reason.net.notApplicable": "The net applies to the square, base layer.",
@@ -179,7 +247,13 @@ const EN = {
   "timeline.net.still": "the net does not move with the timeline",
   "timeline.clear.title": "Remove timeline?",
   "timeline.clear.text": "All keyframes, line pairings and net snapshots of the timeline will be discarded. The layers themselves are kept. This cannot be undone.",
-  "timeline.dia.title": "Remove layer 2 from timeline?"
+  "timeline.dia.title": "Remove layer 2 from timeline?",
+  "timeline.strip": "Timeline",
+  "timeline.play": "Play",
+  "timeline.pause": "Pause",
+  "timeline.need2": "At least two keyframes needed",
+  "timeline.confirm.cancel": "Cancel",
+  "timeline.confirm.remove": "Remove"
  }
 };   // a function entry is read at n = 2
 

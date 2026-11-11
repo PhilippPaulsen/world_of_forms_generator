@@ -1,0 +1,10 @@
+# Auftrag 045 — i18n Rest der Tabellen
+
+**Typ U, Prüfstufe L2.** Regeln: docs/agent-rules.md. Lege zuerst (VOR jeder Arbeit) tasks/045-i18n-rest.md mit diesem Text an. Bericht: reports/045.md (höchstens 30 Zeilen). Branch: task/045-i18n-rest von main (nach Merge von 044). Kein Merge, kein Push. Plan in 5 Zeilen vorab.
+
+**Aufgabe:** Die noch rein deutschen Tabelleneinträge (reports/044.md, "Nicht geliefert") auf ui-i18n.js umstellen, Muster wie 043/044 (tr(key, params, fallback), Getter, deutscher Text als Fallback, Deutsch zeichengleich, Test wie test-i18n-tables.js erweitern): ui-layers.js: layers.base, layers.layer(n), layers.chip.active, layers.eye.none/.name(n)/.on/.off/.kf.off, layers.more.open/.closed, layers.hint; ui-timeline.js: timeline.play, timeline.pause; ferner die vorhandenen, aber ungenutzten DICT-Schlüssel timeline.strip, need2, confirm.* an die Tabelle anbinden. Dazu die Export-Reste layers.eye.none "Ebene sichtbar" und das Fragment "sichtbar".
+EN: layers.base: Base | layers.layer: Layer {n} | layers.chip.active: active | layers.eye.none: Layer visible | layers.eye.name: Layer {n} visible | layers.eye.on: visible | layers.eye.off: hidden | layers.eye.kf.off: Keyframe, not additionally visible | layers.more.open: More (open) | layers.more.closed: More (closed) | timeline.play: Play | timeline.pause: Pause | layers.hint: sinngemäß aus dem deutschen Quelltext übersetzen (Terminologie docs/terminology.md: Netz = net, Knoten = node, Ebene = layer). Der deutsche Quelltext gilt; bei Abweichung von meinen Stichworten en anpassen und im Bericht listen. Phone-Tasten: maxLen 40 beachten.
+
+**Nicht ändern:** core/*, sketch.js, ui-farbe.js, Baselines, off-path-golden.json. Pins nur mit eigenem Commit und Begründung. ?v= bumpen (z. B. 20261110ihte).
+
+**Prüfung:** bash tools/proof.sh L2 045; test-i18n grün; Deutsch-Gleichheitstest; Export neu erzeugen: offene Einträge in ui-*.js = 0 (sonst listen). Sabotage (2): en leer; Schlüssel vertauscht. Bericht: Hashes, Zählung, abweichende de-Texte, /usage vorher/nachher.
