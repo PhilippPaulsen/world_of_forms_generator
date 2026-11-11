@@ -2,66 +2,32 @@
  "generator": "tools/i18n/export-untranslated.js",
  "note": "Heuristic export (task 040): review before use. Placeholders ({n}, ${...}) and composed strings (composed: true) must be translated whole, with the same placeholders. needsCode: the English needs a code change (hard string in JS), not only an entry in ui-i18n.js.",
  "summary": {
-  "total": 12,
+  "total": 6,
   "byGroup": {
-   "main": 12
+   "main": 6
   },
   "byFile": {
-   "sketch.js": 2,
    "ui-farbe.js": 4,
    "ui-layers.js": 1,
-   "ui-timeline.js": 1,
-   "core/color.js": 4
+   "ui-timeline.js": 1
   },
   "byKind": {
-   "other": 6,
    "dialog": 1,
-   "status": 1,
-   "text": 4
+   "other": 4,
+   "status": 1
   },
-  "uniqueTexts": 12,
+  "uniqueTexts": 6,
   "duplicateEntries": 0,
-  "withPlaceholders": 3,
+  "withPlaceholders": 1,
   "composed": 3,
-  "needsCodeChange": 12,
+  "needsCodeChange": 6,
   "markupOnly": 0,
   "existingKey": 0,
-  "coveredFallbackLiterals": 160,
+  "coveredFallbackLiterals": 166,
   "tableKeyNotInDict": 3,
   "viaI18nNearby": 0
  },
  "entries": [
-  {
-   "id": "sketch.feld-braucht-eine-ungerade-g",
-   "de": "Feld braucht eine ungerade Größe (3, 5, 7, 9); {expr} passt nicht, deshalb Einzelnetz. Die Größe bleibt {expr}.",
-   "file": "sketch.js",
-   "line": 664,
-   "group": "main",
-   "function": "applyNetKindChoice",
-   "kind": "other",
-   "context": "string in code, visibility to check in sketch.js; placeholders: {expr} {expr}",
-   "placeholders": [
-    "{expr}",
-    "{expr}"
-   ],
-   "needsCode": true,
-   "maxLen": null
-  },
-  {
-   "id": "sketch.sin-und-tan-brauchen-mindest",
-   "de": "Sin und Tan brauchen mindestens 4 Knoten; Knoten von {expr} auf 4 gesetzt.",
-   "file": "sketch.js",
-   "line": 667,
-   "group": "main",
-   "function": "applyNetKindChoice",
-   "kind": "other",
-   "context": "string in code, visibility to check in sketch.js; placeholders: {expr}",
-   "placeholders": [
-    "{expr}"
-   ],
-   "needsCode": true,
-   "maxLen": null
-  },
   {
    "id": "anchor.hue.title",
    "de": "Farbton",
@@ -141,54 +107,6 @@
    "function": "tr",
    "kind": "other",
    "context": "string in code, visibility to check in ui-timeline.js",
-   "needsCode": true,
-   "maxLen": null
-  },
-  {
-   "id": "core-color.isotints-weissgleiche",
-   "de": "Isotints (Weißgleiche)",
-   "file": "core/color.js",
-   "line": 407,
-   "group": "main",
-   "function": "_evenSpread",
-   "kind": "text",
-   "context": "visible text in core/color.js",
-   "needsCode": true,
-   "maxLen": null
-  },
-  {
-   "id": "core-color.isotones-schwarzgleiche",
-   "de": "Isotones (Schwarzgleiche)",
-   "file": "core/color.js",
-   "line": 424,
-   "group": "main",
-   "function": "generate",
-   "kind": "text",
-   "context": "visible text in core/color.js",
-   "needsCode": true,
-   "maxLen": null
-  },
-  {
-   "id": "core-color.shadow-series-schattenreihe",
-   "de": "Shadow series (Schattenreihe)",
-   "file": "core/color.js",
-   "line": 444,
-   "group": "main",
-   "function": "generate",
-   "kind": "text",
-   "context": "visible text in core/color.js",
-   "needsCode": true,
-   "maxLen": null
-  },
-  {
-   "id": "core-color.richtung",
-   "de": "Richtung",
-   "file": "core/color.js",
-   "line": 518,
-   "group": "main",
-   "function": "_maxContrastGrayIndices",
-   "kind": "text",
-   "context": "visible text in core/color.js",
    "needsCode": true,
    "maxLen": null
   }

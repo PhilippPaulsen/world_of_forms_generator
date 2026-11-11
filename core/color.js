@@ -404,7 +404,7 @@ const _levelAxis = { id: 'level', label: 'Level', count: system => system.graySc
 // 'secondary'; the discrete levels come from the UNVERIFIED letter values.
 registerHarmonyRule({
     id: 'isotint',
-    label: 'Isotints (Weißgleiche)',
+    label: 'Isotints (Weißgleiche)', i18n: 'rule.isotint',
     verified: 'secondary',
     note: 'constant white content w; levels use the unverified gray-letter percentages',
     params: [_hueAxis, { ..._levelAxis, label: 'White level' }],
@@ -421,7 +421,7 @@ registerHarmonyRule({
 // letter k) - the two-letter-code reading, verified: false (see header).
 registerHarmonyRule({
     id: 'isotone',
-    label: 'Isotones (Schwarzgleiche)',
+    label: 'Isotones (Schwarzgleiche)', i18n: 'rule.isotone',
     verified: false,
     note: 'constant black content s; s = 1 - gray-letter value is the UNVERIFIED two-letter-code reading',
     params: [_hueAxis, { ..._levelAxis, label: 'Black level' }],
@@ -441,7 +441,7 @@ registerHarmonyRule({
 // existing, THIS definition of it is not (see header).
 registerHarmonyRule({
     id: 'shadow-series',
-    label: 'Shadow series (Schattenreihe)',
+    label: 'Shadow series (Schattenreihe)', i18n: 'rule.shadowSeries',
     verified: false,
     note: 'constant w:s ratio (line from the full color to the white-black edge); definition unconfirmed',
     params: [_hueAxis, { ..._levelAxis, label: 'Gray (w : s ratio)' }],
@@ -515,7 +515,7 @@ registerHarmonyRule({
     id: 'max-contrast-gray',
     label: 'Max-Kontrast-Graustufen',
     note: 'this app\'s own default for unassigned trails - widest available letter spread for the real trail count, not always all 8',
-    params: [{ id: 'direction', label: 'Richtung', count: 2 }],
+    params: [{ id: 'direction', label: 'Richtung', i18n: 'rule.axis.direction', count: 2 }],
     generate(idx, system, slots) {
         const white = system.grayScale.white;
         const indices = _maxContrastGrayIndices(slots, white.length);
