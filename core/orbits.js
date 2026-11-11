@@ -555,3 +555,163 @@ function computeThemeLineOrbitAssignments(connSet, mode, gridOverride, shapeOver
     if (assignments.some(a => a.orbitId === undefined)) return null;
     return assignments;
 }
+
+// ----------------- LINE KEYS AND GRID NAMES (task 059, G4) --------------------------------------------------------------
+// The semantic line key of a straight line between two nodes of a grid under the MAIN group (3*/4*/6*): { z1, z2, buchstabe, gegen }.
+//   z1 >= z2 are the node numbers (Knotenzahlen, forms.js numberGridNodes) of the two ends; buchstabe = the number n of sectors the segment touches,
+//   read from the end z1 moved into the shaded sector, as a letter in 'abcdefghiklmn' at equal spacing; gegen = the "Ueberstrich" (bar): the segment runs
+//   counter-clockwise from the shaded sector (only when both nodes lie on no mirror axis and 1 < n < K + 1). "spiegelgleich" (Drehling = Spiegeling,
+//   shown as aA) is a DERIVED property of the orbit, not part of the key. The key identifies the pair ORBIT within one grid {shape, ordnung, lage}.
+// Reference implementation (kept unchanged): tools/gitter/measure-name-rule.js pairOrbits/readings/sameSide/letterFor/familyName.
+// NOT the legacy path: computeThemeLineOrbits()/formatThemeLineName()/orbitIds above are untouched and stay in use; this is a parallel pure API behind
+// GITTER_V2 (false: not reachable from the app, a test passes { gitterV2: true }). _pairKey's string order is never used for names.
+const GITTER_V2 = false;
+const _LK_ALPHABET = 'abcdefghiklmn';
+function _lkGate(opts) { if (!GITTER_V2 && !(opts && opts.gitterV2 === true)) throw new Error('GITTER_V2 is off'); }
+function _lkWrap(a) { return ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); }
+function _lkPtKey(x, y) { return Math.round(x * 1e6) + ',' + Math.round(y * 1e6); }
+function lkFamilyName(z1, z2) { return (z1 >= 10 || z2 >= 10) ? z1 + '.' + z2 : '' + z1 + z2; }
+
+// one reading of an unordered pair from the end e (moved into S0 by each group element): [{ n, dir }] (dir +1 counter-clockwise, -1 clockwise, 0 none / antipodal)
+function _lkReadings(spec, els, e, o) {
+    const out = [], TAU = 2 * Math.PI, EPS = 1e-9, w = spec.w;
+    for (const el of els) {
+        const [ex, ey] = el.f(e.x, e.y), [ox, oy] = el.f(o.x, o.y), re = Math.hypot(ex, ey), ro = Math.hypot(ox, oy);
+        let u = 0;
+        if (re > EPS) { u = _lkWrap(Math.atan2(ey, ex) - spec.alpha0); if (u > TAU - 1e-9) u = 0; if (u > w + 1e-9) continue; u /= w; }
+        let n = 1, dir = 0;
+        if (re > EPS && ro > EPS) {
+            let d = _lkWrap(Math.atan2(oy, ox) - Math.atan2(ey, ex)); if (d > Math.PI + 1e-9) d -= TAU;
+            if (Math.abs(d) < 1e-9) { n = 1; dir = 0; }
+            else {
+                if (Math.abs(Math.abs(d) - Math.PI) < 1e-9) { d = Math.PI; dir = 0; } else dir = d > 0 ? 1 : -1;
+                const v = u + d / w, lo = Math.min(u, v), hi = Math.max(u, v);
+                n = Math.max(1, Math.ceil(hi - 1e-9) - Math.floor(lo + 1e-9));
+            }
+        }
+        out.push({ n, dir });
+    }
+    return out;
+}
+
+// compareLineKeys(a, b): NUMERIC z1, z2, then letter rank, then gegen (false before true). Never a string comparison of the tokens.
+function compareLineKeys(a, b) {
+    return (a.z1 - b.z1) || (a.z2 - b.z2) || (_LK_ALPHABET.indexOf(a.buchstabe) - _LK_ALPHABET.indexOf(b.buchstabe)) || ((a.gegen ? 1 : 0) - (b.gegen ? 1 : 0));
+}
+function _lkValidKey(k) {
+    return !!k && Number.isInteger(k.z1) && Number.isInteger(k.z2) && k.z1 >= k.z2 && k.z2 >= 1 && typeof k.buchstabe === 'string' && k.buchstabe.length === 1 && _LK_ALPHABET.indexOf(k.buchstabe) >= 0 && typeof k.gegen === 'boolean';
+}
+// ASCII transport token: family (two digits when both numbers < 10, else z1.z2), letter, optional trailing "~" (bar). opts.display: the bar as a combining
+// overline, and with opts.spiegelgleich the capital partner after the letter (aA = the confirmed double role). null for an invalid key.
+function formatLineKey(key, opts) {
+    if (!_lkValidKey(key)) return null;
+    if (opts && opts.display) return lkFamilyName(key.z1, key.z2) + key.buchstabe + (opts.spiegelgleich ? key.buchstabe.toUpperCase() : '') + (key.gegen ? '̄' : '');
+    return lkFamilyName(key.z1, key.z2) + key.buchstabe + (key.gegen ? '~' : '');
+}
+// Syntax only: the key of an ASCII token, or null. With opts.table (computeLineKeyTable result) the token must also EXIST there; only then a capital letter
+// (the Spiegeling partner "65A") is normalized to the lower-case key, and only when that orbit is spiegelgleich. "~" is never added or removed.
+function parseLineKey(token, opts) {
+    if (typeof token !== 'string') return null;
+    const m = /^(?:(\d)(\d)|(\d+)\.(\d+))([a-nA-N])(~?)$/.exec(token);
+    if (!m) return null;
+    const z1 = m[1] !== undefined ? +m[1] : +m[3], z2 = m[1] !== undefined ? +m[2] : +m[4];
+    const cap = m[5] !== m[5].toLowerCase(), key = { z1, z2, buchstabe: m[5].toLowerCase(), gegen: m[6] === '~' };
+    if (!_lkValidKey(key) || _LK_ALPHABET.indexOf(key.buchstabe) < 0) return null;
+    if (!opts || !opts.table) return cap ? null : key;
+    const e = opts.table.byToken.get(formatLineKey(key));
+    if (!e) return null;
+    if (cap && !e.spiegelgleich) return null;
+    return key;
+}
+
+// computeLineKeyTable(nodes, grid, opts) -> table | null
+//   nodes: grid nodes with id and either u, v (buildGrid with lage 2 / opts.numbered) or, with opts.geometry = { centroid, outerCorners }, canvas x, y;
+//          free nodes (free: true) are left out. The node set must be the complete grid {shape, ordnung, lage} (else the group does not close: throws).
+//   opts.symmetryMode: when given and not the full main group of the shape: null (a reduced mode has no systematic name).
+//   table = { grid, group, entries: [{ key, token, spiegelgleich, size, pairs: [[idA, idB], ...], anomalies }] sorted by compareLineKeys, byToken, collisions, pairCount }
+function computeLineKeyTable(nodes, grid, opts) {
+    _lkGate(opts); opts = opts || {};
+    const v = validateGridSpec(grid, { allowLage2: true });
+    if (!v.ok) throw new Error('computeLineKeyTable: ' + v.error);
+    if (opts.symmetryMode !== undefined && !isMainGroupMode(grid.shape, opts.symmetryMode)) return null;
+    const spec = mainGroupSpec(grid.shape), els = mainGroupElements(grid.shape), num = numberGridNodes(nodes, grid, opts);
+    const list = [], pts = [];
+    num.nodes.forEach((nd, i) => { if (nd.zahl !== undefined) { list.push(nd); pts.push(num.points[i]); } });
+    const N = list.length, apothem = mainGroupApothem(grid.shape, grid.ordnung), index = new Map(pts.map((p, i) => [_lkPtKey(p.x, p.y), i]));
+    const perms = els.map(el => pts.map(p => { const [x, y] = el.f(p.x, p.y), j = index.get(_lkPtKey(x, y)); if (j === undefined) throw new Error('computeLineKeyTable: the node set is not closed under the main group ' + spec.name); return j; }));
+    const canon = new Map();
+    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
+        let best = Infinity;
+        for (const pm of perms) { const a = pm[i], b = pm[j], c = (a < b ? a : b) * N + (a < b ? b : a); if (c < best) best = c; }
+        const l = canon.get(best); if (l) l.push([i, j]); else canon.set(best, [[i, j]]);
+    }
+    const isAxis = p => { const f = mainGroupFold(grid.shape, p.x, p.y); return f.r < 1e-9 || f.t < 1e-9 || Math.abs(f.t - spec.w) < 1e-9; };
+    const sameSide = (a, b) => { const m0 = spec.alpha0 + spec.w; for (let i = 0; i < spec.K; i++) { const mx = Math.cos(m0 + 2 * Math.PI * i / spec.K), my = Math.sin(m0 + 2 * Math.PI * i / spec.K); if (Math.abs(a.x * mx + a.y * my - apothem) < 1e-7 && Math.abs(b.x * mx + b.y * my - apothem) < 1e-7) return true; } return false; };
+    const entries = [];
+    for (const pairs of canon.values()) {
+        const [i, j] = pairs[0], A = list[i], B = list[j], pa = pts[i], pb = pts[j];
+        const z1 = Math.max(A.zahl, B.zahl), z2 = Math.min(A.zahl, B.zahl), ends = [];
+        if (A.zahl === z1) ends.push([pa, pb]);
+        if ((B.zahl === z1 && A.zahl !== B.zahl) || (A.zahl === B.zahl)) ends.push([pb, pa]);
+        const reads = []; ends.forEach(([e, o]) => _lkReadings(spec, els, e, o).forEach(r => reads.push(r)));
+        const anomalies = [], ns = [...new Set(reads.map(r => r.n))];
+        if (ns.length !== 1) anomalies.push('n differs: ' + ns.join('/'));
+        const n = Math.min(...ns);
+        const gegen = !isAxis(pa) && !isAxis(pb) && n > 1 && n < spec.K + 1 && reads.length > 0 && reads.every(r => r.dir > 0);
+        let spiegelgleich = sameSide(pa, pb);
+        if (!spiegelgleich) for (let g = spec.K; g < els.length && !spiegelgleich; g++) { const a = perms[g][i], b = perms[g][j]; if ((a === i && b === j) || (a === j && b === i)) spiegelgleich = true; }
+        const key = { z1, z2, buchstabe: _LK_ALPHABET[Math.round((n - 1) * 12 / spec.K)], gegen };
+        entries.push({ key, token: formatLineKey(key), spiegelgleich, size: pairs.length, pairs: pairs.map(([a, b]) => [list[a].id, list[b].id]), anomalies });
+    }
+    entries.sort((a, b) => compareLineKeys(a.key, b.key));
+    const byToken = new Map(), collisions = [], pairIndex = new Map();
+    entries.forEach((e, k) => { if (byToken.has(e.token)) collisions.push(e.token); else byToken.set(e.token, e); e.index = k; e.pairs.forEach(([a, b]) => pairIndex.set((a < b ? a + ',' + b : b + ',' + a), e)); });
+    return { grid: { shape: grid.shape, ordnung: grid.ordnung, lage: grid.lage }, group: spec.name, entries, byToken, collisions, pairCount: N * (N - 1) / 2, _pairIndex: pairIndex, _zahl: new Map(list.map(nd => [nd.id, nd.zahl])) };
+}
+// the key of the line between node ids a and b (ids of the table's nodes), or null (free end, unknown id, a = b)
+function lineKeyForPair(table, idA, idB, opts) {
+    _lkGate(opts);
+    if (!table || idA === idB) return null;
+    const e = table._pairIndex.get(idA < idB ? idA + ',' + idB : idB + ',' + idA);
+    return e ? Object.assign({}, e.key) : null;
+}
+// a representative ORIENTED pair [id of the end with the larger node number, id of the other] of the orbit with this key, or null
+function pairForLineKey(table, key, opts) {
+    _lkGate(opts);
+    const e = table && _lkValidKey(key) ? table.byToken.get(formatLineKey(key)) : null;
+    if (!e) return null;
+    const [a, b] = e.pairs[0];
+    return table._zahl.get(a) >= table._zahl.get(b) ? [a, b] : [b, a];
+}
+// the lattice-only table of a grid {shape, ordnung, lage}: its node ids are the builders' ids (buildGrid gives the same ids), cached per grid
+const _LK_CACHE = new Map();
+function getLineKeyTable(grid, opts) {
+    _lkGate(opts);
+    const ck = grid.shape + '|' + grid.ordnung + '|' + grid.lage + (grid.legacyC1 ? '|c1' : '');
+    if (!_LK_CACHE.has(ck)) _LK_CACHE.set(ck, computeLineKeyTable(buildGridNodes(grid, { allowLage2: true }), grid, opts));
+    return _LK_CACHE.get(ck);
+}
+const _LK_SHAPE_LETTER = { triangle: 'd', square: 'q', hex: '*' };
+// "{ordnung}{d|q|*}{lage}/{3*|4*|6*} {token}[+{token}...]": tokens sorted numerically (compareLineKeys), duplicates kept (count = number of tokens).
+// null when a key is missing/invalid (a free end or an incomplete line has no systematic name), the grid is not a main-group grid, or keys is empty.
+function formatGridName(grid, keys, opts) {
+    _lkGate(opts);
+    if (!grid || !Object.prototype.hasOwnProperty.call(_LK_SHAPE_LETTER, grid.shape) || !Number.isInteger(grid.ordnung) || grid.ordnung < 1 || (grid.lage !== 1 && grid.lage !== 2)) return null;
+    if (opts && opts.symmetryMode !== undefined && !isMainGroupMode(grid.shape, opts.symmetryMode)) return null;
+    if (!Array.isArray(keys) || keys.length === 0 || !keys.every(_lkValidKey)) return null;
+    const toks = keys.slice().sort(compareLineKeys).map(k => formatLineKey(k));
+    return grid.ordnung + _LK_SHAPE_LETTER[grid.shape] + grid.lage + '/' + mainGroupSpec(grid.shape).name + ' ' + toks.join('+');
+}
+// -> { grid, group, keys, tokens, count } or null. The tokens are checked against the grid's computed table (getLineKeyTable); only then is a capital normalized.
+function parseGridName(name, opts) {
+    _lkGate(opts);
+    if (typeof name !== 'string') return null;
+    const m = /^(\d+)([dq*])([12])\/(3\*|4\*|6\*) (\S+)$/.exec(name);
+    if (!m) return null;
+    const shape = m[2] === 'd' ? 'triangle' : m[2] === 'q' ? 'square' : 'hex', grid = { shape, ordnung: +m[1], lage: +m[3] };
+    if (!validateGridSpec(grid, { allowLage2: true }).ok || mainGroupSpec(shape).name !== m[4]) return null;
+    const table = getLineKeyTable(grid, opts), keys = [];
+    for (const tok of m[5].split('+')) { const k = parseLineKey(tok, { table }); if (!k) return null; keys.push(k); }
+    for (let i = 1; i < keys.length; i++) if (compareLineKeys(keys[i - 1], keys[i]) > 0) return null;   // canonical order only
+    return { grid, group: m[4], keys, tokens: keys.map(k => formatLineKey(k)), count: keys.length };
+}
