@@ -396,6 +396,7 @@ console.log('== the organ names (task 046): visible English text says Color Orga
     const pairOf = key => { const m = new RegExp('(?:^|[\\s,{])' + key + ":\\['([^']*)','([^']*)'\\]").exec(cm); return m ? [m[1], m[2]] : null; };
     const WANT = {
         pair: ['Zweier', 'Pairs'], three: ['Dreier', 'Triples'], four: ['Vierer', 'Quadruples'], complementary: ['Gegenfarben', 'Complementary colors'],
+        pairOne: ['Zweier', 'Pair'], threeOne: ['Dreier', 'Triple'], fourOne: ['Vierer', 'Quadruple'],
         select2: ['2 \u2014 Gegenfarben', '2 \u2014 Complementary colors'], select3: ['3 \u2014 Dreier', '3 \u2014 Triples'], select4: ['4 \u2014 Vierer', '4 \u2014 Quadruples'],
         chord3: ['Dreier \u00B7 symmetrischer Sonderfall: Triade', 'Triples \u00B7 symmetric special case: triad'], chord4: ['Vierer \u00B7 symmetrischer Sonderfall: Tetrade', 'Quadruples \u00B7 symmetric special case: tetrad'],
         seriesV: ['V \u2014 Wertgleich', 'V \u2014 Value (equal value)'], isovalent: ['Wertgleiche \u00B7 gleiche Anteile \u00FCber alle Farbt\u00F6ne', 'Value (equal value) \u00B7 equal contents across all hues'],
@@ -405,6 +406,9 @@ console.log('== the organ names (task 046): visible English text says Color Orga
     };
     const badTerms = Object.keys(WANT).filter(k => { const p = pairOf(k); return !p || p[0] !== WANT[k][0] || p[1] !== WANT[k][1]; });
     check('color-harmony/ui/i18n.mjs: ' + Object.keys(WANT).length + ' pairs: German unchanged, English = main page terms (Pairs, Triples, Quadruples, Complementary colors, Value (equal value), isotints)', badTerms.length === 0, badTerms.join(', '));
+    // task 049: the inspector title (one harmony) uses the singular keys; the plural keys stay for lists and buttons
+    const insp = fs.readFileSync(process.env.COLOR_HARMONY_INSPECTOR_MJS || path.join(ROOT, 'color-harmony', 'ui', 'components', 'Inspector.mjs'), 'utf8');
+    check('color-harmony/ui Inspector title: pairOne / threeOne / fourOne, not the plural keys pair / three / four', /n===2\?'pairOne':n===3\?'threeOne':n===4\?'fourOne'/.test(insp) && !/n===2\?'pair'/.test(insp), '');
     check('color-harmony/ui/i18n.mjs: no old English term is left (Two-/Three-/Four-color group, Isovalent, Isotint, Isotone)', !/(Two|Three|Four)-color group|Isovalent|Isovalent|Isotint\b|Isotone/.test(cm), '');
     check('color-harmony/ui/i18n.mjs: title is Farborgel / Color Organ, and no "Color organ" is left', cm.indexOf("title:['Farborgel','Color Organ']") >= 0 && !/Color organ|colour organ/i.test(cm.replace(/Color Organ/g, '')), '');
 })();
