@@ -58,7 +58,7 @@ check('within the limit: no clamp', r4 === null && s2.additionalLayers[0].nodeCo
 
 // 5. UI wiring present in the source (no DOM test exists for sketch.js - the real-browser run covers behaviour)
 check('base shape switch calls the clamp before rebuildGrid', /clampNodeCountToShape\('Shape'\);\s*rebuildGrid\(currentShape\)/.test(sketch));
-check('base input and layer input read the shape table, no literal 7 clamp left', !/v > 7\) v = 7/.test(sketch) && (sketch.match(/maxNodeCountFor\(/g) || []).length >= 5);   // task 066: was >= 6; isWellFormedCatalogPattern (one call) is gone
+check('base input and layer input read the shape table, no literal 7 clamp left', !/v > 7\) v = 7/.test(sketch) && (sketch.match(/(?:maxNodeCountFor|gridMaxCount)\(/g) || []).length >= 5);   // task 068b: the input limits go through gridMaxCount (lage 1: maxNodeCountFor)   // task 066: was >= 6; isWellFormedCatalogPattern (one call) is gone
 check('no hard-coded 2..5 in alignLayerToBase', !/nodeCount <= 5/.test(forms));
 
 console.log(`${pass}/${pass + fail} checks passed`);

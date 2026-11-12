@@ -241,11 +241,11 @@ console.log('\n== 5. mismatches ==');
 console.log('\n== 6. source check ==');
 {
     const sk = F.read('sketch.js'), st = F.read('core/state.js');
-    check('sketch.js: updateActiveLayerGrid() calls layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.nodeCount, layer.shape, canvasW, canvasH)',
-        /function updateActiveLayerGrid[\s\S]{0,4000}?layerGrid\(outerCorners, centroid, currentShape, shapeSizeFactor, layer\.shapeSizeFactor, layer\.nodeCount, layer\.shape, canvasW, canvasH\)/.test(sk));
-    check('sketch.js: the timeline playback layer is built with the same layerGrid() arguments', /layerGrid\(outerCorners, centroid, currentShape, shapeSizeFactor, playbackLayer\.shapeSizeFactor, playbackLayer\.nodeCount, playbackLayer\.shape, canvasW, canvasH\)/.test(sk));
+    check('sketch.js: updateActiveLayerGrid() calls layerGridForSpec(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.gridSpec, layer.shape, canvasW, canvasH) (task 068b)',
+        /function updateActiveLayerGrid[\s\S]{0,4000}?layerGridForSpec\(outerCorners, centroid, currentShape, shapeSizeFactor, layer\.shapeSizeFactor, layer\.gridSpec, layer\.shape, canvasW, canvasH\)/.test(sk));
+    check('sketch.js: the timeline playback layer is built with the same layerGrid() arguments', /layerGridForSpec\(outerCorners, centroid, currentShape, shapeSizeFactor, playbackLayer\.shapeSizeFactor, playbackLayer\.gridSpec, playbackLayer\.shape, canvasW, canvasH\)/.test(sk));
     const fm = F.read('core/forms.js');   // 057 (G2): rebuildGrid() builds through the GridSpec facade; the facade hands the same four arguments to the three builders
-    check('core/state.js: rebuildGrid() builds the spec held by gridSpec (060: fromLegacy(shape, toLegacy(gridSpec)) for another shape) with (shapeSizeFactor, canvasW, canvasH) through buildGrid(spec, { sizeFactor: shapeSizeFactor, canvasW, canvasH })', /const spec = gridSpec\.shape === shape \? gridSpec : fromLegacy\(shape, toLegacy\(gridSpec\)\);\s*const grid = buildGrid\(spec, \{ sizeFactor: shapeSizeFactor, canvasW, canvasH \}\)/.test(st)
+    check('core/state.js: rebuildGrid() builds the spec held by gridSpec (060: fromLegacy(shape, toLegacy(gridSpec)) for another shape; 068b: via gridSpecOnShape, the same for lage 1) with (shapeSizeFactor, canvasW, canvasH) through buildGrid(spec, { sizeFactor: shapeSizeFactor, canvasW, canvasH })', /const spec = gridSpec\.shape === shape \? gridSpec : gridSpecOnShape\(gridSpec, shape\);[^\n]*\n\s*const grid = buildGrid\(spec, \{ sizeFactor: shapeSizeFactor, canvasW, canvasH \}\)/.test(st)
         && /build = spec\.shape === 'triangle' \? buildTriangleGrid : spec\.shape === 'square' \? buildSquareGrid : buildHexGrid;\s*const g = build\(c, view\.sizeFactor, view\.canvasW, view\.canvasH, view\.center\)/.test(fm) && /const c = toLegacy\(spec, opts\)/.test(fm));
 }
 
