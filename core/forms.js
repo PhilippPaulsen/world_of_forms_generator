@@ -480,10 +480,11 @@ const GRID_SHAPES = ['triangle', 'square', 'hex'];
 function validateGridSpec(spec, opts) {
     if (!spec || typeof spec !== 'object') return { ok: false, error: 'GridSpec must be an object' };
     if (GRID_SHAPES.indexOf(spec.shape) < 0) return { ok: false, error: 'unknown shape: ' + String(spec.shape) };
-    if (spec.lage === 2 && opts && opts.allowLage2 === true) {
+    if (spec.lage === 2 && ((opts && opts.allowLage2 === true) || lage2SwitchOn())) {
         if (!Number.isInteger(spec.ordnung) || spec.ordnung < 1) return { ok: false, error: 'ordnung must be an integer >= 1, got ' + String(spec.ordnung) };
         if (spec.legacyC1 !== undefined) return { ok: false, error: 'legacyC1 belongs to lage 1 only' };
-        if (opts.enforceMax && spec.ordnung > maxOrdnungFor(spec.shape, spec.lage)) return { ok: false, error: 'ordnung ' + spec.ordnung + ' exceeds ' + maxOrdnungFor(spec.shape, spec.lage) + ' for ' + spec.shape + ' lage 2' };
+        // task 067: with the developer switch on the ceiling (LAGE2_MAX) always applies; the builder/test option alone (switch off) keeps its old freedom unless enforceMax is asked for
+        if (((opts && opts.enforceMax) || lage2SwitchOn()) && spec.ordnung > maxOrdnungFor(spec.shape, spec.lage)) return { ok: false, error: 'ordnung ' + spec.ordnung + ' exceeds ' + maxOrdnungFor(spec.shape, spec.lage) + ' for ' + spec.shape + ' lage 2' };
         return { ok: true };
     }
     if (spec.lage !== 1) return { ok: false, error: spec.lage === 2 ? 'lage 2 is not available yet' : 'invalid lage: ' + String(spec.lage) };
@@ -493,9 +494,22 @@ function validateGridSpec(spec, opts) {
     return { ok: true };
 }
 
-// Largest admissible ordnung for shape/lage; 0 = none (unknown shape, or a lage that is not available).
+// Task 067: the internal developer switch of lage 2 (no UI yet, task 068). OFF by default: lage 2 is rejected exactly as before. ON when
+// globalThis.__lage2 === true (set by the page for the query ?lage2=1 below, or by hand in the console / a test). Read afresh on every call.
+function lage2SwitchOn() {
+    return typeof globalThis !== 'undefined' && globalThis.__lage2 === true;
+}
+if (typeof location !== 'undefined' && typeof URLSearchParams === 'function' && typeof globalThis !== 'undefined') {
+    try { if (new URLSearchParams(location.search).get('lage2') === '1') globalThis.__lage2 = true; } catch (e) { /* no query, switch stays off */ }
+}
+// Task 067: the ceiling of the ordnung of a lage-2 grid (base AND layers; the browser load table of the task, node load see reports/058.md).
+const LAGE2_MAX = { triangle: 5, square: 5, hex: 2 };
+
+// Largest admissible ordnung for shape/lage; 0 = none (unknown shape, or a lage that is not available: lage 2 only while the switch is on).
 function maxOrdnungFor(shape, lage) {
-    if (GRID_SHAPES.indexOf(shape) < 0 || (lage === undefined ? 1 : lage) !== 1) return 0;
+    if (GRID_SHAPES.indexOf(shape) < 0) return 0;
+    if (lage === 2) return lage2SwitchOn() ? LAGE2_MAX[shape] : 0;
+    if ((lage === undefined ? 1 : lage) !== 1) return 0;
     const c = maxNodeCountFor(shape);
     return shape === 'hex' ? c : c - 1;
 }
@@ -530,12 +544,14 @@ function baseGridDivisions() {
 }
 // The base's GridSpec in the same sandbox-safe way (task 063: the export names it); equal to core/state.js gridSpec in the app.
 function baseGridSpecNow() {
+    // task 067: a lage-2 base (core/state.js gridSpec) is returned as it is - fromLegacy never yields lage 2. Only when it agrees with the legacy globals; every lage-1 case is the old one.
+    if (typeof gridSpec !== 'undefined' && gridSpec && gridSpec.lage === 2 && gridSpec.shape === currentShape && lage2SwitchOn() && toLegacy(gridSpec) === nodeCount) return gridSpec;
     return fromLegacy(currentShape, nodeCount);
 }
 
 // Task 061 (G5b): every additional layer carries its OWN GridSpec (layer.gridSpec); layer.nodeCount is its derived legacy projection.
 // projectLayerGridSpec is the ONLY write of layer.nodeCount (as core/state.js projectGridSpec is for the base): it validates first
-// (lage 2 stays locked: no allowLage2) and refuses a spec of another shape than layer.shape (shape and spec never drift).
+// (lage 2 only while the developer switch is on, within LAGE2_MAX) and refuses a spec of another shape than layer.shape (shape and spec never drift).
 function projectLayerGridSpec(layer, spec) {
     const c = toLegacy(spec);
     if (spec.shape !== layer.shape) throw new Error('projectLayerGridSpec: spec shape ' + spec.shape + ' differs from layer.shape ' + layer.shape);
@@ -568,14 +584,27 @@ function buildGrid(spec, view, opts) {
     const grid = { shape: spec.shape, ordnung: spec.ordnung, lage: spec.lage };
     if (spec.legacyC1 === true) grid.legacyC1 = true;
     if (spec.lage !== 2 && !(opts && opts.numbered === true)) return { grid, nodes: g.nodes, centroid: g.centroid, outerCorners: g.outerCorners };
+    const nodes = gridNodesWithUV(g, spec, opts);
+    if (opts && opts.numbered === true) return { grid, nodes: numberGridNodes(nodes, grid).nodes, centroid: g.centroid, outerCorners: g.outerCorners };
+    return { grid, nodes, centroid: g.centroid, outerCorners: g.outerCorners };
+}
+
+// Task 067: the nodes of ANY lage-1 grid g = { nodes, centroid, outerCorners } (a base builder, an alt-net subdivision, layerGrid()) of `spec` with u, v on
+// every node and, for lage 2, the mesh centres appended (ids after the lage-1 ids, projected onto g's own corners). Lage-1 nodes keep id, x, y.
+function gridNodesWithUV(g, spec, opts) {
     const uv = buildGridNodes(spec, opts);
     const n1 = g.nodes.length;
     if (uv.length < n1 || uv.some((p, i) => i < n1 && p.id !== g.nodes[i].id)) throw new Error('buildGrid: lage-1 node order does not match the lattice order');
     const nodes = g.nodes.map((nd, i) => ({ id: nd.id, x: nd.x, y: nd.y, u: uv[i].u, v: uv[i].v }));
     const extra = projectGridNodes(uv.slice(n1), { shape: spec.shape, ordnung: spec.ordnung, outerCorners: g.outerCorners, centroid: g.centroid });
     extra.forEach(nd => nodes.push(nd));
-    if (opts && opts.numbered === true) return { grid, nodes: numberGridNodes(nodes, grid).nodes, centroid: g.centroid, outerCorners: g.outerCorners };
-    return { grid, nodes, centroid: g.centroid, outerCorners: g.outerCorners };
+    return nodes;
+}
+// Task 067: the grid of a LAYER of `spec` - layerGrid() on the spec's legacy count, plus the lage-2 nodes. Lage 1: exactly layerGrid()'s result.
+function layerGridForSpec(baseOuterCorners, baseCentroid, baseShape, baseShapeSizeFactor, layerShapeSizeFactor, spec, layerShape, canvasW, canvasH) {
+    const lg = layerGrid(baseOuterCorners, baseCentroid, baseShape, baseShapeSizeFactor, layerShapeSizeFactor, toLegacy(spec), layerShape, canvasW, canvasH);
+    if (spec.lage !== 2) return lg;
+    return { nodes: gridNodesWithUV(lg, spec), centroid: lg.centroid, outerCorners: lg.outerCorners };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
