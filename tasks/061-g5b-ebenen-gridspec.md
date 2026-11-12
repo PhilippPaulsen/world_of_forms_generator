@@ -1,0 +1,20 @@
+# Auftrag 061 — G5b Ebenen: eigenes gridSpec je Ebene
+
+**Typ K, Prüfstufe L3.** Regeln: docs/agent-rules.md. Lege zuerst (VOR jeder Arbeit) tasks/061-g5b-ebenen-gridspec.md mit diesem Text an. Bericht: reports/061.md (höchstens 30 Zeilen). Branch: task/061-g5b-ebenen-gridspec von main (erwarteter HEAD 0342061c). Kein Merge, kein Push. Plan in 5 Zeilen vorab.
+
+**Grundlage:** reports/055.md (§5, §6, G5), reports/056.md (G5b: Ebenen, Timeline, Morph, Farbe; Fehlliste G5: layerGridMatchesBase und incompatibleEnabledLayersForCrossLayerFaces müssen lage vergleichen), reports/057.md, reports/060.md (gridSpec als Wahrheit, projectGridSpec einzige Schreibstelle von nodeCount, getGridDivisions, baseGridDivisions). Entscheidungen: nodeCount bleibt abgeleitete Brücke (core/tiling.js unverändert); Lage 2 bleibt gesperrt; Hex-E = ordnung - 1 (Konvention aus 060).
+
+**Ziel G5b (eine Kernänderung):** Jede Ebene trägt ein eigenes gridSpec (layer.gridSpec), das die bisherige layer.nodeCount als abgeleitete Projektion ersetzt (einzige Schreibstelle je Ebene, analog projectGridSpec).
+1. Schritt 1, Messung vor jeder Änderung: per git grep alle Schreib- und Lesestellen von layer.nodeCount und der Ebenen-Grid-Funktionen listen (addLayer, updateActiveLayerGrid, layerGrid, alignLayerToBase, addLayerToTimeline, layerHasNonDefaultSettings, clampNodeCountToShape, sessionHooks, spatialMorphRenderSource, spatialMorphRenderDraw mit Ebenen-c, layerGridMatchesBase, incompatibleEnabledLayersForCrossLayerFaces, Ebenen-Eingabefeld ui-layer.js, ui-phone-config.js). Weicht die Liste stark von reports/056.md ab oder ergeben sich zwei Wege: STOP mit 2 Optionen.
+2. Alle Schreibstellen auf einen Weg; Session-Restore setzt layer.gridSpec; Fingerprint der Ebenen-Geometrie (_layerGridFingerprint) bleibt inhaltlich gleich.
+3. layerGridMatchesBase und incompatibleEnabledLayersForCrossLayerFaces vergleichen shape, ordnung UND lage (Lage 2 bleibt gesperrt, der Vergleich muss sie trotzdem unterscheiden: Test mit Spec lage 2 über allowLage2 im Builder).
+4. Cache-Schlüssel (cachedTrailsFor, _keyframeFieldCache, spatialMorphRenderCornerField, Bild-/Span-Caches) um gridRevision bzw. Ebenen-Spec erweitern, soweit sie bisher nur auf Knotenanzahl keyen (056, Falschangabe 3); Verhalten bei gleicher Geometrie unverändert (gleiche Schlüssel/Farben).
+5. Morph und Zeitleiste: konkrete Verbindungen, Pairings, Members, Flips bleiben unverändert (Member = Gruppenoperation, nicht Orbit-ID); bei Topologiewechsel wie heute.
+
+**Nicht ändern:** acht geschützte Funktionen in sketch.js (byte-gleich, notwendige Versorgung in ungeschützten Helfern), core/faces.js, core/facecolor.js (Ausnahme nur falls layerGridMatchesBase dort liegt: dann STOP mit 2 Optionen vor dem Eingriff), core/tiling.js, tools/morph/off-path-golden.json, Baselines. Keine neue UI. Pins nur mit eigenem Commit und Begründung (Liste im Bericht). ?v= gemeinsam bumpen (z. B. 20261116gridfe).
+
+**Prüfpunkte:** (1) Verhalten byte-gleich zu 0342061c: Ebenen-Gitter, Linien, Flächen, Export (SVG/JSON), alle Formen, Ebenen mit gleicher/anderer Form und Ordnung, Alt-Netz (Test gegen alten Stand aus git archive). (2) Morph-Frames t = 0, .25, .5, .75, 1 byte-gleich, auch mit Ebenen. (3) Genau eine Schreibstelle je Ebene für layer.nodeCount (Quelltext-Test). (4) layerGridMatchesBase unterscheidet Ordnung, Form und Lage. (5) Session-Roundtrip mit Ebenen und Timeline, Rollback. (6) Cache-Schlüssel: gleiche Geometrie liefert gleiche Schlüssel und Farben (Test). (7) AUS-Pfad-Golden im Browser 30/30. (8) Geschützte Tests 61/61 und 57/57, test-p5-names, Farborgel-Tests.
+
+**Sabotagen (je auf Kopien):** layerGridMatchesBase ohne lage; zweite Schreibstelle von layer.nodeCount; Cache ohne gridRevision (veraltete Farben nach Topologiewechsel); Ebenen-E falsch gerechnet.
+
+**Prüfung:** bash tools/proof.sh L3 061 plus AUS-Pfad-Golden im Browser (Verfahren: Kopfkommentar tools/morph/measure-off-path.js). Bericht: Hashes, Schreibstellenliste, Messwerte, Sabotagen, /usage vorher/nachher, was nicht im Browser gesehen wurde.
