@@ -24,7 +24,7 @@
  * isolation from this process's own global object and from any other
  * sandbox - not the plain `(0,eval)` pattern this project's throwaway
  * test scripts use, since THIS is a real, reusable, repeatedly-called
- * tool, not a one-shot verification script) via createShapeOrderRenderer(),
+ * tool, not a one-shot verification script) via createGridRendererV2(),
  * so core/*.js's source is parsed once per shape+order and the grid/
  * orbit table built once, then reused across every k/orbit-combo
  * variation for that shape+order - avoiding re-parsing ~500 lines of
@@ -35,15 +35,6 @@ const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..', '..');
-
-// Roadmap 1.11 pattern catalog: version stamp for manifest staleness
-// detection (design session, point 5) - bump by hand whenever
-// core/orbits.js's orbit algorithm, core/forms.js's grid construction,
-// or core/symmetry.js's group/rotation logic changes in a way that
-// could alter which orbit an id refers to or how a cell renders (this
-// project's own history - the 1.11-A D-formula correction - confirms
-// this real risk, not a hypothetical one).
-const RENDERER_VERSION = '1.11-catalog-v1';
 
 // Roadmap 1.11 pattern catalog: fixed rendering parameters, chosen (not
 // guessed) via a real bounding-box check across all three shapes at
@@ -102,61 +93,10 @@ function _buildSandbox() {
     return sandbox;
 }
 
-const SHAPE_BUILDERS = { triangle: 'buildTriangleGrid', square: 'buildSquareGrid', hex: 'buildHexGrid' };
-
-// Roadmap 1.11 pattern catalog: one real grid + orbit table, built ONCE
-// per (shape, order, symmetryMode) - every subsequent renderCombo()
-// call for this same handle reuses both, only varying which orbit-id
-// combination gets drawn. Mirrors this project's own established
-// "explicit parameters, no hidden state" testability standard
-// (core/orbits.js's own computeThemeLineOrbits() docblock) - the
-// returned handle exposes the real table (orbits/groupToken/etc) so a
-// caller can verify against it directly, not just trust the rendered
-// output.
-function createShapeOrderRenderer(shape, order, symmetryMode = 'rotation_reflection6') {
-    if (!SHAPE_BUILDERS[shape]) throw new Error(`createShapeOrderRenderer: unknown shape "${shape}"`);
-    const sandbox = _buildSandbox();
-    const grid = sandbox[SHAPE_BUILDERS[shape]](order, CATALOG_SHAPE_SIZE_FACTOR, CATALOG_CANVAS_SIZE, CATALOG_CANVAS_SIZE);
-    sandbox.centroid = grid.centroid;
-    sandbox.symmetryMode = symmetryMode;
-    sandbox.outerCorners = grid.outerCorners;
-    sandbox.currentShape = shape;
-    const table = sandbox.computeThemeLineOrbits(grid.nodes, grid.centroid, shape, symmetryMode, grid.outerCorners);
-
-    // Roadmap 1.11 pattern catalog: one representative connection per
-    // requested orbit id - the FIRST pair listed in that orbit's own
-    // members array. computeThemeLineOrbits() already canonically
-    // orders each orbit's members by _pairKey() (see its own docblock -
-    // "deterministic order within an orbit"), so this choice is itself
-    // deterministic and reproducible from (shape, order, symmetryMode,
-    // orbitId) alone, not an arbitrary pick.
-    function renderCombo(orbitIds) {
-        const connSet = orbitIds.map(id => {
-            if (!table.orbits[id]) throw new Error(`renderCombo: orbit id ${id} does not exist for ${shape} order ${order} (table has ${table.orbits.length} orbits)`);
-            return table.orbits[id].pairs[0];
-        });
-        sandbox.svgPathCollector = [];
-        sandbox.drawShapeCell(connSet, grid.centroid, false, grid.nodes, 0, undefined, shape);
-        const paths = sandbox.svgPathCollector;
-        sandbox.svgPathCollector = null;
-
-        const size = CATALOG_CANVAS_SIZE;
-        let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">\n`;
-        svg += `  <rect width="${size}" height="${size}" fill="#ffffff" />\n`;
-        svg += `  <g stroke="#000000" stroke-width="2" fill="none">\n`;
-        paths.forEach(d => { svg += `    <path d="${d}" />\n`; });
-        svg += `  </g>\n</svg>\n`;
-        return svg;
-    }
-
-    return { shape, order, symmetryMode, groupToken: table.groupToken, table, grid, renderCombo };
-}
-
 // Task 064 (G7a): the catalog v2 renderer. One grid {shape, ordnung, lage 1} -> its line-key table (core/orbits.js getLineKeyTable) and renderTokens(tokens): the single-cell
 // SVG of the lines the tokens name (the representative pair of each key, pairForLineKey), drawn by the same drawShapeCell() call and written in the same SVG layout as v1.
 // The mode is the whole main group of the shape ('rotation_reflection6', as the transport v2 sets it). The legacy orbit ids are not used anywhere.
 const RENDERER_VERSION_V2 = '2-catalog-v2';
-const GRID_V2_OPTS = { gitterV2: true };   // core/orbits.js GRID_V2 is a top-level const (not a property of the vm global): the same option object, written here
 function createGridRendererV2(spec) {
     const sandbox = _buildSandbox();
     const v = sandbox.validateGridSpec(spec, { enforceMax: true });
@@ -168,12 +108,12 @@ function createGridRendererV2(spec) {
     sandbox.symmetryMode = symmetryMode;
     sandbox.outerCorners = grid.outerCorners;
     sandbox.currentShape = spec.shape;
-    const table = sandbox.getLineKeyTable(spec, GRID_V2_OPTS);
+    const table = sandbox.getLineKeyTable(spec);
     const tokens = table.entries.map(e => e.token);   // compareLineKeys order
     function renderTokens(list) {
         const connSet = list.map(t => {
             const key = sandbox.parseLineKey(t, { table });
-            const pair = key && sandbox.pairForLineKey(table, key, GRID_V2_OPTS);
+            const pair = key && sandbox.pairForLineKey(table, key);
             if (!pair) throw new Error(`renderTokens: line ${t} does not exist in ${spec.shape} ordnung ${spec.ordnung}`);
             return pair;
         });
@@ -192,4 +132,4 @@ function createGridRendererV2(spec) {
     return { spec, symmetryMode, table, tokens, grid, sandbox, renderTokens };
 }
 
-module.exports = { createShapeOrderRenderer, createGridRendererV2, RENDERER_VERSION, RENDERER_VERSION_V2, CATALOG_CANVAS_SIZE, CATALOG_SHAPE_SIZE_FACTOR };
+module.exports = { createGridRendererV2, RENDERER_VERSION_V2, CATALOG_CANVAS_SIZE, CATALOG_SHAPE_SIZE_FACTOR };
