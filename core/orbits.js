@@ -715,3 +715,78 @@ function parseGridName(name, opts) {
     for (let i = 1; i < keys.length; i++) if (compareLineKeys(keys[i - 1], keys[i]) > 0) return null;   // canonical order only
     return { grid, group: m[4], keys, tokens: keys.map(k => formatLineKey(k)), count: keys.length };
 }
+
+// ---- task 063 (G6b): the app-facing half of the v2 API - export keys and the pattern transport -----------------------------------------------------
+// GITTER_V2 stays false (the gate of the parallel API); the app passes the explicit option instead: GRID_V2.
+const GRID_V2 = Object.freeze({ gitterV2: true });
+const TRANSPORT_V2_VERSION = 2, TRANSPORT_V2_MAX_LINES = 500, TRANSPORT_V2_MAX_TOKEN = 12;
+
+// The line keys of a sheet's connections ([idA, idB] pairs of its own grid) and its grid name, for the v2 export. `spec` = the sheet's GridSpec.
+// -> { tokens: [ascii token | null, ...] (one per connection), name: string | null }. null token: a free or unknown end (no systematic key), or a reduced symmetry
+// mode (not the whole main group); name null unless EVERY connection has a key. Never throws: anything unexpected is "no key".
+function gridLineKeysFor(spec, connections, symmetryMode) {
+    const list = Array.isArray(connections) ? connections : [];
+    const none = () => ({ tokens: list.map(() => null), name: null });
+    try {
+        if (!spec || !isMainGroupMode(spec.shape, symmetryMode)) return none();
+        const table = getLineKeyTable(spec, GRID_V2);
+        if (!table) return none();
+        const keys = list.map(c => (Array.isArray(c) && c.length === 2 ? lineKeyForPair(table, c[0], c[1], GRID_V2) : null));
+        const name = keys.length > 0 && keys.every(k => k) ? formatGridName(spec, keys, Object.assign({ symmetryMode }, GRID_V2)) : null;
+        return { tokens: keys.map(k => (k ? formatLineKey(k) : null)), name };
+    } catch (e) { return none(); }
+}
+// id -> { zahl, u, v } for the lattice nodes of a grid (node numbers of forms.js numberGridNodes, lattice coordinates u, v in lattice units); null when it cannot be built.
+const _GN_CACHE = new Map();
+function gridNodeNumbersFor(spec) {
+    try {
+        const ck = spec.shape + '|' + spec.ordnung + '|' + spec.lage + (spec.legacyC1 ? '|c1' : '');
+        if (_GN_CACHE.has(ck)) return _GN_CACHE.get(ck);
+        const lat = buildGridNodes(spec, { allowLage2: true }), num = numberGridNodes(lat, spec, { allowLage2: true });
+        const m = new Map(num.nodes.map(n => [n.id, { zahl: n.zahl, u: n.u, v: n.v }]));
+        _GN_CACHE.set(ck, m);
+        return m;
+    } catch (e) { return null; }
+}
+
+// ---- the pattern transport v2 (URL and paste share this) ----
+// raw = { shape, ordnung, lage, group, lines } of plain values (the URL parser hands strings it has already matched, the paste parser what JSON gave): nothing is trusted.
+// ALL tokens are checked against the grid's table before the caller does anything (this function mutates nothing); capital Spiegeling partners are normalized; the keys
+// come back sorted NUMERICALLY (compareLineKeys), duplicates kept. Lage 2 is locked. -> { ok: true, pattern } | { ok: false, code: 'invalid', detail }
+//   pattern = { v2: true, shape, spec, order (the legacy count the app's grid code takes), symmetryMode (the whole main group), group, keys, tokens }
+function parseTransportV2(raw) {
+    const bad = detail => ({ ok: false, code: 'invalid', detail });
+    try {
+        if (!raw || typeof raw !== 'object') return bad('not an object');
+        const { shape, ordnung, lage, group, lines } = raw;
+        if (shape !== 'triangle' && shape !== 'square' && shape !== 'hex') return bad('unknown shape');
+        if (lage !== 1) return bad(lage === 2 ? 'lage 2 is not available yet' : 'lage must be 1');
+        const spec = { shape, ordnung, lage: 1 };
+        const v = validateGridSpec(spec, { enforceMax: true });
+        if (!v.ok) return bad(v.error);
+        if (group !== mainGroupSpec(shape).name) return bad('group must be ' + mainGroupSpec(shape).name + ' for ' + shape);
+        if (!Array.isArray(lines) || lines.length < 1 || lines.length > TRANSPORT_V2_MAX_LINES) return bad('lines must be 1 to ' + TRANSPORT_V2_MAX_LINES + ' tokens');
+        if (!lines.every(t => typeof t === 'string' && t.length >= 1 && t.length <= TRANSPORT_V2_MAX_TOKEN)) return bad('a line token is not a short string');
+        const table = getLineKeyTable(spec, GRID_V2);
+        if (!table) return bad('no line table for this grid');
+        const keys = [];
+        for (const tok of lines) { const k = parseLineKey(tok, { table }); if (!k) return bad('unknown line token ' + JSON.stringify(tok.slice(0, 12))); keys.push(k); }
+        keys.sort(compareLineKeys);
+        return { ok: true, pattern: { v2: true, shape, spec, order: toLegacy(spec), symmetryMode: 'rotation_reflection6', group, keys, tokens: keys.map(k => formatLineKey(k)) } };
+    } catch (e) { return bad('unexpected failure (' + (e && e.message) + ')'); }
+}
+// the representative connection [idA, idB] of every key of a parsed pattern, in the grid of `spec` (a layer's own ids are the same lattice ids); throws for a key the grid lacks
+function transportConnectionsV2(pattern) {
+    const table = getLineKeyTable(pattern.spec, GRID_V2);
+    return pattern.keys.map(k => { const p = pairForLineKey(table, k, GRID_V2); if (!p) throw new Error('line ' + formatLineKey(k) + ' does not exist in ' + pattern.shape + ' ordnung ' + pattern.spec.ordnung); return p; });
+}
+// the writers (nothing in the generator calls them yet; the catalog of G7 does): the v2 query string / paste text of a spec and its keys. Tokens sorted numerically.
+function formatTransportUrlV2(spec, keys, opts) {
+    const toks = keys.slice().sort(compareLineKeys).map(k => formatLineKey(k));
+    const p = new URLSearchParams({ v: String(TRANSPORT_V2_VERSION), shape: spec.shape, ordnung: String(spec.ordnung), lage: String(spec.lage), group: mainGroupSpec(spec.shape).name, lines: toks.join(',') });
+    if (opts && opts.layer === 'new') p.set('layer', 'new');
+    return '?' + p.toString();
+}
+function formatTransportPasteV2(spec, keys) {
+    return JSON.stringify({ version: TRANSPORT_V2_VERSION, grid: { shape: spec.shape, ordnung: spec.ordnung, lage: spec.lage }, group: mainGroupSpec(spec.shape).name, lines: keys.slice().sort(compareLineKeys).map(k => formatLineKey(k)) });
+}

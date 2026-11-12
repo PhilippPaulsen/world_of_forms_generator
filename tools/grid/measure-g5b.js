@@ -10,6 +10,10 @@ const S = require(path.join(__dirname, '..', 'session', 'scenarios.js'));
 const h = (x) => crypto.createHash('sha256').update(typeof x === 'string' ? x : JSON.stringify(x)).digest('hex').slice(0, 16);
 const J = JSON.stringify;
 const out = {};
+// task 063: export v2 changed the export's own fields (formatVersion, meta.grid / nodeCount, nodes' zahl/u/v, lineKeys, name, patternName / themeLineOrbits); the comparison with the
+// old tree hashes the export WITHOUT them, so geometry, edges, adjacency, faces and colours are still compared byte for byte.
+const V2_KEYS = new Set(['formatVersion', 'name', 'patternName', 'themeLineOrbits', 'lineKeys', 'nodeCount', 'grid', 'zahl', 'u', 'v']);
+const stripV2 = (o) => (Array.isArray(o) ? o.map(stripV2) : o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).filter(([k]) => !V2_KEYS.has(k)).map(([k, v]) => [k, stripV2(v)])) : o);
 const NET = { x: { kind: 'trig', w: -1 }, y: 'same', repeat: false };
 const NET_MACRO = { x: { kind: 'trig', w: -1 }, y: 'same', repeat: false, macro: 2 };   // E matters here: macro 2 divides E = 4 (order 5), and is the default at E = 2 (order 3)
 const LAYERS_JS = 'JSON.stringify(additionalLayers.map(l => [l.shape, l.nodeCount, l.shapeSizeFactor, l.symmetryMode, l.nodes, l.centroid, l.outerCorners]))';
@@ -18,7 +22,7 @@ function record(w) {
     rec.layers = h(w.get(LAYERS_JS));
     rec.drawn = h(w.drawn());
     try { rec.frame = h(w.frame()); } catch (e) { rec.frame = 'n/a'; }   // a layer that shows faces empties segmentCollector mid-frame: the drawn calls and the export carry the comparison then
-    rec.exp = h(w.get('(function () { const d = buildExportData(); d.exportedAt = 0; return JSON.stringify(d); })()'));
+    rec.exp = h(JSON.stringify(stripV2(JSON.parse(w.get('(function () { const d = buildExportData(); d.exportedAt = 0; return JSON.stringify(d); })()')))));
     return rec;
 }
 for (const bshape of ['triangle', 'square', 'hex']) for (const bc of [2, 3]) for (const lshape of ['triangle', 'square', 'hex']) for (const lc of [1, 2, 3, 4]) for (const lsize of [3, 5]) for (const net of [false, true]) {
