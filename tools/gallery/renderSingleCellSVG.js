@@ -74,6 +74,7 @@ function _buildSandbox() {
         sin: Math.sin,
         sqrt: Math.sqrt,
         abs: Math.abs,
+        activeNetWarp: null, lineStyle: { visible: true, weight: 2 }, // task 064: core/curves.js and core/tiling.js read these state.js globals now (gallery-render.js defines the same two as its shim)
         segmentCollector: null, // core/state.js global - drawCurvedBezier() checks it before svgPathCollector
         svgPathCollector: null,
         centroid: null, // set once per shape+order below, read by toTileLocal()
@@ -95,7 +96,7 @@ function _buildSandbox() {
         return { x: tileC.x + x, y: tileC.y + y };
     };
     vm.createContext(sandbox);
-    const coreFiles = ['core/forms.js', 'core/orbits.js', 'core/symmetry.js', 'core/curves.js', 'core/tiling.js'];
+    const coreFiles = ['core/forms.js', 'core/orbits.js', 'core/symmetry.js', 'core/curves.js', 'core/tiling.js', 'core/catalog.js'];   // task 064: + the v2 codec
     const src = coreFiles.map(f => readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
     vm.runInContext(src, sandbox);
     return sandbox;
@@ -151,4 +152,44 @@ function createShapeOrderRenderer(shape, order, symmetryMode = 'rotation_reflect
     return { shape, order, symmetryMode, groupToken: table.groupToken, table, grid, renderCombo };
 }
 
-module.exports = { createShapeOrderRenderer, RENDERER_VERSION, CATALOG_CANVAS_SIZE, CATALOG_SHAPE_SIZE_FACTOR };
+// Task 064 (G7a): the catalog v2 renderer. One grid {shape, ordnung, lage 1} -> its line-key table (core/orbits.js getLineKeyTable) and renderTokens(tokens): the single-cell
+// SVG of the lines the tokens name (the representative pair of each key, pairForLineKey), drawn by the same drawShapeCell() call and written in the same SVG layout as v1.
+// The mode is the whole main group of the shape ('rotation_reflection6', as the transport v2 sets it). The legacy orbit ids are not used anywhere.
+const RENDERER_VERSION_V2 = '2-catalog-v2';
+const GRID_V2_OPTS = { gitterV2: true };   // core/orbits.js GRID_V2 is a top-level const (not a property of the vm global): the same option object, written here
+function createGridRendererV2(spec) {
+    const sandbox = _buildSandbox();
+    const v = sandbox.validateGridSpec(spec, { enforceMax: true });
+    if (!v.ok) throw new Error('createGridRendererV2: ' + v.error);
+    if (spec.lage !== 1) throw new Error('createGridRendererV2: lage 2 is not available yet');
+    const symmetryMode = 'rotation_reflection6';
+    const grid = sandbox.buildGrid(spec, { sizeFactor: CATALOG_SHAPE_SIZE_FACTOR, canvasW: CATALOG_CANVAS_SIZE, canvasH: CATALOG_CANVAS_SIZE });
+    sandbox.centroid = grid.centroid;
+    sandbox.symmetryMode = symmetryMode;
+    sandbox.outerCorners = grid.outerCorners;
+    sandbox.currentShape = spec.shape;
+    const table = sandbox.getLineKeyTable(spec, GRID_V2_OPTS);
+    const tokens = table.entries.map(e => e.token);   // compareLineKeys order
+    function renderTokens(list) {
+        const connSet = list.map(t => {
+            const key = sandbox.parseLineKey(t, { table });
+            const pair = key && sandbox.pairForLineKey(table, key, GRID_V2_OPTS);
+            if (!pair) throw new Error(`renderTokens: line ${t} does not exist in ${spec.shape} ordnung ${spec.ordnung}`);
+            return pair;
+        });
+        sandbox.svgPathCollector = [];
+        sandbox.drawShapeCell(connSet, grid.centroid, false, grid.nodes, 0, undefined, spec.shape);
+        const paths = sandbox.svgPathCollector;
+        sandbox.svgPathCollector = null;
+        const size = CATALOG_CANVAS_SIZE;
+        let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">\n`;
+        svg += `  <rect width="${size}" height="${size}" fill="#ffffff" />\n`;
+        svg += `  <g stroke="#000000" stroke-width="2" fill="none">\n`;
+        paths.forEach(d => { svg += `    <path d="${d}" />\n`; });
+        svg += `  </g>\n</svg>\n`;
+        return svg;
+    }
+    return { spec, symmetryMode, table, tokens, grid, sandbox, renderTokens };
+}
+
+module.exports = { createShapeOrderRenderer, createGridRendererV2, RENDERER_VERSION, RENDERER_VERSION_V2, CATALOG_CANVAS_SIZE, CATALOG_SHAPE_SIZE_FACTOR };

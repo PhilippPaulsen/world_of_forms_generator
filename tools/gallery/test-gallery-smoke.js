@@ -102,23 +102,23 @@ check('the list contains the render shim and the page script (a test of nothing 
     let status = '';
     for (let i = 0; i < 200; i++) { status = dom.byId.has('manifest-status') ? dom.byId.get('manifest-status').textContent : ''; if (/entries loaded|Failed/.test(status)) break; await new Promise(r => setTimeout(r, 50)); }
     check('gallery.js finished init: the manifest status says "N entries loaded"', /^\d+ entries loaded/.test(status), status.slice(0, 100));
-    const manifestPath = fileOf('gallery/manifest.jsonl');
+    const manifestPath = fileOf('gallery/v2/manifest.jsonl');   // task 064: the catalog v2
     const lines = fs.readFileSync(manifestPath, 'utf8').split('\n').filter(Boolean);
-    const all = lines.map(l => JSON.parse(l));
+    const all = lines.map(l => { const r = JSON.parse(l); return Object.assign({}, r, { shape: r.grid.shape, order: r.grid.ordnung }); });   // the page's own short names
     check('the status count is the manifest row count', status.startsWith(all.length + ' entries'), all.length);
 
     // four real catalog patterns: the first row of each shape and the last row of the manifest
     const picks = [];
     for (const shape of ['triangle', 'square', 'hex']) { const e = all.find(x => x.shape === shape); if (e) picks.push(e); }
     const lastRow = all[all.length - 1]; if (!picks.includes(lastRow)) picks.push(lastRow);
-    check('four distinct catalog patterns picked', picks.length === 4 && new Set(picks.map(p => p.path)).size === 4, picks.map(p => p.shape + p.order + ' ' + p.orbitIds.join('+')).join(' | '));
+    check('four distinct catalog patterns picked', picks.length === 4 && new Set(picks.map(p => p.path)).size === 4, picks.map(p => p.shape + p.order + ' ' + p.lines.join('+')).join(' | '));
 
     // the generator's own parsers, extracted from sketch.js (the same text the page runs)
     const sketch = fs.readFileSync(path.join(ROOT, 'sketch.js'), 'utf8');
     const fnSrc = name => { const m = sketch.match(new RegExp('\\nfunction ' + name + '\\([^)]*\\) \\{[\\s\\S]*?\\n\\}\\n')); return m ? m[0] : ''; };
     const constSrc = name => { const m = sketch.match(new RegExp('\\nconst ' + name + ' = [^\\n]*\\n')); return m ? m[0] : ''; };
     const parseCtx = vm.createContext({ URLSearchParams, console: { warn() { } } });
-    vm.runInContext(fs.readFileSync(path.join(ROOT, 'core/forms.js'), 'utf8'), parseCtx);
+    for (const f of ['core/forms.js', 'core/symmetry.js', 'core/orbits.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), parseCtx);   // task 064: the v2 parsers use the line-key tables
     const parserSrc = constSrc('CATALOG_URL_SHAPES') + constSrc('CATALOG_URL_MODES') + fnSrc('isWellFormedCatalogPattern') + fnSrc('legacyCatalogReader') + fnSrc('parseCatalogUrlV2') + fnSrc('parseCatalogUrlParams') + fnSrc('parseClipboardCatalogPattern') + '\nlet catalogTransportRejection = null;\n';   // task 063: the parsers now start through legacyCatalogReader (the Formorgel still writes the old format)
     check('the generator\'s catalog parsers were found in sketch.js', ['CATALOG_URL_SHAPES', 'CATALOG_URL_MODES', 'function isWellFormedCatalogPattern', 'function legacyCatalogReader', 'function parseCatalogUrlParams', 'function parseClipboardCatalogPattern'].every(s => parserSrc.includes(s)));
     vm.runInContext(parserSrc, parseCtx);
@@ -126,7 +126,7 @@ check('the list contains the render shim and the page script (a test of nothing 
     // ---- the detail view: what a click on a tile does -------------------------------------------------------------------------------------------------
     console.log('\n== the detail view (openDetailView -> renderFullTessellationSVG) ==');
     for (const e of picks) {
-        const label = `${e.shape} order ${e.order} orbits ${e.orbitIds.join('+')} (${e.symmetryMode})`;
+        const label = `${e.shape} ordnung ${e.order} lines ${e.lines.join('+')}`;
         T('detail view ' + label, () => {
             ctx.__entry = e;
             run('openDetailView(__entry)');
@@ -135,7 +135,7 @@ check('the list contains the render shim and the page script (a test of nothing 
             // "Open in generator", "New layer" and "Copy pattern": one real example each
             const openUrl = dom.document.getElementById('detail-open-generator').href, layerUrl = dom.document.getElementById('detail-open-new-layer').href;
             const parsed = parseCtx.parseCatalogUrlParams(openUrl.slice(openUrl.indexOf('?')));
-            check('Open in generator: ' + openUrl.slice(0, 70) + '... parses back to the same pattern', parsed && parsed.shape === e.shape && parsed.order === e.order && parsed.symmetryMode === e.symmetryMode && JSON.stringify(parsed.orbitIds) === JSON.stringify(e.orbitIds) && parsed.layer === null, JSON.stringify(parsed).slice(0, 80));
+            check('Open in generator: ' + openUrl.slice(0, 70) + '... parses back (v2) to the same pattern', parsed && parsed.v2 === true && parsed.shape === e.shape && parsed.spec.ordnung === e.order && JSON.stringify(parsed.tokens) === JSON.stringify(e.lines), openUrl.slice(0, 120));
             const parsedLayer = parseCtx.parseCatalogUrlParams(layerUrl.slice(layerUrl.indexOf('?')));
             check('New layer link parses with layer=new', parsedLayer && parsedLayer.layer === 'new' && parsedLayer.shape === e.shape, layerUrl.slice(-30));
         });
@@ -148,7 +148,7 @@ check('the list contains the render shim and the page script (a test of nothing 
             await dom.document.getElementById('detail-copy-pattern').onclick();
             const payload = dom.clipboard[0];
             const back = payload ? parseCtx.parseClipboardCatalogPattern(payload) : null;
-            check('Copy pattern writes a payload the generator\'s Paste Pattern parser accepts, equal to the entry', !!back && back.shape === picks[0].shape && back.order === picks[0].order && back.symmetryMode === picks[0].symmetryMode && JSON.stringify(back.orbitIds) === JSON.stringify(picks[0].orbitIds), (payload || '').slice(0, 90));
+            check('Copy pattern writes a v2 payload the generator\'s Paste Pattern parser accepts, equal to the entry', !!back && back.v2 === true && back.shape === picks[0].shape && back.spec.ordnung === picks[0].order && JSON.stringify(back.tokens) === JSON.stringify(picks[0].lines) && !/orbitIds/.test(payload), String(payload).slice(0, 90));
         } catch (err) { check('Copy pattern', false, 'threw: ' + String(err.message).slice(0, 100)); }
     })();
 
@@ -156,20 +156,20 @@ check('the list contains the render shim and the page script (a test of nothing 
     console.log('\n== custom combinations, on a fresh page (buildOrbitTable -> renderOrbitGrid -> renderSingleCellSVG, generateCombinations -> renderComboGrid) ==');
     for (let i = 0, st = ''; i < 200 && !/entries loaded|Failed/.test(st); i++) { await new Promise(r => setTimeout(r, 50)); st = pageC.dom.byId.has('manifest-status') ? pageC.dom.byId.get('manifest-status').textContent : ''; }
     for (const e of picks) {
-        const label = `${e.shape} order ${e.order} (${e.symmetryMode})`;
+        const label = `${e.shape} ordnung ${e.order}`;
         T('orbit tiles ' + label, () => {
             pageC.ctx.__entry = e;
             const before = pageC.dom.created.length;
-            pageC.run('orbitBuilderState = buildOrbitTable(__entry.shape, __entry.order, __entry.symmetryMode); renderOrbitGrid();');
+            pageC.run('orbitBuilderState = buildOrbitTable(__entry.shape, __entry.order); renderOrbitGrid();');
             const previews = pageC.dom.created.slice(before).filter(el => el.className === 'orbit-tile-preview');
             const good = previews.filter(el => /<path /.test(el.innerHTML)).length, failed = previews.filter(el => /render failed/.test(el.textContent)).length;
             check('orbit tiles ' + label + ': every tile preview has paths, none says "render failed"', previews.length > 0 && good === previews.length && failed === 0, `${good}/${previews.length} drawn, ${failed} failed`);
-            const k = Math.min(3, e.orbitIds.length);
-            pageC.ctx.__ids = e.orbitIds.slice(0, k);
+            const k = Math.min(3, e.lines.length);
+            pageC.ctx.__ids = Array.from({ length: k }, (_, i) => i);
             const svg = pageC.run('renderSingleCellSVG(orbitBuilderState, __ids)');
-            check('combination preview ' + label + ' (' + k + ' orbits) draws paths', /<path /.test(svg), (svg.match(/<path /g) || []).length + ' paths');
+            check('combination preview ' + label + ' (' + k + ' lines) draws paths', /<path /.test(svg), (svg.match(/<path /g) || []).length + ' paths');
             // the generated k = 2 combinations of the first three orbits (needs tools/gallery/combinations.js)
-            const n = Math.min(3, pageC.run('orbitBuilderState.table.orbits.length'));
+            const n = Math.min(3, pageC.run('orbitBuilderState.tokens.length'));
             pageC.ctx.__n = n;
             const b2 = pageC.dom.created.length;
             pageC.run('selectedOrbitIds = new Set(Array.from({ length: __n }, (_, i) => i)); generateCombinations(2);');

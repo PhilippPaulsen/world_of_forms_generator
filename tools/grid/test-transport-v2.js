@@ -227,7 +227,9 @@ const STATE = () => T.get('JSON.stringify({ connections, nodes, gridSpec, gridRe
     check('(5) PIN (task 063, decision B; G7 removes legacyCatalogReader and reverses this pin): the reader is defined once and called only in parseCatalogUrlParams and parseClipboardCatalogPattern', /\nfunction legacyCatalogReader\(source\) \{/.test(code) && calls === 3 && /legacyCatalogReader\(\{ params \}\)/.test(inUrl[0]) && /legacyCatalogReader\(\{ obj \}\)/.test(inPaste[0]), 'calls+definition = ' + calls);
     const lr = fnSrc(sketch, 'legacyCatalogReader');
     check('(5) the legacy reader guards on the v2 markers and holds no v2 or writing code', /if \(params\.has\('v'\)\) return null;/.test(lr) && /obj\.version !== undefined\) return null;/.test(lr) && !/parseTransportV2|formatTransport|writeText|URLSearchParams\(\{/.test(lr));
-    check('(5) the Formorgel (gallery.js) is untouched: it still writes the old format, which the legacy reader loads', oldDir ? read('gallery.js') === oldRead('gallery.js') : true);
+    // task 064 (G7a) reversed the 063 pin 'gallery.js untouched': the Formorgel now WRITES v2 (core/catalog.js), so the legacy reader is only for links made before; G7b removes it
+    const gal = read('gallery.js');
+    check('(5) G7a: the Formorgel writes v2 (catalogLinkV2 / catalogPasteV2) and no orbitIds; the legacy reader stays for older links until G7b', /catalogLinkV2\(entry, extra\)/.test(gal) && /catalogPasteV2\(entry\)/.test(gal) && !/orbitIds:\s|orbitIds\.join/.test(gal.replace(/\/\/[^\n]*/g, '')));
 }
 
 console.log(`\n${pass}/${pass + fail} checks passed`);
