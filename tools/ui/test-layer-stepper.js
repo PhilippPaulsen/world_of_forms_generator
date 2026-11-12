@@ -76,7 +76,7 @@ function build(o) {
     const ctx = vm.createContext({ document, console, Event: class { constructor(type, init) { this.type = type; Object.assign(this, init); } },
         MutationObserver: class { constructor(cb) { this.cb = cb; observers.push(this); } observe() { } },
         setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, setInterval: clock.setInterval, clearInterval: clock.clearInterval, performance: { now: clock.now },
-        activeLayer: o.base ? 'base' : 0, additionalLayers: [layer], maxNodeCountFor: s => NODE_COUNT_MAX[s] || 7 });
+        activeLayer: o.base ? 'base' : 0, additionalLayers: [layer], maxNodeCountFor: s => NODE_COUNT_MAX[s] || 7, gridMaxOrdnung: s => NODE_COUNT_MAX[s] || 7 });   // task 068c2: the stepper reads gridMaxOrdnung; this fixture's table stands in for the limit
     ctx.window = ctx;
     vm.runInContext(UI_SRC, ctx, { filename: 'ui.js' });
     vm.runInContext(LAYER_SRC, ctx, { filename: 'ui-layer.js' });
@@ -90,13 +90,13 @@ function build(o) {
 console.log('== limits and reasons ==');
 T('limits', () => {
     const e = build({ shape: 'triangle', node: 7, size: 5 }); e.sync();
-    check('triangle layer at node count 7: the up chevron is disabled with the triangle / hexagon reason, the down chevron is not', e.dis(e.nodeRoot.up) && !e.dis(e.nodeRoot.down) && e.reason(e.nodeRoot.up) === 'Höchstens 7 Knoten bei Dreieck und Sechseck.', String(e.reason(e.nodeRoot.up)));
+    check('triangle layer at node count 7: the up chevron is disabled with the triangle / hexagon reason, the down chevron is not', e.dis(e.nodeRoot.up) && !e.dis(e.nodeRoot.down) && e.reason(e.nodeRoot.up) === 'Höchste Ordnung bei dieser Form: 7.', String(e.reason(e.nodeRoot.up)));
     const s = build({ shape: 'square', node: 13, size: 5 }); s.sync();
-    check('square layer at 13: the up chevron is disabled with the square reason (13 comes from maxNodeCountFor(the layer\'s own shape))', s.dis(s.nodeRoot.up) && s.reason(s.nodeRoot.up) === 'Höchstens 13 Knoten beim Quadrat.', String(s.reason(s.nodeRoot.up)));
+    check('square layer at 13: the up chevron is disabled with the square reason (13 comes from maxNodeCountFor(the layer\'s own shape))', s.dis(s.nodeRoot.up) && s.reason(s.nodeRoot.up) === 'Höchste Ordnung beim Quadrat: 13.', String(s.reason(s.nodeRoot.up)));
     const s12 = build({ shape: 'square', node: 12 }); s12.sync();
     check('square layer at 12: both chevrons are enabled (the base\'s own shape plays no part: the limit is the layer\'s)', !s12.dis(s12.nodeRoot.up) && !s12.dis(s12.nodeRoot.down));
     const one = build({ shape: 'square', node: 1 }); one.sync();
-    check('node count 1: the down chevron is disabled ("Mindestens 1 Knoten.")', one.dis(one.nodeRoot.down) && one.reason(one.nodeRoot.down) === 'Mindestens 1 Knoten.');
+    check('node count 1: the down chevron is disabled ("Niedrigste Ordnung: 1.")', one.dis(one.nodeRoot.down) && one.reason(one.nodeRoot.down) === 'Niedrigste Ordnung: 1.');
     const z = build({ size: 9 }); z.sync();
     check('size 9: up disabled "Größte Größe: 9."; size 1: down disabled "Kleinste Größe: 1."', z.dis(z.sizeRoot.up) && z.reason(z.sizeRoot.up) === 'Größte Größe: 9.' && (() => { const o = build({ size: 1 }); o.sync(); return o.dis(o.sizeRoot.down) && o.reason(o.sizeRoot.down) === 'Kleinste Größe: 1.'; })());
     const even = build({ size: 4 }); even.sync(); even.press(even.sizeRoot.up); even.release(even.sizeRoot.up);
@@ -104,7 +104,7 @@ T('limits', () => {
     const b = build({ base: true }); b.sync();
     check('no layer active (the base): all four chevrons are disabled ("Keine Ebene aktiv.") and a press steps nothing', [b.nodeRoot.up, b.nodeRoot.down, b.sizeRoot.up, b.sizeRoot.down].every(x => b.dis(x) && b.reason(x) === 'Keine Ebene aktiv.') && (() => { b.press(b.nodeRoot.up); b.release(b.nodeRoot.up); return b.sketch.grids.length === 0 && b.nodeInput.value === '3'; })());
     const sw = build({ shape: 'square', node: 13 }); sw.sync(); sw.layer.shape = 'triangle'; sw.nodeInput.value = '7'; sw.sync();
-    check('after a layer switch (a programmatic change) the next sync re-reads the limits (square 13 -> triangle 7: the up chevron is disabled by the triangle limit)', sw.dis(sw.nodeRoot.up) && sw.reason(sw.nodeRoot.up).includes('Dreieck'));
+    check('after a layer switch (a programmatic change) the next sync re-reads the limits (square 13 -> triangle 7: the up chevron is disabled by the triangle limit)', sw.dis(sw.nodeRoot.up) && sw.reason(sw.nodeRoot.up).includes('dieser Form'));
     const typed = build({ shape: 'triangle', node: 3 });
     typed.nodeInput.value = '12'; typed.nodeInput.dispatch('input');
     check('a TYPED out-of-range node count is clamped to the layer\'s limit before the sketch reads it (12 on a triangle layer -> 7)', typed.nodeInput.value === '7', typed.nodeInput.value);

@@ -153,6 +153,7 @@ console.log('\n== sketch.js: the dynamic title sites ==');
         [/^netBtn\.title = /, 'timeline keyframe "Net": visible text'],
         [/^countEl\.title = /, 'the "2/5" counter: a span that is not a control, its text is its content'],
         [/^btn\.title = cand\.orientation/, 'pairing candidate row: visible text'],
+        [/^const set = \(el, prop, value\) => \{ if \(el && \(prop === 'text'/, 'task 068c2: the info-card grid line and the title of the two order steppers (div role=group, not a control; the chevrons keep their aria-labels): a read-out'],
     ];
     const stray = sites.filter(s => !ALLOWED.some(([re]) => re.test(s.text)));
     check('the scan found the raw title sites (not an empty result)', sites.length >= 7, sites.length + ' sites');   // the Curve / Free / Fill lock titles went to UI.setDisabled (notices commit 11); the old layer row's and timeline buttons' went with them (cleanup step 3)
