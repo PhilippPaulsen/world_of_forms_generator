@@ -289,12 +289,20 @@ function spatialMorphRenderColorSheet(id) {
     return { connections: layer.connections, nodes: layer.nodes, store: layer.faceAssignments || null, sheet: (typeof faceSheetOverrideOfLayer === 'function') ? faceSheetOverrideOfLayer(layer) : null, id };
 }
 
+// The cache signature of a corner field (task 061): everything the field depends on, plus the sheet's GridSpec (ordnung, lage, the legacy c = 1 marker),
+// so a grid of another topology never hits an entry of the old one even if shape, node count and first corner agree. The same geometry gives the same signature.
+function spatialMorphRenderCornerSig(id, cs, lay) {
+    let spec = null;
+    try { spec = id === 'base' ? (typeof gridSpec !== 'undefined' ? gridSpec : null) : (typeof layerGridSpecOf === 'function' ? layerGridSpecOf(additionalLayers[id]) : null); } catch (e) { spec = null; }
+    return JSON.stringify([cs.connections, cs.store ? [...cs.store] : null, lay.shape, lay.symmetryMode, cs.nodes.length, lay.outerCorners && lay.outerCorners[0], spec ? [spec.ordnung, spec.lage, spec.legacyC1 === true] : null]);
+}
+
 // The colour field of one corner as a raster: { raster } (cells hold linear-light colours), cached by a signature of everything it depends on (the lines, the store's content, the grid). null when it cannot be built.
 function spatialMorphRenderCornerField(id, cornerIdx) {
     const cs = spatialMorphRenderColorSheet(id);
     if (!cs || typeof computeCellFaces !== 'function' || typeof cssColorToLinear !== 'function') return null;
     const lay = cs.sheet || { shape: currentShape, symmetryMode, outerCorners };
-    const sig = JSON.stringify([cs.connections, cs.store ? [...cs.store] : null, lay.shape, lay.symmetryMode, cs.nodes.length, lay.outerCorners && lay.outerCorners[0]]);
+    const sig = spatialMorphRenderCornerSig(id, cs, lay);
     const st = spatialMorphRenderState;
     const key = String(id) + '#' + cornerIdx;
     const hit = st.colorCache.get(key);
