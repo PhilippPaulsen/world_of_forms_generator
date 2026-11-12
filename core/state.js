@@ -267,7 +267,7 @@ function projectGridSpec(spec) {
 // Legacy signature kept: the grid of `shape` at the order held by gridSpec (a different shape keeps the legacy count, as nodeCount did).
 function rebuildGrid(shape) {
     // built first: an invalid shape throws before any state is touched
-    const spec = gridSpec.shape === shape ? gridSpec : fromLegacy(shape, toLegacy(gridSpec));
+    const spec = gridSpec.shape === shape ? gridSpec : gridSpecOnShape(gridSpec, shape);   // task 068b: lage 2 keeps its lage (ordnung taken over, clamped); lage 1 as before
     const grid = buildGrid(spec, { sizeFactor: shapeSizeFactor, canvasW, canvasH });
     projectGridSpec(spec);
     connections = [];
@@ -290,6 +290,42 @@ function setGrid(spec) {
     currentShape = spec.shape;
     projectGridSpec(spec);
     rebuildGrid(spec.shape);
+    if (typeof gridControlsSync === 'function') gridControlsSync();   // task 068b: the page's inputs/buttons follow (set by sketch.js setup)
+}
+
+// Task 068b: the lage of the BASE grid (no UI yet: 068c). Like a shape change it clears connections, layers and the timeline (rebuildGrid) and the redo stack, and bumps gridRevision.
+// -> { ok: true, changed } | { ok: false, reason: 'invalid-lage' | 'switch-off' | 'ordnung-limit', limit? }; never throws, nothing is touched on a refusal.
+function setBaseLage(lage) {
+    if (lage !== 1 && lage !== 2) return { ok: false, reason: 'invalid-lage' };
+    if (gridSpec.lage === lage) return { ok: true, changed: false };
+    if (lage === 2) {
+        if (!lage2SwitchOn()) return { ok: false, reason: 'switch-off' };
+        if (gridSpec.ordnung > maxOrdnungFor(gridSpec.shape, 2)) return { ok: false, reason: 'ordnung-limit', limit: maxOrdnungFor(gridSpec.shape, 2) };
+    }
+    setGrid({ shape: gridSpec.shape, ordnung: gridSpec.ordnung, lage });
+    redoStack = [];
+    return { ok: true, changed: true };
+}
+// Task 068b: the lage of ONE layer (no UI yet). Clears that layer's lines and redo stack like a shape change and rebuilds its grid; refused for a timeline keyframe / playback layer.
+// -> { ok: true, changed } | { ok: false, reason: 'unknown-layer' | 'invalid-lage' | 'in-timeline' | 'switch-off' | 'ordnung-limit', limit? }
+function setLayerLage(layer, lage) {
+    const idx = additionalLayers.indexOf(layer);
+    if (idx < 0) return { ok: false, reason: 'unknown-layer' };
+    if (lage !== 1 && lage !== 2) return { ok: false, reason: 'invalid-lage' };
+    const spec = layerGridSpecOf(layer);
+    if (spec.lage === lage) return { ok: true, changed: false };
+    if (timeline && (timeline.keyframeLayerIds.indexOf(idx) >= 0 || timeline.playbackLayerIndex === idx)) return { ok: false, reason: 'in-timeline' };
+    if (lage === 2) {
+        if (!lage2SwitchOn()) return { ok: false, reason: 'switch-off' };
+        if (spec.ordnung > maxOrdnungFor(layer.shape, 2)) return { ok: false, reason: 'ordnung-limit', limit: maxOrdnungFor(layer.shape, 2) };
+    }
+    projectLayerGridSpec(layer, { shape: spec.shape, ordnung: spec.ordnung, lage });
+    layer.connections = [];
+    layer.redoStack = [];
+    const g = layerGridForSpec(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.gridSpec, layer.shape, canvasW, canvasH);
+    layer.nodes = g.nodes; layer.centroid = g.centroid; layer.outerCorners = g.outerCorners;
+    if (typeof gridControlsSync === 'function') gridControlsSync();
+    return { ok: true, changed: true };
 }
 
 // Roadmap 1.2-C: the "combiner" 1.2-A's own design deliberately held
