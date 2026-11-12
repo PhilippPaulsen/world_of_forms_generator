@@ -35,8 +35,8 @@ else {
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys)', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/faces.js, core/tiling.js, core/facecolor.js, core/orbits.js, core/export.js, tools/morph/off-path-golden.json, index.html markup (apart from ?v=) are unchanged', ['core/faces.js', 'core/tiling.js', 'core/facecolor.js', 'core/orbits.js', 'core/export.js', 'tools/morph/off-path-golden.json'].every(same)
-        && read('index.html').replace(/\?v=\w+/g, '') === fs.readFileSync(path.join(oldDir, 'index.html'), 'utf8').replace(/\?v=\w+/g, '') && read('ui-phone-config.js') === fs.readFileSync(path.join(oldDir, 'ui-phone-config.js'), 'utf8'));
+    check('(1) core/faces.js, core/tiling.js, core/facecolor.js, core/orbits.js, core/export.js, tools/morph/off-path-golden.json, ui-phone-config.js are unchanged (index.html changed in 068c2: labels)', ['core/faces.js', 'core/tiling.js', 'core/facecolor.js', 'core/orbits.js', 'core/export.js', 'tools/morph/off-path-golden.json'].every(same)
+        && read('ui-phone-config.js') === fs.readFileSync(path.join(oldDir, 'ui-phone-config.js'), 'utf8'));
 }
 const P5 = ['fill', 'noFill', 'beginShape', 'vertex', 'endShape', 'push', 'pop', 'noStroke', 'stroke', 'strokeWeight', 'ellipse', 'rect', 'translate', 'rotate', 'scale', 'textSize', 'text', 'textAlign', 'background', 'clear'];
 function world(shape, ordnung, lage, o) {
@@ -75,7 +75,7 @@ const withSketch = (w, names) => { names.forEach(n => w.set(grab(n))); return w;
     check('(2) size change: rebuildGrid(currentShape) keeps gridSpec (lage 2) and does not clear anything else', sc.get("(function () { shapeSizeFactor = 4; const before = gridSpec; rebuildGrid(currentShape); return gridSpec === before && gridSpec.lage === 2; })()"));
     // clampNodeCountToShape lives in setup(): its lage-aware text
     check('(2) sketch.js: clampNodeCountToShape and the node-count handler read gridMaxCount / gridSpecForCount with gridSpec.lage, the catalog import takes the transport\'s lage', /function clampNodeCountToShape[\s\S]*?gridMaxCount\(currentShape, gridSpec\.lage\)[\s\S]*?gridSpecForCount\(currentShape, maxN, gridSpec\.lage\)/.test(SK)
-        && /setGrid\(gridSpecForCount\(currentShape, v, gridSpec\.lage\)\)/.test(SK) && /gridSpecForCount\(currentShape, catalogUrlPattern\.order, \(catalogUrlPattern\.spec && catalogUrlPattern\.spec\.lage\) \|\| 1\)/.test(SK) && !/setGrid\(fromLegacy\(/.test(SK));
+        && /setGrid\(gridSpecForOrdnung\(currentShape, v, gridSpec\.lage\)\)/.test(SK) && /gridSpecForCount\(currentShape, catalogUrlPattern\.order, \(catalogUrlPattern\.spec && catalogUrlPattern\.spec\.lage\) \|\| 1\)/.test(SK) && !/setGrid\(fromLegacy\(/.test(SK));
     // addLayer
     for (const [lage, shape, n] of [[2, 'triangle', 3], [2, 'square', 4], [2, 'hex', 2], [1, 'square', 3]]) {
         const x = withSketch(world(shape, n, lage), ['addLayer']);
@@ -173,7 +173,7 @@ const withSketch = (w, names) => { names.forEach(n => w.set(grab(n))); return w;
         ['renderLayerTabs', 'updateOffsetControls', 'updateTimelineControls'].forEach(f => { w.sb[f] = () => log.calls.push(f); });
         w.set(m[0].replace('function syncGridControls', 'globalThis.gridControlsSync = function syncGridControls').replace(/\n    \}\n$/, '\n    };\n'));
         w.set("setGrid({ shape: 'triangle', ordnung: 4, lage: 2 });");
-        check('(5) after setGrid (lage 2, ordnung 4) the input shows the count 5 with max 6, the triangle button is the active one, layer views are refreshed', nodeInput.v === '5' && nodeInput.elt.max === 6 && shapeBtns[0].active && !shapeBtns[1].active && !shapeBtns[2].active && log.calls.length === 3, J([nodeInput.v, nodeInput.elt.max, shapeBtns.map(b => b.active), log.calls]));
+        check('(5) after setGrid (lage 2, ordnung 4) the input shows the ordnung 4 with max 5 (task 068c2), the triangle button is the active one, layer views are refreshed', nodeInput.v === '4' && nodeInput.elt.max === 5 && shapeBtns[0].active && !shapeBtns[1].active && !shapeBtns[2].active && log.calls.length === 3, J([nodeInput.v, nodeInput.elt.max, shapeBtns.map(b => b.active), log.calls]));
         w.set("setGrid({ shape: 'hex', ordnung: 2, lage: 2 });");
         check('(5) ...after a hex grid: count 2, max 2 (lage-2 ceiling), hex button active', nodeInput.v === '2' && nodeInput.elt.max === 2 && shapeBtns[2].active && !shapeBtns[0].active);
         w.set("setBaseLage(1);");
