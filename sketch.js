@@ -167,22 +167,32 @@ function setup() {
     const shapeBtns = selectAll('.shape-icon-btn');
     shapeBtns.forEach(btn => {
         btn.mousePressed(() => {
+            // Task 068c3a: the ordnung stays across a shape change (clamped to the new shape's maximum, the lage stays); what the rebuild clears is said, and asked
+            // for first when it takes layers or the timeline with it. A click on the shape that is already active behaves as before.
+            const plan = shapeChangePlan(btn.attribute('data-shape'));
+            const doShapeChange = () => {
             // Remove active class from all
             shapeBtns.forEach(b => b.removeClass('active'));
             // Add to current
             btn.addClass('active');
             // Set shape
             currentShape = btn.attribute('data-shape');
-            // The node count of the shape we came from may exceed this shape's ceiling (square 13 -> hex 7): clamp it,
-            // visibly (a note), before the grid is built from it.
-            clampNodeCountToShape('Shape');
+            // The ordnung of the shape we came from may exceed this shape's ceiling (square 12 -> hex 7): rebuildGrid() clamps it (gridSpecOnShape); the note says so
             rebuildGrid(currentShape);
+            syncGridControls();   // the input's value and max, the shape buttons
+            sayShapeChange(plan);
             renderLayerTabs(); // rebuildGrid() clears additionalLayers - the layer views follow on the next tick
             updateOffsetControls();
             updateTimelineControls(); // rebuildGrid() also clears timeline - see its own comment (core/state.js)
             updateSymmetryModeControl(); // Roadmap 1.11: fold row only applies to hex - show/hide it and re-resolve symmetryMode for the new shape (function declaration, hoisted within setup() regardless of textual order below)
             cancelAltNetConstruction(); // Roadmap 1.2-C: an in-progress P/Q click pair no longer means anything once the target shape/order changed underneath it
             redraw();
+            };
+            if (!plan.same && (plan.loss.layers || plan.loss.timeline) && window.timelineConfirm && window.UI && UI.t) {
+                window.timelineConfirm({ title: UI.t('shape.confirm.title'), text: UI.t('shape.confirm.text', { what: shapeLossWhat(plan.loss) }), confirmLabel: UI.t('shape.confirm.go'), onConfirm: doShapeChange, returnFocus: () => { const a = shapeBtns.find(b => b.hasClass('active')); if (a && a.elt.focus) a.elt.focus(); } });
+                return;
+            }
+            doShapeChange();
         });
     });
 
@@ -1671,12 +1681,11 @@ function setup() {
                 if (activeLayer === 'base') return;
                 layerShapeBtns.forEach(b => b.removeClass('active'));
                 btn.addClass('active');
+                const hadLines = additionalLayers[activeLayer].connections.length > 0, shapeDiffers = additionalLayers[activeLayer].shape !== btn.attribute('data-shape');
                 const clamp = updateActiveLayerGrid({ shape: btn.attribute('data-shape') });
-                // updateActiveLayerGrid() clamps this layer's own node count to the new shape's limit; say so, and sync the input
-                if (clamp) {
-                    showLayerNodeCountNote(`Layer shape changed to ${clamp.shape}: Layer Order ${ordnungForCount(clamp.shape, clamp.from)} is above its limit of ${ordnungForCount(clamp.shape, clamp.to)}, so it was set to ${ordnungForCount(clamp.shape, clamp.to)}.`);
-                    if (layerNodeCountInput) layerNodeCountInput.value(ordnungForCount(clamp.shape, clamp.to));
-                }
+                // updateActiveLayerGrid() keeps the layer's ordnung (task 068c3a) and clamps it to the new shape's maximum; say so, and sync the input
+                if (clamp && layerNodeCountInput) layerNodeCountInput.value(ordnungForCount(clamp.shape, clamp.to));
+                if (shapeDiffers) { const t = shapeChangeText(clamp ? ordnungForCount(clamp.shape, clamp.to) : null, hadLines ? shapeLossWhat({ lines: true }) : ''); if (t) showLayerNodeCountNote(t); }
                 // Roadmap 1.12 "Align to base" bugfix: found live while
                 // testing - this handler predates the align button and
                 // never re-synced the layer-contextual controls'
@@ -2735,9 +2744,12 @@ function updateActiveLayerGrid(patch) {
     if (activeLayer === 'base') return;
     const layer = additionalLayers[activeLayer];
     // task 061: a patch's nodeCount is not assigned; it becomes the layer's gridSpec (projectLayerGridSpec writes layer.nodeCount)
+    const oldShape = layer.shape, oldSpecForShape = layerGridSpecOf(layer);   // task 068c3a
     const { nodeCount: patchCount, ordnung: patchOrdnung, ...patchRest } = patch;   // task 068c2: the input sends the ordnung; align / catalog still send the legacy count
     Object.assign(layer, patchRest);
     let layerCount = Number.isInteger(patchOrdnung) && patchOrdnung >= 1 ? countForOrdnung(layer.shape, patchOrdnung) : Number.isInteger(patchCount) && patchCount >= 1 ? patchCount : layer.nodeCount;
+    // task 068c3a: a shape change on its own keeps the layer's ORDNUNG (the clamp below limits it), not the legacy count
+    if (patch.shape !== undefined && patch.shape !== oldShape && !(Number.isInteger(patchOrdnung) && patchOrdnung >= 1) && !(Number.isInteger(patchCount) && patchCount >= 1)) layerCount = countForOrdnung(layer.shape, oldSpecForShape.ordnung);
     // Defence in depth for every caller (shape switch, catalog link, align): a layer's node count never exceeds its OWN
     // shape's ceiling (core/forms.js NODE_COUNT_MAX). The caller that knows the UI reports it (returned below).
     let clamped = null;
@@ -4769,6 +4781,38 @@ window.getSpatialMorph = getSpatialMorph;
 // Updates #pattern-name-status for whichever sheet is currently active.
 // Called once per draw() (see there for why this is cached rather than
 // unconditional like updateCrossLayerStatus()).
+// Task 068c3a: what a change of the BASE shape does. -> { same, from, to, clamped: { from, to } | null, loss: { lines, layers, timeline, colors } }.
+// to = gridSpecOnShape (the ordnung stays, clamped; the lage stays). The loss is what rebuildGrid() clears: the base's lines and colours, every layer and the timeline.
+function shapeChangePlan(target) {
+    const from = baseGridSpecNow(), same = target === currentShape;
+    const to = same ? from : gridSpecOnShape(from, target);
+    return { same, from, to, clamped: !same && to.ordnung < from.ordnung ? { from: from.ordnung, to: to.ordnung } : null,
+        loss: { lines: connections.length > 0, layers: additionalLayers.length, timeline: !!timeline, colors: baseFaceAssignments instanceof Map && baseFaceAssignments.size > 0 } };
+}
+// "Linien, Ebenen, Zeitleiste und Farben" - the words of what a shape change clears (only what is there), joined as a list.
+function shapeLossWhat(loss) {
+    const t = (k, fb) => (window.UI && UI.t ? UI.t(k) : fb);
+    const parts = [];
+    if (loss.lines) parts.push(t('shape.lost.lines', 'Linien'));
+    if (loss.layers) parts.push(t('shape.lost.layers', 'Ebenen'));
+    if (loss.timeline) parts.push(t('shape.lost.timeline', 'Zeitleiste'));
+    if (loss.colors) parts.push(t('shape.lost.colors', 'Farben'));
+    return parts.length < 2 ? parts.join('') : parts.slice(0, -1).join(', ') + ' ' + t('shape.lost.and', 'und') + ' ' + parts[parts.length - 1];
+}
+// The notice after a shape change: the clamp ("Ordnung auf {n} begrenzt ...") and what was cleared. null when there is nothing to say.
+function shapeChangeText(clampedTo, what) {
+    const t = (k, v, fb) => (window.UI && UI.t ? UI.t(k, v) : fb);
+    const parts = [];
+    if (clampedTo !== null && clampedTo !== undefined) parts.push(t('note.shape.clamp', { n: clampedTo }, `Ordnung auf ${clampedTo} begrenzt (höchstens ${clampedTo} bei dieser Form).`));
+    if (what) parts.push(t('note.shape.cleared', { what }, `Geleert: ${what}.`));
+    return parts.length ? parts.join(' ') : null;
+}
+function sayShapeChange(plan) {
+    if (plan.same) return;
+    const text = shapeChangeText(plan.clamped ? plan.clamped.to : null, shapeLossWhat(plan.loss));
+    if (text && window.say) window.say('shape-change', text, 'info');
+}
+
 // Task 068c2: the read-outs of the active sheet's grid - the info card's line "Gitter: {name} · Knoten: {n}" (#grid-info-status) and the tooltips of the two
 // ordnung steppers ("Ordnung {o}: {n} Knoten"). Derived from the spec only (getGridNodeCount, the grid part of the v2 name); written only when the text changes.
 function updateGridInfoLine() {
