@@ -14,7 +14,7 @@ const newCtx = () => makeContext({ state: true, export: true });
 
 // ---- worlds and scenarios ------------------------------------------------------------------------------------------------------
 function reset(ctx, shape, order, size, mode) {
-    ctx.run(`currentShape = ${J(shape)}; nodeCount = ${order}; shapeSizeFactor = ${size}; canvasW = ${CANVAS}; canvasH = ${CANVAS}; symmetryMode = ${J(mode || 'rotation_reflection6')};
+    ctx.run(`currentShape = ${J(shape)}; projectGridSpec(fromLegacy(currentShape, ${order})); shapeSizeFactor = ${size}; canvasW = ${CANVAS}; canvasH = ${CANVAS}; symmetryMode = ${J(mode || 'rotation_reflection6')};
         curveType = { kind: 'straight' }; showNodes = true; showFaces = false; freeEndpointsEnabled = false; lineColor = '#000000'; baseNetTransform = null; redoStack = [];
         rebuildGrid(currentShape);`);
     return ctx;
@@ -51,7 +51,7 @@ function orbitReps(ctx) { return ctx.run('computeThemeLineOrbits(nodes, centroid
 // base + 3 layers + playback layer + timeline on an ALTERNATIVE-NET hex base: the heaviest scenario
 function layeredAltNet(ctx, o) {
     o = o || {};
-    ctx.run(`currentShape = 'hex'; nodeCount = 3; shapeSizeFactor = 3; canvasW = ${CANVAS}; canvasH = ${CANVAS}; symmetryMode = 'rotation_reflection6'; rebuildGridFromConstruction({ x: 120, y: 230 }, { x: 310, y: 260 }, 6, 1);`);
+    ctx.run(`currentShape = 'hex'; projectGridSpec(fromLegacy(currentShape, 3)); shapeSizeFactor = 3; canvasW = ${CANVAS}; canvasH = ${CANVAS}; symmetryMode = 'rotation_reflection6'; rebuildGridFromConstruction({ x: 120, y: 230 }, { x: 310, y: 260 }, 6, 1);`);
     const reps = orbitReps(ctx);
     ctx.run(`connections = ${J([reps[3], reps[10], reps[20], reps[35]])};`);
     ctx.run(`nodes.push({ id: nodes.length + 1, x: 41.25, y: 99.5, free: true }); connections.push([1, nodes.length]); redoStack = [[2, 3]];

@@ -223,7 +223,7 @@ console.log('\n== 9. export ==');
     const g = ex({ x: { kind: 'geometric', w: 1.2 }, y: 'same', domain: 'field' }, 3);
     check('geometric q in a field is per tile (Rt = 3): exp(w / 2)', Math.abs(g.x.q - Math.exp(1.2 / 2)) < 1e-12 && g.x.alternate === false);
     const exportSrc = fs.readFileSync(path.join(ROOT, 'core', 'export.js'), 'utf8');
-    check('core/export.js passes shapeSizeFactor (the tile count) to the description', exportSrc.includes('netTransformExportData(netTransformNow(), nodeCount - 1, shapeSizeFactor)'));
+    check('core/export.js passes shapeSizeFactor (the tile count) to the description', exportSrc.includes('netTransformExportData(netTransformNow(), baseGridDivisions(), shapeSizeFactor)'));
 }
 
 // ============ 10. free endpoints ============

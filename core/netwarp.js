@@ -259,7 +259,9 @@ function _netWarpAxis(f, alt, s) {
 function netWarpForBase(spec, shape, corners, nodeCountValue, Rt) {
     if (!spec || shape !== 'square' || !corners || corners.length < 4) return null;
     const c0 = corners[0], c1 = corners[1], c3 = corners[3];
-    return makeNetWarp(spec, { c0, v1: { x: c1.x - c0.x, y: c1.y - c0.y }, v2: { x: c3.x - c0.x, y: c3.y - c0.y } }, nodeCountValue - 1, Rt);
+    // legacy signature (c = the legacy count): E comes from the one producer, getGridDivisions (an invalid c gives no warp, as c - 1 < 1 did)
+    const E = Number.isInteger(nodeCountValue) && nodeCountValue >= 1 ? getGridDivisions(fromLegacy(shape, nodeCountValue)) : -1;
+    return makeNetWarp(spec, { c0, v1: { x: c1.x - c0.x, y: c1.y - c0.y }, v2: { x: c3.x - c0.x, y: c3.y - c0.y } }, E, Rt);
 }
 
 // Tile coordinates (s,t) of a point in the warp's frame: (0..1, 0..1) is the net's own tile.

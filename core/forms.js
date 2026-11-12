@@ -516,6 +516,19 @@ function toLegacy(spec, opts) {
     return spec.legacyC1 === true ? 1 : spec.ordnung + 1;
 }
 
+// Task 060 (G5a): the divisions E per tile and axis of the base grid - the ONE producer every net/export consumer asks (it replaces the
+// scattered `nodeCount - 1`). triangle/square: ordnung (also on lage 2, which extends the same lage-1 grid); hex: ordnung - 1; the legacy
+// c = 1 spec: 0 (no warp, as before). Equal to the old E = c - 1 for every shape and c.
+function getGridDivisions(spec) {
+    return toLegacy(spec, { allowLage2: true }) - 1;
+}
+
+// E of the live base grid: the base's GridSpec as its derived legacy projection (global nodeCount, set only by core/state.js projectGridSpec)
+// goes through getGridDivisions. Sandboxes that load forms/netwarp/export without state.js only provide currentShape + nodeCount.
+function baseGridDivisions() {
+    return getGridDivisions(fromLegacy(currentShape, nodeCount));
+}
+
 // view = {sizeFactor, canvasW, canvasH, center?}. -> { grid: {shape, ordnung, lage}, nodes, centroid, outerCorners }.
 // opts.numbered (task 059): every node also carries u, v and its semantic node number zahl (numberGridNodes), for lage 1 as well as lage 2.
 // Lage 1: exactly the output of the three builders (no extra fields). Lage 2 (only with opts.allowLage2): the lage-1 nodes

@@ -24,7 +24,7 @@ const CANVAS = 600;
 // ---- a context with the real globals, a grid built by the REAL rebuildGrid(), and helpers ------------------------------------------
 function world(shape, order, size, mode) {
     const ctx = makeContext({ state: true });
-    ctx.run(`currentShape = ${J(shape)}; nodeCount = ${order}; shapeSizeFactor = ${size}; canvasW = ${CANVAS}; canvasH = ${CANVAS}; symmetryMode = ${J(mode || 'rotation_reflection6')}; rebuildGrid(currentShape);`);
+    ctx.run(`currentShape = ${J(shape)}; projectGridSpec(fromLegacy(currentShape, ${order})); shapeSizeFactor = ${size}; canvasW = ${CANVAS}; canvasH = ${CANVAS}; symmetryMode = ${J(mode || 'rotation_reflection6')}; rebuildGrid(currentShape);`);
     return ctx;
 }
 // a layer the way sketch.js builds one: layerGrid(<base>, ..., layer size, layer count, layer shape, canvasW, canvasH), free nodes appended
@@ -154,7 +154,7 @@ console.log('\n== 3. alternative net (rebuildGridFromConstruction) ==');
     for (const [shape, n] of [['triangle', 3], ['square', 4], ['hex', 6]]) for (const side of [1, -1]) for (const order of [2, 3, 4]) {
         total++;
         const ctx = makeContext({ state: true });
-        ctx.run(`currentShape = ${J(shape)}; nodeCount = ${order}; shapeSizeFactor = 3; canvasW = ${CANVAS}; canvasH = ${CANVAS}; symmetryMode = 'rotation_reflection6'; rebuildGridFromConstruction({ x: 120, y: 230 }, { x: 310, y: 260 }, ${n}, ${side});`);
+        ctx.run(`currentShape = ${J(shape)}; projectGridSpec(fromLegacy(currentShape, ${order})); shapeSizeFactor = 3; canvasW = ${CANVAS}; canvasH = ${CANVAS}; symmetryMode = 'rotation_reflection6'; rebuildGridFromConstruction({ x: 120, y: 230 }, { x: 310, y: 260 }, ${n}, ${side});`);
         putConnections(ctx, [[1, 2]]);
         const snap = snapshotOf(ctx), r = planOf(ctx, snap);
         const real = ctx.get('nodes').map(pickNode);
@@ -245,7 +245,7 @@ console.log('\n== 6. source check ==');
         /function updateActiveLayerGrid[\s\S]{0,4000}?layerGrid\(outerCorners, centroid, currentShape, shapeSizeFactor, layer\.shapeSizeFactor, layer\.nodeCount, layer\.shape, canvasW, canvasH\)/.test(sk));
     check('sketch.js: the timeline playback layer is built with the same layerGrid() arguments', /layerGrid\(outerCorners, centroid, currentShape, shapeSizeFactor, playbackLayer\.shapeSizeFactor, playbackLayer\.nodeCount, playbackLayer\.shape, canvasW, canvasH\)/.test(sk));
     const fm = F.read('core/forms.js');   // 057 (G2): rebuildGrid() builds through the GridSpec facade; the facade hands the same four arguments to the three builders
-    check('core/state.js: rebuildGrid() builds with (nodeCount, shapeSizeFactor, canvasW, canvasH) through buildGrid(fromLegacy(shape, nodeCount), { sizeFactor: shapeSizeFactor, canvasW, canvasH })', /buildGrid\(fromLegacy\(shape, nodeCount\), \{ sizeFactor: shapeSizeFactor, canvasW, canvasH \}\)/.test(st)
+    check('core/state.js: rebuildGrid() builds the spec held by gridSpec (060: fromLegacy(shape, toLegacy(gridSpec)) for another shape) with (shapeSizeFactor, canvasW, canvasH) through buildGrid(spec, { sizeFactor: shapeSizeFactor, canvasW, canvasH })', /const spec = gridSpec\.shape === shape \? gridSpec : fromLegacy\(shape, toLegacy\(gridSpec\)\);\s*const grid = buildGrid\(spec, \{ sizeFactor: shapeSizeFactor, canvasW, canvasH \}\)/.test(st)
         && /build = spec\.shape === 'triangle' \? buildTriangleGrid : spec\.shape === 'square' \? buildSquareGrid : buildHexGrid;\s*const g = build\(c, view\.sizeFactor, view\.canvasW, view\.canvasH, view\.center\)/.test(fm) && /const c = toLegacy\(spec, opts\)/.test(fm));
 }
 

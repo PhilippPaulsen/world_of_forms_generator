@@ -478,7 +478,7 @@ T('span', () => {
   const c2 = w.get('spatialMorphRenderState.spanComputes');
   w.setMorph({ enabled: true, mode: 'radial', angleDeg: 45 }); w.frame();
   const c3 = w.get('spatialMorphRenderState.spanComputes');
-  w.set("currentShape = 'hex'; nodeCount = 3; shapeSizeFactor = 3; rebuildGrid('hex');"); w.baseConnections([[1, 10]]);
+  w.set("currentShape = 'hex'; projectGridSpec(fromLegacy('hex', 3)); shapeSizeFactor = 3; rebuildGrid('hex');"); w.baseConnections([[1, 10]]);
   w.set('timeline = null; additionalLayers = [];'); const h1 = w.addKeyframeLayer([[1, 10], [3, 14]]), h2 = w.addKeyframeLayer([[2, 11], [4, 15]]); w.setTimeline([h1, h2]);
   w.frame(); const c4 = w.get('spatialMorphRenderState.spanComputes');
   w.frame(); const c5 = w.get('spatialMorphRenderState.spanComputes');

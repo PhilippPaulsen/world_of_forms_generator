@@ -40,19 +40,19 @@
 
 // every global apply writes, in the order it writes them (Phase B). test-session-apply.js pins this list against the `let`s of core/state.js.
 const SESSION_APPLY_CAPTURED = Object.freeze([
-    'currentShape', 'nodeCount', 'shapeSizeFactor', 'symmetryMode', 'curveType', 'lineColor', 'showNodes', 'showFaces', 'freeEndpointsEnabled',
+    'currentShape', 'gridSpec', 'shapeSizeFactor', 'symmetryMode', 'curveType', 'lineColor', 'showNodes', 'showFaces', 'freeEndpointsEnabled',
     'nodes', 'centroid', 'outerCorners', 'altNetSeed',
     'connections', 'redoStack', 'baseFaceAssignments', 'baseFacePalette', 'baseFaceAnchor', 'baseLastHarmonyType', 'baseLastSelection', 'baseDistributionStrategy',
     'additionalLayers', 'timeline', 'activeLayer',
     'baseNetTransform', 'baseNetAnimation', 'faceHover', 'spatialMorph', 'lineStyle',
 ]);
 // the `let`s of core/state.js apply deliberately leaves alone (gridRevision: a monotonic counter of base-grid rebuilds - a rollback must never rewind it, or a revision number could name two different grids; faceSelected: the chip view's outline of the selected trail, UI state it re-derives from the restored trails on its next tick; a rollback must not bring back a key of the old pattern)
-const SESSION_APPLY_UNTOUCHED = Object.freeze(['canvasW', 'canvasH', 'svgPathCollector', 'segmentCollector', 'activeNetWarp', 'faceSelected', 'gridRevision']);
+const SESSION_APPLY_UNTOUCHED = Object.freeze(['nodeCount', 'canvasW', 'canvasH', 'svgPathCollector', 'segmentCollector', 'activeNetWarp', 'faceSelected', 'gridRevision']);
 
 // The live references, by name (NOT copies): enough to undo an apply, and to check by identity that an undo was complete.
 function captureSessionGlobals() {
     return {
-        currentShape, nodeCount, shapeSizeFactor, symmetryMode, curveType, lineColor, showNodes, showFaces, freeEndpointsEnabled,
+        currentShape, gridSpec, shapeSizeFactor, symmetryMode, curveType, lineColor, showNodes, showFaces, freeEndpointsEnabled,
         nodes, centroid, outerCorners, altNetSeed,
         connections, redoStack, baseFaceAssignments, baseFacePalette, baseFaceAnchor, baseLastHarmonyType, baseLastSelection, baseDistributionStrategy,
         additionalLayers, timeline, activeLayer,
@@ -60,7 +60,7 @@ function captureSessionGlobals() {
     };
 }
 function _restoreSessionGlobals(c) {
-    currentShape = c.currentShape; nodeCount = c.nodeCount; shapeSizeFactor = c.shapeSizeFactor; symmetryMode = c.symmetryMode; curveType = c.curveType;
+    currentShape = c.currentShape; projectGridSpec(c.gridSpec); shapeSizeFactor = c.shapeSizeFactor; symmetryMode = c.symmetryMode; curveType = c.curveType;
     lineColor = c.lineColor; showNodes = c.showNodes; showFaces = c.showFaces; freeEndpointsEnabled = c.freeEndpointsEnabled;
     nodes = c.nodes; centroid = c.centroid; outerCorners = c.outerCorners; altNetSeed = c.altNetSeed;
     connections = c.connections; redoStack = c.redoStack; baseFaceAssignments = c.baseFaceAssignments; baseFacePalette = c.baseFacePalette;
@@ -224,7 +224,7 @@ function applySessionSnapshot(snapshot, plan, hooks, opts) {
         oldState = collectSessionState(hooks && hooks.symmetryUi);
         const st = snapshot.settings;
         step('B:settings');
-        currentShape = st.shape; nodeCount = st.nodeCount; shapeSizeFactor = st.shapeSizeFactor; symmetryMode = st.symmetryMode; curveType = built.curveType;
+        currentShape = st.shape; projectGridSpec(fromLegacy(st.shape, st.nodeCount)); shapeSizeFactor = st.shapeSizeFactor; symmetryMode = st.symmetryMode; curveType = built.curveType;
         lineColor = st.lineColor; showNodes = st.showNodes; showFaces = st.showFaces; freeEndpointsEnabled = st.freeEndpointsEnabled;
         step('B:grid');
         nodes = built.base.nodes; centroid = built.base.centroid; outerCorners = built.base.outerCorners; altNetSeed = built.altNetSeed;
