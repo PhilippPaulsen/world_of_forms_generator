@@ -1079,7 +1079,7 @@ function setup() {
     let layerMoreOpen = false;
     // The dot of the layer "Mehr": the ONE place that computes it (layerApi.moreState hands it to the layer views).
     function layerMoreDot() {   // (not "dot": p5's friendly-error reader reports a let/const named like a p5 member in setup() / draw())
-        return activeLayer !== 'base' && !!additionalLayers[activeLayer] && layerHasNonDefaultSettings(additionalLayers[activeLayer], { shape: currentShape, symmetryMode, nodeCount, shapeSizeFactor, lage: baseGridSpecNow().lage });
+        return activeLayer !== 'base' && !!additionalLayers[activeLayer] && layerHasNonDefaultSettings(additionalLayers[activeLayer], { shape: currentShape, symmetryMode, nodeCount, shapeSizeFactor, lage: typeof baseGridSpecNow === 'function' ? baseGridSpecNow().lage : undefined });
     }
     function syncLayerMore() {
         if (!layerMorePanel) return;
