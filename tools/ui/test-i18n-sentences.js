@@ -74,10 +74,10 @@ console.log('== English ==');
 (function () {
     const F = loadT('form', true, 'en'), L = loadT('layer', true, 'en'), Y = loadT('layers', true, 'en'), M = loadT('timeline', true, 'en');
     const eq = (name, got, want) => check(name, got === want, got === want ? undefined : '"' + got + '"');
-    eq('reason.node.max.square (form)', F['reason.node.max.square'](5), 'At most 5 nodes for the square.');
-    eq('reason.node.max.other (form)', F['reason.node.max.other'](12), 'At most 12 nodes for triangle and hexagon.');
-    eq('reason.node.max.square (layer)', L['reason.node.max.square'](5), 'At most 5 nodes for the square.');
-    eq('reason.node.max.other (layer)', L['reason.node.max.other'](12), 'At most 12 nodes for triangle and hexagon.');
+    eq('reason.node.max.square (form)', F['reason.node.max.square'](5), 'Highest order for the square: 5.');
+    eq('reason.node.max.other (form)', F['reason.node.max.other'](12), 'Highest order for this shape: 12.');
+    eq('reason.node.max.square (layer)', L['reason.node.max.square'](5), 'Highest order for the square: 5.');
+    eq('reason.node.max.other (layer)', L['reason.node.max.other'](12), 'Highest order for this shape: 12.');
     eq('note.size.field', F['note.size.field'](3, 5), 'Field net: odd sizes only, so 3 → 5.');
     eq('layers.remove.title', Y['layers.remove.title'](2), 'Remove layer 2?');
     eq('layers.remove.lines, k = 1', Y['layers.remove.lines'](1), 'The one line of this layer will be lost. This cannot be undone.');
