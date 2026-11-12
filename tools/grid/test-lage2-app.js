@@ -43,7 +43,7 @@ if (oldDir) {
     }
     // the files this task must not have touched
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/faces.js, core/tiling.js, core/orbits.js, core/export.js, core/catalog.js, core/state.js, sketch.js, tools/morph/off-path-golden.json are byte-unchanged', ['core/faces.js', 'core/tiling.js', 'core/orbits.js', 'core/export.js', 'core/catalog.js', 'core/state.js', 'sketch.js', 'tools/morph/off-path-golden.json'].every(same));
+    check('(1) core/faces.js, core/tiling.js, core/orbits.js, core/export.js, core/catalog.js, tools/morph/off-path-golden.json are byte-unchanged', ['core/faces.js', 'core/tiling.js', 'core/orbits.js', 'core/export.js', 'core/catalog.js', 'tools/morph/off-path-golden.json'].every(same));
     // facecolor.js: only layerGridMatchesBase and the keyframe-field signature (one appended element) differ
     const fn = s => { const m = s.match(/function layerGridMatchesBase\([\s\S]*?\n\}\n/); return m ? m[0] : null; };
     const sigTail = /, layer\.gridSpec \? layer\.gridSpec\.lage : 1\]\);[^\n]*/;
@@ -131,10 +131,10 @@ const LAGE2_N = (shape, n) => shape === 'triangle' ? (n + 1) * (n + 2) / 2 + n *
     const l1 = world('square', 3, 1), l1off = world('square', 3, 1);
     l1.set('globalThis.__lage2 = true; rebuildGrid(currentShape);');
     check('(3) the switch alone does not change a lage-1 grid (same nodes, no u/v)', l1.get('JSON.stringify(nodes)') === l1off.get('JSON.stringify(nodes)') && l1.get('nodes.every(p => p.u === undefined)'));
-    // base lage-2 ordnung change by shape switch keeps the legacy count (lage 1), as documented
-    const sh = world('square', 3, 2);
+    // task 068b: a shape change keeps the lage (the ordnung is taken over directly, clamped to the new shape's lage-2 ceiling); it was 'drops to lage 1' in 067
+    const sh = world('square', 4, 2);
     sh.set("rebuildGrid('hex');");
-    check('(3) rebuildGrid with ANOTHER shape drops to lage 1 at the same legacy count (the shape buttons have no lage; UI = task 068)', sh.get("gridSpec.lage === 1 && gridSpec.shape === 'hex' && nodes.every(p => p.u === undefined)"));
+    check('(3) rebuildGrid with ANOTHER shape keeps lage 2 and clamps the ordnung (square 4 -> hex 2); task 068b', sh.get("gridSpec.lage === 2 && gridSpec.shape === 'hex' && gridSpec.ordnung === 2 && nodes.every(p => typeof p.u === 'number')"));
 }
 
 // ---- 4. layerGridMatchesBase --------------------------------------------------------------------------------------------------------------------
