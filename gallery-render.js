@@ -80,6 +80,7 @@ var baseNetAnimation = null;
 var baseNetTransform = null;
 var activeNetWarp = null;
 var nodeCount = null;
+var gridSpec = null;   // task 067: core/forms.js baseGridSpecNow() reads it (a lage-2 base of the app); the gallery has none
 var shapeSizeFactor = null;
 
 // Replicated (not eval'd from core/state.js) for the same scoping
