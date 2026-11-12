@@ -322,9 +322,9 @@ T('source', () => {
     check('hotkeys: index.html has no accesskey on the block and the module no key code but Escape and the arrows', !/morph[^>]*accesskey/.test(HTML) && !/e\.key === '[a-zA-Z]'/.test(src));
     // sketch.js and core/ unchanged against the commit of task 018 (d3 K3 list helpers; was b5a300e7, the e1 commit, before)
     let diff = null;
-    try { diff = cp.execFileSync('git', ['diff', '--stat', 'b0fcf177', '--', 'sketch.js', 'core/tiling.js'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch (e) { diff = null; }
+    try { diff = cp.execFileSync('git', ['diff', '--stat', '6fbf420b', '--', 'sketch.js', 'core/tiling.js'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch (e) { diff = null; }
     if (diff === null) console.log('NOTE  git or the commit 80deee88 is not available: the sketch.js / core/tiling.js diff pin is skipped');
-    else check('sketch.js and core/tiling.js have an EMPTY diff against b0fcf177 (task 066, the last commit that changed sketch.js: G7b removes the old-format catalog reader (063: 5ae2886e, 062 notice: 061: 712fef39, 060: f5c8336a, gridSpec/nodeCount projection); 80deee88 = task 050 before it; before: d1174f82, the d3 K3 list helpers): the UI stage touches neither (stage d2c changed core/spatial-morph*.js, so the pin names the two files that must stay byte-identical)', diff.trim() === '', diff.trim().slice(0, 200));
+    else check('sketch.js and core/tiling.js have an EMPTY diff against 6fbf420b (task 066, the last commit that changed sketch.js: G7b removes the old-format catalog reader (063: 5ae2886e, 062 notice: 061: 712fef39, 060: f5c8336a, gridSpec/nodeCount projection); 80deee88 = task 050 before it; before: d1174f82, the d3 K3 list helpers): the UI stage touches neither (stage d2c changed core/spatial-morph*.js, so the pin names the two files that must stay byte-identical)', diff.trim() === '', diff.trim().slice(0, 200));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
