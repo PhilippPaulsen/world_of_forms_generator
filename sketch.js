@@ -150,7 +150,8 @@ function optionalSelect(sel) { return document.querySelector(sel) ? select(sel) 
 function layerHasNonDefaultSettings(layer, base) {
     if (!layer || !base) return false;
     return !!(layer.offsetX || layer.offsetY || layer.rotation ||
-        layer.shape !== base.shape || layer.symmetryMode !== base.symmetryMode || layer.nodeCount !== base.nodeCount || layer.shapeSizeFactor !== base.shapeSizeFactor);
+        layer.shape !== base.shape || layer.symmetryMode !== base.symmetryMode || layer.nodeCount !== base.nodeCount || layer.shapeSizeFactor !== base.shapeSizeFactor ||
+        (base.lage !== undefined && layerGridSpecOf(layer).lage !== base.lage));   // task 068b: another lage is a non-default setting
 }
 
 function setup() {
@@ -207,11 +208,11 @@ function setup() {
     // Sets the input's own max for currentShape (the HTML attribute is only the universal default of 7) and, when the
     // current nodeCount is above it, clamps nodeCount and says so. `cause` names what triggered it.
     function clampNodeCountToShape(cause) {
-        const maxN = maxNodeCountFor(currentShape);
+        const maxN = gridMaxCount(currentShape, gridSpec.lage);   // task 068b: the limit of the base's own lage
         if (nodeInput) nodeInput.elt.max = maxN;
         if (nodeCount > maxN) {
             showNodeCountNote(`${cause} changed to ${currentShape}: Node Count ${nodeCount} is above its limit of ${maxN}, so it was set to ${maxN}.`);
-            projectGridSpec(fromLegacy(currentShape, maxN));
+            projectGridSpec(gridSpecForCount(currentShape, maxN, gridSpec.lage));
             if (nodeInput) nodeInput.value(nodeCount);
         }
     }
@@ -225,20 +226,33 @@ function setup() {
             // table bounds the v2 transport validation (validateGridSpec), the layer input
             // and alignLayerToBase(). An over-limit value is clamped and
             // the input and a note say so (it used to be silent).
-            const maxN = maxNodeCountFor(currentShape);
+            const maxN = gridMaxCount(currentShape, gridSpec.lage);
             if (v < 1) v = 1;
             if (v > maxN) {
                 showNodeCountNote(`Node Count ${v} is above the ${currentShape} limit of ${maxN}, so it was set to ${maxN}.`);
                 v = maxN;
                 nodeInput.value(v);
             }
-            setGrid(fromLegacy(currentShape, v));
+            setGrid(gridSpecForCount(currentShape, v, gridSpec.lage));   // task 068b: the base keeps its lage
             renderLayerTabs();
             updateOffsetControls();
             updateTimelineControls();
             redraw();
         });
     }
+
+    // Task 068b: the page's grid controls follow the state after setGrid / setBaseLage / setLayerLage (core/state.js calls this hook; no new elements).
+    function syncGridControls() {
+        if (nodeInput) {
+            nodeInput.elt.max = gridMaxCount(currentShape, gridSpec.lage);
+            if (String(nodeInput.value()) !== String(nodeCount)) nodeInput.value(nodeCount);
+        }
+        shapeBtns.forEach(b => { if (b.attribute('data-shape') === currentShape) b.addClass('active'); else b.removeClass('active'); });
+        renderLayerTabs();
+        updateOffsetControls();
+        updateTimelineControls();
+    }
+    window.gridControlsSync = syncGridControls;
 
     // Roadmap: catalog -> generator back-link (see parseCatalogUrlParams()/
     // applyCatalogPattern() above for the full reasoning). Parsed once,
@@ -255,7 +269,7 @@ function setup() {
     if (catalogTransportRejection) { console.warn(`Catalog link not loaded (${catalogTransportRejection.code}: ${catalogTransportRejection.detail})`); say('catalog', catalogRejectionText(catalogTransportRejection), 'warn'); }
     if (catalogUrlPattern) {
         currentShape = catalogUrlPattern.shape;
-        projectGridSpec(fromLegacy(currentShape, catalogUrlPattern.order));
+        projectGridSpec(gridSpecForCount(currentShape, catalogUrlPattern.order, (catalogUrlPattern.spec && catalogUrlPattern.spec.lage) || 1));   // task 068b: the lage of the transport (lage 2 stays locked there)
         shapeBtns.forEach(b => b.removeClass('active'));
         const matchingShapeBtn = shapeBtns.find(b => b.attribute('data-shape') === currentShape);
         if (matchingShapeBtn) matchingShapeBtn.addClass('active');
@@ -1065,7 +1079,7 @@ function setup() {
     let layerMoreOpen = false;
     // The dot of the layer "Mehr": the ONE place that computes it (layerApi.moreState hands it to the layer views).
     function layerMoreDot() {   // (not "dot": p5's friendly-error reader reports a let/const named like a p5 member in setup() / draw())
-        return activeLayer !== 'base' && !!additionalLayers[activeLayer] && layerHasNonDefaultSettings(additionalLayers[activeLayer], { shape: currentShape, symmetryMode, nodeCount, shapeSizeFactor });
+        return activeLayer !== 'base' && !!additionalLayers[activeLayer] && layerHasNonDefaultSettings(additionalLayers[activeLayer], { shape: currentShape, symmetryMode, nodeCount, shapeSizeFactor, lage: baseGridSpecNow().lage });
     }
     function syncLayerMore() {
         if (!layerMorePanel) return;
@@ -1091,7 +1105,7 @@ function setup() {
             const layer = additionalLayers[activeLayer];
             if (offsetXInput) offsetXInput.value(layer.offsetX);
             if (offsetYInput) offsetYInput.value(layer.offsetY);
-            if (layerNodeCountInput) { layerNodeCountInput.value(layer.nodeCount); layerNodeCountInput.elt.max = maxNodeCountFor(layer.shape); }
+            if (layerNodeCountInput) { layerNodeCountInput.value(layer.nodeCount); layerNodeCountInput.elt.max = gridMaxCount(layer.shape, layerGridSpecOf(layer).lage); }
             if (layerShapeSizeInput) layerShapeSizeInput.value(layer.shapeSizeFactor);
             if (layerRotationInput) layerRotationInput.value(layer.rotation || 0);
             syncLayerAnimationDisplay(layer);
@@ -1788,7 +1802,7 @@ function setup() {
             if (activeLayer === 'base') return;
             const layer = additionalLayers[activeLayer];
             if (layer.shape !== currentShape) return;
-            const result = alignLayerToBase(shapeSizeFactor, nodeCount, layer.shapeSizeFactor, layer.nodeCount, layer.shape);
+            const result = (layerGridSpecOf(layer).lage !== 1 || baseGridSpecNow().lage !== 1) ? { achievable: false } : alignLayerToBase(shapeSizeFactor, nodeCount, layer.shapeSizeFactor, layer.nodeCount, layer.shape);
             if (result.achievable) {
                 updateActiveLayerGrid({ shapeSizeFactor: result.shapeSizeFactor, nodeCount: result.nodeCount });
                 if (layerShapeSizeInput) layerShapeSizeInput.value(layer.shapeSizeFactor);
@@ -1815,7 +1829,7 @@ function setup() {
             if (activeLayer === 'base') return;
             let v = parseInt(layerNodeCountInput.value());
             // Roadmap 1.1 (Group A): bounded by the LAYER'S OWN shape (it may differ from the base's) - see the base input's clamp
-            const maxN = maxNodeCountFor(additionalLayers[activeLayer].shape);
+            const maxN = gridMaxCount(additionalLayers[activeLayer].shape, layerGridSpecOf(additionalLayers[activeLayer]).lage);
             if (v < 1) v = 1;
             if (v > maxN) {
                 showLayerNodeCountNote(`Layer Node Count ${v} is above the ${additionalLayers[activeLayer].shape} limit of ${maxN}, so it was set to ${maxN}.`);
@@ -2626,8 +2640,8 @@ function addLayer() {
     // already read it straight from this field (symmetryModeOverride),
     // no layerGrid() involvement.
     const layer = { connections: [], redoStack: [], offsetX: 0, offsetY: 0, rotation: 0, shape: currentShape, symmetryMode, enabled: true, showFaces: false, shapeSizeFactor };
-    projectLayerGridSpec(layer, fromLegacy(currentShape, nodeCount)); // task 061: gridSpec + the derived nodeCount, the one write
-    const grid = layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.nodeCount);
+    projectLayerGridSpec(layer, Object.assign({}, baseGridSpecNow())); // task 061: gridSpec + the derived nodeCount, the one write; task 068b: a copy of the base's spec, its lage included (lage 1: fromLegacy as before)
+    const grid = layerGridForSpec(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.gridSpec, layer.shape, canvasW, canvasH);
     layer.nodes = grid.nodes;
     layer.centroid = grid.centroid;
     layer.outerCorners = grid.outerCorners;
@@ -2726,9 +2740,10 @@ function updateActiveLayerGrid(patch) {
     // Defence in depth for every caller (shape switch, catalog link, align): a layer's node count never exceeds its OWN
     // shape's ceiling (core/forms.js NODE_COUNT_MAX). The caller that knows the UI reports it (returned below).
     let clamped = null;
-    const layerMax = maxNodeCountFor(layer.shape);
+    const keepLage = layerGridSpecOf(layer).lage;   // task 068b: a layer keeps its lage through every patch (size, count, shape)
+    const layerMax = gridMaxCount(layer.shape, keepLage);
     if (layerCount > layerMax) { clamped = { shape: layer.shape, from: layerCount, to: layerMax }; layerCount = layerMax; }
-    projectLayerGridSpec(layer, fromLegacy(layer.shape, layerCount));
+    projectLayerGridSpec(layer, gridSpecForCount(layer.shape, layerCount, keepLage));
     layer.connections = [];
     layer.redoStack = [];
     // Roadmap 1.12 stage 4 (UI) bugfix: layer.shape (post-patch, so a
@@ -2745,7 +2760,7 @@ function updateActiveLayerGrid(patch) {
     // layer.shape itself (Object.assign above) while silently leaving
     // the actual persisted grid geometry unchanged (still the base's
     // shape) - see the design session's own before/after verification.
-    const grid = layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.nodeCount, layer.shape, canvasW, canvasH);
+    const grid = layerGridForSpec(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.gridSpec, layer.shape, canvasW, canvasH);
     layer.nodes = grid.nodes;
     layer.centroid = grid.centroid;
     layer.outerCorners = grid.outerCorners;
@@ -3328,6 +3343,10 @@ function addLayerToTimeline() {
         setTimelineStatus(`Layer ${idx + 1} must share the same shape, order, size and symmetry mode as Layer ${prevIdx + 1} to extend the timeline.`, 'refusal');
         return;
     }
+    if (layerGridSpecOf(layer).lage !== layerGridSpecOf(prevLayer).lage) {   // task 068b: keyframes of lage 1 and lage 2 are different lattices and cannot be morphed
+        setTimelineStatus(window.UI && UI.t ? UI.t('note.timeline.lageMix') : `Layer ${idx + 1} not added: Layer ${prevIdx + 1} is on another position (Lage) of the grid - keyframes must share it.`, 'refusal');
+        return;
+    }
     const fromCoords = resolveConnectionsToCoords(prevLayer);
     const toCoords = resolveConnectionsToCoords(layer);
     if (fromCoords.length !== toCoords.length || fromCoords.length === 0) {
@@ -3359,7 +3378,7 @@ function addLayerToTimeline() {
             isTimelinePlayback: true,
         };
         projectLayerGridSpec(playbackLayer, Object.assign({}, layerGridSpecOf(prevLayer))); // task 061: the playback layer has the keyframes' spec
-        const grid = layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, playbackLayer.shapeSizeFactor, playbackLayer.nodeCount, playbackLayer.shape, canvasW, canvasH);
+        const grid = layerGridForSpec(outerCorners, centroid, currentShape, shapeSizeFactor, playbackLayer.shapeSizeFactor, playbackLayer.gridSpec, playbackLayer.shape, canvasW, canvasH);   // task 068b: with the lage-2 nodes
         playbackLayer.nodes = grid.nodes;
         playbackLayer.centroid = grid.centroid;
         playbackLayer.outerCorners = grid.outerCorners;
@@ -4338,7 +4357,8 @@ function patternNameSignature() {
     const gridOverride = activeGridOverride();
     const activeShape = gridOverride ? gridOverride.shape : currentShape;
     const activeMode = gridOverride ? gridOverride.symmetryMode : symmetryMode;
-    return JSON.stringify({ shape: activeShape, mode: activeMode, activeLayer, conns: activeConnections() });
+    const sp = activeLayer !== 'base' && additionalLayers[activeLayer] ? layerGridSpecOf(additionalLayers[activeLayer]) : baseGridSpecNow();
+    return JSON.stringify({ shape: activeShape, mode: activeMode, activeLayer, conns: activeConnections(), ordnung: sp.ordnung, lage: sp.lage, rev: gridRevision });   // task 068b: the grid (ordnung, lage, revision) is part of the name's cache key
 }
 
 // ----------------- FACE COLORS PANEL (Group D Phase 3) -----------------

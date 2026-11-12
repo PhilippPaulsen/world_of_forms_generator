@@ -514,6 +514,25 @@ function maxOrdnungFor(shape, lage) {
     return shape === 'hex' ? c : c - 1;
 }
 
+// Task 068b: lage-keeping helpers. The UI counts in the LEGACY count c (nodeCount); a lage-2 grid has the same c as the lage-1 grid it extends.
+// gridSpecForCount: the spec of `shape` at count c in `lage` (lage 1: exactly fromLegacy; lage 2: the ordnung of that count, clamped to LAGE2_MAX).
+function gridSpecForCount(shape, count, lage) {
+    const s = fromLegacy(shape, count);
+    if (lage !== 2) return s;
+    const max = maxOrdnungFor(shape, 2);
+    return { shape, ordnung: Math.max(1, max ? Math.min(s.ordnung, max) : s.ordnung), lage: 2 };
+}
+// The largest count the input may take in `lage` (lage 1: the shape's NODE_COUNT_MAX; lage 2: the count of the lage-2 ceiling).
+function gridMaxCount(shape, lage) {
+    const m = lage === 2 ? maxOrdnungFor(shape, 2) : 0;
+    return m ? (shape === 'hex' ? m : m + 1) : maxNodeCountFor(shape);
+}
+// The base's spec on ANOTHER shape. Lage 1: the legacy count moves over (as before); lage 2: the ordnung is taken over directly, clamped to the new shape's lage-2 ceiling.
+function gridSpecOnShape(spec, shape) {
+    if (spec.lage === 2 && maxOrdnungFor(shape, 2)) return { shape, ordnung: Math.min(spec.ordnung, maxOrdnungFor(shape, 2)), lage: 2 };
+    return fromLegacy(shape, toLegacy(spec));
+}
+
 function fromLegacy(shape, c) {
     if (GRID_SHAPES.indexOf(shape) < 0) throw new Error('fromLegacy: unknown shape: ' + String(shape));
     if (!Number.isInteger(c) || c < 1) throw new Error('fromLegacy: nodeCount must be an integer >= 1, got ' + String(c));
