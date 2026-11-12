@@ -4770,11 +4770,11 @@ window.getSpatialMorph = getSpatialMorph;
 // Called once per draw() (see there for why this is cached rather than
 // unconditional like updateCrossLayerStatus()).
 // Task 068c2: the read-outs of the active sheet's grid - the info card's line "Gitter: {name} · Knoten: {n}" (#grid-info-status) and the tooltips of the two
-// ordnung steppers ("Ordnung {o}: {n} Knoten"). Derived from the spec only (getGridNodeCount, the code of formatGridName without lines); written only when the text changes.
+// ordnung steppers ("Ordnung {o}: {n} Knoten"). Derived from the spec only (getGridNodeCount, the grid part of the v2 name); written only when the text changes.
 function updateGridInfoLine() {
     const t = (key, vars, fallback) => (window.UI && UI.t ? UI.t(key, vars) : fallback);
     const textOf = (spec) => {
-        const n = getGridNodeCount(spec), code = typeof formatGridName === 'function' ? (formatGridName(spec, []) || '').split('/')[0] : '';
+        const n = getGridNodeCount(spec), code = spec.ordnung + { triangle: 'd', square: 'q', hex: '*' }[spec.shape] + spec.lage;   // the grid part of the v2 name (core/orbits.js formatGridName: {ordnung}{d|q|*}{lage})
         return { n, code };
     };
     const set = (el, prop, value) => { if (el && (prop === 'text' ? el.textContent !== value : el.getAttribute('title') !== value)) { if (prop === 'text') el.textContent = value; else el.setAttribute('title', value); } };
