@@ -9,7 +9,7 @@
  *  1. the pure helpers of core/spatial-morph.js (defaults, normalise, equal) and that core/state.js declares the same defaults;
  *  2. the BYTES: a snapshot of a pattern with the morph at its defaults is byte-for-byte the one written before the block existed (sha256 of the snapshot text of a small and of the
  *     heaviest layered scenario, taken from the code of the commit before stage b; the same was checked over all 258 corpus patterns when the stage was built), the block is written ONLY
- *     when it differs from the defaults, schema stays 1;
+ *     when it differs from the defaults, the schema is not raised by it;
  *  3. validate: every parameter round-trips (3 modes x enabled x angles incl. negative, fractional, 360+); an old snapshot without the block is valid; malformed blocks and fields fall
  *     back to their defaults, never throw, unknown keys are dropped;
  *  4. apply: a restore sets the saved parameters; a snapshot WITHOUT the block restores the DEFAULTS into a page that had a morph; the object is new; a failed apply rolls back to the old
@@ -67,12 +67,12 @@ console.log('== 1. the helpers and the state default ==');
 
 // ---- 2. the bytes ----------------------------------------------------------------------------------------------------------------------
 console.log('\n== 2. the snapshot: byte-identical at the defaults, the block only when it differs ==');
-const WANT = { small: '1932cccee4c1244f57a81dac3e8d67a9d5fbdde1f8f57ed7c6e13d43fcff9654', layered: '5c494cc138163ba67e32a530045c6c0cfe123eee8ef3ec93b8b7d301c5b76d99' };
+const WANT = { small: 'c3037bd52eaceb60a722382ea9779e5b50ca1cc520606741e4198172d4c20fc1', layered: 'dbe4f2591181e416d6c49c4f072d19c59f2b58d6eb316a6de4ea7c60ef74913a' };   // task 062: re-recorded for schema 2 (grid instead of nodeCount, spec and free endpoints in the fingerprint); before: 1932cccee4c1, 5c494cc13816 (638 characters)
 {
     const w = world('square', 3, 5, 'none'); w.run('connections = [[1, 6], [2, 9]];');
     const ui = uiOf(w, 'none', 6), t0 = text(w, ui);
     check('the live global exists and holds the defaults in a fresh world', same(getMorph(w), DEF));
-    check('a small pattern with the defaults: the snapshot text has the sha256 of the text the code BEFORE stage b wrote (638 characters)', sha(t0) === WANT.small && t0.length === 638, sha(t0).slice(0, 12));
+    check('a small pattern with the defaults: the snapshot text has the sha256 of the text the code BEFORE stage b wrote (671 characters under schema 2; 638 before task 062)', sha(t0) === WANT.small && t0.length === 671, sha(t0).slice(0, 12));
     check('...and contains no spatialMorph key at all', !t0.includes('spatialMorph'));
     const lay = newCtx(); layeredAltNet(lay, {});
     const tl = text(lay, uiOf(lay, 'spiegeling', 6));
@@ -85,7 +85,7 @@ const WANT = { small: '1932cccee4c1244f57a81dac3e8d67a9d5fbdde1f8f57ed7c6e13d43f
     setMorph(w, { enabled: true, mode: 'radial', angleDeg: -45.5 });
     const s1 = JSON.parse(text(w, ui));
     check('a morph that differs from the defaults is written as settings.spatialMorph = { enabled, mode, angleDeg } (exactly three fields), after netTransform', same(s1.settings.spatialMorph, { enabled: true, mode: 'radial', angleDeg: -45.5 }) && Object.keys(s1.settings).at(-1) === 'spatialMorph' && Object.keys(s1.settings).at(-2) === 'netTransform');
-    check('the schema stays 1 (additive field, old snapshots stay valid)', s1.schema === 1 && w.get('SESSION_SCHEMA_VERSION') === 1);
+    check('the schema is 2 and the morph block adds nothing to it (additive field; task 062 raised the schema for the grid, not for the block)', s1.schema === 2 && w.get('SESSION_SCHEMA_VERSION') === 2);
     const without = clone(s1); delete without.settings.spatialMorph;
     check('apart from that one block the text is the same as without the morph', J(without) === J(JSON.parse(t0)));
     // each field alone counts as "differs"
@@ -116,7 +116,7 @@ console.log('\n== 3. validate: round trip, old snapshots, malformed values ==');
     const base = JSON.parse(text(w, ui));
     const old = clone(base); delete old.settings.spatialMorph;
     const vOld = w.sb.validateSession(old);
-    check('an OLD snapshot (no block; the pre-stage-b bytes) is valid, schema 1, and its normalised copy has no block (the restore then sets the defaults)', vOld.ok && vOld.snapshot.schema === 1 && vOld.snapshot.settings.spatialMorph === undefined);
+    check('a snapshot without the block (the bytes before stage b) is valid, schema 2, and its normalised copy has no block (the restore then sets the defaults)', vOld.ok && vOld.snapshot.schema === 2 && vOld.snapshot.settings.spatialMorph === undefined);
     const withBlock = v => { const c = clone(base); c.settings.spatialMorph = v; return c; };
     const variants = [['a string', 'radial'], ['a number', 7], ['an array', ['radial', 45]], ['null', null], ['true', true], ['an empty object', {}],
         ['enabled "yes"', { enabled: 'yes', mode: 'radial', angleDeg: 30 }], ['enabled 1', { enabled: 1, mode: 'radial', angleDeg: 30 }], ['mode "spiral"', { enabled: true, mode: 'spiral', angleDeg: 30 }],

@@ -153,6 +153,7 @@
     'reason.node.max.other': { de: 'Höchstens {n} Knoten bei Dreieck und Sechseck.', en: 'At most {n} nodes for triangle and hexagon.' },
     'note.size.field': { de: 'Feld-Netz: nur ungerade Größen, deshalb {from} \u2192 {to}.', en: 'Field net: odd sizes only, so {from} \u2192 {to}.' },
     // ---- core (task 050): the two net-kind notes of sketch.js ({from} {size} {kept}) and the harmony-rule texts of core/color.js (the German is the label there, character for character) ----
+    'note.session.oldSchema': { de: 'Die gespeicherte Sitzung stammt aus einer älteren Version des Generators und kann nicht wiederhergestellt werden. Sie wurde beiseitegelegt, der Generator startet neu.', en: 'The saved session comes from an older version of the generator and cannot be restored. It was set aside and the generator starts fresh.' },
     'note.net.minNodes': { de: 'Sin und Tan brauchen mindestens 4 Knoten; Knoten von {from} auf 4 gesetzt.', en: 'Sin and Tan need at least 4 nodes; nodes changed from {from} to 4.' },
     'note.net.fieldOddSize': { de: 'Feld braucht eine ungerade Größe (3, 5, 7, 9); {size} passt nicht, deshalb Einzelnetz. Die Größe bleibt {kept}.', en: 'Field needs an odd size (3, 5, 7, 9); {size} does not fit, so single net. The size stays {kept}.' },
     'rule.isotint': { de: 'Isotints (Weißgleiche)', en: 'Isotints' },

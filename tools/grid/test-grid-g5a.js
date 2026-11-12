@@ -54,7 +54,7 @@ else {
     const st = read('core/state.js');
     check('(3) it is projectGridSpec() in core/state.js, which also sets gridSpec', /function projectGridSpec\(spec\) \{\s*const c = toLegacy\(spec\);\s*gridSpec = spec;\s*nodeCount = c;\s*\}/.test(st));
     check('(3) setGrid, rebuildGrid and the session restore all go through it; no per-frame sync (draw never mentions projectGridSpec)',
-        /function setGrid[\s\S]*?projectGridSpec\(spec\)/.test(st) && /function rebuildGrid[\s\S]*?projectGridSpec\(spec\)/.test(st) && /projectGridSpec\(c\.gridSpec\)/.test(read('core/session-apply.js')) && /projectGridSpec\(fromLegacy\(st\.shape, st\.nodeCount\)\)/.test(read('core/session-apply.js'))
+        /function setGrid[\s\S]*?projectGridSpec\(spec\)/.test(st) && /function rebuildGrid[\s\S]*?projectGridSpec\(spec\)/.test(st) && /projectGridSpec\(c\.gridSpec\)/.test(read('core/session-apply.js')) && /projectGridSpec\(Object\.assign\(\{\}, st\.grid\)\)/.test(read('core/session-apply.js'))
         && !/function draw\(\)[\s\S]{0,400}projectGridSpec/.test(read('sketch.js')));
     const producers = [];
     // core/forms.js is excluded: its `c - 1` are the builders' own lattice arithmetic (the three Lage-1 builders are byte-unchanged), not E producers
