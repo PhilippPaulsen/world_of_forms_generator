@@ -57,7 +57,7 @@ function mk(files, o) {
 }
 const setLines = (w, v) => w.run(`lineStyle = ${JSON.stringify(v)};`);
 const lineCalls = d => d.filter(c => c[0] === 'line' || c[0] === 'bezier');
-const svgOf = w => w.get('generateSVGString()');
+const svgOf = w => w.get('generateSVGString()').replace(/  <title>[^\n]*<\/title>\n/, '');   // task 063: the optional <title> (grid name) is metadata; the pin is about the geometry text
 // the sabotage "morph": the morph frame draws although lines are off (drawn through the sink in the old curves.js, which has no gate)
 const fileSet = SAB === 'morph' ? filesOld : filesNew;
 if (SAB === 'morph') EXPORT_SRC.set(filesOld, exp);   // old curves.js (no gate), new export.js
@@ -207,7 +207,7 @@ console.log('\n== 6. markup, i18n, position ==');
     // task 050 changed sketch.js on purpose (two notes through UI.t, commit 80deee88): sketch.js is pinned against that commit, the other files still against BASE
     // task 053 re-recorded the golden of curve-fold1-sym on purpose (quad pieces on the canvas, commit fc98e3d9): off-path-golden.json is pinned against that commit
     // task 031 changes core/facecolor.js on purpose (the playback colours); this check guards what task 024 itself must leave alone, so that file is no longer in the list
-  check('sketch.js is untouched by the task (it is pinned by the morph tests) and gallery.html still loads without core/state.js: the gallery shim defines lineStyle', execSync(`git diff --stat ${BASE} -- core/tiling.js core/faces.js`, { cwd: ROOT }).toString().trim() === '' && execSync('git diff --stat fc98e3d9 -- tools/morph/off-path-golden.json', { cwd: ROOT }).toString().trim() === '' && execSync('git diff --stat 1dd585d4 -- sketch.js', { cwd: ROOT }).toString().trim() === '' && /var lineStyle = \{ visible: true, weight: 2 \}/.test(read('gallery-render.js')));
+  check('sketch.js is untouched by the task (it is pinned by the morph tests) and gallery.html still loads without core/state.js: the gallery shim defines lineStyle', execSync(`git diff --stat ${BASE} -- core/tiling.js core/faces.js`, { cwd: ROOT }).toString().trim() === '' && execSync('git diff --stat fc98e3d9 -- tools/morph/off-path-golden.json', { cwd: ROOT }).toString().trim() === '' && execSync('git diff --stat 5ae2886e -- sketch.js', { cwd: ROOT }).toString().trim() === '' && /var lineStyle = \{ visible: true, weight: 2 \}/.test(read('gallery-render.js')));
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

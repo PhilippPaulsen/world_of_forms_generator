@@ -119,8 +119,8 @@ check('the list contains the render shim and the page script (a test of nothing 
     const constSrc = name => { const m = sketch.match(new RegExp('\\nconst ' + name + ' = [^\\n]*\\n')); return m ? m[0] : ''; };
     const parseCtx = vm.createContext({ URLSearchParams, console: { warn() { } } });
     vm.runInContext(fs.readFileSync(path.join(ROOT, 'core/forms.js'), 'utf8'), parseCtx);
-    const parserSrc = constSrc('CATALOG_URL_SHAPES') + constSrc('CATALOG_URL_MODES') + fnSrc('isWellFormedCatalogPattern') + fnSrc('parseCatalogUrlParams') + fnSrc('parseClipboardCatalogPattern');
-    check('the generator\'s catalog parsers were found in sketch.js', ['CATALOG_URL_SHAPES', 'CATALOG_URL_MODES', 'function isWellFormedCatalogPattern', 'function parseCatalogUrlParams', 'function parseClipboardCatalogPattern'].every(s => parserSrc.includes(s)));
+    const parserSrc = constSrc('CATALOG_URL_SHAPES') + constSrc('CATALOG_URL_MODES') + fnSrc('isWellFormedCatalogPattern') + fnSrc('legacyCatalogReader') + fnSrc('parseCatalogUrlV2') + fnSrc('parseCatalogUrlParams') + fnSrc('parseClipboardCatalogPattern') + '\nlet catalogTransportRejection = null;\n';   // task 063: the parsers now start through legacyCatalogReader (the Formorgel still writes the old format)
+    check('the generator\'s catalog parsers were found in sketch.js', ['CATALOG_URL_SHAPES', 'CATALOG_URL_MODES', 'function isWellFormedCatalogPattern', 'function legacyCatalogReader', 'function parseCatalogUrlParams', 'function parseClipboardCatalogPattern'].every(s => parserSrc.includes(s)));
     vm.runInContext(parserSrc, parseCtx);
 
     // ---- the detail view: what a click on a tile does -------------------------------------------------------------------------------------------------

@@ -114,21 +114,39 @@ function computeAdjacency(completeConnections, nodeById) {
 // point one way). The caller (sketch.js's export-JSON button handler)
 // is what already knows whether a valid, non-stale result exists -
 // see exportJSON() below, which just forwards whatever it's given.
+// Task 063 (G6b, export v2): the grid of a sheet as the export states it, its nodes with the node number (zahl) and the lattice coordinates (u, v) where the
+// lattice knows the id (free endpoints and ids outside the lattice stay {id, x, y}), and the line keys / grid name of its connections (core/orbits.js).
+function _exportGrid(spec) {
+    const g = { shape: spec.shape, ordnung: spec.ordnung, lage: spec.lage };
+    if (spec.legacyC1 === true) g.legacyC1 = true;
+    return g;
+}
+function _exportNodes(list, spec) {
+    const num = gridNodeNumbersFor(spec);
+    return list.map(n => {
+        const o = { id: n.id, x: n.x, y: n.y }, e = num && !n.free ? num.get(n.id) : undefined;
+        if (e) { o.zahl = e.zahl; o.u = e.u; o.v = e.v; }
+        return o;
+    });
+}
+
 function buildExportData(crossLayerData) {
     // Mirror the same completeness filter drawShapeCell() already applies -
     // a connection started by one click and never finished stays [id] (length 1).
     const completeConnections = connections.filter(c => c.length === 2);
     const nodeById = new Map(nodes.map(n => [n.id, n]));
     const adjacency = computeAdjacency(completeConnections, nodeById);
+    const baseSpec = baseGridSpecNow();
+    const baseKeys = gridLineKeysFor(baseSpec, completeConnections, symmetryMode);
 
     const data = {
-        formatVersion: 1,
+        formatVersion: 2,   // task 063: v2 - meta.grid / nodes with zahl, u, v / lineKeys / name replace nodeCount, patternName and themeLineOrbits
         generator: "World of Forms Generator",
         exportedAt: new Date().toISOString(),
         meta: {
             shapeType: currentShape,
             shapeSizeFactor,
-            nodeCount,
+            grid: _exportGrid(baseSpec),
             symmetryMode,
             // Roadmap 1.5-B: this object-shorthand already captured
             // whatever curveType currently holds since 1.4-A, so no code
@@ -160,8 +178,9 @@ function buildExportData(crossLayerData) {
         geometry: {
             centroid: { x: centroid.x, y: centroid.y },
             outerCorners: outerCorners.map(c => ({ x: c.x, y: c.y })),
-            nodes: nodes.map(n => ({ id: n.id, x: n.x, y: n.y })),
+            nodes: _exportNodes(nodes, baseSpec),
             edges: completeConnections.map(c => [c[0], c[1]]),
+            lineKeys: baseKeys.tokens,
             adjacency
         }
     };
@@ -190,6 +209,8 @@ function buildExportData(crossLayerData) {
             // node of the same id, or - once a layer's own node count
             // exceeds the base's - finds nothing at all.
             const layerNodeById = new Map(layer.nodes.map(n => [n.id, n]));
+            const layerSpec = layerGridSpecOf(layer);
+            const layerKeys = gridLineKeysFor(layerSpec, completeLayerConnections, layer.symmetryMode);
             const layerGridOverride = { nodes: layer.nodes, centroid: layer.centroid, outerCorners: layer.outerCorners };
             const layerData = {
                 // This layer's own real node positions, mirroring the
@@ -198,7 +219,7 @@ function buildExportData(crossLayerData) {
                 // at all once a layer's own grid differs from the base's
                 // (same ids, different positions, or ids the base's own
                 // node set doesn't even contain).
-                nodes: layer.nodes.map(n => ({ id: n.id, x: n.x, y: n.y })),
+                nodes: _exportNodes(layer.nodes, layerSpec),
                 // Roadmap 1.12 stage 2 (export extension, distinct from
                 // the offsetX/offsetY-rendering fix this stage otherwise
                 // makes): this layer's own outerCorners/centroid/
@@ -238,7 +259,7 @@ function buildExportData(crossLayerData) {
                 // app has no import/rehydration mechanism of its own.
                 symmetryMode: layer.symmetryMode,
                 shapeSizeFactor: layer.shapeSizeFactor,
-                nodeCount: layer.nodeCount,
+                grid: _exportGrid(layerSpec),
                 offsetX: layer.offsetX,
                 offsetY: layer.offsetY,
                 // Roadmap 1.12 stage 3: this layer's own rotation
@@ -257,6 +278,8 @@ function buildExportData(crossLayerData) {
                 // may not have it).
                 rotation: layer.rotation || 0,
                 edges: completeLayerConnections.map(c => [c[0], c[1]]),
+                lineKeys: layerKeys.tokens,
+                name: layerKeys.name,
                 adjacency: computeAdjacency(completeLayerConnections, layerNodeById)
             };
             if (curveType.kind === 'straight' && !netWarped) {
@@ -306,13 +329,7 @@ function buildExportData(crossLayerData) {
             // silently computed under the BASE's own symmetryMode
             // (design session finding, harmless only because every layer
             // shared the one global value before Phase 1).
-            if (completeLayerConnections.length > 0) {
-                const layerPatternName = computeThemeLineName(completeLayerConnections, layer.symmetryMode, layerGridOverride, layer.shape);
-                if (layerPatternName) {
-                    layerData.patternName = layerPatternName;
-                    layerData.themeLineOrbits = computeThemeLineOrbitAssignments(completeLayerConnections, layer.symmetryMode, layerGridOverride, layer.shape);
-                }
-            }
+            // task 063: the legacy patternName / themeLineOrbits (orbit ids) are gone from the v2 export; the line keys and the name above replace them
             layerFaceStores.push({ layerIndex: layerIdx, store: layer.faceAssignments });
             return layerData;
         });
@@ -361,13 +378,8 @@ function buildExportData(crossLayerData) {
     // treatment as the per-layer case above - a free-endpoint-inclusive
     // base sheet omits both fields entirely rather than exporting an
     // explicit null.
-    if (completeConnections.length > 0) {
-        const basePatternName = computeThemeLineName(completeConnections);
-        if (basePatternName) {
-            data.patternName = basePatternName;
-            data.geometry.themeLineOrbits = computeThemeLineOrbitAssignments(completeConnections);
-        }
-    }
+    // task 063: v2 - the grid name (null for free ends, a reduced mode or no line) instead of patternName / geometry.themeLineOrbits
+    data.name = baseKeys.name;
 
     // Roadmap 1.10b-ii-c: geometry.crossLayer - additive the same way as
     // geometry.faces/geometry.layers before it, present only when the
@@ -464,6 +476,14 @@ function _svgCollectFacePolygons() {
     return polys;
 }
 
+// Task 063 (G6b): the grid name of the base pattern for the SVG metadata (null: no systematic name). Only a <title> element carries it; the geometry is untouched.
+function svgPatternNameNow() {
+    try { return gridLineKeysFor(baseGridSpecNow(), connections.filter(c => c.length === 2), symmetryMode).name; } catch (e) { return null; }
+}
+function _xmlEscape(text) {
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
 function generateSVGString() {
     svgPathCollector = [];
     let polys, paths;
@@ -478,6 +498,8 @@ function generateSVGString() {
     const bgColor = getComputedStyle(document.body).getPropertyValue('--panel-bg-color') || '#ffffff';
 
     let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n`;
+    const svgName = svgPatternNameNow();
+    if (svgName) svg += `  <title>${_xmlEscape(svgName)}</title>\n`;   // task 063: the name only, escaped; without a systematic name the SVG is byte-identical to before
     svg += `  <rect x="0" y="0" width="${w}" height="${h}" fill="${bgColor.trim() || '#ffffff'}" />\n`;
     // Task 035: face fills between background and lines; no group when no face was drawn (showFaces off: output unchanged).
     if (polys.length) {
