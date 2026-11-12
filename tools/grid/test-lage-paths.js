@@ -53,10 +53,10 @@ const LAGE2_N = (shape, n) => shape === 'triangle' ? (n + 1) * (n + 2) / 2 + n *
 const withSketch = (w, names) => { names.forEach(n => w.set(grab(n))); return w; };
 {
     const w = world('triangle', 2, 1);
-    check('(1) helpers at lage 1: gridSpecForCount = fromLegacy, gridMaxCount = maxNodeCountFor, gridSpecOnShape = the old fromLegacy(shape, toLegacy(spec)) for every shape and count', w.get(`(function () {
+    check('(1) helpers at lage 1: gridSpecForCount = fromLegacy, gridMaxCount = maxNodeCountFor, gridSpecOnShape = the ordnung kept and clamped (task 068c3a) for every shape and count', w.get(`(function () {
         for (const s of ['triangle', 'square', 'hex']) { if (gridMaxCount(s, 1) !== maxNodeCountFor(s)) return false;
             for (let c = 1; c <= maxNodeCountFor(s); c++) { if (JSON.stringify(gridSpecForCount(s, c, 1)) !== JSON.stringify(fromLegacy(s, c))) return false;
-                for (const t of ['triangle', 'square', 'hex']) if (c <= maxNodeCountFor(t) && JSON.stringify(gridSpecOnShape(fromLegacy(s, c), t)) !== JSON.stringify(fromLegacy(t, toLegacy(fromLegacy(s, c))))) return false; } }
+                for (const t of ['triangle', 'square', 'hex']) { const o = fromLegacy(s, c).ordnung, e = { shape: t, ordnung: Math.min(o, maxOrdnungFor(t, 1)), lage: 1 }; if (JSON.stringify(gridSpecOnShape(fromLegacy(s, c), t)) !== JSON.stringify(e)) return false; } } }
         return true; })()`));
 }
 

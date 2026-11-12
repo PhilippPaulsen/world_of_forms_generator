@@ -119,7 +119,7 @@ else {
     t2.run('projectGridSpec(fromLegacy("triangle", 1)); rebuildGrid("triangle")');
     check('(5) the legacy c = 1 marker survives rebuildGrid: gridSpec keeps legacyC1, nodeCount 1, E 0', t2.get('gridSpec.legacyC1') === true && t2.get('nodeCount') === 1 && t2.get('getGridDivisions(gridSpec)') === 0);
     t2.run('currentShape = "square"; rebuildGrid("square")');
-    check('(5) a shape change keeps the legacy count (triangle c 1 -> square c 1) and gridSpec follows the shape', agree(t2) && t2.get('nodeCount') === 1 && t2.get('gridSpec.shape') === 'square');
+    check('(5) a shape change keeps the ORDNUNG (task 068c3a; triangle c 1 = ordnung 1 -> square ordnung 1 = count 2) and gridSpec follows the shape', agree(t2) && t2.get('nodeCount') === 2 && t2.get('gridSpec.shape') === 'square');
 }
 
 console.log(`\n${pass}/${pass + fail} checks passed`);
