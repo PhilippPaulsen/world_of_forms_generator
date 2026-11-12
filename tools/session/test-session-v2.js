@@ -72,7 +72,7 @@ const validate = (o, opts) => ctxV.sb.validateSession(o, opts);
     // the notice: de and en, and sketch.js shows it on 'schema-version' after the quarantine
     const i18n = read('ui-i18n.js'), m = i18n.match(/'note\.session\.oldSchema': \{ de: '([^']+)', en: '([^']+)' \}/);
     check('(3) the notice \'note.session.oldSchema\' exists in German and English (non-empty, different texts)', !!m && m[1].length > 40 && m[2].length > 40 && m[1] !== m[2], m && m[1].slice(0, 30));
-    const sk = read('sketch.js'), rej = (sk.match(/const reject = \(code, detail\) => \{[\s\S]*?\n            \};/) || [''])[0];
+    const sk = read('sketch.js'), rej = (sk.match(/const reject = \(code, detail\) => \{\n\s*console\.warn[\s\S]*?\n            \};/) || [''])[0];
     check('(3) the restore\'s reject() quarantines the snapshot and then says the notice for schema-version; the page never throws', /quarantineSession\(guard\.storage, loaded\.text, sessionQuarantineReason\(code\)\)/.test(rej) && /code === 'schema-version'\) say\('session-old', .*note\.session\.oldSchema/.test(rej) && /return false;/.test(rej));
     // the store: quarantine moves the old text out of the main key
     const mem = {}; const storage = { getItem: k => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: k => { delete mem[k]; } };
