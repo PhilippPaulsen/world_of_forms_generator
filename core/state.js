@@ -13,7 +13,10 @@ let canvasW = 600;
 let canvasH = 600; // keep square
 
 let shapeSizeFactor = 5; // 1..9, adjustable via #shape-size-input
-let nodeCount = 3;       // 1..5, adjustable via #node-count-input
+// Task 060 (G5a): gridSpec is the ONE writable truth of the base grid (core/forms.js GridSpec). nodeCount is its DERIVED legacy projection
+// (core/tiling.js and the legacy fassade read it); projectGridSpec() below is the only place that writes it.
+let gridSpec = { shape: 'triangle', ordnung: 2, lage: 1 };
+let nodeCount = 3;       // DERIVED from gridSpec (projectGridSpec), never written elsewhere
 // Roadmap 1.4-A: curveType replaces the old bare curveAmount number
 // (core/curves.js's curveType struct - kind/fold/symmetric/leaning/
 // strength). Still a single global shared by every sheet, same
@@ -253,10 +256,20 @@ function toTileLocal(n, tileC, flip180, rotationDeg = 0) {
 // can tell a stale derived value from a current one. Nothing reads it yet.
 let gridRevision = 0;
 
-// Legacy signature kept: shape + the global nodeCount (the derived bridge) -> GridSpec facade (core/forms.js).
+// Task 060 (G5a): the ONLY write of nodeCount. Validates first (throws before any state is touched), then sets gridSpec and its derived
+// legacy projection together. Does not rebuild and does not touch gridRevision (session-apply and setup use it without a rebuild).
+function projectGridSpec(spec) {
+    const c = toLegacy(spec);
+    gridSpec = spec;
+    nodeCount = c;
+}
+
+// Legacy signature kept: the grid of `shape` at the order held by gridSpec (a different shape keeps the legacy count, as nodeCount did).
 function rebuildGrid(shape) {
-    // built first: an invalid shape/nodeCount throws before any state is touched
-    const grid = buildGrid(fromLegacy(shape, nodeCount), { sizeFactor: shapeSizeFactor, canvasW, canvasH });
+    // built first: an invalid shape throws before any state is touched
+    const spec = gridSpec.shape === shape ? gridSpec : fromLegacy(shape, toLegacy(gridSpec));
+    const grid = buildGrid(spec, { sizeFactor: shapeSizeFactor, canvasW, canvasH });
+    projectGridSpec(spec);
     connections = [];
     additionalLayers = [];
     baseFaceAssignments = new Map(); // keys are geometry of the OLD grid
@@ -275,7 +288,7 @@ function setGrid(spec) {
     const v = validateGridSpec(spec);
     if (!v.ok) throw new Error('setGrid: ' + v.error);
     currentShape = spec.shape;
-    nodeCount = toLegacy(spec);
+    projectGridSpec(spec);
     rebuildGrid(spec.shape);
 }
 
