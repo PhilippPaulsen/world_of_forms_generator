@@ -32,7 +32,7 @@ const card = cardMatch ? cardMatch[2] : '';
 console.log('== the markup ==');
 T('markup', () => {
     check('#info-card exists once, is the dialog the Info button opens (aria-controls), keeps role dialog, its name key and hidden, and is overlay-wide', !!cardMatch && (htmlNoComments.match(/id="info-card"/g) || []).length === 1 && /aria-controls="info-card"/.test(htmlNoComments) && /class="overlay overlay-wide"/.test(cardMatch[1]) && /role="dialog"/.test(cardMatch[1]) && /data-i18n="info\.card"/.test(cardMatch[1]) && /\bhidden\b/.test(cardMatch[1]));
-    check('the pattern-name row stays as it was: #pattern-name-group with its label and #pattern-name-status, before the sections', /<div class="control-group" id="pattern-name-group">\s*<label>Pattern Name<\/label>\s*<span id="pattern-name-status"><\/span>\s*<\/div>/.test(card) && card.indexOf('pattern-name-group') < card.indexOf('<details'));
+    check('the pattern-name row stays as it was (task 068c2: plus the grid line #grid-info-status): #pattern-name-group with its label and #pattern-name-status, before the sections', /<div class="control-group" id="pattern-name-group">\s*<label>Pattern Name<\/label>\s*<span id="pattern-name-status"><\/span>\s*<span id="grid-info-status"><\/span>\s*<\/div>/.test(card) && card.indexOf('pattern-name-group') < card.indexOf('<details'));
     const details = card.match(/<details\b[^>]*>/g) || [];
     check('exactly two <details> (Netz, Zeitleiste), none open by default', details.length === 2 && details.every(d => !/\bopen\b/.test(d)) && /id="info-net"/.test(details[0]) && /id="info-tl"/.test(details[1]), details.join(' '));
     const sec = id => { const m = new RegExp('<details class="info-section" id="' + id + '">([\\s\\S]*?)</details>').exec(card); return m ? m[1] : ''; };
@@ -58,7 +58,7 @@ T('dictionary', () => {
         'info.net.kinds': ['Sinus: Maschen zum Kachelrand hin schmaler. Tangens: breiter. Geometrisch: gleiches Verhältnis.', 'Sine: meshes get narrower towards the tile edge. Tangent: wider. Geometric: same ratio each step.'],
         'info.net.field': ['Feld: ein Gesetz über alle Kacheln, ungerade Größe von 3 bis 9.', 'Field: one law across all tiles, odd size from 3 to 9.'],
         'info.net.locks': ['Solange ein Netz aktiv ist, sind Kurve und Frei aus.', 'While a net is active, Curve and Free are off.'],
-        'info.tl.keyframes': ['Ein Keyframe ist eine Ebene mit gefüllter Raute. Sie muss zum vorigen passen (Form, Knotenzahl, Größe, Symmetrie, Linienzahl).', 'A keyframe is a layer with a filled diamond. It must match the previous one (shape, node count, size, symmetry, number of lines).'],
+        'info.tl.keyframes': ['Ein Keyframe ist eine Ebene mit gefüllter Raute. Sie muss zum vorigen passen (Form, Ordnung, Lage, Größe, Symmetrie, Linienzahl).', 'A keyframe is a layer with a filled diamond. It must match the previous one (shape, order, position, size, symmetry, number of lines).'],
         'info.tl.net': ['Das Netz bewegt sich nur, wenn jeder Keyframe ein Netz hat und je zwei benachbarte Netze zusammenpassen.', 'The net only moves when every keyframe has a net and each two neighbouring nets fit together.']
     };
     check('the five lines are exactly the maintainer\'s texts, in both languages', Object.keys(want).every(k => DICT[k].de === want[k][0] && DICT[k].en === want[k][1]) && DICT['info.net.title'].de === 'Netz' && DICT['info.tl.title'].de === 'Zeitleiste' && DICT['info.net.title'].en === 'Net' && DICT['info.tl.title'].en === 'Timeline');
