@@ -530,31 +530,7 @@ function computeThemeLineName(connSet, mode, gridOverride, shapeOverride) {
     return formatThemeLineName(computeThemeLineOrbitTable(mode, gridOverride, shapeOverride), connSet);
 }
 
-// Roadmap 1.11-B (export integration): per-connection orbit assignments
-// ({connIndex, orbitId}) for a specific connection set under the
-// CURRENT live grid - what core/export.js's buildExportData() needs for
-// geometry.themeLineOrbits, without reaching into this module's private
-// _pairKey()/table internals itself (same "public API only" discipline
-// export.js already keeps toward core/faces.js - it calls
-// computeCellFaces(), never faces.js's own private helpers). connIndex
-// matches the connection's position in the SAME filtered (complete-only)
-// list the caller passes in, mirroring computeAdjacency()'s own
-// completeConnections-relative indexing in export.js.
-// Roadmap [orbits.js free-endpoint fix]: mirrors formatThemeLineName()'s
-// own all-or-nothing decision - a connection touching a free-endpoint
-// node (excluded from the table, see computeThemeLineOrbits()) has no
-// resolvable orbitId. Returning null for the whole set rather than a
-// partially-undefined array keeps this function self-protecting: a
-// caller (core/export.js) doesn't need its own free-endpoint detection
-// logic to avoid exporting a holed/inconsistent assignments array.
-function computeThemeLineOrbitAssignments(connSet, mode, gridOverride, shapeOverride) {
-    const table = computeThemeLineOrbitTable(mode, gridOverride, shapeOverride);
-    const assignments = connSet
-        .filter(c => c.length === 2)
-        .map((c, connIndex) => ({ connIndex, orbitId: table.pairToOrbitId.get(_pairKey(c[0], c[1])) }));
-    if (assignments.some(a => a.orbitId === undefined)) return null;
-    return assignments;
-}
+// (task 066: computeThemeLineOrbitAssignments - per-connection orbit ids for the v1 export - is gone: nothing in the app or a test used it since export v2, task 063)
 
 // ----------------- LINE KEYS AND GRID NAMES (task 059, G4) --------------------------------------------------------------
 // The semantic line key of a straight line between two nodes of a grid under the MAIN group (3*/4*/6*): { z1, z2, buchstabe, gegen }.
@@ -563,11 +539,9 @@ function computeThemeLineOrbitAssignments(connSet, mode, gridOverride, shapeOver
 //   counter-clockwise from the shaded sector (only when both nodes lie on no mirror axis and 1 < n < K + 1). "spiegelgleich" (Drehling = Spiegeling,
 //   shown as aA) is a DERIVED property of the orbit, not part of the key. The key identifies the pair ORBIT within one grid {shape, ordnung, lage}.
 // Reference implementation (kept unchanged): tools/gitter/measure-name-rule.js pairOrbits/readings/sameSide/letterFor/familyName.
-// NOT the legacy path: computeThemeLineOrbits()/formatThemeLineName()/orbitIds above are untouched and stay in use; this is a parallel pure API behind
-// GITTER_V2 (false: not reachable from the app, a test passes { gitterV2: true }). _pairKey's string order is never used for names.
-const GITTER_V2 = false;
+// The legacy computeThemeLineOrbits()/formatThemeLineName() above stay in use for the live name display and the group elements; this API is the standard one since task 066 (the old
+// on/off switch is removed, no option is needed). _pairKey's string order is never used for names.
 const _LK_ALPHABET = 'abcdefghiklmn';
-function _lkGate(opts) { if (!GITTER_V2 && !(opts && opts.gitterV2 === true)) throw new Error('GITTER_V2 is off'); }
 function _lkWrap(a) { return ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); }
 function _lkPtKey(x, y) { return Math.round(x * 1e6) + ',' + Math.round(y * 1e6); }
 function lkFamilyName(z1, z2) { return (z1 >= 10 || z2 >= 10) ? z1 + '.' + z2 : '' + z1 + z2; }
@@ -630,7 +604,7 @@ function parseLineKey(token, opts) {
 //   opts.symmetryMode: when given and not the full main group of the shape: null (a reduced mode has no systematic name).
 //   table = { grid, group, entries: [{ key, token, spiegelgleich, size, pairs: [[idA, idB], ...], anomalies }] sorted by compareLineKeys, byToken, collisions, pairCount }
 function computeLineKeyTable(nodes, grid, opts) {
-    _lkGate(opts); opts = opts || {};
+    opts = opts || {};
     const v = validateGridSpec(grid, { allowLage2: true });
     if (!v.ok) throw new Error('computeLineKeyTable: ' + v.error);
     if (opts.symmetryMode !== undefined && !isMainGroupMode(grid.shape, opts.symmetryMode)) return null;
@@ -670,14 +644,12 @@ function computeLineKeyTable(nodes, grid, opts) {
 }
 // the key of the line between node ids a and b (ids of the table's nodes), or null (free end, unknown id, a = b)
 function lineKeyForPair(table, idA, idB, opts) {
-    _lkGate(opts);
     if (!table || idA === idB) return null;
     const e = table._pairIndex.get(idA < idB ? idA + ',' + idB : idB + ',' + idA);
     return e ? Object.assign({}, e.key) : null;
 }
 // a representative ORIENTED pair [id of the end with the larger node number, id of the other] of the orbit with this key, or null
 function pairForLineKey(table, key, opts) {
-    _lkGate(opts);
     const e = table && _lkValidKey(key) ? table.byToken.get(formatLineKey(key)) : null;
     if (!e) return null;
     const [a, b] = e.pairs[0];
@@ -686,7 +658,6 @@ function pairForLineKey(table, key, opts) {
 // the lattice-only table of a grid {shape, ordnung, lage}: its node ids are the builders' ids (buildGrid gives the same ids), cached per grid
 const _LK_CACHE = new Map();
 function getLineKeyTable(grid, opts) {
-    _lkGate(opts);
     const ck = grid.shape + '|' + grid.ordnung + '|' + grid.lage + (grid.legacyC1 ? '|c1' : '');
     if (!_LK_CACHE.has(ck)) _LK_CACHE.set(ck, computeLineKeyTable(buildGridNodes(grid, { allowLage2: true }), grid, opts));
     return _LK_CACHE.get(ck);
@@ -695,7 +666,6 @@ const _LK_SHAPE_LETTER = { triangle: 'd', square: 'q', hex: '*' };
 // "{ordnung}{d|q|*}{lage}/{3*|4*|6*} {token}[+{token}...]": tokens sorted numerically (compareLineKeys), duplicates kept (count = number of tokens).
 // null when a key is missing/invalid (a free end or an incomplete line has no systematic name), the grid is not a main-group grid, or keys is empty.
 function formatGridName(grid, keys, opts) {
-    _lkGate(opts);
     if (!grid || !Object.prototype.hasOwnProperty.call(_LK_SHAPE_LETTER, grid.shape) || !Number.isInteger(grid.ordnung) || grid.ordnung < 1 || (grid.lage !== 1 && grid.lage !== 2)) return null;
     if (opts && opts.symmetryMode !== undefined && !isMainGroupMode(grid.shape, opts.symmetryMode)) return null;
     if (!Array.isArray(keys) || keys.length === 0 || !keys.every(_lkValidKey)) return null;
@@ -704,7 +674,6 @@ function formatGridName(grid, keys, opts) {
 }
 // -> { grid, group, keys, tokens, count } or null. The tokens are checked against the grid's computed table (getLineKeyTable); only then is a capital normalized.
 function parseGridName(name, opts) {
-    _lkGate(opts);
     if (typeof name !== 'string') return null;
     const m = /^(\d+)([dq*])([12])\/(3\*|4\*|6\*) (\S+)$/.exec(name);
     if (!m) return null;
@@ -717,8 +686,6 @@ function parseGridName(name, opts) {
 }
 
 // ---- task 063 (G6b): the app-facing half of the v2 API - export keys and the pattern transport -----------------------------------------------------
-// GITTER_V2 stays false (the gate of the parallel API); the app passes the explicit option instead: GRID_V2.
-const GRID_V2 = Object.freeze({ gitterV2: true });
 const TRANSPORT_V2_VERSION = 2, TRANSPORT_V2_MAX_LINES = 500, TRANSPORT_V2_MAX_TOKEN = 12;
 
 // The line keys of a sheet's connections ([idA, idB] pairs of its own grid) and its grid name, for the v2 export. `spec` = the sheet's GridSpec.
@@ -729,10 +696,10 @@ function gridLineKeysFor(spec, connections, symmetryMode) {
     const none = () => ({ tokens: list.map(() => null), name: null });
     try {
         if (!spec || !isMainGroupMode(spec.shape, symmetryMode)) return none();
-        const table = getLineKeyTable(spec, GRID_V2);
+        const table = getLineKeyTable(spec);
         if (!table) return none();
-        const keys = list.map(c => (Array.isArray(c) && c.length === 2 ? lineKeyForPair(table, c[0], c[1], GRID_V2) : null));
-        const name = keys.length > 0 && keys.every(k => k) ? formatGridName(spec, keys, Object.assign({ symmetryMode }, GRID_V2)) : null;
+        const keys = list.map(c => (Array.isArray(c) && c.length === 2 ? lineKeyForPair(table, c[0], c[1]) : null));
+        const name = keys.length > 0 && keys.every(k => k) ? formatGridName(spec, keys, { symmetryMode }) : null;
         return { tokens: keys.map(k => (k ? formatLineKey(k) : null)), name };
     } catch (e) { return none(); }
 }
@@ -767,7 +734,7 @@ function parseTransportV2(raw) {
         if (group !== mainGroupSpec(shape).name) return bad('group must be ' + mainGroupSpec(shape).name + ' for ' + shape);
         if (!Array.isArray(lines) || lines.length < 1 || lines.length > TRANSPORT_V2_MAX_LINES) return bad('lines must be 1 to ' + TRANSPORT_V2_MAX_LINES + ' tokens');
         if (!lines.every(t => typeof t === 'string' && t.length >= 1 && t.length <= TRANSPORT_V2_MAX_TOKEN)) return bad('a line token is not a short string');
-        const table = getLineKeyTable(spec, GRID_V2);
+        const table = getLineKeyTable(spec);
         if (!table) return bad('no line table for this grid');
         const keys = [];
         for (const tok of lines) { const k = parseLineKey(tok, { table }); if (!k) return bad('unknown line token ' + JSON.stringify(tok.slice(0, 12))); keys.push(k); }
@@ -777,8 +744,8 @@ function parseTransportV2(raw) {
 }
 // the representative connection [idA, idB] of every key of a parsed pattern, in the grid of `spec` (a layer's own ids are the same lattice ids); throws for a key the grid lacks
 function transportConnectionsV2(pattern) {
-    const table = getLineKeyTable(pattern.spec, GRID_V2);
-    return pattern.keys.map(k => { const p = pairForLineKey(table, k, GRID_V2); if (!p) throw new Error('line ' + formatLineKey(k) + ' does not exist in ' + pattern.shape + ' ordnung ' + pattern.spec.ordnung); return p; });
+    const table = getLineKeyTable(pattern.spec);
+    return pattern.keys.map(k => { const p = pairForLineKey(table, k); if (!p) throw new Error('line ' + formatLineKey(k) + ' does not exist in ' + pattern.shape + ' ordnung ' + pattern.spec.ordnung); return p; });
 }
 // the writers (nothing in the generator calls them yet; the catalog of G7 does): the v2 query string / paste text of a spec and its keys. Tokens sorted numerically.
 function formatTransportUrlV2(spec, keys, opts) {
