@@ -528,6 +528,10 @@ function getGridDivisions(spec) {
 function baseGridDivisions() {
     return getGridDivisions(fromLegacy(currentShape, nodeCount));
 }
+// The base's GridSpec in the same sandbox-safe way (task 063: the export names it); equal to core/state.js gridSpec in the app.
+function baseGridSpecNow() {
+    return fromLegacy(currentShape, nodeCount);
+}
 
 // Task 061 (G5b): every additional layer carries its OWN GridSpec (layer.gridSpec); layer.nodeCount is its derived legacy projection.
 // projectLayerGridSpec is the ONLY write of layer.nodeCount (as core/state.js projectGridSpec is for the base): it validates first
