@@ -14,8 +14,7 @@ const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log
 
 const OLD = {
  "ui-form.js": {
-  "reason.node.min": "Mindestens 1 Knoten.",
-  "reason.node.min.trig": "Sin und Tan brauchen mindestens 4 Knoten.",
+  "reason.node.min": "Niedrigste Ordnung: 1.",
   "reason.size.min": "Kleinste Größe: 1.",
   "reason.size.max": "Größte Größe: 9.",
   "reason.size.field.min": "Im Feld-Netz sind nur ungerade Größen von 3 bis 9 möglich; 3 ist die kleinste.",
@@ -25,7 +24,7 @@ const OLD = {
   "more.label.fold3": "Mehr – aktive Zähligkeit: 3"
  },
  "ui-layer.js": {
-  "reason.node.min": "Mindestens 1 Knoten.",
+  "reason.node.min": "Niedrigste Ordnung: 1.",
   "reason.size.min": "Kleinste Größe: 1.",
   "reason.size.max": "Größte Größe: 9."
  },
@@ -250,8 +249,7 @@ const OLD = {
 };
 const EN = {
  "ui-form.js": {
-  "reason.node.min": "At least 1 node.",
-  "reason.node.min.trig": "Sin and Tan need at least 4 nodes.",
+  "reason.node.min": "Lowest order: 1.",
   "reason.size.min": "Smallest size: 1.",
   "reason.size.max": "Largest size: 9.",
   "reason.size.field.min": "In the field net only odd sizes from 3 to 9 are possible; 3 is the smallest.",
@@ -261,7 +259,7 @@ const EN = {
   "more.label.fold3": "More – active fold: 3"
  },
  "ui-layer.js": {
-  "reason.node.min": "At least 1 node.",
+  "reason.node.min": "Lowest order: 1.",
   "reason.size.min": "Smallest size: 1.",
   "reason.size.max": "Largest size: 9."
  },

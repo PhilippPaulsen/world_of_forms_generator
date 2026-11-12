@@ -13,13 +13,14 @@ const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log
 // ---- the OLD German, as it stood before task 043 (reference) ----
 const OLD = {
     form: {
-        'reason.node.max.square': function (n) { return 'Höchstens ' + n + ' Knoten beim Quadrat.'; },
-        'reason.node.max.other': function (n) { return 'Höchstens ' + n + ' Knoten bei Dreieck und Sechseck.'; },
+        'reason.node.min.trig': function (n) { return 'Sin und Tan brauchen mindestens Ordnung ' + n + '.'; },   // task 068c2: a function of the ordnung (was a static text)
+        'reason.node.max.square': function (n) { return 'Höchste Ordnung beim Quadrat: ' + n + '.'; },
+        'reason.node.max.other': function (n) { return 'Höchste Ordnung bei dieser Form: ' + n + '.'; },
         'note.size.field': function (from, to) { return 'Feld-Netz: nur ungerade Größen, deshalb ' + from + ' → ' + to + '.'; }
     },
     layer: {
-        'reason.node.max.square': function (n) { return 'Höchstens ' + n + ' Knoten beim Quadrat.'; },
-        'reason.node.max.other': function (n) { return 'Höchstens ' + n + ' Knoten bei Dreieck und Sechseck.'; }
+        'reason.node.max.square': function (n) { return 'Höchste Ordnung beim Quadrat: ' + n + '.'; },
+        'reason.node.max.other': function (n) { return 'Höchste Ordnung bei dieser Form: ' + n + '.'; }
     },
     layers: {
         'layers.remove.title': function (n) { return 'Ebene ' + n + ' entfernen?'; },
@@ -32,7 +33,7 @@ const OLD = {
 };
 const FILES = { form: ['UI_FORM_JS', 'ui-form.js'], layer: ['UI_LAYER_JS', 'ui-layer.js'], layers: ['UI_LAYERS_JS', 'ui-layers.js'], timeline: ['UI_TIMELINE_JS', 'ui-timeline.js'] };
 const ARGS = {
-    form: { 'reason.node.max.square': [[0], [1], [2], [5]], 'reason.node.max.other': [[0], [1], [2], [5]], 'note.size.field': [[1, 3], [3, 5], [0, 2], [5, 7]] },
+    form: { 'reason.node.min.trig': [[3], [4]], 'reason.node.max.square': [[0], [1], [2], [5]], 'reason.node.max.other': [[0], [1], [2], [5]], 'note.size.field': [[1, 3], [3, 5], [0, 2], [5, 7]] },
     layer: { 'reason.node.max.square': [[0], [1], [2], [5]], 'reason.node.max.other': [[0], [1], [2], [5]] },
     layers: { 'layers.remove.title': [[0], [1], [2], [5]], 'layers.remove.lines': [[0], [1], [2], [5]], 'layers.remove.keyframe': [[0], [1], [2], [5]] },
     timeline: { 'timeline.dia.text': [[0], [1], [2], [5]] }
@@ -73,10 +74,10 @@ console.log('== English ==');
 (function () {
     const F = loadT('form', true, 'en'), L = loadT('layer', true, 'en'), Y = loadT('layers', true, 'en'), M = loadT('timeline', true, 'en');
     const eq = (name, got, want) => check(name, got === want, got === want ? undefined : '"' + got + '"');
-    eq('reason.node.max.square (form)', F['reason.node.max.square'](5), 'At most 5 nodes for the square.');
-    eq('reason.node.max.other (form)', F['reason.node.max.other'](12), 'At most 12 nodes for triangle and hexagon.');
-    eq('reason.node.max.square (layer)', L['reason.node.max.square'](5), 'At most 5 nodes for the square.');
-    eq('reason.node.max.other (layer)', L['reason.node.max.other'](12), 'At most 12 nodes for triangle and hexagon.');
+    eq('reason.node.max.square (form)', F['reason.node.max.square'](5), 'Highest order for the square: 5.');
+    eq('reason.node.max.other (form)', F['reason.node.max.other'](12), 'Highest order for this shape: 12.');
+    eq('reason.node.max.square (layer)', L['reason.node.max.square'](5), 'Highest order for the square: 5.');
+    eq('reason.node.max.other (layer)', L['reason.node.max.other'](12), 'Highest order for this shape: 12.');
     eq('note.size.field', F['note.size.field'](3, 5), 'Field net: odd sizes only, so 3 → 5.');
     eq('layers.remove.title', Y['layers.remove.title'](2), 'Remove layer 2?');
     eq('layers.remove.lines, k = 1', Y['layers.remove.lines'](1), 'The one line of this layer will be lost. This cannot be undone.');

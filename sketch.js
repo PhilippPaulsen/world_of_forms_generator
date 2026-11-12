@@ -208,16 +208,16 @@ function setup() {
     // Sets the input's own max for currentShape (the HTML attribute is only the universal default of 7) and, when the
     // current nodeCount is above it, clamps nodeCount and says so. `cause` names what triggered it.
     function clampNodeCountToShape(cause) {
-        const maxN = gridMaxCount(currentShape, gridSpec.lage);   // task 068b: the limit of the base's own lage
-        if (nodeInput) nodeInput.elt.max = maxN;
+        const maxN = gridMaxCount(currentShape, gridSpec.lage);   // task 068b: the limit of the base's own lage (the internal count; the input shows the ordnung, task 068c2)
+        if (nodeInput) nodeInput.elt.max = gridMaxOrdnung(currentShape, gridSpec.lage);
         if (nodeCount > maxN) {
-            showNodeCountNote(`${cause} changed to ${currentShape}: Node Count ${nodeCount} is above its limit of ${maxN}, so it was set to ${maxN}.`);
+            showNodeCountNote(`${cause} changed to ${currentShape}: Order ${ordnungForCount(currentShape, nodeCount)} is above its limit of ${gridMaxOrdnung(currentShape, gridSpec.lage)}, so it was set to ${gridMaxOrdnung(currentShape, gridSpec.lage)}.`);
             projectGridSpec(gridSpecForCount(currentShape, maxN, gridSpec.lage));
-            if (nodeInput) nodeInput.value(nodeCount);
+            if (nodeInput) nodeInput.value(gridSpec.ordnung);
         }
     }
     if (nodeInput) {
-        projectGridSpec(fromLegacy(currentShape, Math.max(1, parseInt(nodeInput.value()) || 3)));
+        projectGridSpec(gridSpecForOrdnung(currentShape, parseInt(nodeInput.value()) || 2, 1));   // task 068c2: the input holds the ordnung (default 2 = the old count 3)
         nodeInput.input(() => {
             let v = parseInt(nodeInput.value());
             // Roadmap 1.1 (Group A, node-count limit raise): 5 -> 7, and
@@ -226,14 +226,14 @@ function setup() {
             // table bounds the v2 transport validation (validateGridSpec), the layer input
             // and alignLayerToBase(). An over-limit value is clamped and
             // the input and a note say so (it used to be silent).
-            const maxN = gridMaxCount(currentShape, gridSpec.lage);
+            const maxN = gridMaxOrdnung(currentShape, gridSpec.lage);   // task 068c2: the value is the ordnung
             if (v < 1) v = 1;
             if (v > maxN) {
-                showNodeCountNote(`Node Count ${v} is above the ${currentShape} limit of ${maxN}, so it was set to ${maxN}.`);
+                showNodeCountNote(`Order ${v} is above the ${currentShape} limit of ${maxN}, so it was set to ${maxN}.`);
                 v = maxN;
                 nodeInput.value(v);
             }
-            setGrid(gridSpecForCount(currentShape, v, gridSpec.lage));   // task 068b: the base keeps its lage
+            setGrid(gridSpecForOrdnung(currentShape, v, gridSpec.lage));   // task 068b: the base keeps its lage; task 068c2: v is the ordnung
             renderLayerTabs();
             updateOffsetControls();
             updateTimelineControls();
@@ -244,8 +244,8 @@ function setup() {
     // Task 068b: the page's grid controls follow the state after setGrid / setBaseLage / setLayerLage (core/state.js calls this hook; no new elements).
     function syncGridControls() {
         if (nodeInput) {
-            nodeInput.elt.max = gridMaxCount(currentShape, gridSpec.lage);
-            if (String(nodeInput.value()) !== String(nodeCount)) nodeInput.value(nodeCount);
+            nodeInput.elt.max = gridMaxOrdnung(currentShape, gridSpec.lage);
+            if (String(nodeInput.value()) !== String(gridSpec.ordnung)) nodeInput.value(gridSpec.ordnung);
         }
         shapeBtns.forEach(b => { if (b.attribute('data-shape') === currentShape) b.addClass('active'); else b.removeClass('active'); });
         renderLayerTabs();
@@ -273,7 +273,7 @@ function setup() {
         shapeBtns.forEach(b => b.removeClass('active'));
         const matchingShapeBtn = shapeBtns.find(b => b.attribute('data-shape') === currentShape);
         if (matchingShapeBtn) matchingShapeBtn.addClass('active');
-        if (nodeInput) nodeInput.value(nodeCount);
+        if (nodeInput) nodeInput.value(gridSpec.ordnung);
     }
     clampNodeCountToShape('Shape'); // sets the input's max for the starting shape (a validated catalog order is already within it)
 
@@ -590,9 +590,10 @@ function setup() {
                 if (netDomainEffective({ domain: 'field' }, R).ignored === null) setDomain('field');
                 else { setDomain('single'); notes.push(window.UI && UI.t ? UI.t('note.net.fieldOddSize', { size: R, kept: R }) : `Feld braucht eine ungerade Größe (3, 5, 7, 9); ${R} passt nicht, deshalb Einzelnetz. Die Größe bleibt ${R}.`); }
             }
-            if ((kind === 'sinus' || kind === 'tangens') && nodeCount < 4) {
-                notes.push(window.UI && UI.t ? UI.t('note.net.minNodes', { from: nodeCount }) : `Sin und Tan brauchen mindestens 4 Knoten; Knoten von ${nodeCount} auf 4 gesetzt.`);
-                if (nodeInput) { nodeInput.value(4); nodeInput.elt.dispatchEvent(new Event('input', { bubbles: true })); }
+            if ((kind === 'sinus' || kind === 'tangens') && nodeCount < 4) {   // E >= 3, i.e. the legacy count 4 = ordnung 3 (triangle, square) / 4 (hex), task 068c2
+                const minO = gridMinOrdnungTrig(currentShape);
+                notes.push(window.UI && UI.t ? UI.t('note.net.minNodes', { from: gridSpec.ordnung, to: minO }) : `Sin und Tan brauchen mindestens Ordnung ${minO}; Ordnung von ${gridSpec.ordnung} auf ${minO} gesetzt.`);
+                if (nodeInput) { nodeInput.value(minO); nodeInput.elt.dispatchEvent(new Event('input', { bubbles: true })); }
             }
             if (notes.length && window.UI) UI.toast(notes.join(' '), 6000);
         }
@@ -1105,7 +1106,7 @@ function setup() {
             const layer = additionalLayers[activeLayer];
             if (offsetXInput) offsetXInput.value(layer.offsetX);
             if (offsetYInput) offsetYInput.value(layer.offsetY);
-            if (layerNodeCountInput) { layerNodeCountInput.value(layer.nodeCount); layerNodeCountInput.elt.max = gridMaxCount(layer.shape, layerGridSpecOf(layer).lage); }
+            if (layerNodeCountInput) { layerNodeCountInput.value(layerGridSpecOf(layer).ordnung); layerNodeCountInput.elt.max = gridMaxOrdnung(layer.shape, layerGridSpecOf(layer).lage); }   // task 068c2: the ordnung
             if (layerShapeSizeInput) layerShapeSizeInput.value(layer.shapeSizeFactor);
             if (layerRotationInput) layerRotationInput.value(layer.rotation || 0);
             syncLayerAnimationDisplay(layer);
@@ -1673,8 +1674,8 @@ function setup() {
                 const clamp = updateActiveLayerGrid({ shape: btn.attribute('data-shape') });
                 // updateActiveLayerGrid() clamps this layer's own node count to the new shape's limit; say so, and sync the input
                 if (clamp) {
-                    showLayerNodeCountNote(`Layer shape changed to ${clamp.shape}: Layer Node Count ${clamp.from} is above its limit of ${clamp.to}, so it was set to ${clamp.to}.`);
-                    if (layerNodeCountInput) layerNodeCountInput.value(clamp.to);
+                    showLayerNodeCountNote(`Layer shape changed to ${clamp.shape}: Layer Order ${ordnungForCount(clamp.shape, clamp.from)} is above its limit of ${ordnungForCount(clamp.shape, clamp.to)}, so it was set to ${ordnungForCount(clamp.shape, clamp.to)}.`);
+                    if (layerNodeCountInput) layerNodeCountInput.value(ordnungForCount(clamp.shape, clamp.to));
                 }
                 // Roadmap 1.12 "Align to base" bugfix: found live while
                 // testing - this handler predates the align button and
@@ -1806,7 +1807,7 @@ function setup() {
             if (result.achievable) {
                 updateActiveLayerGrid({ shapeSizeFactor: result.shapeSizeFactor, nodeCount: result.nodeCount });
                 if (layerShapeSizeInput) layerShapeSizeInput.value(layer.shapeSizeFactor);
-                if (layerNodeCountInput) layerNodeCountInput.value(layer.nodeCount);
+                if (layerNodeCountInput) layerNodeCountInput.value(layerGridSpecOf(layer).ordnung);
                 if (window.UI) UI.notifyClear('align');
                 redraw();
             } else {
@@ -1829,14 +1830,14 @@ function setup() {
             if (activeLayer === 'base') return;
             let v = parseInt(layerNodeCountInput.value());
             // Roadmap 1.1 (Group A): bounded by the LAYER'S OWN shape (it may differ from the base's) - see the base input's clamp
-            const maxN = gridMaxCount(additionalLayers[activeLayer].shape, layerGridSpecOf(additionalLayers[activeLayer]).lage);
+            const maxN = gridMaxOrdnung(additionalLayers[activeLayer].shape, layerGridSpecOf(additionalLayers[activeLayer]).lage);   // task 068c2: the value is the ordnung
             if (v < 1) v = 1;
             if (v > maxN) {
-                showLayerNodeCountNote(`Layer Node Count ${v} is above the ${additionalLayers[activeLayer].shape} limit of ${maxN}, so it was set to ${maxN}.`);
+                showLayerNodeCountNote(`Layer Order ${v} is above the ${additionalLayers[activeLayer].shape} limit of ${maxN}, so it was set to ${maxN}.`);
                 v = maxN;
                 layerNodeCountInput.value(v);
             }
-            updateActiveLayerGrid({ nodeCount: v });
+            updateActiveLayerGrid({ ordnung: v });
             redraw();
         });
     }
@@ -2058,7 +2059,7 @@ function setup() {
             const match = shapeBtns.find(b => b.attribute('data-shape') === currentShape);
             if (match) match.addClass('active');
             if (shapeInput) shapeInput.value(shapeSizeFactor);
-            if (nodeInput) nodeInput.value(nodeCount);
+            if (nodeInput) nodeInput.value(gridSpec.ordnung);
             clampNodeCountToShape('Restore'); // the input's max for the restored shape; the restored count is within it, so no note
         },
         symmetry(category, fold) {
@@ -2734,9 +2735,9 @@ function updateActiveLayerGrid(patch) {
     if (activeLayer === 'base') return;
     const layer = additionalLayers[activeLayer];
     // task 061: a patch's nodeCount is not assigned; it becomes the layer's gridSpec (projectLayerGridSpec writes layer.nodeCount)
-    const { nodeCount: patchCount, ...patchRest } = patch;
+    const { nodeCount: patchCount, ordnung: patchOrdnung, ...patchRest } = patch;   // task 068c2: the input sends the ordnung; align / catalog still send the legacy count
     Object.assign(layer, patchRest);
-    let layerCount = Number.isInteger(patchCount) && patchCount >= 1 ? patchCount : layer.nodeCount;
+    let layerCount = Number.isInteger(patchOrdnung) && patchOrdnung >= 1 ? countForOrdnung(layer.shape, patchOrdnung) : Number.isInteger(patchCount) && patchCount >= 1 ? patchCount : layer.nodeCount;
     // Defence in depth for every caller (shape switch, catalog link, align): a layer's node count never exceeds its OWN
     // shape's ceiling (core/forms.js NODE_COUNT_MAX). The caller that knows the UI reports it (returned below).
     let clamped = null;
@@ -4768,9 +4769,29 @@ window.getSpatialMorph = getSpatialMorph;
 // Updates #pattern-name-status for whichever sheet is currently active.
 // Called once per draw() (see there for why this is cached rather than
 // unconditional like updateCrossLayerStatus()).
+// Task 068c2: the read-outs of the active sheet's grid - the info card's line "Gitter: {name} · Knoten: {n}" (#grid-info-status) and the tooltips of the two
+// ordnung steppers ("Ordnung {o}: {n} Knoten"). Derived from the spec only (getGridNodeCount, the grid part of the v2 name); written only when the text changes.
+function updateGridInfoLine() {
+    const t = (key, vars, fallback) => (window.UI && UI.t ? UI.t(key, vars) : fallback);
+    const textOf = (spec) => {
+        const n = getGridNodeCount(spec), code = spec.ordnung + { triangle: 'd', square: 'q', hex: '*' }[spec.shape] + spec.lage;   // the grid part of the v2 name (core/orbits.js formatGridName: {ordnung}{d|q|*}{lage})
+        return { n, code };
+    };
+    const set = (el, prop, value) => { if (el && (prop === 'text' ? el.textContent !== value : el.getAttribute('title') !== value)) { if (prop === 'text') el.textContent = value; else el.setAttribute('title', value); } };
+    const active = activeLayer !== 'base' && additionalLayers[activeLayer] ? layerGridSpecOf(additionalLayers[activeLayer]) : baseGridSpecNow();
+    const a = textOf(active);
+    set(document.getElementById('grid-info-status'), 'text', t('info.grid.line', { name: a.code, n: a.n }, `Gitter: ${a.code} · Knoten: ${a.n}`));
+    const base = baseGridSpecNow(), b = textOf(base);
+    set(document.getElementById('nav-node-stepper'), 'title', t('tip.order', { o: base.ordnung, n: b.n }, `Ordnung ${base.ordnung}: ${b.n} Knoten`));
+    const lay = additionalLayers[activeLayer];
+    const lg = document.getElementById('layer-node-count-input');
+    if (lg && lay) { const s = layerGridSpecOf(lay), c = textOf(s); set(lg.closest('.stepper'), 'title', t('tip.order', { o: s.ordnung, n: c.n }, `Ordnung ${s.ordnung}: ${c.n} Knoten`)); }
+}
+
 function updatePatternNameStatus() {
     const statusEl = select('#pattern-name-status');
     if (!statusEl) return;
+    updateGridInfoLine();
 
     const sig = patternNameSignature();
     if (sig !== patternNameCacheSignature) {

@@ -28,10 +28,10 @@
   // a sentence of the bilingual dictionary (ui-i18n.js) in the current language, else the German text written here
   const tr = function (key, params, fallback) { const i = window.uiI18n; return i && i.has(key) ? i.t(key, params) : fallback; };
   const T = {
-    get 'reason.node.min'() { return tr('reason.node.min', null, 'Mindestens 1 Knoten.'); },
-    get 'reason.node.min.trig'() { return tr('reason.node.min.trig', null, 'Sin und Tan brauchen mindestens 4 Knoten.'); },
-    'reason.node.max.square': function (n) { return tr('reason.node.max.square', { n: n }, 'Höchstens ' + n + ' Knoten beim Quadrat.'); },
-    'reason.node.max.other': function (n) { return tr('reason.node.max.other', { n: n }, 'Höchstens ' + n + ' Knoten bei Dreieck und Sechseck.'); },
+    get 'reason.node.min'() { return tr('reason.node.min', null, 'Niedrigste Ordnung: 1.'); },
+    'reason.node.min.trig': function (n) { return tr('reason.node.min.trig', { n: n }, 'Sin und Tan brauchen mindestens Ordnung ' + n + '.'); },
+    'reason.node.max.square': function (n) { return tr('reason.node.max.square', { n: n }, 'Höchste Ordnung beim Quadrat: ' + n + '.'); },
+    'reason.node.max.other': function (n) { return tr('reason.node.max.other', { n: n }, 'Höchste Ordnung bei dieser Form: ' + n + '.'); },
     get 'reason.size.min'() { return tr('reason.size.min', null, 'Kleinste Größe: 1.'); },
     get 'reason.size.max'() { return tr('reason.size.max', null, 'Größte Größe: 9.'); },
     get 'reason.size.field.min'() { return tr('reason.size.field.min', null, 'Im Feld-Netz sind nur ungerade Größen von 3 bis 9 möglich; 3 ist die kleinste.'); },
@@ -60,9 +60,9 @@
     const x = baseNetTransform.x, y = baseNetTransform.y;
     return (x && x.kind === 'trig') || (y && y !== 'same' && y.kind === 'trig');
   }
-  function nodeMin() { return trigNetActive() ? 4 : 1; }
-  function nodeMinMsg() { return trigNetActive() ? T['reason.node.min.trig'] : T['reason.node.min']; }
-  function nodeMax() { return typeof maxNodeCountFor === 'function' ? maxNodeCountFor(currentShape) : 7; }
+  function nodeMin() { return trigNetActive() ? (typeof gridMinOrdnungTrig === 'function' ? gridMinOrdnungTrig(currentShape) : 3) : 1; }   // task 068c2: the value is the ordnung (Sin/Tan: E >= 3, i.e. 3 / 3 / 4)
+  function nodeMinMsg() { return trigNetActive() ? T['reason.node.min.trig'](nodeMin()) : T['reason.node.min']; }
+  function nodeMax() { return typeof gridMaxOrdnung === 'function' ? gridMaxOrdnung(currentShape, typeof gridSpec !== 'undefined' ? gridSpec.lage : 1) : 7; }
   function nodeMaxMsg(max) { return (currentShape === 'square' ? T['reason.node.max.square'] : T['reason.node.max.other'])(max); }
 
   // dir +1 = the up chevron, -1 = the down chevron

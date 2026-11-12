@@ -21,9 +21,9 @@
   const tr = function (key, fallback, params) { const i = window.uiI18n; return i && i.has(key) ? i.t(key, params) : fallback; };
   const T = {
     get 'reason.none'() { return tr('common.noLayer', 'Keine Ebene aktiv.'); },
-    get 'reason.node.min'() { return tr('reason.node.min', 'Mindestens 1 Knoten.'); },
-    'reason.node.max.square': function (n) { return tr('reason.node.max.square', 'Höchstens ' + n + ' Knoten beim Quadrat.', { n: n }); },
-    'reason.node.max.other': function (n) { return tr('reason.node.max.other', 'Höchstens ' + n + ' Knoten bei Dreieck und Sechseck.', { n: n }); },
+    get 'reason.node.min'() { return tr('reason.node.min', 'Niedrigste Ordnung: 1.'); },
+    'reason.node.max.square': function (n) { return tr('reason.node.max.square', 'Höchste Ordnung beim Quadrat: ' + n + '.', { n: n }); },
+    'reason.node.max.other': function (n) { return tr('reason.node.max.other', 'Höchste Ordnung bei dieser Form: ' + n + '.', { n: n }); },
     get 'reason.size.min'() { return tr('reason.size.min', 'Kleinste Größe: 1.'); },
     get 'reason.size.max'() { return tr('reason.size.max', 'Größte Größe: 9.'); },
   };
@@ -35,7 +35,7 @@
   function layer() {
     return typeof activeLayer !== 'undefined' && activeLayer !== 'base' && typeof additionalLayers !== 'undefined' && additionalLayers[activeLayer] || null;
   }
-  function nodeMax() { const L = layer(); return typeof maxNodeCountFor === 'function' ? maxNodeCountFor(L ? L.shape : 'triangle') : 7; }
+  function nodeMax() { const L = layer(); return typeof gridMaxOrdnung === 'function' ? gridMaxOrdnung(L ? L.shape : 'triangle', L && typeof layerGridSpecOf === 'function' ? layerGridSpecOf(L).lage : 1) : 7; }   // task 068c2: the ordnung
   function nodeMaxMsg(max) { const L = layer(); return (L && L.shape === 'square' ? T['reason.node.max.square'] : T['reason.node.max.other'])(max); }
 
   // dir +1 = the up chevron, -1 = the down chevron
