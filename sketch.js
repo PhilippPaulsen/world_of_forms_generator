@@ -30,64 +30,6 @@ function normSym(val) {
     return validModes.includes(v) ? v : 'rotation_reflection6';
 }
 
-// Roadmap: catalog (gallery.html) -> generator back-link. A catalog
-// entry's (shape, order, symmetryMode, orbitIds) tuple is already
-// exactly what core/orbits.js's computeThemeLineOrbits() needs to
-// reconstruct the same connections gallery-render.js's own
-// renderFullTessellationSVG() builds - see the design session for why
-// node-id numbering is guaranteed identical regardless of scale
-// (core/forms.js's id assignment depends only on nodeCount, never on
-// shapeSizeFactor/canvas size) and why shapeSizeFactor is deliberately
-// NOT part of this scheme (a pure rendering parameter, no bearing on
-// which nodes/orbits exist).
-//
-// orbitIds is comma-separated, not '+' (the pattern-name display
-// format's own separator, e.g. "2*/D3 0+2") - '+' in a URL query VALUE
-// is reserved and silently decodes to a space unless percent-encoded,
-// which would corrupt the id list; comma has no such meaning.
-//
-// Two validation layers, deliberately kept separate (see the design
-// session): this function is the SYNTACTIC layer only - can these four
-// params even describe a real request - checked before touching any
-// grid/orbit machinery. The SEMANTIC layer (do the given orbitIds
-// actually exist in THIS exact table) can only run once the grid is
-// built - see applyCatalogPattern() below. Returns null (never a
-// partial/best-guess object) for anything that doesn't clearly ask for
-// a catalog pattern - an ordinary load with no query string, and a
-// malformed one, are treated identically: fall through to the normal
-// addRandomConnection() default.
-const CATALOG_URL_SHAPES = ['triangle', 'square', 'hex'];
-const CATALOG_URL_MODES = ['none', 'reflection_only', 'rotation3', 'rotation6', 'rotation_reflection3', 'rotation_reflection6'];
-
-// Roadmap: catalog pattern syntactic validation - shared between the
-// URL-driven back-link (parseCatalogUrlParams() below) and the
-// clipboard-driven "Paste Pattern" action (parseClipboardCatalogPattern()
-// below) - ONE definition of "what a valid pattern object looks like",
-// not two independently-drifting copies (design session point 1).
-// Takes already-coerced-to-target-type candidate values - each caller's
-// own parsing step (URLSearchParams string splitting vs. JSON.parse)
-// stays separate, since the two transports hand this differently-shaped
-// raw input (strings from a query string; whatever JSON.parse produced,
-// which for a hand-edited clipboard payload could be any type at all)
-// - this only checks range/enum validity once that coercion has already
-// happened. Deliberately NOT normSym() for symmetryMode - see
-// parseCatalogUrlParams()'s own original comment on that, unchanged in
-// meaning by this extraction.
-function isWellFormedCatalogPattern(shape, order, symmetryMode, orbitIds) {
-    if (!CATALOG_URL_SHAPES.includes(shape)) return false;
-    if (!CATALOG_URL_MODES.includes(symmetryMode)) return false;
-    // 1..maxNodeCountFor(shape) matches #node-count-input's own bound for
-    // that shape (core/forms.js NODE_COUNT_MAX: triangle/hex 7, square 13)
-    // - every real manifest entry is within the lower part of this range
-    // (max observed: 5, triangle), so this is a syntactic sanity bound, not
-    // a workaround. Shape-aware because a uniform 13 would let a hex link
-    // at order 13 load a grid whose orbit table costs several hundred ms
-    // per click (measured: hex 9 ~87 ms, 11 ~199 ms).
-    if (!Number.isInteger(order) || order < 1 || order > maxNodeCountFor(shape)) return false;
-    if (!Array.isArray(orbitIds) || orbitIds.length === 0 || orbitIds.some(id => !Number.isInteger(id) || id < 0)) return false;
-    return true;
-}
-
 // ---- Task 063 (G6b): the pattern transport v2 (URL and paste) -------------------------------------------------------------------------------------
 // v2 URL:   ?v=2&shape=&ordnung=&lage=&group=&lines=65a,12.11a,...[&layer=new]       v2 paste: {"version":2,"grid":{shape,ordnung,lage},"group","lines":[tokens]}
 // The v2 path is STRICT (core/orbits.js parseTransportV2): the version must be 2, all tokens are checked against the grid's line table BEFORE anything is
@@ -98,38 +40,6 @@ let catalogTransportRejection = null;
 function catalogRejectionText(rej) {
     const fallback = rej.code === 'version' ? 'This link or pattern was made for another version of the generator and cannot be loaded.' : 'This link or pattern is not valid for the current grid and cannot be loaded.';
     return window.UI && UI.t ? (rej.code === 'version' ? UI.t('note.catalog.version') : UI.t('note.catalog.invalid')) : fallback;
-}
-
-// legacyCatalogReader: TRANSITIONAL DEBT until G7 (task 063, decision B). The Formorgel (gallery.js) still writes the OLD format (?shape&order&symmetryMode&orbitIds,
-// paste JSON {shape, order, symmetryMode, orbitIds}); this isolated block reads ONLY that, through the old resolution (orbit table). It never writes the old format and
-// it refuses everything that carries a v2 marker (a v parameter, a version field): a broken v2 input is never "rescued" by it. G7 removes it and reverses its pin.
-function legacyCatalogReader(source) {
-    if (source.params) {
-        const params = source.params;
-        if (params.has('v')) return null;
-        const shape = params.get('shape');
-        const orderRaw = params.get('order');
-        const symmetryModeParam = params.get('symmetryMode');
-        const orbitIdsRaw = params.get('orbitIds');
-        if (!shape || !orderRaw || !symmetryModeParam || !orbitIdsRaw) return null;
-        const order = parseInt(orderRaw, 10);
-        const orbitIds = orbitIdsRaw.split(',').map(s => parseInt(s, 10));
-        if (!isWellFormedCatalogPattern(shape, order, symmetryModeParam, orbitIds)) return null;
-        // 'new' is the only recognized layer= value; present-but-not-'new' is reported and treated as absent (the rest of a valid link stays valid)
-        const layerRaw = params.get('layer');
-        let layer = null;
-        if (layerRaw === 'new') {
-            layer = 'new';
-        } else if (layerRaw !== null) {
-            console.warn(`Unrecognized layer= value "${layerRaw}" in catalog URL - ignoring, loading as the base pattern instead.`);
-        }
-        return { shape, order, symmetryMode: symmetryModeParam, orbitIds, layer };
-    }
-    const obj = source.obj;
-    if (!obj || typeof obj !== 'object' || obj.version !== undefined) return null;
-    const { shape, order, symmetryMode, orbitIds } = obj;
-    if (!isWellFormedCatalogPattern(shape, order, symmetryMode, orbitIds)) return null;
-    return { shape, order, symmetryMode, orbitIds };
 }
 
 function parseCatalogUrlV2(params) {
@@ -150,11 +60,13 @@ function parseCatalogUrlV2(params) {
 function parseCatalogUrlParams(search) {
     catalogTransportRejection = null;
     const params = new URLSearchParams(search);
-    if (!params.has('v')) return legacyCatalogReader({ params });
-    return parseCatalogUrlV2(params);
+    if (params.has('v')) return parseCatalogUrlV2(params);
+    // task 066 (G7b): the old format (?shape&order&symmetryMode&orbitIds, no v) is gone - refused with the version note, never loaded; any other query is an ordinary load
+    if (params.has('orbitIds')) catalogTransportRejection = { code: 'version', detail: 'old format (orbitIds) without v=2' };
+    return null;
 }
 
-// The clipboard payload (the catalog's "Copy pattern" writes the OLD format until G7, the v2 writers are core/orbits.js formatTransportPasteV2): never throws, null for
+// The clipboard payload (the catalog's "Copy pattern" writes v2: core/orbits.js formatTransportPasteV2): never throws, null for
 // anything that does not clearly describe a real pattern. Always targets a NEW layer (no `layer` field).
 function parseClipboardCatalogPattern(text) {
     catalogTransportRejection = null;
@@ -165,8 +77,8 @@ function parseClipboardCatalogPattern(text) {
         return null;
     }
     if (!obj || typeof obj !== 'object') return null;
-    if (obj.version === undefined) return legacyCatalogReader({ obj });
     const reject = (code, detail) => { catalogTransportRejection = { code, detail }; return null; };
+    if (obj.version === undefined) return Object.prototype.hasOwnProperty.call(obj, 'orbitIds') ? reject('version', 'old format (orbitIds) without version 2') : null;   // task 066: the old paste format is refused, other JSON stays a quiet null
     if (obj.version !== 2) return reject('version', 'version ' + JSON.stringify(obj.version).slice(0, 20));
     if (Object.keys(obj).some(k => !['version', 'grid', 'group', 'lines'].includes(k))) return reject('invalid', 'unknown field in a v2 pattern (an old-format field?)');
     const g = obj.grid;
@@ -176,36 +88,10 @@ function parseClipboardCatalogPattern(text) {
     return r.pattern;
 }
 
-// Semantic validation + reconstruction (the second layer above) - only
-// meaningful once the target grid (base or a layer's own, see callers
-// below) already reflects pattern.shape/order, since it needs the real
-// live nodes/centroid. Mirrors gallery-render.js's
-// renderFullTessellationSVG() exactly: orbitIds.map(id =>
-// table.orbits[id].pairs[0]) - the SAME reconstruction, reusing the
-// SAME live orbit-table glue (computeThemeLineOrbitTable(), core/orbits.js)
-// rather than a second, independently-written lookup. Any representative
-// pair (pairs[0]) is fine to use as-is - two pairs land in the same
-// orbit precisely because the group maps one onto the other, so the
-// rendered copy-set is an invariant of the orbit, not of which member
-// was chosen (see the design session). gridOverride/shapeOverride are
-// computeThemeLineOrbitTable()'s own passthrough params (core/orbits.js) -
-// omitted (as applyCatalogPattern() below does) resolves against the
-// base sheet's own live globals, byte-identical to before this was
-// extracted; applyCatalogPatternToNewLayer() passes a layer's own grid
-// instead. Throws on a stale/malformed orbitIds (not realistic for an
-// app-generated link, but a hand-edited or future-format-drifted one
-// should degrade gracefully) - each caller's own try/catch reports it
-// via console.warn, not a new UI element (deliberately - expected to be
-// rare enough that dedicated in-page chrome isn't warranted yet).
-function resolveCatalogPatternConnections(pattern, gridOverride, shapeOverride) {
-    if (pattern.v2) return transportConnectionsV2(pattern);   // task 063: the line keys, resolved in the grid's own lattice table
-    const table = computeThemeLineOrbitTable(pattern.symmetryMode, gridOverride, shapeOverride);
-    return pattern.orbitIds.map(id => {
-        if (!table.orbits[id]) {
-            throw new Error(`orbit id ${id} does not exist for ${pattern.shape} order ${pattern.order} ${pattern.symmetryMode} (table has ${table.orbits.length} orbits)`);
-        }
-        return table.orbits[id].pairs[0];
-    });
+// Task 066 (G7b): the connections of a parsed v2 pattern: the representative pair of each line key in the grid's own lattice table (core/orbits.js transportConnectionsV2; a layer's ids
+// are the same lattice ids, so the base and a new layer resolve alike). Throws for a key the grid lacks - each caller's own try/catch reports it via console.warn.
+function resolveCatalogPatternConnections(pattern) {
+    return transportConnectionsV2(pattern);
 }
 
 // Applies a catalog pattern to the BASE sheet - only meaningful once
@@ -244,11 +130,7 @@ function applyCatalogPatternToNewLayer(pattern) {
         updateActiveLayerGrid({ shape: pattern.shape, nodeCount: pattern.order });
         const layer = additionalLayers[layerIndex];
         layer.symmetryMode = pattern.symmetryMode;
-        layer.connections = resolveCatalogPatternConnections(
-            pattern,
-            { nodes: layer.nodes, centroid: layer.centroid, outerCorners: layer.outerCorners },
-            pattern.shape
-        );
+        layer.connections = resolveCatalogPatternConnections(pattern);   // task 066: the keys resolve in the lattice table, the layer's own ids are the same
         return true;
     } catch (err) {
         console.warn('Failed to load catalog pattern into a new layer from URL - removing the empty layer and falling back to the default random base connection:', err.message);
@@ -340,7 +222,7 @@ function setup() {
             // Roadmap 1.1 (Group A, node-count limit raise): 5 -> 7, and
             // then shape-dependent (square 13, triangle/hex 7 - see
             // core/forms.js NODE_COUNT_MAX for the measurements). The same
-            // table bounds `isWellFormedCatalogPattern()`, the layer input
+            // table bounds the v2 transport validation (validateGridSpec), the layer input
             // and alignLayerToBase(). An over-limit value is clamped and
             // the input and a note say so (it used to be silent).
             const maxN = maxNodeCountFor(currentShape);

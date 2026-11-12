@@ -78,10 +78,10 @@ const NMAX = (shape, lage) => shape === 'hex' ? (lage === 2 ? 5 : 6) : 8;
     check('(5) free end / unknown id / same node: lineKeyForPair null', kf(t, 1, 9999, V2) === null && kf(t, 1, 1, V2) === null && kf(t, -5, 2, V2) === null);
     const nodes = G('buildGridNodes')(grid, LAT).concat([{ id: 777, x: 12.5, y: 40, free: true }]), t2 = G('computeLineKeyTable')(nodes, grid, V2);
     check('(5) a free end node is left out of the table (no key for any pair with it)', kf(t2, 1, 777, V2) === null && t2.entries.length === t.entries.length);
-    check('(5) reduced symmetryMode: computeLineKeyTable and formatGridName give null (rotation3, reflection_only, none, hex rotation_reflection3); the main modes do not', ['rotation3', 'reflection_only', 'none', 'rotation6'].every(m => G('computeLineKeyTable')(nodes, grid, { gitterV2: true, symmetryMode: m }) === null && F(grid, [{ z1: 2, z2: 1, buchstabe: 'a', gegen: false }], { gitterV2: true, symmetryMode: m }) === null)
-        && G('computeLineKeyTable')(G('buildGridNodes')({ shape: 'hex', ordnung: 2, lage: 1 }, LAT), { shape: 'hex', ordnung: 2, lage: 1 }, { gitterV2: true, symmetryMode: 'rotation_reflection3' }) === null && G('computeLineKeyTable')(nodes, grid, { gitterV2: true, symmetryMode: 'rotation_reflection6' }) !== null);
+    check('(5) reduced symmetryMode: computeLineKeyTable and formatGridName give null (rotation3, reflection_only, none, hex rotation_reflection3); the main modes do not', ['rotation3', 'reflection_only', 'none', 'rotation6'].every(m => G('computeLineKeyTable')(nodes, grid, { symmetryMode: m }) === null && F(grid, [{ z1: 2, z2: 1, buchstabe: 'a', gegen: false }], { symmetryMode: m }) === null)
+        && G('computeLineKeyTable')(G('buildGridNodes')({ shape: 'hex', ordnung: 2, lage: 1 }, LAT), { shape: 'hex', ordnung: 2, lage: 1 }, { symmetryMode: 'rotation_reflection3' }) === null && G('computeLineKeyTable')(nodes, grid, { symmetryMode: 'rotation_reflection6' }) !== null);
     check('(5) incomplete line (a null / invalid key in the list), empty list, bad grid: formatGridName null', [[{ z1: 2, z2: 1, buchstabe: 'a', gegen: false }, null], [], [{ z1: 1, z2: 2, buchstabe: 'a', gegen: false }], [{ z1: 2, z2: 1, buchstabe: 'j', gegen: false }], null].every(ks => F(grid, ks, V2) === null) && F({ shape: 'pentagon', ordnung: 3, lage: 1 }, [{ z1: 2, z2: 1, buchstabe: 'a', gegen: false }], V2) === null);
-    check('(5) GITTER_V2 is false and gates the whole API (no opts: throws), the app never sets it', G('GITTER_V2') === false && ['computeLineKeyTable', 'lineKeyForPair', 'pairForLineKey', 'formatGridName', 'parseGridName', 'getLineKeyTable'].every(fn => { try { G(fn)(); return false; } catch (e) { return /GITTER_V2/.test(e.message) || fn === 'x'; } }));
+    check('(5) GITTER_V2 is gone (task 066, G7b): the switch does not exist any more and the whole API works without any option (no opts: no gate error)', typeof G('typeof GITTER_V2') === 'string' && G('typeof GITTER_V2') === 'undefined' && !/gitterV2|GITTER_V2|_lkGate/.test(require('fs').readFileSync(process.env.ORBITS_JS || require('path').join(__dirname, '..', '..', 'core', 'orbits.js'), 'utf8')) && ['getLineKeyTable'].every(fn => { try { return !!G(fn)(grid); } catch (e) { return false; } }) && G('formatGridName')(grid, [{ z1: 1, z2: 1, buchstabe: 'a', gegen: false }]) !== undefined);
     check('(5) incomplete node set: the group does not close -> throws (never a wrong name)', (() => { try { G('computeLineKeyTable')(G('buildGridNodes')(grid, LAT).slice(1), grid, V2); return false; } catch (e) { return /not closed/.test(e.message); } })());
 }
 
@@ -89,7 +89,7 @@ const NMAX = (shape, lage) => shape === 'hex' ? (lage === 2 ? 5 : 6) : 8;
 {
     let bad = '', cases = 0;
     const run = (shape, n, lage, geo, nodes, label) => {
-        const grid = { shape, ordnung: n, lage }, t = G('computeLineKeyTable')(nodes, grid, { gitterV2: true, geometry: geo }), og = O.buildGrid(shape, n, lage), oo = O.pairOrbits(og);
+        const grid = { shape, ordnung: n, lage }, t = G('computeLineKeyTable')(nodes, grid, { geometry: geo }), og = O.buildGrid(shape, n, lage), oo = O.pairOrbits(og);
         const fr = G('canonicalGridFrame')({ shape, ordnung: n, centroid: geo.centroid, outerCorners: geo.outerCorners }), idx = new Map(og.nodes.map((nd, i) => [B.ptKey(nd.x, nd.y), i]));
         const oMap = new Map(); oo.forEach(o => o.pairs.forEach(([i, j]) => oMap.set(Math.min(i, j) + ',' + Math.max(i, j), o.name)));
         const pos = new Map(nodes.map(nd => { const o = fr.toOracle(nd.x, nd.y); return [nd.id, idx.get(B.ptKey(o.X, o.Y))]; }));
@@ -114,7 +114,7 @@ const NMAX = (shape, lage) => shape === 'hex' ? (lage === 2 ? 5 : 6) : 8;
     const old = cp.execFileSync('git', ['show', (process.env.BASE || 'dd146481') + ':core/orbits.js'], { cwd: B.ROOT, encoding: 'utf8' });
     const sb = { Math, console, Number, Object, Error, Set, Map, WeakMap, JSON, radians: d => d * Math.PI / 180, cos: Math.cos, sin: Math.sin, sqrt: Math.sqrt, atan2: Math.atan2, PI: Math.PI, dist: (a, b, c, d) => Math.hypot(c - a, d - b) };
     vm.createContext(sb); vm.runInContext(old, sb);
-    const names = [...old.matchAll(/^function (\w+)\(/gm)].map(m => m[1]);
+    const names = [...old.matchAll(/^function (\w+)\(/gm)].map(m => m[1]).filter(n => n !== 'computeThemeLineOrbitAssignments');   // task 066: removed on purpose (no consumer left: the v1 export was its only one)
     const same = names.filter(n => vm.runInContext(n + '.toString()', sb) !== G(n + '.toString()'));
     check('(6) all ' + names.length + ' functions of the old core/orbits.js (computeThemeLineOrbits, formatThemeLineName, computeThemeLineOrbitTable, _pairKey, ...) are source-identical', same.length === 0, same.join(','));
     let eq = 0, n = 0;

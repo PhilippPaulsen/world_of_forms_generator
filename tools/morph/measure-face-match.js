@@ -380,9 +380,9 @@ function randomPair(shape, N, sym, seed, n) {
   const w = makeRenderWorld(shape, N, 3, sym); const ids = w.get('nodes.filter((nd) => !nd.free).map((nd) => nd.id)');
   const r = rng(seed * 7919 + n); return { A: randConns(r, n, ids), B: randConns(r, n, ids) };
 }
-// a gallery pair (gallery/manifest.jsonl): two entries of one (shape, order, group) with count 2 whose face counts differ the most (split / merge); lines = the first pair of each orbit
+// a gallery pair (tools/morph/data/catalog-v1-count2.jsonl: the first 80 count-2 rows of the three (shape, order, group) the tests use, taken from the v1 catalog manifest before task 066 removed it - the legacy orbit ids stay valid on the unchanged legacy table): two entries of one (shape, order, group) with count 2 whose face counts differ the most (split / merge); lines = the first pair of each orbit
 function galleryPair(shape, order, token, mode) {
-  const fs = require('fs'); const man = fs.readFileSync(path.join(__dirname, '..', '..', 'gallery', 'manifest.jsonl'), 'utf8').split('\n').filter(Boolean).map(JSON.parse)
+  const fs = require('fs'); const man = fs.readFileSync(path.join(__dirname, 'data', 'catalog-v1-count2.jsonl'), 'utf8').split('\n').filter(Boolean).map(JSON.parse)
     .filter((e) => e.shape === shape && e.order === order && e.groupToken === token && e.count === 2).slice(0, 60);
   const w = makeRenderWorld(shape, order, 3, mode);
   const table = w.run('computeThemeLineOrbits(nodes, centroid, currentShape, symmetryMode, outerCorners)');
@@ -395,7 +395,7 @@ function galleryPair(shape, order, token, mode) {
 // a CURATED gallery pair (not random): among the first 80 count-2 entries of (shape, order, group) with 8..40 faces, the pair that shares exactly one orbit line (an edit of one pattern, as a user makes it) and has the most similar
 // face count (ties: the first in manifest order); deterministic.
 function curatedPair(shape, order, token, mode) {
-  const fs = require('fs'); const man = fs.readFileSync(path.join(__dirname, '..', '..', 'gallery', 'manifest.jsonl'), 'utf8').split('\n').filter(Boolean).map(JSON.parse)
+  const fs = require('fs'); const man = fs.readFileSync(path.join(__dirname, 'data', 'catalog-v1-count2.jsonl'), 'utf8').split('\n').filter(Boolean).map(JSON.parse)
     .filter((e) => e.shape === shape && e.order === order && e.groupToken === token && e.count === 2).slice(0, 80);
   const w = makeRenderWorld(shape, order, 3, mode);
   const table = w.run('computeThemeLineOrbits(nodes, centroid, currentShape, symmetryMode, outerCorners)');
@@ -971,7 +971,7 @@ function sollPureN(f, lists) {
 const inBBq = (q, bb) => q.x >= bb.x0 && q.x <= bb.x1 && q.y >= bb.y0 && q.y <= bb.y1;
 const SAT_HUE = (shift) => new Function('return ' + `(function (info) { return { hue: (info.i * 5 + ${shift}) % 24, w: 0.2, s: 0.3, rule: 'test', params: null }; })`)();
 function curatedFour(shape, order, token, mode) {   // the first four count-2 entries of the manifest (8..40 faces) of a group
-  const fs = require('fs'); const man = fs.readFileSync(path.join(__dirname, '..', '..', 'gallery', 'manifest.jsonl'), 'utf8').split('\n').filter(Boolean).map(JSON.parse).filter((e) => e.shape === shape && e.order === order && e.groupToken === token && e.count === 2).slice(0, 40);
+  const fs = require('fs'); const man = fs.readFileSync(path.join(__dirname, 'data', 'catalog-v1-count2.jsonl'), 'utf8').split('\n').filter(Boolean).map(JSON.parse).filter((e) => e.shape === shape && e.order === order && e.groupToken === token && e.count === 2).slice(0, 40);
   const w = makeRenderWorld(shape, order, 3, mode); const table = w.run('computeThemeLineOrbits(nodes, centroid, currentShape, symmetryMode, outerCorners)'); const out = [];
   for (const e of man) { const conns = e.orbitIds.map((id) => table.orbits[id].pairs[0]); const id = w.addKeyframeLayer(conns, { showFaces: true });
     const faces = w.run(`(function(){ var L = additionalLayers[${id}]; return computeCellFaces(L.connections, L.nodes, null, null, faceSheetOverrideOfLayer(L)).faces.length; })()`);

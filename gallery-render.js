@@ -165,7 +165,7 @@ function buildOrbitTable(shape, ordnung) {
   var v = validateGridSpec(spec, { enforceMax: true });
   if (!v.ok) throw new Error('buildOrbitTable: ' + v.error);
   var grid = buildGrid(spec, { sizeFactor: CATALOG_SHAPE_SIZE_FACTOR, canvasW: CATALOG_CANVAS_SIZE, canvasH: CATALOG_CANVAS_SIZE });
-  var table = getLineKeyTable(spec, GRID_V2);
+  var table = getLineKeyTable(spec);
   return { shape: shape, order: ordnung, spec: spec, symmetryMode: CATALOG_MODE, grid: grid, table: table, tokens: table.entries.map(function (e) { return e.token; }) };
 }
 
@@ -182,7 +182,7 @@ function renderSingleCellSVG(builderState, lineIndices) {
   var connSet = lineIndices.map(function (i) {
     var e = builderState.table.entries[i];
     if (!e) throw new Error('renderSingleCellSVG: line index ' + i + ' does not exist for ' + builderState.shape + ' ordnung ' + builderState.order + ' (table has ' + builderState.table.entries.length + ' lines)');
-    return pairForLineKey(builderState.table, e.key, GRID_V2);
+    return pairForLineKey(builderState.table, e.key);
   });
 
   svgPathCollector = [];

@@ -72,12 +72,12 @@ const specOf = (shape, c) => ({ shape, ordnung: shape === 'hex' ? c : c - 1, lag
         if (!ok) bad.push(shape + c);
         if (/"nodeCount"|"orbitIds"|"themeLineOrbits"|"patternName"/.test(text)) legacyKeys++;
         // line -> key -> connection: the same pattern is drawn from the representatives of the keys
-        const pairs = ex.geometry.lineKeys.map(t => w.get(`pairForLineKey(getLineKeyTable(${J(spec)}, GRID_V2), parseLineKey(${J(t)}), GRID_V2)`));
+        const pairs = ex.geometry.lineKeys.map(t => w.get(`pairForLineKey(getLineKeyTable(${J(spec)}), parseLineKey(${J(t)}))`));
         const w2 = H.makeRenderWorld(shape, c, 3, 'rotation_reflection6');
         w2.baseConnections(pairs);
         // key level, always: the representative of a key has that key. Drawing level where the app's own drawing is orbit-invariant: NOT square ordnung 3 (c = 4), where 4 of the 8
         // members of an orbit draw differently in the app already (measured; the legacy orbit table has the same partition) - reported in reports/063.md
-        const keyBack = pairs.map(p => (p ? w.get(`formatLineKey(lineKeyForPair(getLineKeyTable(${J(spec)}, GRID_V2), ${p[0]}, ${p[1]}, GRID_V2))`) : null));
+        const keyBack = pairs.map(p => (p ? w.get(`formatLineKey(lineKeyForPair(getLineKeyTable(${J(spec)}), ${p[0]}, ${p[1]}))`) : null));
         if (pairs.some(p => !p) || J(keyBack) !== J(ex.geometry.lineKeys)) rtBad.push(shape + c + ':key');
         else if (!(shape === 'square' && c === 4) && sortedSegs(w) !== sortedSegs(w2)) rtBad.push(shape + c + ':draw');
     }
@@ -114,14 +114,14 @@ const specOf = (shape, c) => ({ shape, ordnung: shape === 'hex' ? c : c - 1, lag
 const sketch = read('sketch.js');
 const fnSrc = (src, name) => { const m = src.match(new RegExp('\\nfunction ' + name + '\\([^)]*\\) \\{[\\s\\S]*?\\n\\}\\n')); return m ? m[0] : ''; };
 const constSrc = (src, name) => { const m = src.match(new RegExp('\\nconst ' + name + ' = [^\\n]*\\n')); return m ? m[0] : ''; };
-const parserSrc = (src, names) => constSrc(src, 'CATALOG_URL_SHAPES') + constSrc(src, 'CATALOG_URL_MODES') + names.map(n => fnSrc(src, n)).join('') + '\nlet catalogTransportRejection = null;\n';
-const NEW_NAMES = ['isWellFormedCatalogPattern', 'legacyCatalogReader', 'parseCatalogUrlV2', 'parseCatalogUrlParams', 'parseClipboardCatalogPattern', 'resolveCatalogPatternConnections'];
+const parserSrc = (src, names) => names.map(n => fnSrc(src, n)).join('') + '\nlet catalogTransportRejection = null;\n';
+const NEW_NAMES = ['parseCatalogUrlV2', 'parseCatalogUrlParams', 'parseClipboardCatalogPattern', 'resolveCatalogPatternConnections'];
 const T = S.world('hex', 3, 3, 'rotation_reflection6');
 T.sb.URLSearchParams = URLSearchParams; T.sb.console = { warn() { }, log() { }, error() { } };
 T.run(parserSrc(sketch, NEW_NAMES));
 const parseUrl = q => { T.run('catalogTransportRejection = null;'); const p = T.get(`parseCatalogUrlParams(${J(q)})`); return { p: p ? JSON.parse(J(p)) : null, rej: T.get('catalogTransportRejection') }; };
 const parsePaste = t => { T.run('catalogTransportRejection = null;'); const p = T.get(`parseClipboardCatalogPattern(${J(t)})`); return { p: p ? JSON.parse(J(p)) : null, rej: T.get('catalogTransportRejection') }; };
-const tableOf = spec => T.get(`getLineKeyTable(${J(spec)}, GRID_V2)`);
+const tableOf = spec => T.get(`getLineKeyTable(${J(spec)})`);
 const urlOf = (spec, keys, opts) => T.get(`formatTransportUrlV2(${J(spec)}, ${J(keys)}, ${J(opts || {})})`);
 const pasteOf = (spec, keys) => T.get(`formatTransportPasteV2(${J(spec)}, ${J(keys)})`);
 const STATE = () => T.get('JSON.stringify({ connections, nodes, gridSpec, gridRevision, additionalLayers, currentShape, nodeCount })');
@@ -140,7 +140,7 @@ const STATE = () => T.get('JSON.stringify({ connections, nodes, gridSpec, gridRe
         const resolved = JSON.parse(J(T.get(`resolveCatalogPatternConnections(parseCatalogUrlParams(${J(urlOf(spec, keys, {}))}))`)));
         const wl = H.makeRenderWorld(shape, c, 3, 'rotation_reflection6'), ws = H.makeRenderWorld(shape, c, 3, 'rotation_reflection6');
         wl.baseConnections(resolved); ws.baseConnections(pick.map(e => e.pairs[0]));
-        const back = resolved.map(p => T.get(`formatLineKey(lineKeyForPair(getLineKeyTable(${J(spec)}, GRID_V2), ${p[0]}, ${p[1]}, GRID_V2))`)), want = u.p.tokens;
+        const back = resolved.map(p => T.get(`formatLineKey(lineKeyForPair(getLineKeyTable(${J(spec)}), ${p[0]}, ${p[1]}))`)), want = u.p.tokens;
         const fa = sortedSegs(wl), fb = sortedSegs(ws);
         if (J(back) !== J(want)) { bad.push(shape + ordnung + ':keys'); continue; }
         if (!(shape === 'square' && ordnung === 3) && (fa !== fb || fa.length < 10)) { bad.push(shape + ordnung + ':draw'); continue; }
@@ -202,34 +202,26 @@ const STATE = () => T.get('JSON.stringify({ connections, nodes, gridSpec, gridRe
     const ver = i18n.match(/'note\.catalog\.version': \{ de: '([^']+)', en: '([^']+)' \}/), inv = i18n.match(/'note\.catalog\.invalid': \{ de: '([^']+)', en: '([^']+)' \}/);
     check('(5) the two refusal notes exist in German and English (non-empty, different, different from each other)', !!ver && !!inv && ver[1].length > 30 && ver[2].length > 30 && ver[1] !== ver[2] && inv[1] !== inv[2] && ver[1] !== inv[1]);
     check('(5) sketch.js says them for a refused link (setup) and a refused paste, through UI.t with static keys', /UI\.t\('note\.catalog\.version'\)/.test(sketch) && /UI\.t\('note\.catalog\.invalid'\)/.test(sketch) && /if \(catalogTransportRejection\) \{[^\n]*say\('catalog', catalogRejectionText\(catalogTransportRejection\), 'warn'\)/.test(sketch) && /say\('paste', catalogTransportRejection \? catalogRejectionText\(catalogTransportRejection\)/.test(sketch));
-    // the old format: still loads through the legacy reader, identical to the old tree
-    const urls = ['?shape=square&order=3&symmetryMode=rotation_reflection6&orbitIds=0,1', '?shape=hex&order=2&symmetryMode=rotation_reflection3&orbitIds=32,33&layer=new', '?shape=triangle&order=9&symmetryMode=rotation_reflection6&orbitIds=0', '?shape=square&order=3&symmetryMode=rotation_reflection6&orbitIds=0,x', '?shape=pentagon&order=3&symmetryMode=none&orbitIds=1', '?shape=hex', '', '?shape=hex&order=2&symmetryMode=none&orbitIds=1&layer=zzz'];
-    const pastes = [J({ shape: 'square', order: 3, symmetryMode: 'rotation_reflection6', orbitIds: [0, 1] }), J({ shape: 'hex', order: 2, symmetryMode: 'none', orbitIds: [] }), J({ shape: 'hex', order: 2, symmetryMode: 'none', orbitIds: [1, -1] }), '{}', 'nope', J({ shape: 'hex', order: 2, symmetryMode: 'none', orbitIds: [1], version: undefined })];
-    let diffLegacy = [];
-    if (oldDir) {
-        const O = S.world('hex', 3, 3, 'rotation_reflection6');
-        O.sb.URLSearchParams = URLSearchParams; O.sb.console = { warn() { }, log() { }, error() { } };
-        O.run(parserSrc(oldRead('sketch.js'), ['isWellFormedCatalogPattern', 'parseCatalogUrlParams', 'parseClipboardCatalogPattern']));
-        for (const u of urls) { const a = O.get(`parseCatalogUrlParams(${J(u)})`), b = parseUrl(u).p; if (J(a) !== J(b)) diffLegacy.push(u); }
-        for (const t of pastes) { const a = O.get(`parseClipboardCatalogPattern(${J(t)})`), b = parsePaste(t).p; if (J(a) !== J(b)) diffLegacy.push(t.slice(0, 40)); }
-        check('(5) old-format links and pastes (' + (urls.length + pastes.length) + ' inputs, valid and malformed) parse exactly as in the old tree - the Formorgel links keep loading through the legacy reader', diffLegacy.length === 0 && parseUrl(urls[0]).p && parseUrl(urls[0]).p.orbitIds.length === 2 && parseUrl(urls[1]).p.layer === 'new', diffLegacy.slice(0, 2).join(' | '));
-    }
-    check('(5) a malformed OLD-format input is a quiet null (no rejection code: it is not a v2 input)', [urls[2], urls[3], urls[4], urls[5], urls[6]].every(u => { const r = parseUrl(u); return r.p === null && r.rej === null; }) === false ? false : parseUrl(urls[3]).p === null && parseUrl(urls[3]).rej === null);
-    // the legacy reader never rescues a v2 input
-    const legacyOld = '?shape=square&order=3&symmetryMode=rotation_reflection6&orbitIds=0,1';
-    const rescue = [parseUrl('?v=2&shape=square&order=3&symmetryMode=rotation_reflection6&orbitIds=0,1'), parseUrl('?v=1&shape=square&order=3&symmetryMode=rotation_reflection6&orbitIds=0,1'), parseUrl('?v=2&' + legacyOld.slice(1)),
+    // task 066 (G7b): the OLD format (?shape&order&symmetryMode&orbitIds, paste JSON with orbitIds and no version) is not loaded any more: refused with the version note, nothing mutated
+    const oldUrls = ['?shape=square&order=3&symmetryMode=rotation_reflection6&orbitIds=0,1', '?shape=hex&order=2&symmetryMode=rotation_reflection3&orbitIds=32,33&layer=new', '?shape=triangle&order=9&symmetryMode=rotation_reflection6&orbitIds=0', '?orbitIds=1'];
+    const oldPastes = [J({ shape: 'square', order: 3, symmetryMode: 'rotation_reflection6', orbitIds: [0, 1] }), J({ shape: 'hex', order: 2, symmetryMode: 'none', orbitIds: [] }), J({ orbitIds: [1] })];
+    const before5 = STATE();
+    const refusedUrls = oldUrls.map(parseUrl), refusedPastes = oldPastes.map(parsePaste);
+    check('(5) old-format links (' + oldUrls.length + ') are refused with the version code (note.catalog.version, de and en) and load nothing', refusedUrls.every(r => r.p === null && r.rej && r.rej.code === 'version'), refusedUrls.map(r => J(r.rej)).join(' | '));
+    check('(5) old-format pastes (' + oldPastes.length + ', orbitIds and no version) are refused the same way', refusedPastes.every(r => r.p === null && r.rej && r.rej.code === 'version'), refusedPastes.map(r => J(r.rej)).join(' | '));
+    check('(5) the refusals mutated nothing', STATE() === before5);
+    check('(5) a query without orbitIds or v (an ordinary load, other JSON) is a quiet null, no rejection code', ['?shape=hex', '', '?shape=hex&order=2'].every(u => { const r = parseUrl(u); return r.p === null && r.rej === null; }) && ['{}', '[1]', J({ shape: 'hex' })].every(t => { const r = parsePaste(t); return r.p === null && r.rej === null; }));
+    // a v2 marker with old fields stays refused (as before), now as the only reader
+    const rescue = [parseUrl('?v=2&shape=square&order=3&symmetryMode=rotation_reflection6&orbitIds=0,1'), parseUrl('?v=1&shape=square&order=3&symmetryMode=rotation_reflection6&orbitIds=0,1'),
         parsePaste(J({ version: 2, shape: 'square', order: 3, symmetryMode: 'rotation_reflection6', orbitIds: [0, 1] })), parsePaste(J({ version: 1, shape: 'square', order: 3, symmetryMode: 'rotation_reflection6', orbitIds: [0, 1] })), parsePaste(J({ version: 3, shape: 'square', order: 3, symmetryMode: 'rotation_reflection6', orbitIds: [0, 1] }))];
-    check('(5) the legacy reader refuses everything that carries a v2 marker (v=, version): old fields in a v2 / v1 / v3 input are rejected, never loaded as the old format', rescue.every(r => r.p === null && r.rej), rescue.map(r => J(r.rej)).join(' | '));
+    check('(5) old fields in a v2 / v1 / v3 input are still rejected, never loaded as the old format', rescue.every(r => r.p === null && r.rej), rescue.map(r => J(r.rej)).join(' | '));
     check('(5) the v2 writers write no old format (no orbitIds in a v2 URL or paste)', !/orbitIds/.test(urlOf({ shape: 'hex', ordnung: 2, lage: 1 }, [tableOf({ shape: 'hex', ordnung: 2, lage: 1 }).entries[0].key], {})) && !/orbitIds/.test(pasteOf({ shape: 'hex', ordnung: 2, lage: 1 }, [tableOf({ shape: 'hex', ordnung: 2, lage: 1 }).entries[0].key])));
-    // the pin: legacyCatalogReader exists and is called only at the parser entries.  G7 removes it and REVERSES this pin (the reader and both calls gone).
+    // the pin of task 063 (decision B), REVERSED by task 066 (G7b): the legacy reader and everything that served only the old format must not exist any more
     const code = sketch.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
-    const calls = [...code.matchAll(/legacyCatalogReader\(/g)].length, inUrl = /function parseCatalogUrlParams\([\s\S]*?\n\}\n/.exec(code), inPaste = /function parseClipboardCatalogPattern\([\s\S]*?\n\}\n/.exec(code);
-    check('(5) PIN (task 063, decision B; G7 removes legacyCatalogReader and reverses this pin): the reader is defined once and called only in parseCatalogUrlParams and parseClipboardCatalogPattern', /\nfunction legacyCatalogReader\(source\) \{/.test(code) && calls === 3 && /legacyCatalogReader\(\{ params \}\)/.test(inUrl[0]) && /legacyCatalogReader\(\{ obj \}\)/.test(inPaste[0]), 'calls+definition = ' + calls);
-    const lr = fnSrc(sketch, 'legacyCatalogReader');
-    check('(5) the legacy reader guards on the v2 markers and holds no v2 or writing code', /if \(params\.has\('v'\)\) return null;/.test(lr) && /obj\.version !== undefined\) return null;/.test(lr) && !/parseTransportV2|formatTransport|writeText|URLSearchParams\(\{/.test(lr));
-    // task 064 (G7a) reversed the 063 pin 'gallery.js untouched': the Formorgel now WRITES v2 (core/catalog.js), so the legacy reader is only for links made before; G7b removes it
+    check('(5) PIN (reversed in task 066): legacyCatalogReader, isWellFormedCatalogPattern, CATALOG_URL_SHAPES / CATALOG_URL_MODES do not exist in sketch.js, and the catalog path no longer resolves orbit ids (no computeThemeLineOrbitTable in resolveCatalogPatternConnections)', !/legacyCatalogReader|isWellFormedCatalogPattern|CATALOG_URL_(SHAPES|MODES)/.test(code) && !/computeThemeLineOrbitTable/.test(fnSrc(sketch, 'resolveCatalogPatternConnections')) && !/pattern\.orbitIds/.test(code));
     const gal = read('gallery.js');
-    check('(5) G7a: the Formorgel writes v2 (catalogLinkV2 / catalogPasteV2) and no orbitIds; the legacy reader stays for older links until G7b', /catalogLinkV2\(entry, extra\)/.test(gal) && /catalogPasteV2\(entry\)/.test(gal) && !/orbitIds:\s|orbitIds\.join/.test(gal.replace(/\/\/[^\n]*/g, '')));
+    check('(5) the Formorgel writes v2 (catalogLinkV2 / catalogPasteV2) and no orbitIds; there is no old catalog any more (gallery/ holds v2 only)', /catalogLinkV2\(entry, extra\)/.test(gal) && /catalogPasteV2\(entry\)/.test(gal) && !/orbitIds:\s|orbitIds\.join/.test(gal.replace(/\/\/[^\n]*/g, '')) && fs.readdirSync(path.join(ROOT, 'gallery')).join() === 'v2');
+
 }
 
 console.log(`\n${pass}/${pass + fail} checks passed`);

@@ -1,6 +1,6 @@
 # Terminology
 
-Two parts: (A) the operational vocabulary — structural/mechanical terms used throughout the code, UI, and bilingual editions, translated from Ostwald's German; (B) a proposed systematic naming scheme for individual named patterns, replacing Ostwald's evocative names with a Hinterreiter-style parametric code, cross-referenced to his originals for historical traceability. Part B is a design proposal tied to Roadmap item 1.11, not yet implemented.
+Two parts: (A) the operational vocabulary — structural/mechanical terms used throughout the code, UI, and bilingual editions, translated from Ostwald's German; (B) the systematic naming scheme (v2) for individual patterns, replacing Ostwald's evocative names with a Hinterreiter-style parametric code, cross-referenced to his originals for historical traceability. Part B describes the implemented v2 scheme (Roadmap 1.11, tasks 054-066); the live name display still shows the legacy name, see the end of Part B.
 
 ---
 
@@ -55,30 +55,39 @@ These terms describe structures and operations, independent of any specific patt
 
 ---
 
-## Part B — Proposed Systematic Naming Scheme (Roadmap 1.11)
+## Part B — Systematic Naming Scheme (v2; Roadmap 1.11, tasks 054–066)
 
 ### Rationale
 
 Ostwald named patterns by hand and explicitly acknowledged the practice doesn't scale ("die Anzahl... übertrifft das beste Gedächtnis"). Hinterreiter's approach — strict, parametric, geometry-derived labels — replaces evocative naming with codes that are:
 
 - **unambiguous**: the code alone reconstructs the geometry
-- **generatable**: can be produced programmatically from the same data `buildExportData()` already emits, once combined with 1.9's combinatorics layer
+- **generatable**: produced programmatically from the grid and its lines (the export carries it, `meta.grid` + `geometry.lineKeys` + `name`)
 - **scalable**: works identically for pattern #1 and pattern #10,000
 
-Ostwald's names remain valuable as historical/editorial reference and stay attached as metadata — this scheme doesn't erase them, it adds a parallel, systematic identifier.
+Ostwald's names remain valuable as historical/editorial reference and stay attached as metadata (the Ostwald backfill of the catalog) — this scheme doesn't erase them, it adds a parallel, systematic identifier.
 
-### Proposed grammar
+### Grammar (v2)
 
-Format: `{count}*/{GroupToken} {orbitId}+{orbitId}+...` — implemented in `core/orbits.js` (`formatThemeLineName()` / `computeThemeLineName()`), Roadmap 1.11-B.
+Name: `{ordnung}{d|q|*}{lage}/{3*|4*|6*} {token}+{token}+...` — implemented in `core/orbits.js` (`formatGridName()` / `parseGridName()`), pure functions of a grid and its line keys.
 
-- `{count}`: the number of theme-lines actually drawn in one sheet (Zweier/Dreier/Vierer, Part A above) — not the number of distinct symmetry classes among them.
-- `{GroupToken}`: the active dihedral/cyclic group's structure (`D4`, `C3`, `Z2`, `C1`, ...), derived from the shape's actual rotation-angle set plus whether reflection is active — not from the raw `symmetryMode` string, since `core/symmetry.js`'s `rotation3`/`rotation6` give identical angle sets for triangle/square (`core/orbits.js`'s `groupTokenFor()` collapses those two mode names to the same token).
-- `{orbitId}+...`: one canonical orbit id (`core/orbits.js`'s `computeThemeLineOrbits()` — orbits sorted by their lexicographically-smallest member node-pair) per theme-line, listed in **ascending** order rather than click order, so the name is an invariant of the constructed pattern, not of the sequence it was drawn in — and **not deduplicated**, so the list length always matches `{count}`.
+- `{ordnung}{d|q|*}{lage}`: the grid. `ordnung` = the divisions per side of the net (an integer ≥ 1); `d` triangle, `q` square, `*` hexagon; `lage` 1 (the nodes of the net) or 2 (lage 1 plus the centres of all smallest meshes; locked in the app, built by the tests through `allowLage2`). Example: `3d1`.
+- `{3*|4*|6*}`: the main group of the shape (the full rotation-reflection group, 2K elements): only this group has a systematic name. A reduced symmetry mode (rotation only, one mirror, hexagon 3-fold) has none.
+- `{token}`: one **line key**, `{family}{letter}[~]`. *Family* = the two node numbers `z1 z2` (`z1 ≥ z2`; written `{z1}{z2}`, or `{z1}.{z2}` when a number is ≥ 10). *Node number* (Knotenzahl) = the rank of a node orbit under the main group by its distance from the centre perpendicular to the side, ties by the position along it. *Letter* = the number `n` of sectors the straight segment touches, read from the end `z1` moved into the shaded sector, in `abcdefghiklmn` at equal spacing. `~` (ASCII transport; displayed as an overline, *Überstrich*) = the segment runs counter-clockwise from the shaded sector. A capital letter (`aA`) marks that a Drehling is also a Spiegeling (a derived property, not part of the key; the parser accepts the capital only where it is true).
+- The tokens are listed in ascending order of `(z1, z2, letter rank, bar)` — compared NUMERICALLY (`compareLineKeys`), never as strings — and **not deduplicated**, so the number of tokens is the number of lines drawn (Zweier/Dreier/Vierer, Part A).
+
+**What a key names.** A line key names the **undirected straight line orbit**: the set of lines the whole main group maps onto one another within one grid `{shape, ordnung, lage}`. The direction of travel is free (task 065, `tools/gitter/test-member-geometry.js`): every member of the orbit draws the same geometry; only the direction of a member's segments may differ, which matters for a leaning curve and for a free curve (seeded by node ids), never for a straight line. The representative a key resolves to (`pairForLineKey`) runs from the end with the larger node number to the other; for `z1 = z2` the two directions are not told apart by the key.
+
+**Transport.** A pattern travels as its grid and its tokens: URL `?v=2&shape=&ordnung=&lage=&group=&lines=...[&layer=new]`, paste `{"version":2,"grid":{shape,ordnung,lage},"group","lines":[...]}`; all tokens are checked against the grid's line table before anything is loaded, unsorted tokens are sorted. The old orbit-id format is not read any more (tasks 063, 066: refused with a version note). The catalog (`gallery/v2/`) addresses an entry by `gallery/v2/{shape}/{ordnung}/lage{lage}/k{count}/{3|4|6}star/{tokens}.svg` through the one codec `core/catalog.js`.
+
+**Reference.** The rule was measured against the source images (`reports/054.md`, `docs/quellen/`, not committed); the oracle is `tools/gitter/measure-name-rule.js`, and `tools/gitter/test-name-rule.js` compares the core with it by coordinates (two known deviations, 5q2: 261 → 262 and 64 → 65, are tracked there).
+
+### Legacy name (still displayed)
+
+The live name display (`#pattern-name-status`, `core/orbits.js` `computeThemeLineName()` / `formatThemeLineName()`) still shows the **legacy** name `{count}*/{GroupToken} {orbitId}+{orbitId}+...`: `{count}` the number of lines drawn, `{GroupToken}` the active group (`D4`, `C3`, `Z2`, ..., from the shape's rotation angles and whether a reflection is active), `{orbitId}` the canonical orbit id of `computeThemeLineOrbits()` in ascending order, not deduplicated. It also names reduced symmetry modes, which v2 does not. **Follow-up (UI step, not done):** switch the display to the v2 name and decide what a reduced symmetry shows (a message, or the legacy name).
 
 **Source and divergence.** This `{count}*/{group} {segments}` structure is adapted from Hans Hinterreiter's own working notation, confirmed via primary-source research: Hart, G., "Hans Hinterreiter's Flowing Fields," *Bridges 2024 Conference Proceedings*. A documented example from Hinterreiter's notes reads `4*/6 98a+82a+52e+75a` — "4 basic segments, 6-fold rotational symmetry (no mirror), four segment codes." That independently confirms this project's own Zweier/Dreier/Vierer reading (a count of base theme-lines within one sheet, under one symmetry group) matches Hinterreiter's real structure.
 
-What this scheme does **not** reproduce: Hinterreiter's exact digit+letter segment-coding convention (what makes a segment `98a` rather than `98b`) is not publicly documented — Hart's paper explicitly declines to explain it, and it exists only in Hinterreiter's rare 800-page book *Die Kunst der reinen Form* (1978), which the project's maintainer owns a copy of but whose specific conventions have not been confirmed to help rather than add idiosyncratic friction. Rather than guess at or reverse-engineer that convention, this scheme uses its own logical, documented segment identifier instead — a canonical orbit id from a plain Burnside orbit-reduction over the active symmetry group (`core/orbits.js`). Stated plainly rather than overclaiming fidelity to Hinterreiter's original notation.
+Where this scheme goes beyond Hinterreiter's published notation, the segment code (family and letter) follows the rule measured in task 054 rather than a reproduction of his 1978 book's conventions, which are not publicly documented.
 
 **Editorial aside**, not a design consideration for 1.11 itself: Hinterreiter was directly influenced by Ostwald's color theory (also noted in Hart's paper) — a genuine historical link worth flagging given this project's own Ostwald focus. He also deliberately avoided infinite tessellation in his own work, describing it as "too crystalline" and lacking "inherent closure" — a real point of divergence from Ostwald's (and this project's) tessellating approach. Worth noting in the project's editorial framing (see `ROADMAP.md`, Priority 2) at some point, not a blocker here.
-
-### Proposed grammar

@@ -119,8 +119,8 @@ check('the list contains the render shim and the page script (a test of nothing 
     const constSrc = name => { const m = sketch.match(new RegExp('\\nconst ' + name + ' = [^\\n]*\\n')); return m ? m[0] : ''; };
     const parseCtx = vm.createContext({ URLSearchParams, console: { warn() { } } });
     for (const f of ['core/forms.js', 'core/symmetry.js', 'core/orbits.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), parseCtx);   // task 064: the v2 parsers use the line-key tables
-    const parserSrc = constSrc('CATALOG_URL_SHAPES') + constSrc('CATALOG_URL_MODES') + fnSrc('isWellFormedCatalogPattern') + fnSrc('legacyCatalogReader') + fnSrc('parseCatalogUrlV2') + fnSrc('parseCatalogUrlParams') + fnSrc('parseClipboardCatalogPattern') + '\nlet catalogTransportRejection = null;\n';   // task 063: the parsers now start through legacyCatalogReader (the Formorgel still writes the old format)
-    check('the generator\'s catalog parsers were found in sketch.js', ['CATALOG_URL_SHAPES', 'CATALOG_URL_MODES', 'function isWellFormedCatalogPattern', 'function legacyCatalogReader', 'function parseCatalogUrlParams', 'function parseClipboardCatalogPattern'].every(s => parserSrc.includes(s)));
+    const parserSrc = fnSrc('parseCatalogUrlV2') + fnSrc('parseCatalogUrlParams') + fnSrc('parseClipboardCatalogPattern') + '\nlet catalogTransportRejection = null;\n';   // task 066: v2 only, the old-format reader is gone
+    check('the generator\'s catalog parsers were found in sketch.js', ['function parseCatalogUrlV2', 'function parseCatalogUrlParams', 'function parseClipboardCatalogPattern'].every(s => parserSrc.includes(s)) && !/legacyCatalogReader|isWellFormedCatalogPattern/.test(parserSrc));
     vm.runInContext(parserSrc, parseCtx);
 
     // ---- the detail view: what a click on a tile does -------------------------------------------------------------------------------------------------

@@ -25,7 +25,6 @@ const crypto = require('crypto');
 const ROOT = path.join(__dirname, '..', '..');
 const ARGS = new Set(process.argv.slice(2));
 const CORE = ['core/forms.js', 'core/orbits.js', 'core/symmetry.js', 'core/curves.js', 'core/tiling.js', 'core/catalog.js'];
-const GRID_V2 = { gitterV2: true };
 const SIZE = 600, SF = 1.3;
 
 function sandbox() {
@@ -82,7 +81,7 @@ function measureGrid(shape, c, ordnung) {
     const spec = { shape, ordnung, lage: 1 };
     const grid = sb.buildGrid(spec, { sizeFactor: SF, canvasW: SIZE, canvasH: SIZE });
     sb.centroid = grid.centroid; sb.outerCorners = grid.outerCorners; sb.currentShape = shape; sb.symmetryMode = 'rotation_reflection6';
-    const table = sb.getLineKeyTable(spec, GRID_V2);
+    const table = sb.getLineKeyTable(spec);
     const rec = { shape, c, ordnung, nodes: grid.nodes.length, orbits: table.entries.length, pairs: table.pairCount, geoBad: 0, dirBad: 0, dirOnlyReversed: 0, leaningBad: 0, symmetricBad: 0, zDirBad: 0, zDirBadEqualZahl: 0, zDirBadDifferentZahl: 0, equalZahlOrbits: 0, examples: [], leaningExample: null };
     for (const e of table.entries) {
         // the orbit's node numbers: z1 >= z2 (core/forms.js numberGridNodes through the table); the "z-oriented" member runs from the end with the larger number to the other
@@ -116,7 +115,7 @@ function measureGrid(shape, c, ordnung) {
 function measureTessellation(shape, c, ordnung) {
     const H = require(path.join(ROOT, 'tools', 'morph', 'render-harness.js'));
     const w0 = H.makeRenderWorld(shape, c, 3, 'rotation_reflection6');
-    const table = w0.get(`getLineKeyTable({ shape: ${JSON.stringify(shape)}, ordnung: ${ordnung}, lage: 1 }, GRID_V2)`);
+    const table = w0.get(`getLineKeyTable({ shape: ${JSON.stringify(shape)}, ordnung: ${ordnung}, lage: 1 })`);
     const rec = { shape, c, ordnung, orbits: table.entries.length, geoBad: 0, dirBad: 0 };
     for (const e of table.entries) {
         const g = new Set(), d = new Set();
@@ -150,7 +149,7 @@ if (fs.existsSync(manifestPath)) {
             const sb = sandbox(), spec = { shape: e.grid.shape, ordnung: e.grid.ordnung, lage: 1 };
             const grid = sb.buildGrid(spec, { sizeFactor: SF, canvasW: SIZE, canvasH: SIZE });
             sb.centroid = grid.centroid; sb.outerCorners = grid.outerCorners; sb.currentShape = e.grid.shape;
-            const table = sb.getLineKeyTable(spec, GRID_V2), info = new Map();
+            const table = sb.getLineKeyTable(spec), info = new Map();
             for (const ent of table.entries) {
                 const geo = new Set(), dir = new Set();
                 ent.pairs.forEach(p => { const x = cellDrawing(sb, grid, e.grid.shape, p); geo.add(sig(x.geo)); dir.add(sig(x.dir)); });
