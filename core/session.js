@@ -340,7 +340,7 @@ function _vGrid(g, shape, what, opts) {
     const spec = { shape: g.shape, ordnung: g.ordnung, lage: g.lage };
     if (g.legacyC1 !== undefined) spec.legacyC1 = g.legacyC1;
     if (typeof validateGridSpec !== 'function') throw what + ' cannot be checked (core/forms.js is not loaded)';
-    const v = validateGridSpec(spec, { allowLage2: !!(opts && opts.allowLage2), enforceMax: true });
+    const v = validateGridSpec(spec, { allowLage2: !!(opts && opts.allowLage2), enforceMax: spec.lage !== 2 });   // the ceiling of lage 2 is 0 (locked): only the test option reaches it, without a ceiling
     if (!v.ok) throw what + ': ' + v.error;
     return spec;
 }
