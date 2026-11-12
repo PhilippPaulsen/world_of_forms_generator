@@ -18,7 +18,7 @@
  * scheme that makes the face-trail keys of the assignments (core/facecolor.js: canonical vertex set, 0.01 px): if
  * that scheme changes, every stored key would silently become an inert orphan, so a snapshot made under another
  * scheme is rejected, not migrated. Bump the matching constant whenever the format or the key scheme changes.
- * Each sheet also carries a fingerprint of its GRID nodes (sessionNodeFingerprint): if the grid algorithm or its
+ * Each sheet also carries a fingerprint of its grid spec, GRID nodes and free endpoints (sessionNodeFingerprint): if the grid algorithm or its
  * numbers change, the connections (stored as node ids) would point at other nodes, and the restore must notice.
  *
  * validateSession() never throws and returns a NORMALIZED COPY (unknown keys dropped, every field type-checked and
@@ -36,7 +36,7 @@
  * core/spatial-morph.js (load it BEFORE this file); without it the block is neither written nor read.
  */
 
-const SESSION_SCHEMA_VERSION = 1;
+const SESSION_SCHEMA_VERSION = 2;   // 2 (task 062): settings.grid / sheet.grid {shape, ordnung, lage[, legacyC1]} replace nodeCount; the fingerprint carries the spec and the free endpoints. Schema 1 is rejected, not migrated
 const SESSION_TRAIL_KEY_VERSION = 1;
 const SESSION_MAX_CHARS = 2 * 1024 * 1024;        // serialized size cap; the densest stress pattern with 3 layers is ~240 KB
 const SESSION_STORAGE_KEY = 'wof:session';         // the sessionStorage key (used by the writer, a later phase)
@@ -83,14 +83,29 @@ function _sJson(x, depth, label) {
 
 // FNV-1a over the GRID nodes (free endpoint nodes are state, not grid, and are stored separately): id and the
 // position rounded to 0.01 px - the same rounding the trail keys use. { count, hash }.
-function sessionNodeFingerprint(nodes) {
-    const grid = (nodes || []).filter(n => !(n && n.free === true));
-    let h = 0x811c9dc5;
-    for (const n of grid) {
-        const s = n.id + ':' + Math.round(n.x * 100) + ':' + Math.round(n.y * 100) + ';';
-        for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
-    }
+// Task 062 (schema 2): `spec` = the sheet's GridSpec ({shape, ordnung, lage[, legacyC1]}) is hashed FIRST, so another ordnung, lage or shape never
+// shares a fingerprint, whatever the positions. sessionNodeFingerprint also hashes the free endpoints (id, position) after the grid nodes: it is the
+// sheet's nodeCheck ({ count = the GRID nodes only, hash }; the ids of the free nodes start above count). sessionGridFingerprint hashes the grid nodes
+// alone (what a rebuilt layerGrid() can be compared with when the live layer carries free endpoints). Without a spec the old (nodes-only) hash results.
+function _fpSpecKey(spec) {
+    return spec ? 'g' + spec.shape + '|' + spec.ordnung + '|' + spec.lage + '|' + (spec.legacyC1 === true ? 1 : 0) + ';' : '';
+}
+function _fpFeed(h, s) { for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h; }
+function _fpNodes(nodes, spec, withFree) {
+    const all = nodes || [];
+    const grid = all.filter(n => !(n && n.free === true));
+    let h = _fpFeed(0x811c9dc5, _fpSpecKey(spec));
+    for (const n of grid) h = _fpFeed(h, n.id + ':' + Math.round(n.x * 100) + ':' + Math.round(n.y * 100) + ';');
+    if (withFree) for (const n of all) if (n && n.free === true) h = _fpFeed(h, 'f' + n.id + ':' + Math.round(n.x * 100) + ':' + Math.round(n.y * 100) + ';');
     return { count: grid.length, hash: h.toString(16).padStart(8, '0') };
+}
+function sessionNodeFingerprint(nodes, spec) { return _fpNodes(nodes, spec, true); }
+function sessionGridFingerprint(nodes, spec) { return _fpNodes(nodes, spec, false); }
+// The JSON form of a spec in a snapshot (legacyC1 only where set: it must round-trip, it is what keeps c = 1 apart from c = 2).
+function _snapGrid(spec) {
+    const g = { shape: spec.shape, ordnung: spec.ordnung, lage: spec.lage };
+    if (spec.legacyC1 === true) g.legacyC1 = true;
+    return g;
 }
 
 // ---- building a snapshot ------------------------------------------------------------------------------------------
@@ -113,7 +128,7 @@ function _snapSheet(o) {
         connections: (o.connections || []).map(c => c.slice()),
         redoStack: (o.redoStack || []).map(c => c.slice()),
         freeNodes: (o.nodes || []).filter(n => n && n.free === true).map(n => ({ id: n.id, x: n.x, y: n.y })),
-        nodeCheck: sessionNodeFingerprint(o.nodes),
+        nodeCheck: sessionNodeFingerprint(o.nodes, o.gridSpec),
         faceAssignments: _snapStoreEntries(o.faceAssignments),
         facePalette: _snapPalette(o.facePalette),
         faceAnchor: o.faceAnchor ? { hueIndex: o.faceAnchor.hueIndex, registerIndex: o.faceAnchor.registerIndex } : null,
@@ -140,18 +155,19 @@ function _snapMorph(m) {
     return spatialMorphEqual(m, undefined) ? {} : { spatialMorph: spatialMorphNormalize(m) };
 }
 
-// `s` is the state-like object: { currentShape, nodeCount, shapeSizeFactor, canvasW, canvasH, symmetryMode,
+// `s` is the state-like object: { currentShape, gridSpec, shapeSizeFactor, canvasW, canvasH, symmetryMode,
 // symmetryCategory?, symmetryFold?, curveType, lineColor, showNodes, showFaces, freeEndpointsEnabled, altNetSeed,
 // baseNetTransform, spatialMorph?, connections, redoStack, nodes, baseFaceAssignments (Map), baseFacePalette, baseFaceAnchor,
 // baseLastHarmonyType, baseLastSelection, baseDistributionStrategy, additionalLayers, timeline, activeLayer } -
 // the globals of core/state.js, gathered by the caller. Returns a plain-JSON object (maps become entry arrays,
 // runtime clocks are left out). The result is only as trustworthy as `s`: validateSession() is what a reader must run.
 function buildSessionSnapshot(s, now) {
-    const base = _snapSheet({ connections: s.connections, redoStack: s.redoStack, nodes: s.nodes, faceAssignments: s.baseFaceAssignments,
+    const baseSpec = s.gridSpec || fromLegacy(s.currentShape, s.nodeCount);   // a state-like without gridSpec (older fixtures): the spec its shape and count give
+    const base = _snapSheet({ gridSpec: baseSpec, connections: s.connections, redoStack: s.redoStack, nodes: s.nodes, faceAssignments: s.baseFaceAssignments,
         facePalette: s.baseFacePalette, faceAnchor: s.baseFaceAnchor, lastHarmonyType: s.baseLastHarmonyType,
         lastSelection: s.baseLastSelection, distributionStrategy: s.baseDistributionStrategy });
-    const layers = (s.additionalLayers || []).map(l => Object.assign(_snapSheet(l), {
-        shape: l.shape, symmetryMode: l.symmetryMode, nodeCount: l.nodeCount, shapeSizeFactor: l.shapeSizeFactor,
+    const layers = (s.additionalLayers || []).map(l => Object.assign(_snapSheet(Object.assign({}, l, { gridSpec: layerGridSpecOf(l) })), {
+        shape: l.shape, symmetryMode: l.symmetryMode, grid: _snapGrid(layerGridSpecOf(l)), shapeSizeFactor: l.shapeSizeFactor,
         offsetX: l.offsetX, offsetY: l.offsetY, rotation: l.rotation || 0, enabled: !!l.enabled, showFaces: !!l.showFaces,
         isTimelinePlayback: !!l.isTimelinePlayback,
         timelineSavedEnabled: l._timelineSavedEnabled === undefined ? null : !!l._timelineSavedEnabled,
@@ -162,7 +178,7 @@ function buildSessionSnapshot(s, now) {
         trailKeys: SESSION_TRAIL_KEY_VERSION,
         savedAt: typeof now === 'number' ? now : Date.now(),
         settings: Object.assign({
-            shape: s.currentShape, nodeCount: s.nodeCount, shapeSizeFactor: s.shapeSizeFactor,
+            shape: s.currentShape, grid: _snapGrid(baseSpec), shapeSizeFactor: s.shapeSizeFactor,
             canvas: { w: s.canvasW, h: s.canvasH },
             symmetryMode: s.symmetryMode,
             symmetryCategory: s.symmetryCategory === undefined ? null : s.symmetryCategory,
@@ -313,7 +329,23 @@ function _vFlips(p, what) {
 
 // -> { ok: true, snapshot } (a normalized copy) | { ok: false, code, detail }
 // codes: 'not-an-object' | 'schema-version' | 'trail-key-version' | 'invalid'. Never throws.
-function validateSession(input) {
+// A stored grid -> a normalized spec, or a thrown message. Lage 2 is refused unless opts.allowLage2 (tests; the app cannot build it yet); the order is bounded by the
+// shape's ceiling; `shape` of the sheet must be the spec's own shape (no sheet of one shape on a grid of another).
+function _vGrid(g, shape, what, opts) {
+    if (!_sObj(g)) throw what + ' must be {shape, ordnung, lage}';
+    const allowed = ['shape', 'ordnung', 'lage', 'legacyC1'];
+    if (Object.keys(g).some(k => !allowed.includes(k))) throw what + ' has an unknown key';
+    if (!SESSION_SHAPES.includes(g.shape)) throw what + '.shape must be triangle, square or hex';
+    if (g.shape !== shape) throw `${what}.shape ${g.shape} differs from the sheet's shape ${shape}`;
+    const spec = { shape: g.shape, ordnung: g.ordnung, lage: g.lage };
+    if (g.legacyC1 !== undefined) spec.legacyC1 = g.legacyC1;
+    if (typeof validateGridSpec !== 'function') throw what + ' cannot be checked (core/forms.js is not loaded)';
+    const v = validateGridSpec(spec, { allowLage2: !!(opts && opts.allowLage2), enforceMax: true });
+    if (!v.ok) throw what + ': ' + v.error;
+    return spec;
+}
+
+function validateSession(input, opts) {
     try {
         if (!_sObj(input)) return { ok: false, code: 'not-an-object', detail: 'snapshot is not an object' };
         // Validate what JSON would carry, not the live object: a sparse array (Array.prototype.every skips holes),
@@ -326,7 +358,7 @@ function validateSession(input) {
         const st = raw.settings;
         if (!_sObj(st)) throw 'settings is not an object';
         if (!SESSION_SHAPES.includes(st.shape)) throw 'settings.shape must be triangle, square or hex';
-        if (!_sPos(st.nodeCount) || st.nodeCount > _sMaxNodeCount(st.shape)) throw 'settings.nodeCount must be an integer from 1 to ' + _sMaxNodeCount(st.shape) + ' for ' + st.shape;
+        const baseGrid = _vGrid(st.grid, st.shape, 'settings.grid', opts);
         if (!_sNum(st.shapeSizeFactor) || st.shapeSizeFactor <= 0 || st.shapeSizeFactor > 100) throw 'settings.shapeSizeFactor must be a positive number';
         if (!_sObj(st.canvas) || !_sPos(st.canvas.w) || !_sPos(st.canvas.h) || st.canvas.w > 10000 || st.canvas.h > 10000) throw 'settings.canvas must be {w, h}';
         if (!SESSION_SYMMETRY_MODES.includes(st.symmetryMode)) throw 'settings.symmetryMode must be one of ' + SESSION_SYMMETRY_MODES.join(', ');
@@ -344,7 +376,7 @@ function validateSession(input) {
             altNetSeed = { p: { x: a.p.x, y: a.p.y }, q: { x: a.q.x, y: a.q.y }, side: a.side, n: a.n };
         }
         const netTransform = st.netTransform === null || st.netTransform === undefined ? null : _vNetSpec(st.netTransform, 'settings.netTransform');
-        const settings = { shape: st.shape, nodeCount: st.nodeCount, shapeSizeFactor: st.shapeSizeFactor, canvas: { w: st.canvas.w, h: st.canvas.h },
+        const settings = { shape: st.shape, grid: _snapGrid(baseGrid), shapeSizeFactor: st.shapeSizeFactor, canvas: { w: st.canvas.w, h: st.canvas.h },
             symmetryMode: st.symmetryMode, symmetryCategory: st.symmetryCategory === undefined ? null : st.symmetryCategory, symmetryFold: st.symmetryFold === undefined ? null : st.symmetryFold,
             curveType, lineColor: st.lineColor, showNodes: st.showNodes, showFaces: st.showFaces, freeEndpointsEnabled: st.freeEndpointsEnabled, altNetSeed, netTransform };
         // spatial morph (morph stage b): additive, optional. Absent, malformed or equal to the defaults -> no key (the restore then sets the defaults); a bad field falls back to
@@ -367,12 +399,12 @@ function validateSession(input) {
             const sheet = _vSheet(l, what);
             if (!SESSION_SHAPES.includes(l.shape)) throw what + '.shape must be triangle, square or hex';
             if (!SESSION_SYMMETRY_MODES.includes(l.symmetryMode)) throw what + '.symmetryMode must be one of ' + SESSION_SYMMETRY_MODES.join(', ');
-            if (!_sPos(l.nodeCount) || l.nodeCount > _sMaxNodeCount(l.shape)) throw what + '.nodeCount must be an integer from 1 to ' + _sMaxNodeCount(l.shape) + ' for ' + l.shape;
+            const layerGrid_ = _vGrid(l.grid, l.shape, what + '.grid', opts);
             if (!_sNum(l.shapeSizeFactor) || l.shapeSizeFactor <= 0 || l.shapeSizeFactor > 100) throw what + '.shapeSizeFactor must be a positive number';
             if (!_sCoord(l.offsetX) || !_sCoord(l.offsetY) || !_sNum(l.rotation) || Math.abs(l.rotation) > 1e5) throw what + ' offsetX / offsetY / rotation must be finite numbers';
             for (const k of ['enabled', 'showFaces', 'isTimelinePlayback']) if (typeof l[k] !== 'boolean') throw `${what}.${k} must be a boolean`;
             if (!(l.timelineSavedEnabled === null || typeof l.timelineSavedEnabled === 'boolean')) throw what + '.timelineSavedEnabled must be null or a boolean';
-            return Object.assign(sheet, { shape: l.shape, symmetryMode: l.symmetryMode, nodeCount: l.nodeCount, shapeSizeFactor: l.shapeSizeFactor, offsetX: l.offsetX, offsetY: l.offsetY,
+            return Object.assign(sheet, { shape: l.shape, symmetryMode: l.symmetryMode, grid: _snapGrid(layerGrid_), shapeSizeFactor: l.shapeSizeFactor, offsetX: l.offsetX, offsetY: l.offsetY,
                 rotation: l.rotation, enabled: l.enabled, showFaces: l.showFaces, isTimelinePlayback: l.isTimelinePlayback, timelineSavedEnabled: l.timelineSavedEnabled });
         });
         const activeLayer = raw.activeLayer;
@@ -403,13 +435,13 @@ function validateSession(input) {
 }
 
 // The raw string from storage -> the same result as validateSession(), plus 'too-large' / 'not-json'. Never throws.
-function parseSession(rawString) {
+function parseSession(rawString, opts) {
     if (rawString === null || rawString === undefined || rawString === '') return { ok: false, code: 'empty', detail: 'nothing stored' };
     if (typeof rawString !== 'string') return { ok: false, code: 'not-json', detail: 'not a string' };
     if (rawString.length > SESSION_MAX_CHARS) return { ok: false, code: 'too-large', detail: `larger than ${SESSION_MAX_CHARS} characters` };
     let obj;
     try { obj = JSON.parse(rawString); } catch (e) { return { ok: false, code: 'not-json', detail: 'not valid JSON' }; }
-    return validateSession(obj);
+    return validateSession(obj, opts);
 }
 
 // ---- planning a restore: rebuild every grid, compare the fingerprints (pure) -----------------------------------------
@@ -430,8 +462,11 @@ function planSessionRestore(snapshot, live) {
             || typeof _subdivideHexInterior !== 'function') return { ok: false, code: 'plan-error', detail: 'core/forms.js is not loaded' };
         const st = snapshot.settings;
         if (!live || live.canvasW !== st.canvas.w || live.canvasH !== st.canvas.h) return { ok: false, code: 'canvas-mismatch', detail: `saved canvas ${st.canvas.w}x${st.canvas.h}, live ${live && live.canvasW}x${live && live.canvasH}` };
-        const sheetNodes = (gridNodes, saved, what) => {
-            const fp = sessionNodeFingerprint(gridNodes);
+        const baseSpec = st.grid;
+        if (baseSpec.lage !== 1 || snapshot.layers.some(l => l.grid.lage !== 1)) return { ok: false, code: 'plan-error', detail: 'a lage-2 grid cannot be restored yet' };
+        const sheetNodes = (gridNodes, saved, what, spec) => {
+            const withFree = gridNodes.map(n => ({ id: n.id, x: n.x, y: n.y })).concat(saved.freeNodes.map(n => ({ id: n.id, x: n.x, y: n.y, free: true })));
+            const fp = sessionNodeFingerprint(withFree, spec);
             if (fp.count !== saved.nodeCheck.count || fp.hash !== saved.nodeCheck.hash) {
                 return { error: { ok: false, code: 'grid-mismatch', detail: `${what}: the rebuilt grid has ${fp.count} nodes (hash ${fp.hash}), the snapshot was made with ${saved.nodeCheck.count} (hash ${saved.nodeCheck.hash}) - the grid algorithm or its inputs changed` } };
             }
@@ -449,21 +484,22 @@ function planSessionRestore(snapshot, live) {
             const a = st.altNetSeed;
             if (a.n !== nOf) return { ok: false, code: 'plan-error', detail: `altNetSeed.n ${a.n} does not belong to shape ${st.shape}` };
             const { center, vertices } = completeEdgeToRegularPolygon(a.p, a.q, a.n, a.side);
-            const nodes = a.n === 3 ? _subdivideTriangleInterior(vertices[0], vertices[1], vertices[2], st.nodeCount)
-                : a.n === 4 ? _subdivideSquareInterior(vertices, st.nodeCount) : _subdivideHexInterior(vertices, center, st.nodeCount);
+            const c = toLegacy(baseSpec);
+            const nodes = a.n === 3 ? _subdivideTriangleInterior(vertices[0], vertices[1], vertices[2], c)
+                : a.n === 4 ? _subdivideSquareInterior(vertices, c) : _subdivideHexInterior(vertices, center, c);
             grid = { nodes, centroid: center, outerCorners: vertices };
         } else {
             if (st.shape !== 'triangle' && st.shape !== 'square' && st.shape !== 'hex') return { ok: false, code: 'plan-error', detail: 'unknown shape' };
             const build = st.shape === 'triangle' ? buildTriangleGrid : st.shape === 'square' ? buildSquareGrid : buildHexGrid;
-            grid = build(st.nodeCount, st.shapeSizeFactor, st.canvas.w, st.canvas.h);
+            grid = build(toLegacy(baseSpec), st.shapeSizeFactor, st.canvas.w, st.canvas.h);
         }
-        const base = sheetNodes(grid.nodes, snapshot.base, 'base');
+        const base = sheetNodes(grid.nodes, snapshot.base, 'base', baseSpec);
         if (base.error) return base.error;
         const plan = { base: { nodes: base.nodes, centroid: { x: grid.centroid.x, y: grid.centroid.y }, outerCorners: grid.outerCorners.map(c => ({ x: c.x, y: c.y })) }, layers: [] };
         for (let i = 0; i < snapshot.layers.length; i++) {
             const l = snapshot.layers[i];
-            const lg = layerGrid(grid.outerCorners, grid.centroid, st.shape, st.shapeSizeFactor, l.shapeSizeFactor, l.nodeCount, l.shape, st.canvas.w, st.canvas.h);
-            const r = sheetNodes(lg.nodes, l, 'layers[' + i + ']');
+            const lg = layerGrid(grid.outerCorners, grid.centroid, st.shape, st.shapeSizeFactor, l.shapeSizeFactor, toLegacy(l.grid), l.shape, st.canvas.w, st.canvas.h);
+            const r = sheetNodes(lg.nodes, l, 'layers[' + i + ']', l.grid);
             if (r.error) return r.error;
             plan.layers.push({ nodes: r.nodes, centroid: { x: lg.centroid.x, y: lg.centroid.y }, outerCorners: lg.outerCorners.map(c => ({ x: c.x, y: c.y })) });
         }

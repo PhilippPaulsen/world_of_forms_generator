@@ -81,14 +81,14 @@ function _restoreSessionGlobals(c) {
 const SESSION_COLLECT_STATS = { gridBuilds: 0, searches: 0 };
 function _layerGridFingerprint(layer, f) {
     SESSION_COLLECT_STATS.gridBuilds++;
-    return sessionNodeFingerprint(layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, f, layer.nodeCount, layer.shape, canvasW, canvasH).nodes);
+    return sessionGridFingerprint(layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, f, layer.nodeCount, layer.shape, canvasW, canvasH).nodes, layerGridSpecOf(layer));
 }
 function _sameFingerprint(a, b) { return a.count === b.count && a.hash === b.hash; }
 // `layer` did not match its live shapeSizeFactor (the first candidate, tried by the caller): try the rest.
 function sessionLayerBuildSize(layer) {
     try {
         SESSION_COLLECT_STATS.searches++;
-        const want = sessionNodeFingerprint(layer.nodes);
+        const want = sessionGridFingerprint(layer.nodes, layerGridSpecOf(layer));
         const tries = [layer.shapeSizeFactor];
         if (layer.animation) tries.push(layer.animation.fromShapeSizeFactor, layer.animation.toShapeSizeFactor);
         for (let k = 1; k <= 9; k++) tries.push(k);
@@ -113,14 +113,14 @@ function collectSessionState(symmetryUi, opts) {
         layers = additionalLayers.map(l => {
             if (!l || !Array.isArray(l.nodes)) return l;
             let ok;
-            try { ok = _sameFingerprint(_layerGridFingerprint(l, l.shapeSizeFactor), sessionNodeFingerprint(l.nodes)); } catch (e) { return l; }
+            try { ok = _sameFingerprint(_layerGridFingerprint(l, l.shapeSizeFactor), sessionGridFingerprint(l.nodes, layerGridSpecOf(l))); } catch (e) { return l; }
             if (ok) return l;   // the fast path: nothing to derive
             const f = sessionLayerBuildSize(l);
             return f === null ? l : Object.assign({}, l, { shapeSizeFactor: f });
         });
     }
     return {
-        currentShape, nodeCount, shapeSizeFactor, canvasW, canvasH, symmetryMode,
+        currentShape, gridSpec, shapeSizeFactor, canvasW, canvasH, symmetryMode,
         symmetryCategory: symmetryUi && typeof symmetryUi.category === 'function' ? symmetryUi.category() : null,
         symmetryFold: symmetryUi && typeof symmetryUi.fold === 'function' ? symmetryUi.fold() : null,
         curveType, lineColor, showNodes, showFaces, freeEndpointsEnabled, altNetSeed, baseNetTransform, spatialMorph, lineStyle,
@@ -166,7 +166,7 @@ function _buildSessionObjects(snap, plan, step) {
             enabled: l.enabled, showFaces: l.showFaces, shapeSizeFactor: l.shapeSizeFactor,
             nodes: plan.layers[i].nodes, centroid: plan.layers[i].centroid, outerCorners: plan.layers[i].outerCorners,
         }, _sheetColorFields(l));
-        projectLayerGridSpec(layer, fromLegacy(l.shape, l.nodeCount));   // task 061: the restored layer's own gridSpec; layer.nodeCount follows
+        projectLayerGridSpec(layer, Object.assign({}, l.grid));   // task 061: the restored layer's own gridSpec; layer.nodeCount follows
         if (l.isTimelinePlayback) layer.isTimelinePlayback = true;
         if (l.timelineSavedEnabled !== null) layer._timelineSavedEnabled = l.timelineSavedEnabled;
         return layer;
@@ -225,7 +225,7 @@ function applySessionSnapshot(snapshot, plan, hooks, opts) {
         oldState = collectSessionState(hooks && hooks.symmetryUi);
         const st = snapshot.settings;
         step('B:settings');
-        currentShape = st.shape; projectGridSpec(fromLegacy(st.shape, st.nodeCount)); shapeSizeFactor = st.shapeSizeFactor; symmetryMode = st.symmetryMode; curveType = built.curveType;
+        currentShape = st.shape; projectGridSpec(Object.assign({}, st.grid)); shapeSizeFactor = st.shapeSizeFactor; symmetryMode = st.symmetryMode; curveType = built.curveType;
         lineColor = st.lineColor; showNodes = st.showNodes; showFaces = st.showFaces; freeEndpointsEnabled = st.freeEndpointsEnabled;
         step('B:grid');
         nodes = built.base.nodes; centroid = built.base.centroid; outerCorners = built.base.outerCorners; altNetSeed = built.altNetSeed;
