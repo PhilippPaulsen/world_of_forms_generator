@@ -10,7 +10,7 @@
  * Name:     formatGridName of the source (core/orbits.js): "{ordnung}{d|q|*}{lage}/{group} {tokens joined with +}"
  *
  * The pure string functions need nothing; the ones that sort or name (catalogSortedTokensV2, catalogNameV2) use core/orbits.js globals
- * (parseLineKey, compareLineKeys, formatLineKey, formatGridName, GRID_V2), so load this file after core/orbits.js.
+ * (parseLineKey, compareLineKeys, formatLineKey, formatGridName), so load this file after core/orbits.js.
  */
 const CATALOG_V2_ROOT = 'gallery/v2';
 const CATALOG_V2_STAR = Object.freeze({ triangle: '3', square: '4', hex: '6' });
@@ -55,7 +55,7 @@ function catalogEntryV2(grid, tokens, rendererVersion) {
 function catalogNameV2(grid, tokens) {
     const keys = tokens.map(t => parseLineKey(t));
     if (keys.some(k => !k)) return null;
-    return formatGridName(grid, keys, GRID_V2);
+    return formatGridName(grid, keys);
 }
 // the keys an entry's links carry: the v2 transport (core/orbits.js formatTransportUrlV2 / formatTransportPasteV2) of the entry's own spec and lines
 function catalogLinkV2(entry, opts) {

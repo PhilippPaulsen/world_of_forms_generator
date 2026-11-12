@@ -1,5 +1,5 @@
 // Shape-dependent Node Count limits (square 13, triangle/hex 7): core/forms.js NODE_COUNT_MAX / maxNodeCountFor(),
-// the shape-aware catalog validator, alignLayerToBase() (was hard-coded 2..5) and updateActiveLayerGrid()'s clamp.
+// the shape-aware grid validator (validateGridSpec, since task 066 the only transport validator), alignLayerToBase() (was hard-coded 2..5) and updateActiveLayerGrid()'s clamp.
 // sketch.js functions are lifted by source (no DOM); the UI wiring is checked in the browser, plus source-string checks below.
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
@@ -11,7 +11,8 @@ const grab = (src, name) => { const i = src.indexOf('function ' + name + '('); l
 const forms = read('core/forms.js'), sketch = read('sketch.js');
 const sb = { Math, console }; vm.createContext(sb);
 vm.runInContext(forms, sb);
-vm.runInContext(`const CATALOG_URL_SHAPES = ['triangle','square','hex']; const CATALOG_URL_MODES = ['none','rotation6'];\n` + grab(sketch, 'isWellFormedCatalogPattern'), sb);
+// task 066 (G7b): the old catalog validator isWellFormedCatalogPattern is gone with the old catalog; the same limits now bound the v2 transport (validateGridSpec with enforceMax:
+// ordnung = c - 1 for triangle / square, c for hex, the legacy count c = fromLegacy(shape, c)), so the check below asks that validator through the legacy count.
 const ev = s => vm.runInContext(s, sb);
 
 // 1. the table
@@ -19,11 +20,11 @@ check('limits: square 13, triangle 7, hex 7', ev(`maxNodeCountFor('square')`) ==
 check('unknown shape falls back to 7', ev(`maxNodeCountFor('x')`) === 7);
 
 // 2. catalog validator, per shape
-const ok = (shape, order) => ev(`isWellFormedCatalogPattern(${JSON.stringify(shape)}, ${order}, 'none', [0])`);
+const ok = (shape, order) => { try { return ev(`validateGridSpec(fromLegacy(${JSON.stringify(shape)}, ${order}), { enforceMax: true }).ok`) === true; } catch (e) { return false; } };
 check('validator: square 13 accepted, 14 refused', ok('square', 13) && !ok('square', 14));
 check('validator: hex 7 accepted, 8 refused', ok('hex', 7) && !ok('hex', 8));
 check('validator: triangle 7 accepted, 8 refused (a uniform 13 would have accepted it)', ok('triangle', 7) && !ok('triangle', 8) && !ok('hex', 13));
-check('validator: 0 and non-integers still refused', !ok('square', 0) && !ev(`isWellFormedCatalogPattern('square', 3.5, 'none', [0])`) && !ev(`isWellFormedCatalogPattern('square', '7', 'none', [0])`));
+check('validator: 0 and non-integers still refused', !ok('square', 0) && !ok('square', 3.5) && ev(`validateGridSpec({ shape: 'square', ordnung: '7', lage: 1 }, { enforceMax: true }).ok`) === false);
 check('validator: unknown shape still refused', !ok('pentagon', 3));
 
 // 3. alignLayerToBase: same answers where the old bound (5) already found one, and any NEW answer is genuine
@@ -57,7 +58,7 @@ check('within the limit: no clamp', r4 === null && s2.additionalLayers[0].nodeCo
 
 // 5. UI wiring present in the source (no DOM test exists for sketch.js - the real-browser run covers behaviour)
 check('base shape switch calls the clamp before rebuildGrid', /clampNodeCountToShape\('Shape'\);\s*rebuildGrid\(currentShape\)/.test(sketch));
-check('base input and layer input read the shape table, no literal 7 clamp left', !/v > 7\) v = 7/.test(sketch) && (sketch.match(/maxNodeCountFor\(/g) || []).length >= 6);
+check('base input and layer input read the shape table, no literal 7 clamp left', !/v > 7\) v = 7/.test(sketch) && (sketch.match(/maxNodeCountFor\(/g) || []).length >= 5);   // task 066: was >= 6; isWellFormedCatalogPattern (one call) is gone
 check('no hard-coded 2..5 in alignLayerToBase', !/nodeCount <= 5/.test(forms));
 
 console.log(`${pass}/${pass + fail} checks passed`);
