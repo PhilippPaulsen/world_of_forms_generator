@@ -4,7 +4,7 @@
 //   2. per shape x ordnung: the preview file = the page's renderer (gallery-render.js on the live core) = what the entry's generator link resolves to; link and paste round trip
 //   3. names: the catalog name of every entry = formatGridName of its source = the export name of the live generator for the same pattern
 //   4. the codec: one source (core/catalog.js), reversible paths, numeric token order, lage in the path, the viewer refuses old / mismatching records
-//   5. backfill: every row mapped (or listed), the old catalog and the old CSV untouched
+//   5. backfill: the four rows are the key paths of the legacy orbits; the old catalog is gone (task 066)
 const fs = require('fs'), path = require('path'), os = require('os'), vm = require('vm'), cp = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
 const BASE = process.env.BASE || '59338562';
@@ -14,7 +14,6 @@ const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const J = JSON.stringify;
 process.on('uncaughtException', e => { console.log('FAIL  the test run itself crashed: ' + (e && e.stack)); process.exit(1); });
 const { generateCatalogV2, planGrid, SHAPES, ORDNUNGEN } = require('./generate-v2.js');
-const { convertBackfill } = require('./convert-backfill.js');
 const H = require('../morph/render-harness.js');
 
 // the page's core: the scripts of gallery.html that matter for rendering, in its order
@@ -41,7 +40,7 @@ const entries = manifestText.split('\n').filter(Boolean).map(l => JSON.parse(l))
     // the scope: every shape x ordnung 1..3, k = 1 complete, k = 2 by the fixed rule
     let scopeBad = [];
     for (const shape of SHAPES) for (const ordnung of ORDNUNGEN) {
-        const spec = { shape, ordnung, lage: 1 }, tb = P(`getLineKeyTable(${J(spec)}, GRID_V2)`), tokens = tb.entries.map(e => e.token);
+        const spec = { shape, ordnung, lage: 1 }, tb = P(`getLineKeyTable(${J(spec)})`), tokens = tb.entries.map(e => e.token);
         const mine = entries.filter(e => e.grid.shape === shape && e.grid.ordnung === ordnung);
         const k1 = mine.filter(e => e.count === 1).map(e => e.lines[0]), k2 = mine.filter(e => e.count === 2).map(e => e.lines.join('+'));
         const want2 = planGrid(tokens).filter(x => x.k === 2).map(x => x.tokens.join('+'));
@@ -87,7 +86,7 @@ const dOf = svg => [...svg.matchAll(/ d="([^"]*)"/g)].map(m => m[1]);
         const pu = JSON.parse(J(PC(`parseCatalogUrlParams(${J(url.slice(url.indexOf('?')))})`))), pn = JSON.parse(J(PC(`parseCatalogUrlParams(${J(urlNew.slice(urlNew.indexOf('?')))})`))), pp = JSON.parse(J(PC(`parseClipboardCatalogPattern(${J(paste)})`)));
         if (!pu || !pn || !pp || J(pu.tokens) !== J(e.lines) || J(pp.tokens) !== J(e.lines) || pn.layer !== 'new' || pu.layer !== null || pu.shape !== e.grid.shape || pu.spec.ordnung !== e.grid.ordnung || /orbitIds/.test(url + paste)) { bad.push(e.path + ':link'); continue; }
         const conns = JSON.parse(J(PC(`resolveCatalogPatternConnections(parseCatalogUrlParams(${J(url.slice(url.indexOf('?')))}))`)));
-        const want = idx.map(i => JSON.parse(J(P(`pairForLineKey(__st.table, __st.table.entries[${i}].key, GRID_V2)`))));
+        const want = idx.map(i => JSON.parse(J(P(`pairForLineKey(__st.table, __st.table.entries[${i}].key)`))));
         if (J(conns) !== J(want)) bad.push(e.path + ':pairs');
     }
     check('(2) for all ' + n + ' entries (every shape and ordnung): the preview file = the page renderer on the live core (same path data), the "Open in generator" / "New layer" / "Copy pattern" links parse back to the entry\'s lines (no orbitIds) and resolve to the pairs the preview drew', bad.length === 0, bad.slice(0, 3).join(' | '));
@@ -98,7 +97,7 @@ const dOf = svg => [...svg.matchAll(/ d="([^"]*)"/g)].map(m => m[1]);
     let bad = [], n = 0;
     for (const e of entries) {
         const keys = e.lines.map(t => P(`parseLineKey(${J(t)})`));
-        const want = P(`formatGridName(${J(e.grid)}, ${J(keys)}, { gitterV2: true, symmetryMode: 'rotation_reflection6' })`), got = P(`catalogNameV2(${J(e.grid)}, ${J(e.lines)})`);
+        const want = P(`formatGridName(${J(e.grid)}, ${J(keys)}, { symmetryMode: 'rotation_reflection6' })`), got = P(`catalogNameV2(${J(e.grid)}, ${J(e.lines)})`);
         if (!want || want !== got) bad.push(e.path + ' ' + got + ' vs ' + want);
         n++;
     }
@@ -110,7 +109,7 @@ const dOf = svg => [...svg.matchAll(/ d="([^"]*)"/g)].map(m => m[1]);
         if (!e) continue;
         const c = shape === 'hex' ? ordnung : ordnung + 1;
         const w = H.makeRenderWorld(shape, c, 3, 'rotation_reflection6');
-        const conns = e.lines.map(t => P(`pairForLineKey(getLineKeyTable(${J(e.grid)}, GRID_V2), parseLineKey(${J(t)}), GRID_V2)`));
+        const conns = e.lines.map(t => P(`pairForLineKey(getLineKeyTable(${J(e.grid)}), parseLineKey(${J(t)}))`));
         w.baseConnections(JSON.parse(J(conns)));
         const live = w.get('buildExportData().name');
         nc++; if (live !== P(`catalogNameV2(${J(e.grid)}, ${J(e.lines)})`)) nb.push(shape + ordnung + ': ' + live);
@@ -127,7 +126,7 @@ const dOf = svg => [...svg.matchAll(/ d="([^"]*)"/g)].map(m => m[1]);
     check('(4) tokens are sorted NUMERICALLY (compareLineKeys), duplicates kept: 21a 21a 65a 12.11a, not the string order 12.11a 21a 21a 65a', J(sorted) === J(['21a', '21a', '65a', '12.11a']) && P("catalogPathV2({ shape: 'hex', ordnung: 3, lage: 1 }, catalogSortedTokensV2(['65a', '12.11a']))") === 'gallery/v2/hex/3/lage1/k2/6star/65a_12.11a.svg');
     check('(4) a lage-2 grid has its own path (lage in the path: two grids never share a file)', P("catalogPathV2({ shape: 'square', ordnung: 2, lage: 2 }, ['11e'])") !== P("catalogPathV2({ shape: 'square', ordnung: 2, lage: 1 }, ['11e'])") && /\/lage2\//.test(P("catalogPathV2({ shape: 'square', ordnung: 2, lage: 2 }, ['11e'])")));
     // one source: gallery.js and the tools carry no path template or name builder of their own
-    const g = read('gallery.js'), tools = ['tools/gallery/generate-v2.js', 'tools/gallery/convert-backfill.js'].map(read).join('\n');
+    const g = read('gallery.js'), tools = ['tools/gallery/generate-v2.js'].map(read).join('\n');
     check('(4) gallery.js has no codec of its own (no gallery/v2 path template, no k${count} segment, no name builder): it calls catalogPathV2 / catalogNameV2 / catalogLinkV2 / catalogPasteV2 from core/catalog.js', !/gallery\/v2\/\$\{|`gallery\/|k\$\{|star['`]/.test(g.replace(/const CATALOG_V2_(MANIFEST|BACKFILL) = [^\n]*\n/g, '')) && !/function (catalogPathV2|catalogNameV2|catalogLinkV2|catalogPasteV2|catalogSortedTokensV2|parseCatalogPathV2)\b/.test(g) && /catalogPathV2\(/.test(g) && /catalogNameV2\(/.test(g) && /catalogLinkV2\(/.test(g) && /catalogPasteV2\(/.test(g));
     check('(4) the tools use the codec through core/catalog.js only (catalogEntryV2), no own template', /catalogEntryV2/.test(tools) && !/k\$\{|star`|'star'/.test(tools) && /'core\/catalog\.js'/.test(read('tools/gallery/renderSingleCellSVG.js')));
     // the viewer refuses what is not v2 (extracted normalizeEntryV2 from gallery.js)
@@ -141,26 +140,17 @@ const dOf = svg => [...svg.matchAll(/ d="([^"]*)"/g)].map(m => m[1]);
     check('(4) the viewer reads gallery/v2/manifest.jsonl and gallery/v2/ostwald-backfill.csv, not the old files', /const CATALOG_V2_MANIFEST = 'gallery\/v2\/manifest\.jsonl';/.test(g) && /const CATALOG_V2_BACKFILL = 'gallery\/v2\/ostwald-backfill\.csv';/.test(g) && !/fetch\('gallery\/(manifest|ostwald)/.test(g));
 }
 
-// ---- 5. backfill and the untouched old catalog --------------------------------------------------------------------------------------------------------
+// ---- 5. backfill; the old catalog is gone ---------------------------------------------------------------------------------------------------------------
 {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-v2-'));
-    fs.mkdirSync(path.join(tmp, 'gallery/v2'), { recursive: true });
-    fs.copyFileSync(path.join(ROOT, 'gallery/v2/manifest.jsonl'), path.join(tmp, 'gallery/v2/manifest.jsonl'));
-    const r = convertBackfill(tmp);
-    const oldRows = read('gallery/ostwald-backfill.csv').split('\n').filter(Boolean).slice(1);
-    check('(5) backfill: every row of gallery/ostwald-backfill.csv is mapped to a v2 key path that exists in the manifest (' + r.mapped.length + '/' + oldRows.length + '), none unmapped, none lost', r.mapped.length === oldRows.length && r.unmapped.length === 0 && r.mapped.every(m => m.inCatalog), J(r.unmapped));
-    const out = fs.readFileSync(path.join(tmp, 'gallery/v2/ostwald-backfill.csv'), 'utf8'), committed = read('gallery/v2/ostwald-backfill.csv');
-    check('(5) the committed gallery/v2/ostwald-backfill.csv equals the conversion; labels and urls are the old rows\' own', out === committed && oldRows.every((row, i) => committed.split('\n')[i + 1].split(',').slice(1).join(',') === row.split(',').slice(1).join(',')));
-    // the badge path of a catalog entry is its v2 path: every mapped path is a manifest entry
-    const manifestPaths = new Set(entries.map(e => e.path));
-    check('(5) every backfill path is a catalog entry of the viewer (the badge is found by entryCatalogPath)', committed.split('\n').slice(1).filter(Boolean).every(row => manifestPaths.has(row.split(',')[0])));
-    let untouched = true;
-    try {
-        cp.execFileSync('git', ['rev-parse', '--verify', '--quiet', BASE + '^{commit}'], { cwd: ROOT, stdio: 'ignore' });
-        const changed = cp.execFileSync('git', ['diff', '--name-only', BASE, '--', 'gallery/', ':!gallery/v2'], { cwd: ROOT, encoding: 'utf8' }).trim();
-        untouched = changed === '';
-        check('(5) the old catalog (every file under gallery/ outside gallery/v2, the manifest and the old CSV included) is unchanged against ' + BASE, untouched, changed.slice(0, 120));
-    } catch (e) { console.log('NOTE  ' + BASE + ' is not available: the old-catalog check is skipped'); }
+    // task 066 (G7b): the four rows of the old gallery/ostwald-backfill.csv (legacy path = triangle, legacy count 3, group D3, orbit ids 0..3) are mapped to key paths: each committed
+    // row must be the key path of the legacy orbit's representative pair, recomputed here from the legacy orbit table (computeThemeLineOrbits stays) and the line-key table
+    const rows = read('gallery/v2/ostwald-backfill.csv').split('\n').filter(Boolean), header = rows.shift();
+    check('(5) gallery/v2/ostwald-backfill.csv has the old header and the 4 plate rows, each path a catalog entry of the manifest', header === 'catalogPath,label,url' && rows.length === 4 && rows.every(r => entries.some(e => e.path === r.split(',')[0])));
+    const spec = { shape: 'triangle', ordnung: 2, lage: 1 };
+    const want = [0, 1, 2, 3].map(id => P(`(function () { const g = buildGrid(${J(spec)}, { sizeFactor: 1.3, canvasW: 300, canvasH: 300 }), t = computeThemeLineOrbits(g.nodes, g.centroid, 'triangle', 'rotation_reflection6', g.outerCorners), tb = getLineKeyTable(${J(spec)}), p = t.orbits[${id}].pairs[0]; return catalogPathV2(${J(spec)}, [formatLineKey(lineKeyForPair(tb, p[0], p[1]))]); })()`));
+    check('(5) the rows are the key paths of the legacy orbits 0..3 of triangle c = 3 (the conversion recomputed from the legacy table: nothing lost, nothing remapped by hand)', J(rows.map(r => r.split(',')[0])) === J(want), J(want));
+    check('(5) the labels and urls are the plates of the old rows (2. Net x2, 3. Net 2nd, 4. Tri-Hex)', J(rows.map(r => r.split(',')[1])) === J(['2. Net', '2. Net', '3. Net 2nd', '4. Tri-Hex']) && rows.every(r => /^https:\/\/www\.die-welt-der-formen\.de\/world\.html#sh-/.test(r.split(',').slice(2).join(','))));
+    check('(5) the old catalog is gone: gallery/ holds only v2, and the old generator / path / converter tools do not exist', fs.readdirSync(path.join(ROOT, 'gallery')).join() === 'v2' && ['generate.js', 'catalogPath.js', 'convert-backfill.js'].every(f => !fs.existsSync(path.join(ROOT, 'tools/gallery', f))));
 }
 
 console.log(`\n${pass}/${pass + fail} checks passed`);
