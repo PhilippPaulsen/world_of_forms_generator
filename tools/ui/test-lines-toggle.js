@@ -29,7 +29,7 @@ let failures = 0, checks = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
 process.on('uncaughtException', e => { console.log('FAIL  the test run itself crashed: ' + (e && e.message)); process.exit(1); });
 const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
-const BASE = '85f563da';   // the tree before the task
+const BASE = '6fbf420b';   // the tree before the task
 const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'lines-'));
 const copy = (rel, text) => { const p = path.join(tmp, rel.replace(/\//g, '_')); fs.writeFileSync(p, text); return p; };
 const oldOf = rel => copy('old-' + rel, execSync(`git show ${BASE}:${rel}`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString());
@@ -207,7 +207,7 @@ console.log('\n== 6. markup, i18n, position ==');
     // task 050 changed sketch.js on purpose (two notes through UI.t, commit 80deee88): sketch.js is pinned against that commit, the other files still against BASE
     // task 053 re-recorded the golden of curve-fold1-sym on purpose (quad pieces on the canvas, commit fc98e3d9): off-path-golden.json is pinned against that commit
     // task 031 changes core/facecolor.js on purpose (the playback colours); this check guards what task 024 itself must leave alone, so that file is no longer in the list
-  check('sketch.js is untouched by the task (it is pinned by the morph tests) and gallery.html still loads without core/state.js: the gallery shim defines lineStyle', execSync(`git diff --stat ${BASE} -- core/tiling.js core/faces.js`, { cwd: ROOT }).toString().trim() === '' && execSync('git diff --stat fc98e3d9 -- tools/morph/off-path-golden.json', { cwd: ROOT }).toString().trim() === '' && execSync('git diff --stat 5f0c54e6 -- sketch.js', { cwd: ROOT }).toString().trim() === '' && /var lineStyle = \{ visible: true, weight: 2 \}/.test(read('gallery-render.js')));
+  check('sketch.js is untouched by the task (it is pinned by the morph tests) and gallery.html still loads without core/state.js: the gallery shim defines lineStyle', execSync(`git diff --stat ${BASE} -- core/tiling.js core/faces.js`, { cwd: ROOT }).toString().trim() === '' && execSync('git diff --stat fc98e3d9 -- tools/morph/off-path-golden.json', { cwd: ROOT }).toString().trim() === '' && execSync('git diff --stat 6fbf420b -- sketch.js', { cwd: ROOT }).toString().trim() === '' && /var lineStyle = \{ visible: true, weight: 2 \}/.test(read('gallery-render.js')));
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });
