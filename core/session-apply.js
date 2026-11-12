@@ -81,7 +81,10 @@ function _restoreSessionGlobals(c) {
 const SESSION_COLLECT_STATS = { gridBuilds: 0, searches: 0 };
 function _layerGridFingerprint(layer, f) {
     SESSION_COLLECT_STATS.gridBuilds++;
-    return sessionGridFingerprint(layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, f, layer.nodeCount, layer.shape, canvasW, canvasH).nodes, layerGridSpecOf(layer));
+    const spec = layerGridSpecOf(layer);
+    // task 067: a lage-2 layer is rebuilt with its lage-2 nodes (u, v too); lage 1: the call it was
+    const lg = spec.lage === 2 ? layerGridForSpec(outerCorners, centroid, currentShape, shapeSizeFactor, f, spec, layer.shape, canvasW, canvasH) : layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, f, layer.nodeCount, layer.shape, canvasW, canvasH);
+    return sessionGridFingerprint(lg.nodes, spec);
 }
 function _sameFingerprint(a, b) { return a.count === b.count && a.hash === b.hash; }
 // `layer` did not match its live shapeSizeFactor (the first candidate, tried by the caller): try the rest.

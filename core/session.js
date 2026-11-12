@@ -95,7 +95,9 @@ function _fpNodes(nodes, spec, withFree) {
     const all = nodes || [];
     const grid = all.filter(n => !(n && n.free === true));
     let h = _fpFeed(0x811c9dc5, _fpSpecKey(spec));
-    for (const n of grid) h = _fpFeed(h, n.id + ':' + Math.round(n.x * 100) + ':' + Math.round(n.y * 100) + ';');
+    // task 067: a lage-2 grid also hashes the lattice coordinates u, v (sixths, as core/forms.js LAGE2_DEN) of every node; a lage-1 grid hashes exactly what it did
+    const uv = !!spec && spec.lage === 2;
+    for (const n of grid) h = _fpFeed(h, n.id + ':' + Math.round(n.x * 100) + ':' + Math.round(n.y * 100) + (uv ? ':' + Math.round(n.u * 6) + ':' + Math.round(n.v * 6) : '') + ';');
     if (withFree) for (const n of all) if (n && n.free === true) h = _fpFeed(h, 'f' + n.id + ':' + Math.round(n.x * 100) + ':' + Math.round(n.y * 100) + ';');
     return { count: grid.length, hash: h.toString(16).padStart(8, '0') };
 }
@@ -329,7 +331,7 @@ function _vFlips(p, what) {
 
 // -> { ok: true, snapshot } (a normalized copy) | { ok: false, code, detail }
 // codes: 'not-an-object' | 'schema-version' | 'trail-key-version' | 'invalid'. Never throws.
-// A stored grid -> a normalized spec, or a thrown message. Lage 2 is refused unless opts.allowLage2 (tests; the app cannot build it yet); the order is bounded by the
+// A stored grid -> a normalized spec, or a thrown message. Lage 2 is refused unless the developer switch is on (core/forms.js lage2SwitchOn) or opts.allowLage2 (tests); the order is bounded by the
 // shape's ceiling; `shape` of the sheet must be the spec's own shape (no sheet of one shape on a grid of another).
 function _vGrid(g, shape, what, opts) {
     if (!_sObj(g)) throw what + ' must be {shape, ordnung, lage}';
@@ -340,7 +342,8 @@ function _vGrid(g, shape, what, opts) {
     const spec = { shape: g.shape, ordnung: g.ordnung, lage: g.lage };
     if (g.legacyC1 !== undefined) spec.legacyC1 = g.legacyC1;
     if (typeof validateGridSpec !== 'function') throw what + ' cannot be checked (core/forms.js is not loaded)';
-    const v = validateGridSpec(spec, { allowLage2: !!(opts && opts.allowLage2), enforceMax: spec.lage !== 2 });   // the ceiling of lage 2 is 0 (locked): only the test option reaches it, without a ceiling
+    // task 067: lage 2 needs the developer switch (or the test option) and, with the switch on, stays within LAGE2_MAX (validateGridSpec); the test option alone has no ceiling
+    const v = validateGridSpec(spec, { allowLage2: !!(opts && opts.allowLage2), enforceMax: spec.lage !== 2 || (typeof lage2SwitchOn === 'function' && lage2SwitchOn()) });
     if (!v.ok) throw what + ': ' + v.error;
     return spec;
 }
@@ -457,20 +460,22 @@ function parseSession(rawString, opts) {
 // updateActiveLayerGrid() perform, minus their resets.
 function planSessionRestore(snapshot, live) {
     try {
-        if (typeof buildTriangleGrid !== 'function' || typeof buildSquareGrid !== 'function' || typeof buildHexGrid !== 'function' || typeof layerGrid !== 'function'
+        if (typeof buildTriangleGrid !== 'function' || typeof buildSquareGrid !== 'function' || typeof buildHexGrid !== 'function' || typeof layerGrid !== 'function' || typeof layerGridForSpec !== 'function' || typeof gridNodesWithUV !== 'function'
             || typeof completeEdgeToRegularPolygon !== 'function' || typeof _subdivideTriangleInterior !== 'function' || typeof _subdivideSquareInterior !== 'function'
             || typeof _subdivideHexInterior !== 'function') return { ok: false, code: 'plan-error', detail: 'core/forms.js is not loaded' };
         const st = snapshot.settings;
         if (!live || live.canvasW !== st.canvas.w || live.canvasH !== st.canvas.h) return { ok: false, code: 'canvas-mismatch', detail: `saved canvas ${st.canvas.w}x${st.canvas.h}, live ${live && live.canvasW}x${live && live.canvasH}` };
         const baseSpec = st.grid;
-        if (baseSpec.lage !== 1 || snapshot.layers.some(l => l.grid.lage !== 1)) return { ok: false, code: 'plan-error', detail: 'a lage-2 grid cannot be restored yet' };
+        if ((baseSpec.lage !== 1 || snapshot.layers.some(l => l.grid.lage !== 1)) && !(typeof lage2SwitchOn === 'function' && lage2SwitchOn())) return { ok: false, code: 'plan-error', detail: 'a lage-2 grid cannot be restored (the lage-2 switch is off)' };
+        // lage 2 keeps u, v on every grid node (the fingerprint hashes them); lage 1 keeps {id, x, y} exactly as before
+        const gridCopy = (nds, spec) => nds.map(n => spec.lage === 2 ? { id: n.id, x: n.x, y: n.y, u: n.u, v: n.v } : { id: n.id, x: n.x, y: n.y });
         const sheetNodes = (gridNodes, saved, what, spec) => {
-            const withFree = gridNodes.map(n => ({ id: n.id, x: n.x, y: n.y })).concat(saved.freeNodes.map(n => ({ id: n.id, x: n.x, y: n.y, free: true })));
+            const withFree = gridCopy(gridNodes, spec).concat(saved.freeNodes.map(n => ({ id: n.id, x: n.x, y: n.y, free: true })));
             const fp = sessionNodeFingerprint(withFree, spec);
             if (fp.count !== saved.nodeCheck.count || fp.hash !== saved.nodeCheck.hash) {
                 return { error: { ok: false, code: 'grid-mismatch', detail: `${what}: the rebuilt grid has ${fp.count} nodes (hash ${fp.hash}), the snapshot was made with ${saved.nodeCheck.count} (hash ${saved.nodeCheck.hash}) - the grid algorithm or its inputs changed` } };
             }
-            const nodes = gridNodes.map(n => ({ id: n.id, x: n.x, y: n.y })).concat(saved.freeNodes.map(n => ({ id: n.id, x: n.x, y: n.y, free: true })));
+            const nodes = gridCopy(gridNodes, spec).concat(saved.freeNodes.map(n => ({ id: n.id, x: n.x, y: n.y, free: true })));
             const ids = new Set(nodes.map(n => n.id));
             for (const [list, name] of [[saved.connections, 'connections'], [saved.redoStack, 'redoStack']]) {
                 for (let i = 0; i < list.length; i++) for (const id of list[i]) if (!ids.has(id)) return { error: { ok: false, code: 'grid-mismatch', detail: `${what}.${name}[${i}] names node ${id}, which the rebuilt sheet does not have` } };
@@ -487,18 +492,19 @@ function planSessionRestore(snapshot, live) {
             const c = toLegacy(baseSpec);
             const nodes = a.n === 3 ? _subdivideTriangleInterior(vertices[0], vertices[1], vertices[2], c)
                 : a.n === 4 ? _subdivideSquareInterior(vertices, c) : _subdivideHexInterior(vertices, center, c);
-            grid = { nodes, centroid: center, outerCorners: vertices };
+            grid = { nodes: baseSpec.lage === 2 ? gridNodesWithUV({ nodes, centroid: center, outerCorners: vertices }, baseSpec) : nodes, centroid: center, outerCorners: vertices };
         } else {
             if (st.shape !== 'triangle' && st.shape !== 'square' && st.shape !== 'hex') return { ok: false, code: 'plan-error', detail: 'unknown shape' };
             const build = st.shape === 'triangle' ? buildTriangleGrid : st.shape === 'square' ? buildSquareGrid : buildHexGrid;
             grid = build(toLegacy(baseSpec), st.shapeSizeFactor, st.canvas.w, st.canvas.h);
+            if (baseSpec.lage === 2) grid = { nodes: gridNodesWithUV(grid, baseSpec), centroid: grid.centroid, outerCorners: grid.outerCorners };
         }
         const base = sheetNodes(grid.nodes, snapshot.base, 'base', baseSpec);
         if (base.error) return base.error;
         const plan = { base: { nodes: base.nodes, centroid: { x: grid.centroid.x, y: grid.centroid.y }, outerCorners: grid.outerCorners.map(c => ({ x: c.x, y: c.y })) }, layers: [] };
         for (let i = 0; i < snapshot.layers.length; i++) {
             const l = snapshot.layers[i];
-            const lg = layerGrid(grid.outerCorners, grid.centroid, st.shape, st.shapeSizeFactor, l.shapeSizeFactor, toLegacy(l.grid), l.shape, st.canvas.w, st.canvas.h);
+            const lg = layerGridForSpec(grid.outerCorners, grid.centroid, st.shape, st.shapeSizeFactor, l.shapeSizeFactor, l.grid, l.shape, st.canvas.w, st.canvas.h);
             const r = sheetNodes(lg.nodes, l, 'layers[' + i + ']', l.grid);
             if (r.error) return r.error;
             plan.layers.push({ nodes: r.nodes, centroid: { x: lg.centroid.x, y: lg.centroid.y }, outerCorners: lg.outerCorners.map(c => ({ x: c.x, y: c.y })) });

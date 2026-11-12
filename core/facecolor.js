@@ -856,7 +856,8 @@ function sheetGroupElements(gridNodes, sheet = null) {
 // its segments then never leave a base tile, so on a FIELD warp its faces are as exact as the base's (core/netwarp.js
 // netWarpBlocksFaces()). Read afresh on every call - a live-animated layer (1.8 Stage A) can leave this state mid-playback.
 function layerGridMatchesBase(layer) {
-    return layer.shape === currentShape && layer.shapeSizeFactor === shapeSizeFactor && !layer.offsetX && !layer.offsetY && !layer.rotation;
+    // task 067: the lage must agree too (a lage-2 layer over a lage-1 base, or the reverse, is another lattice); a missing spec / lage reads as lage 1, so every lage-1 answer is the old one
+    return layer.shape === currentShape && layer.shapeSizeFactor === shapeSizeFactor && !layer.offsetX && !layer.offsetY && !layer.rotation && ((layer.gridSpec && layer.gridSpec.lage) || 1) === ((typeof gridSpec !== 'undefined' && gridSpec && gridSpec.lage) || 1);
 }
 function faceSheetOverrideOfLayer(layer) {
     return { shape: layer.shape, symmetryMode: layer.symmetryMode, centroid: layer.centroid, outerCorners: layer.outerCorners, gridMatchesBase: layerGridMatchesBase(layer) };
@@ -978,7 +979,7 @@ const _keyframeFieldCache = new WeakMap();
 function keyframeFieldFor(layerIndex) {
     const layer = additionalLayers[layerIndex];
     const store = faceAssignmentsFor(layerIndex);
-    const sigOf = () => JSON.stringify([layer.connections, [...store], layer.shape, layer.symmetryMode, layer.nodes.length, layer.outerCorners[0]]);
+    const sigOf = () => JSON.stringify([layer.connections, [...store], layer.shape, layer.symmetryMode, layer.nodes.length, layer.outerCorners[0], layer.gridSpec ? layer.gridSpec.lage : 1]);   // task 067: lage 1 and lage 2 grids can have the same node count (triangle lage 1 ordnung 3 = lage 2 ordnung 2 = 10)
     const hit = _keyframeFieldCache.get(layer);
     if (hit && hit.sig === sigOf()) return hit.field;
     const sheet = faceSheetOverrideOfLayer(layer);
