@@ -58,7 +58,7 @@ function mk(src, o) {
     w.run('showFaces = ' + (o.faces === false ? 'false' : 'true') + ';');
     return w;
 }
-const svgOf = w => w.get('generateSVGString()');
+const svgOf = w => w.get('generateSVGString()').replace(/  <title>[^\n]*<\/title>\n/, '');   // task 063: the optional <title> (grid name) is metadata; the pin is about the geometry text
 // the polygons the canvas path gets: fill state at endShape, skipping the outline (noFill) ones
 function canvasPolys(w) {
     const sb = w.sb; sb.__canvas.length = 0; w.run('drawTessellation()');
