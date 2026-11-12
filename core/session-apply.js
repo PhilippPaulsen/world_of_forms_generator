@@ -163,9 +163,10 @@ function _buildSessionObjects(snap, plan, step) {
         const layer = Object.assign({
             connections: l.connections.map(c => c.slice()), redoStack: l.redoStack.map(c => c.slice()),
             offsetX: l.offsetX, offsetY: l.offsetY, rotation: l.rotation, shape: l.shape, symmetryMode: l.symmetryMode,
-            enabled: l.enabled, showFaces: l.showFaces, nodeCount: l.nodeCount, shapeSizeFactor: l.shapeSizeFactor,
+            enabled: l.enabled, showFaces: l.showFaces, shapeSizeFactor: l.shapeSizeFactor,
             nodes: plan.layers[i].nodes, centroid: plan.layers[i].centroid, outerCorners: plan.layers[i].outerCorners,
         }, _sheetColorFields(l));
+        projectLayerGridSpec(layer, fromLegacy(l.shape, l.nodeCount));   // task 061: the restored layer's own gridSpec; layer.nodeCount follows
         if (l.isTimelinePlayback) layer.isTimelinePlayback = true;
         if (l.timelineSavedEnabled !== null) layer._timelineSavedEnabled = l.timelineSavedEnabled;
         return layer;

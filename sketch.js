@@ -2709,7 +2709,8 @@ function addLayer() {
     // change time - core/tiling.js's drawTessellation()/drawAdditionalLayers()
     // already read it straight from this field (symmetryModeOverride),
     // no layerGrid() involvement.
-    const layer = { connections: [], redoStack: [], offsetX: 0, offsetY: 0, rotation: 0, shape: currentShape, symmetryMode, enabled: true, showFaces: false, nodeCount, shapeSizeFactor };
+    const layer = { connections: [], redoStack: [], offsetX: 0, offsetY: 0, rotation: 0, shape: currentShape, symmetryMode, enabled: true, showFaces: false, shapeSizeFactor };
+    projectLayerGridSpec(layer, fromLegacy(currentShape, nodeCount)); // task 061: gridSpec + the derived nodeCount, the one write
     const grid = layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.nodeCount);
     layer.nodes = grid.nodes;
     layer.centroid = grid.centroid;
@@ -2802,12 +2803,16 @@ function removeLayer(index) {
 function updateActiveLayerGrid(patch) {
     if (activeLayer === 'base') return;
     const layer = additionalLayers[activeLayer];
-    Object.assign(layer, patch);
+    // task 061: a patch's nodeCount is not assigned; it becomes the layer's gridSpec (projectLayerGridSpec writes layer.nodeCount)
+    const { nodeCount: patchCount, ...patchRest } = patch;
+    Object.assign(layer, patchRest);
+    let layerCount = Number.isInteger(patchCount) && patchCount >= 1 ? patchCount : layer.nodeCount;
     // Defence in depth for every caller (shape switch, catalog link, align): a layer's node count never exceeds its OWN
     // shape's ceiling (core/forms.js NODE_COUNT_MAX). The caller that knows the UI reports it (returned below).
     let clamped = null;
     const layerMax = maxNodeCountFor(layer.shape);
-    if (layer.nodeCount > layerMax) { clamped = { shape: layer.shape, from: layer.nodeCount, to: layerMax }; layer.nodeCount = layerMax; }
+    if (layerCount > layerMax) { clamped = { shape: layer.shape, from: layerCount, to: layerMax }; layerCount = layerMax; }
+    projectLayerGridSpec(layer, fromLegacy(layer.shape, layerCount));
     layer.connections = [];
     layer.redoStack = [];
     // Roadmap 1.12 stage 4 (UI) bugfix: layer.shape (post-patch, so a
@@ -3434,9 +3439,10 @@ function addLayerToTimeline() {
         const playbackLayer = {
             connections: [], redoStack: [], offsetX: 0, offsetY: 0, rotation: 0,
             shape: prevLayer.shape, symmetryMode: prevLayer.symmetryMode, enabled: true,
-            showFaces: false, nodeCount: prevLayer.nodeCount, shapeSizeFactor: prevLayer.shapeSizeFactor,
+            showFaces: false, shapeSizeFactor: prevLayer.shapeSizeFactor,
             isTimelinePlayback: true,
         };
+        projectLayerGridSpec(playbackLayer, Object.assign({}, layerGridSpecOf(prevLayer))); // task 061: the playback layer has the keyframes' spec
         const grid = layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, playbackLayer.shapeSizeFactor, playbackLayer.nodeCount, playbackLayer.shape, canvasW, canvasH);
         playbackLayer.nodes = grid.nodes;
         playbackLayer.centroid = grid.centroid;
@@ -4967,7 +4973,7 @@ function buildCrossLayerInput() {
 function incompatibleEnabledLayersForCrossLayerFaces() {
     return additionalLayers
         .map((layer, i) => ({ index: i, layer }))
-        .filter(({ layer }) => layer.enabled && (layer.shapeSizeFactor !== shapeSizeFactor || (layer.rotation || 0) !== 0 || layer.shape !== currentShape));
+        .filter(({ layer }) => layer.enabled && (layer.shapeSizeFactor !== shapeSizeFactor || (layer.rotation || 0) !== 0 || layer.shape !== currentShape || !layerSpecMatchesBase(layerGridSpecOf(layer), gridSpec)));
 }
 
 // A cheap fingerprint of everything a cross-layer compute result

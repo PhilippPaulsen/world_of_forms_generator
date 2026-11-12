@@ -23,7 +23,8 @@ function world(shape, order, size, mode) { return reset(newCtx(), shape, order, 
 function addLayer(ctx, o) {
     ctx.run(`(function () {
         const layer = { connections: ${J(o.connections || [])}, redoStack: [], offsetX: ${o.offsetX || 0}, offsetY: ${o.offsetY || 0}, rotation: ${o.rotation || 0}, shape: ${J(o.shape)},
-            symmetryMode: ${J(o.mode || 'rotation_reflection6')}, enabled: ${o.enabled !== false}, showFaces: ${!!o.showFaces}, nodeCount: ${o.order}, shapeSizeFactor: ${o.size} };
+            symmetryMode: ${J(o.mode || 'rotation_reflection6')}, enabled: ${o.enabled !== false}, showFaces: ${!!o.showFaces}, shapeSizeFactor: ${o.size} };
+        projectLayerGridSpec(layer, fromLegacy(layer.shape, ${o.order}));
         const grid = layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.nodeCount, layer.shape, canvasW, canvasH);
         layer.nodes = grid.nodes; layer.centroid = grid.centroid; layer.outerCorners = grid.outerCorners;
         ${o.free ? `layer.nodes.push({ id: layer.nodes.length + 1, x: ${o.free[0]}, y: ${o.free[1]}, free: true });` : ''}
