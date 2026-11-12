@@ -109,34 +109,27 @@ var SHAPE_BUILDERS = { triangle: buildTriangleGrid, square: buildSquareGrid, hex
 var DETAIL_CANVAS_SIZE = 600;
 var DETAIL_SHAPE_SIZE_FACTOR = 5;
 
-// Rebuilds the exact grid+orbit table a manifest entry was generated
-// from, and renders its FULL TESSELLATION (not the single-cell
-// thumbnail) as an inline SVG string. (shape, order, symmetryMode,
-// orbitIds) is exactly the tuple every manifest.jsonl row already
-// stores - no new data needed, nothing pre-generated (design session's
-// storage-cost finding).
+// Task 064 (G7a): rebuilds the grid of a v2 manifest entry ({grid: {shape, ordnung, lage}, lines: [tokens]}) and renders its FULL TESSELLATION (not the single-cell
+// thumbnail) as an inline SVG string. The lines are the entry's own line keys, resolved in the grid's line table (core/orbits.js transportConnectionsV2) - the same
+// resolution the generator's "Open in generator" link makes - and the whole main group of the shape ('rotation_reflection6') draws them. Nothing pre-generated.
+var CATALOG_MODE = 'rotation_reflection6';
 function renderFullTessellationSVG(entry) {
   var size = DETAIL_CANVAS_SIZE;
-  var buildGrid = SHAPE_BUILDERS[entry.shape];
-  if (!buildGrid) throw new Error('renderFullTessellationSVG: unknown shape "' + entry.shape + '"');
+  var spec = { shape: entry.grid.shape, ordnung: entry.grid.ordnung, lage: entry.grid.lage };
+  var v = validateGridSpec(spec, { enforceMax: true });
+  if (!v.ok) throw new Error('renderFullTessellationSVG: ' + v.error);
 
-  var grid = buildGrid(entry.order, DETAIL_SHAPE_SIZE_FACTOR, size, size);
+  var grid = buildGrid(spec, { sizeFactor: DETAIL_SHAPE_SIZE_FACTOR, canvasW: size, canvasH: size });
   centroid = grid.centroid;
   outerCorners = grid.outerCorners;
-  currentShape = entry.shape;
-  symmetryMode = entry.symmetryMode;
+  currentShape = spec.shape;
+  symmetryMode = CATALOG_MODE;
   width = size;
   height = size;
   nodes = grid.nodes;
   additionalLayers = [];
 
-  var table = computeThemeLineOrbits(grid.nodes, grid.centroid, entry.shape, entry.symmetryMode, grid.outerCorners);
-  connections = entry.orbitIds.map(function (id) {
-    if (!table.orbits[id]) {
-      throw new Error('renderFullTessellationSVG: orbit id ' + id + ' does not exist for ' + entry.shape + ' order ' + entry.order + ' (table has ' + table.orbits.length + ' orbits)');
-    }
-    return table.orbits[id].pairs[0];
-  });
+  connections = transportConnectionsV2({ spec: spec, shape: spec.shape, keys: entry.lines.map(function (t) { return parseLineKey(t); }) });
 
   svgPathCollector = [];
   drawTessellation();
@@ -164,26 +157,21 @@ function renderFullTessellationSVG(entry) {
 var CATALOG_CANVAS_SIZE = 300;
 var CATALOG_SHAPE_SIZE_FACTOR = 1.3;
 
-// Builds the grid + orbit table for one (shape, order, symmetryMode)
-// ONCE - reused across every orbit-table tile and every generated
-// combination for that shape+order (mirrors renderSingleCellSVG.js's
-// own createShapeOrderRenderer(): rebuilding core/forms.js's grid and
-// re-running computeThemeLineOrbits() per tile would be wasteful when
-// a single shape+order selection can have dozens of orbit tiles and
-// up to 2,000 generated combinations).
-function buildOrbitTable(shape, order, symmetryModeArg) {
-  var buildGrid = SHAPE_BUILDERS[shape];
-  if (!buildGrid) throw new Error('buildOrbitTable: unknown shape "' + shape + '"');
-  var grid = buildGrid(order, CATALOG_SHAPE_SIZE_FACTOR, CATALOG_CANVAS_SIZE, CATALOG_CANVAS_SIZE);
-  var table = computeThemeLineOrbits(grid.nodes, grid.centroid, shape, symmetryModeArg, grid.outerCorners);
-  return { shape: shape, order: order, symmetryMode: symmetryModeArg, grid: grid, table: table };
+// Task 064 (G7a): the grid + line-key table of one (shape, ordnung), built ONCE and reused for every tile and every generated combination. The "orbits" are the grid's line
+// keys in compareLineKeys order (core/orbits.js getLineKeyTable); a tile / combination refers to them by their INDEX in that list inside the page only - everything that leaves
+// the page (labels, links, paste) uses the key tokens.
+function buildOrbitTable(shape, ordnung) {
+  var spec = { shape: shape, ordnung: ordnung, lage: 1 };
+  var v = validateGridSpec(spec, { enforceMax: true });
+  if (!v.ok) throw new Error('buildOrbitTable: ' + v.error);
+  var grid = buildGrid(spec, { sizeFactor: CATALOG_SHAPE_SIZE_FACTOR, canvasW: CATALOG_CANVAS_SIZE, canvasH: CATALOG_CANVAS_SIZE });
+  var table = getLineKeyTable(spec, GRID_V2);
+  return { shape: shape, order: ordnung, spec: spec, symmetryMode: CATALOG_MODE, grid: grid, table: table, tokens: table.entries.map(function (e) { return e.token; }) };
 }
 
-// Renders ONE single cell (drawShapeCell(), not drawTessellation()) for
-// an arbitrary set of orbit ids against an already-built orbit table -
-// used for both a lone orbit preview (orbitIds.length === 1) and a full
-// ad-hoc k-combination preview.
-function renderSingleCellSVG(builderState, orbitIds) {
+// Renders ONE single cell (drawShapeCell(), not drawTessellation()) for a set of line indices (positions in builderState.tokens) against an already-built table - used for
+// a lone line preview and for a full ad-hoc k-combination preview.
+function renderSingleCellSVG(builderState, lineIndices) {
   var size = CATALOG_CANVAS_SIZE;
   centroid = builderState.grid.centroid;
   outerCorners = builderState.grid.outerCorners;
@@ -191,11 +179,10 @@ function renderSingleCellSVG(builderState, orbitIds) {
   symmetryMode = builderState.symmetryMode;
   nodes = builderState.grid.nodes;
 
-  var connSet = orbitIds.map(function (id) {
-    if (!builderState.table.orbits[id]) {
-      throw new Error('renderSingleCellSVG: orbit id ' + id + ' does not exist for ' + builderState.shape + ' order ' + builderState.order + ' (table has ' + builderState.table.orbits.length + ' orbits)');
-    }
-    return builderState.table.orbits[id].pairs[0];
+  var connSet = lineIndices.map(function (i) {
+    var e = builderState.table.entries[i];
+    if (!e) throw new Error('renderSingleCellSVG: line index ' + i + ' does not exist for ' + builderState.shape + ' ordnung ' + builderState.order + ' (table has ' + builderState.table.entries.length + ' lines)');
+    return pairForLineKey(builderState.table, e.key, GRID_V2);
   });
 
   svgPathCollector = [];
