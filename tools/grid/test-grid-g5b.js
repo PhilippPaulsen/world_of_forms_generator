@@ -104,7 +104,9 @@ if (oldDir) {
     check('(4) ...another lage does not match (a lage-2 spec built with allowLage2 in the builder, which setGrid/projectLayerGridSpec still refuse)',
         (() => { const g = sb.buildGrid(l2, { sizeFactor: 3, canvasW: 600, canvasH: 600 }, { allowLage2: true }); return g.grid.lage === 2 && sb.layerSpecMatchesBase(l2, sq) === false && sb.layerSpecMatchesBase(sq, l2) === false && sb.layerSpecMatchesBase(l2, { shape: 'square', ordnung: 5, lage: 2 }) === true; })());
     const fcNew = read('core/facecolor.js'), fcOld = oldDir ? oldRead('core/facecolor.js') : fcNew;
-    check('(4) core/facecolor.js is byte-unchanged (layerGridMatchesBase included)', fcNew === fcOld);
+    // task 067: layerGridMatchesBase (lage) and the _keyframeFieldCache signature (lage) were changed on purpose; everything else (cachedTrailsFor included) is still byte-unchanged
+    { const strip = s => s.replace(/function layerGridMatchesBase\([\s\S]*?\n\}\n/, 'X').replace(/, layer\.gridSpec \? layer\.gridSpec\.lage : 1\]\);[^\n]*/, ']);');
+      check('(4) core/facecolor.js is byte-unchanged apart from layerGridMatchesBase and the keyframe-field signature (task 067)', strip(fcNew) === strip(fcOld)); }
     if (oldDir) {
         const mk = (readFn) => { const s2 = sandbox(readFn, '\n' + grab(readFn('core/facecolor.js'), 'layerGridMatchesBase') + '\n' + grab(readFn('sketch.js'), 'incompatibleEnabledLayersForCrossLayerFaces')); return s2; };
         const O = mk(oldRead), N = mk(read);
