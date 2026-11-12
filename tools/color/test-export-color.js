@@ -163,7 +163,7 @@ console.log('\n== 2. round trip: assign -> export -> JSON -> re-derive ==');
             // there is something to have been filled.
             if (otherFaces.length && (!otherMetaList || !otherMetaList.every(e => e.rule === 'max-contrast-gray'))) isolBad++;
             if (!otherFaces.every(f => f.colorSpec && f.colorSpec.rule === 'max-contrast-gray')) isolBad++;
-            if (parsed.formatVersion !== 1) fmtBad++;
+            if (parsed.formatVersion !== 2) fmtBad++;   // task 063: export v2
 
             const faces = target === 'base' ? parsed.geometry.faces : parsed.geometry.layers[0].faces;
             const keysNow = sb.computeFaceTrailKeys(sb.computeCellFaces(conns, S.grid.nodes), group);
@@ -214,7 +214,7 @@ console.log('\n== 2. round trip: assign -> export -> JSON -> re-derive ==');
     check('per-trail override survives the round trip (slot != rank, in params)', overrideBad === 0, `${overrideRuns} override runs, all 4 rules, base and layer`);
     check('unassigned faces: gray hex color, no colorSpec', unassignedBad === 0);
     check('sheet isolation: an assignment on one sheet leaves the other sheet\'s faces and meta untouched', isolBad === 0);
-    check('face count unchanged by assigning; formatVersion stays 1', countBad === 0 && fmtBad === 0);
+    check('face count unchanged by assigning; formatVersion is 2 (task 063)', countBad === 0 && fmtBad === 0);
     check('apart from face.color/colorSpec and meta.faceColoring, the export equals the unassigned export', restBad === 0);
 }
 // ---------------- 3. partial assignment (mixed assigned/unassigned faces on one sheet) ----------------

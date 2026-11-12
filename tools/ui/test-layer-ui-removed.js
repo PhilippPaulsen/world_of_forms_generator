@@ -145,11 +145,11 @@ T('export', () => {
     sb.additionalLayers = [layer(1), layer(2)];
     const ex = JSON.parse(JSON.stringify(sb.buildExportData(null)));
     check('a two-layer pattern exports with NO geometry.crossLayer when there is no result (the field is absent, not empty)', ex.geometry && !('crossLayer' in ex.geometry) && Array.isArray(ex.geometry.layers) && ex.geometry.layers.length === 2, Object.keys(ex.geometry).join(','));
-    check('formatVersion is still 1', ex.formatVersion === 1);
+    check('formatVersion is 2 (task 063: export v2; was 1)', ex.formatVersion === 2);
     check('the keys SpaceHarmony reads are all there: geometry.nodes (array), centroid, outerCorners, edges, meta.shapeType, meta.symmetryMode',
         Array.isArray(ex.geometry.nodes) && ex.geometry.nodes.length > 0 && ex.geometry.centroid && typeof ex.geometry.centroid.x === 'number' && Array.isArray(ex.geometry.outerCorners) && Array.isArray(ex.geometry.edges) && ex.meta.shapeType === 'triangle' && ex.meta.symmetryMode === 'rotation_reflection6');
     const withResult = JSON.parse(JSON.stringify(sb.buildExportData({ latticeBasis: { v1: { x: 1, y: 0 }, v2: { x: 0, y: 1 } }, nodes: [], faces: [] })));
-    check('given a current result the same call still writes geometry.crossLayer (the field is kept)', withResult.geometry.crossLayer && Array.isArray(withResult.geometry.crossLayer.faces) && withResult.formatVersion === 1);
+    check('given a current result the same call still writes geometry.crossLayer (the field is kept)', withResult.geometry.crossLayer && Array.isArray(withResult.geometry.crossLayer.faces) && withResult.formatVersion === 2);
     delete ex.exportedAt; delete withResult.exportedAt; delete withResult.geometry.crossLayer;
     check('...and apart from that field the two exports are identical', JSON.stringify(ex) === JSON.stringify(withResult));
 });

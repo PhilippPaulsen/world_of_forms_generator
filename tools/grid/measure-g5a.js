@@ -10,6 +10,10 @@ const H = require(path.join(__dirname, '..', 'morph', 'render-harness.js'));
 const h = (x) => crypto.createHash('sha256').update(typeof x === 'string' ? x : JSON.stringify(x)).digest('hex').slice(0, 16);
 const J = JSON.stringify;
 const out = {};
+// task 063: export v2 changed the export's own fields (formatVersion, meta.grid / nodeCount, nodes' zahl/u/v, lineKeys, name, patternName / themeLineOrbits); the comparison with the
+// old tree hashes the export WITHOUT them, so geometry, edges, adjacency, faces and colours are still compared byte for byte.
+const V2_KEYS = new Set(['formatVersion', 'name', 'patternName', 'themeLineOrbits', 'lineKeys', 'nodeCount', 'grid', 'zahl', 'u', 'v']);
+const stripV2 = (o) => (Array.isArray(o) ? o.map(stripV2) : o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).filter(([k]) => !V2_KEYS.has(k)).map(([k, v]) => [k, stripV2(v)])) : o);
 const NETS = { none: null, single: { x: { kind: 'trig', w: -1 }, y: 'same', repeat: false }, tiled: { x: { kind: 'trig', w: -1 }, y: 'same', repeat: true } };
 const E_EXPR = "(typeof baseGridDivisions === 'function' ? baseGridDivisions() : nodeCount - 1)";
 const CONN = [[1, 2], [1, 3]];
@@ -24,7 +28,7 @@ for (const shape of ['triangle', 'square', 'hex']) for (let c = 1; c <= 7; c++) 
         rec.grid = h(w.get('JSON.stringify({ nodes, centroid, outerCorners })'));
         rec.drawn = h(w.drawn());
         rec.frame = h(w.frame());
-        rec.exp = h(w.get('(function () { const d = buildExportData(); d.exportedAt = 0; return JSON.stringify(d); })()'));
+        rec.exp = h(JSON.stringify(stripV2(JSON.parse(w.get('(function () { const d = buildExportData(); d.exportedAt = 0; return JSON.stringify(d); })()')))));
         rec.warp = h(w.get('JSON.stringify(netWarpBaseNow())'));
         rec.lines = h(w.get(`JSON.stringify(netGridLines(netTransformNow(), outerCorners, ${E_EXPR}, { x0: 0, y0: 0, x1: 600, y1: 600 }, { closed: true }))`));
         rec.E = w.get(E_EXPR);
