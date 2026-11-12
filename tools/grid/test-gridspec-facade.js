@@ -61,8 +61,8 @@ const OS = mk(oldForms, oldState), NS = mk(newForms, stateSrc);
 const snap = sb => ev(sb, 'JSON.stringify({nodes, centroid, outerCorners, connections, additionalLayers, activeLayer, timeline, altNetSeed, baseNetAnimation, redoStack, faceHover, baseFacePalette})');
 let n4 = 0, bad4 = 0;
 for (const shape of shapes) for (let c = 1; c <= 7; c++) for (const sf of [1, 5, 9]) {
-    const setup = `currentShape='${shape}'; nodeCount=${c}; shapeSizeFactor=${sf}; connections=[[1,2]]; redoStack=[[3,4]]; additionalLayers=[{x:1}]; activeLayer=0; timeline={a:1}; altNetSeed={p:1}; baseNetAnimation={x:1}; faceHover={k:1}; baseFacePalette={r:1}; rebuildGrid(currentShape);`;
-    ev(OS, setup); ev(NS, setup); n4++;
+    const setup = `currentShape='${shape}'; projectGridSpec(fromLegacy(currentShape, ${c})); shapeSizeFactor=${sf}; connections=[[1,2]]; redoStack=[[3,4]]; additionalLayers=[{x:1}]; activeLayer=0; timeline={a:1}; altNetSeed={p:1}; baseNetAnimation={x:1}; faceHover={k:1}; baseFacePalette={r:1}; rebuildGrid(currentShape);`;
+    ev(OS, setup.replace(/projectGridSpec\(fromLegacy\(currentShape, (\d+)\)\);/, 'nodeCount=$1;')); ev(NS, setup); n4++;   // 060: the old state has no projectGridSpec, it set nodeCount directly
     if (snap(OS) !== snap(NS)) bad4++;
 }
 check('(4) rebuildGrid: nodes, centroid, corners, lines, layers, timeline, redoStack etc. equal to the old behaviour (' + n4 + ' cases)', bad4 === 0, bad4);
@@ -81,7 +81,7 @@ const before = snap(NS), rv = ev(NS, 'gridRevision');
 let thrown = 0;
 for (const s of [{ shape: 'hex', ordnung: 3, lage: 2 }, { shape: 'hex', ordnung: 0, lage: 1 }, { shape: 'pentagon', ordnung: 1, lage: 1 }]) { try { NS.setGrid(s); } catch (e) { thrown++; } }
 check('(4) setGrid with an invalid spec throws and leaves state and gridRevision untouched', thrown === 3 && snap(NS) === before && ev(NS, 'gridRevision') === rv);
-ev(NS, `nodeCount=3; shapeSizeFactor=3; rebuildGridFromConstruction({x:120,y:230},{x:310,y:260},4,1)`);
+ev(NS, `projectGridSpec(fromLegacy(currentShape, 3)); shapeSizeFactor=3; rebuildGridFromConstruction({x:120,y:230},{x:310,y:260},4,1)`);
 check('(4) rebuildGridFromConstruction raises gridRevision', ev(NS, 'gridRevision') === rv + 1);
 
 console.log(`${pass}/${pass + fail} checks passed`);

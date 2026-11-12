@@ -19,7 +19,7 @@ const vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
 const sb = { Math, console, baseNetTransform: null, baseNetAnimation: null, currentShape: 'square', outerCorners: null, nodeCount: 7 };
 vm.createContext(sb);
-vm.runInContext(fs.readFileSync(path.join(ROOT, 'core', 'netwarp.js'), 'utf8'), sb);
+vm.runInContext(fs.readFileSync(path.join(ROOT, 'core', 'forms.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'core', 'netwarp.js'), 'utf8'), sb);   // 060: netWarpForBase takes E from getGridDivisions (core/forms.js)
 let failures = 0, checks = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
 const near = (a, b, e = 1e-9) => Math.abs(a - b) <= e;

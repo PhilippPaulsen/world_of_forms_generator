@@ -298,12 +298,12 @@ function setup() {
         if (nodeInput) nodeInput.elt.max = maxN;
         if (nodeCount > maxN) {
             showNodeCountNote(`${cause} changed to ${currentShape}: Node Count ${nodeCount} is above its limit of ${maxN}, so it was set to ${maxN}.`);
-            nodeCount = maxN;
+            projectGridSpec(fromLegacy(currentShape, maxN));
             if (nodeInput) nodeInput.value(nodeCount);
         }
     }
     if (nodeInput) {
-        nodeCount = parseInt(nodeInput.value()) || 3;
+        projectGridSpec(fromLegacy(currentShape, Math.max(1, parseInt(nodeInput.value()) || 3)));
         nodeInput.input(() => {
             let v = parseInt(nodeInput.value());
             // Roadmap 1.1 (Group A, node-count limit raise): 5 -> 7, and
@@ -319,8 +319,7 @@ function setup() {
                 v = maxN;
                 nodeInput.value(v);
             }
-            nodeCount = v;
-            rebuildGrid(currentShape);
+            setGrid(fromLegacy(currentShape, v));
             renderLayerTabs();
             updateOffsetControls();
             updateTimelineControls();
@@ -342,7 +341,7 @@ function setup() {
     const catalogUrlPattern = parseCatalogUrlParams(location.search);
     if (catalogUrlPattern) {
         currentShape = catalogUrlPattern.shape;
-        nodeCount = catalogUrlPattern.order;
+        projectGridSpec(fromLegacy(currentShape, catalogUrlPattern.order));
         shapeBtns.forEach(b => b.removeClass('active'));
         const matchingShapeBtn = shapeBtns.find(b => b.attribute('data-shape') === currentShape);
         if (matchingShapeBtn) matchingShapeBtn.addClass('active');
@@ -744,7 +743,7 @@ function setup() {
             fieldBtn.elt.disabled = !fieldOk;
             fieldBtn.elt.title = fieldOk ? fieldBtn.elt.dataset.title : 'Field needs an odd Shape Size (3, 5, 7, 9)';
             fieldHint.elt.hidden = fieldOk;
-            const isField = ui.domain === 'field', E0 = nodeCount - 1;
+            const isField = ui.domain === 'field', E0 = baseGridDivisions();
             fieldInfo.elt.hidden = !(active && isField);
             if (active && isField) fieldInfo.html(`Field: macro = R = ${R} tiles, micro = E = ${E0} per tile. Face fills are exact on a Field and work for the base sheet and for layers on the base grid (same shape and size, no offset, no rotation - every timeline playback layer); other layers are not filled.`);
             // The Shape Size hint says what Shape Size does in the CURRENT mode
@@ -755,7 +754,7 @@ function setup() {
             sizeHint.elt.hidden = hintText === null; if (hintText !== null) sizeHint.html(hintText);
             // Macro cells: a chosen macro that no longer divides E (Node Count changed) is reset to smooth, visibly -
             // never silently snapped to another divisor (the core would ignore it anyway: netMacroEffective()).
-            const E = nodeCount - 1;
+            const E = baseGridDivisions();
             if (ui.macro !== undefined && !netMacroEffective(ui.macro, E).valid) {
                 const was = ui.macro; setMacro(undefined);
                 showMacroNote(`Macro ${was} does not divide E = ${E} (Node Count ${nodeCount}), so the net was reset to smooth (${E}\u00d71).`);
@@ -4441,7 +4440,7 @@ let netLinesOn = false;
 function drawNetLinesOverlay() {
     if (!netLinesOn || currentShape !== 'square') return;
     const nw = netWarpBaseNow(), closed = !!nw && !nw.repeat, field = nw && nw.field;
-    const lines = netGridLines(netTransformNow(), outerCorners, nodeCount - 1, { x0: 0, y0: 0, x1: width, y1: height }, field ? { closed, domain: 'field', fieldTiles: field.Rt } : { closed });
+    const lines = netGridLines(netTransformNow(), outerCorners, baseGridDivisions(), { x0: 0, y0: 0, x1: width, y1: height }, field ? { closed, domain: 'field', fieldTiles: field.Rt } : { closed });
     push();
     strokeWeight(1);
     lines.forEach(l => {

@@ -8,7 +8,7 @@ function offPathScript(spec) {
     const J = JSON.stringify;
     const L = [];
     L.push(`symmetryMode = 'none'; showFaces = false; baseNetTransform = null; baseNetAnimation = null; timeline = null; additionalLayers = []; activeLayer = 'base'; curveType = { kind: 'straight' };`);
-    L.push(`currentShape = ${J(spec.shape)}; nodeCount = ${spec.order}; shapeSizeFactor = ${spec.size}; rebuildGrid(currentShape); symmetryMode = ${J(spec.mode)}; connections = ${J(spec.connections)}; redoStack = [];`);
+    L.push(`currentShape = ${J(spec.shape)}; projectGridSpec(fromLegacy(currentShape, ${spec.order})); shapeSizeFactor = ${spec.size}; rebuildGrid(currentShape); symmetryMode = ${J(spec.mode)}; connections = ${J(spec.connections)}; redoStack = [];`);
     if (spec.curve) L.push(`curveType = ${J(spec.curve)};`);
     if (spec.net) L.push(`baseNetTransform = ${J(spec.net)};`);
     (spec.layers || []).forEach((l, i) => {
