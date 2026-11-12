@@ -2204,6 +2204,8 @@ function setup() {
             const reject = (code, detail) => {
                 console.warn(`[session] saved session not restored (${code}: ${detail}); kept in the quarantine slot, starting fresh`);
                 quarantineSession(guard.storage, loaded.text, sessionQuarantineReason(code));
+                // task 062: a session saved under the old schema is discarded with a plain message (kept in the quarantine slot as before)
+                if (code === 'schema-version') say('session-old', window.UI && UI.t ? UI.t('note.session.oldSchema') : 'The saved session comes from an older version of the generator and cannot be restored. It was set aside and the generator starts fresh.', 'info');
                 return false;
             };
             const parsed = parseSession(loaded.text);
