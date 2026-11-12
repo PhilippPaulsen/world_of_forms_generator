@@ -522,6 +522,30 @@ function gridSpecForCount(shape, count, lage) {
     const max = maxOrdnungFor(shape, 2);
     return { shape, ordnung: Math.max(1, max ? Math.min(s.ordnung, max) : s.ordnung), lage: 2 };
 }
+// Task 068c2: the steppers' value is the ORDNUNG of the spec (not the legacy count c). Lage 1: triangle 1..6, square 1..12, hex 1..7; lage 2: 5/5/2.
+// gridMaxOrdnung: the limit of the input for `lage` (lage 2 only while the switch is on, else the lage-1 limit). gridSpecForOrdnung: the clamped spec.
+// countForOrdnung / ordnungForCount: the INTERNAL bridge to the legacy count (triangle/square c = ordnung + 1, hex c = ordnung; c = 1 shows as ordnung 1).
+function gridMaxOrdnung(shape, lage) {
+    const m = lage === 2 ? maxOrdnungFor(shape, 2) : 0;
+    return m || maxOrdnungFor(shape, 1);
+}
+function gridSpecForOrdnung(shape, ordnung, lage) {
+    return { shape, ordnung: Math.max(1, Math.min(ordnung, gridMaxOrdnung(shape, lage))), lage: lage === 2 ? 2 : 1 };
+}
+function countForOrdnung(shape, ordnung) { return shape === 'hex' ? ordnung : ordnung + 1; }
+function ordnungForCount(shape, c) { return shape === 'hex' ? c : Math.max(1, c - 1); }
+// The smallest ordnung a Sin / Tan net accepts: it needs E >= 3 divisions (core/netwarp.js), i.e. the legacy count c >= 4: triangle/square ordnung 3, hex ordnung 4.
+function gridMinOrdnungTrig(shape) { return shape === 'hex' ? 4 : 3; }
+// The number of nodes of the grid (lage 1 = the builder's nodes, lage 2 adds the centres of the smallest meshes); the legacy c = 1 marker has 3 / 4 nodes.
+function getGridNodeCount(spec) {
+    const n = spec.ordnung;
+    let n1;
+    if (spec.shape === 'triangle') n1 = spec.legacyC1 === true ? 3 : (n + 1) * (n + 2) / 2;
+    else if (spec.shape === 'square') n1 = spec.legacyC1 === true ? 4 : (n + 1) * (n + 1);
+    else n1 = 3 * n * (n + 1) + 1;
+    if (spec.lage !== 2) return n1;
+    return n1 + (spec.shape === 'hex' ? 6 * n * n : n * n);
+}
 // The largest count the input may take in `lage` (lage 1: the shape's NODE_COUNT_MAX; lage 2: the count of the lage-2 ceiling).
 function gridMaxCount(shape, lage) {
     const m = lage === 2 ? maxOrdnungFor(shape, 2) : 0;
