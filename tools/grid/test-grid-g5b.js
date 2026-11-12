@@ -61,7 +61,7 @@ if (oldDir) {
     check('(3) the layer literals of addLayer(), addLayerToTimeline() and the session restore carry no nodeCount key; each calls projectLayerGridSpec',
         body(sk, 'addLayer') && !lit.test(body(sk, 'addLayer')) && !lit.test(body(sk, 'addLayerToTimeline')) && !lit.test(body(sa, '_buildSessionObjects'))
         && /projectLayerGridSpec\(layer, Object\.assign\(\{\}, baseGridSpecNow\(\)\)\)/.test(body(sk, 'addLayer')) && /projectLayerGridSpec\(playbackLayer, /.test(body(sk, 'addLayerToTimeline')) && /projectLayerGridSpec\(layer, Object\.assign\(\{\}, l\.grid\)\)/.test(body(sa, '_buildSessionObjects')));
-    check('(3) updateActiveLayerGrid takes the patch\'s nodeCount out of the Object.assign and writes the spec instead', /const \{ nodeCount: patchCount, \.\.\.patchRest \} = patch;\s*Object\.assign\(layer, patchRest\);/.test(sk) && /projectLayerGridSpec\(layer, gridSpecForCount\(layer\.shape, layerCount, keepLage\)\)/.test(body(sk, 'updateActiveLayerGrid')));
+    check('(3) updateActiveLayerGrid takes the patch\'s nodeCount out of the Object.assign and writes the spec instead', /const \{ nodeCount: patchCount, ordnung: patchOrdnung, \.\.\.patchRest \} = patch;[^\n]*\s*Object\.assign\(layer, patchRest\);/.test(sk) && /projectLayerGridSpec\(layer, gridSpecForCount\(layer\.shape, layerCount, keepLage\)\)/.test(body(sk, 'updateActiveLayerGrid')));
 }
 
 // ---- helpers for sandboxes ------------------------------------------------------------------------------------------------------------------
