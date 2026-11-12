@@ -38,9 +38,9 @@ if (oldDir) {
     check('(0) the measurement ran: nothing threw, same keys in both trees', keys.every(k => typeof n[k] !== 'string') && J(Object.keys(o)) === J(keys));
     check('(1) layer geometry, drawn calls, segments and export JSON equal the old tree (' + lay.length + ' cases: 3 base shapes x c 2/3 x layer shape x order 1..4 x size 3/5, with and without a square net)', lay.length === 192 && diff(lay).length === 0, diff(lay).slice(0, 3).join(' | '));
     check('(1) alt-net bases with layers equal the old tree (' + alt.length + ' cases)', alt.length === 3 && diff(alt).length === 0, diff(alt).slice(0, 3).join(' | '));
-    check('(2) morph frames t = 0 .25 .5 .75 1 with keyframe layers of another order, with and without a net, equal the old tree (' + mor.length * 5 + ' frames)', mor.length === 16 && diff(mor).length === 0, diff(mor).slice(0, 3).join(' | '));
-    const netCase = n['morph/square/net/4/linear'], plain = n['morph/square/nonet/4/linear'];
-    check('(2) the control is not vacuous: the net changes the morph frames, the layer order changes them too', J(netCase) !== J(plain) && J(n['morph/square/net/3/linear']) !== J(netCase));
+    check('(2) morph frames t = 0 .25 .5 .75 1 with keyframe layers of another order, with and without a net, equal the old tree (' + mor.length * 5 + ' frames)', mor.length === 20 && diff(mor).length === 0, diff(mor).slice(0, 3).join(' | '));
+    const M = k => J(n['morph/square/' + k + '/linear']);
+    check('(2) the controls are not vacuous: the net changes the morph frames, the layer order changes them, and a macro changes them only where E (the layer\'s own order) lets it: order 5 (E 4), not order 3 (E 2 = the default)', M('net/5') !== M('nonet/5') && M('net/3') !== M('net/5') && M('macro/5') !== M('net/5') && M('macro/3') === M('net/3'));
 }
 
 // ---- 2. one write of layer.nodeCount -------------------------------------------------------------------------------------------------------
