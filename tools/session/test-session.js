@@ -47,7 +47,7 @@ function nodesOf(grid, freeNodes) { return grid.nodes.map(n => ({ id: n.id, x: n
 function stateFromSnapshot(snap, gridNodesBase, gridNodesOfLayer) {
     const st = snap.settings;
     return {
-        currentShape: st.shape, nodeCount: st.nodeCount, shapeSizeFactor: st.shapeSizeFactor, canvasW: st.canvas.w, canvasH: st.canvas.h,
+        currentShape: st.shape, gridSpec: st.grid, shapeSizeFactor: st.shapeSizeFactor, canvasW: st.canvas.w, canvasH: st.canvas.h,
         symmetryMode: st.symmetryMode, symmetryCategory: st.symmetryCategory, symmetryFold: st.symmetryFold, curveType: clone(st.curveType),
         lineColor: st.lineColor, showNodes: st.showNodes, showFaces: st.showFaces, freeEndpointsEnabled: st.freeEndpointsEnabled,
         altNetSeed: clone(st.altNetSeed), baseNetTransform: clone(st.netTransform),
@@ -57,7 +57,7 @@ function stateFromSnapshot(snap, gridNodesBase, gridNodesOfLayer) {
         additionalLayers: snap.layers.map((l, i) => ({
             connections: clone(l.connections), redoStack: clone(l.redoStack), nodes: gridNodesOfLayer[i].concat(l.freeNodes.map(n => ({ id: n.id, x: n.x, y: n.y, free: true }))),
             faceAssignments: storeOf(l.faceAssignments), facePalette: paletteOf(l.facePalette), faceAnchor: clone(l.faceAnchor), lastHarmonyType: l.lastHarmonyType,
-            lastSelection: clone(l.lastSelection), distributionStrategy: l.distributionStrategy, shape: l.shape, symmetryMode: l.symmetryMode, nodeCount: l.nodeCount,
+            lastSelection: clone(l.lastSelection), distributionStrategy: l.distributionStrategy, shape: l.shape, symmetryMode: l.symmetryMode, gridSpec: l.grid,
             shapeSizeFactor: l.shapeSizeFactor, offsetX: l.offsetX, offsetY: l.offsetY, rotation: l.rotation, enabled: l.enabled, showFaces: l.showFaces,
             isTimelinePlayback: l.isTimelinePlayback, _timelineSavedEnabled: l.timelineSavedEnabled === null ? undefined : l.timelineSavedEnabled,
         })),
@@ -100,11 +100,12 @@ const paintedColors = (sh, conns, nodes, store) => sh.sb.computeCellFaces(conns,
 // ---- 1. constants, fingerprint, grid node ids -------------------------------------------------------------------------
 console.log('== 1. constants, node fingerprint, grid-node ids ==');
 {
-    check('schema 1, trail-key scheme 1, cap 2 MB, key wof:session', K('SESSION_SCHEMA_VERSION') === 1 && K('SESSION_TRAIL_KEY_VERSION') === 1 && K('SESSION_MAX_CHARS') === 2 * 1024 * 1024 && K('SESSION_STORAGE_KEY') === 'wof:session');
+    check('schema 2 (task 062), trail-key scheme 1, cap 2 MB, key wof:session', K('SESSION_SCHEMA_VERSION') === 2 && K('SESSION_TRAIL_KEY_VERSION') === 1 && K('SESSION_MAX_CHARS') === 2 * 1024 * 1024 && K('SESSION_STORAGE_KEY') === 'wof:session');
     const g = probe.grid.nodes;
     const f1 = S.sessionNodeFingerprint(g), f2 = S.sessionNodeFingerprint(g.map(n => Object.assign({}, n)));
     check('fingerprint is stable and counts the grid nodes', same(f1, f2) && f1.count === g.length && /^[0-9a-f]{8}$/.test(f1.hash));
-    check('free endpoint nodes do not change the fingerprint', same(f1, S.sessionNodeFingerprint(g.concat([{ id: g.length + 1, x: 12.5, y: 7, free: true }]))));
+    const withFree = g.concat([{ id: g.length + 1, x: 12.5, y: 7, free: true }]);
+    check('free endpoint nodes do not change the GRID fingerprint, but they do change the sheet fingerprint (schema 2: id and position of each free endpoint are hashed; the count stays the grid count)', same(S.sessionGridFingerprint(g), S.sessionGridFingerprint(withFree)) && !same(f1, S.sessionNodeFingerprint(withFree)) && S.sessionNodeFingerprint(withFree).count === f1.count);
     const moved = g.map(n => Object.assign({}, n)); moved[3].x += 0.5;
     check('a grid node moved by half a pixel changes it', S.sessionNodeFingerprint(moved).hash !== f1.hash);
     const reid = g.map(n => Object.assign({}, n)); const t = reid[1].id; reid[1].id = reid[2].id; reid[2].id = t;
@@ -220,7 +221,7 @@ console.log('\n== 5. versions and size ==');
 {
     const base = clone(layered.snap);
     const code = mut => { const o = clone(base); mut(o); return S.validateSession(o); };
-    for (const v of [0, 2, '1', null, undefined]) check(`schema ${J(v)} is rejected as schema-version`, (r => !r.ok && r.code === 'schema-version')(code(o => { if (v === undefined) delete o.schema; else o.schema = v; })));
+    for (const v of [0, 1, '2', null, undefined]) check(`schema ${J(v)} is rejected as schema-version`, (r => !r.ok && r.code === 'schema-version')(code(o => { if (v === undefined) delete o.schema; else o.schema = v; })));
     for (const v of [0, 2, '1', null, undefined]) check(`trailKeys ${J(v)} is rejected as trail-key-version`, (r => !r.ok && r.code === 'trail-key-version')(code(o => { if (v === undefined) delete o.trailKeys; else o.trailKeys = v; })));
     // 50,000 assignments is the per-sheet maximum; a dozen sheets of them exceeds 2 MB
     const big = clone(base); const entry = [0, { hue: 1, w: 0.1, s: 0.1, rule: 'farborgel', params: { source: 'farborgel', memberIndex: 0, cardinality: 3, strategy: 'cyclic' }, displayColor: [1, 2, 3] }];
@@ -254,8 +255,8 @@ console.log('\n== 6. targeted rejections ==');
     bad('an unknown strategy', o => { o.base.distributionStrategy = 'hierarchy'; });
     bad('an anchor hue of 25', o => { o.base.faceAnchor.hueIndex = 25; });
     bad('an unknown shape', o => { o.settings.shape = 'pentagon'; });
-    bad('a hex node count above the UI ceiling', o => { o.settings.shape = 'hex'; o.settings.nodeCount = 9; });
-    bad('a layer with a node count above its shape ceiling', o => { o.layers[0].shape = 'triangle'; o.layers[0].nodeCount = 11; });
+    bad('a hex node count above the UI ceiling', o => { o.settings.shape = 'hex'; o.settings.grid = { shape: 'hex', ordnung: 9, lage: 1 }; });
+    bad('a layer with a node count above its shape ceiling', o => { o.layers[0].shape = 'triangle'; o.layers[0].grid = { shape: 'triangle', ordnung: 10, lage: 1 }; });
     bad('an unknown curve kind', o => { o.settings.curveType.kind = 'wavy'; });
     bad('a non-boolean showNodes', o => { o.settings.showNodes = 1; });
     bad('altNetSeed with an impossible polygon', o => { o.settings.altNetSeed.n = 5; });
