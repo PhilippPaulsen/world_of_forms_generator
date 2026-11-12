@@ -11,6 +11,7 @@ const h = (x) => crypto.createHash('sha256').update(typeof x === 'string' ? x : 
 const J = JSON.stringify;
 const out = {};
 const NET = { x: { kind: 'trig', w: -1 }, y: 'same', repeat: false };
+const NET_MACRO = { x: { kind: 'trig', w: -1 }, y: 'same', repeat: false, macro: 2 };   // E matters here: macro 2 divides E = 4 (order 5), and is the default at E = 2 (order 3)
 const LAYERS_JS = 'JSON.stringify(additionalLayers.map(l => [l.shape, l.nodeCount, l.shapeSizeFactor, l.symmetryMode, l.nodes, l.centroid, l.outerCorners]))';
 function record(w) {
     const rec = {};
@@ -41,13 +42,13 @@ for (const [shape, lshape, lc] of [['hex', 'hex', 2], ['hex', 'triangle', 3], ['
 }
 const CONNS = { square: [[1, 5], [2, 8], [3, 7]], triangle: [[1, 5], [2, 6], [3, 4]], hex: [[1, 10], [3, 14], [5, 20]] };
 const ALT = { square: [[1, 9], [2, 6], [4, 8]], triangle: [[1, 6], [2, 5], [3, 5]], hex: [[2, 11], [4, 15], [6, 21]] };
-for (const shape of ['square', 'triangle', 'hex']) for (const net of [false, true]) for (const kfOrder of [3, 4]) for (const mode of ['linear', 'radial']) {
-    if (net && shape !== 'square') continue;
-    const key = ['morph', shape, net ? 'net' : 'nonet', kfOrder, mode].join('/');
+for (const shape of ['square', 'triangle', 'hex']) for (const net of ['none', 'net', 'macro']) for (const kfOrder of [3, 5]) for (const mode of ['linear', 'radial']) {
+    if (net !== 'none' && shape !== 'square') continue;
+    const key = ['morph', shape, net === 'none' ? 'nonet' : net, kfOrder, mode].join('/');
     try {
         const w = H.makeRenderWorld(shape, 3, 3, 'none');
         w.baseConnections(CONNS[shape]);
-        w.set(`baseNetTransform = ${J(net ? NET : null)};`);
+        w.set(`baseNetTransform = ${J(net === 'net' ? NET : net === 'macro' ? NET_MACRO : null)};`);
         const a = w.addKeyframeLayer(CONNS[shape], { order: kfOrder }), b = w.addKeyframeLayer(ALT[shape], { order: kfOrder });
         w.setTimeline([a, b]);
         w.setMorph({ enabled: true, mode, angleDeg: mode === 'linear' ? 135 : 0 });
