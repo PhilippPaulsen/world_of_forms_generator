@@ -529,6 +529,27 @@ function baseGridDivisions() {
     return getGridDivisions(fromLegacy(currentShape, nodeCount));
 }
 
+// Task 061 (G5b): every additional layer carries its OWN GridSpec (layer.gridSpec); layer.nodeCount is its derived legacy projection.
+// projectLayerGridSpec is the ONLY write of layer.nodeCount (as core/state.js projectGridSpec is for the base): it validates first
+// (lage 2 stays locked: no allowLage2) and refuses a spec of another shape than layer.shape (shape and spec never drift).
+function projectLayerGridSpec(layer, spec) {
+    const c = toLegacy(spec);
+    if (spec.shape !== layer.shape) throw new Error('projectLayerGridSpec: spec shape ' + spec.shape + ' differs from layer.shape ' + layer.shape);
+    layer.gridSpec = spec;
+    layer.nodeCount = c;
+}
+// The spec of a layer: its own gridSpec, or - for a layer object built without one (test fixtures, an old object) - the one its shape and
+// legacy count give. Read only.
+function layerGridSpecOf(layer) {
+    return layer.gridSpec || fromLegacy(layer.shape, layer.nodeCount);
+}
+// Whether a layer's grid TYPE is the base's: same shape and same lage (neither size, offset, rotation nor ordnung: a layer of another
+// ordnung may still share the base lattice, see core/facecolor.js layerGridMatchesBase, which this does not replace). allowLage2 specs
+// are distinguished too, although lage 2 cannot be set yet.
+function layerSpecMatchesBase(layerSpec, baseSpec) {
+    return layerSpec.shape === baseSpec.shape && layerSpec.lage === baseSpec.lage;
+}
+
 // view = {sizeFactor, canvasW, canvasH, center?}. -> { grid: {shape, ordnung, lage}, nodes, centroid, outerCorners }.
 // opts.numbered (task 059): every node also carries u, v and its semantic node number zahl (numberGridNodes), for lage 1 as well as lage 2.
 // Lage 1: exactly the output of the three builders (no extra fields). Lage 2 (only with opts.allowLage2): the lage-1 nodes
