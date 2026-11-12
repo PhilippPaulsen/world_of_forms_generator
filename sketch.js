@@ -88,52 +88,76 @@ function isWellFormedCatalogPattern(shape, order, symmetryMode, orbitIds) {
     return true;
 }
 
-function parseCatalogUrlParams(search) {
-    const params = new URLSearchParams(search);
-    const shape = params.get('shape');
-    const orderRaw = params.get('order');
-    const symmetryModeParam = params.get('symmetryMode');
-    const orbitIdsRaw = params.get('orbitIds');
-    if (!shape || !orderRaw || !symmetryModeParam || !orbitIdsRaw) return null;
-
-    const order = parseInt(orderRaw, 10);
-    const orbitIds = orbitIdsRaw.split(',').map(s => parseInt(s, 10));
-    if (!isWellFormedCatalogPattern(shape, order, symmetryModeParam, orbitIds)) return null;
-
-    // Roadmap: catalog -> NEW LAYER back-link extension. 'new' is
-    // currently the only recognized value - a numeric layer INDEX would
-    // have no meaningful referent on a fresh page load (the generator
-    // always starts with zero additional layers; there is no
-    // pre-existing session for a URL to target by index - see the
-    // design session). Present-but-not-'new' is reported (not silently
-    // ignored) and treated as absent, so a typo'd layer= value degrades
-    // to the ordinary base-sheet link rather than doing something
-    // unexpected, and doesn't invalidate the rest of an otherwise-valid
-    // link the way a malformed shape/order/symmetryMode/orbitIds does.
-    const layerRaw = params.get('layer');
-    let layer = null;
-    if (layerRaw === 'new') {
-        layer = 'new';
-    } else if (layerRaw !== null) {
-        console.warn(`Unrecognized layer= value "${layerRaw}" in catalog URL - ignoring, loading as the base pattern instead.`);
-    }
-
-    return { shape, order, symmetryMode: symmetryModeParam, orbitIds, layer };
+// ---- Task 063 (G6b): the pattern transport v2 (URL and paste) -------------------------------------------------------------------------------------
+// v2 URL:   ?v=2&shape=&ordnung=&lage=&group=&lines=65a,12.11a,...[&layer=new]       v2 paste: {"version":2,"grid":{shape,ordnung,lage},"group","lines":[tokens]}
+// The v2 path is STRICT (core/orbits.js parseTransportV2): the version must be 2, all tokens are checked against the grid's line table BEFORE anything is
+// touched (nothing here mutates; the callers mutate only after a pattern came back), the tokens are sorted numerically, duplicates kept, lage 2 stays locked,
+// an old-format field (orbitIds, order, symmetryMode) in a v2 input is refused. A refused input sets catalogTransportRejection = { code, detail } (code 'version'
+// or 'invalid'); the callers say it (note.catalog.* in ui-i18n.js) and fall back exactly as for any malformed link.
+let catalogTransportRejection = null;
+function catalogRejectionText(rej) {
+    const fallback = rej.code === 'version' ? 'This link or pattern was made for another version of the generator and cannot be loaded.' : 'This link or pattern is not valid for the current grid and cannot be loaded.';
+    return window.UI && UI.t ? (rej.code === 'version' ? UI.t('note.catalog.version') : UI.t('note.catalog.invalid')) : fallback;
 }
 
-// Roadmap: catalog -> clipboard "Paste Pattern" action. Parses+validates
-// a clipboard payload written by gallery.js's "Copy pattern" button
-// (JSON.stringify({shape, order, symmetryMode, orbitIds})) via the SAME
-// syntactic validation as the URL path (isWellFormedCatalogPattern()
-// above) - clipboard content is exactly as untrusted as a hand-edited
-// URL (stale, hand-edited, or from something else entirely; JSON.parse
-// itself can hand back any type for shape/order/symmetryMode/orbitIds,
-// not necessarily the right ones). Never throws, returns null for
-// anything that doesn't clearly describe a real pattern - same "no
-// partial/best-guess object" convention as parseCatalogUrlParams().
-// Always targets a NEW layer (no base-sheet equivalent, no `layer`
-// field to parse) - see this action's own design session point 3.
+// legacyCatalogReader: TRANSITIONAL DEBT until G7 (task 063, decision B). The Formorgel (gallery.js) still writes the OLD format (?shape&order&symmetryMode&orbitIds,
+// paste JSON {shape, order, symmetryMode, orbitIds}); this isolated block reads ONLY that, through the old resolution (orbit table). It never writes the old format and
+// it refuses everything that carries a v2 marker (a v parameter, a version field): a broken v2 input is never "rescued" by it. G7 removes it and reverses its pin.
+function legacyCatalogReader(source) {
+    if (source.params) {
+        const params = source.params;
+        if (params.has('v')) return null;
+        const shape = params.get('shape');
+        const orderRaw = params.get('order');
+        const symmetryModeParam = params.get('symmetryMode');
+        const orbitIdsRaw = params.get('orbitIds');
+        if (!shape || !orderRaw || !symmetryModeParam || !orbitIdsRaw) return null;
+        const order = parseInt(orderRaw, 10);
+        const orbitIds = orbitIdsRaw.split(',').map(s => parseInt(s, 10));
+        if (!isWellFormedCatalogPattern(shape, order, symmetryModeParam, orbitIds)) return null;
+        // 'new' is the only recognized layer= value; present-but-not-'new' is reported and treated as absent (the rest of a valid link stays valid)
+        const layerRaw = params.get('layer');
+        let layer = null;
+        if (layerRaw === 'new') {
+            layer = 'new';
+        } else if (layerRaw !== null) {
+            console.warn(`Unrecognized layer= value "${layerRaw}" in catalog URL - ignoring, loading as the base pattern instead.`);
+        }
+        return { shape, order, symmetryMode: symmetryModeParam, orbitIds, layer };
+    }
+    const obj = source.obj;
+    if (!obj || typeof obj !== 'object' || obj.version !== undefined) return null;
+    const { shape, order, symmetryMode, orbitIds } = obj;
+    if (!isWellFormedCatalogPattern(shape, order, symmetryMode, orbitIds)) return null;
+    return { shape, order, symmetryMode, orbitIds };
+}
+
+function parseCatalogUrlV2(params) {
+    const reject = (code, detail) => { catalogTransportRejection = { code, detail }; return null; };
+    if (params.get('v') !== '2') return reject('version', 'v=' + String(params.get('v')).slice(0, 20));
+    for (const k of ['orbitIds', 'order', 'symmetryMode']) if (params.has(k)) return reject('invalid', k + ' belongs to the old format');
+    const ordnungRaw = params.get('ordnung'), lageRaw = params.get('lage'), linesRaw = params.get('lines');
+    if (!/^[1-9]\d{0,2}$/.test(ordnungRaw || '') || lageRaw !== '1' || !linesRaw) return reject('invalid', 'ordnung, lage or lines missing or malformed');
+    const r = parseTransportV2({ shape: params.get('shape'), ordnung: parseInt(ordnungRaw, 10), lage: 1, group: params.get('group'), lines: linesRaw.split(',') });
+    if (!r.ok) return reject(r.code, r.detail);
+    const layerRaw = params.get('layer');
+    let layer = null;
+    if (layerRaw === 'new') layer = 'new';
+    else if (layerRaw !== null) console.warn(`Unrecognized layer= value "${layerRaw}" in catalog URL - ignoring, loading as the base pattern instead.`);
+    return Object.assign({}, r.pattern, { layer });
+}
+
+function parseCatalogUrlParams(search) {
+    catalogTransportRejection = null;
+    const params = new URLSearchParams(search);
+    if (!params.has('v')) return legacyCatalogReader({ params });
+    return parseCatalogUrlV2(params);
+}
+
+// The clipboard payload (the catalog's "Copy pattern" writes the OLD format until G7, the v2 writers are core/orbits.js formatTransportPasteV2): never throws, null for
+// anything that does not clearly describe a real pattern. Always targets a NEW layer (no `layer` field).
 function parseClipboardCatalogPattern(text) {
+    catalogTransportRejection = null;
     let obj;
     try {
         obj = JSON.parse(text);
@@ -141,9 +165,15 @@ function parseClipboardCatalogPattern(text) {
         return null;
     }
     if (!obj || typeof obj !== 'object') return null;
-    const { shape, order, symmetryMode, orbitIds } = obj;
-    if (!isWellFormedCatalogPattern(shape, order, symmetryMode, orbitIds)) return null;
-    return { shape, order, symmetryMode, orbitIds };
+    if (obj.version === undefined) return legacyCatalogReader({ obj });
+    const reject = (code, detail) => { catalogTransportRejection = { code, detail }; return null; };
+    if (obj.version !== 2) return reject('version', 'version ' + JSON.stringify(obj.version).slice(0, 20));
+    if (Object.keys(obj).some(k => !['version', 'grid', 'group', 'lines'].includes(k))) return reject('invalid', 'unknown field in a v2 pattern (an old-format field?)');
+    const g = obj.grid;
+    if (!g || typeof g !== 'object' || Object.keys(g).some(k => !['shape', 'ordnung', 'lage'].includes(k))) return reject('invalid', 'grid must be {shape, ordnung, lage}');
+    const r = parseTransportV2({ shape: g.shape, ordnung: g.ordnung, lage: g.lage, group: obj.group, lines: obj.lines });
+    if (!r.ok) return reject(r.code, r.detail);
+    return r.pattern;
 }
 
 // Semantic validation + reconstruction (the second layer above) - only
@@ -168,6 +198,7 @@ function parseClipboardCatalogPattern(text) {
 // via console.warn, not a new UI element (deliberately - expected to be
 // rare enough that dedicated in-page chrome isn't warranted yet).
 function resolveCatalogPatternConnections(pattern, gridOverride, shapeOverride) {
+    if (pattern.v2) return transportConnectionsV2(pattern);   // task 063: the line keys, resolved in the grid's own lattice table
     const table = computeThemeLineOrbitTable(pattern.symmetryMode, gridOverride, shapeOverride);
     return pattern.orbitIds.map(id => {
         if (!table.orbits[id]) {
@@ -339,6 +370,7 @@ function setup() {
     // actually-loaded grid). symmetryMode itself is applied further
     // below, once modeBtns/foldBtns exist.
     const catalogUrlPattern = parseCatalogUrlParams(location.search);
+    if (catalogTransportRejection) { console.warn(`Catalog link not loaded (${catalogTransportRejection.code}: ${catalogTransportRejection.detail})`); say('catalog', catalogRejectionText(catalogTransportRejection), 'warn'); }
     if (catalogUrlPattern) {
         currentShape = catalogUrlPattern.shape;
         projectGridSpec(fromLegacy(currentShape, catalogUrlPattern.order));
@@ -1706,7 +1738,7 @@ function setup() {
                 }
                 const pattern = parseClipboardCatalogPattern(text);
                 if (!pattern) {
-                    say('paste', 'Clipboard does not contain a valid copied pattern.', 'error');
+                    say('paste', catalogTransportRejection ? catalogRejectionText(catalogTransportRejection) : 'Clipboard does not contain a valid copied pattern.', 'error');
                     return;
                 }
                 if (applyCatalogPatternToNewLayer(pattern)) {
