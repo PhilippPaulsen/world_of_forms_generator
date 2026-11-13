@@ -38,8 +38,8 @@ else {
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys): export, session, SVG, grids, lines, morph frames unchanged', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/*.js except orbits.js, tools/morph/off-path-golden.json and ui-phone-config.js are unchanged (export, session, catalog, faces, tiling, facecolor, forms, state)', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'orbits.js' && f !== 'export.js' && f !== 'glossary.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
-    const strip = s => s.replace(/\/\/ The grid code of the v2 name[\s\S]*?\n\}\n/, '').replace(/\/\/ Task 071: the name as the page DISPLAYS it[\s\S]*?\n\}\n/, '');
+    check('(1) core/*.js except orbits.js, tools/morph/off-path-golden.json and ui-phone-config.js are unchanged (export, session, catalog, faces, tiling, facecolor, forms, state)', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'orbits.js' && f !== 'symmetry.js' && f !== 'glossary.js' && f !== 'export.js' && f !== 'glossary.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
+    const strip = s => s.replace(/\/\/ The grid code of the v2 name[\s\S]*?\n\}\n/, '').replace(/\/\/ Task 071: the name as the page DISPLAYS it[\s\S]*?\n\}\n/, '').replace(/\/\/ Task 072c: the name of a pattern in the mode[\s\S]*?\n\}\n/, '').replace(', _pts: new Map(list.map((nd, i) => [nd.id, pts[i]]))', '');
     check('(1) core/orbits.js only gained gridCodeFor and gridDisplayNameFor (every other line equal to the old file); the old name functions are all still there (pairToOrbitId is a local of computeThemeLineOrbits)', strip(read('core/orbits.js')) === fs.readFileSync(path.join(oldDir, 'core/orbits.js'), 'utf8') && ['computeThemeLineName', 'formatThemeLineName', 'computeThemeLineOrbitTable', 'computeThemeLineOrbits'].every(n => new RegExp('function ' + n + '\\(').test(read('core/orbits.js'))));
 }
 const P5 = ['fill', 'noFill', 'beginShape', 'vertex', 'endShape', 'push', 'pop', 'noStroke', 'stroke', 'strokeWeight', 'ellipse', 'rect', 'translate', 'rotate', 'scale', 'textSize', 'text', 'textAlign', 'background', 'clear'];
@@ -103,10 +103,10 @@ const normalize = d => d.replace(/\u0304/g, '~').replace(/([A-Z])/g, c => '').re
     check('(3) main group (rotation_reflection6 on the square) with lines: the name field shows the v2 display name (' + v2 + '), a tooltip is set, the info line has the same grid code', r.text === v2 && /^4q1\/4\* /.test(r.text) && typeof r.tip === 'string' && r.tip.startsWith('4q1: Ordnung 4, Quadrat, Lage 1, Hauptgruppe 4*, 25 Knoten') && r.info === 'Gitter: 4q1 · Knoten: 25', J(r));
     check('(3) the tooltip names every distinct line: token, node numbers, letter and sectors; the bar and the capital where they apply', (() => { const tk = w.get('gridDisplayNameFor(baseGridSpecNow(), connections, symmetryMode).tokens'); return tk.every(t => r.tip.includes(t.display + ': Knotennummer ' + t.key.z1 + ', ' + t.key.z2 + '; Buchstabe ' + t.key.buchstabe)) && tk.every(t => (!!t.key.gegen) === r.tip.split('\n').find(l => l.startsWith(t.display)).includes('Überstrich: ')); })(), r.tip);
     // reduced symmetry: the old name, no tooltip
-    const old = w.get(`computeThemeLineName(connections, 'rotation3', undefined, undefined)`);
-    w.set("symmetryMode = 'rotation3';");
+    const old = w.get(`computeThemeLineName(connections, 'reflection_only', undefined, undefined)`);
+    w.set("symmetryMode = 'reflection_only';");
     r = show();
-    check('(3) "nur Drehung" (rotation3): the old name unchanged (computeThemeLineName), NO tooltip', r.text === w.get("computeThemeLineName(connections, undefined, undefined, undefined)") && !/^\d+[dq*][12]\//.test(r.text) && r.tip === undefined, J(r));
+    check('(3) one mirror only (reflection_only; "nur Drehung" has had its own name since task 072c): the old name unchanged (computeThemeLineName), NO tooltip', r.text === w.get("computeThemeLineName(connections, undefined, undefined, undefined)") && !/^\d+[dq*][12]\//.test(r.text) && r.tip === undefined, J(r));
     w.set("symmetryMode = 'rotation_reflection6';"); show();
     // free endpoint
     w.set('nodes.push({ id: nodes.length + 1, x: 41.5, y: 99.5, free: true }); connections.push([1, nodes.length]);');
@@ -123,7 +123,7 @@ const normalize = d => d.replace(/\u0304/g, '~').replace(/([A-Z])/g, c => '').re
     w.set("currentShape = 'hex'; setGrid({ shape: 'hex', ordnung: 3, lage: 1 }); connections = [[1, 2]];"); names.push(show().text);
     check('(4) the cached name follows a new line, the ordnung, the lage and the shape (5 different names: ' + names.join(' | ') + ')', new Set(names).size === 5 && /^4q1/.test(names[0]) && /^4q1/.test(names[1]) && /^5q1/.test(names[2]) && /^4q2/.test(names[3]) && /^3\*1/.test(names[4]), J(names));
     w.set("currentShape = 'square'; setGrid({ shape: 'square', ordnung: 4, lage: 1 }); connections = " + J(reps.slice(10, 12)) + "; symmetryMode = 'rotation_reflection6';");
-    const a = show().text; w.set("symmetryMode = 'rotation3';"); const b = show().text; w.set("symmetryMode = 'rotation_reflection6';"); const c = show().text;
+    const a = show().text; w.set("symmetryMode = 'reflection_only';"); const b = show().text; w.set("symmetryMode = 'rotation_reflection6';"); const c = show().text;
     check('(4) the symmetry mode: v2 -> old name -> v2 again (the signature carries the mode)', a !== b && a === c && /^4q1\/4\*/.test(a) && !/^\d+[dq*][12]\//.test(b), J([a, b, c]));
     // the lage alone (a session restore uses projectGridSpec: gridRevision is NOT bumped): the signature itself must carry it
     w.set("(function () { const spec = { shape: 'square', ordnung: 4, lage: 2 }; projectGridSpec(spec); nodes = buildGrid(spec, { sizeFactor: shapeSizeFactor, canvasW, canvasH }).nodes; })();");
@@ -155,7 +155,7 @@ const normalize = d => d.replace(/\u0304/g, '~').replace(/([A-Z])/g, c => '').re
     check('(5) the budget: the first v2 call (the table of a hex 12 grid, once) under 1 s, every repeated call under 5 ms; the display is computed only when the signature changes (cache block of updatePatternNameStatus)', first < 1000 && rep < 5 && /if \(sig !== patternNameCacheSignature\) \{[\s\S]*?gridDisplayNameFor\([\s\S]*?patternNameCacheSignature = sig;/.test(SK), `${first} / ${rep}`);
 }
 
-check('(5) style.css: #pattern-name-status may break anywhere (overflow-wrap: anywhere): a long v2 name does not run out of the narrow phone card', /#pattern-name-status \{ overflow-wrap: anywhere; \}/.test(read('style.css')));
+check('(5) style.css: #pattern-name-status may break anywhere (overflow-wrap: anywhere): a long v2 name does not run out of the narrow phone card', /#pattern-name-status \{ overflow-wrap: anywhere; white-space: pre-line; \}/.test(read('style.css')));
 
 console.log(`${pass}/${pass + fail} checks passed`);
 process.exit(fail ? 1 : 0);

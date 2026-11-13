@@ -38,7 +38,7 @@ else {
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys; the export is compared without the new field "glossary")', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/*.js except export.js and the new glossary.js, core/faces, tiling, facecolor, orbits, state, session, forms, catalog and tools/morph/off-path-golden.json are unchanged', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'export.js' && f !== 'glossary.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && !fs.existsSync(path.join(oldDir, 'core/glossary.js')));
+    check('(1) core/*.js except export.js and the new glossary.js, core/faces, tiling, facecolor, orbits, state, session, forms, catalog and tools/morph/off-path-golden.json are unchanged', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'export.js' && f !== 'glossary.js' && f !== 'symmetry.js' && f !== 'orbits.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && !fs.existsSync(path.join(oldDir, 'core/glossary.js')));
 }
 const P5 = ['fill', 'noFill', 'beginShape', 'vertex', 'endShape', 'push', 'pop', 'noStroke', 'stroke', 'strokeWeight', 'ellipse', 'rect', 'translate', 'rotate', 'scale', 'textSize', 'text', 'textAlign', 'background', 'clear'];
 function world(shape, spec, mode, ui) {
@@ -54,7 +54,7 @@ function world(shape, spec, mode, ui) {
 // ---- 2. the glossary --------------------------------------------------------------------------------------------------------------------------------
 {
     const ids = G.GLOSSARY.map(e => e.id);
-    check('(2) 14 entries: order, position, maingroup, formsign, nodes, nodenumber, family, letter, sector, bar, lower, mirror, both, nameform', J(ids) === J(['order', 'position', 'maingroup', 'formsign', 'nodes', 'nodenumber', 'family', 'letter', 'sector', 'bar', 'lower', 'mirror', 'both', 'nameform']));
+    check('(2) 17 entries: order, position, maingroup, formsign, nodes, nodenumber, family, letter, sector, bar, lower, mirror, both, nameform, then (task 072c) direction, law1c, sourceform', J(ids) === J(['order', 'position', 'maingroup', 'formsign', 'nodes', 'nodenumber', 'family', 'letter', 'sector', 'bar', 'lower', 'mirror', 'both', 'nameform', 'direction', 'law1c', 'sourceform']));
     const missing = [];
     for (const e of G.GLOSSARY) for (const k of [e.termKey, e.textKey]) { const d = dict[k]; if (!d || !d.de || !d.en) missing.push(k); }
     check('(2) every entry has its term and its explanation in German AND English (non-empty), in ui-i18n.js DICT; the entry holds only the two keys (no text of its own)', missing.length === 0 && G.GLOSSARY.every(e => J(Object.keys(e).sort()) === J(['id', 'termKey', 'textKey'])), missing.join(','));
@@ -96,8 +96,8 @@ function world(shape, spec, mode, ui) {
     const card = html.slice(html.indexOf('id="info-card"'), html.indexOf('id="ui-notices"'));
     const m = /<details class="info-section" id="info-glossary">([\s\S]*?)<\/details>/.exec(card);
     check('(4) the section "Begriffe": a <details class="info-section" id="info-glossary"> without `open` (closed by default), before Netz and Zeitleiste, the summary has the key info.glossary.title', !!m && !/<details[^>]*\bopen\b/.test(card) && card.indexOf('id="info-glossary"') < card.indexOf('id="info-net"') && /<summary data-i18n="info\.glossary\.title">Begriffe<\/summary>/.test(card));
-    const spans = m ? [...m[1].matchAll(/<p><span data-i18n="(glossary\.[a-z]+)\.term">([^<]*)<\/span>: <span data-i18n="(glossary\.[a-z]+)">([^<]*)<\/span><\/p>/g)] : [];
-    check('(4) one plain line per glossary id, in the order of the glossary, term and explanation with their keys; the German markup text equals the dictionary', spans.length === 14 && spans.every((s, i) => s[1] === G.GLOSSARY[i].textKey && s[3] === G.GLOSSARY[i].textKey && s[2].replace(/&amp;/g, '&') === dict[G.GLOSSARY[i].termKey].de && s[4].replace(/&amp;/g, '&') === dict[G.GLOSSARY[i].textKey].de), String(spans.length));
+    const spans = m ? [...m[1].matchAll(/<p><span data-i18n="(glossary\.[a-z0-9]+)\.term">([^<]*)<\/span>: <span data-i18n="(glossary\.[a-z0-9]+)">([^<]*)<\/span><\/p>/g)] : [];
+    check('(4) one plain line per glossary id, in the order of the glossary, term and explanation with their keys; the German markup text equals the dictionary', spans.length === 17 && spans.every((s, i) => s[1] === G.GLOSSARY[i].textKey && s[3] === G.GLOSSARY[i].textKey && s[2].replace(/&amp;/g, '&') === dict[G.GLOSSARY[i].termKey].de && s[4].replace(/&amp;/g, '&') === dict[G.GLOSSARY[i].textKey].de), String(spans.length));
     check('(4) #info-lage is gone (markup) and the key info.lage with it', !/info-lage/.test(html) && !dict['info.lage'] && !/info\.lage/.test(read('ui-i18n.js')));
     const rule = /#pattern-name-group \{ align-items: flex-start; text-align: left; \}\n#pattern-name-group #pattern-name-status, #pattern-name-group #grid-info-status \{ font-size: var\(--size-secondary\); font-weight: var\(--weight-regular\); color: var\(--color-text\); opacity: 1; text-align: left; font-variant-numeric: tabular-nums; \}/.test(css);
     check('(4) the name and grid block is quiet: left-aligned, ONE size (--size-secondary), ONE weight (regular), ONE colour (--color-text, no opacity), the same rule for both lines; it beats the old centred, muted rule of index.html by its id selectors', rule && /#pattern-name-status \{[^}]*text-align: center/.test(html) && !/#grid-info-status \{[^}]*(font-size|color|opacity)/.test(css.replace(/#pattern-name-group #grid-info-status[^{]*\{[^}]*\}/, '')));

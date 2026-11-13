@@ -640,7 +640,7 @@ function computeLineKeyTable(nodes, grid, opts) {
     entries.sort((a, b) => compareLineKeys(a.key, b.key));
     const byToken = new Map(), collisions = [], pairIndex = new Map();
     entries.forEach((e, k) => { if (byToken.has(e.token)) collisions.push(e.token); else byToken.set(e.token, e); e.index = k; e.pairs.forEach(([a, b]) => pairIndex.set((a < b ? a + ',' + b : b + ',' + a), e)); });
-    return { grid: { shape: grid.shape, ordnung: grid.ordnung, lage: grid.lage }, group: spec.name, entries, byToken, collisions, pairCount: N * (N - 1) / 2, _pairIndex: pairIndex, _zahl: new Map(list.map(nd => [nd.id, nd.zahl])) };
+    return { grid: { shape: grid.shape, ordnung: grid.ordnung, lage: grid.lage }, group: spec.name, entries, byToken, collisions, pairCount: N * (N - 1) / 2, _pairIndex: pairIndex, _zahl: new Map(list.map(nd => [nd.id, nd.zahl])), _pts: new Map(list.map((nd, i) => [nd.id, pts[i]])) };
 }
 // the key of the line between node ids a and b (ids of the table's nodes), or null (free end, unknown id, a = b)
 function lineKeyForPair(table, idA, idB, opts) {
@@ -727,6 +727,54 @@ function gridDisplayNameFor(spec, connections, symmetryMode) {
         });
         const head = ascii.slice(0, ascii.indexOf(' ')), slash = head.indexOf('/');
         return { ascii, display: head + ' ' + tokens.map(t => t.display).join('+'), grid: head.slice(0, slash), group: head.slice(slash + 1), tokens };
+    } catch (e) { return null; }
+}
+// Task 072c: the name of a pattern in the mode "nur Drehung" (the pure rotation group C3 / C4 / C6; core/symmetry.js isRotationMode), a DISPLAY value only: the export, the catalog and the session
+// keep the main-group name (gridLineKeysFor / gridDisplayNameFor are untouched; for the pure rotation they give null as before). Reports 072a / 072b.
+// Each line is a pair of nodes; its full-group key (z1, z2, letter, bar) is the family, the handedness h (symmetry.js rotationHandedness) says which of the two pure-rotation orbits of it the line is:
+//   h > 0: "z1 z2", h < 0: "z2 z1" (the digits in the direction of travel; 32a / 23a); z1 = z2 and h < 0: an underscore before the second number ("5_5i", "10._10e").
+//   aA (the source's law 1, incl. 1c: a line in a side of the net): one orbit, no handedness, capital partner after the letter - also where the geometry would give two (law1c = true on the token).
+//   ascii/display: "{grid}/{3*|4*|6*} tok+tok" (the group sign as in the full-group name), tokens in compareLineKeys order, the digits order as drawn. source: the Hinterreiter form of the same pattern,
+//   "{ordnung}{△|□|*}/ tok + tok" with the index of the rotation group after each token (₄ square, ₆ hexagon, none for the triangle); a pair of mirror-equal orbits (R and its mirror image, BOTH in the
+//   pattern) is written once as the capital letter (52A), a single one stays 52a / 25a.
+// -> { rotation: true, ascii, display, source, grid, group, tokens: [{ token, display, source, key, spiegelgleich, law1c, h, swapped, underlined }], merged } | null (not a rotation mode, no line, a free end, a non-lattice pair)
+const _LK_FORM_SIGN = { triangle: '△', square: '□', hex: '*' }, _LK_ROT_INDEX = { triangle: '', square: '₄', hex: '₆' };
+function gridRotationNameFor(spec, connections, symmetryMode) {
+    try {
+        const list = Array.isArray(connections) ? connections : [];
+        if (!spec || list.length === 0 || !isRotationMode(spec.shape, symmetryMode)) return null;
+        const table = getLineKeyTable(spec), code = gridCodeFor(spec);
+        if (!table || !code) return null;
+        const lines = [];
+        for (const c of list) {
+            if (!Array.isArray(c) || c.length !== 2) return null;
+            const key = lineKeyForPair(table, c[0], c[1]);
+            if (!key) return null;
+            const e = table.byToken.get(formatLineKey(key)), pa = table._pts.get(c[0]), pb = table._pts.get(c[1]);
+            if (!e || !pa || !pb) return null;
+            const hGeo = rotationHandedness(spec.shape, pa, pb, table._zahl.get(c[0]), table._zahl.get(c[1])), sg = !!e.spiegelgleich;
+            lines.push({ key, spiegelgleich: sg, law1c: sg && hGeo !== 0, h: sg ? 0 : hGeo });
+        }
+        if (!lines.every(l => l.spiegelgleich || l.h !== 0)) return null;   // a chiral orbit without a handedness cannot happen; refuse rather than guess
+        lines.sort((a, b) => compareLineKeys(a.key, b.key) || (b.h - a.h));
+        // mirror-equal pairs (display only): one R (h > 0) and one mR (h < 0) of the same family key become one capital
+        const left = new Map(), merged = [];
+        lines.forEach(l => { if (l.h !== 0) { const k = formatLineKey(l.key); if (!left.has(k)) left.set(k, { pos: [], neg: [] }); left.get(k)[l.h > 0 ? 'pos' : 'neg'].push(l); } });
+        left.forEach(v => { const n = Math.min(v.pos.length, v.neg.length); for (let i = 0; i < n; i++) { v.pos[i].merged = true; v.neg[i].dropped = true; merged.push(v.pos[i]); } });
+        const piece = (l, uni, merge) => {
+            const k = l.key, z = l.h < 0 && k.z1 === k.z2 ? (k.z1 >= 10 ? k.z1 + '._' + k.z2 : k.z1 + '_' + k.z2) : l.h < 0 ? lkFamilyName(k.z2, k.z1) : lkFamilyName(k.z1, k.z2);
+            const letter = l.spiegelgleich ? k.buchstabe + k.buchstabe.toUpperCase() : merge && l.merged ? k.buchstabe.toUpperCase() : k.buchstabe;
+            if (!uni) return z + letter + (k.gegen ? '~' : '');
+            const zu = z.replace(/_(\d+)$/, (m, d) => d.split('').map(ch => ch + '̲').join(''));   // the underline of the source: combining low line under the second number
+            return zu + letter + (k.gegen ? '̄' : '');
+        };
+        const tokens = lines.map(l => ({ token: piece(l, false, false), display: piece(l, true, false), source: null, key: l.key, spiegelgleich: l.spiegelgleich, law1c: l.law1c, h: l.h, swapped: l.h < 0, underlined: l.h < 0 && l.key.z1 === l.key.z2, merged: !!l.merged, dropped: !!l.dropped }));
+        const shown = tokens.filter(tk => !tk.dropped);
+        shown.forEach((tk, i) => { const l = lines[tokens.indexOf(tk)]; tk.source = piece(l, true, true) + _LK_ROT_INDEX[spec.shape]; });
+        const group = mainGroupSpec(spec.shape).name, ascii = code + '/' + group + ' ' + tokens.map(tk => tk.token).join('+');
+        const display = code + '/' + group + ' ' + tokens.map(tk => tk.display).join('+');
+        const source = spec.ordnung + _LK_FORM_SIGN[spec.shape] + '/ ' + shown.map(tk => tk.source).join(' + ');
+        return { rotation: true, ascii, display, source, grid: code, group, tokens, merged: merged.length };
     } catch (e) { return null; }
 }
 // id -> { zahl, u, v } for the lattice nodes of a grid (node numbers of forms.js numberGridNodes, lattice coordinates u, v in lattice units); null when it cannot be built.
