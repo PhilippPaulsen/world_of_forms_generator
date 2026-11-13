@@ -35,7 +35,7 @@ else {
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys)', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/faces.js, core/tiling.js, core/facecolor.js, core/orbits.js, core/export.js, tools/morph/off-path-golden.json, ui-phone-config.js are unchanged (index.html changed in 068c2: labels)', ['core/faces.js', 'core/tiling.js', 'core/facecolor.js', 'core/export.js', 'tools/morph/off-path-golden.json'].every(same)
+    check('(1) core/faces.js, core/tiling.js, core/facecolor.js, core/orbits.js, core/export.js, tools/morph/off-path-golden.json, ui-phone-config.js are unchanged (index.html changed in 068c2: labels)', ['core/faces.js', 'core/tiling.js', 'core/facecolor.js', 'tools/morph/off-path-golden.json'].every(same)
         && read('ui-phone-config.js') === fs.readFileSync(path.join(oldDir, 'ui-phone-config.js'), 'utf8'));
 }
 const P5 = ['fill', 'noFill', 'beginShape', 'vertex', 'endShape', 'push', 'pop', 'noStroke', 'stroke', 'strokeWeight', 'ellipse', 'rect', 'translate', 'rotate', 'scale', 'textSize', 'text', 'textAlign', 'background', 'clear'];

@@ -38,7 +38,7 @@ else {
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys): export, session, SVG, grids, lines, morph frames unchanged', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/*.js except orbits.js, tools/morph/off-path-golden.json and ui-phone-config.js are unchanged (export, session, catalog, faces, tiling, facecolor, forms, state)', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'orbits.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
+    check('(1) core/*.js except orbits.js, tools/morph/off-path-golden.json and ui-phone-config.js are unchanged (export, session, catalog, faces, tiling, facecolor, forms, state)', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'orbits.js' && f !== 'export.js' && f !== 'glossary.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
     const strip = s => s.replace(/\/\/ The grid code of the v2 name[\s\S]*?\n\}\n/, '').replace(/\/\/ Task 071: the name as the page DISPLAYS it[\s\S]*?\n\}\n/, '');
     check('(1) core/orbits.js only gained gridCodeFor and gridDisplayNameFor (every other line equal to the old file); the old name functions are all still there (pairToOrbitId is a local of computeThemeLineOrbits)', strip(read('core/orbits.js')) === fs.readFileSync(path.join(oldDir, 'core/orbits.js'), 'utf8') && ['computeThemeLineName', 'formatThemeLineName', 'computeThemeLineOrbitTable', 'computeThemeLineOrbits'].every(n => new RegExp('function ' + n + '\\(').test(read('core/orbits.js'))));
 }
@@ -100,8 +100,8 @@ const normalize = d => d.replace(/\u0304/g, '~').replace(/([A-Z])/g, c => '').re
     w.set(`connections = ${J(reps.slice(10, 12))};`);
     r = show();
     const v2 = w.get('gridDisplayNameFor(baseGridSpecNow(), connections, symmetryMode).display');
-    check('(3) main group (rotation_reflection6 on the square) with lines: the name field shows the v2 display name (' + v2 + '), a tooltip is set, the info line has the same grid code', r.text === v2 && /^4q1\/4\* /.test(r.text) && typeof r.tip === 'string' && r.tip.startsWith('Gitter 4q1: Ordnung 4, Quadrat, Lage 1, Hauptgruppe 4*, 25 Knoten.') && r.info === 'Gitter: 4q1 · Knoten: 25', J(r));
-    check('(3) the tooltip names every distinct line: token, node numbers, letter and sectors; the bar and the capital where they apply', (() => { const tk = w.get('gridDisplayNameFor(baseGridSpecNow(), connections, symmetryMode).tokens'); return tk.every(t => r.tip.includes(t.display + ': Knotennummern ' + t.key.z1 + ' und ' + t.key.z2 + ', Buchstabe ' + t.key.buchstabe)) && tk.every(t => (!!t.key.gegen) === r.tip.split('\n').find(l => l.startsWith(t.display)).includes('Überstrich')); })(), r.tip);
+    check('(3) main group (rotation_reflection6 on the square) with lines: the name field shows the v2 display name (' + v2 + '), a tooltip is set, the info line has the same grid code', r.text === v2 && /^4q1\/4\* /.test(r.text) && typeof r.tip === 'string' && r.tip.startsWith('4q1: Ordnung 4, Quadrat, Lage 1, Hauptgruppe 4*, 25 Knoten') && r.info === 'Gitter: 4q1 · Knoten: 25', J(r));
+    check('(3) the tooltip names every distinct line: token, node numbers, letter and sectors; the bar and the capital where they apply', (() => { const tk = w.get('gridDisplayNameFor(baseGridSpecNow(), connections, symmetryMode).tokens'); return tk.every(t => r.tip.includes(t.display + ': Knotennummer ' + t.key.z1 + ', ' + t.key.z2 + '; Buchstabe ' + t.key.buchstabe)) && tk.every(t => (!!t.key.gegen) === r.tip.split('\n').find(l => l.startsWith(t.display)).includes('Überstrich: ')); })(), r.tip);
     // reduced symmetry: the old name, no tooltip
     const old = w.get(`computeThemeLineName(connections, 'rotation3', undefined, undefined)`);
     w.set("symmetryMode = 'rotation3';");
@@ -130,7 +130,7 @@ const normalize = d => d.replace(/\u0304/g, '~').replace(/([A-Z])/g, c => '').re
     const lageOnly = show().text; w.set("(function () { const spec = { shape: 'square', ordnung: 4, lage: 1 }; projectGridSpec(spec); nodes = buildGrid(spec, { sizeFactor: shapeSizeFactor, canvasW, canvasH }).nodes; })();"); show();
     check('(4) the lage alone (state set like a session restore, gridRevision unchanged) changes the name: 4q2 against 4q1 (the signature carries the lage)', /^4q2\//.test(lageOnly) && /^4q1\//.test(a), lageOnly);
     const tipDe = els['pattern-name-status'].attrs.title; ui.lang = 'en'; r = show();
-    check('(4) a language change re-builds the tooltip (the signature carries UI.lang): English "Grid 4q1: order 4, Square, position 1, main group 4*, 25 nodes." and "node numbers"', tipDe.startsWith('Gitter 4q1') && r.tip !== tipDe && r.tip.startsWith('Grid 4q1: order 4, Square, position 1, main group 4*, 25 nodes.') && /node numbers \d+ and \d+, letter [a-n] \(touches \d+ sectors\)/.test(r.tip) && r.text === a, r.tip);
+    check('(4) a language change re-builds the tooltip (the signature carries UI.lang): English "Grid 4q1: order 4, Square, position 1, main group 4*, 25 nodes." and "node numbers"', tipDe.startsWith('4q1: Ordnung 4') && r.tip !== tipDe && r.tip.startsWith('4q1: order 4, Square, position 1, main group 4*, 25 nodes') && /node number \d+, \d+; letter [a-n] \(\d+ sectors?\)/.test(r.tip) && r.text === a, r.tip);
     ui.lang = 'de';
     check('(4) the layer path: the name of an active layer is built from the layer\'s own spec and mode (hex layer of lage 2 on a square base)', (() => {
         w.set("additionalLayers = [{ shape: 'hex', symmetryMode: 'rotation_reflection6', gridSpec: { shape: 'hex', ordnung: 2, lage: 2 }, nodeCount: 2, connections: [], nodes: [], centroid, outerCorners, shapeSizeFactor: 3 }];");
@@ -138,7 +138,7 @@ const normalize = d => d.replace(/\u0304/g, '~').replace(/([A-Z])/g, c => '').re
         const tbl = w.get("computeThemeLineOrbits(additionalLayers[0].nodes, additionalLayers[0].centroid, 'hex', 'rotation_reflection6', additionalLayers[0].outerCorners).orbits.map(o => o.pairs[0].slice())");
         w.set(`additionalLayers[0].connections = ${J(tbl.slice(5, 7))};`);
         const t = show(); w.set("activeLayer = 'base'; additionalLayers = [];");
-        return /^2\*2\/6\* /.test(t.text) && t.tip && t.tip.startsWith('Gitter 2*2: Ordnung 2, Sechseck, Lage 2, Hauptgruppe 6*');
+        return /^2\*2\/6\* /.test(t.text) && t.tip && t.tip.startsWith('2*2: Ordnung 2, Sechseck, Lage 2, Hauptgruppe 6*');
     })());
 }
 

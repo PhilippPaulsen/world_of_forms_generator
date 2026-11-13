@@ -23,6 +23,7 @@ const TL = ['info.tl.keyframes', 'info.tl.net'];
 // the lines of the longer card of commit 6b: 6c replaced them by short ones and removed these keys (and the unverified info.net.size of 6b)
 const REMOVED = ['info.net.scope', 'info.net.domain', 'info.net.focus', 'info.net.macro', 'info.net.alternate', 'info.tl.pairing', 'info.tl.remove', 'info.net.size'];
 const MAX_LEN = 140;
+const GLOSSARY_TEXTS = new Set(Object.keys(DICT).filter(k => /^(glossary\.|info\.glossary\.)/.test(k)).map(k => DICT[k].de));   // task 071b: the section "Begriffe" (the glossary terms and explanations, German)
 const ALL = ['info.net.title'].concat(NET, ['info.tl.title'], TL);
 
 const htmlNoComments = HTML.replace(/<!--[\s\S]*?-->/g, '');
@@ -34,14 +35,14 @@ T('markup', () => {
     check('#info-card exists once, is the dialog the Info button opens (aria-controls), keeps role dialog, its name key and hidden, and is overlay-wide', !!cardMatch && (htmlNoComments.match(/id="info-card"/g) || []).length === 1 && /aria-controls="info-card"/.test(htmlNoComments) && /class="overlay overlay-wide"/.test(cardMatch[1]) && /role="dialog"/.test(cardMatch[1]) && /data-i18n="info\.card"/.test(cardMatch[1]) && /\bhidden\b/.test(cardMatch[1]));
     check('the pattern-name row stays as it was (task 068c2: plus the grid line #grid-info-status): #pattern-name-group with its label and #pattern-name-status, before the sections', /<div class="control-group" id="pattern-name-group">\s*<label>Pattern Name<\/label>\s*<span id="pattern-name-status"><\/span>\s*<span id="grid-info-status"><\/span>\s*<\/div>/.test(card) && card.indexOf('pattern-name-group') < card.indexOf('<details'));
     const details = card.match(/<details\b[^>]*>/g) || [];
-    check('exactly two <details> (Netz, Zeitleiste), none open by default', details.length === 2 && details.every(d => !/\bopen\b/.test(d)) && /id="info-net"/.test(details[0]) && /id="info-tl"/.test(details[1]), details.join(' '));
+    check('exactly three <details> (Begriffe [task 071b], Netz, Zeitleiste), none open by default', details.length === 3 && details.every(d => !/\bopen\b/.test(d)) && /id="info-glossary"/.test(details[0]) && /id="info-net"/.test(details[1]) && /id="info-tl"/.test(details[2]), details.join(' '));
     const sec = id => { const m = new RegExp('<details class="info-section" id="' + id + '">([\\s\\S]*?)</details>').exec(card); return m ? m[1] : ''; };
     const parts = body => ({ summary: (/<summary data-i18n="([^"]+)">([^<]*)<\/summary>/.exec(body) || []), ps: [...body.matchAll(/<p data-i18n="([^"]+)">([^<]*)<\/p>/g)].map(m => [m[1], unesc(m[2])]), allP: (body.match(/<p\b/g) || []).length });
     const n = parts(sec('info-net')), t = parts(sec('info-tl'));
     check('Netz: the summary is info.net.title and the paragraphs are, in this order, ' + NET.join(', '), n.summary[1] === 'info.net.title' && n.ps.map(p => p[0]).join() === NET.join() && n.allP === NET.length);
     check('Zeitleiste: the summary is info.tl.title and the paragraphs are, in this order, ' + TL.join(', '), t.summary[1] === 'info.tl.title' && t.ps.map(p => p[0]).join() === TL.join() && t.allP === TL.length);
     const withKey = (card.match(/data-i18n="info\.(?:net|tl)\.[a-z]+"/g) || []).length;
-    check('every paragraph and summary of the sections carries its own key (' + ALL.length + '), and nothing in the card has text without one (no stray text outside the tags above)', withKey === ALL.length && card.replace(/<[^>]*>/g, '|').split('|').map(x => x.trim()).filter(Boolean).every(x => x === 'Pattern Name' || x === DICT['info.lage'].de || ALL.some(k => unesc(x) === DICT[k].de)));
+    check('every paragraph and summary of the sections carries its own key (' + ALL.length + '), and nothing in the card has text without one (no stray text outside the tags above)', withKey === ALL.length && card.replace(/<[^>]*>/g, '|').split('|').map(x => x.trim()).filter(Boolean).every(x => x === 'Pattern Name' || GLOSSARY_TEXTS.has(x) || x === ':' || ALL.some(k => unesc(x) === DICT[k].de)));
     const german = [n.summary.slice(1), ...n.ps, t.summary.slice(1), ...t.ps];
     check('the German of every summary and paragraph in the markup equals the dictionary German of its key (' + german.length + ')', german.length === ALL.length && german.every(([k, txt]) => DICT[k] && DICT[k].de === unesc(txt)), german.filter(([k, txt]) => !(DICT[k] && DICT[k].de === unesc(txt))).map(x => x[0]).join());
 });
