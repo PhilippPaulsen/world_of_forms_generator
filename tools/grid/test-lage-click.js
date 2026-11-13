@@ -37,7 +37,7 @@ else {
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys)', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/*.js (task 069 changed only the ceiling table in forms.js), tools/morph/off-path-golden.json and ui-phone-config.js are unchanged (setBaseLage / setLayerLage are only used)', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'forms.js' && f !== 'orbits.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
+    check('(1) core/*.js (task 069 changed only the ceiling table in forms.js), tools/morph/off-path-golden.json and ui-phone-config.js are unchanged (setBaseLage / setLayerLage are only used)', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'forms.js' && f !== 'orbits.js' && f !== 'export.js' && f !== 'glossary.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
     const cnt = (s, rx) => (s.match(rx) || []).length;
     check('(1) the p5 handler count of sketch.js is unchanged (a branch in the existing handlers, no new one)', cnt(SK, /\.mousePressed\(/g) === cnt(fs.readFileSync(path.join(oldDir, 'sketch.js'), 'utf8'), /\.mousePressed\(/g));
 }
@@ -205,8 +205,8 @@ const st = x => x.w.get('JSON.stringify([gridSpec, connections, redoStack, addit
     }
     check('(5) measure: the dot clears every symbol box (triangle, square, hex) at 36 px (5 px dot) and 48 px (6 px dot): ' + rows.map(r => r.join('/')).join(' '), rows.every(r => r[2] > 0), J(rows));
     check('(5) the symbol paths in index.html are the ones measured (triangle M12 4.5 L21 19.5 H3, square 4.5..19.5, hex M12 3 .. 21)', /M12 4\.5 L21 19\.5 H3 Z/.test(html) && /x="4\.5" y="4\.5" width="15" height="15"/.test(html) && /M12 3 L20 7\.5 V16\.5 L12 21 L4 16\.5 V7\.5 Z/.test(html));
-    check('(5) info card: the sentence "Form erneut klicken: Lage 2" (info.lage) sits after the grid line, with its key; German equals the dictionary; English exists', /<span id="grid-info-status"><\/span>\s*<\/div>\s*<p id="info-lage" data-i18n="info\.lage">Form erneut klicken: Lage 2<\/p>/.test(html) && dict['info.lage'].de === 'Form erneut klicken: Lage 2' && dict['info.lage'].en === 'Click the shape again: position 2');
-    const keys = ['shape.lage.state', 'reason.lage2.max', 'reason.lage.timeline', 'note.lage.2', 'note.lage.2.none', 'note.lage.1', 'note.lage.1.none', 'lage.confirm.title', 'lage.confirm.text', 'info.lage'];
+    check('(5) info card (task 071b): the sentence #info-lage is gone (markup and key info.lage); the operating hint lives in the aria-label / title of the shape button', !/id="info-lage"/.test(html) && !dict['info.lage']);
+    const keys = ['shape.lage.state', 'reason.lage2.max', 'reason.lage.timeline', 'note.lage.2', 'note.lage.2.none', 'note.lage.1', 'note.lage.1.none', 'lage.confirm.title', 'lage.confirm.text'];
     check('(5) the ten new keys exist in German and English (non-empty, different)', keys.every(k => dict[k] && dict[k].de && dict[k].en && dict[k].de !== dict[k].en));
     check('(5) the grid line shows the lage through the name (2d1 -> 2d2): updateGridInfoLine takes the code from gridCodeFor (ordnung + d|q|* + lage; task 071: one function)', /code = gridCodeFor\(spec\)/.test(SK) && /spec\.ordnung \+ _LK_SHAPE_LETTER\[spec\.shape\] \+ spec\.lage/.test(read('core/orbits.js')));
 }

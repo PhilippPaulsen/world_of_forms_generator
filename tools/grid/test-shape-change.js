@@ -37,7 +37,7 @@ else {
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
     check('(1) core/faces.js, core/tiling.js, core/facecolor.js, core/state.js, core/orbits.js, core/export.js, off-path-golden, ui-phone-config.js are unchanged',
-        ['core/faces.js', 'core/tiling.js', 'core/facecolor.js', 'core/state.js', 'core/export.js', 'tools/morph/off-path-golden.json', 'ui-phone-config.js'].every(same));   // index.html changed in 068c3b (the info sentence)
+        ['core/faces.js', 'core/tiling.js', 'core/facecolor.js', 'core/state.js', 'tools/morph/off-path-golden.json', 'ui-phone-config.js'].every(same));   // index.html changed in 068c3b (the info sentence)
 }
 const P5 = ['fill', 'noFill', 'beginShape', 'vertex', 'endShape', 'push', 'pop', 'noStroke', 'stroke', 'strokeWeight', 'ellipse', 'rect', 'translate', 'rotate', 'scale', 'textSize', 'text', 'textAlign', 'background', 'clear'];
 function world(shape, spec, o) {

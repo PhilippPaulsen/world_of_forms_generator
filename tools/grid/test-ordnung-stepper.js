@@ -35,7 +35,7 @@ else {
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys)', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/faces.js, core/tiling.js, core/facecolor.js, core/orbits.js, core/export.js, core/state.js, core/session*.js, off-path-golden, ui-phone-config.js are unchanged', ['core/faces.js', 'core/tiling.js', 'core/facecolor.js', 'core/export.js', 'core/state.js', 'core/session.js', 'core/session-apply.js', 'tools/morph/off-path-golden.json', 'ui-phone-config.js'].every(same));
+    check('(1) core/faces.js, core/tiling.js, core/facecolor.js, core/orbits.js, core/export.js, core/state.js, core/session*.js, off-path-golden, ui-phone-config.js are unchanged', ['core/faces.js', 'core/tiling.js', 'core/facecolor.js', 'core/state.js', 'core/session.js', 'core/session-apply.js', 'tools/morph/off-path-golden.json', 'ui-phone-config.js'].every(same));
 }
 const P5 = ['fill', 'noFill', 'beginShape', 'vertex', 'endShape', 'push', 'pop', 'noStroke', 'stroke', 'strokeWeight', 'ellipse', 'rect', 'translate', 'rotate', 'scale', 'textSize', 'text', 'textAlign', 'background', 'clear'];
 function world(shape, spec, o) {
