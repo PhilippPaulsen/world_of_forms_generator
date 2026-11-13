@@ -703,6 +703,32 @@ function gridLineKeysFor(spec, connections, symmetryMode) {
         return { tokens: keys.map(k => (k ? formatLineKey(k) : null)), name };
     } catch (e) { return none(); }
 }
+// The grid code of the v2 name: {ordnung}{d|q|*}{lage} ("4q1"); null for a spec that has none. The ONE place that spells it (the display name, the info card line, the export name all start with it).
+function gridCodeFor(spec) {
+    if (!spec || !Object.prototype.hasOwnProperty.call(_LK_SHAPE_LETTER, spec.shape) || !Number.isInteger(spec.ordnung) || spec.ordnung < 1 || (spec.lage !== 1 && spec.lage !== 2)) return null;
+    return spec.ordnung + _LK_SHAPE_LETTER[spec.shape] + spec.lage;
+}
+// Task 071: the name as the page DISPLAYS it (the info card, #pattern-name-status): the v2 name of gridLineKeysFor with the tokens in display form (the bar as an overline, a capital letter
+// where the orbit is spiegelgleich: "4q1/4* 52a+66d", "5q1/4* 12.2aA"). Same rules as gridLineKeysFor / the export name: main group only, every line a complete pair of the lattice (a free endpoint or a
+// pair that is no lattice pair gives null), at least one line. -> { ascii (= the export name), display, grid (the code before the group: "4q1"), group, tokens: [{ token, display, key, spiegelgleich }] } | null
+function gridDisplayNameFor(spec, connections, symmetryMode) {
+    try {
+        const list = Array.isArray(connections) ? connections : [];
+        if (!spec || list.length === 0 || !isMainGroupMode(spec.shape, symmetryMode)) return null;
+        const table = getLineKeyTable(spec);
+        if (!table) return null;
+        const keys = list.map(c => (Array.isArray(c) && c.length === 2 ? lineKeyForPair(table, c[0], c[1]) : null));
+        if (!keys.every(k => k)) return null;
+        const ascii = formatGridName(spec, keys, { symmetryMode });
+        if (!ascii) return null;
+        const tokens = keys.slice().sort(compareLineKeys).map(k => {
+            const e = table.byToken.get(formatLineKey(k)), sg = !!(e && e.spiegelgleich);
+            return { token: formatLineKey(k), display: formatLineKey(k, { display: true, spiegelgleich: sg }), key: k, spiegelgleich: sg };
+        });
+        const head = ascii.slice(0, ascii.indexOf(' ')), slash = head.indexOf('/');
+        return { ascii, display: head + ' ' + tokens.map(t => t.display).join('+'), grid: head.slice(0, slash), group: head.slice(slash + 1), tokens };
+    } catch (e) { return null; }
+}
 // id -> { zahl, u, v } for the lattice nodes of a grid (node numbers of forms.js numberGridNodes, lattice coordinates u, v in lattice units); null when it cannot be built.
 const _GN_CACHE = new Map();
 function gridNodeNumbersFor(spec) {
