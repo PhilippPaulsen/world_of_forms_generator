@@ -27,7 +27,7 @@ These terms describe structures and operations, independent of any specific patt
 | Verbindung(en) | connection(s) | Ostwald's term for pattern combinations (pairs/triples/quadruples); see Roadmap 1.3, 1.9 |
 | Mappe | portfolio | |
 | Blatt / Bl. | sheet / Sh. | not "plate" (reserved for "Tafel", the print-run numbering) |
-| Lage | position | "erste/zweite/dritte Lage" = first/second/third position |
+| Lage | position | "erste/zweite/dritte Lage" = first/second/third position; since task 072d the second position is freely usable (second click on the active shape button), up to 12 / 12 / 9 (triangle / square / hexagon); the catalog only has the first |
 | paarzahlig / unpaarzahlig | of even / odd order | |
 | Stern | star | open form from crossing lines |
 | Spitze | tip | closed, star-like form; "Dreispitz" = three-tip, "Zwölfspitz" = twelve-tip, etc. |
