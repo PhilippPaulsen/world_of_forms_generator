@@ -41,12 +41,10 @@ else {
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys)', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/*.js except forms.js, tools/morph/off-path-golden.json and ui-phone-config.js are unchanged (core/faces, tiling, facecolor, orbits, export, session, state included)', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'forms.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
+    check('(1) core/*.js except forms.js, tools/morph/off-path-golden.json and ui-phone-config.js are unchanged (core/faces, tiling, facecolor, orbits, export, session, state included)', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'forms.js' && f !== 'orbits.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
     const strip = s => s.replace(/\/\/ (?:Task 067: the ceiling of the ordnung of a lage-2 grid|The ONE table of the lage-2 ceiling)[\s\S]*?const LAGE2_MAX = \{[^}]*\};/, 'TABLE');
     check('(1) core/forms.js differs from the old file ONLY in the LAGE2_MAX table (and its comment): the lage-1 table NODE_COUNT_MAX is untouched', strip(read('core/forms.js')) === strip(fs.readFileSync(path.join(oldDir, 'core/forms.js'), 'utf8')) && read('core/forms.js') !== fs.readFileSync(path.join(oldDir, 'core/forms.js'), 'utf8') && /const NODE_COUNT_MAX = \{ triangle: 13, square: 13, hex: 12 \};/.test(read('core/forms.js')));
-    const sk0 = fs.readFileSync(path.join(oldDir, 'sketch.js'), 'utf8');
-    const stripRefusal = s => s.replace(/t\('reason\.lage2\.max', \{[^}]*\}, `[^`]*`\)/, 'REFUSAL');
-    check('(1) sketch.js differs from the old file ONLY in the refusal text call of sayLageRefusal (the numbers come from the table now)', stripRefusal(SK) === stripRefusal(sk0) && SK !== sk0);
+    check('(1) sketch.js: the refusal text call of sayLageRefusal passes the table values (task 070; later tasks may change other parts of sketch.js)', /t\('reason\.lage2\.max', \{ n: r\.limit, t: maxOrdnungFor\('triangle', 2\)/.test(SK));
 }
 const P5 = ['fill', 'noFill', 'beginShape', 'vertex', 'endShape', 'push', 'pop', 'noStroke', 'stroke', 'strokeWeight', 'ellipse', 'rect', 'translate', 'rotate', 'scale', 'textSize', 'text', 'textAlign', 'background', 'clear'];
 function world(shape, spec, o) {

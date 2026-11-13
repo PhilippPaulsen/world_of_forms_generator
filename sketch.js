@@ -4337,6 +4337,7 @@ function clearTimelineState(statusMessage, kind) {
 // matches a real signature, so the first call always computes for real.
 let patternNameCacheSignature = null;
 let patternNameCacheValue = null;
+let patternNameCacheTip = null;   // task 071: the tooltip of the v2 name (null for the old name)
 
 // Everything the active sheet's name actually depends on: which shape/
 // symmetry group is active, which sheet is selected, and that sheet's
@@ -4373,7 +4374,7 @@ function patternNameSignature() {
     const activeShape = gridOverride ? gridOverride.shape : currentShape;
     const activeMode = gridOverride ? gridOverride.symmetryMode : symmetryMode;
     const sp = activeLayer !== 'base' && additionalLayers[activeLayer] ? layerGridSpecOf(additionalLayers[activeLayer]) : baseGridSpecNow();
-    return JSON.stringify({ shape: activeShape, mode: activeMode, activeLayer, conns: activeConnections(), ordnung: sp.ordnung, lage: sp.lage, rev: gridRevision });   // task 068b: the grid (ordnung, lage, revision) is part of the name's cache key
+    return JSON.stringify({ shape: activeShape, mode: activeMode, activeLayer, conns: activeConnections(), ordnung: sp.ordnung, lage: sp.lage, rev: gridRevision, lang: window.UI ? UI.lang : '' });   // task 068b: the grid (ordnung, lage, revision) is part of the name's cache key
 }
 
 // ----------------- FACE COLORS PANEL (Group D Phase 3) -----------------
@@ -4857,12 +4858,30 @@ function sayShapeChange(plan) {
     if (text && window.say) window.say('shape-change', text, 'info');
 }
 
+// Task 071: the tooltip of the v2 name: the grid (ordnung, shape, lage, main group, nodes) and every distinct line (node numbers z1 / z2, letter and the sectors it touches, overline, capital letter).
+// Texts in ui-i18n.js (name.tip.*), the terms of docs/terminology.md part B.
+function patternNameTooltip(v2, spec) {
+    const t = (key, vars, fb) => (window.UI && UI.t ? UI.t(key, vars) : fb);
+    const SHAPE_KEY = { triangle: 'shape.triangle', square: 'shape.square', hex: 'shape.hex' };
+    const lines = [t('name.tip.grid', { code: v2.grid, o: spec.ordnung, shape: t(SHAPE_KEY[spec.shape], null, spec.shape), l: spec.lage, g: v2.group, n: getGridNodeCount(spec) }, `Gitter ${v2.grid}: Ordnung ${spec.ordnung}, Lage ${spec.lage}, Hauptgruppe ${v2.group}, ${getGridNodeCount(spec)} Knoten.`)];
+    const seen = new Set();
+    v2.tokens.forEach(tk => {
+        if (seen.has(tk.token)) return; seen.add(tk.token);
+        const sectors = 'abcdefghiklmn'.indexOf(tk.key.buchstabe) + 1;
+        let line = t('name.tip.line', { token: tk.display, z1: tk.key.z1, z2: tk.key.z2, b: tk.key.buchstabe, s: sectors }, `${tk.display}: Knotennummern ${tk.key.z1} und ${tk.key.z2}, Buchstabe ${tk.key.buchstabe}`);
+        if (tk.key.gegen) line += t('name.tip.bar', null, ', Überstrich');
+        if (tk.spiegelgleich) line += t('name.tip.cap', null, ', Großbuchstabe');
+        lines.push(line);
+    });
+    return lines.join('\n');
+}
+
 // Task 068c2: the read-outs of the active sheet's grid - the info card's line "Gitter: {name} · Knoten: {n}" (#grid-info-status) and the tooltips of the two
 // ordnung steppers ("Ordnung {o}: {n} Knoten"). Derived from the spec only (getGridNodeCount, the grid part of the v2 name); written only when the text changes.
 function updateGridInfoLine() {
     const t = (key, vars, fallback) => (window.UI && UI.t ? UI.t(key, vars) : fallback);
     const textOf = (spec) => {
-        const n = getGridNodeCount(spec), code = spec.ordnung + { triangle: 'd', square: 'q', hex: '*' }[spec.shape] + spec.lage;   // the grid part of the v2 name (core/orbits.js formatGridName: {ordnung}{d|q|*}{lage})
+        const n = getGridNodeCount(spec), code = gridCodeFor(spec) || '';   // task 071: the grid part of the v2 name, from the one function (core/orbits.js gridCodeFor)
         return { n, code };
     };
     const set = (el, prop, value) => { if (el && (prop === 'text' ? el.textContent !== value : el.getAttribute('title') !== value)) { if (prop === 'text') el.textContent = value; else el.setAttribute('title', value); } };
@@ -4905,7 +4924,12 @@ function updatePatternNameStatus() {
         // own finding: a layer's displayed pattern name was silently
         // computed under the BASE's symmetryMode, not its own.
         const gridOverride = activeGridOverride();
-        patternNameCacheValue = computeThemeLineName(activeConnections(), gridOverride && gridOverride.symmetryMode, gridOverride, gridOverride && gridOverride.shape);
+        // task 071: a main-group pattern (full 3* / 4* / 6*, no free endpoint, at least one line) shows the v2 name - the same function as the export name; every other case keeps the old name
+        const sheetSpec = activeLayer !== 'base' && additionalLayers[activeLayer] ? layerGridSpecOf(additionalLayers[activeLayer]) : baseGridSpecNow();
+        const sheetMode = gridOverride && gridOverride.symmetryMode !== undefined ? gridOverride.symmetryMode : symmetryMode;
+        const v2 = gridDisplayNameFor(sheetSpec, activeConnections(), sheetMode);
+        patternNameCacheValue = v2 ? v2.display : computeThemeLineName(activeConnections(), gridOverride && gridOverride.symmetryMode, gridOverride, gridOverride && gridOverride.shape);
+        patternNameCacheTip = v2 ? patternNameTooltip(v2, sheetSpec) : null;
         patternNameCacheSignature = sig;
     }
     // Roadmap [orbits.js free-endpoint fix]: computeThemeLineName() now
@@ -4916,6 +4940,9 @@ function updatePatternNameStatus() {
     // different situations and shouldn't share one fallback text; the
     // old unconditional "No theme lines yet" would be actively
     // misleading for a sheet that clearly has visible lines.
+    // the tooltip belongs to the v2 name only; the old name and the placeholders have none
+    if (patternNameCacheTip) { if (statusEl.elt.getAttribute('title') !== patternNameCacheTip) statusEl.elt.setAttribute('title', patternNameCacheTip); }
+    else if (statusEl.elt.hasAttribute('title')) statusEl.elt.removeAttribute('title');
     if (patternNameCacheValue) {
         statusEl.html(patternNameCacheValue);
     } else if (activeConnections().some(c => c.length === 2)) {
