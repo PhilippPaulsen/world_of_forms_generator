@@ -4944,13 +4944,9 @@ function updatePatternNameStatus() {
     // the tooltip belongs to the v2 name only; the old name and the placeholders have none
     if (patternNameCacheTip) { if (statusEl.elt.getAttribute('title') !== patternNameCacheTip) statusEl.elt.setAttribute('title', patternNameCacheTip); }
     else if (statusEl.elt.hasAttribute('title')) statusEl.elt.removeAttribute('title');
-    if (patternNameCacheValue) {
-        statusEl.html(patternNameCacheValue);
-    } else if (activeConnections().some(c => c.length === 2)) {
-        statusEl.html('Name unavailable (includes free endpoints)');
-    } else {
-        statusEl.html('No theme lines yet');
-    }
+    // task 071c: write only when the text CHANGES (compared with the DOM value, not with the signature): .html() replaced the content on every draw() and the browser restarted the tooltip each time
+    const nameText = patternNameCacheValue ? patternNameCacheValue : activeConnections().some(c => c.length === 2) ? 'Name unavailable (includes free endpoints)' : 'No theme lines yet';
+    if (statusEl.elt.textContent !== nameText) statusEl.html(nameText);
 }
 
 // ----------------- CROSS-LAYER FACE COMPUTE (Roadmap 1.10b-ii-b) -----
