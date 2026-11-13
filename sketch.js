@@ -4868,8 +4868,8 @@ function patternNameTooltip(v2, spec) {
     const seen = new Set();
     v2.tokens.forEach(tk => {
         if (seen.has(tk.token)) return; seen.add(tk.token);
-        const sectors = 'abcdefghiklmn'.indexOf(tk.key.buchstabe) + 1;
-        let line = `${tk.display}: ${term('nodenumber')} ${tk.key.z1}, ${tk.key.z2}; ${term('letter')} ${tk.key.buchstabe} (${sectors === 1 ? T('glossary.sectors.one', { n: sectors }) : T('glossary.sectors.other', { n: sectors })})`;
+        const sectors = lineKeySectors(tk.key, spec.shape);   // task 072c2: the rank of the letter in the series of the shape (was: the index in the whole alphabet, "g = 7 Sektoren" in the square)
+        let line = `${tk.display}: ${term('nodenumber')} ${tk.key.z1}, ${tk.key.z2}; ${term('letter')} ${tk.key.buchstabe}${sectors === null ? '' : ` (${sectors === 1 ? T('glossary.sectors.one', { n: sectors }) : T('glossary.sectors.other', { n: sectors })})`}`;
         if (tk.key.gegen) line += `; ${term('bar')}: ${text('bar')}`;
         if (tk.spiegelgleich) line += `; ${term('both')}: ${text('both')}`;
         lines.push(line);
