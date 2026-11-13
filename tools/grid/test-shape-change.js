@@ -51,7 +51,7 @@ function world(shape, spec, o) {
 }
 const withSketch = (w, names) => { names.forEach(n => w.set(grab(n))); return w; };
 const SHAPES = ['triangle', 'square', 'hex'];
-const MAXO = { 1: { triangle: 6, square: 12, hex: 7 }, 2: { triangle: 5, square: 5, hex: 2 } };
+const MAXO = { 1: { triangle: 12, square: 12, hex: 12 }, 2: { triangle: 5, square: 5, hex: 2 } };
 
 // ---- 2. base --------------------------------------------------------------------------------------------------------------------------------------
 {
@@ -80,7 +80,7 @@ const MAXO = { 1: { triangle: 6, square: 12, hex: 7 }, 2: { triangle: 5, square:
     w2.set("currentShape = 'square'; rebuildGrid('square');");
     const a1 = w2.get('gridSpec.ordnung');
     w2.set("currentShape = 'square'; setGrid({ shape: 'square', ordnung: 12, lage: 1 }); currentShape = 'triangle'; rebuildGrid('triangle');");
-    check('(2) triangle 6 -> square 6; square 12 -> triangle 6 (clamped)', a1 === 6 && w2.get('gridSpec.ordnung === 6 && gridSpec.shape === "triangle"'));
+    check('(2) triangle 6 -> square 6; square 12 -> triangle 12 (task 069: the same ceiling on every shape, lage 1 clamps no more)', a1 === 6 && w2.get('gridSpec.ordnung === 12 && gridSpec.shape === "triangle"'));
     check('(2) no shape change (same shape, size, input, lage API) stays as it was: rebuildGrid(same shape) keeps gridSpec incl. legacyC1', (() => { const x = world('triangle', null); x.set("projectGridSpec(fromLegacy('triangle', 1)); rebuildGrid('triangle');"); return x.get('gridSpec.legacyC1 === true && nodes.length === 3'); })());
 }
 
@@ -132,10 +132,10 @@ const MAXO = { 1: { triangle: 6, square: 12, hex: 7 }, 2: { triangle: 5, square:
     const click = (x, s) => x.btns.find(b => b.s === s).handler();
     const active = x => x.btns.filter(b => b.active).map(b => b.s).join();
     // no layers: changes at once, the notice names the lines and the clamp
-    let x = mk({ shape: 'square', ordnung: 12, lage: 1 }, 'connections = [[1, 2]];');
+    let x = mk({ shape: 'square', ordnung: 5, lage: 2 }, 'connections = [[1, 2]];');
     click(x, 'hex');
-    check('(4) square 12 with a line -> hex: no dialog, ordnung 7 (clamped), the notice "Ordnung auf 7 begrenzt (höchstens 7 bei dieser Form). Geleert: Linien." (info), the controls sync, hex is active',
-        x.log.dialogs.length === 0 && x.w.get('gridSpec.ordnung') === 7 && x.w.get('currentShape') === 'hex' && x.w.get('connections.length') === 0 && J(x.log.said) === J([['shape-change', 'Ordnung auf 7 begrenzt (höchstens 7 bei dieser Form). Geleert: Linien.', 'info']]) && x.log.calls.includes('sync') && !x.log.calls.includes('clamp') && active(x) === 'hex', J([x.log, active(x)]));
+    check('(4) lage 2 square 5 with a line -> hex: no dialog, ordnung 2 (clamped to the lage-2 ceiling of the hex), the notice "Ordnung auf 2 begrenzt (höchstens 2 bei dieser Form). Geleert: Linien." (info), the controls sync, hex is active',
+        x.log.dialogs.length === 0 && x.w.get('gridSpec.ordnung') === 2 && x.w.get('currentShape') === 'hex' && x.w.get('connections.length') === 0 && J(x.log.said) === J([['shape-change', 'Ordnung auf 2 begrenzt (höchstens 2 bei dieser Form). Geleert: Linien.', 'info']]) && x.log.calls.includes('sync') && !x.log.calls.includes('clamp') && active(x) === 'hex', J([x.log, active(x)]));
     x = mk({ shape: 'triangle', ordnung: 3, lage: 2 }, 'connections = [[1, 2]]; baseFaceAssignments.set("k", {});');
     click(x, 'square');
     check('(4) lage 2 triangle 3 -> square: lage stays 2, ordnung 3 (no clamp note), what is cleared: "Geleert: Linien und Farben."', x.w.get('gridSpec.lage') === 2 && x.w.get('gridSpec.ordnung') === 3 && x.log.said.length === 1 && x.log.said[0][1] === 'Geleert: Linien und Farben.', J(x.log.said));
@@ -156,9 +156,9 @@ const MAXO = { 1: { triangle: 6, square: 12, hex: 7 }, 2: { triangle: 5, square:
     click(x, 'square');
     check('(4) a click on the shape that is already active (task 068c3b) is the lage: no shape notice, no silent rebuild of lage 1 (the lines go with the lage change: lage 2 now)', x.w.get('gridSpec.lage === 2 && gridSpec.ordnung === 4 && connections.length === 0') && x.log.dialogs.length === 0 && x.log.said.length === 1 && x.log.said[0][0] === 'lage-change', J(x.log.said));
     // English
-    x = mk({ shape: 'square', ordnung: 12, lage: 1 }, "connections = [[1, 2]]; additionalLayers.push({ shape: 'square', connections: [], nodes: [] });", 'en');
+    x = mk({ shape: 'square', ordnung: 5, lage: 2 }, "connections = [[1, 2]]; additionalLayers.push({ shape: 'square', connections: [], nodes: [] });", 'en');
     click(x, 'hex');
-    check('(4) English: "Change shape?", "Changing the shape discards lines and layers. This cannot be undone.", then "Order limited to 7 (at most 7 for this shape). Cleared: lines and layers."', x.log.dialogs[0].title === 'Change shape?' && x.log.dialogs[0].text === 'Changing the shape discards lines and layers. This cannot be undone.' && (x.log.dialogs[0].onConfirm(), x.log.said[0][1] === 'Order limited to 7 (at most 7 for this shape). Cleared: lines and layers.'), J([x.log.dialogs[0].text, x.log.said]));
+    check('(4) English: "Change shape?", "Changing the shape discards lines and layers. This cannot be undone.", then "Order limited to 2 (at most 2 for this shape). Cleared: lines and layers."', x.log.dialogs[0].title === 'Change shape?' && x.log.dialogs[0].text === 'Changing the shape discards lines and layers. This cannot be undone.' && (x.log.dialogs[0].onConfirm(), x.log.said[0][1] === 'Order limited to 2 (at most 2 for this shape). Cleared: lines and layers.'), J([x.log.dialogs[0].text, x.log.said]));
     // the layer handler text
     check('(4) layer shape buttons: the clamp and the cleared lines are said through shapeChangeText (no dialog: a layer change clears only that layer\'s lines), the input follows', /const clamp = updateActiveLayerGrid\(\{ shape: btn\.attribute\('data-shape'\) \}\);[\s\S]*?layerNodeCountInput\.value\(ordnungForCount\(clamp\.shape, clamp\.to\)\)[\s\S]*?shapeChangeText\(/.test(SK));
 }

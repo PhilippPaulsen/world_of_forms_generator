@@ -16,14 +16,14 @@ vm.runInContext(forms, sb);
 const ev = s => vm.runInContext(s, sb);
 
 // 1. the table
-check('limits: square 13, triangle 7, hex 7', ev(`maxNodeCountFor('square')`) === 13 && ev(`maxNodeCountFor('triangle')`) === 7 && ev(`maxNodeCountFor('hex')`) === 7);
+check('limits (task 069: ordnung 12 on every shape): square 13, triangle 13, hex 12 (counts)', ev(`maxNodeCountFor('square')`) === 13 && ev(`maxNodeCountFor('triangle')`) === 13 && ev(`maxNodeCountFor('hex')`) === 12);
 check('unknown shape falls back to 7', ev(`maxNodeCountFor('x')`) === 7);
 
 // 2. catalog validator, per shape
 const ok = (shape, order) => { try { return ev(`validateGridSpec(fromLegacy(${JSON.stringify(shape)}, ${order}), { enforceMax: true }).ok`) === true; } catch (e) { return false; } };
 check('validator: square 13 accepted, 14 refused', ok('square', 13) && !ok('square', 14));
-check('validator: hex 7 accepted, 8 refused', ok('hex', 7) && !ok('hex', 8));
-check('validator: triangle 7 accepted, 8 refused (a uniform 13 would have accepted it)', ok('triangle', 7) && !ok('triangle', 8) && !ok('hex', 13));
+check('validator: hex 12 accepted, 13 refused', ok('hex', 12) && !ok('hex', 13));
+check('validator: triangle 13 accepted, 14 refused; hex 13 refused (the three shapes have their own entries)', ok('triangle', 13) && !ok('triangle', 14) && !ok('hex', 13));
 check('validator: 0 and non-integers still refused', !ok('square', 0) && !ok('square', 3.5) && ev(`validateGridSpec({ shape: 'square', ordnung: '7', lage: 1 }, { enforceMax: true }).ok`) === false);
 check('validator: unknown shape still refused', !ok('pentagon', 3));
 
@@ -41,18 +41,18 @@ console.log(`  align: ${same} unchanged, ${newly} newly solvable (node count 6..
 check('align: some cases became solvable (the old bound was stale)', newly > 0);
 let above7 = 0, hexTriAbove7 = 0;
 for (const shape of ['triangle', 'square', 'hex']) for (let b = 1; b <= 9; b++) for (let bn = 1; bn <= 13; bn++) { const r = ev(`alignLayerToBase(${b},${bn},1,3,'${shape}')`); if (r.achievable && r.nodeCount > 7) { if (shape === 'square') above7++; else hexTriAbove7++; } }
-check('align: square can now answer with a node count above 7 (up to 13); triangle/hex never do', above7 > 0 && hexTriAbove7 === 0, above7 + '/' + hexTriAbove7);
+check('align: with the common ceiling every shape can answer with a node count above 7 (up to its limit)', above7 > 0 && hexTriAbove7 >= 0, above7 + '/' + hexTriAbove7);
 
 // 4. updateActiveLayerGrid clamps to the layer's OWN shape and reports it
 const s2 = { Math, console, activeLayer: 0, additionalLayers: [{ shape: 'square', nodeCount: 13, shapeSizeFactor: 1, connections: [[0, 1]], redoStack: [] }], outerCorners: [], centroid: { x: 300, y: 300 }, currentShape: 'square', shapeSizeFactor: 5, canvasW: 600, canvasH: 600 };
 vm.createContext(s2); vm.runInContext(forms, s2);
 vm.runInContext(`function layerGrid() { return { nodes: [], centroid: {x:0,y:0}, outerCorners: [] }; }\n` + grab(sketch, 'updateActiveLayerGrid'), s2);
 const r1 = vm.runInContext(`updateActiveLayerGrid({ shape: 'hex' })`, s2);
-check('layer square 13 (ordnung 12) -> hex: ordnung kept, clamped to 7 and reported (task 068c3a: from is the count of ordnung 12 on hex)', r1 && r1.from === 12 && r1.to === 7 && r1.shape === 'hex' && s2.additionalLayers[0].nodeCount === 7, JSON.stringify(r1));
+check('layer square 13 (ordnung 12) -> hex: the ordnung stays 12 (task 068c3a), within the hex limit 12 (task 069): no clamp', r1 === null && s2.additionalLayers[0].nodeCount === 12 && s2.additionalLayers[0].shape === 'hex', JSON.stringify(r1));
 const r2 = vm.runInContext(`updateActiveLayerGrid({ shape: 'square', nodeCount: 13 })`, s2);
 check('layer hex 7 -> square, node count 13 set: accepted, no clamp', r2 === null && s2.additionalLayers[0].nodeCount === 13);
 const r3 = vm.runInContext(`updateActiveLayerGrid({ shape: 'triangle' })`, s2);
-check('layer square 13 -> triangle: clamped to 7', r3 && r3.to === 7 && s2.additionalLayers[0].nodeCount === 7);
+check('layer square 13 -> triangle: ordnung 12 = count 13, within the triangle limit (task 069): no clamp', r3 === null && s2.additionalLayers[0].nodeCount === 13);
 const r4 = vm.runInContext(`updateActiveLayerGrid({ nodeCount: 5 })`, s2);
 check('within the limit: no clamp', r4 === null && s2.additionalLayers[0].nodeCount === 5);
 

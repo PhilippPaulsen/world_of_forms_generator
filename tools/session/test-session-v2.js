@@ -94,7 +94,7 @@ const validate = (o, opts) => ctxV.sb.validateSession(o, opts);
         ['square ordnung 1 lage 2', o => { o.settings.shape = 'square'; o.settings.grid = { shape: 'square', ordnung: 1, lage: 2 }; }],
         ['ordnung 0', o => { o.settings.grid.ordnung = 0; }],
         ['ordnung 1.5', o => { o.settings.grid.ordnung = 1.5; }],
-        ['ordnung above the shape ceiling (hex 8)', o => { o.settings.shape = 'hex'; o.settings.grid = { shape: 'hex', ordnung: 8, lage: 1 }; }],
+        ['ordnung above the shape ceiling (hex 13)', o => { o.settings.shape = 'hex'; o.settings.grid = { shape: 'hex', ordnung: 13, lage: 1 }; }],
         ['a foreign shape (pentagon)', o => { o.settings.shape = 'pentagon'; o.settings.grid = { shape: 'pentagon', ordnung: 2, lage: 1 }; }],
         ['grid shape differs from the sheet shape', o => { o.settings.grid.shape = o.settings.shape === 'hex' ? 'square' : 'hex'; }],
         ['legacyC1 on a hex', o => { o.settings.shape = 'hex'; o.settings.grid = { shape: 'hex', ordnung: 1, lage: 1, legacyC1: true }; }],
