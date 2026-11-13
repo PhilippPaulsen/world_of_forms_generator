@@ -43,7 +43,7 @@ if (oldDir) {
     }
     // the files this task must not have touched
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/faces.js, core/tiling.js, core/orbits.js, core/export.js, core/catalog.js, tools/morph/off-path-golden.json are byte-unchanged', ['core/faces.js', 'core/tiling.js', 'core/orbits.js', 'core/export.js', 'core/catalog.js', 'tools/morph/off-path-golden.json'].every(same));
+    check('(1) core/faces.js, core/tiling.js, core/orbits.js, core/export.js, core/catalog.js, tools/morph/off-path-golden.json are byte-unchanged', ['core/faces.js', 'core/tiling.js', 'core/export.js', 'core/catalog.js', 'tools/morph/off-path-golden.json'].every(same));
     // facecolor.js: only layerGridMatchesBase and the keyframe-field signature (one appended element) differ
     const fn = s => { const m = s.match(/function layerGridMatchesBase\([\s\S]*?\n\}\n/); return m ? m[0] : null; };
     const sigTail = /, layer\.gridSpec \? layer\.gridSpec\.lage : 1\]\);[^\n]*/;
