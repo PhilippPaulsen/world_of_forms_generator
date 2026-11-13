@@ -1,0 +1,19 @@
+# Auftrag 068c3a — Formwechsel behält die Ordnung
+
+**Typ K, Prüfstufe L3.** Regeln: docs/agent-rules.md. Lege zuerst (VOR jeder Arbeit) tasks/068c3a-formwechsel-ordnung.md mit diesem Text an. Bericht: reports/068c3a.md (höchstens 30 Zeilen). Branch: task/068c3a-formwechsel-ordnung von main (erwarteter HEAD f5ca44fd). Kein Merge, kein Push. Plan in 5 Zeilen vorab.
+
+**Grundlage:** reports/068b.md (gridSpecOnShape: Formwechsel Lage 1 über Legacy-Zähler, Lage 2 Ordnung direkt), reports/068c2.md (Stepper-Wert = Ordnung; Eigenheit "Dreieck 6 -> Quadrat 6" bzw. Zähler c wird mitgenommen). Entscheidung des Auftraggebers: Beim Formwechsel bleibt die ORDNUNG gleich (Form A Ordnung n -> Form B Ordnung n), geklemmt auf das Maximum der neuen Form (Lage 1: 6/12/7, Lage 2: 5/5/2). Beispiel: Quadrat Ordnung 1 -> Sechseck zeigt Ordnung 1 (7 Knoten), NICHT 3.
+
+**Ziel (eine Kernänderung):**
+1. Schritt 1, Messung vor jeder Änderung: Tabelle alt gegen neu für alle Formpaare und Ordnungen 1..12 (Basis und Ebene): Ordnung vorher, Ordnung nachher (alt), Ordnung nach Regel (neu), Knotenzahl, Klemme ja/nein. Stellen per git grep: gridSpecOnShape, rebuildGrid (Formwechsel), clampNodeCountToShape, Formtasten-Handler in sketch.js setup, Ebenen-Formtasten (updateActiveLayerGrid({shape})), Katalog-Import. Zwei Wege oder Abweichung: STOP mit 2 Optionen.
+2. Regel: neue Ordnung = min(alte Ordnung, maxOrdnung(neue Form, Lage)). Keine Zählung über toLegacy/fromLegacy beim Formwechsel. Lage bleibt (068b). legacyC1-Zustand: beim Formwechsel Ordnung 1 ohne Marker.
+3. Basis UND Ebene gleiches Verhalten. Hinweis nach dem Wechsel (UI.notify, i18n de/en): bei Klemme "Ordnung auf {n} begrenzt (höchstens {n} bei dieser Form)"; wenn Linien, Ebenen oder Zeitleiste geleert wurden: kurzer Satz, WAS geleert wurde (Linien / Ebenen / Zeitleiste / Farben). Gibt es Ebenen oder eine Zeitleiste, die mitgelöscht würden: Rückfrage vor dem Wechsel im Stil der bestehenden Rückfrage beim Entfernen einer Ebene (bestehender Dialog, anderer Text, i18n de/en); Abbrechen ändert nichts.
+4. Nicht Teil: Linien auf die neue Form abbilden (Linien werden weiter geleert); Größenerhalt; Lage per Zweitklick (068c3b).
+
+**Nicht ändern:** acht geschützte Funktionen in sketch.js (byte-gleich; Versorgung in ungeschützten Helfern; liegt die Rückfrage in einer davon: STOP), core/faces.js, core/tiling.js, core/facecolor.js, tools/morph/off-path-golden.json, Baselines, neue Bedienelemente. Pins nur mit eigenem Commit und Begründung. ?v= gemeinsam bumpen (z. B. 20261124gridfm).
+
+**Prüfpunkte:** (1) Formwechsel-Tabelle: für alle Paare und Ordnungen 1..12 bleibt die Ordnung gleich bzw. wird auf das Maximum geklemmt (Test, auch bei Lage 2 mit ?lage2=1). (2) Gitter nach dem Wechsel = frisch gebautes Gitter derselben Form und Ordnung (Knoten, Zentrum, Ecken). (3) Ohne Formwechsel (Eingabe, Größe, Lagen-API) alles byte-gleich zu f5ca44fd (measure-g5a/g5b/g6a/g6b, measure-lage2-app, Session, Export, Katalog). (4) Rückfrage erscheint nur bei Ebenen/Zeitleiste; Abbrechen lässt Zustand unverändert; Hinweistexte de/en. (5) DOM: Stepper-Wert, max, Formtasten folgen. (6) Browser: AUS-Pfad-Golden 30/30 mit und ohne ?lage2=1 (ändert sich ein Hash: STOP mit Befund, nicht neu aufnehmen), echte Handler im Browser: Quadrat 1 -> Sechseck zeigt Ordnung 1 und 7 Knoten, Dreieck 6 -> Quadrat 6, Quadrat 12 -> Dreieck 6 mit Hinweis; langsame facecolor-Suiten grün; geschützte Tests 61/61 und 57/57, test-p5-names, test-i18n.
+
+**Sabotagen (je auf Kopien):** alte Zählung über fromLegacy beim Formwechsel; Klemme entfernt; Rückfrage umgangen; Lage beim Formwechsel verloren.
+
+**Prüfung:** bash tools/proof.sh L3 068c3a plus AUS-Pfad-Golden im Browser. Bericht: Hashes, Formwechsel-Tabelle (nur Auffälliges), Sabotagen, Pins, /usage vorher/nachher, was nicht im Browser gesehen wurde.
