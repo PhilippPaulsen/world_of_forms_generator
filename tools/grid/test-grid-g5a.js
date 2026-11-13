@@ -114,8 +114,9 @@ else {
     const t2 = world('square', 4, 3, 'none'), rv = t2.get('gridRevision');
     t2.run('setGrid({ shape: "hex", ordnung: 2, lage: 1 })');
     check('(5) setGrid still bumps gridRevision once and sets shape, gridSpec and nodeCount together', t2.get('gridRevision') === rv + 1 && agree(t2) && t2.get('currentShape') === 'hex' && t2.get('nodeCount') === 2);
-    let threw = false; try { t2.run('setGrid({ shape: "hex", ordnung: 2, lage: 2 })'); } catch (e) { threw = true; }
-    check('(5) lage 2 stays locked: setGrid refuses it and changes nothing', threw && t2.get('gridSpec.lage') === 1 && t2.get('gridRevision') === rv + 1);
+    // task 072d: lage 2 is free (was: "lage 2 stays locked: setGrid refuses it"); what stays refused is lage 2 over the ceiling, and nothing changes then
+    let threw = false; try { t2.run('setGrid({ shape: "hex", ordnung: 10, lage: 2 })'); } catch (e) { threw = true; }
+    check('(5) lage 2 over the ceiling (hex 10 > 9): setGrid refuses it and changes nothing (lage 2 within it is free since task 072d)', threw && t2.get('gridSpec.lage') === 1 && t2.get('gridRevision') === rv + 1);
     t2.run('projectGridSpec(fromLegacy("triangle", 1)); rebuildGrid("triangle")');
     check('(5) the legacy c = 1 marker survives rebuildGrid: gridSpec keeps legacyC1, nodeCount 1, E 0', t2.get('gridSpec.legacyC1') === true && t2.get('nodeCount') === 1 && t2.get('getGridDivisions(gridSpec)') === 0);
     t2.run('currentShape = "square"; rebuildGrid("square")');
