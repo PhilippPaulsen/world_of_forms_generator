@@ -52,6 +52,9 @@ check('(5) the title is there after the rebuilds', els['pattern-name-status'].at
 ui.lang = 'en'; const l1 = call(), l2 = call(); ui.lang = 'de';
 check('(6) a language change re-writes the TITLE (the signature carries the language; the name text itself is language-neutral) once, then nothing; the English title is there', l1['pattern-name-status.title'] === 1 && !l1['pattern-name-status.text'] && l2.total === 0, J([l1, l2]));
 ui.lang = 'en'; call(); check('(6) the English title text', els['pattern-name-status'].attrs.title.startsWith('3d1: order 3'), els['pattern-name-status'].attrs.title); ui.lang = 'de'; call();
+// (6b) the title is lost from outside (rebuild of the field) while the signature stays: the next call writes it back once, then nothing
+delete els['pattern-name-status'].attrs.title; const t1 = call(), t2 = call();
+check('(6b) a title lost from outside (same signature) comes back exactly once, then nothing', t1['pattern-name-status.title'] === 1 && !t1['pattern-name-status.text'] && t2.total === 0 && els['pattern-name-status'].attrs.title.startsWith('3d1: Ordnung 3'), J([t1, t2]));
 w.set('connections = [];');
 const e1 = call(), e2 = call();
 check('(7) no line: the placeholder is written once, then nothing; no title', e1['pattern-name-status.text'] === 1 && e2.total === 0 && els['pattern-name-status'].attrs.title === undefined, J([e1, e2]));
