@@ -37,7 +37,7 @@ else {
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys)', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/*.js (task 069 changed only the ceiling table in forms.js), tools/morph/off-path-golden.json and ui-phone-config.js are unchanged (setBaseLage / setLayerLage are only used)', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'forms.js' && f !== 'orbits.js' && f !== 'export.js' && f !== 'glossary.js' && f !== 'symmetry.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
+    check('(1) core/*.js (task 069 changed only the ceiling table in forms.js), tools/morph/off-path-golden.json and ui-phone-config.js are unchanged (setBaseLage / setLayerLage are only used)', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'forms.js' && f !== 'orbits.js' && f !== 'export.js' && f !== 'glossary.js' && f !== 'symmetry.js' && f !== 'state.js' && f !== 'session.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
     const cnt = (s, rx) => (s.match(rx) || []).length;
     check('(1) the p5 handler count of sketch.js is unchanged (a branch in the existing handlers, no new one)', cnt(SK, /\.mousePressed\(/g) === cnt(fs.readFileSync(path.join(oldDir, 'sketch.js'), 'utf8'), /\.mousePressed\(/g));
 }
@@ -47,7 +47,6 @@ function world(shape, spec, o) {
     const sb = w.sb;
     sb.document = { body: {} }; sb.getComputedStyle = () => ({ getPropertyValue: () => '#ffffff' }); sb.CLOSE = 'close'; sb.window = (o && o.window) || { UI: undefined };
     P5.forEach(f => { sb[f] = () => { }; });
-    if (!(o && o.switchOff)) w.set('globalThis.__lage2 = true;');
     if (spec) w.set(`currentShape = ${J(spec.shape)}; setGrid(${J(spec)});`);
     return w;
 }
@@ -108,11 +107,11 @@ const st = x => x.w.get('JSON.stringify([gridSpec, connections, redoStack, addit
     x = mk({ shape: 'hex', ordnung: 10, lage: 1 }, "additionalLayers.push({ shape: 'square', connections: [], nodes: [] });");
     x.click('hex');
     check('(2) a refused change (ordnung above the ceiling) with layers asks nothing: the warning only', x.log.dialogs.length === 0 && x.log.said.length === 1 && x.log.said[0][2] === 'warn');
-    // switch off
+    // no switch (task 072d: this was "switch off: the click does nothing"; the gate is gone, the click is answered)
     x = mk({ shape: 'square', ordnung: 3, lage: 1 }, "connections = [[1, 2]]; additionalLayers.push({ shape: 'square', connections: [], nodes: [] });", { switchOff: true });
     before = st(x);
     x.click('square');
-    check('(2) switch off: the click on the active shape does nothing at all (no rebuild any more, no notice, no dialog), lines and layers stay', st(x) === before && x.log.said.length === 0 && x.log.dialogs.length === 0 && x.w.get('connections.length') === 1 && x.w.get('additionalLayers.length') === 1);
+    check('(2) no switch: the click on the active shape is answered without any flag (the question about the layers, or the change): it is no longer ignored (reversed from "switch off: does nothing")', st(x) !== before || x.log.dialogs.length === 1, J([x.log.dialogs.length, x.log.said.length]));
     // English
     x = mk({ shape: 'triangle', ordnung: 3, lage: 1 }, 'connections = [[1, 2]];', { lang: 'en' });
     x.click('triangle');
@@ -146,7 +145,7 @@ const st = x => x.w.get('JSON.stringify([gridSpec, connections, redoStack, addit
     x = lay('square', 2, 1, '', { switchOff: true });
     const b2 = x.w.get('JSON.stringify(additionalLayers[0])');
     x.w.set('toggleLayerLage(additionalLayers[0]);');
-    check('(3) switch off: the layer click does nothing and says nothing', x.w.get('JSON.stringify(additionalLayers[0])') === b2 && x.log.said.length === 0);
+    check('(3) no switch: the layer click changes the layer\'s lage without any flag (reversed from "switch off: does nothing")', x.w.get('JSON.stringify(additionalLayers[0])') !== b2);
     check('(3) the layer handler: the ACTIVE shape button calls toggleLayerLage before any shape change; no dialog (only that layer\'s lines are cleared)', /if \(additionalLayers\[activeLayer\] && additionalLayers\[activeLayer\]\.shape === btn\.attribute\('data-shape'\)\) \{ toggleLayerLage\(additionalLayers\[activeLayer\]\); return; \}/.test(SK) && !/function toggleLayerLage[\s\S]*?timelineConfirm[\s\S]*?\n\}\n/.test(SK.match(/function toggleLayerLage[\s\S]*?\n\}\n/)[0] + 'x') );
 }
 
@@ -165,7 +164,7 @@ const st = x => x.w.get('JSON.stringify([gridSpec, connections, redoStack, addit
         sandbox.syncLage();
         return btns;
     };
-    const sw = on => ({ lage2SwitchOn: () => on, maxOrdnungFor: (s, l) => l === 2 ? (on ? { triangle: 12, square: 12, hex: 9 }[s] : 0) : 12 });
+    const sw = () => ({ maxOrdnungFor: (s, l) => l === 2 ? { triangle: 12, square: 12, hex: 9 }[s] : 12 });   // task 072d: no switch any more
     const form = (spec, on, lang) => run('ui-form.js', 'form', { active: spec.shape, globals: Object.assign({ gridSpec: spec }, sw(on)) }, lang);
     let b = form({ shape: 'triangle', ordnung: 3, lage: 1 }, true);
     check('(4) form row, lage 1 within the ceiling: no dot; the active button says "Dreieck, Lage 1. Erneut klicken: Lage 2", the others their plain names', !b[0].cls.has('lage-2') && b[0].name === 'Dreieck, Lage 1. Erneut klicken: Lage 2' && b[1].name === 'Quadrat' && b[2].name === 'Sechseck', J(b.map(x => x.name)));
@@ -174,7 +173,7 @@ const st = x => x.w.get('JSON.stringify([gridSpec, connections, redoStack, addit
     b = form({ shape: 'hex', ordnung: 10, lage: 1 }, true);
     check('(4) above the ceiling (hex 10): no dot and no "Erneut klicken" (the click cannot work): plain "Sechseck"', !b[2].cls.has('lage-2') && b[2].name === 'Sechseck');
     b = form({ shape: 'triangle', ordnung: 3, lage: 1 }, false);
-    check('(4) switch off: no dot, plain names on every button (as before)', b.every(x => !x.cls.has('lage-2')) && J(b.map(x => x.name)) === J(['Dreieck', 'Quadrat', 'Sechseck']));
+    check('(4) no switch: the hint "Erneut klicken" is there without any flag (reversed from "switch off: plain names")', b.every(x => !x.cls.has('lage-2')) && J(b.map(x => x.name)) === J(['Dreieck, Lage 1. Erneut klicken: Lage 2', 'Quadrat', 'Sechseck']));
     b = form({ shape: 'triangle', ordnung: 3, lage: 1 }, true, 'en');
     check('(4) English: "Triangle, position 1. Click again: position 2", "Square", "Hexagon"', J(b.map(x => x.name)) === J(['Triangle, position 1. Click again: position 2', 'Square', 'Hexagon']), J(b.map(x => x.name)));
     const L = (spec, on, tl, lang) => run('ui-layer.js', 'layer', { active: spec.shape, layer: { gridSpec: spec, shape: spec.shape }, globals: Object.assign({ layerGridSpecOf: l => l.gridSpec, timeline: tl, additionalLayers: [] }, sw(on)) }, lang);

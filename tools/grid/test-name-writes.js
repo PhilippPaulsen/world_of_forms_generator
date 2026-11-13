@@ -23,7 +23,6 @@ const mkEl = id => { const e = { id, attrs: {}, getAttribute(k) { return this.at
 const w = H.makeRenderWorld('square', 3, 3, 'rotation_reflection6');
 const sb = w.sb;
 sb.document = { body: {}, getElementById: id => els[id] || null }; sb.window = { UI: ui }; sb.UI = ui; sb.select = id => els[id.replace('#', '')] || null;
-w.set('globalThis.__lage2 = true;');
 w.set("currentShape = 'square'; setGrid({ shape: 'square', ordnung: 4, lage: 1 });");
 w.sb.glossaryEntry = require(path.join(ROOT, 'core', 'glossary.js')).glossaryEntry;
 w.set('let patternNameCacheSignature = null; let patternNameCacheValue = null; let patternNameCacheTip = null;');

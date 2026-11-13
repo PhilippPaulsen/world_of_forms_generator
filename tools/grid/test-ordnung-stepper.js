@@ -35,7 +35,7 @@ else {
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys)', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/faces.js, core/tiling.js, core/facecolor.js, core/orbits.js, core/export.js, core/state.js, core/session*.js, off-path-golden, ui-phone-config.js are unchanged', ['core/faces.js', 'core/tiling.js', 'core/facecolor.js', 'core/state.js', 'core/session.js', 'core/session-apply.js', 'tools/morph/off-path-golden.json', 'ui-phone-config.js'].every(same));
+    check('(1) core/faces.js, core/tiling.js, core/facecolor.js, core/session-apply.js, off-path-golden, ui-phone-config.js are unchanged (state.js and session.js: task 072d removed the switch, pinned in test-lage2-free.js)', ['core/faces.js', 'core/tiling.js', 'core/facecolor.js', 'core/session-apply.js', 'tools/morph/off-path-golden.json', 'ui-phone-config.js'].every(same));
 }
 const P5 = ['fill', 'noFill', 'beginShape', 'vertex', 'endShape', 'push', 'pop', 'noStroke', 'stroke', 'strokeWeight', 'ellipse', 'rect', 'translate', 'rotate', 'scale', 'textSize', 'text', 'textAlign', 'background', 'clear'];
 function world(shape, spec, o) {
@@ -43,7 +43,6 @@ function world(shape, spec, o) {
     const sb = w.sb;
     sb.document = (o && o.document) || { body: {} }; sb.getComputedStyle = () => ({ getPropertyValue: () => '#ffffff' }); sb.CLOSE = 'close'; sb.window = { UI: undefined };
     P5.forEach(f => { sb[f] = () => { }; });
-    if (o && o.lage2) w.set('globalThis.__lage2 = true;');
     if (spec) w.set(`setGrid(${J(spec)});`);
     return w;
 }
@@ -90,7 +89,7 @@ const SHAPES = ['triangle', 'square', 'hex'];
     check('(3) base input path: setGrid(gridSpecForOrdnung) = the old setGrid(fromLegacy(count)) for every ordnung of the new scale (spec, nodeCount, nodes)', bad2.length === 0, bad2.join(','));
     check('(3) over the limit the ordnung is clamped (task 069: 20 -> 12 on every shape; 9 stays 9), 0 / negative -> 1; lage 2 (switch on, task 070): 12 / 12 / 9', w.get("gridSpecForOrdnung('triangle', 20, 1).ordnung === 12 && gridSpecForOrdnung('square', 20, 1).ordnung === 12 && gridSpecForOrdnung('hex', 20, 1).ordnung === 12 && gridSpecForOrdnung('hex', 9, 1).ordnung === 9 && gridSpecForOrdnung('hex', 0, 1).ordnung === 1")
         && world('triangle', null, { lage2: true }).get("gridSpecForOrdnung('triangle', 20, 2).ordnung === 12 && gridSpecForOrdnung('square', 20, 2).ordnung === 12 && gridSpecForOrdnung('hex', 20, 2).ordnung === 9 && gridMaxOrdnung('hex', 2) === 9"));
-    check('(3) with the switch off lage 2 falls back to the lage-1 limit for the input max (gridMaxOrdnung(.., 2) = 12 / 12 / 12)', w.get("gridMaxOrdnung('triangle', 2) === 12 && gridMaxOrdnung('square', 2) === 12 && gridMaxOrdnung('hex', 2) === 12"));
+    check('(3) no switch (task 072d; was: switch off falls back to the lage-1 limit 12 / 12 / 12): the input max at lage 2 is the LAGE2_MAX table 12 / 12 / 9 in a fresh sandbox', w.get("gridMaxOrdnung('triangle', 2) === 12 && gridMaxOrdnung('square', 2) === 12 && gridMaxOrdnung('hex', 2) === 9"));
     // the layer path: updateActiveLayerGrid({ ordnung: o }) = the old updateActiveLayerGrid({ nodeCount: c })
     let bad3 = [];
     for (const shape of SHAPES) {
@@ -124,7 +123,7 @@ const SHAPES = ['triangle', 'square', 'hex'];
 {
     // getGridNodeCount = the number of nodes the builder makes
     const w = world('triangle', null, { lage2: true });
-    const r = w.get(`(function () { const bad = []; for (const s of ['triangle', 'square', 'hex']) for (const lage of [1, 2]) for (let o = 1; o <= (lage === 2 ? (s === 'hex' ? 2 : 5) : 7); o++) { const spec = { shape: s, ordnung: o, lage }; if (getGridNodeCount(spec) !== buildGridNodes(spec, { allowLage2: true }).length) bad.push(s + o + 'L' + lage); }
+    const r = w.get(`(function () { const bad = []; for (const s of ['triangle', 'square', 'hex']) for (const lage of [1, 2]) for (let o = 1; o <= (lage === 2 ? (s === 'hex' ? 2 : 5) : 7); o++) { const spec = { shape: s, ordnung: o, lage }; if (getGridNodeCount(spec) !== buildGridNodes(spec, { beyondCeiling: true }).length) bad.push(s + o + 'L' + lage); }
         for (const s of ['triangle', 'square']) if (getGridNodeCount({ shape: s, ordnung: 1, lage: 1, legacyC1: true }) !== buildGridNodes({ shape: s, ordnung: 1, lage: 1, legacyC1: true }).length) bad.push(s + 'c1'); return bad; })()`);
     check('(5) getGridNodeCount equals the node list of buildGridNodes for 3 shapes x ordnung 1..7 x lage 1/2 and the legacyC1 marker', r.length === 0, J(r));
     // updateGridInfoLine on fake elements

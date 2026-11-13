@@ -59,7 +59,6 @@ function world(shape, ordnung, lage, o) {
     const sb = w.sb;
     sb.document = { body: {} }; sb.getComputedStyle = () => ({ getPropertyValue: () => '#ffffff' }); sb.CLOSE = 'close';
     P5.forEach(f => { sb[f] = () => { }; });
-    if (lage === 2 && o.switchOn !== false) w.set('globalThis.__lage2 = true;');
     if (lage === 2) w.set(`setGrid(${J({ shape, ordnung, lage: 2 })}); `);
     else if (ordnung) w.set(`setGrid(${J({ shape, ordnung, lage: 1 })}); `);
     return w;
@@ -79,32 +78,30 @@ function addLayer2(w, spec, size, conns, extra) {
 const safe = (f) => { try { return f(); } catch (e) { return 'threw: ' + String(e && e.message).slice(0, 100); } };
 const LAGE2_N = (shape, n) => shape === 'triangle' ? (n + 1) * (n + 2) / 2 + n * n : shape === 'square' ? (n + 1) * (n + 1) + n * n : 3 * n * (n + 1) + 1 + 6 * n * n;
 
-// ---- 2. switch OFF ------------------------------------------------------------------------------------------------------------------------------
+// ---- 2. no switch (task 072d: the gate of task 067 is gone; these were the "switch off" cases, now reversed) ------------------------------------------------------------------
 {
     const w = world('triangle', 0, 1);
-    check('(2) the switch is off in a fresh page/sandbox: globalThis.__lage2 is not set, maxOrdnungFor(.., 2) = 0', w.get('typeof globalThis.__lage2') === 'undefined' && w.get("maxOrdnungFor('triangle', 2) === 0 && maxOrdnungFor('hex', 2) === 0 && maxOrdnungFor('square', 2) === 0"));
-    check('(2) validateGridSpec refuses lage 2 as before (message unchanged), also with enforceMax', w.get("validateGridSpec({ shape: 'hex', ordnung: 1, lage: 2 }).error") === 'lage 2 is not available yet' && w.get("validateGridSpec({ shape: 'hex', ordnung: 1, lage: 2 }, { enforceMax: true }).ok") === false);
-    check('(2) setGrid, projectGridSpec, projectLayerGridSpec and buildGrid throw on lage 2; nothing is written', w.get(`(function () {
+    check('(2) no switch: maxOrdnungFor(.., 2) is the LAGE2_MAX table (12 / 12 / 9) in a fresh page/sandbox', w.get("maxOrdnungFor('triangle', 2) === 12 && maxOrdnungFor('square', 2) === 12 && maxOrdnungFor('hex', 2) === 9"));
+    check('(2) validateGridSpec accepts lage 2 within the ceiling (also with enforceMax), refuses one over it ("exceeds") and lage 3 ("invalid lage")', w.get("validateGridSpec({ shape: 'hex', ordnung: 1, lage: 2 }).ok === true && validateGridSpec({ shape: 'hex', ordnung: 9, lage: 2 }, { enforceMax: true }).ok === true") && /exceeds 9 for hex in lage 2/.test(w.get("validateGridSpec({ shape: 'hex', ordnung: 10, lage: 2 }).error")) && w.get("validateGridSpec({ shape: 'hex', ordnung: 1, lage: 3 }).error") === 'invalid lage: 3');
+    check('(2) setGrid, projectGridSpec, projectLayerGridSpec and buildGrid throw on lage 2 OVER the ceiling; nothing is written', w.get(`(function () {
         const before = JSON.stringify([gridSpec, nodeCount, gridRevision]), l = { shape: 'square', nodeCount: 3, gridSpec: { shape: 'square', ordnung: 2, lage: 1 } }, bl = JSON.stringify(l);
         const t = f => { try { f(); return false; } catch (e) { return true; } };
-        const r = [t(() => setGrid({ shape: 'triangle', ordnung: 2, lage: 2 })), t(() => projectGridSpec({ shape: 'triangle', ordnung: 2, lage: 2 })), t(() => projectLayerGridSpec(l, { shape: 'square', ordnung: 2, lage: 2 })), t(() => buildGrid({ shape: 'triangle', ordnung: 2, lage: 2 }, { sizeFactor: 3, canvasW: 600, canvasH: 600 }))];
+        const r = [t(() => setGrid({ shape: 'triangle', ordnung: 13, lage: 2 })), t(() => projectGridSpec({ shape: 'triangle', ordnung: 13, lage: 2 })), t(() => projectLayerGridSpec(l, { shape: 'square', ordnung: 13, lage: 2 })), t(() => buildGrid({ shape: 'triangle', ordnung: 13, lage: 2 }, { sizeFactor: 3, canvasW: 600, canvasH: 600 }))];
         return r.every(x => x) && before === JSON.stringify([gridSpec, nodeCount, gridRevision]) && bl === JSON.stringify(l);
     })()`));
-    // the builder/test option alone still works without a ceiling (switch off), as in 058
-    check('(2) the builder option allowLage2 alone (switch off) still builds lage 2 without a ceiling (task 058 tests)', w.get("buildGrid({ shape: 'hex', ordnung: 4, lage: 2 }, { sizeFactor: 3, canvasW: 600, canvasH: 600 }, { allowLage2: true }).nodes.length") === LAGE2_N('hex', 4));
-    // a lage-2 snapshot, made with the switch on, is refused with it off
+    // the builder/test option lifts the ceiling (measurements, task 058 tests)
+    check('(2) the builder option beyondCeiling still builds lage 2 without a ceiling (task 058 tests, measurements)', w.get("buildGrid({ shape: 'hex', ordnung: 10, lage: 2 }, { sizeFactor: 3, canvasW: 600, canvasH: 600 }, { beyondCeiling: true }).nodes.length") > 0 && w.get("buildGrid({ shape: 'hex', ordnung: 4, lage: 2 }, { sizeFactor: 3, canvasW: 600, canvasH: 600 }, { beyondCeiling: true }).nodes.length") === LAGE2_N('hex', 4));
+    // a lage-2 snapshot is accepted and planned without any switch
     const src = world('square', 2, 2);
     const ui = S.uiOf(src, 'none', 6);
     const snap = S.snapOf(src, ui);
     check('(2) the snapshot of a lage-2 base says lage 2 and keeps u, v out of the JSON (only the spec)', snap.settings.grid.lage === 2 && J(snap).indexOf('"u"') < 0);
     const off = S.newCtx(); S.reset(off, 'square', 3, 3, 'none');
     const v = off.sb.validateSession(Object.assign(JSON.parse(J(snap)), { savedAt: 1 }));
-    check('(2) switch off: validateSession refuses a lage-2 snapshot (invalid, message of the validator)', v.ok === false && v.code === 'invalid' && /lage 2 is not available yet/.test(v.detail), J(v).slice(0, 200));
-    const v2 = off.sb.validateSession(Object.assign(JSON.parse(J(snap)), { savedAt: 1 }), { allowLage2: true });
-    check('(2) the test option lets the validator accept it, but the plan refuses while the switch is off (plan-error)', v2.ok === true && off.sb.planSessionRestore(v2.snapshot, { canvasW: 600, canvasH: 600 }).code === 'plan-error');
-    // not on by default in the sources: the only place that sets it is the query reader in forms.js
-    const setters = ['core', '.'].flatMap(d => fs.readdirSync(path.join(ROOT, d)).filter(f => /\.js$/.test(f)).map(f => [path.join(d, f), read(path.join(d, f))])).filter(([, s]) => /__lage2\s*=[^=]/.test(s)).map(([f]) => f);
-    check('(2) __lage2 is assigned only in core/forms.js, and there only for the query ?lage2=1', J(setters) === J(['core/forms.js']) && /get\('lage2'\) === '1'\) globalThis\.__lage2 = true/.test(read('core/forms.js')));
+    check('(2) validateSession accepts a lage-2 snapshot and the plan restores it (no switch)', v.ok === true && off.sb.planSessionRestore(v.snapshot, { canvasW: 600, canvasH: 600 }).ok === true, J(v).slice(0, 200));
+    // the gate is gone from every source: no __lage2, no lage2SwitchOn, no ?lage2 reader
+    const gone = ['core', '.', 'tools/morph'].flatMap(d => fs.readdirSync(path.join(ROOT, d)).filter(f => /\.js$/.test(f)).map(f => [path.join(d, f), read(path.join(d, f))])).filter(([f, s]) => /__lage2|lage2SwitchOn|get\('lage2'\)/.test(s) && !/^tools/.test(f)).map(([f]) => f);
+    check('(2) the switch is gone from core/*.js and the page scripts (__lage2, lage2SwitchOn, the ?lage2 reader): the query parameter has no effect', gone.length === 0, J(gone));
 }
 
 // ---- 3. switch ON -------------------------------------------------------------------------------------------------------------------------------
@@ -129,7 +126,7 @@ const LAGE2_N = (shape, n) => shape === 'triangle' ? (n + 1) * (n + 2) / 2 + n *
     })()`));
     // lage 1 under the switch: the nodes carry no u, v, ids and positions as before
     const l1 = world('square', 3, 1), l1off = world('square', 3, 1);
-    l1.set('globalThis.__lage2 = true; rebuildGrid(currentShape);');
+    l1.set('rebuildGrid(currentShape);');
     check('(3) the switch alone does not change a lage-1 grid (same nodes, no u/v)', l1.get('JSON.stringify(nodes)') === l1off.get('JSON.stringify(nodes)') && l1.get('nodes.every(p => p.u === undefined)'));
     // task 068b: a shape change keeps the lage (the ordnung is taken over directly, clamped to the new shape's lage-2 ceiling); it was 'drops to lage 1' in 067
     const sh = world('square', 12, 2);
@@ -183,7 +180,7 @@ const LAGE2_N = (shape, n) => shape === 'triangle' ? (n + 1) * (n + 2) / 2 + n *
         const snap = S.snapOf(src, ui);
         const tag = `${shape}${n} + ${layers.map(l => l.shape[0] + l.ordnung + 'L' + l.lage).join(',')}`;
         check(`(6) ${tag}: the snapshot carries the specs (base lage 2, layer lages)`, snap.settings.grid.lage === 2 && snap.layers.every((l, i) => l.grid.lage === layers[i].lage && l.grid.ordnung === layers[i].ordnung));
-        const dst = world(shape === 'hex' ? 'square' : 'hex', 0, 1); dst.set('globalThis.__lage2 = true;');
+        const dst = world(shape === 'hex' ? 'square' : 'hex', 0, 1);
         const tu = S.uiOf(dst, 'none', 6);
         const res = S.applyInto(dst.ctx, snap, S.fakeHooks(dst.ctx, snap, tu), {});
         check(`(6) ${tag}: restore applies (switch on)`, res.ok === true, J(res).slice(0, 240));
@@ -193,11 +190,11 @@ const LAGE2_N = (shape, n) => shape === 'triangle' ? (n + 1) * (n + 2) / 2 + n *
         const st = src.get('collectSessionState(null, { buildSizes: true }).additionalLayers.every((l, i) => l === additionalLayers[i])');
         check(`(6) ${tag}: collectSessionState({buildSizes}) recognises the lage-2 layers (nodes match their own spec, no derived size)`, st === true);
         // rollback before every step: the target must stay as it was
-        const steps = []; const dry = world('square', 3, 1); dry.set('globalThis.__lage2 = true;');
+        const steps = []; const dry = world('square', 3, 1);
         S.applyInto(dry.ctx, snap, S.fakeHooks(dry.ctx, null, S.uiOf(dry.ctx, 'none', 6), { skipCheck: true }), { beforeStep: nm => steps.push(nm) });
         let bad = [];
         for (const stepName of steps) {
-            const t = world('square', 3, 1); t.set('globalThis.__lage2 = true;');
+            const t = world('square', 3, 1);
             t.baseConnections([[1, 2]]);
             const u2 = S.uiOf(t.ctx, 'none', 6), before = S.snapOf(t.ctx, u2), nodesBefore = t.get('nodes'), specBefore = t.get('gridSpec'), rev = t.get('gridRevision'), ncBefore = t.get('nodeCount');
             const rr = S.applyInto(t.ctx, snap, S.fakeHooks(t.ctx, null, u2, { skipCheck: true }), { beforeStep: nm => { if (nm === stepName) throw new Error('fault before ' + nm); } });
@@ -206,15 +203,11 @@ const LAGE2_N = (shape, n) => shape === 'triangle' ? (n + 1) * (n + 2) / 2 + n *
         }
         if (shape === 'triangle') check(`(6) ${tag}: rollback before each of the ${steps.length} apply steps restores objects, spec, nodeCount, gridRevision`, steps.length === 16 && bad.length === 0, steps.length + ' steps; bad: ' + bad.join(','));
         else check(`(6) ${tag}: rollback before each of ${steps.length} apply steps`, steps.length === 16 && bad.length === 0, bad.join(','));
-        // switch off: the same snapshot is refused at validate; the live state is not touched
-        const offc = S.newCtx(); S.reset(offc, 'square', 3, 3, 'none');
-        const vOff = offc.sb.validateSession(Object.assign(JSON.parse(J(snap)), { savedAt: 1 }));
-        check(`(6) ${tag}: with the switch off the snapshot is refused (invalid)`, vOff.ok === false);
     }
-    // limits: a snapshot over the ceiling is invalid with the switch on, valid-for-test-option only without it; the ceiling of each layer counts
+    // limits: a snapshot over the ceiling is invalid (valid only with the test option beyondCeiling); the ceiling of each layer counts
     const src = world('triangle', 12, 2);
     const snap = JSON.parse(J(S.snapOf(src, S.uiOf(src, 'none', 6)))); snap.savedAt = 1;
-    const on = world('square', 3, 1); on.set('globalThis.__lage2 = true;');
+    const on = world('square', 3, 1);
     const over = JSON.parse(J(snap)); over.settings.grid.ordnung = 13;
     const lay = JSON.parse(J(snap)); lay.layers = [Object.assign({}, JSON.parse(J(snap.base)), {})];
     check('(6) ceiling at the base: ordnung 12 (triangle) valid, 13 invalid; hex 9 valid, hex 10 invalid (task 070)', on.sb.validateSession(JSON.parse(J(snap))).ok === true && on.sb.validateSession(over).ok === false);
@@ -273,7 +266,6 @@ const LAGE2_N = (shape, n) => shape === 'triangle' ? (n + 1) * (n + 2) / 2 + n *
     // the measurement here is the direct case where nothing clears them.
     {
         const w = world('triangle', 3, 1);
-        w.set('globalThis.__lage2 = true;');
         const r = reps(w, 6);
         const id = addLayer2(w, { shape: 'triangle', ordnung: 3, lage: 1 }, 3, r.slice(0, 2), { enabled: false });
         const L = 'additionalLayers[' + id + ']';
@@ -293,11 +285,11 @@ const LAGE2_N = (shape, n) => shape === 'triangle' ? (n + 1) * (n + 2) / 2 + n *
         const upd = read('sketch.js').match(/function updateActiveLayerGrid\([\s\S]*?\n\}\n/)[0];
         check('(7) cache keys: the only app path that re-grids an existing layer object (updateActiveLayerGrid) clears layer.connections, so the keyframe signature changes with every grid change', /layer\.connections = \[\];/.test(upd) && /projectLayerGridSpec\(layer,/.test(upd));
     }
-    // catalog transport and the locked gates: listed, not changed
+    // catalog transport (task 072d: lage 2 loads; the gate "not available yet" and the check lageRaw !== '1' are gone)
     {
         const w = world('triangle', 2, 2);
-        const t = w.get("parseTransportV2({ shape: 'triangle', ordnung: 2, lage: 2, group: '3*', lines: ['41a'] })");
-        check('(7) catalog transport v2: lage 2 is still refused by parseTransportV2 ("not available yet") and by sketch.js (lageRaw !== \'1\') - a locked gate outside this task, listed in the report', t && t.ok === false && /lage 2 is not available yet/.test(t.error || J(t)) && /lageRaw !== '1'/.test(read('sketch.js')), J(t));
+        const t2 = w.get("parseTransportV2({ shape: 'triangle', ordnung: 2, lage: 2, group: '3*', lines: ['41a'] })");
+        check('(7) catalog transport v2: lage 2 is accepted by parseTransportV2 (spec.lage 2) and the sketch.js check admits "1" and "2" only', t2 && t2.ok === true && t2.pattern.spec.lage === 2 && !/lageRaw !== '1' \|\|/.test(read('sketch.js')) && /lageRaw !== '2'/.test(read('sketch.js')), J(t2).slice(0, 200));
     }
 }
 

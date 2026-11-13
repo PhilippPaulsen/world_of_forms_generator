@@ -159,7 +159,7 @@ const STATE = () => T.get('JSON.stringify({ connections, nodes, gridSpec, gridRe
         ['a token that does not exist in THIS grid (hex family in a square)', q({ lines: good + ',65a~' }), 'invalid'], ['an empty token', q({ lines: good + ',,' + good2 }), 'invalid'],
         ['no lines', q({ lines: '' }), 'invalid'], ['too many lines (501)', q({ lines: new Array(501).fill(good).join(',') }), 'invalid'], ['an over-long token', q({ lines: good + ',1234567890123a' }), 'invalid'],
         ['ordnung 0', q({ ordnung: '0' }), 'invalid'], ['ordnung above the ceiling (13)', q({ ordnung: '13' }), 'invalid'], ['ordnung 1.5', q({ ordnung: '1.5' }), 'invalid'], ['ordnung 03 (not canonical)', q({ ordnung: '03' }), 'invalid'],
-        ['lage 2 (locked)', q({ lage: '2' }), 'invalid'], ['no lage', q({ lage: '' }), 'invalid'], ['a foreign shape', q({ shape: 'pentagon' }), 'invalid'], ['group of another shape (6*)', q({ group: '6*' }), 'invalid'], ['group missing', q({ group: '' }), 'invalid'],
+        ['lage 3 (task 072d: lage 2 loads, was: locked)', q({ lage: '3' }), 'invalid'], ['no lage', q({ lage: '' }), 'invalid'], ['a foreign shape', q({ shape: 'pentagon' }), 'invalid'], ['group of another shape (6*)', q({ group: '6*' }), 'invalid'], ['group missing', q({ group: '' }), 'invalid'],
         ['an old orbitIds field in a v2 link', q({ orbitIds: '0,1' }), 'invalid'], ['an old order field in a v2 link', q({ order: '3' }), 'invalid'], ['an old symmetryMode field in a v2 link', q({ symmetryMode: 'rotation6' }), 'invalid'],
     ];
     const bad = [];
@@ -170,13 +170,13 @@ const STATE = () => T.get('JSON.stringify({ connections, nodes, gridSpec, gridRe
         ['paste version 1', J({ version: 1, grid: { shape: 'square', ordnung: 3, lage: 1 }, group: '4*', lines: [good] }), 'version'], ['paste version "2"', J({ version: '2', grid: { shape: 'square', ordnung: 3, lage: 1 }, group: '4*', lines: [good] }), 'version'],
         ['paste version null', J({ version: null, orbitIds: [0], shape: 'square', order: 3, symmetryMode: 'rotation6' }), 'version'],
         ['paste v2 with an orbitIds field', J({ version: 2, grid: { shape: 'square', ordnung: 3, lage: 1 }, group: '4*', lines: [good], orbitIds: [0] }), 'invalid'],
-        ['paste v2 with an unknown token', J({ version: 2, grid: { shape: 'square', ordnung: 3, lage: 1 }, group: '4*', lines: [good, '99z'] }), 'invalid'], ['paste v2 lage 2', J({ version: 2, grid: { shape: 'square', ordnung: 3, lage: 2 }, group: '4*', lines: [good] }), 'invalid'],
+        ['paste v2 with an unknown token', J({ version: 2, grid: { shape: 'square', ordnung: 3, lage: 1 }, group: '4*', lines: [good, '99z'] }), 'invalid'], ['paste v2 lage 3', J({ version: 2, grid: { shape: 'square', ordnung: 3, lage: 3 }, group: '4*', lines: [good] }), 'invalid'],
         ['paste v2 grid with an extra field', J({ version: 2, grid: { shape: 'square', ordnung: 3, lage: 1, nodeCount: 4 }, group: '4*', lines: [good] }), 'invalid'], ['paste v2 without a grid', J({ version: 2, group: '4*', lines: [good] }), 'invalid'],
         ['paste v2 lines not an array', J({ version: 2, grid: { shape: 'square', ordnung: 3, lage: 1 }, group: '4*', lines: good }), 'invalid'], ['paste v2 ordnung as a string', J({ version: 2, grid: { shape: 'square', ordnung: '3', lage: 1 }, group: '4*', lines: [good] }), 'invalid'],
     ];
     const badP = [];
     for (const [name, text, code] of pv) { const r = parsePaste(text); if (r.p !== null || !r.rej || r.rej.code !== code) badP.push(name + ' -> ' + J(r.rej)); }
-    check('(3) ' + pv.length + ' refused v2 pastes (wrong version incl. a version-less shape with version null, old fields, bad tokens, lage 2, bad grid): null with the right code', badP.length === 0, badP.slice(0, 3).join(' | '));
+    check('(3) ' + pv.length + ' refused v2 pastes (wrong version incl. a version-less shape with version null, old fields, bad tokens, lage 3, bad grid): null with the right code', badP.length === 0, badP.slice(0, 3).join(' | '));
     check('(3) none of the refusals touched anything (still no mutation after ' + (cases.length + pv.length) + ' refused inputs)', STATE() === before);
     check('(3) not JSON / not an object stay quiet nulls (no rejection code)', ['not json', '[1,2]', '3', 'null', ''].every(t => { const r = parsePaste(t); return r.p === null && r.rej === null; }));
 }

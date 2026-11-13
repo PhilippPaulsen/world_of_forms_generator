@@ -3,7 +3,7 @@
 //   1. old tree vs working tree, tools/grid/measure-g5b.js: layer geometry, drawn calls, segments, export JSON, alt net, morph frames with layers under a net: equal
 //   2. source scan: exactly ONE write of a member `.nodeCount` (core/forms.js), no nodeCount key in the layer literals (addLayer, addLayerToTimeline, session restore)
 //   3. updateActiveLayerGrid (old and new text, same inputs): same layers, same clamp report; layer.gridSpec and nodeCount agree
-//   4. layerSpecMatchesBase tells shape and lage apart (lage 2 through allowLage2), not ordnung; layerGridMatchesBase (core/facecolor.js) is byte-unchanged and behaves as before;
+//   4. layerSpecMatchesBase tells shape and lage apart (lage 2 through beyondCeiling), not ordnung; layerGridMatchesBase (core/facecolor.js) is byte-unchanged and behaves as before;
 //      incompatibleEnabledLayersForCrossLayerFaces equals the old one on every lage-1 case
 //   5. projectLayerGridSpec validates before writing; layer E equals the old c - 1
 //   6. session round trip with layers and a timeline, rollback at every step
@@ -103,8 +103,8 @@ if (oldDir) {
     const l2 = { shape: 'square', ordnung: 2, lage: 2 };
     check('(4) layerSpecMatchesBase: same shape and lage match, any ordnung (order is deliberately not compared)', sb.layerSpecMatchesBase(sq, { shape: 'square', ordnung: 1, lage: 1 }) === true && sb.layerSpecMatchesBase(sq, sq) === true);
     check('(4) ...another shape does not match', ['triangle', 'hex'].every(s => sb.layerSpecMatchesBase({ shape: s, ordnung: 3, lage: 1 }, sq) === false));
-    check('(4) ...another lage does not match (a lage-2 spec built with allowLage2 in the builder, which setGrid/projectLayerGridSpec still refuse)',
-        (() => { const g = sb.buildGrid(l2, { sizeFactor: 3, canvasW: 600, canvasH: 600 }, { allowLage2: true }); return g.grid.lage === 2 && sb.layerSpecMatchesBase(l2, sq) === false && sb.layerSpecMatchesBase(sq, l2) === false && sb.layerSpecMatchesBase(l2, { shape: 'square', ordnung: 5, lage: 2 }) === true; })());
+    check('(4) ...another lage does not match (a lage-2 spec built with beyondCeiling in the builder, which setGrid/projectLayerGridSpec still refuse)',
+        (() => { const g = sb.buildGrid(l2, { sizeFactor: 3, canvasW: 600, canvasH: 600 }, { beyondCeiling: true }); return g.grid.lage === 2 && sb.layerSpecMatchesBase(l2, sq) === false && sb.layerSpecMatchesBase(sq, l2) === false && sb.layerSpecMatchesBase(l2, { shape: 'square', ordnung: 5, lage: 2 }) === true; })());
     const fcNew = read('core/facecolor.js'), fcOld = oldDir ? oldRead('core/facecolor.js') : fcNew;
     // task 067: layerGridMatchesBase (lage) and the _keyframeFieldCache signature (lage) were changed on purpose; everything else (cachedTrailsFor included) is still byte-unchanged
     { const strip = s => s.replace(/function layerGridMatchesBase\([\s\S]*?\n\}\n/, 'X').replace(/, layer\.gridSpec \? layer\.gridSpec\.lage : 1\]\);[^\n]*/, ']);');
@@ -133,10 +133,10 @@ if (oldDir) {
     const sb = sandbox(read);
     const L = { shape: 'square', nodeCount: 4, gridSpec: { shape: 'square', ordnung: 3, lage: 1 } };
     let e1 = null, e2 = null, e3 = null;
-    try { sb.projectLayerGridSpec(L, { shape: 'square', ordnung: 2, lage: 2 }); } catch (e) { e1 = e.message; }
+    try { sb.projectLayerGridSpec(L, { shape: 'square', ordnung: 13, lage: 2 }); } catch (e) { e1 = e.message; }   // task 072d: lage 2 over the ceiling (lage 2 itself is free)
     try { sb.projectLayerGridSpec(L, { shape: 'hex', ordnung: 2, lage: 1 }); } catch (e) { e2 = e.message; }
     try { sb.projectLayerGridSpec(L, { shape: 'square', ordnung: 0, lage: 1 }); } catch (e) { e3 = e.message; }
-    check('(5) projectLayerGridSpec refuses lage 2, a spec of another shape and an invalid ordnung BEFORE writing anything', !!e1 && !!e2 && !!e3 && L.nodeCount === 4 && L.gridSpec.ordnung === 3, [e1, e2, e3].join(' | '));
+    check('(5) projectLayerGridSpec refuses lage 2 over the ceiling (13 > 12), a spec of another shape and an invalid ordnung BEFORE writing anything', !!e1 && !!e2 && !!e3 && L.nodeCount === 4 && L.gridSpec.ordnung === 3, [e1, e2, e3].join(' | '));
     sb.projectLayerGridSpec(L, { shape: 'square', ordnung: 5, lage: 1 });
     check('(5) a valid spec sets gridSpec and the derived nodeCount together (square ordnung 5 -> c 6)', L.nodeCount === 6 && L.gridSpec.ordnung === 5);
     let bad = [];

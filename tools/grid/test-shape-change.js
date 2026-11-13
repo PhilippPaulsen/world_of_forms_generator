@@ -36,8 +36,8 @@ else {
         check('(1) ' + script + ' equals the old tree without a shape change (' + keys.length + ' keys)', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/faces.js, core/tiling.js, core/facecolor.js, core/state.js, core/orbits.js, core/export.js, off-path-golden, ui-phone-config.js are unchanged',
-        ['core/faces.js', 'core/tiling.js', 'core/facecolor.js', 'core/state.js', 'tools/morph/off-path-golden.json', 'ui-phone-config.js'].every(same));   // index.html changed in 068c3b (the info sentence)
+    check('(1) core/faces.js, core/tiling.js, core/facecolor.js, off-path-golden, ui-phone-config.js are unchanged (state.js: task 072d removed the switch, pinned in test-lage2-free.js)',
+        ['core/faces.js', 'core/tiling.js', 'core/facecolor.js', 'tools/morph/off-path-golden.json', 'ui-phone-config.js'].every(same));   // index.html changed in 068c3b (the info sentence)
 }
 const P5 = ['fill', 'noFill', 'beginShape', 'vertex', 'endShape', 'push', 'pop', 'noStroke', 'stroke', 'strokeWeight', 'ellipse', 'rect', 'translate', 'rotate', 'scale', 'textSize', 'text', 'textAlign', 'background', 'clear'];
 function world(shape, spec, o) {
@@ -45,7 +45,6 @@ function world(shape, spec, o) {
     const sb = w.sb;
     sb.document = { body: {} }; sb.getComputedStyle = () => ({ getPropertyValue: () => '#ffffff' }); sb.CLOSE = 'close'; sb.window = (o && o.window) || { UI: undefined };
     P5.forEach(f => { sb[f] = () => { }; });
-    w.set('globalThis.__lage2 = true;');
     if (spec) w.set(`currentShape = ${J(spec.shape)}; setGrid(${J(spec)});`);
     return w;
 }

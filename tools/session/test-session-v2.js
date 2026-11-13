@@ -3,7 +3,7 @@
 //   1. round trip (base + 4 layers + timeline + members + colours + free endpoints + alt net, and 38 more): the state after restore equals the source AND the old tree's (measure-g6a.js)
 //   2. c = 1 (legacyC1) round trips, as base and as layer, and stays apart from c = 2
 //   3. schema 1 is rejected deterministically ('schema-version'), the notice exists in de and en and the quarantine runs; an invalid import mutates nothing
-//   4. invalid grid combinations -> invalid (and the quarantine reason), one case each; lage 2 only through allowLage2, and the plan still refuses it
+//   4. invalid grid combinations -> invalid (and the quarantine reason), one case each; lage 2 only through beyondCeiling, and the plan still refuses it
 //   5. the fingerprint changes with ordnung, lage, shape, a moved node, a moved free endpoint; equal for equal geometry
 //   6. rollback before every apply step: same objects, gridRevision untouched; no nodeCount key anywhere in a snapshot
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
@@ -90,8 +90,8 @@ const validate = (o, opts) => ctxV.sb.validateSession(o, opts);
 {
     const tamper = (fn, opts) => { const o = clone(snap); fn(o); return validate(o, opts); };
     const cases = [
-        ['triangle ordnung 2 lage 2 (lage 2 is locked in the app)', o => { o.settings.shape = 'triangle'; o.settings.grid = { shape: 'triangle', ordnung: 2, lage: 2 }; }],
-        ['square ordnung 1 lage 2', o => { o.settings.shape = 'square'; o.settings.grid = { shape: 'square', ordnung: 1, lage: 2 }; }],
+        ['triangle ordnung 13 lage 2 (over LAGE2_MAX; task 072d: lage 2 itself is free, was: locked)', o => { o.settings.shape = 'triangle'; o.settings.grid = { shape: 'triangle', ordnung: 13, lage: 2 }; }],
+        ['square ordnung 13 lage 2', o => { o.settings.shape = 'square'; o.settings.grid = { shape: 'square', ordnung: 13, lage: 2 }; }],
         ['ordnung 0', o => { o.settings.grid.ordnung = 0; }],
         ['ordnung 1.5', o => { o.settings.grid.ordnung = 1.5; }],
         ['ordnung above the shape ceiling (hex 13)', o => { o.settings.shape = 'hex'; o.settings.grid = { shape: 'hex', ordnung: 13, lage: 1 }; }],
@@ -99,18 +99,18 @@ const validate = (o, opts) => ctxV.sb.validateSession(o, opts);
         ['grid shape differs from the sheet shape', o => { o.settings.grid.shape = o.settings.shape === 'hex' ? 'square' : 'hex'; }],
         ['legacyC1 on a hex', o => { o.settings.shape = 'hex'; o.settings.grid = { shape: 'hex', ordnung: 1, lage: 1, legacyC1: true }; }],
         ['an unknown key in the grid', o => { o.settings.grid.nodeCount = 3; }],
-        ['a layer with lage 2', o => { o.layers[0].grid = Object.assign({}, o.layers[0].grid, { lage: 2 }); }],
+        ['a layer with lage 3', o => { o.layers[0].grid = Object.assign({}, o.layers[0].grid, { lage: 3 }); }],
         ['a layer with a missing grid', o => { delete o.layers[1].grid; }],
         ['no settings.grid', o => { delete o.settings.grid; }],
     ];
     const res = cases.map(([name, fn]) => [name, tamper(fn)]);
     res.forEach(([name, r]) => check('(4) ' + name + ' -> invalid', !r.ok && r.code === 'invalid', J(r).slice(0, 140)));
     check('(4) an invalid snapshot is quarantined under the reason \'corrupt\' (sketch.js maps code invalid to it)', /return 'corrupt'; \/\/ empty, too-large, not-json, not-an-object, invalid/.test(read('sketch.js')));
-    // lage 2 only through the test option: validate accepts it, the plan still refuses (the app cannot build lage 2)
-    const l2 = tamper(o => { o.settings.grid = { shape: o.settings.shape, ordnung: 2, lage: 2 }; }, { allowLage2: true });
+    // lage 2 (task 072d: free, no test option needed; the plan no longer refuses for lage 2)
+    const l2 = tamper(o => { o.settings.grid = { shape: o.settings.shape, ordnung: 2, lage: 2 }; });
     const planCtx = world('hex', 3, 3, 'none');
     const pl = l2.ok ? planCtx.sb.planSessionRestore(l2.snapshot, { canvasW: S.CANVAS, canvasH: S.CANVAS }) : null;
-    check('(4) with allowLage2 the validator accepts a lage-2 grid (tests only) and planSessionRestore refuses it: plan-error, nothing applied', l2.ok && pl && !pl.ok && pl.code === 'plan-error' && /lage-2/.test(pl.detail), pl && pl.detail);
+    check('(4) the validator accepts a lage-2 grid without any option; planSessionRestore no longer refuses for lage 2 (no "lage-2 switch" message; this tampered snapshot is refused by its node fingerprint instead, the real lage-2 round trips are in test-lage2-app and test-lage2-limits)', l2.ok && pl && !/lage-2/.test(pl.detail || '') && !/switch/.test(pl.detail || ''), pl && pl.detail);
 }
 
 // ---- 5. the fingerprint ----------------------------------------------------------------------------------------------------------------------------------
