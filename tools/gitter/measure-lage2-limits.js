@@ -17,7 +17,7 @@ console.log('shape  ord  nodes    pairs  setBase(ms)  orbits(ms)  orbitN  heapMB
 for (const [shape, o] of plan) {
     if (stopped.has(shape)) continue;
     const w = H.makeRenderWorld(shape, 3, 3, 'rotation_reflection6');
-    w.set('globalThis.__lage2 = true; LAGE2_MAX.triangle = 12; LAGE2_MAX.square = 12; LAGE2_MAX.hex = 12;');   // the ceiling is lifted for the measurement only (a plain object)
+    w.set('LAGE2_MAX.triangle = 12; LAGE2_MAX.square = 12; LAGE2_MAX.hex = 12;');   // the ceiling is lifted for the measurement only (a plain object)
     w.set(`currentShape = ${JSON.stringify(shape)}; setGrid({ shape: ${JSON.stringify(shape)}, ordnung: ${o}, lage: 1 });`);
     const [tb, r] = ms(() => w.get('JSON.stringify(setBaseLage(2))'));
     const n = w.get('nodes.length');
@@ -25,7 +25,7 @@ for (const [shape, o] of plan) {
     const [to, orb] = ms(() => w.get('computeThemeLineOrbits(nodes, centroid, currentShape, symmetryMode, outerCorners).orbits.length'));
     const h1 = heap();
     const spec = JSON.stringify({ shape, ordnung: o, lage: 2 });
-    const [tn] = ms(() => w.get(`computeLineKeyTable(buildGridNodes(${spec}, { allowLage2: true }), ${spec}, {}).entries.length`));
+    const [tn] = ms(() => w.get(`computeLineKeyTable(buildGridNodes(${spec}, { beyondCeiling: true }), ${spec}, {}).entries.length`));
     let snapKB = '-';
     try { w.set(`connections = ${JSON.stringify(w.get('computeThemeLineOrbits(nodes, centroid, currentShape, symmetryMode, outerCorners).orbits.slice(0, 5).map(o => o.pairs[0])'))};`); snapKB = (JSON.stringify(S.snapOf(w.ctx, S.uiOf(w.ctx, 'none', 6))).length / 1024).toFixed(1); } catch (e) { snapKB = 'err'; }
     const spacing = (size) => { w.set(`shapeSizeFactor = ${size}; setGrid(${spec});`); return w.get('(function () { let m = Infinity; for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) { const d = Math.hypot(nodes[i].x - nodes[j].x, nodes[i].y - nodes[j].y); if (d < m) m = d; } return m; })()'); };

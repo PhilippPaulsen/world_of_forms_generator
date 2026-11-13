@@ -1,4 +1,4 @@
-// G3 (task 058): the pure lage-2 builder (core/forms.js buildGridNodes / projectGridNodes / buildGrid with {allowLage2:true}) and
+// G3 (task 058): the pure lage-2 builder (core/forms.js buildGridNodes / projectGridNodes / buildGrid with {beyondCeiling:true}) and
 // core/symmetry.js canonicalGridFrame, measured against the Orakel tools/gitter/measure-name-rule.js (matched by COORDINATES, never by ids).
 //   node tools/grid/test-lage2-builder.js        FORMS_JS / SYMMETRY_JS = mutated copies (sabotage runs); BASE = git commit of the old forms.js (default 4ab7654d)
 const fs = require('fs'), path = require('path'), vm = require('vm'), cp = require('child_process');
@@ -15,7 +15,7 @@ const N = mk([rd('core/forms.js', process.env.FORMS_JS), rd('core/symmetry.js', 
 const OLD = mk([cp.execFileSync('git', ['show', BASE + ':core/forms.js'], { cwd: ROOT, encoding: 'utf8' })]);
 const ev = (sb, s) => vm.runInContext(s, sb);
 const shapes = ['triangle', 'square', 'hex'], MODE = { triangle: 'rotation_reflection3', square: 'rotation_reflection3', hex: 'rotation_reflection6' };
-const VIEW = { sizeFactor: 3, canvasW: 600, canvasH: 600 }, ALL = { allowLage2: true };
+const VIEW = { sizeFactor: 3, canvasW: 600, canvasH: 600 }, ALL = { beyondCeiling: true };
 const grid = (shape, n, lage, view, extra) => N.buildGrid({ shape, ordnung: n, lage }, Object.assign({}, VIEW, view), ALL);
 const L1 = { triangle: n => (n + 1) * (n + 2) / 2, square: n => (n + 1) * (n + 1), hex: n => 3 * n * (n + 1) + 1 };
 const ADD = { triangle: n => n * n, square: n => n * n, hex: n => 6 * n * n };
@@ -39,7 +39,7 @@ const matchIdx = (pts, ref, tol) => pts.map(p => { let b = -1, d = Infinity; ref
         n2++; if (J(old.nodes) !== J(g.nodes.slice(0, old.nodes.length).map(nd => ({ id: nd.id, x: nd.x, y: nd.y }))) || J(old.outerCorners) !== J(g.outerCorners) || J(old.centroid) !== J(g.centroid)) ids++;
     }
     check('(1) lage 2: the lage-1 nodes (id, x, y, order), centroid and corners are exactly the old builder\'s; new nodes only appended (' + n2 + ' grids)', ids === 0, ids);
-    check('(1) default validateGridSpec / buildGrid still refuse lage 2 (the app never passes the switch)', N.validateGridSpec({ shape: 'hex', ordnung: 1, lage: 2 }).ok === false && shapes.every(s => { try { N.buildGrid({ shape: s, ordnung: 2, lage: 2 }, VIEW); return false; } catch (e) { return /lage 2/.test(e.message); } }) && N.validateGridSpec({ shape: 'hex', ordnung: 1, lage: 2 }, { allowLage2: true }).ok);
+    check('(1) default validateGridSpec / buildGrid (task 072d: no switch; was: refuse lage 2) build lage 2 within the ceiling and refuse one above it; beyondCeiling lifts the ceiling', N.validateGridSpec({ shape: 'hex', ordnung: 1, lage: 2 }).ok === true && shapes.every(s => { try { N.buildGrid({ shape: s, ordnung: 2, lage: 2 }, VIEW); } catch (e) { return false; } try { N.buildGrid({ shape: s, ordnung: N.maxOrdnungFor(s, 2) + 1, lage: 2 }, VIEW); return false; } catch (e) { return /exceeds/.test(e.message); } }) && N.validateGridSpec({ shape: 'hex', ordnung: 1, lage: 2 }, { beyondCeiling: true }).ok);
     check('(1) with the switch: ordnung 0, unknown shape, lage 3, legacyC1 still refused', [{ shape: 'hex', ordnung: 0, lage: 2 }, { shape: 'x', ordnung: 1, lage: 2 }, { shape: 'hex', ordnung: 1, lage: 3 }, { shape: 'square', ordnung: 1, lage: 2, legacyC1: true }].every(s => !N.validateGridSpec(s, ALL).ok));
 }
 

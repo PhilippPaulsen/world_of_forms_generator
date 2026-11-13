@@ -45,7 +45,6 @@ function world(shape, ordnung, lage, o) {
     const sb = w.sb;
     sb.document = { body: {} }; sb.getComputedStyle = () => ({ getPropertyValue: () => '#ffffff' }); sb.CLOSE = 'close'; sb.window = { UI: undefined };
     P5.forEach(f => { sb[f] = () => { }; });
-    if (lage === 2) w.set('globalThis.__lage2 = true;');
     w.set(`setGrid(${J({ shape, ordnung, lage })});`);
     return w;
 }
@@ -105,7 +104,6 @@ const withSketch = (w, names) => { names.forEach(n => w.set(grab(n))); return w;
 // ---- 3. setBaseLage / setLayerLage -------------------------------------------------------------------------------------------------------------
 {
     const w = withSketch(world('triangle', 3, 1), ['addLayer']);
-    w.set('globalThis.__lage2 = true;');
     w.set('connections = [[1, 2]]; redoStack = [[3, 4]]; addLayer(); additionalLayers[0].connections = [[1, 2]];');
     const rev = w.get('gridRevision');
     const r1 = w.get('setBaseLage(2)');
@@ -118,17 +116,17 @@ const withSketch = (w, names) => { names.forEach(n => w.set(grab(n))); return w;
         return [out, same, same2]; })()`);
     check('(3) setBaseLage refuses with a reason and touches nothing: invalid lage; ordnung above the lage-2 ceiling (hex 10 > 9, task 070)', bad[0][0].reason === 'invalid-lage' && bad[0][1].reason === 'invalid-lage' && bad[0][2].reason === 'invalid-lage' && bad[0][3].ok === false && bad[0][3].reason === 'ordnung-limit' && bad[0][3].limit === 9 && bad[1] && bad[2], J(bad));
     const off = world('triangle', 3, 1);
-    check('(3) switch off: setBaseLage(2) answers switch-off, no throw, nothing changes', off.get("(function () { const b = JSON.stringify([gridSpec, gridRevision]); const r = setBaseLage(2); return r.ok === false && r.reason === 'switch-off' && b === JSON.stringify([gridSpec, gridRevision]); })()"));
+    check('(3) no switch (task 072d; was: setBaseLage(2) answers switch-off): setBaseLage(2) works in a fresh sandbox and never answers switch-off', off.get("(function () { const r = setBaseLage(2); return r.ok === true && r.changed === true && gridSpec.lage === 2; })()"));
     // setLayerLage
     const L = withSketch(world('square', 3, 1), ['addLayer']);
-    L.set("globalThis.__lage2 = true; addLayer(); additionalLayers[0].connections = [[1, 2]]; additionalLayers[0].redoStack = [[2, 3]];");
+    L.set("addLayer(); additionalLayers[0].connections = [[1, 2]]; additionalLayers[0].redoStack = [[2, 3]];");
     const rl = L.get('setLayerLage(additionalLayers[0], 2)');
     const sl = L.get('({ lage: additionalLayers[0].gridSpec.lage, c: additionalLayers[0].connections.length, rd: additionalLayers[0].redoStack.length, n: additionalLayers[0].nodes.length, nc: additionalLayers[0].nodeCount, baseLage: gridSpec.lage, rev: gridRevision })');
     check('(3) setLayerLage(layer, 2): the layer gets lage 2 nodes, its lines and redo stack are cleared, the base is untouched', rl.ok && rl.changed && sl.lage === 2 && sl.c === 0 && sl.rd === 0 && sl.n === LAGE2_N('square', 3) && sl.baseLage === 1, J([rl, sl]));
     const ref = L.get(`(function () { const out = []; setLayerLage(additionalLayers[0], 1); updateLimit = 0; additionalLayers[0].shape = 'hex'; additionalLayers[0].gridSpec = { shape: 'hex', ordnung: 10, lage: 1 }; additionalLayers[0].nodeCount = 10; const b = JSON.stringify(additionalLayers[0]); out.push(setLayerLage(additionalLayers[0], 2), JSON.stringify(additionalLayers[0]) === b, setLayerLage({}, 2), setLayerLage(additionalLayers[0], 5)); return out; })()`);
     check('(3) setLayerLage refuses with a reason: ordnung above the ceiling (hex 10 > 9), unknown layer, invalid lage; nothing touched', ref[0].reason === 'ordnung-limit' && ref[0].limit === 9 && ref[1] === true && ref[2].reason === 'unknown-layer' && ref[3].reason === 'invalid-lage', J(ref));
     const tl = withSketch(world('square', 2, 1), ['addLayer']);
-    tl.set("globalThis.__lage2 = true; addLayer(); addLayer(); timeline = { keyframeLayerIds: [0, 1], playbackLayerIndex: 2 };");
+    tl.set("addLayer(); addLayer(); timeline = { keyframeLayerIds: [0, 1], playbackLayerIndex: 2 };");
     check('(3) a timeline keyframe / playback layer cannot change its lage (in-timeline)', tl.get('setLayerLage(additionalLayers[0], 2)').reason === 'in-timeline' && tl.get('setLayerLage(additionalLayers[1], 2)').reason === 'in-timeline');
 }
 
@@ -178,7 +176,7 @@ const withSketch = (w, names) => { names.forEach(n => w.set(grab(n))); return w;
         check('(5) ...after a hex grid: count 2, max 9 (lage-2 ceiling of the hex, task 070), hex button active', nodeInput.v === '2' && nodeInput.elt.max === 9 && shapeBtns[2].active && !shapeBtns[0].active);
         w.set("setBaseLage(1);");
         check('(5) ...after setBaseLage(1): the max is the lage-1 limit (12, task 069)', nodeInput.elt.max === 12 && nodeInput.v === '2');
-        w.set("globalThis.__lage2 = true; setBaseLage(2); additionalLayers.push({ shape: 'hex', gridSpec: { shape: 'hex', ordnung: 1, lage: 1 }, nodeCount: 1, shapeSizeFactor: 3, offsetX: 0, offsetY: 0, rotation: 0, connections: [], redoStack: [], nodes: [], centroid, outerCorners });");
+        w.set("setBaseLage(2); additionalLayers.push({ shape: 'hex', gridSpec: { shape: 'hex', ordnung: 1, lage: 1 }, nodeCount: 1, shapeSizeFactor: 3, offsetX: 0, offsetY: 0, rotation: 0, connections: [], redoStack: [], nodes: [], centroid, outerCorners });");
         log.calls.length = 0; w.set('setLayerLage(additionalLayers[0], 2);');
         check('(5) setLayerLage calls the same hook (layer views refreshed)', log.calls.length === 3, J(log.calls));
     }

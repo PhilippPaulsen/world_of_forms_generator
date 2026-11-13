@@ -33,7 +33,7 @@ function normSym(val) {
 // ---- Task 063 (G6b): the pattern transport v2 (URL and paste) -------------------------------------------------------------------------------------
 // v2 URL:   ?v=2&shape=&ordnung=&lage=&group=&lines=65a,12.11a,...[&layer=new]       v2 paste: {"version":2,"grid":{shape,ordnung,lage},"group","lines":[tokens]}
 // The v2 path is STRICT (core/orbits.js parseTransportV2): the version must be 2, all tokens are checked against the grid's line table BEFORE anything is
-// touched (nothing here mutates; the callers mutate only after a pattern came back), the tokens are sorted numerically, duplicates kept, lage 2 stays locked,
+// touched (nothing here mutates; the callers mutate only after a pattern came back), the tokens are sorted numerically, duplicates kept, lage 2 loads (task 072d),
 // an old-format field (orbitIds, order, symmetryMode) in a v2 input is refused. A refused input sets catalogTransportRejection = { code, detail } (code 'version'
 // or 'invalid'); the callers say it (note.catalog.* in ui-i18n.js) and fall back exactly as for any malformed link.
 let catalogTransportRejection = null;
@@ -47,8 +47,8 @@ function parseCatalogUrlV2(params) {
     if (params.get('v') !== '2') return reject('version', 'v=' + String(params.get('v')).slice(0, 20));
     for (const k of ['orbitIds', 'order', 'symmetryMode']) if (params.has(k)) return reject('invalid', k + ' belongs to the old format');
     const ordnungRaw = params.get('ordnung'), lageRaw = params.get('lage'), linesRaw = params.get('lines');
-    if (!/^[1-9]\d{0,2}$/.test(ordnungRaw || '') || lageRaw !== '1' || !linesRaw) return reject('invalid', 'ordnung, lage or lines missing or malformed');
-    const r = parseTransportV2({ shape: params.get('shape'), ordnung: parseInt(ordnungRaw, 10), lage: 1, group: params.get('group'), lines: linesRaw.split(',') });
+    if (!/^[1-9]\d{0,2}$/.test(ordnungRaw || '') || (lageRaw !== '1' && lageRaw !== '2') || !linesRaw) return reject('invalid', 'ordnung, lage or lines missing or malformed');
+    const r = parseTransportV2({ shape: params.get('shape'), ordnung: parseInt(ordnungRaw, 10), lage: parseInt(lageRaw, 10), group: params.get('group'), lines: linesRaw.split(',') });
     if (!r.ok) return reject(r.code, r.detail);
     const layerRaw = params.get('layer');
     let layer = null;
@@ -129,6 +129,7 @@ function applyCatalogPatternToNewLayer(pattern) {
     try {
         updateActiveLayerGrid({ shape: pattern.shape, nodeCount: pattern.order });
         const layer = additionalLayers[layerIndex];
+        if (pattern.spec && pattern.spec.lage === 2) { const lr = setLayerLage(layer, 2); if (!lr.ok) throw new Error('lage 2 not set (' + lr.reason + ')'); }   // task 072d: the new layer carries the lage of the pattern
         layer.symmetryMode = pattern.symmetryMode;
         layer.connections = resolveCatalogPatternConnections(pattern);   // task 066: the keys resolve in the lattice table, the layer's own ids are the same
         return true;
@@ -280,7 +281,7 @@ function setup() {
     if (catalogTransportRejection) { console.warn(`Catalog link not loaded (${catalogTransportRejection.code}: ${catalogTransportRejection.detail})`); say('catalog', catalogRejectionText(catalogTransportRejection), 'warn'); }
     if (catalogUrlPattern) {
         currentShape = catalogUrlPattern.shape;
-        projectGridSpec(gridSpecForCount(currentShape, catalogUrlPattern.order, (catalogUrlPattern.spec && catalogUrlPattern.spec.lage) || 1));   // task 068b: the lage of the transport (lage 2 stays locked there)
+        projectGridSpec(gridSpecForCount(currentShape, catalogUrlPattern.order, (catalogUrlPattern.spec && catalogUrlPattern.spec.lage) || 1));   // task 068b: the lage of the transport (task 072d: lage 1 or 2)
         shapeBtns.forEach(b => b.removeClass('active'));
         const matchingShapeBtn = shapeBtns.find(b => b.attribute('data-shape') === currentShape);
         if (matchingShapeBtn) matchingShapeBtn.addClass('active');
@@ -4794,7 +4795,7 @@ function sayLage(to, what) {
     window.say('lage-change', text, 'info');
 }
 function sayLageRefusal(r) {
-    if (!window.say || !r || r.ok || r.reason === 'switch-off') return;   // the switch off: the click does nothing and says nothing
+    if (!window.say || !r || r.ok) return;
     const t = (k, v, fb) => (window.UI && UI.t ? UI.t(k, v) : fb);
     if (r.reason === 'ordnung-limit') window.say('lage-change', t('reason.lage2.max', { n: r.limit, t: maxOrdnungFor('triangle', 2), q: maxOrdnungFor('square', 2), h: maxOrdnungFor('hex', 2) }, `Lage 2 gibt es nur bis Ordnung ${r.limit} (Dreieck ${maxOrdnungFor('triangle', 2)}, Quadrat ${maxOrdnungFor('square', 2)}, Sechseck ${maxOrdnungFor('hex', 2)}).`), 'warn');
     else if (r.reason === 'in-timeline') window.say('lage-change', t('reason.lage.timeline', null, 'Die Ebene gehört zur Zeitleiste; ihre Lage ist gesperrt.'), 'warn');
@@ -4802,7 +4803,6 @@ function sayLageRefusal(r) {
 function toggleBaseLage() {
     const spec = baseGridSpecNow(), to = spec.lage === 1 ? 2 : 1;
     if (to === 2) {   // the refusals first: no question for a change that cannot happen
-        if (!lage2SwitchOn()) return;
         if (spec.ordnung > maxOrdnungFor(spec.shape, 2)) { sayLageRefusal({ ok: false, reason: 'ordnung-limit', limit: maxOrdnungFor(spec.shape, 2) }); return; }
     }
     const loss = shapeChangePlan(spec.shape).loss;

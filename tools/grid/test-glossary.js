@@ -38,7 +38,7 @@ else {
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys; the export is compared without the new field "glossary")', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/*.js except export.js and the new glossary.js, core/faces, tiling, facecolor, orbits, state, session, forms, catalog and tools/morph/off-path-golden.json are unchanged', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'export.js' && f !== 'glossary.js' && f !== 'symmetry.js' && f !== 'orbits.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && !fs.existsSync(path.join(oldDir, 'core/glossary.js')));
+    check('(1) core/*.js except export.js and the new glossary.js, core/faces, tiling, facecolor, orbits, state, session, forms, catalog and tools/morph/off-path-golden.json are unchanged', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'export.js' && f !== 'glossary.js' && f !== 'symmetry.js' && f !== 'orbits.js' && f !== 'forms.js' && f !== 'state.js' && f !== 'session.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && !fs.existsSync(path.join(oldDir, 'core/glossary.js')));
 }
 const P5 = ['fill', 'noFill', 'beginShape', 'vertex', 'endShape', 'push', 'pop', 'noStroke', 'stroke', 'strokeWeight', 'ellipse', 'rect', 'translate', 'rotate', 'scale', 'textSize', 'text', 'textAlign', 'background', 'clear'];
 function world(shape, spec, mode, ui) {
@@ -46,7 +46,6 @@ function world(shape, spec, mode, ui) {
     const sb = w.sb;
     sb.document = { body: {} }; sb.getComputedStyle = () => ({ getPropertyValue: () => '#ffffff' }); sb.CLOSE = 'close'; sb.window = { UI: ui }; if (ui) sb.UI = ui;
     P5.forEach(f => { sb[f] = () => { }; });
-    w.set('globalThis.__lage2 = true;');
     if (spec) w.set(`currentShape = ${J(spec.shape)}; setGrid(${J(spec)}); symmetryMode = ${J(mode || 'rotation_reflection6')};`);
     return w;
 }

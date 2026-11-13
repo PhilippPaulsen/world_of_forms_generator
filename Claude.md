@@ -36,3 +36,4 @@ engine. This repo is the canonical generator (`sketch.js` UI shell, portable `co
 State and next steps: `ROADMAP.md` ("Spatial morph: staged plan" > "Stand 2026-11-10", "Patterns block - STATUS",
 "Sheets redesign - STATUS", "Merge readiness"). Morph state after task 038: d3 filter, line switch, playback and
 spatial colours, SVG export and the frame memo are done; open: d3 relaxation, small items, Browser timing (ROADMAP).
+Grid position 2 (Lage 2): freely usable since task 072d - no switch, no `?lage2=1` (ignored): second click on the active shape button (dot), base and layers, ceiling `LAGE2_MAX` 12 / 12 / 9 in `core/forms.js`; session and transport (URL, paste) load it; the catalog (`gallery/v2`) stays position 1 only.

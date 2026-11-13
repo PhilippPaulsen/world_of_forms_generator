@@ -41,9 +41,10 @@ else {
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys)', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/*.js except forms.js, tools/morph/off-path-golden.json and ui-phone-config.js are unchanged (core/faces, tiling, facecolor, orbits, export, session, state included)', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'forms.js' && f !== 'orbits.js' && f !== 'export.js' && f !== 'glossary.js' && f !== 'symmetry.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
+    check('(1) core/*.js except forms.js, tools/morph/off-path-golden.json and ui-phone-config.js are unchanged (core/faces, tiling, facecolor, orbits, export, session, state included)', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'forms.js' && f !== 'orbits.js' && f !== 'export.js' && f !== 'glossary.js' && f !== 'symmetry.js' && f !== 'state.js' && f !== 'session.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
     const strip = s => s.replace(/\/\/ (?:Task 067: the ceiling of the ordnung of a lage-2 grid|The ONE table of the lage-2 ceiling)[\s\S]*?const LAGE2_MAX = \{[^}]*\};/, 'TABLE');
-    check('(1) core/forms.js differs from the old file ONLY in the LAGE2_MAX table (and its comment): the lage-1 table NODE_COUNT_MAX is untouched', strip(read('core/forms.js')) === strip(fs.readFileSync(path.join(oldDir, 'core/forms.js'), 'utf8')) && read('core/forms.js') !== fs.readFileSync(path.join(oldDir, 'core/forms.js'), 'utf8') && /const NODE_COUNT_MAX = \{ triangle: 13, square: 13, hex: 12 \};/.test(read('core/forms.js')));
+    const tabLine = (s, n) => (new RegExp('const ' + n + ' = \\{[^}]*\\};').exec(s) || [''])[0];
+    check('(1) core/forms.js: the lage-2 table is 12 / 12 / 9 and the lage-1 table NODE_COUNT_MAX is untouched (task 072d changed forms.js further: the switch is gone, pinned in test-lage2-free.js)', tabLine(read('core/forms.js'), 'LAGE2_MAX') === 'const LAGE2_MAX = { triangle: 12, square: 12, hex: 9 };' && tabLine(read('core/forms.js'), 'NODE_COUNT_MAX') === tabLine(fs.readFileSync(path.join(oldDir, 'core/forms.js'), 'utf8'), 'NODE_COUNT_MAX'));
     check('(1) sketch.js: the refusal text call of sayLageRefusal passes the table values (task 070; later tasks may change other parts of sketch.js)', /t\('reason\.lage2\.max', \{ n: r\.limit, t: maxOrdnungFor\('triangle', 2\)/.test(SK));
 }
 const P5 = ['fill', 'noFill', 'beginShape', 'vertex', 'endShape', 'push', 'pop', 'noStroke', 'stroke', 'strokeWeight', 'ellipse', 'rect', 'translate', 'rotate', 'scale', 'textSize', 'text', 'textAlign', 'background', 'clear'];
@@ -53,7 +54,6 @@ function world(shape, spec, o) {
     const sb = w.sb;
     sb.document = { body: {} }; sb.getComputedStyle = () => ({ getPropertyValue: () => '#ffffff' }); sb.CLOSE = 'close'; sb.window = o.window || { UI: undefined };
     P5.forEach(f => { sb[f] = () => { }; });
-    if (o.on !== false) w.set('globalThis.__lage2 = true;');
     if (spec) w.set(`currentShape = ${J(spec.shape)}; setGrid(${J(spec)});`);
     return w;
 }
@@ -61,7 +61,7 @@ function world(shape, spec, o) {
 // ---- 2. one table ------------------------------------------------------------------------------------------------------------------------
 {
     const w = world('triangle', null);
-    check('(2) maxOrdnungFor / gridMaxOrdnung at lage 2 (switch on) = 12 / 12 / 9; with the switch off 0 / the lage-1 limit; lage 1 stays 12 / 12 / 12', SHAPES.every(s => w.get(`maxOrdnungFor(${J(s)}, 2) === ${LM[s]} && gridMaxOrdnung(${J(s)}, 2) === ${LM[s]} && maxOrdnungFor(${J(s)}, 1) === 12`)) && world('triangle', null, { on: false }).get("maxOrdnungFor('hex', 2) === 0 && gridMaxOrdnung('hex', 2) === 12"));
+    check('(2) maxOrdnungFor / gridMaxOrdnung at lage 2 = 12 / 12 / 9 (no switch since task 072d: also in a fresh sandbox; was: with the switch off 0 / the lage-1 limit); lage 1 stays 12 / 12 / 12', SHAPES.every(s => w.get(`maxOrdnungFor(${J(s)}, 2) === ${LM[s]} && gridMaxOrdnung(${J(s)}, 2) === ${LM[s]} && maxOrdnungFor(${J(s)}, 1) === 12`)) && world('triangle', null, { on: false }).get("maxOrdnungFor('hex', 2) === 9 && gridMaxOrdnung('hex', 2) === 9"));
     check('(2) the validator (switch on): each shape accepts its limit and refuses one above, at lage 2; the layer path (projectLayerGridSpec) and setGrid / projectGridSpec say the same', SHAPES.every(s => w.get(`(function () { const t = f => { try { f(); return false; } catch (e) { return true; } }, l = { shape: ${J(s)}, nodeCount: 3, gridSpec: { shape: ${J(s)}, ordnung: 3, lage: 1 } };
             return validateGridSpec({ shape: ${J(s)}, ordnung: ${LM[s]}, lage: 2 }).ok && !validateGridSpec({ shape: ${J(s)}, ordnung: ${LM[s] + 1}, lage: 2 }).ok && t(() => setGrid({ shape: ${J(s)}, ordnung: ${LM[s] + 1}, lage: 2 })) && t(() => projectGridSpec({ shape: ${J(s)}, ordnung: ${LM[s] + 1}, lage: 2 }))
                 && t(() => projectLayerGridSpec(l, { shape: ${J(s)}, ordnung: ${LM[s] + 1}, lage: 2 })) && !t(() => projectLayerGridSpec(l, { shape: ${J(s)}, ordnung: ${LM[s]}, lage: 2 })); })()`)));
@@ -172,21 +172,20 @@ function world(shape, spec, o) {
 {
     for (const [shape, lshape] of [['triangle', 'square'], ['hex', 'triangle'], ['square', 'hex']]) {
         const src = S.newCtx(); S.reset(src, shape, 3, 3, 'rotation_reflection6');
-        src.run('globalThis.__lage2 = true;');
         src.run(`currentShape = ${J(shape)}; setGrid({ shape: ${J(shape)}, ordnung: ${LM[shape]}, lage: 2 });`);
         const reps = src.run('computeThemeLineOrbits(nodes, centroid, currentShape, symmetryMode, outerCorners).orbits.map(o => o.pairs[0].slice())');
         src.run(`connections = ${J(reps.slice(0, 5))};`);
         src.run(`(function () { const layer = { connections: [[1, 2]], redoStack: [], offsetX: 0, offsetY: 0, rotation: 0, shape: ${J(lshape)}, symmetryMode: symmetryMode, enabled: true, showFaces: false, shapeSizeFactor: 3 };
             projectLayerGridSpec(layer, { shape: ${J(lshape)}, ordnung: ${LM[lshape]}, lage: 2 }); const g = layerGridForSpec(outerCorners, centroid, currentShape, shapeSizeFactor, 3, layer.gridSpec, layer.shape, canvasW, canvasH); layer.nodes = g.nodes; layer.centroid = g.centroid; layer.outerCorners = g.outerCorners; additionalLayers.push(layer); })();`);
         const ui = S.uiOf(src, 'none', 6), snap = S.snapOf(src, ui);
-        const dst = S.newCtx(); S.reset(dst, shape === 'hex' ? 'square' : 'hex', 3, 3, 'none'); dst.run('globalThis.__lage2 = true;');
+        const dst = S.newCtx(); S.reset(dst, shape === 'hex' ? 'square' : 'hex', 3, 3, 'none');
         const res = S.applyInto(dst, snap, S.fakeHooks(dst, snap, S.uiOf(dst, 'none', 6)), {});
         check(`(5) session round trip: ${shape} ${LM[shape]} lage 2 base + ${lshape} ${LM[lshape]} lage 2 layer: validate, plan, apply; the state equals the source (snapshot, nodes with u/v, export JSON)`, res.ok === true && S.same(S.snapOf(dst, S.uiOf(dst, 'none', 6)), snap) && dst.run('gridSpec.lage') === 2 && dst.run('additionalLayers[0].gridSpec.lage') === 2 && dst.run('additionalLayers[0].nodes.length') === L2N(lshape, LM[lshape]) && J(S.exportOf(dst)) === J(S.exportOf(src)), J(res).slice(0, 200));
         const over = JSON.parse(J(snap)); over.settings.grid.ordnung = LM[shape] + 1; over.savedAt = 1;
         const overL = JSON.parse(J(snap)); overL.layers[0].grid.ordnung = LM[lshape] + 1; overL.savedAt = 1;
         check(`(5) the session validator: ordnung ${LM[shape] + 1} on the ${shape} base and ${LM[lshape] + 1} on the ${lshape} layer (lage 2) are refused, the limits accepted`, dst.sb.validateSession(over).ok === false && dst.sb.validateSession(overL).ok === false && dst.sb.validateSession(Object.assign(JSON.parse(J(snap)), { savedAt: 1 })).ok === true);
         const off = S.newCtx(); S.reset(off, 'square', 3, 3, 'none');
-        check(`(5) with the switch off the same snapshot is refused (${shape} / ${lshape})`, off.sb.validateSession(Object.assign(JSON.parse(J(snap)), { savedAt: 1 })).ok === false);
+        check(`(5) no switch (task 072d; was: with the switch off the same snapshot is refused): a fresh sandbox accepts the same snapshot (${shape} / ${lshape})`, off.sb.validateSession(Object.assign(JSON.parse(J(snap)), { savedAt: 1 })).ok === true);
     }
 }
 

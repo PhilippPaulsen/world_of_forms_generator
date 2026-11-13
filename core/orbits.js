@@ -613,7 +613,7 @@ function parseLineKey(token, opts) {
 //   table = { grid, group, entries: [{ key, token, spiegelgleich, size, pairs: [[idA, idB], ...], anomalies }] sorted by compareLineKeys, byToken, collisions, pairCount }
 function computeLineKeyTable(nodes, grid, opts) {
     opts = opts || {};
-    const v = validateGridSpec(grid, { allowLage2: true });
+    const v = validateGridSpec(grid, { beyondCeiling: true });
     if (!v.ok) throw new Error('computeLineKeyTable: ' + v.error);
     if (opts.symmetryMode !== undefined && !isMainGroupMode(grid.shape, opts.symmetryMode)) return null;
     const spec = mainGroupSpec(grid.shape), els = mainGroupElements(grid.shape), num = numberGridNodes(nodes, grid, opts);
@@ -667,7 +667,7 @@ function pairForLineKey(table, key, opts) {
 const _LK_CACHE = new Map();
 function getLineKeyTable(grid, opts) {
     const ck = grid.shape + '|' + grid.ordnung + '|' + grid.lage + (grid.legacyC1 ? '|c1' : '');
-    if (!_LK_CACHE.has(ck)) _LK_CACHE.set(ck, computeLineKeyTable(buildGridNodes(grid, { allowLage2: true }), grid, opts));
+    if (!_LK_CACHE.has(ck)) _LK_CACHE.set(ck, computeLineKeyTable(buildGridNodes(grid, { beyondCeiling: true }), grid, opts));
     return _LK_CACHE.get(ck);
 }
 const _LK_SHAPE_LETTER = { triangle: 'd', square: 'q', hex: '*' };
@@ -686,7 +686,7 @@ function parseGridName(name, opts) {
     const m = /^(\d+)([dq*])([12])\/(3\*|4\*|6\*) (\S+)$/.exec(name);
     if (!m) return null;
     const shape = m[2] === 'd' ? 'triangle' : m[2] === 'q' ? 'square' : 'hex', grid = { shape, ordnung: +m[1], lage: +m[3] };
-    if (!validateGridSpec(grid, { allowLage2: true }).ok || mainGroupSpec(shape).name !== m[4]) return null;
+    if (!validateGridSpec(grid, { beyondCeiling: true }).ok || mainGroupSpec(shape).name !== m[4]) return null;
     const table = getLineKeyTable(grid, opts), keys = [];
     for (const tok of m[5].split('+')) { const k = parseLineKey(tok, { table }); if (!k) return null; keys.push(k); }
     for (let i = 1; i < keys.length; i++) if (compareLineKeys(keys[i - 1], keys[i]) > 0) return null;   // canonical order only
@@ -791,7 +791,7 @@ function gridNodeNumbersFor(spec) {
     try {
         const ck = spec.shape + '|' + spec.ordnung + '|' + spec.lage + (spec.legacyC1 ? '|c1' : '');
         if (_GN_CACHE.has(ck)) return _GN_CACHE.get(ck);
-        const lat = buildGridNodes(spec, { allowLage2: true }), num = numberGridNodes(lat, spec, { allowLage2: true });
+        const lat = buildGridNodes(spec, { beyondCeiling: true }), num = numberGridNodes(lat, spec, { beyondCeiling: true });
         const m = new Map(num.nodes.map(n => [n.id, { zahl: n.zahl, u: n.u, v: n.v }]));
         _GN_CACHE.set(ck, m);
         return m;
@@ -809,8 +809,8 @@ function parseTransportV2(raw) {
         if (!raw || typeof raw !== 'object') return bad('not an object');
         const { shape, ordnung, lage, group, lines } = raw;
         if (shape !== 'triangle' && shape !== 'square' && shape !== 'hex') return bad('unknown shape');
-        if (lage !== 1) return bad(lage === 2 ? 'lage 2 is not available yet' : 'lage must be 1');
-        const spec = { shape, ordnung, lage: 1 };
+        if (lage !== 1 && lage !== 2) return bad('lage must be 1 or 2');   // task 072d: lage 2 loads, within LAGE2_MAX (validateGridSpec) and against its own line table below
+        const spec = { shape, ordnung, lage };
         const v = validateGridSpec(spec, { enforceMax: true });
         if (!v.ok) return bad(v.error);
         if (group !== mainGroupSpec(shape).name) return bad('group must be ' + mainGroupSpec(shape).name + ' for ' + shape);
