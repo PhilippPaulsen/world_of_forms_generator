@@ -170,6 +170,7 @@ function setup() {
             // Task 068c3a: the ordnung stays across a shape change (clamped to the new shape's maximum, the lage stays); what the rebuild clears is said, and asked
             // for first when it takes layers or the timeline with it. A click on the shape that is already active behaves as before.
             const plan = shapeChangePlan(btn.attribute('data-shape'));
+            if (plan.same) { toggleBaseLage(); return; }   // task 068c3b: a click on the ACTIVE shape changes the lage (it used to rebuild the grid silently)
             const doShapeChange = () => {
             // Remove active class from all
             shapeBtns.forEach(b => b.removeClass('active'));
@@ -188,7 +189,7 @@ function setup() {
             cancelAltNetConstruction(); // Roadmap 1.2-C: an in-progress P/Q click pair no longer means anything once the target shape/order changed underneath it
             redraw();
             };
-            if (!plan.same && (plan.loss.layers || plan.loss.timeline) && window.timelineConfirm && window.UI && UI.t) {
+            if ((plan.loss.layers || plan.loss.timeline) && window.timelineConfirm && window.UI && UI.t) {
                 window.timelineConfirm({ title: UI.t('shape.confirm.title'), text: UI.t('shape.confirm.text', { what: shapeLossWhat(plan.loss) }), confirmLabel: UI.t('shape.confirm.go'), onConfirm: doShapeChange, returnFocus: () => { const a = shapeBtns.find(b => b.hasClass('active')); if (a && a.elt.focus) a.elt.focus(); } });
                 return;
             }
@@ -1679,6 +1680,7 @@ function setup() {
         layerShapeBtns.forEach(btn => {
             btn.mousePressed(() => {
                 if (activeLayer === 'base') return;
+                if (additionalLayers[activeLayer] && additionalLayers[activeLayer].shape === btn.attribute('data-shape')) { toggleLayerLage(additionalLayers[activeLayer]); return; }   // task 068c3b: the active shape again = the lage
                 layerShapeBtns.forEach(b => b.removeClass('active'));
                 btn.addClass('active');
                 const hadLines = additionalLayers[activeLayer].connections.length > 0, shapeDiffers = additionalLayers[activeLayer].shape !== btn.attribute('data-shape');
@@ -4781,6 +4783,48 @@ window.getSpatialMorph = getSpatialMorph;
 // Updates #pattern-name-status for whichever sheet is currently active.
 // Called once per draw() (see there for why this is cached rather than
 // unconditional like updateCrossLayerStatus()).
+// Task 068c3b: the lage by a second click on the ACTIVE shape button. Base: setBaseLage (clears the lines, layers and timeline like a shape change; asks first when layers or a timeline would go);
+// refused with a text when the ordnung is above the lage-2 ceiling; silent while the developer switch is off. Layer: setLayerLage (clears that layer's lines; a timeline layer is locked).
+function sayLage(to, what) {
+    if (!window.say) return;
+    const t = (k, v, fb) => (window.UI && UI.t ? UI.t(k, v) : fb);
+    const text = what ? t('note.lage.' + to, { what }, `Lage ${to}: ${what} geleert. ` + (to === 2 ? 'Erneut klicken: zurück zu Lage 1.' : 'Erneut klicken: Lage 2.'))
+        : t('note.lage.' + to + '.none', null, `Lage ${to}. ` + (to === 2 ? 'Erneut klicken: zurück zu Lage 1.' : 'Erneut klicken: Lage 2.'));
+    window.say('lage-change', text, 'info');
+}
+function sayLageRefusal(r) {
+    if (!window.say || !r || r.ok || r.reason === 'switch-off') return;   // the switch off: the click does nothing and says nothing
+    const t = (k, v, fb) => (window.UI && UI.t ? UI.t(k, v) : fb);
+    if (r.reason === 'ordnung-limit') window.say('lage-change', t('reason.lage2.max', { n: r.limit }, `Lage 2 gibt es nur bis Ordnung ${r.limit} (beim Dreieck und Quadrat 5, beim Sechseck 2).`), 'warn');
+    else if (r.reason === 'in-timeline') window.say('lage-change', t('reason.lage.timeline', null, 'Die Ebene gehört zur Zeitleiste; ihre Lage ist gesperrt.'), 'warn');
+}
+function toggleBaseLage() {
+    const spec = baseGridSpecNow(), to = spec.lage === 1 ? 2 : 1;
+    if (to === 2) {   // the refusals first: no question for a change that cannot happen
+        if (!lage2SwitchOn()) return;
+        if (spec.ordnung > maxOrdnungFor(spec.shape, 2)) { sayLageRefusal({ ok: false, reason: 'ordnung-limit', limit: maxOrdnungFor(spec.shape, 2) }); return; }
+    }
+    const loss = shapeChangePlan(spec.shape).loss;
+    const go = () => {
+        const r = setBaseLage(to);
+        if (!r.ok) { sayLageRefusal(r); return; }
+        sayLage(to, shapeLossWhat(loss));
+        redraw();
+    };
+    if ((loss.layers || loss.timeline) && window.timelineConfirm && window.UI && UI.t) {
+        window.timelineConfirm({ title: UI.t('lage.confirm.title'), text: UI.t('lage.confirm.text', { what: shapeLossWhat(loss) }), confirmLabel: UI.t('shape.confirm.go'), onConfirm: go });
+        return;
+    }
+    go();
+}
+function toggleLayerLage(layer) {
+    const to = layerGridSpecOf(layer).lage === 1 ? 2 : 1, hadLines = layer.connections.length > 0;
+    const r = setLayerLage(layer, to);
+    if (!r.ok) { sayLageRefusal(r); return; }
+    sayLage(to, hadLines ? shapeLossWhat({ lines: true }) : '');
+    redraw();
+}
+
 // Task 068c3a: what a change of the BASE shape does. -> { same, from, to, clamped: { from, to } | null, loss: { lines, layers, timeline, colors } }.
 // to = gridSpecOnShape (the ordnung stays, clamped; the lage stays). The loss is what rebuildGrid() clears: the base's lines and colours, every layer and the timeline.
 function shapeChangePlan(target) {
