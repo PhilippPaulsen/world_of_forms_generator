@@ -36,9 +36,8 @@ else {
         check('(1) ' + script + ' equals the old tree without a shape change (' + keys.length + ' keys)', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/faces.js, core/tiling.js, core/facecolor.js, core/state.js, core/orbits.js, core/export.js, off-path-golden, index.html markup (apart from ?v=), ui-phone-config.js are unchanged',
-        ['core/faces.js', 'core/tiling.js', 'core/facecolor.js', 'core/state.js', 'core/orbits.js', 'core/export.js', 'tools/morph/off-path-golden.json', 'ui-phone-config.js'].every(same)
-        && read('index.html').replace(/\?v=\w+/g, '') === fs.readFileSync(path.join(oldDir, 'index.html'), 'utf8').replace(/\?v=\w+/g, ''));
+    check('(1) core/faces.js, core/tiling.js, core/facecolor.js, core/state.js, core/orbits.js, core/export.js, off-path-golden, ui-phone-config.js are unchanged',
+        ['core/faces.js', 'core/tiling.js', 'core/facecolor.js', 'core/state.js', 'core/orbits.js', 'core/export.js', 'tools/morph/off-path-golden.json', 'ui-phone-config.js'].every(same));   // index.html changed in 068c3b (the info sentence)
 }
 const P5 = ['fill', 'noFill', 'beginShape', 'vertex', 'endShape', 'push', 'pop', 'noStroke', 'stroke', 'strokeWeight', 'ellipse', 'rect', 'translate', 'rotate', 'scale', 'textSize', 'text', 'textAlign', 'background', 'clear'];
 function world(shape, spec, o) {
@@ -121,7 +120,7 @@ const MAXO = { 1: { triangle: 6, square: 12, hex: 7 }, 2: { triangle: 5, square:
         const log = { said: [], dialogs: [], calls: [] };
         const t = (key, vars) => { const e = dict[key]; if (!e) return key; return e[lang || 'de'].replace(/\{(\w+)\}/g, (_, k) => vars && vars[k] !== undefined ? vars[k] : '{' + k + '}'); };
         const win = { UI: { t }, say: (k, text, kind) => log.said.push([k, text, kind]), timelineConfirm: o => log.dialogs.push(o) };
-        const w = withSketch(world(spec.shape, spec, { window: win }), ['shapeChangePlan', 'shapeLossWhat', 'shapeChangeText', 'sayShapeChange']);
+        const w = withSketch(world(spec.shape, spec, { window: win }), ['shapeChangePlan', 'shapeLossWhat', 'shapeChangeText', 'sayShapeChange', 'toggleBaseLage', 'sayLage', 'sayLageRefusal']);
         w.sb.UI = win.UI;
         const mkBtn = s => ({ s, active: s === spec.shape, handler: null, mousePressed(f) { this.handler = f; }, attribute: () => s, addClass() { this.active = true; }, removeClass() { this.active = false; }, hasClass() { return this.active; }, elt: { focus() { } } });
         const btns = SHAPES.map(mkBtn);
@@ -152,10 +151,10 @@ const MAXO = { 1: { triangle: 6, square: 12, hex: 7 }, 2: { triangle: 5, square:
     check('(4) cancel (the dialog never calls onConfirm) leaves everything unchanged', x.w.get('JSON.stringify([gridSpec, currentShape, connections, additionalLayers.length, timeline])') === before && active(x) === 'square');
     x.log.dialogs[0].onConfirm();
     check('(4) confirm: the change happens (hex ordnung 4, layers and timeline gone), the notice says what was cleared', x.w.get('gridSpec.shape === "hex" && gridSpec.ordnung === 4 && additionalLayers.length === 0 && timeline === null') && active(x) === 'hex' && x.log.said.length === 1 && /Geleert: Linien, Ebenen und Zeitleiste\./.test(x.log.said[0][1]), J(x.log.said));
-    // a click on the active shape: as before (no dialog, no notice, rebuild)
-    x = mk({ shape: 'square', ordnung: 4, lage: 1 }, "connections = [[1, 2]]; additionalLayers.push({ shape: 'square', connections: [], nodes: [] });");
+    // a click on the active shape: task 068c3b - no longer a silent rebuild, it is the lage (tools/grid/test-lage-click.js); with layers it asks first
+    x = mk({ shape: 'square', ordnung: 4, lage: 1 }, "connections = [[1, 2]];");
     click(x, 'square');
-    check('(4) a click on the shape that is already active behaves as before: no dialog, no notice, the grid is rebuilt (lines and layers cleared)', x.log.dialogs.length === 0 && x.log.said.length === 0 && x.w.get('connections.length === 0 && additionalLayers.length === 0 && gridSpec.shape === "square" && gridSpec.ordnung === 4'));
+    check('(4) a click on the shape that is already active (task 068c3b) is the lage: no shape notice, no silent rebuild of lage 1 (the lines go with the lage change: lage 2 now)', x.w.get('gridSpec.lage === 2 && gridSpec.ordnung === 4 && connections.length === 0') && x.log.dialogs.length === 0 && x.log.said.length === 1 && x.log.said[0][0] === 'lage-change', J(x.log.said));
     // English
     x = mk({ shape: 'square', ordnung: 12, lage: 1 }, "connections = [[1, 2]]; additionalLayers.push({ shape: 'square', connections: [], nodes: [] });", 'en');
     click(x, 'hex');
