@@ -24,7 +24,6 @@ const ui = { lang: 'de' }; ui.t = (key, vars) => { const e = dict[key]; if (!e) 
 function tooltipWorld(shape, ordnung, lage) {
     const w = H.makeRenderWorld(shape, 3, 3, 'rotation_reflection6'), sb = w.sb;
     sb.document = { body: {} }; sb.window = { UI: ui }; sb.UI = ui;
-    w.set('globalThis.__lage2 = true;');
     w.set(`currentShape = ${J(shape)}; setGrid(${J({ shape, ordnung, lage })});`);
     sb.glossaryEntry = require(path.join(ROOT, 'core', 'glossary.js')).glossaryEntry;
     if (process.env.ORBITS_JS) { /* the world loads core from the repo; a sabotaged orbits.js is judged by the core part of this test */ }

@@ -37,10 +37,11 @@ else {
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys)', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/*.js except forms.js, tools/morph/off-path-golden.json, ui-phone-config.js are unchanged', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'forms.js' && f !== 'orbits.js' && f !== 'export.js' && f !== 'glossary.js' && f !== 'symmetry.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
+    check('(1) core/*.js except forms.js, tools/morph/off-path-golden.json, ui-phone-config.js are unchanged', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'forms.js' && f !== 'orbits.js' && f !== 'export.js' && f !== 'glossary.js' && f !== 'symmetry.js' && f !== 'state.js' && f !== 'session.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
     // forms.js differs ONLY in the table and its comment
     const strip = s => s.replace(/\/\/ (?:Node Count ceiling per shape|The ONE table of the lage-1 ceiling)[\s\S]*?const NODE_COUNT_MAX = \{[^}]*\};/, 'TABLE').replace(/\/\/ (?:Task 067: the ceiling of the ordnung of a lage-2 grid|The ONE table of the lage-2 ceiling)[\s\S]*?const LAGE2_MAX = \{[^}]*\};/, 'TABLE2');   // task 070 changed the lage-2 table too
-    check('(1) core/forms.js differs from the old file only in the NODE_COUNT_MAX table (and its comment)', strip(read('core/forms.js')) === strip(fs.readFileSync(path.join(oldDir, 'core/forms.js'), 'utf8')) && read('core/forms.js') !== fs.readFileSync(path.join(oldDir, 'core/forms.js'), 'utf8'));
+    const tabLine = (s, n) => (new RegExp('const ' + n + ' = \\{[^}]*\\};').exec(s) || [''])[0];
+    check('(1) core/forms.js: the NODE_COUNT_MAX table is the task-069 one (13 / 13 / 12) and differs from the old file (task 072d changed forms.js further: the switch is gone, pinned in test-lage2-free.js)', tabLine(read('core/forms.js'), 'NODE_COUNT_MAX') === 'const NODE_COUNT_MAX = { triangle: 13, square: 13, hex: 12 };' && read('core/forms.js') !== fs.readFileSync(path.join(oldDir, 'core/forms.js'), 'utf8'));
 }
 const P5 = ['fill', 'noFill', 'beginShape', 'vertex', 'endShape', 'push', 'pop', 'noStroke', 'stroke', 'strokeWeight', 'ellipse', 'rect', 'translate', 'rotate', 'scale', 'textSize', 'text', 'textAlign', 'background', 'clear'];
 function world(shape, spec, on) {
@@ -48,7 +49,6 @@ function world(shape, spec, on) {
     const sb = w.sb;
     sb.document = { body: {} }; sb.getComputedStyle = () => ({ getPropertyValue: () => '#ffffff' }); sb.CLOSE = 'close'; sb.window = { UI: undefined };
     P5.forEach(f => { sb[f] = () => { }; });
-    if (on !== false) w.set('globalThis.__lage2 = true;');
     if (spec) w.set(`currentShape = ${J(spec.shape)}; setGrid(${J(spec)});`);
     return w;
 }

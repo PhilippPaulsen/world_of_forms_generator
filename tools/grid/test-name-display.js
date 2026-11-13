@@ -49,7 +49,6 @@ function world(shape, spec, mode, ui) {
     sb.document = { body: {} }; sb.getComputedStyle = () => ({ getPropertyValue: () => '#ffffff' }); sb.CLOSE = 'close'; sb.window = { UI: ui };
     if (ui) sb.UI = ui;
     P5.forEach(f => { sb[f] = () => { }; });
-    w.set('globalThis.__lage2 = true;');
     if (spec) w.set(`currentShape = ${J(spec.shape)}; setGrid(${J(spec)}); symmetryMode = ${J(mode || 'rotation_reflection6')};`);
     return w;
 }

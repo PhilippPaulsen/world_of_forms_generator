@@ -27,14 +27,14 @@ const oracleZahl = (shape, n, lage) => { const og = O.buildGrid(shape, n, lage);
     }
     check('(6) lage-1 buildGrid byte-equal to ' + BASE + ' (' + n1 + ' grids), no zahl/u/v unless requested', bad === 0 && leak === 0, bad + '/' + leak);
     check('(6) with { numbered: true } the lage-1 nodes keep id, x, y exactly and gain u, v, zahl', numOk === n1, numOk + '/' + n1);
-    check('(6) the lage-2 switch is still internal: default buildGrid/validateGridSpec refuse lage 2', shapes.every(s => !G('validateGridSpec')({ shape: s, ordnung: 2, lage: 2 }).ok));
+    check('(6) task 072d: no switch; default validateGridSpec accepts lage 2 within LAGE2_MAX and refuses one above it (was: still internal, refused)', shapes.every(s => G('validateGridSpec')({ shape: s, ordnung: 2, lage: 2 }).ok && !G('validateGridSpec')({ shape: s, ordnung: 13, lage: 2 }).ok));
 }
 
 // (1) node numbers equal the Orakel's: every shape x both lagen x n = 1..8, by coordinates
 {
     let bad = '', cases = 0, nodesChecked = 0;
     for (const shape of shapes) for (const lage of [1, 2]) for (let n = 1; n <= 8; n++) {
-        const g = G('buildGrid')({ shape, ordnung: n, lage }, VIEW, { allowLage2: true, numbered: true }), fr = G('canonicalGridFrame')({ shape, ordnung: n, centroid: g.centroid, outerCorners: g.outerCorners });
+        const g = G('buildGrid')({ shape, ordnung: n, lage }, VIEW, { beyondCeiling: true, numbered: true }), fr = G('canonicalGridFrame')({ shape, ordnung: n, centroid: g.centroid, outerCorners: g.outerCorners });
         const { og, byKey } = oracleZahl(shape, n, lage); cases++;
         let ok = g.nodes.length === og.nodes.length;
         for (const nd of g.nodes) { const o = fr.toOracle(nd.x, nd.y), m = byKey.get(B.ptKey(o.X, o.Y)); nodesChecked++; if (!m || m.zahl !== nd.zahl) ok = false; }
@@ -49,9 +49,9 @@ const oracleZahl = (shape, n, lage) => { const og = O.buildGrid(shape, n, lage);
 {
     let bad = '';
     for (const shape of shapes) for (const [n, lage] of [[2, 2], [3, 1], [4, 2]]) {
-        const ref = G('buildGrid')({ shape, ordnung: n, lage }, VIEW, { allowLage2: true, numbered: true });
+        const ref = G('buildGrid')({ shape, ordnung: n, lage }, VIEW, { beyondCeiling: true, numbered: true });
         for (const v of [{ sizeFactor: 1 }, { sizeFactor: 9, canvasW: 900, canvasH: 500 }, { center: { x: 90, y: 410 } }]) {
-            const g = G('buildGrid')({ shape, ordnung: n, lage }, Object.assign({}, VIEW, v), { allowLage2: true, numbered: true });
+            const g = G('buildGrid')({ shape, ordnung: n, lage }, Object.assign({}, VIEW, v), { beyondCeiling: true, numbered: true });
             if (!g.nodes.every((nd, i) => nd.zahl === ref.nodes[i].zahl && nd.u === ref.nodes[i].u && nd.v === ref.nodes[i].v)) bad += ` ${shape}${n}/${lage}${J(v)}`;
             // the canvas path (x, y through the frame) gives the same numbers as the lattice path
             const nn = G('numberGridNodes')(g.nodes.map(nd => ({ id: nd.id, x: nd.x, y: nd.y })), { shape, ordnung: n, lage }, { geometry: g });
@@ -71,7 +71,7 @@ const oracleZahl = (shape, n, lage) => { const og = O.buildGrid(shape, n, lage);
     check('(2) size, canvas size, translation, a vertical canvas flip and a rotated/mirrored alt-net polygon leave every node number unchanged (equal to the Orakel\'s by coordinates)', bad === '', bad.slice(0, 200));
     let worst = 0;
     for (const shape of shapes) for (let n = 1; n <= 6; n++) {
-        const g = G('buildGrid')({ shape, ordnung: n, lage: 2 }, VIEW, { allowLage2: true }), fr = G('canonicalGridFrame')({ shape, ordnung: n, centroid: g.centroid, outerCorners: g.outerCorners });
+        const g = G('buildGrid')({ shape, ordnung: n, lage: 2 }, VIEW, { beyondCeiling: true }), fr = G('canonicalGridFrame')({ shape, ordnung: n, centroid: g.centroid, outerCorners: g.outerCorners });
         for (const nd of g.nodes) { const o = fr.toOracle(nd.x, nd.y), c = G('gridCanonicalPoint')(shape, n, nd.u, nd.v); worst = Math.max(worst, Math.hypot(o.X - c.X, o.Y - c.Y)); }
     }
     check('(3) gridCanonicalPoint(u, v) is exactly the canvas node seen through canonicalGridFrame (max ' + worst.toExponential(1) + ')', worst < 1e-9, worst);

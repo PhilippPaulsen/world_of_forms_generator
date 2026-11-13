@@ -15,7 +15,7 @@ function loadCore() {
     vm.runInContext(rd('core/symmetry.js', process.env.SYMMETRY_JS), sb);
     vm.runInContext(rd('core/orbits.js', process.env.ORBITS_JS), sb);
     const g = n => vm.runInContext(n, sb);
-    const V2 = {}, LAT = { allowLage2: true };
+    const V2 = {}, LAT = { beyondCeiling: true };
     const api = {
         sb, V2, LAT, get: g,
         latticeNodes: grid => g('buildGridNodes')(grid, LAT),
