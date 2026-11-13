@@ -125,6 +125,10 @@ const normalize = d => d.replace(/\u0304/g, '~').replace(/([A-Z])/g, c => '').re
     w.set("currentShape = 'square'; setGrid({ shape: 'square', ordnung: 4, lage: 1 }); connections = " + J(reps.slice(10, 12)) + "; symmetryMode = 'rotation_reflection6';");
     const a = show().text; w.set("symmetryMode = 'rotation3';"); const b = show().text; w.set("symmetryMode = 'rotation_reflection6';"); const c = show().text;
     check('(4) the symmetry mode: v2 -> old name -> v2 again (the signature carries the mode)', a !== b && a === c && /^4q1\/4\*/.test(a) && !/^\d+[dq*][12]\//.test(b), J([a, b, c]));
+    // the lage alone (a session restore uses projectGridSpec: gridRevision is NOT bumped): the signature itself must carry it
+    w.set("(function () { const spec = { shape: 'square', ordnung: 4, lage: 2 }; projectGridSpec(spec); nodes = buildGrid(spec, { sizeFactor: shapeSizeFactor, canvasW, canvasH }).nodes; })();");
+    const lageOnly = show().text; w.set("(function () { const spec = { shape: 'square', ordnung: 4, lage: 1 }; projectGridSpec(spec); nodes = buildGrid(spec, { sizeFactor: shapeSizeFactor, canvasW, canvasH }).nodes; })();"); show();
+    check('(4) the lage alone (state set like a session restore, gridRevision unchanged) changes the name: 4q2 against 4q1 (the signature carries the lage)', /^4q2\//.test(lageOnly) && /^4q1\//.test(a), lageOnly);
     const tipDe = els['pattern-name-status'].attrs.title; ui.lang = 'en'; r = show();
     check('(4) a language change re-builds the tooltip (the signature carries UI.lang): English "Grid 4q1: order 4, Square, position 1, main group 4*, 25 nodes." and "node numbers"', tipDe.startsWith('Gitter 4q1') && r.tip !== tipDe && r.tip.startsWith('Grid 4q1: order 4, Square, position 1, main group 4*, 25 nodes.') && /node numbers \d+ and \d+, letter [a-n] \(touches \d+ sectors\)/.test(r.tip) && r.text === a, r.tip);
     ui.lang = 'de';
