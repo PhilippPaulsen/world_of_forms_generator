@@ -4858,19 +4858,20 @@ function sayShapeChange(plan) {
     if (text && window.say) window.say('shape-change', text, 'info');
 }
 
-// Task 071: the tooltip of the v2 name: the grid (ordnung, shape, lage, main group, nodes) and every distinct line (node numbers z1 / z2, letter and the sectors it touches, overline, capital letter).
-// Texts in ui-i18n.js (name.tip.*), the terms of docs/terminology.md part B.
+// Task 071 / 071b: the tooltip of the v2 name: the grid (order, shape, position, main group, nodes) and every distinct line (node numbers, letter and the sectors it touches, overline, aA). Every word and
+// explanation is a key of the glossary (core/glossary.js -> ui-i18n.js glossary.*): the tooltip owns no text of its own.
 function patternNameTooltip(v2, spec) {
-    const t = (key, vars, fb) => (window.UI && UI.t ? UI.t(key, vars) : fb);
+    const T = (key, vars) => (window.UI && UI.t ? UI.t(key, vars) : key);
+    const term = id => T(glossaryEntry(id).termKey), text = id => T(glossaryEntry(id).textKey);
     const SHAPE_KEY = { triangle: 'shape.triangle', square: 'shape.square', hex: 'shape.hex' };
-    const lines = [t('name.tip.grid', { code: v2.grid, o: spec.ordnung, shape: t(SHAPE_KEY[spec.shape], null, spec.shape), l: spec.lage, g: v2.group, n: getGridNodeCount(spec) }, `Gitter ${v2.grid}: Ordnung ${spec.ordnung}, Lage ${spec.lage}, Hauptgruppe ${v2.group}, ${getGridNodeCount(spec)} Knoten.`)];
+    const lines = [`${v2.grid}: ${term('order')} ${spec.ordnung}, ${T(SHAPE_KEY[spec.shape])}, ${term('position')} ${spec.lage}, ${term('maingroup')} ${v2.group}, ${getGridNodeCount(spec)} ${term('nodes')}`];
     const seen = new Set();
     v2.tokens.forEach(tk => {
         if (seen.has(tk.token)) return; seen.add(tk.token);
         const sectors = 'abcdefghiklmn'.indexOf(tk.key.buchstabe) + 1;
-        let line = t('name.tip.line', { token: tk.display, z1: tk.key.z1, z2: tk.key.z2, b: tk.key.buchstabe, s: sectors }, `${tk.display}: Knotennummern ${tk.key.z1} und ${tk.key.z2}, Buchstabe ${tk.key.buchstabe}`);
-        if (tk.key.gegen) line += t('name.tip.bar', null, ', Überstrich');
-        if (tk.spiegelgleich) line += t('name.tip.cap', null, ', Großbuchstabe');
+        let line = `${tk.display}: ${term('nodenumber')} ${tk.key.z1}, ${tk.key.z2}; ${term('letter')} ${tk.key.buchstabe} (${sectors === 1 ? T('glossary.sectors.one', { n: sectors }) : T('glossary.sectors.other', { n: sectors })})`;
+        if (tk.key.gegen) line += `; ${term('bar')}: ${text('bar')}`;
+        if (tk.spiegelgleich) line += `; ${term('both')}: ${text('both')}`;
         lines.push(line);
     });
     return lines.join('\n');
