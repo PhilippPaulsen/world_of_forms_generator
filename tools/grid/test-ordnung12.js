@@ -37,9 +37,9 @@ else {
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys)', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/*.js except forms.js, sketch.js, tools/morph/off-path-golden.json, ui-phone-config.js are unchanged', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'forms.js').every(f => same('core/' + f)) && same('sketch.js') && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
+    check('(1) core/*.js except forms.js, tools/morph/off-path-golden.json, ui-phone-config.js are unchanged', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'forms.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
     // forms.js differs ONLY in the table and its comment
-    const strip = s => s.replace(/\/\/ (?:Node Count ceiling per shape|The ONE table of the lage-1 ceiling)[\s\S]*?const NODE_COUNT_MAX = \{[^}]*\};/, 'TABLE');
+    const strip = s => s.replace(/\/\/ (?:Node Count ceiling per shape|The ONE table of the lage-1 ceiling)[\s\S]*?const NODE_COUNT_MAX = \{[^}]*\};/, 'TABLE').replace(/\/\/ (?:Task 067: the ceiling of the ordnung of a lage-2 grid|The ONE table of the lage-2 ceiling)[\s\S]*?const LAGE2_MAX = \{[^}]*\};/, 'TABLE2');   // task 070 changed the lage-2 table too
     check('(1) core/forms.js differs from the old file only in the NODE_COUNT_MAX table (and its comment)', strip(read('core/forms.js')) === strip(fs.readFileSync(path.join(oldDir, 'core/forms.js'), 'utf8')) && read('core/forms.js') !== fs.readFileSync(path.join(oldDir, 'core/forms.js'), 'utf8'));
 }
 const P5 = ['fill', 'noFill', 'beginShape', 'vertex', 'endShape', 'push', 'pop', 'noStroke', 'stroke', 'strokeWeight', 'ellipse', 'rect', 'translate', 'rotate', 'scale', 'textSize', 'text', 'textAlign', 'background', 'clear'];
@@ -57,11 +57,11 @@ function world(shape, spec, on) {
 {
     const files = [...fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f)).map(f => 'core/' + f), 'sketch.js', 'ui-form.js', 'ui-layer.js', 'ui.js', 'gallery.js', 'gallery-render.js', 'ui-layers.js', 'ui-net.js'];
     const tables = files.flatMap(f => (read(f).match(/\{\s*triangle:\s*\d+,\s*square:\s*\d+,\s*hex:\s*\d+\s*\}/g) || []).map(m => f + ' ' + m.replace(/\s+/g, ' ')));
-    check('(2) the limits live in ONE table per lage: core/forms.js NODE_COUNT_MAX { 13, 13, 12 } (counts) and LAGE2_MAX { 5, 5, 2 }; no other { triangle, square, hex } number table in core, sketch or ui', J(tables.sort()) === J(['core/forms.js { triangle: 13, square: 13, hex: 12 }', 'core/forms.js { triangle: 5, square: 5, hex: 2 }']), J(tables));
+    check('(2) the limits live in ONE table per lage: core/forms.js NODE_COUNT_MAX { 13, 13, 12 } (counts) and LAGE2_MAX { 12, 12, 9 } (task 070); no other { triangle, square, hex } number table in core, sketch or ui', J(tables.sort()) === J(['core/forms.js { triangle: 13, square: 13, hex: 12 }', 'core/forms.js { triangle: 12, square: 12, hex: 9 }'].sort()), J(tables));
     const w = world('triangle', null);
-    check('(2) lage 1: gridMaxOrdnung = maxOrdnungFor = 12 for every shape; the counts 13 / 13 / 12; lage 2 (switch on) 5 / 5 / 2', SHAPES.every(s => w.get(`gridMaxOrdnung(${J(s)}, 1) === 12 && maxOrdnungFor(${J(s)}, 1) === 12`)) && w.get("maxNodeCountFor('triangle') === 13 && maxNodeCountFor('square') === 13 && maxNodeCountFor('hex') === 12 && maxOrdnungFor('triangle', 2) === 5 && maxOrdnungFor('square', 2) === 5 && maxOrdnungFor('hex', 2) === 2 && gridMaxOrdnung('hex', 2) === 2"));
-    check('(2) the validator (enforceMax): ordnung 12 accepted, 13 refused, for EACH of the three shapes; lage 2 above 5 / 5 / 2 refused', SHAPES.every(s => w.get(`validateGridSpec({ shape: ${J(s)}, ordnung: 12, lage: 1 }, { enforceMax: true }).ok && !validateGridSpec({ shape: ${J(s)}, ordnung: 13, lage: 1 }, { enforceMax: true }).ok`))
-        && w.get("validateGridSpec({ shape: 'triangle', ordnung: 5, lage: 2 }).ok && !validateGridSpec({ shape: 'triangle', ordnung: 6, lage: 2 }).ok && !validateGridSpec({ shape: 'hex', ordnung: 3, lage: 2 }).ok"));
+    check('(2) lage 1: gridMaxOrdnung = maxOrdnungFor = 12 for every shape; the counts 13 / 13 / 12; lage 2 (switch on) 12 / 12 / 9', SHAPES.every(s => w.get(`gridMaxOrdnung(${J(s)}, 1) === 12 && maxOrdnungFor(${J(s)}, 1) === 12`)) && w.get("maxNodeCountFor('triangle') === 13 && maxNodeCountFor('square') === 13 && maxNodeCountFor('hex') === 12 && maxOrdnungFor('triangle', 2) === 12 && maxOrdnungFor('square', 2) === 12 && maxOrdnungFor('hex', 2) === 9 && gridMaxOrdnung('hex', 2) === 9"));
+    check('(2) the validator (enforceMax): ordnung 12 accepted, 13 refused, for EACH of the three shapes; lage 2 above 12 / 12 / 9 refused', SHAPES.every(s => w.get(`validateGridSpec({ shape: ${J(s)}, ordnung: 12, lage: 1 }, { enforceMax: true }).ok && !validateGridSpec({ shape: ${J(s)}, ordnung: 13, lage: 1 }, { enforceMax: true }).ok`))
+        && w.get("validateGridSpec({ shape: 'triangle', ordnung: 12, lage: 2 }).ok && !validateGridSpec({ shape: 'triangle', ordnung: 13, lage: 2 }).ok && validateGridSpec({ shape: 'hex', ordnung: 9, lage: 2 }).ok && !validateGridSpec({ shape: 'hex', ordnung: 10, lage: 2 }).ok"));
     const html = read('index.html');
     check('(2) markup: both order inputs max="12" (the shape and lage set the real max in sketch.js); the code fallbacks of ui-form.js / ui-layer.js are 12, not 7', /id="node-count-input" min="1" max="12"/.test(html) && /id="layer-node-count-input" min="1" max="12"/.test(html) && /gridMaxOrdnung\(currentShape, typeof gridSpec !== 'undefined' \? gridSpec\.lage : 1\) : 12; \}/.test(read('ui-form.js')) && /layerGridSpecOf\(L\)\.lage : 1\) : 12; \}/.test(read('ui-layer.js')));
     const dict = (() => { const src = read('ui-i18n.js'); const m = {}; const rx = /'([\w.]+)': \{ de: '((?:[^'\\]|\\.)*)', en: '((?:[^'\\]|\\.)*)' \}/g; let k; while ((k = rx.exec(src))) m[k[1]] = { de: k[2], en: k[3] }; return m; })();
@@ -131,18 +131,18 @@ function world(shape, spec, on) {
     let pairsN = 0, clampedL1 = 0;
     for (const a of SHAPES) for (const b of SHAPES) {
         if (a === b) continue;
-        for (const lage of [1, 2]) for (let o = 1; o <= (lage === 1 ? 12 : { triangle: 5, square: 5, hex: 2 }[a]); o++) {
+        for (const lage of [1, 2]) for (let o = 1; o <= (lage === 1 ? 12 : { triangle: 12, square: 12, hex: 9 }[a]); o++) {
             const w = world(a, { shape: a, ordnung: o, lage });
             w.set(`currentShape = ${J(b)}; rebuildGrid(${J(b)});`);
-            const maxB = lage === 1 ? 12 : { triangle: 5, square: 5, hex: 2 }[b], want = Math.min(o, maxB);
+            const maxB = lage === 1 ? 12 : { triangle: 12, square: 12, hex: 9 }[b], want = Math.min(o, maxB);
             pairsN++; if (lage === 1 && want < o) clampedL1++;
             if (w.get('gridSpec.ordnung') !== want || w.get('gridSpec.lage') !== lage || w.get('nodes.length') !== (lage === 1 ? NODES(b, want) : w.get('nodes.length'))) bad2.push(`L${lage} ${a}${o}->${b}`);
         }
     }
-    check(`(4) shape change for every ordered pair x ordnung 1..max x lage (${pairsN} cases): the ordnung stays (lage 1: never clamped, ${clampedL1} clamps; lage 2: 5 / 5 / 2 clamps), the lage stays, the node count is that of the new shape and ordnung`, bad2.length === 0 && clampedL1 === 0, bad2.slice(0, 4).join(' | '));
+    check(`(4) shape change for every ordered pair x ordnung 1..max x lage (${pairsN} cases): the ordnung stays (lage 1: never clamped, ${clampedL1} clamps; lage 2: 12 / 12 / 9 clamps), the lage stays, the node count is that of the new shape and ordnung`, bad2.length === 0 && clampedL1 === 0, bad2.slice(0, 4).join(' | '));
     const w = world('triangle', { shape: 'triangle', ordnung: 6, lage: 1 });
-    check('(4) lage 2 is still 5 / 5 / 2: setBaseLage refuses triangle 6 (limit 5), hex 3 (limit 2), square 6 (limit 5); accepts triangle 5; an ordnung 12 base can go to lage 2 on no shape', w.get("setBaseLage(2).reason === 'ordnung-limit' && setBaseLage(2).limit === 5") && SHAPES.every(s => { const x = world(s, { shape: s, ordnung: 12, lage: 1 }); const r = x.get('setBaseLage(2)'); return r.ok === false && r.reason === 'ordnung-limit' && r.limit === { triangle: 5, square: 5, hex: 2 }[s]; })
-        && world('triangle', { shape: 'triangle', ordnung: 5, lage: 1 }).get('setBaseLage(2).ok') === true);
+    check('(4) lage 2 (task 070: 12 / 12 / 9): setBaseLage accepts ordnung 12 on triangle and square and 9 on hex, refuses hex 10..12 with limit 9', ['triangle', 'square'].every(s => world(s, { shape: s, ordnung: 12, lage: 1 }).get('setBaseLage(2).ok') === true) && world('hex', { shape: 'hex', ordnung: 9, lage: 1 }).get('setBaseLage(2).ok') === true
+        && [10, 11, 12].every(o => { const r = world('hex', { shape: 'hex', ordnung: o, lage: 1 }).get('setBaseLage(2)'); return r.ok === false && r.reason === 'ordnung-limit' && r.limit === 9; }));
 }
 
 // ---- 5. session, catalog -----------------------------------------------------------------------------------------------------------------------
