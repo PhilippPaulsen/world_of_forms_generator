@@ -4795,7 +4795,7 @@ function sayLage(to, what) {
 function sayLageRefusal(r) {
     if (!window.say || !r || r.ok || r.reason === 'switch-off') return;   // the switch off: the click does nothing and says nothing
     const t = (k, v, fb) => (window.UI && UI.t ? UI.t(k, v) : fb);
-    if (r.reason === 'ordnung-limit') window.say('lage-change', t('reason.lage2.max', { n: r.limit }, `Lage 2 gibt es nur bis Ordnung ${r.limit} (beim Dreieck und Quadrat 5, beim Sechseck 2).`), 'warn');
+    if (r.reason === 'ordnung-limit') window.say('lage-change', t('reason.lage2.max', { n: r.limit, t: maxOrdnungFor('triangle', 2), q: maxOrdnungFor('square', 2), h: maxOrdnungFor('hex', 2) }, `Lage 2 gibt es nur bis Ordnung ${r.limit} (Dreieck ${maxOrdnungFor('triangle', 2)}, Quadrat ${maxOrdnungFor('square', 2)}, Sechseck ${maxOrdnungFor('hex', 2)}).`), 'warn');
     else if (r.reason === 'in-timeline') window.say('lage-change', t('reason.lage.timeline', null, 'Die Ebene gehört zur Zeitleiste; ihre Lage ist gesperrt.'), 'warn');
 }
 function toggleBaseLage() {
