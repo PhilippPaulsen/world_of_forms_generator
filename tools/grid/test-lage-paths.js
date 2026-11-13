@@ -99,7 +99,7 @@ const withSketch = (w, names) => { names.forEach(n => w.set(grab(n))); return w;
     // lage 1 layers: the old path, the old clamp
     const u1 = withSketch(world('square', 3, 1), ['addLayer', 'updateActiveLayerGrid']);
     u1.set('addLayer(); activeLayer = 0;');
-    check('(2) a lage-1 layer behaves as before: count 9 -> 9 (square limit 13), hex 9 -> clamp 7', u1.get("(function () { const a = updateActiveLayerGrid({ nodeCount: 9 }); const b = updateActiveLayerGrid({ shape: 'hex' }); return a === null && additionalLayers[0].gridSpec.lage === 1 && additionalLayers[0].nodeCount === 7 && b && b.to === 7; })()"));
+    check('(2) a lage-1 layer behaves as before: count 9 -> 9 (square), hex keeps the ordnung 8 (count 8; the hex limit is 12 since task 069): no clamp', u1.get("(function () { const a = updateActiveLayerGrid({ nodeCount: 9 }); const b = updateActiveLayerGrid({ shape: 'hex' }); return a === null && additionalLayers[0].gridSpec.lage === 1 && additionalLayers[0].nodeCount === 8 && b === null; })()"));
 }
 
 // ---- 3. setBaseLage / setLayerLage -------------------------------------------------------------------------------------------------------------
@@ -177,7 +177,7 @@ const withSketch = (w, names) => { names.forEach(n => w.set(grab(n))); return w;
         w.set("setGrid({ shape: 'hex', ordnung: 2, lage: 2 });");
         check('(5) ...after a hex grid: count 2, max 2 (lage-2 ceiling), hex button active', nodeInput.v === '2' && nodeInput.elt.max === 2 && shapeBtns[2].active && !shapeBtns[0].active);
         w.set("setBaseLage(1);");
-        check('(5) ...after setBaseLage(1): the max is the lage-1 limit (hex 7)', nodeInput.elt.max === 7 && nodeInput.v === '2');
+        check('(5) ...after setBaseLage(1): the max is the lage-1 limit (12, task 069)', nodeInput.elt.max === 12 && nodeInput.v === '2');
         w.set("globalThis.__lage2 = true; setBaseLage(2); additionalLayers.push({ shape: 'hex', gridSpec: { shape: 'hex', ordnung: 1, lage: 1 }, nodeCount: 1, shapeSizeFactor: 3, offsetX: 0, offsetY: 0, rotation: 0, connections: [], redoStack: [], nodes: [], centroid, outerCorners });");
         log.calls.length = 0; w.set('setLayerLage(additionalLayers[0], 2);');
         check('(5) setLayerLage calls the same hook (layer views refreshed)', log.calls.length === 3, J(log.calls));
