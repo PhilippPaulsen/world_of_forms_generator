@@ -86,7 +86,8 @@ if (oldDir) {
         vm.runInContext(mkLayer(shape, c, false), O); vm.runInContext(mkLayer(shape, c, true), N);
         const a = vm.runInContext('updateActiveLayerGrid(' + J(p) + ')', O), b = vm.runInContext('updateActiveLayerGrid(' + J(p) + ')', N);
         n3++;
-        const keepsOrdnung = p.shape !== undefined && p.shape !== shape && p.nodeCount === undefined;   // task 068c3a: a shape change on its own keeps the ORDNUNG now (tools/grid/test-shape-change.js), not the count
+        const OLDMAX = { triangle: 7, square: 13, hex: 7 }, aboveOld = p.nodeCount !== undefined && p.nodeCount > OLDMAX[p.shape || shape];   // task 069: the ceiling is 12 on every shape; counts above the OLD ceiling clamp differently now
+        const keepsOrdnung = aboveOld || (p.shape !== undefined && p.shape !== shape && p.nodeCount === undefined);   // task 068c3a: a shape change on its own keeps the ORDNUNG now (tools/grid/test-shape-change.js), not the count
         if (!keepsOrdnung && (J(a) !== J(b) || dump(O) !== dump(N))) bad3.push(shape + c + J(p));
         const ok = vm.runInContext('(function(){ const l = additionalLayers[0]; return toLegacy(l.gridSpec) === l.nodeCount && l.gridSpec.shape === l.shape; })()', N);
         if (!ok) badSpec.push(shape + c + J(p));

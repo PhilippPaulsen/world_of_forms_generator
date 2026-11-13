@@ -37,7 +37,7 @@ else {
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys)', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/*.js, tools/morph/off-path-golden.json and ui-phone-config.js are unchanged (setBaseLage / setLayerLage are only used)', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f)).every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
+    check('(1) core/*.js (task 069 changed only the ceiling table in forms.js), tools/morph/off-path-golden.json and ui-phone-config.js are unchanged (setBaseLage / setLayerLage are only used)', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'forms.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
     const cnt = (s, rx) => (s.match(rx) || []).length;
     check('(1) the p5 handler count of sketch.js is unchanged (a branch in the existing handlers, no new one)', cnt(SK, /\.mousePressed\(/g) === cnt(fs.readFileSync(path.join(oldDir, 'sketch.js'), 'utf8'), /\.mousePressed\(/g));
 }

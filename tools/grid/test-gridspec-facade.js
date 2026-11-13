@@ -43,7 +43,7 @@ for (const s of ['triangle', 'square']) {
         J(pts(ga.nodes)) === J(pts(gb.nodes)) && ev(N, `_alignmentConditionMet(3, 1, 3, 3, '${s}')`) === false && ev(N, `_alignmentConditionMet(3, 2, 3, 2, '${s}')`) === true);
 }
 check('(2) fromLegacy rejects unknown shape and nodeCount 0 / 1.5 / "3"', [['pentagon', 3], ['hex', 0], ['square', 1.5], ['square', '3']].every(([s, c]) => { try { N.fromLegacy(s, c); return false; } catch (e) { return true; } }));
-check('(2) maxOrdnungFor: triangle 6, square 12, hex 7, lage 2 / unknown 0', N.maxOrdnungFor('triangle', 1) === 6 && N.maxOrdnungFor('square', 1) === 12 && N.maxOrdnungFor('hex') === 7 && N.maxOrdnungFor('hex', 2) === 0 && N.maxOrdnungFor('x', 1) === 0);
+check('(2) maxOrdnungFor: 12 / 12 / 12 (task 069), lage 2 / unknown 0', N.maxOrdnungFor('triangle', 1) === 12 && N.maxOrdnungFor('square', 1) === 12 && N.maxOrdnungFor('hex') === 12 && N.maxOrdnungFor('hex', 2) === 0 && N.maxOrdnungFor('x', 1) === 0);
 
 // (3) validator
 const bad = (spec, re) => { const r = N.validateGridSpec(spec); return r.ok === false && re.test(r.error); };
@@ -52,7 +52,7 @@ check('(3) ordnung 0 / negative / fractional / string rejected', [0, -1, 1.5, '2
 check('(3) unknown shape rejected (also missing, null spec)', bad({ shape: 'pentagon', ordnung: 1, lage: 1 }, /unknown shape/) && bad({ ordnung: 1, lage: 1 }, /unknown shape/) && N.validateGridSpec(null).ok === false);
 check('(3) lage 0 / 3 / missing rejected', [0, 3, undefined].every(l => N.validateGridSpec({ shape: 'hex', ordnung: 1, lage: l }).ok === false));
 check('(3) valid specs accepted; legacyC1 only on triangle/square ordnung 1', N.validateGridSpec({ shape: 'hex', ordnung: 7, lage: 1 }).ok && N.validateGridSpec({ shape: 'triangle', ordnung: 1, lage: 1, legacyC1: true }).ok && !N.validateGridSpec({ shape: 'hex', ordnung: 1, lage: 1, legacyC1: true }).ok && !N.validateGridSpec({ shape: 'square', ordnung: 2, lage: 1, legacyC1: true }).ok);
-check('(3) enforceMax: square 12 ok, 13 refused; hex 8 refused', N.validateGridSpec({ shape: 'square', ordnung: 12, lage: 1 }, { enforceMax: true }).ok && !N.validateGridSpec({ shape: 'square', ordnung: 13, lage: 1 }, { enforceMax: true }).ok && !N.validateGridSpec({ shape: 'hex', ordnung: 8, lage: 1 }, { enforceMax: true }).ok);
+check('(3) enforceMax: square 12 ok, 13 refused; hex 13 refused (task 069)', N.validateGridSpec({ shape: 'square', ordnung: 12, lage: 1 }, { enforceMax: true }).ok && !N.validateGridSpec({ shape: 'square', ordnung: 13, lage: 1 }, { enforceMax: true }).ok && !N.validateGridSpec({ shape: 'hex', ordnung: 13, lage: 1 }, { enforceMax: true }).ok);
 
 // (4) rebuildGrid / setGrid in a state context, against the OLD rebuildGrid body run on the OLD builders
 const oldState = cp.execFileSync('git', ['show', BASE + ':core/state.js'], { cwd: ROOT, encoding: 'utf8' });

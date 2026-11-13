@@ -56,7 +56,7 @@ const SHAPES = ['triangle', 'square', 'hex'];
     check('(2) helpers: countForOrdnung / ordnungForCount are inverse for ordnung >= 1 (triangle/square c = o + 1, hex c = o); c = 1 shows as ordnung 1', w.get(`(function () {
         for (const s of ['triangle', 'square', 'hex']) { for (let o = 1; o <= 13; o++) if (ordnungForCount(s, countForOrdnung(s, o)) !== o) return false; }
         return ordnungForCount('triangle', 1) === 1 && ordnungForCount('square', 1) === 1 && ordnungForCount('hex', 1) === 1 && countForOrdnung('hex', 3) === 3 && countForOrdnung('square', 3) === 4; })()`));
-    check('(2) limits at lage 1: gridMaxOrdnung = 6 / 12 / 7 = the old count ceilings (7 / 13 / 7) minus the offset; maxOrdnungFor agrees', w.get("gridMaxOrdnung('triangle', 1) === 6 && gridMaxOrdnung('square', 1) === 12 && gridMaxOrdnung('hex', 1) === 7 && maxNodeCountFor('triangle') === 7 && maxNodeCountFor('square') === 13 && maxNodeCountFor('hex') === 7"));
+    check('(2) limits at lage 1 (task 069): gridMaxOrdnung = 12 / 12 / 12 = the count ceilings 13 / 13 / 12 minus the offset; maxOrdnungFor agrees', w.get("gridMaxOrdnung('triangle', 1) === 12 && gridMaxOrdnung('square', 1) === 12 && gridMaxOrdnung('hex', 1) === 12 && maxNodeCountFor('triangle') === 13 && maxNodeCountFor('square') === 13 && maxNodeCountFor('hex') === 12"));
     // every old value c -> the same grid through the new ordnung; the OLD path is fromLegacy(shape, c) + buildGrid
     let bad = [], n = 0;
     for (const shape of SHAPES) {
@@ -73,7 +73,7 @@ const SHAPES = ['triangle', 'square', 'hex'];
             if (!same || J([a.centroid, a.outerCorners]) !== J([b.centroid, b.outerCorners]) || (c >= 2 || shape === 'hex' ? J(oldSpec) !== J(newSpec) : false)) bad.push(shape + c + '->' + o);
         }
     }
-    check(`(2) every old value c (3 shapes x 1..max, ${n} cases) -> the new ordnung gives the same nodes, centroid and corners; for c >= 2 (and every hex) the same spec; c = 1 (legacyC1) has the same node POSITIONS (the square numbers its corners cyclically, ids differ, so a legacyC1 state keeps its own spec)`, n === 7 + 13 + 7 && bad.length === 0, bad.slice(0, 4).join(' | '));
+    check(`(2) every old value c (3 shapes x 1..max, ${n} cases) -> the new ordnung gives the same nodes, centroid and corners; for c >= 2 (and every hex) the same spec; c = 1 (legacyC1) has the same node POSITIONS (the square numbers its corners cyclically, ids differ, so a legacyC1 state keeps its own spec)`, n === 13 + 13 + 12 && bad.length === 0, bad.slice(0, 4).join(' | '));
     // a legacyC1 state shows ordnung 1 and still loads / builds
     const l = world('square');
     l.set("projectGridSpec(fromLegacy('square', 1)); rebuildGrid('square');");
@@ -88,9 +88,9 @@ const SHAPES = ['triangle', 'square', 'hex'];
         if (a.get('JSON.stringify([gridSpec, nodeCount, nodes])') !== b.get('JSON.stringify([gridSpec, nodeCount, nodes])')) bad2.push(shape + o);
     }
     check('(3) base input path: setGrid(gridSpecForOrdnung) = the old setGrid(fromLegacy(count)) for every ordnung of the new scale (spec, nodeCount, nodes)', bad2.length === 0, bad2.join(','));
-    check('(3) over the limit the ordnung is clamped (triangle 9 -> 6, square 20 -> 12, hex 9 -> 7), 0 / negative -> 1; lage 2 (switch on): 5 / 5 / 2', w.get("gridSpecForOrdnung('triangle', 9, 1).ordnung === 6 && gridSpecForOrdnung('square', 20, 1).ordnung === 12 && gridSpecForOrdnung('hex', 9, 1).ordnung === 7 && gridSpecForOrdnung('hex', 0, 1).ordnung === 1")
+    check('(3) over the limit the ordnung is clamped (task 069: 20 -> 12 on every shape; 9 stays 9), 0 / negative -> 1; lage 2 (switch on): 5 / 5 / 2', w.get("gridSpecForOrdnung('triangle', 20, 1).ordnung === 12 && gridSpecForOrdnung('square', 20, 1).ordnung === 12 && gridSpecForOrdnung('hex', 20, 1).ordnung === 12 && gridSpecForOrdnung('hex', 9, 1).ordnung === 9 && gridSpecForOrdnung('hex', 0, 1).ordnung === 1")
         && world('triangle', null, { lage2: true }).get("gridSpecForOrdnung('triangle', 9, 2).ordnung === 5 && gridSpecForOrdnung('square', 9, 2).ordnung === 5 && gridSpecForOrdnung('hex', 9, 2).ordnung === 2 && gridMaxOrdnung('hex', 2) === 2"));
-    check('(3) with the switch off lage 2 falls back to the lage-1 limit for the input max (gridMaxOrdnung(.., 2) = 6 / 12 / 7)', w.get("gridMaxOrdnung('triangle', 2) === 6 && gridMaxOrdnung('square', 2) === 12 && gridMaxOrdnung('hex', 2) === 7"));
+    check('(3) with the switch off lage 2 falls back to the lage-1 limit for the input max (gridMaxOrdnung(.., 2) = 12 / 12 / 12)', w.get("gridMaxOrdnung('triangle', 2) === 12 && gridMaxOrdnung('square', 2) === 12 && gridMaxOrdnung('hex', 2) === 12"));
     // the layer path: updateActiveLayerGrid({ ordnung: o }) = the old updateActiveLayerGrid({ nodeCount: c })
     let bad3 = [];
     for (const shape of SHAPES) {
@@ -149,7 +149,7 @@ const SHAPES = ['triangle', 'square', 'hex'];
     check('(5) tip.order and info.grid.line carry the count word: "Ordnung {o}: {n} Knoten" / "Order {o}: {n} nodes", "Gitter: {name} · Knoten: {n}" / "Grid: {name} · Nodes: {n}"', dict['tip.order'].de === 'Ordnung {o}: {n} Knoten' && dict['tip.order'].en === 'Order {o}: {n} nodes' && dict['info.grid.line'].de === 'Gitter: {name} · Knoten: {n}' && dict['info.grid.line'].en === 'Grid: {name} · Nodes: {n}');
     const html = read('index.html');
     const stepper = html.slice(html.indexOf('id="nav-node-stepper"'), html.indexOf('id="nav-size-stepper"')), lstep = html.slice(html.indexOf('for="layer-node-count-input"'), html.indexOf('layer-shape-size-input') > 0 ? html.indexOf('id="layer-shape-size-group"') : undefined);
-    check('(5) index.html: both steppers carry Ordnung (label, group, input, chevrons), no "Knoten"; the default value is 2 (the old 3 = ordnung 2); the node VISIBILITY texts stay (#btn-toggle-nodes "Toggle Nodes", more.farbe.button with "Knoten")', /Ordnung/.test(stepper) && !/Knoten/.test(stepper) && /Ordnung/.test(lstep) && !/Knoten/.test(lstep) && /id="node-count-input" min="1" max="7" value="2"/.test(html)
+    check('(5) index.html: both steppers carry Ordnung (label, group, input, chevrons), no "Knoten"; the default value is 2 (the old 3 = ordnung 2); the node VISIBILITY texts stay (#btn-toggle-nodes "Toggle Nodes", more.farbe.button with "Knoten")', /Ordnung/.test(stepper) && !/Knoten/.test(stepper) && /Ordnung/.test(lstep) && !/Knoten/.test(lstep) && /id="node-count-input" min="1" max="12" value="2"/.test(html)
         && /id="btn-toggle-nodes"[^>]*title="Toggle Nodes"/.test(html) && /Mehr: Farben zurücksetzen, Knoten, Farborgel/.test(read('ui-i18n.js')));
     check('(5) the markup German equals the dictionary German for the stepper keys (test-i18n core), and the info line element exists without a control', /<span id="grid-info-status"><\/span>/.test(html) && !/<(button|input)[^>]*grid-info-status/.test(html));
 }
