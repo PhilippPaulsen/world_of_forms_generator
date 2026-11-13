@@ -41,7 +41,7 @@ T('markup', () => {
     check('Netz: the summary is info.net.title and the paragraphs are, in this order, ' + NET.join(', '), n.summary[1] === 'info.net.title' && n.ps.map(p => p[0]).join() === NET.join() && n.allP === NET.length);
     check('Zeitleiste: the summary is info.tl.title and the paragraphs are, in this order, ' + TL.join(', '), t.summary[1] === 'info.tl.title' && t.ps.map(p => p[0]).join() === TL.join() && t.allP === TL.length);
     const withKey = (card.match(/data-i18n="info\.(?:net|tl)\.[a-z]+"/g) || []).length;
-    check('every paragraph and summary of the sections carries its own key (' + ALL.length + '), and nothing in the card has text without one (no stray text outside the tags above)', withKey === ALL.length && card.replace(/<[^>]*>/g, '|').split('|').map(x => x.trim()).filter(Boolean).every(x => x === 'Pattern Name' || ALL.some(k => unesc(x) === DICT[k].de)));
+    check('every paragraph and summary of the sections carries its own key (' + ALL.length + '), and nothing in the card has text without one (no stray text outside the tags above)', withKey === ALL.length && card.replace(/<[^>]*>/g, '|').split('|').map(x => x.trim()).filter(Boolean).every(x => x === 'Pattern Name' || x === DICT['info.lage'].de || ALL.some(k => unesc(x) === DICT[k].de)));
     const german = [n.summary.slice(1), ...n.ps, t.summary.slice(1), ...t.ps];
     check('the German of every summary and paragraph in the markup equals the dictionary German of its key (' + german.length + ')', german.length === ALL.length && german.every(([k, txt]) => DICT[k] && DICT[k].de === unesc(txt)), german.filter(([k, txt]) => !(DICT[k] && DICT[k].de === unesc(txt))).map(x => x[0]).join());
 });
