@@ -118,10 +118,10 @@ const LAGE2_N = (shape, n) => shape === 'triangle' ? (n + 1) * (n + 2) / 2 + n *
         if (r.n !== LAGE2_N(shape, n) || r.uv !== r.n || r.spec.lage !== 2 || r.spec.ordnung !== n || r.E !== wantE || r.nc !== (shape === 'hex' ? n : n + 1) || r.ids !== Array.from({ length: r.n }, (_, i) => i + 1).join()) { ok = false; why += ` ${shape}${n}:${J(r).slice(0, 90)}`; }
     }
     check('(3) setGrid lage 2 (3 shapes at the ceiling and at ordnung 1): nodes = lage-1 + new, ids 1..N, u/v on every node, E = ordnung (hex ordnung - 1), nodeCount = the lage-1 count', ok, why);
-    check('(3) the ceilings: maxOrdnungFor lage 2 = 5 / 5 / 2; one above is refused by setGrid, projectGridSpec, projectLayerGridSpec and validateGridSpec', w.get("maxOrdnungFor('triangle', 2) === 5 && maxOrdnungFor('square', 2) === 5 && maxOrdnungFor('hex', 2) === 2 && maxOrdnungFor('hex', 1) === 12") && w.get(`(function () {
-        const t = f => { try { f(); return false; } catch (e) { return true; } }, l = { shape: 'hex', nodeCount: 3, gridSpec: { shape: 'hex', ordnung: 3, lage: 1 } };
-        return t(() => setGrid({ shape: 'triangle', ordnung: 6, lage: 2 })) && t(() => setGrid({ shape: 'square', ordnung: 6, lage: 2 })) && t(() => setGrid({ shape: 'hex', ordnung: 3, lage: 2 })) && t(() => projectGridSpec({ shape: 'hex', ordnung: 3, lage: 2 }))
-            && t(() => projectLayerGridSpec(l, { shape: 'hex', ordnung: 3, lage: 2 })) && !validateGridSpec({ shape: 'hex', ordnung: 3, lage: 2 }).ok && validateGridSpec({ shape: 'hex', ordnung: 2, lage: 2 }).ok;
+    check('(3) the ceilings: maxOrdnungFor lage 2 = 12 / 12 / 9 (task 070); one above is refused by setGrid, projectGridSpec, projectLayerGridSpec and validateGridSpec', w.get("maxOrdnungFor('triangle', 2) === 12 && maxOrdnungFor('square', 2) === 12 && maxOrdnungFor('hex', 2) === 9 && maxOrdnungFor('hex', 1) === 12") && w.get(`(function () {
+        const t = f => { try { f(); return false; } catch (e) { return true; } }, l = { shape: 'hex', nodeCount: 10, gridSpec: { shape: 'hex', ordnung: 10, lage: 1 } };
+        return t(() => setGrid({ shape: 'triangle', ordnung: 13, lage: 2 })) && t(() => setGrid({ shape: 'square', ordnung: 13, lage: 2 })) && t(() => setGrid({ shape: 'hex', ordnung: 10, lage: 2 })) && t(() => projectGridSpec({ shape: 'hex', ordnung: 10, lage: 2 }))
+            && t(() => projectLayerGridSpec(l, { shape: 'hex', ordnung: 10, lage: 2 })) && !validateGridSpec({ shape: 'hex', ordnung: 10, lage: 2 }).ok && validateGridSpec({ shape: 'hex', ordnung: 9, lage: 2 }).ok;
     })()`));
     check('(3) lage 2 never comes from the legacy count (fromLegacy is lage 1 for every shape and c), legacyC1 on lage 2 is refused, lage 3 / 0 refused', w.get(`(function () {
         for (const s of ['triangle', 'square', 'hex']) for (let c = 1; c <= 7; c++) if (fromLegacy(s, c).lage !== 1) return false;
@@ -132,9 +132,9 @@ const LAGE2_N = (shape, n) => shape === 'triangle' ? (n + 1) * (n + 2) / 2 + n *
     l1.set('globalThis.__lage2 = true; rebuildGrid(currentShape);');
     check('(3) the switch alone does not change a lage-1 grid (same nodes, no u/v)', l1.get('JSON.stringify(nodes)') === l1off.get('JSON.stringify(nodes)') && l1.get('nodes.every(p => p.u === undefined)'));
     // task 068b: a shape change keeps the lage (the ordnung is taken over directly, clamped to the new shape's lage-2 ceiling); it was 'drops to lage 1' in 067
-    const sh = world('square', 4, 2);
+    const sh = world('square', 12, 2);
     sh.set("rebuildGrid('hex');");
-    check('(3) rebuildGrid with ANOTHER shape keeps lage 2 and clamps the ordnung (square 4 -> hex 2); task 068b', sh.get("gridSpec.lage === 2 && gridSpec.shape === 'hex' && gridSpec.ordnung === 2 && nodes.every(p => typeof p.u === 'number')"));
+    check('(3) rebuildGrid with ANOTHER shape keeps lage 2 and clamps the ordnung (square 12 -> hex 9); tasks 068b, 070', sh.get("gridSpec.lage === 2 && gridSpec.shape === 'hex' && gridSpec.ordnung === 9 && nodes.every(p => typeof p.u === 'number')"));
 }
 
 // ---- 4. layerGridMatchesBase --------------------------------------------------------------------------------------------------------------------
@@ -212,15 +212,15 @@ const LAGE2_N = (shape, n) => shape === 'triangle' ? (n + 1) * (n + 2) / 2 + n *
         check(`(6) ${tag}: with the switch off the snapshot is refused (invalid)`, vOff.ok === false);
     }
     // limits: a snapshot over the ceiling is invalid with the switch on, valid-for-test-option only without it; the ceiling of each layer counts
-    const src = world('triangle', 5, 2);
+    const src = world('triangle', 12, 2);
     const snap = JSON.parse(J(S.snapOf(src, S.uiOf(src, 'none', 6)))); snap.savedAt = 1;
     const on = world('square', 3, 1); on.set('globalThis.__lage2 = true;');
-    const over = JSON.parse(J(snap)); over.settings.grid.ordnung = 6;
+    const over = JSON.parse(J(snap)); over.settings.grid.ordnung = 13;
     const lay = JSON.parse(J(snap)); lay.layers = [Object.assign({}, JSON.parse(J(snap.base)), {})];
-    check('(6) ceiling at the base: ordnung 5 (triangle) valid, 6 invalid; hex 2 valid, hex 3 invalid', on.sb.validateSession(JSON.parse(J(snap))).ok === true && on.sb.validateSession(over).ok === false);
-    const srcH = world('hex', 2, 2), snapH = JSON.parse(J(S.snapOf(srcH, S.uiOf(srcH, 'none', 6)))); snapH.savedAt = 1;
-    const overH = JSON.parse(J(snapH)); overH.settings.grid.ordnung = 3;
-    check('(6) hex: ordnung 2 valid, 3 invalid (a layer with its own grid at the ceiling is checked the same way in _vGrid)', on.sb.validateSession(JSON.parse(J(snapH))).ok === true && on.sb.validateSession(overH).ok === false);
+    check('(6) ceiling at the base: ordnung 12 (triangle) valid, 13 invalid; hex 9 valid, hex 10 invalid (task 070)', on.sb.validateSession(JSON.parse(J(snap))).ok === true && on.sb.validateSession(over).ok === false);
+    const srcH = world('hex', 9, 2), snapH = JSON.parse(J(S.snapOf(srcH, S.uiOf(srcH, 'none', 6)))); snapH.savedAt = 1;
+    const overH = JSON.parse(J(snapH)); overH.settings.grid.ordnung = 10;
+    check('(6) hex: ordnung 9 valid, 10 invalid (a layer with its own grid at the ceiling is checked the same way in _vGrid)', on.sb.validateSession(JSON.parse(J(snapH))).ok === true && on.sb.validateSession(overH).ok === false);
 }
 
 // ---- 7. all paths -----------------------------------------------------------------------------------------------------------------------------

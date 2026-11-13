@@ -168,7 +168,7 @@
     'shape.confirm.text': { de: 'Beim Wechsel gehen {what} verloren. Das lässt sich nicht rückgängig machen.', en: 'Changing the shape discards {what}. This cannot be undone.' },
     'shape.confirm.go': { de: 'Wechseln', en: 'Change' },
     'shape.lage.state': { de: '{name}, Lage {n}. Erneut klicken: Lage {m}', en: '{name}, position {n}. Click again: position {m}' },
-    'reason.lage2.max': { de: 'Lage 2 gibt es nur bis Ordnung {n} (beim Dreieck und Quadrat 5, beim Sechseck 2).', en: 'Position 2 is only available up to order {n} (5 for triangle and square, 2 for hexagon).' },
+    'reason.lage2.max': { de: 'Lage 2 gibt es nur bis Ordnung {n} (Dreieck {t}, Quadrat {q}, Sechseck {h}).', en: 'Position 2 is only available up to order {n} (triangle {t}, square {q}, hexagon {h}).' },
     'reason.lage.timeline': { de: 'Die Ebene gehört zur Zeitleiste; ihre Lage ist gesperrt.', en: 'The layer belongs to the timeline; its position is locked.' },
     'note.lage.2': { de: 'Lage 2: {what} geleert. Erneut klicken: zurück zu Lage 1.', en: 'Position 2: {what} cleared. Click again: back to position 1.' },
     'note.lage.2.none': { de: 'Lage 2. Erneut klicken: zurück zu Lage 1.', en: 'Position 2. Click again: back to position 1.' },

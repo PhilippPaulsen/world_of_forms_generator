@@ -501,8 +501,10 @@ function lage2SwitchOn() {
 if (typeof location !== 'undefined' && typeof URLSearchParams === 'function' && typeof globalThis !== 'undefined') {
     try { if (new URLSearchParams(location.search).get('lage2') === '1') globalThis.__lage2 = true; } catch (e) { /* no query, switch stays off */ }
 }
-// Task 067: the ceiling of the ordnung of a lage-2 grid (base AND layers; the browser load table of the task, node load see reports/058.md).
-const LAGE2_MAX = { triangle: 5, square: 5, hex: 2 };
+// The ONE table of the lage-2 ceiling (base AND layers). Task 067 set 5 / 5 / 2 as a precaution; task 070 measured lage 2 per shape (tools/gitter/measure-lage2-limits.js):
+// triangle and square reach ordnung 12 (orbit table 0.1 s / 0.2 s, name table 50 / 76 ms), the hexagon is limited by its orbit table (0.67 s at 7, 1.2 s at 8, 2.1 s at 9, 3.5 s at 10 in
+// Node against the 3 s threshold of the task; 1.0 s at 9 and 1.9 s at 10 in the browser): 9. Everything that bounds a lage-2 order reads this table through maxOrdnungFor(shape, 2).
+const LAGE2_MAX = { triangle: 12, square: 12, hex: 9 };
 
 // Largest admissible ordnung for shape/lage; 0 = none (unknown shape, or a lage that is not available: lage 2 only while the switch is on).
 function maxOrdnungFor(shape, lage) {

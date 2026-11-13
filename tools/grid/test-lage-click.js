@@ -89,12 +89,12 @@ const st = x => x.w.get('JSON.stringify([gridSpec, connections, redoStack, addit
         check(`(2) ${shape}: with nothing to clear the notice is only "Lage 1. Erneut klicken: Lage 2."`, x.log.said[0][1] === 'Lage 1. Erneut klicken: Lage 2.', J(x.log.said));
     }
     // refusals: ordnung above the lage-2 ceiling
-    for (const [shape, ord, limit] of [['square', 8, 5], ['triangle', 6, 5], ['hex', 3, 2]]) {
+    for (const [shape, ord, limit] of [['hex', 10, 9], ['hex', 11, 9], ['hex', 12, 9]]) {
         const x = mk({ shape, ordnung: ord, lage: 1 }, 'connections = [[1, 2]];');
         const before = st(x);
         x.click(shape);
-        check(`(2) ${shape} ${ord} (above the lage-2 ceiling ${limit}): the click changes nothing, no dialog, the warning "Lage 2 gibt es nur bis Ordnung ${limit} (beim Dreieck und Quadrat 5, beim Sechseck 2)."`,
-            st(x) === before && x.log.dialogs.length === 0 && J(x.log.said) === J([['lage-change', `Lage 2 gibt es nur bis Ordnung ${limit} (beim Dreieck und Quadrat 5, beim Sechseck 2).`, 'warn']]), J(x.log.said));
+        check(`(2) ${shape} ${ord} (above the lage-2 ceiling ${limit}, task 070): the click changes nothing, no dialog, the warning "Lage 2 gibt es nur bis Ordnung ${limit} (Dreieck 12, Quadrat 12, Sechseck 9)."`,
+            st(x) === before && x.log.dialogs.length === 0 && J(x.log.said) === J([['lage-change', `Lage 2 gibt es nur bis Ordnung ${limit} (Dreieck 12, Quadrat 12, Sechseck 9).`, 'warn']]), J(x.log.said));
     }
     // the dialog
     let x = mk({ shape: 'square', ordnung: 3, lage: 1 }, "connections = [[1, 2]]; additionalLayers.push({ shape: 'square', connections: [], nodes: [] }); additionalLayers.push({ shape: 'square', connections: [], nodes: [] }); timeline = { keyframeLayerIds: [0, 1] };");
@@ -105,8 +105,8 @@ const st = x => x.w.get('JSON.stringify([gridSpec, connections, redoStack, addit
     x.log.dialogs[0].onConfirm();
     check('(2) confirm: lage 2, layers and timeline gone, the notice names what was cleared', x.w.get('gridSpec.lage === 2 && additionalLayers.length === 0 && timeline === null') && x.log.said[0][1] === 'Lage 2: Linien, Ebenen und Zeitleiste geleert. Erneut klicken: zurück zu Lage 1.', J(x.log.said));
     // no dialog for a refusal, even with layers
-    x = mk({ shape: 'square', ordnung: 8, lage: 1 }, "additionalLayers.push({ shape: 'square', connections: [], nodes: [] });");
-    x.click('square');
+    x = mk({ shape: 'hex', ordnung: 10, lage: 1 }, "additionalLayers.push({ shape: 'square', connections: [], nodes: [] });");
+    x.click('hex');
     check('(2) a refused change (ordnung above the ceiling) with layers asks nothing: the warning only', x.log.dialogs.length === 0 && x.log.said.length === 1 && x.log.said[0][2] === 'warn');
     // switch off
     x = mk({ shape: 'square', ordnung: 3, lage: 1 }, "connections = [[1, 2]]; additionalLayers.push({ shape: 'square', connections: [], nodes: [] });", { switchOff: true });
@@ -117,9 +117,9 @@ const st = x => x.w.get('JSON.stringify([gridSpec, connections, redoStack, addit
     x = mk({ shape: 'triangle', ordnung: 3, lage: 1 }, 'connections = [[1, 2]];', { lang: 'en' });
     x.click('triangle');
     check('(2) English notice "Position 2: lines cleared. Click again: back to position 1."', x.log.said[0][1] === 'Position 2: lines cleared. Click again: back to position 1.', J(x.log.said));
-    x = mk({ shape: 'triangle', ordnung: 6, lage: 1 }, '', { lang: 'en' });
-    x.click('triangle');
-    check('(2) English refusal "Position 2 is only available up to order 5 (5 for triangle and square, 2 for hexagon)."', x.log.said[0][1] === 'Position 2 is only available up to order 5 (5 for triangle and square, 2 for hexagon).', J(x.log.said));
+    x = mk({ shape: 'hex', ordnung: 10, lage: 1 }, '', { lang: 'en' });
+    x.click('hex');
+    check('(2) English refusal "Position 2 is only available up to order 9 (triangle 12, square 12, hexagon 9)."', x.log.said[0][1] === 'Position 2 is only available up to order 9 (triangle 12, square 12, hexagon 9).', J(x.log.said));
     // a shape change keeps the lage (068c3a) and the old rebuild is gone for the active shape
     x = mk({ shape: 'square', ordnung: 3, lage: 2 }, '');
     x.click('triangle');
@@ -135,10 +135,10 @@ const st = x => x.w.get('JSON.stringify([gridSpec, connections, redoStack, addit
     check('(3) toggleLayerLage: a hex layer ordnung 2 -> lage 2 (43 nodes), lines cleared, the base untouched, notice "Lage 2: Linien geleert. ..."', a.lage === 2 && a.ord === 2 && a.c === 0 && a.n === 43 && a.base === 1 && x.log.said[0][1] === 'Lage 2: Linien geleert. Erneut klicken: zurück zu Lage 1.', J([a, x.log.said]));
     x.w.set('toggleLayerLage(additionalLayers[0]);');
     check('(3) ...and back to lage 1 (19 nodes)', x.w.get('additionalLayers[0].gridSpec.lage === 1 && additionalLayers[0].nodes.length === 19'));
-    x = lay('triangle', 6, 1);
+    x = lay('hex', 10, 1);
     const b0 = x.w.get('JSON.stringify(additionalLayers[0])');
     x.w.set('toggleLayerLage(additionalLayers[0]);');
-    check('(3) a layer above the ceiling (triangle 6): nothing changes, the ceiling text', x.w.get('JSON.stringify(additionalLayers[0])') === b0 && x.log.said[0][1].startsWith('Lage 2 gibt es nur bis Ordnung 5'), J(x.log.said));
+    check('(3) a layer above the ceiling (hex 10): nothing changes, the ceiling text', x.w.get('JSON.stringify(additionalLayers[0])') === b0 && x.log.said[0][1].startsWith('Lage 2 gibt es nur bis Ordnung 9'), J(x.log.said));
     x = lay('square', 2, 1, ' timeline = { keyframeLayerIds: [0, 1], playbackLayerIndex: null };');
     const b1 = x.w.get('JSON.stringify(additionalLayers[0])');
     x.w.set('toggleLayerLage(additionalLayers[0]);');
@@ -165,14 +165,14 @@ const st = x => x.w.get('JSON.stringify([gridSpec, connections, redoStack, addit
         sandbox.syncLage();
         return btns;
     };
-    const sw = on => ({ lage2SwitchOn: () => on, maxOrdnungFor: (s, l) => l === 2 ? (on ? { triangle: 5, square: 5, hex: 2 }[s] : 0) : 7 });
+    const sw = on => ({ lage2SwitchOn: () => on, maxOrdnungFor: (s, l) => l === 2 ? (on ? { triangle: 12, square: 12, hex: 9 }[s] : 0) : 12 });
     const form = (spec, on, lang) => run('ui-form.js', 'form', { active: spec.shape, globals: Object.assign({ gridSpec: spec }, sw(on)) }, lang);
     let b = form({ shape: 'triangle', ordnung: 3, lage: 1 }, true);
     check('(4) form row, lage 1 within the ceiling: no dot; the active button says "Dreieck, Lage 1. Erneut klicken: Lage 2", the others their plain names', !b[0].cls.has('lage-2') && b[0].name === 'Dreieck, Lage 1. Erneut klicken: Lage 2' && b[1].name === 'Quadrat' && b[2].name === 'Sechseck', J(b.map(x => x.name)));
     b = form({ shape: 'square', ordnung: 3, lage: 2 }, true);
     check('(4) lage 2: the dot class on the active button only, "Quadrat, Lage 2. Erneut klicken: Lage 1"', b[1].cls.has('lage-2') && !b[0].cls.has('lage-2') && !b[2].cls.has('lage-2') && b[1].name === 'Quadrat, Lage 2. Erneut klicken: Lage 1', J(b.map(x => x.name)));
-    b = form({ shape: 'hex', ordnung: 5, lage: 1 }, true);
-    check('(4) above the ceiling (hex 5): no dot and no "Erneut klicken" (the click cannot work): plain "Sechseck"', !b[2].cls.has('lage-2') && b[2].name === 'Sechseck');
+    b = form({ shape: 'hex', ordnung: 10, lage: 1 }, true);
+    check('(4) above the ceiling (hex 10): no dot and no "Erneut klicken" (the click cannot work): plain "Sechseck"', !b[2].cls.has('lage-2') && b[2].name === 'Sechseck');
     b = form({ shape: 'triangle', ordnung: 3, lage: 1 }, false);
     check('(4) switch off: no dot, plain names on every button (as before)', b.every(x => !x.cls.has('lage-2')) && J(b.map(x => x.name)) === J(['Dreieck', 'Quadrat', 'Sechseck']));
     b = form({ shape: 'triangle', ordnung: 3, lage: 1 }, true, 'en');
