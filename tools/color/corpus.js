@@ -20,7 +20,7 @@ const ROOT = path.join(__dirname, '..', '..');
 const CORE = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'farborgel-bridge'];
 const { execSync } = require('child_process');
 // The core sources: the working tree, or (fromHead) the last commit's - for before/after comparisons.
-const loadSrc = fromHead => CORE.map(f => fromHead
+const loadSrc = fromHead => (fromHead ? CORE : CORE.concat(['glossary'])).map(f => fromHead   // task 071b: core/glossary.js (the name terms; export.js and sketch.js read it) joins the working-tree load; HEAD comparisons keep the old list
     ? execSync(`git show HEAD:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString()
     : fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
 const SRC = loadSrc(false);

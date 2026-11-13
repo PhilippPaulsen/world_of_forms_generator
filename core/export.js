@@ -380,6 +380,11 @@ function buildExportData(crossLayerData) {
     // explicit null.
     // task 063: v2 - the grid name (null for free ends, a reduced mode or no line) instead of patternName / geometry.themeLineOrbits
     data.name = baseKeys.name;
+    // task 071b: the ids (no texts) of the glossary terms the name uses (core/glossary.js), only while a v2 name exists; the field is optional and additive (formatVersion stays 2)
+    if (baseKeys.name && typeof glossaryIdsForName === 'function') {
+        const dn = gridDisplayNameFor(baseSpec, completeConnections, symmetryMode);
+        if (dn) data.glossary = glossaryIdsForName(dn);
+    }
 
     // Roadmap 1.10b-ii-c: geometry.crossLayer - additive the same way as
     // geometry.faces/geometry.layers before it, present only when the

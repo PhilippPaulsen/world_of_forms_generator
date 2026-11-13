@@ -11,7 +11,7 @@ const { world, newCtx, uiOf, snapOf, exportOf, fakeHooks, applyInto, layeredAltN
 const out = {};
 // task 063: export v2 changed the export's own fields (formatVersion, meta.grid / nodeCount, nodes' zahl/u/v, lineKeys, name, patternName / themeLineOrbits); the comparison with the
 // old tree hashes the export WITHOUT them, so geometry, edges, adjacency, faces and colours are still compared byte for byte.
-const V2_KEYS = new Set(['formatVersion', 'name', 'patternName', 'themeLineOrbits', 'lineKeys', 'nodeCount', 'grid', 'zahl', 'u', 'v']);
+const V2_KEYS = new Set(['formatVersion', 'name', 'patternName', 'themeLineOrbits', 'lineKeys', 'nodeCount', 'grid', 'zahl', 'u', 'v', 'glossary']);
 const stripV2 = (o) => (Array.isArray(o) ? o.map(stripV2) : o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).filter(([k]) => !V2_KEYS.has(k)).map(([k, v]) => [k, stripV2(v)])) : o);
 const STATE_JS = 'JSON.stringify({ currentShape, nodeCount, shapeSizeFactor, symmetryMode, nodes, centroid, outerCorners, connections, redoStack, altNetSeed, activeLayer, timeline: timeline && { k: timeline.keyframeLayerIds, p: timeline.playbackLayerIndex, d: timeline.segmentDurationsMs, m: timeline.segmentMembers, f: timeline.segmentFlips, q: timeline.segmentPairings }, layers: additionalLayers.map(l => ({ shape: l.shape, nodeCount: l.nodeCount, size: l.shapeSizeFactor, off: [l.offsetX, l.offsetY, l.rotation], conns: l.connections, redo: l.redoStack, nodes: l.nodes, centroid: l.centroid, corners: l.outerCorners, assign: l.faceAssignments ? [...l.faceAssignments] : null, enabled: l.enabled, playback: !!l.isTimelinePlayback })), baseAssign: baseFaceAssignments ? [...baseFaceAssignments] : null })';
 function roundtrip(key, src, ui) {
