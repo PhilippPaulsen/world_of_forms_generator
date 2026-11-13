@@ -193,7 +193,7 @@ const st = x => x.w.get('JSON.stringify([gridSpec, connections, redoStack, addit
 // ---- 5. the dot's measures; info sentence; texts ------------------------------------------------------------------------------------------------
 {
     const css = read('style.css'), html = read('index.html');
-    check('(5) style.css: .lage-2::after = the corner dot (top 5, right 5, currentColor), 6 px; 5 px under (pointer: fine); no other rule changes the button', /\.shape-icon-btn\.lage-2::after, \.layer-shape-icon-btn\.lage-2::after \{\s*content: "";\s*position: absolute;\s*top: 5px;\s*right: 5px;\s*width: 6px;\s*height: 6px;\s*border-radius: 50%;\s*background: currentColor;\s*\}\s*@media \(pointer: fine\) \{\s*\.shape-icon-btn\.lage-2::after, \.layer-shape-icon-btn\.lage-2::after \{ width: 5px; height: 5px; \}/.test(css));
+    check('(5) style.css: .lage-2::after = the corner dot (top 5, right 5, currentColor), size = --target / 12 + 2 px (5 px at 36, 6 px at 48: it follows the button)', /\.shape-icon-btn\.lage-2::after, \.layer-shape-icon-btn\.lage-2::after \{\s*content: "";\s*position: absolute;\s*top: 5px;\s*right: 5px;\s*width: calc\(var\(--target\) \/ 12 \+ 2px\);[^\n]*\s*height: calc\(var\(--target\) \/ 12 \+ 2px\);\s*border-radius: 50%;\s*background: currentColor;\s*\}/.test(css) && (36 / 12 + 2 === 5) && (48 / 12 + 2 === 6));
     // symbol boxes from index.html (the 24-unit paths scaled to the 18 px icon, centred in the button)
     const boxes = { triangle: [3, 4.5, 21, 19.5], square: [4.5, 4.5, 19.5, 19.5], hex: [4, 3, 20, 21] };
     const rows = [];
