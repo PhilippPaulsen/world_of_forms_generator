@@ -551,10 +551,11 @@ function gridMaxCount(shape, lage) {
     const m = lage === 2 ? maxOrdnungFor(shape, 2) : 0;
     return m ? (shape === 'hex' ? m : m + 1) : maxNodeCountFor(shape);
 }
-// The base's spec on ANOTHER shape. Lage 1: the legacy count moves over (as before); lage 2: the ordnung is taken over directly, clamped to the new shape's lage-2 ceiling.
+// A spec on ANOTHER shape (task 068c3a): the ORDNUNG stays, clamped to the new shape's maximum in the spec's lage (lage 1: 6 / 12 / 7, lage 2: 5 / 5 / 2); the lage stays
+// (a lage-2 spec falls to lage 1 only when lage 2 is not available); the legacy c = 1 marker is dropped (ordnung 1 without it). No count over toLegacy / fromLegacy.
 function gridSpecOnShape(spec, shape) {
-    if (spec.lage === 2 && maxOrdnungFor(shape, 2)) return { shape, ordnung: Math.min(spec.ordnung, maxOrdnungFor(shape, 2)), lage: 2 };
-    return fromLegacy(shape, toLegacy(spec));
+    const lage = spec.lage === 2 && maxOrdnungFor(shape, 2) ? 2 : 1;
+    return { shape, ordnung: Math.min(spec.ordnung, gridMaxOrdnung(shape, lage)), lage };
 }
 
 function fromLegacy(shape, c) {

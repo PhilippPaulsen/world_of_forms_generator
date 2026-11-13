@@ -48,7 +48,7 @@ const s2 = { Math, console, activeLayer: 0, additionalLayers: [{ shape: 'square'
 vm.createContext(s2); vm.runInContext(forms, s2);
 vm.runInContext(`function layerGrid() { return { nodes: [], centroid: {x:0,y:0}, outerCorners: [] }; }\n` + grab(sketch, 'updateActiveLayerGrid'), s2);
 const r1 = vm.runInContext(`updateActiveLayerGrid({ shape: 'hex' })`, s2);
-check('layer square 13 -> hex: clamped to 7 and reported', r1 && r1.from === 13 && r1.to === 7 && r1.shape === 'hex' && s2.additionalLayers[0].nodeCount === 7, JSON.stringify(r1));
+check('layer square 13 (ordnung 12) -> hex: ordnung kept, clamped to 7 and reported (task 068c3a: from is the count of ordnung 12 on hex)', r1 && r1.from === 12 && r1.to === 7 && r1.shape === 'hex' && s2.additionalLayers[0].nodeCount === 7, JSON.stringify(r1));
 const r2 = vm.runInContext(`updateActiveLayerGrid({ shape: 'square', nodeCount: 13 })`, s2);
 check('layer hex 7 -> square, node count 13 set: accepted, no clamp', r2 === null && s2.additionalLayers[0].nodeCount === 13);
 const r3 = vm.runInContext(`updateActiveLayerGrid({ shape: 'triangle' })`, s2);
@@ -57,7 +57,7 @@ const r4 = vm.runInContext(`updateActiveLayerGrid({ nodeCount: 5 })`, s2);
 check('within the limit: no clamp', r4 === null && s2.additionalLayers[0].nodeCount === 5);
 
 // 5. UI wiring present in the source (no DOM test exists for sketch.js - the real-browser run covers behaviour)
-check('base shape switch calls the clamp before rebuildGrid', /clampNodeCountToShape\('Shape'\);\s*rebuildGrid\(currentShape\)/.test(sketch));
+check('base shape switch rebuilds with the ordnung kept and clamped by gridSpecOnShape, then syncs the controls (task 068c3a)', /rebuildGrid\(currentShape\);\s*syncGridControls\(\);/.test(sketch));
 check('base input and layer input read the shape table, no literal 7 clamp left', !/v > 7\) v = 7/.test(sketch) && (sketch.match(/(?:maxNodeCountFor|gridMaxCount|gridMaxOrdnung)\(/g) || []).length >= 5);   // task 068b: the input limits go through gridMaxCount (lage 1: maxNodeCountFor)   // task 066: was >= 6; isWellFormedCatalogPattern (one call) is gone
 check('no hard-coded 2..5 in alignLayerToBase', !/nodeCount <= 5/.test(forms));
 
