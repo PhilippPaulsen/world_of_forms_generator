@@ -602,6 +602,23 @@ body.dark {
 /* Task 068c2: the info card's grid line ("Gitter: 3d2 · Knoten: 12"), a read-out under the pattern name. */
 #grid-info-status { display: block; margin-top: 4px; }
 
+/* Task 068c3b: the active shape button of a lage-2 grid (Form row and layer panel) carries the same small corner dot (.lage-2, set by ui-form.js / ui-layer.js):
+   5px on a 36px button (mouse), 6px on a 48px one (touch); currentColor = white on the black active button. */
+.shape-icon-btn, .layer-shape-icon-btn { position: relative; }
+.shape-icon-btn.lage-2::after, .layer-shape-icon-btn.lage-2::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+@media (pointer: fine) {
+  .shape-icon-btn.lage-2::after, .layer-shape-icon-btn.lage-2::after { width: 5px; height: 5px; }
+}
+
 /* "Other symmetry" set (none / mirror only): the More button shows a dot then. */
 .nav-more { position: relative; }
 .nav-more.has-state::after {

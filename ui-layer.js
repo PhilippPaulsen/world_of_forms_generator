@@ -64,5 +64,31 @@
   // shape and fold: aria-pressed follows the 'active' class that sketch.js's handlers (and updateOffsetControls) set
   document.querySelectorAll('.layer-shape-icon-btn, .layer-fold-btn').forEach(function (b) { UI.pressed(b); });
 
-  UI.onSync(function () { steppers.forEach(function (s) { s.refresh(); }); });
+  // lage (task 068c3b): the active layer-shape button of a lage-2 layer carries the dot (class lage-2) and says "Dreieck, Lage 2. Erneut klicken: Lage 1"; the second click changes the lage
+  // (sketch.js toggleLayerLage). No hint on a timeline layer (its lage is locked) or above the lage-2 ceiling.
+  const SHAPE_NAME = { triangle: 'Dreieck', square: 'Quadrat', hex: 'Sechseck' };
+  const SHAPE_KEY = { triangle: 'layer.shape.triangle', square: 'layer.shape.square', hex: 'layer.shape.hex' };
+  function lageText(name, n, m) { return tr('shape.lage.state', name + ', Lage ' + n + '. Erneut klicken: Lage ' + m, { name: name, n: n, m: m }); }
+  function inTimeline(L) {
+    if (typeof timeline === 'undefined' || !timeline) return false;
+    const i = additionalLayers.indexOf(L);
+    return timeline.keyframeLayerIds.indexOf(i) >= 0 || timeline.playbackLayerIndex === i;
+  }
+  function syncLage() {
+    if (typeof layerGridSpecOf !== 'function' || typeof lage2SwitchOn !== 'function') return;
+    const L = layer(), spec = L ? layerGridSpecOf(L) : null;
+    document.querySelectorAll('.layer-shape-icon-btn').forEach(function (b) {
+      const shape = b.getAttribute('data-shape'), on = !!L && b.classList.contains('active');
+      const dot = on && spec.lage === 2;
+      if (b.classList.contains('lage-2') !== dot) b.classList.toggle('lage-2', dot);
+      let text = tr(SHAPE_KEY[shape], SHAPE_NAME[shape]);
+      if (on && lage2SwitchOn() && !inTimeline(L)) {
+        if (spec.lage === 2) text = lageText(text, 2, 1);
+        else if (spec.ordnung <= maxOrdnungFor(shape, 2)) text = lageText(text, 1, 2);
+      }
+      UI.name(b, text);
+    });
+  }
+
+  UI.onSync(function () { steppers.forEach(function (s) { s.refresh(); }); syncLage(); });
 })();
