@@ -88,8 +88,8 @@ const SHAPES = ['triangle', 'square', 'hex'];
         if (a.get('JSON.stringify([gridSpec, nodeCount, nodes])') !== b.get('JSON.stringify([gridSpec, nodeCount, nodes])')) bad2.push(shape + o);
     }
     check('(3) base input path: setGrid(gridSpecForOrdnung) = the old setGrid(fromLegacy(count)) for every ordnung of the new scale (spec, nodeCount, nodes)', bad2.length === 0, bad2.join(','));
-    check('(3) over the limit the ordnung is clamped (task 069: 20 -> 12 on every shape; 9 stays 9), 0 / negative -> 1; lage 2 (switch on): 5 / 5 / 2', w.get("gridSpecForOrdnung('triangle', 20, 1).ordnung === 12 && gridSpecForOrdnung('square', 20, 1).ordnung === 12 && gridSpecForOrdnung('hex', 20, 1).ordnung === 12 && gridSpecForOrdnung('hex', 9, 1).ordnung === 9 && gridSpecForOrdnung('hex', 0, 1).ordnung === 1")
-        && world('triangle', null, { lage2: true }).get("gridSpecForOrdnung('triangle', 9, 2).ordnung === 5 && gridSpecForOrdnung('square', 9, 2).ordnung === 5 && gridSpecForOrdnung('hex', 9, 2).ordnung === 2 && gridMaxOrdnung('hex', 2) === 2"));
+    check('(3) over the limit the ordnung is clamped (task 069: 20 -> 12 on every shape; 9 stays 9), 0 / negative -> 1; lage 2 (switch on, task 070): 12 / 12 / 9', w.get("gridSpecForOrdnung('triangle', 20, 1).ordnung === 12 && gridSpecForOrdnung('square', 20, 1).ordnung === 12 && gridSpecForOrdnung('hex', 20, 1).ordnung === 12 && gridSpecForOrdnung('hex', 9, 1).ordnung === 9 && gridSpecForOrdnung('hex', 0, 1).ordnung === 1")
+        && world('triangle', null, { lage2: true }).get("gridSpecForOrdnung('triangle', 20, 2).ordnung === 12 && gridSpecForOrdnung('square', 20, 2).ordnung === 12 && gridSpecForOrdnung('hex', 20, 2).ordnung === 9 && gridMaxOrdnung('hex', 2) === 9"));
     check('(3) with the switch off lage 2 falls back to the lage-1 limit for the input max (gridMaxOrdnung(.., 2) = 12 / 12 / 12)', w.get("gridMaxOrdnung('triangle', 2) === 12 && gridMaxOrdnung('square', 2) === 12 && gridMaxOrdnung('hex', 2) === 12"));
     // the layer path: updateActiveLayerGrid({ ordnung: o }) = the old updateActiveLayerGrid({ nodeCount: c })
     let bad3 = [];
@@ -105,8 +105,8 @@ const SHAPES = ['triangle', 'square', 'hex'];
     check('(3) layer input path: updateActiveLayerGrid({ ordnung: o }) = the old ({ nodeCount: c }) for o = 1..14 on all shapes (spec, nodes, clamp report, lines cleared)', bad3.length === 0, bad3.slice(0, 5).join(','));
     const sk2 = withSketch(world('square', { shape: 'square', ordnung: 3, lage: 2 }, { lage2: true }), ['addLayer', 'updateActiveLayerGrid']);
     sk2.set('addLayer(); activeLayer = 0;');
-    const r2 = sk2.get('(function () { const a = updateActiveLayerGrid({ ordnung: 4 }); const s1 = additionalLayers[0].gridSpec; const b = updateActiveLayerGrid({ ordnung: 9 }); return [a, s1, b, additionalLayers[0].gridSpec]; })()');
-    check('(3) layer path on lage 2: ordnung 4 kept at lage 2; 9 is clamped to 5 (clamp report in the internal count: from 10 to 6)', r2[1].ordnung === 4 && r2[1].lage === 2 && r2[3].ordnung === 5 && r2[3].lage === 2 && r2[2] && r2[2].from === 10 && r2[2].to === 6, J(r2));
+    const r2 = sk2.get('(function () { const a = updateActiveLayerGrid({ ordnung: 4 }); const s1 = additionalLayers[0].gridSpec; const b = updateActiveLayerGrid({ ordnung: 20 }); return [a, s1, b, additionalLayers[0].gridSpec]; })()');
+    check('(3) layer path on lage 2: ordnung 4 kept at lage 2; 20 is clamped to 12 (task 070; clamp report in the internal count: from 21 to 13)', r2[1].ordnung === 4 && r2[1].lage === 2 && r2[3].ordnung === 12 && r2[3].lage === 2 && r2[2] && r2[2].from === 21 && r2[2].to === 13, J(r2));
 }
 
 // ---- 4. Sin/Tan minimum ------------------------------------------------------------------------------------------------------------------------

@@ -65,13 +65,13 @@ const withSketch = (w, names) => { names.forEach(n => w.set(grab(n))); return w;
     const w = world('triangle', 3, 2);
     // the node-count input path (setGrid(gridSpecForCount(currentShape, v, gridSpec.lage)), limit gridMaxCount(currentShape, gridSpec.lage))
     const r = w.get(`(function () { const out = []; for (const v of [1, 2, 4, 6]) { setGrid(gridSpecForCount(currentShape, v, gridSpec.lage)); out.push([v, gridSpec.lage, gridSpec.ordnung, nodeCount, nodes.length, gridMaxCount(currentShape, gridSpec.lage)]); } return out; })()`);
-    check('(2) node-count input: the base keeps lage 2 for counts 1, 2, 4, 6; the limit is the lage-2 ceiling (triangle 6)', r.every(x => x[1] === 2) && r[3][2] === 5 && r[3][4] === LAGE2_N('triangle', 5) && r[0][2] === 1 && r[3][5] === 6, J(r));
+    check('(2) node-count input: the base keeps lage 2 for counts 1, 2, 4, 6; the limit is the lage-2 ceiling (triangle 12 = count 13, task 070)', r.every(x => x[1] === 2) && r[3][2] === 5 && r[3][4] === LAGE2_N('triangle', 5) && r[0][2] === 1 && r[3][5] === 13, J(r));
     const h2 = world('hex', 2, 2);
-    check('(2) node-count input on hex: the limit is 2, lage 2 kept, count above it is clamped by gridSpecForCount', h2.get("(function () { const s = gridSpecForCount('hex', 7, 2); return gridMaxCount('hex', 2) === 2 && s.lage === 2 && s.ordnung === 2; })()"));
+    check('(2) node-count input on hex: the limit is 9 (task 070), lage 2 kept, a count above it is clamped by gridSpecForCount', h2.get("(function () { const s = gridSpecForCount('hex', 12, 2); return gridMaxCount('hex', 2) === 9 && s.lage === 2 && s.ordnung === 9; })()"));
     // shape change (rebuildGrid with another shape) and size change
-    const sc = world('triangle', 5, 2);
+    const sc = world('triangle', 12, 2);
     const seq = sc.get(`(function () { const out = []; for (const s of ['square', 'hex', 'triangle']) { currentShape = s; rebuildGrid(s); out.push([s, gridSpec.lage, gridSpec.ordnung, nodes.length]); } return out; })()`);
-    check('(2) shape change: the lage stays 2, the ordnung is taken over directly and clamped (triangle 5 -> square 5 -> hex 2 -> triangle 2)', J(seq) === J([['square', 2, 5, LAGE2_N('square', 5)], ['hex', 2, 2, LAGE2_N('hex', 2)], ['triangle', 2, 2, LAGE2_N('triangle', 2)]]), J(seq));
+    check('(2) shape change: the lage stays 2, the ordnung is taken over directly and clamped (triangle 12 -> square 12 -> hex 9 -> triangle 9; task 070)', J(seq) === J([['square', 2, 12, LAGE2_N('square', 12)], ['hex', 2, 9, LAGE2_N('hex', 9)], ['triangle', 2, 9, LAGE2_N('triangle', 9)]]), J(seq));
     check('(2) size change: rebuildGrid(currentShape) keeps gridSpec (lage 2) and does not clear anything else', sc.get("(function () { shapeSizeFactor = 4; const before = gridSpec; rebuildGrid(currentShape); return gridSpec === before && gridSpec.lage === 2; })()"));
     // clampNodeCountToShape lives in setup(): its lage-aware text
     check('(2) sketch.js: clampNodeCountToShape and the node-count handler read gridMaxCount / gridSpecForCount with gridSpec.lage, the catalog import takes the transport\'s lage', /function clampNodeCountToShape[\s\S]*?gridMaxCount\(currentShape, gridSpec\.lage\)[\s\S]*?gridSpecForCount\(currentShape, maxN, gridSpec\.lage\)/.test(SK)
@@ -94,8 +94,8 @@ const withSketch = (w, names) => { names.forEach(n => w.set(grab(n))); return w;
         rec('shape hex', updateActiveLayerGrid({ shape: 'hex' }));
         rec('shape triangle', updateActiveLayerGrid({ shape: 'triangle', nodeCount: 4 }));
         return out; })()`);
-    check('(2) updateActiveLayerGrid keeps lage 2 for a size change, a count, a clamped count, a shape change and a combined patch; the nodes are rebuilt with u/v', steps.every(s => s[4] === 2 && s[7] === true && s[6] === LAGE2_N(s[2], s[3])) && steps[0][3] === 3 && steps[2][3] === 5 && steps[3][3] === 2 && steps[4][3] === 3, J(steps));
-    check('(2) ...a clamp is reported as before (count 9 on a lage-2 square: from 9 to 6), and the lines are still cleared by a grid change but not needed for a pure size change check', J(steps[2][1]) === J({ shape: 'square', from: 9, to: 6 }) || /"to":6/.test(J(steps[2][1])), J(steps[2][1]));
+    check('(2) updateActiveLayerGrid keeps lage 2 for a size change, a count, a clamped count, a shape change and a combined patch; the nodes are rebuilt with u/v', steps.every(s => s[4] === 2 && s[7] === true && s[6] === LAGE2_N(s[2], s[3])) && steps[0][3] === 3 && steps[2][3] === 8 && steps[3][3] === 8 && steps[4][3] === 3, J(steps));
+    check('(2) ...the clamp report on lage 2 (task 070): a hex layer patch with count 14 is clamped to the hex ceiling 9 and reported as {shape, from, to}', J(u.get("updateActiveLayerGrid({ shape: 'hex', nodeCount: 14 })")) === J({ shape: 'hex', from: 14, to: 9 }));
     // lage 1 layers: the old path, the old clamp
     const u1 = withSketch(world('square', 3, 1), ['addLayer', 'updateActiveLayerGrid']);
     u1.set('addLayer(); activeLayer = 0;');
@@ -114,9 +114,9 @@ const withSketch = (w, names) => { names.forEach(n => w.set(grab(n))); return w;
     check('(3) setBaseLage to the lage it has: ok, changed false, nothing touched; back to 1 works', w.get("(function () { const r = gridRevision, a = setBaseLage(2); const b = setBaseLage(1); return a.ok && a.changed === false && r === gridRevision - 1 && b.ok && b.changed && gridSpec.lage === 1; })()"));
     const bad = w.get(`(function () { const out = []; connections = [[1, 2]]; const snap = () => JSON.stringify([gridSpec, connections, gridRevision, nodes.length]);
         const b0 = snap(); out.push(setBaseLage(3), setBaseLage(0), setBaseLage('2')); const same = b0 === snap();
-        setGrid({ shape: 'triangle', ordnung: 6, lage: 1 }); const b1 = snap(); out.push(setBaseLage(2)); const same2 = b1 === snap();
+        setGrid({ shape: 'hex', ordnung: 10, lage: 1 }); const b1 = snap(); out.push(setBaseLage(2)); const same2 = b1 === snap();
         return [out, same, same2]; })()`);
-    check('(3) setBaseLage refuses with a reason and touches nothing: invalid lage; ordnung above the lage-2 ceiling (triangle 6 > 5)', bad[0][0].reason === 'invalid-lage' && bad[0][1].reason === 'invalid-lage' && bad[0][2].reason === 'invalid-lage' && bad[0][3].ok === false && bad[0][3].reason === 'ordnung-limit' && bad[0][3].limit === 5 && bad[1] && bad[2], J(bad));
+    check('(3) setBaseLage refuses with a reason and touches nothing: invalid lage; ordnung above the lage-2 ceiling (hex 10 > 9, task 070)', bad[0][0].reason === 'invalid-lage' && bad[0][1].reason === 'invalid-lage' && bad[0][2].reason === 'invalid-lage' && bad[0][3].ok === false && bad[0][3].reason === 'ordnung-limit' && bad[0][3].limit === 9 && bad[1] && bad[2], J(bad));
     const off = world('triangle', 3, 1);
     check('(3) switch off: setBaseLage(2) answers switch-off, no throw, nothing changes', off.get("(function () { const b = JSON.stringify([gridSpec, gridRevision]); const r = setBaseLage(2); return r.ok === false && r.reason === 'switch-off' && b === JSON.stringify([gridSpec, gridRevision]); })()"));
     // setLayerLage
@@ -125,8 +125,8 @@ const withSketch = (w, names) => { names.forEach(n => w.set(grab(n))); return w;
     const rl = L.get('setLayerLage(additionalLayers[0], 2)');
     const sl = L.get('({ lage: additionalLayers[0].gridSpec.lage, c: additionalLayers[0].connections.length, rd: additionalLayers[0].redoStack.length, n: additionalLayers[0].nodes.length, nc: additionalLayers[0].nodeCount, baseLage: gridSpec.lage, rev: gridRevision })');
     check('(3) setLayerLage(layer, 2): the layer gets lage 2 nodes, its lines and redo stack are cleared, the base is untouched', rl.ok && rl.changed && sl.lage === 2 && sl.c === 0 && sl.rd === 0 && sl.n === LAGE2_N('square', 3) && sl.baseLage === 1, J([rl, sl]));
-    const ref = L.get(`(function () { const out = []; setLayerLage(additionalLayers[0], 1); updateLimit = 0; additionalLayers[0].gridSpec = { shape: 'square', ordnung: 6, lage: 1 }; additionalLayers[0].nodeCount = 7; const b = JSON.stringify(additionalLayers[0]); out.push(setLayerLage(additionalLayers[0], 2), JSON.stringify(additionalLayers[0]) === b, setLayerLage({}, 2), setLayerLage(additionalLayers[0], 5)); return out; })()`);
-    check('(3) setLayerLage refuses with a reason: ordnung above the ceiling (square 6 > 5), unknown layer, invalid lage; nothing touched', ref[0].reason === 'ordnung-limit' && ref[0].limit === 5 && ref[1] === true && ref[2].reason === 'unknown-layer' && ref[3].reason === 'invalid-lage', J(ref));
+    const ref = L.get(`(function () { const out = []; setLayerLage(additionalLayers[0], 1); updateLimit = 0; additionalLayers[0].shape = 'hex'; additionalLayers[0].gridSpec = { shape: 'hex', ordnung: 10, lage: 1 }; additionalLayers[0].nodeCount = 10; const b = JSON.stringify(additionalLayers[0]); out.push(setLayerLage(additionalLayers[0], 2), JSON.stringify(additionalLayers[0]) === b, setLayerLage({}, 2), setLayerLage(additionalLayers[0], 5)); return out; })()`);
+    check('(3) setLayerLage refuses with a reason: ordnung above the ceiling (hex 10 > 9), unknown layer, invalid lage; nothing touched', ref[0].reason === 'ordnung-limit' && ref[0].limit === 9 && ref[1] === true && ref[2].reason === 'unknown-layer' && ref[3].reason === 'invalid-lage', J(ref));
     const tl = withSketch(world('square', 2, 1), ['addLayer']);
     tl.set("globalThis.__lage2 = true; addLayer(); addLayer(); timeline = { keyframeLayerIds: [0, 1], playbackLayerIndex: 2 };");
     check('(3) a timeline keyframe / playback layer cannot change its lage (in-timeline)', tl.get('setLayerLage(additionalLayers[0], 2)').reason === 'in-timeline' && tl.get('setLayerLage(additionalLayers[1], 2)').reason === 'in-timeline');
@@ -173,9 +173,9 @@ const withSketch = (w, names) => { names.forEach(n => w.set(grab(n))); return w;
         ['renderLayerTabs', 'updateOffsetControls', 'updateTimelineControls'].forEach(f => { w.sb[f] = () => log.calls.push(f); });
         w.set(m[0].replace('function syncGridControls', 'globalThis.gridControlsSync = function syncGridControls').replace(/\n    \}\n$/, '\n    };\n'));
         w.set("setGrid({ shape: 'triangle', ordnung: 4, lage: 2 });");
-        check('(5) after setGrid (lage 2, ordnung 4) the input shows the ordnung 4 with max 5 (task 068c2), the triangle button is the active one, layer views are refreshed', nodeInput.v === '4' && nodeInput.elt.max === 5 && shapeBtns[0].active && !shapeBtns[1].active && !shapeBtns[2].active && log.calls.length === 3, J([nodeInput.v, nodeInput.elt.max, shapeBtns.map(b => b.active), log.calls]));
+        check('(5) after setGrid (lage 2, ordnung 4) the input shows the ordnung 4 with max 12 (task 068c2, 070), the triangle button is the active one, layer views are refreshed', nodeInput.v === '4' && nodeInput.elt.max === 12 && shapeBtns[0].active && !shapeBtns[1].active && !shapeBtns[2].active && log.calls.length === 3, J([nodeInput.v, nodeInput.elt.max, shapeBtns.map(b => b.active), log.calls]));
         w.set("setGrid({ shape: 'hex', ordnung: 2, lage: 2 });");
-        check('(5) ...after a hex grid: count 2, max 2 (lage-2 ceiling), hex button active', nodeInput.v === '2' && nodeInput.elt.max === 2 && shapeBtns[2].active && !shapeBtns[0].active);
+        check('(5) ...after a hex grid: count 2, max 9 (lage-2 ceiling of the hex, task 070), hex button active', nodeInput.v === '2' && nodeInput.elt.max === 9 && shapeBtns[2].active && !shapeBtns[0].active);
         w.set("setBaseLage(1);");
         check('(5) ...after setBaseLage(1): the max is the lage-1 limit (12, task 069)', nodeInput.elt.max === 12 && nodeInput.v === '2');
         w.set("globalThis.__lage2 = true; setBaseLage(2); additionalLayers.push({ shape: 'hex', gridSpec: { shape: 'hex', ordnung: 1, lage: 1 }, nodeCount: 1, shapeSizeFactor: 3, offsetX: 0, offsetY: 0, rotation: 0, connections: [], redoStack: [], nodes: [], centroid, outerCorners });");
