@@ -294,12 +294,11 @@ function setGrid(spec) {
 }
 
 // Task 068b: the lage of the BASE grid (no UI yet: 068c). Like a shape change it clears connections, layers and the timeline (rebuildGrid) and the redo stack, and bumps gridRevision.
-// -> { ok: true, changed } | { ok: false, reason: 'invalid-lage' | 'switch-off' | 'ordnung-limit', limit? }; never throws, nothing is touched on a refusal.
+// -> { ok: true, changed } | { ok: false, reason: 'invalid-lage' | 'ordnung-limit', limit? }; never throws, nothing is touched on a refusal.
 function setBaseLage(lage) {
     if (lage !== 1 && lage !== 2) return { ok: false, reason: 'invalid-lage' };
     if (gridSpec.lage === lage) return { ok: true, changed: false };
     if (lage === 2) {
-        if (!lage2SwitchOn()) return { ok: false, reason: 'switch-off' };
         if (gridSpec.ordnung > maxOrdnungFor(gridSpec.shape, 2)) return { ok: false, reason: 'ordnung-limit', limit: maxOrdnungFor(gridSpec.shape, 2) };
     }
     setGrid({ shape: gridSpec.shape, ordnung: gridSpec.ordnung, lage });
@@ -307,7 +306,7 @@ function setBaseLage(lage) {
     return { ok: true, changed: true };
 }
 // Task 068b: the lage of ONE layer (no UI yet). Clears that layer's lines and redo stack like a shape change and rebuilds its grid; refused for a timeline keyframe / playback layer.
-// -> { ok: true, changed } | { ok: false, reason: 'unknown-layer' | 'invalid-lage' | 'in-timeline' | 'switch-off' | 'ordnung-limit', limit? }
+// -> { ok: true, changed } | { ok: false, reason: 'unknown-layer' | 'invalid-lage' | 'in-timeline' | 'ordnung-limit', limit? }
 function setLayerLage(layer, lage) {
     const idx = additionalLayers.indexOf(layer);
     if (idx < 0) return { ok: false, reason: 'unknown-layer' };
@@ -316,7 +315,6 @@ function setLayerLage(layer, lage) {
     if (spec.lage === lage) return { ok: true, changed: false };
     if (timeline && (timeline.keyframeLayerIds.indexOf(idx) >= 0 || timeline.playbackLayerIndex === idx)) return { ok: false, reason: 'in-timeline' };
     if (lage === 2) {
-        if (!lage2SwitchOn()) return { ok: false, reason: 'switch-off' };
         if (spec.ordnung > maxOrdnungFor(layer.shape, 2)) return { ok: false, reason: 'ordnung-limit', limit: maxOrdnungFor(layer.shape, 2) };
     }
     projectLayerGridSpec(layer, { shape: spec.shape, ordnung: spec.ordnung, lage });
