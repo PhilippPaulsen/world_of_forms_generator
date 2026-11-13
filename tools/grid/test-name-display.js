@@ -155,5 +155,7 @@ const normalize = d => d.replace(/\u0304/g, '~').replace(/([A-Z])/g, c => '').re
     check('(5) the budget: the first v2 call (the table of a hex 12 grid, once) under 1 s, every repeated call under 5 ms; the display is computed only when the signature changes (cache block of updatePatternNameStatus)', first < 1000 && rep < 5 && /if \(sig !== patternNameCacheSignature\) \{[\s\S]*?gridDisplayNameFor\([\s\S]*?patternNameCacheSignature = sig;/.test(SK), `${first} / ${rep}`);
 }
 
+check('(5) style.css: #pattern-name-status may break anywhere (overflow-wrap: anywhere): a long v2 name does not run out of the narrow phone card', /#pattern-name-status \{ overflow-wrap: anywhere; \}/.test(read('style.css')));
+
 console.log(`${pass}/${pass + fail} checks passed`);
 process.exit(fail ? 1 : 0);
