@@ -473,43 +473,33 @@ function alignLayerToBase(baseShapeSizeFactor, baseNodeCount, layerCurrentShapeS
 //   rejected by validateGridSpec until a later task builds it.
 const GRID_SHAPES = ['triangle', 'square', 'hex'];
 
-// -> { ok: true } | { ok: false, error: <message> }. opts.enforceMax: also reject ordnung > maxOrdnungFor(shape, lage).
-// opts.allowLage2 (task 058, G3): internal switch for the pure builders and their tests only - the app (setGrid, rebuildGrid) never
-// passes it, so lage 2 stays rejected there until a later task releases it.
+// -> { ok: true } | { ok: false, error: <message> }. opts.enforceMax: also reject a lage-1 ordnung > maxOrdnungFor(shape, 1).
+// Lage 2 (task 072d: free, no switch) is valid up to the ceiling LAGE2_MAX; opts.beyondCeiling (the pure builders, the table functions, measurements and their tests only - never the app) lifts that ceiling.
 function validateGridSpec(spec, opts) {
     if (!spec || typeof spec !== 'object') return { ok: false, error: 'GridSpec must be an object' };
     if (GRID_SHAPES.indexOf(spec.shape) < 0) return { ok: false, error: 'unknown shape: ' + String(spec.shape) };
-    if (spec.lage === 2 && ((opts && opts.allowLage2 === true) || lage2SwitchOn())) {
+    if (spec.lage === 2) {
         if (!Number.isInteger(spec.ordnung) || spec.ordnung < 1) return { ok: false, error: 'ordnung must be an integer >= 1, got ' + String(spec.ordnung) };
         if (spec.legacyC1 !== undefined) return { ok: false, error: 'legacyC1 belongs to lage 1 only' };
-        // task 067: with the developer switch on the ceiling (LAGE2_MAX) always applies; the builder/test option alone (switch off) keeps its old freedom unless enforceMax is asked for
-        if (((opts && opts.enforceMax) || lage2SwitchOn()) && spec.ordnung > maxOrdnungFor(spec.shape, spec.lage)) return { ok: false, error: 'ordnung ' + spec.ordnung + ' exceeds ' + maxOrdnungFor(spec.shape, spec.lage) + ' for ' + spec.shape + ' lage 2' };
+        if (!(opts && opts.beyondCeiling === true) && spec.ordnung > maxOrdnungFor(spec.shape, spec.lage)) return { ok: false, error: 'ordnung ' + spec.ordnung + ' exceeds ' + maxOrdnungFor(spec.shape, spec.lage) + ' for ' + spec.shape + ' in lage 2' };
         return { ok: true };
     }
-    if (spec.lage !== 1) return { ok: false, error: spec.lage === 2 ? 'lage 2 is not available yet' : 'invalid lage: ' + String(spec.lage) };
+    if (spec.lage !== 1) return { ok: false, error: 'invalid lage: ' + String(spec.lage) };
     if (!Number.isInteger(spec.ordnung) || spec.ordnung < 1) return { ok: false, error: 'ordnung must be an integer >= 1, got ' + String(spec.ordnung) };
     if (spec.legacyC1 !== undefined && !(spec.legacyC1 === true && spec.shape !== 'hex' && spec.ordnung === 1)) return { ok: false, error: 'legacyC1 is only valid for triangle/square at ordnung 1' };
     if (opts && opts.enforceMax && spec.ordnung > maxOrdnungFor(spec.shape, spec.lage)) return { ok: false, error: 'ordnung ' + spec.ordnung + ' exceeds ' + maxOrdnungFor(spec.shape, spec.lage) + ' for ' + spec.shape };
     return { ok: true };
 }
 
-// Task 067: the internal developer switch of lage 2 (no UI yet, task 068). OFF by default: lage 2 is rejected exactly as before. ON when
-// globalThis.__lage2 === true (set by the page for the query ?lage2=1 below, or by hand in the console / a test). Read afresh on every call.
-function lage2SwitchOn() {
-    return typeof globalThis !== 'undefined' && globalThis.__lage2 === true;
-}
-if (typeof location !== 'undefined' && typeof URLSearchParams === 'function' && typeof globalThis !== 'undefined') {
-    try { if (new URLSearchParams(location.search).get('lage2') === '1') globalThis.__lage2 = true; } catch (e) { /* no query, switch stays off */ }
-}
 // The ONE table of the lage-2 ceiling (base AND layers). Task 067 set 5 / 5 / 2 as a precaution; task 070 measured lage 2 per shape (tools/gitter/measure-lage2-limits.js):
 // triangle and square reach ordnung 12 (orbit table 0.1 s / 0.2 s, name table 50 / 76 ms), the hexagon is limited by its orbit table (0.67 s at 7, 1.2 s at 8, 2.1 s at 9, 3.5 s at 10 in
 // Node against the 3 s threshold of the task; 1.0 s at 9 and 1.9 s at 10 in the browser): 9. Everything that bounds a lage-2 order reads this table through maxOrdnungFor(shape, 2).
 const LAGE2_MAX = { triangle: 12, square: 12, hex: 9 };
 
-// Largest admissible ordnung for shape/lage; 0 = none (unknown shape, or a lage that is not available: lage 2 only while the switch is on).
+// Largest admissible ordnung for shape/lage; 0 = none (unknown shape or lage).
 function maxOrdnungFor(shape, lage) {
     if (GRID_SHAPES.indexOf(shape) < 0) return 0;
-    if (lage === 2) return lage2SwitchOn() ? LAGE2_MAX[shape] : 0;
+    if (lage === 2) return LAGE2_MAX[shape];
     if ((lage === undefined ? 1 : lage) !== 1) return 0;
     const c = maxNodeCountFor(shape);
     return shape === 'hex' ? c : c - 1;
@@ -524,7 +514,7 @@ function gridSpecForCount(shape, count, lage) {
     return { shape, ordnung: Math.max(1, max ? Math.min(s.ordnung, max) : s.ordnung), lage: 2 };
 }
 // Task 068c2: the steppers' value is the ORDNUNG of the spec (not the legacy count c). Lage 1: triangle 1..6, square 1..12, hex 1..7; lage 2: 5/5/2.
-// gridMaxOrdnung: the limit of the input for `lage` (lage 2 only while the switch is on, else the lage-1 limit). gridSpecForOrdnung: the clamped spec.
+// gridMaxOrdnung: the limit of the input for `lage` (the LAGE2_MAX table for lage 2, else the lage-1 limit). gridSpecForOrdnung: the clamped spec.
 // countForOrdnung / ordnungForCount: the INTERNAL bridge to the legacy count (triangle/square c = ordnung + 1, hex c = ordnung; c = 1 shows as ordnung 1).
 function gridMaxOrdnung(shape, lage) {
     const m = lage === 2 ? maxOrdnungFor(shape, 2) : 0;
@@ -552,10 +542,10 @@ function gridMaxCount(shape, lage) {
     const m = lage === 2 ? maxOrdnungFor(shape, 2) : 0;
     return m ? (shape === 'hex' ? m : m + 1) : maxNodeCountFor(shape);
 }
-// A spec on ANOTHER shape (task 068c3a): the ORDNUNG stays, clamped to the new shape's maximum in the spec's lage (lage 1: 6 / 12 / 7, lage 2: 5 / 5 / 2); the lage stays
-// (a lage-2 spec falls to lage 1 only when lage 2 is not available); the legacy c = 1 marker is dropped (ordnung 1 without it). No count over toLegacy / fromLegacy.
+// A spec on ANOTHER shape (task 068c3a): the ORDNUNG stays, clamped to the new shape's maximum in the spec's lage (lage 1: 12 / 12 / 12, lage 2: 12 / 12 / 9); the lage stays
+// (task 072d: lage 2 is always available); the legacy c = 1 marker is dropped (ordnung 1 without it). No count over toLegacy / fromLegacy.
 function gridSpecOnShape(spec, shape) {
-    const lage = spec.lage === 2 && maxOrdnungFor(shape, 2) ? 2 : 1;
+    const lage = spec.lage === 2 ? 2 : 1;
     return { shape, ordnung: Math.min(spec.ordnung, gridMaxOrdnung(shape, lage)), lage };
 }
 
@@ -579,7 +569,7 @@ function toLegacy(spec, opts) {
 // scattered `nodeCount - 1`). triangle/square: ordnung (also on lage 2, which extends the same lage-1 grid); hex: ordnung - 1; the legacy
 // c = 1 spec: 0 (no warp, as before). Equal to the old E = c - 1 for every shape and c.
 function getGridDivisions(spec) {
-    return toLegacy(spec, { allowLage2: true }) - 1;
+    return toLegacy(spec, { beyondCeiling: true }) - 1;
 }
 
 // E of the live base grid: the base's GridSpec as its derived legacy projection (global nodeCount, set only by core/state.js projectGridSpec)
@@ -590,7 +580,7 @@ function baseGridDivisions() {
 // The base's GridSpec in the same sandbox-safe way (task 063: the export names it); equal to core/state.js gridSpec in the app.
 function baseGridSpecNow() {
     // task 067: a lage-2 base (core/state.js gridSpec) is returned as it is - fromLegacy never yields lage 2. Only when it agrees with the legacy globals; every lage-1 case is the old one.
-    if (typeof gridSpec !== 'undefined' && gridSpec && gridSpec.lage === 2 && gridSpec.shape === currentShape && lage2SwitchOn() && toLegacy(gridSpec) === nodeCount) return gridSpec;
+    if (typeof gridSpec !== 'undefined' && gridSpec && gridSpec.lage === 2 && gridSpec.shape === currentShape && toLegacy(gridSpec) === nodeCount) return gridSpec;
     return fromLegacy(currentShape, nodeCount);
 }
 
@@ -609,7 +599,7 @@ function layerGridSpecOf(layer) {
     return layer.gridSpec || fromLegacy(layer.shape, layer.nodeCount);
 }
 // Whether a layer's grid TYPE is the base's: same shape and same lage (neither size, offset, rotation nor ordnung: a layer of another
-// ordnung may still share the base lattice, see core/facecolor.js layerGridMatchesBase, which this does not replace). allowLage2 specs
+// ordnung may still share the base lattice, see core/facecolor.js layerGridMatchesBase, which this does not replace). Lage-2 specs
 // are distinguished too, although lage 2 cannot be set yet.
 function layerSpecMatchesBase(layerSpec, baseSpec) {
     return layerSpec.shape === baseSpec.shape && layerSpec.lage === baseSpec.lage;
@@ -617,7 +607,7 @@ function layerSpecMatchesBase(layerSpec, baseSpec) {
 
 // view = {sizeFactor, canvasW, canvasH, center?}. -> { grid: {shape, ordnung, lage}, nodes, centroid, outerCorners }.
 // opts.numbered (task 059): every node also carries u, v and its semantic node number zahl (numberGridNodes), for lage 1 as well as lage 2.
-// Lage 1: exactly the output of the three builders (no extra fields). Lage 2 (only with opts.allowLage2): the lage-1 nodes
+// Lage 1: exactly the output of the three builders (no extra fields). Lage 2 (within LAGE2_MAX, or any order with opts.beyondCeiling): the lage-1 nodes
 // unchanged (same ids, x, y, order), then the centres of the smallest meshes appended with the next ids; every node of a lage-2
 // grid also carries u, v (see buildGridNodes).
 function buildGrid(spec, view, opts) {
@@ -664,7 +654,7 @@ function layerGridForSpec(baseOuterCorners, baseCentroid, baseShape, baseShapeSi
 const LAGE2_DEN = 6;
 const _HEX_DIRS = [[-1, 1], [0, 1], [1, 0], [1, -1], [0, -1], [-1, 0]];   // axial direction of outerCorners[k] (k = 0..5)
 
-// -> [{ id, u6, v6, u, v }]; opts as validateGridSpec (lage 2 needs { allowLage2: true }).
+// -> [{ id, u6, v6, u, v }]; opts as validateGridSpec.
 function buildGridNodes(spec, opts) {
     const v = validateGridSpec(spec, opts);
     if (!v.ok) throw new Error('buildGridNodes: ' + v.error);
@@ -746,7 +736,7 @@ function _gridOraclePoints(nodes, grid, opts) {
 }
 // -> { nodes: copies of the input with zahl added (free / unplaced nodes copied without), orbits: [{ zahl, size, r, t, x, y }], points }
 function numberGridNodes(nodes, grid, opts) {
-    const v = validateGridSpec(grid, { allowLage2: true });
+    const v = validateGridSpec(grid, { beyondCeiling: true });
     if (!v.ok) throw new Error('numberGridNodes: ' + v.error);
     const points = _gridOraclePoints(nodes, grid, opts), w = mainGroupSpec(grid.shape).w, orbits = new Map(), keyOf = new Array(nodes.length);
     nodes.forEach((nd, i) => {

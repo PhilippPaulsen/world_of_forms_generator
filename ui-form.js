@@ -48,18 +48,18 @@
   document.querySelectorAll('.shape-icon-btn').forEach(function (b) { UI.pressed(b); });
 
   // ---- lage (task 068c3b): the active shape button of a lage-2 base carries a dot (class lage-2) and says "Dreieck, Lage 2. Erneut klicken: Lage 1" ----------
-  // The second click on the active button changes the lage (sketch.js toggleBaseLage). The hint "Erneut klicken" only shows where the click can work (switch on, ordnung within the lage-2 ceiling).
+  // The second click on the active button changes the lage (sketch.js toggleBaseLage). The hint "Erneut klicken" only shows where the click can work (ordnung within the lage-2 ceiling).
   const SHAPE_NAME = { triangle: 'Dreieck', square: 'Quadrat', hex: 'Sechseck' };
   const SHAPE_KEY = { triangle: 'shape.triangle', square: 'shape.square', hex: 'shape.hex' };
   function lageText(name, n, m) { return tr('shape.lage.state', { name: name, n: n, m: m }, name + ', Lage ' + n + '. Erneut klicken: Lage ' + m); }
   function syncLage() {
-    if (typeof gridSpec === 'undefined' || typeof lage2SwitchOn !== 'function') return;
+    if (typeof gridSpec === 'undefined') return;
     document.querySelectorAll('.shape-icon-btn').forEach(function (b) {
       const shape = b.getAttribute('data-shape'), on = b.classList.contains('active');
       const dot = on && gridSpec.lage === 2;
       if (b.classList.contains('lage-2') !== dot) b.classList.toggle('lage-2', dot);
       let text = tr(SHAPE_KEY[shape], null, SHAPE_NAME[shape]);
-      if (on && lage2SwitchOn()) {
+      if (on) {
         if (gridSpec.lage === 2) text = lageText(text, 2, 1);
         else if (gridSpec.ordnung <= maxOrdnungFor(shape, 2)) text = lageText(text, 1, 2);
       }
