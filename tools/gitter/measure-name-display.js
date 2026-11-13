@@ -10,7 +10,7 @@ const cases = [['triangle', 3, 1, 'rotation_reflection6', 2, false], ['square', 
 console.log('shape ord lage mode                 lines free | old name                              | v2 display                         | first call ms | repeat ms (old / v2)');
 for (const [shape, o, lage, mode, k, free] of cases) {
     const w = H.makeRenderWorld(shape, 3, 3, mode);
-    w.set('globalThis.__lage2 = true; LAGE2_MAX.hex = 12;');
+    w.set('LAGE2_MAX.hex = 12;');
     w.set(`currentShape = ${JSON.stringify(shape)}; setGrid({ shape: ${JSON.stringify(shape)}, ordnung: ${o}, lage: ${lage} }); symmetryMode = ${JSON.stringify(mode)};`);
     const reps = w.get('computeThemeLineOrbits(nodes, centroid, currentShape, "rotation_reflection6", outerCorners).orbits.map(o => o.pairs[0].slice())');
     let conns = reps.slice(Math.floor(reps.length / 3), Math.floor(reps.length / 3) + k);

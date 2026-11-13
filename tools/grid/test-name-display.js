@@ -38,9 +38,9 @@ else {
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys): export, session, SVG, grids, lines, morph frames unchanged', a && keys.length > 5 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/*.js except orbits.js, tools/morph/off-path-golden.json and ui-phone-config.js are unchanged (export, session, catalog, faces, tiling, facecolor, forms, state)', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'orbits.js' && f !== 'symmetry.js' && f !== 'glossary.js' && f !== 'export.js' && f !== 'glossary.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
+    check('(1) core/*.js except orbits.js, tools/morph/off-path-golden.json and ui-phone-config.js are unchanged (export, session, catalog, faces, tiling, facecolor, forms, state)', fs.readdirSync(path.join(ROOT, 'core')).filter(f => /\.js$/.test(f) && f !== 'orbits.js' && f !== 'symmetry.js' && f !== 'glossary.js' && f !== 'forms.js' && f !== 'state.js' && f !== 'session.js' && f !== 'export.js' && f !== 'glossary.js').every(f => same('core/' + f)) && same('tools/morph/off-path-golden.json') && same('ui-phone-config.js'));
     const strip = s => s.replace(/\/\/ The grid code of the v2 name[\s\S]*?\n\}\n/, '').replace(/\/\/ Task 071: the name as the page DISPLAYS it[\s\S]*?\n\}\n/, '').replace(/\/\/ Task 072c: the name of a pattern in the mode[\s\S]*?\n\}\n/, '').replace(/\/\/ Task 072c2: the number n of sectors[\s\S]*?\n\}\n/, '').replace(', _pts: new Map(list.map((nd, i) => [nd.id, pts[i]]))', '');
-    check('(1) core/orbits.js only gained gridCodeFor and gridDisplayNameFor (every other line equal to the old file); the old name functions are all still there (pairToOrbitId is a local of computeThemeLineOrbits)', strip(read('core/orbits.js')) === fs.readFileSync(path.join(oldDir, 'core/orbits.js'), 'utf8') && ['computeThemeLineName', 'formatThemeLineName', 'computeThemeLineOrbitTable', 'computeThemeLineOrbits'].every(n => new RegExp('function ' + n + '\\(').test(read('core/orbits.js'))));
+    check('(1) core/orbits.js only gained gridCodeFor and gridDisplayNameFor (every other line equal to the old file); the old name functions are all still there (pairToOrbitId is a local of computeThemeLineOrbits)', strip(read('core/orbits.js')).replace(/beyondCeiling/g, 'allowLage2').replace(/        if \(lage !== 1 && lage !== 2\) return bad\('lage must be 1 or 2'\);[^\n]*\n        const spec = \{ shape, ordnung, lage \};/, "        if (lage !== 1) return bad(lage === 2 ? 'lage 2 is not available yet' : 'lage must be 1');\n        const spec = { shape, ordnung, lage: 1 };") === fs.readFileSync(path.join(oldDir, 'core/orbits.js'), 'utf8') && ['computeThemeLineName', 'formatThemeLineName', 'computeThemeLineOrbitTable', 'computeThemeLineOrbits'].every(n => new RegExp('function ' + n + '\\(').test(read('core/orbits.js'))));
 }
 const P5 = ['fill', 'noFill', 'beginShape', 'vertex', 'endShape', 'push', 'pop', 'noStroke', 'stroke', 'strokeWeight', 'ellipse', 'rect', 'translate', 'rotate', 'scale', 'textSize', 'text', 'textAlign', 'background', 'clear'];
 function world(shape, spec, mode, ui) {
@@ -49,7 +49,6 @@ function world(shape, spec, mode, ui) {
     sb.document = { body: {} }; sb.getComputedStyle = () => ({ getPropertyValue: () => '#ffffff' }); sb.CLOSE = 'close'; sb.window = { UI: ui };
     if (ui) sb.UI = ui;
     P5.forEach(f => { sb[f] = () => { }; });
-    w.set('globalThis.__lage2 = true;');
     if (spec) w.set(`currentShape = ${J(spec.shape)}; setGrid(${J(spec)}); symmetryMode = ${J(mode || 'rotation_reflection6')};`);
     return w;
 }

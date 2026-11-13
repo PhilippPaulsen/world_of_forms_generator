@@ -331,7 +331,7 @@ function _vFlips(p, what) {
 
 // -> { ok: true, snapshot } (a normalized copy) | { ok: false, code, detail }
 // codes: 'not-an-object' | 'schema-version' | 'trail-key-version' | 'invalid'. Never throws.
-// A stored grid -> a normalized spec, or a thrown message. Lage 2 is refused unless the developer switch is on (core/forms.js lage2SwitchOn) or opts.allowLage2 (tests); the order is bounded by the
+// A stored grid -> a normalized spec, or a thrown message. Lage 2 is valid up to LAGE2_MAX (opts.beyondCeiling: tests only); the order is bounded by the
 // shape's ceiling; `shape` of the sheet must be the spec's own shape (no sheet of one shape on a grid of another).
 function _vGrid(g, shape, what, opts) {
     if (!_sObj(g)) throw what + ' must be {shape, ordnung, lage}';
@@ -342,8 +342,8 @@ function _vGrid(g, shape, what, opts) {
     const spec = { shape: g.shape, ordnung: g.ordnung, lage: g.lage };
     if (g.legacyC1 !== undefined) spec.legacyC1 = g.legacyC1;
     if (typeof validateGridSpec !== 'function') throw what + ' cannot be checked (core/forms.js is not loaded)';
-    // task 067: lage 2 needs the developer switch (or the test option) and, with the switch on, stays within LAGE2_MAX (validateGridSpec); the test option alone has no ceiling
-    const v = validateGridSpec(spec, { allowLage2: !!(opts && opts.allowLage2), enforceMax: spec.lage !== 2 || (typeof lage2SwitchOn === 'function' && lage2SwitchOn()) });
+    // task 072d: lage 2 stays within LAGE2_MAX (validateGridSpec); lage 1 within its own ceiling; opts.beyondCeiling (tests) lifts the lage-2 one
+    const v = validateGridSpec(spec, { beyondCeiling: !!(opts && opts.beyondCeiling), enforceMax: true });
     if (!v.ok) throw what + ': ' + v.error;
     return spec;
 }
@@ -466,7 +466,6 @@ function planSessionRestore(snapshot, live) {
         const st = snapshot.settings;
         if (!live || live.canvasW !== st.canvas.w || live.canvasH !== st.canvas.h) return { ok: false, code: 'canvas-mismatch', detail: `saved canvas ${st.canvas.w}x${st.canvas.h}, live ${live && live.canvasW}x${live && live.canvasH}` };
         const baseSpec = st.grid;
-        if ((baseSpec.lage !== 1 || snapshot.layers.some(l => l.grid.lage !== 1)) && !(typeof lage2SwitchOn === 'function' && lage2SwitchOn())) return { ok: false, code: 'plan-error', detail: 'a lage-2 grid cannot be restored (the lage-2 switch is off)' };
         // lage 2 keeps u, v on every grid node (the fingerprint hashes them); lage 1 keeps {id, x, y} exactly as before
         const gridCopy = (nds, spec) => nds.map(n => spec.lage === 2 ? { id: n.id, x: n.x, y: n.y, u: n.u, v: n.v } : { id: n.id, x: n.x, y: n.y });
         const sheetNodes = (gridNodes, saved, what, spec) => {

@@ -43,11 +43,11 @@ for (const s of ['triangle', 'square']) {
         J(pts(ga.nodes)) === J(pts(gb.nodes)) && ev(N, `_alignmentConditionMet(3, 1, 3, 3, '${s}')`) === false && ev(N, `_alignmentConditionMet(3, 2, 3, 2, '${s}')`) === true);
 }
 check('(2) fromLegacy rejects unknown shape and nodeCount 0 / 1.5 / "3"', [['pentagon', 3], ['hex', 0], ['square', 1.5], ['square', '3']].every(([s, c]) => { try { N.fromLegacy(s, c); return false; } catch (e) { return true; } }));
-check('(2) maxOrdnungFor: 12 / 12 / 12 (task 069), lage 2 / unknown 0', N.maxOrdnungFor('triangle', 1) === 12 && N.maxOrdnungFor('square', 1) === 12 && N.maxOrdnungFor('hex') === 12 && N.maxOrdnungFor('hex', 2) === 0 && N.maxOrdnungFor('x', 1) === 0);
+check('(2) maxOrdnungFor: 12 / 12 / 12 (task 069), lage 2 = LAGE2_MAX 12 / 12 / 9 (task 072d, was 0 while locked), unknown 0', N.maxOrdnungFor('triangle', 1) === 12 && N.maxOrdnungFor('square', 1) === 12 && N.maxOrdnungFor('hex') === 12 && N.maxOrdnungFor('hex', 2) === 9 && N.maxOrdnungFor('x', 1) === 0);
 
 // (3) validator
 const bad = (spec, re) => { const r = N.validateGridSpec(spec); return r.ok === false && re.test(r.error); };
-check('(3) lage 2 rejected explicitly (all shapes), also by buildGrid', shapes.every(s => bad({ shape: s, ordnung: 1, lage: 2 }, /lage 2/)) && (() => { try { N.buildGrid({ shape: 'hex', ordnung: 1, lage: 2 }, { sizeFactor: 3, canvasW: 600, canvasH: 600 }); return false; } catch (e) { return /lage 2/.test(e.message); } })());
+check('(3) lage 2 (task 072d: free, was rejected): accepted up to LAGE2_MAX, one above it rejected ("exceeds"), lage 3 rejected, also by buildGrid', shapes.every(s => N.validateGridSpec({ shape: s, ordnung: 1, lage: 2 }).ok && bad({ shape: s, ordnung: N.maxOrdnungFor(s, 2) + 1, lage: 2 }, /exceeds/) && bad({ shape: s, ordnung: 1, lage: 3 }, /invalid lage/)) && (() => { try { N.buildGrid({ shape: 'hex', ordnung: 10, lage: 2 }, { sizeFactor: 3, canvasW: 600, canvasH: 600 }); return false; } catch (e) { return /exceeds/.test(e.message); } })());
 check('(3) ordnung 0 / negative / fractional / string rejected', [0, -1, 1.5, '2', null].every(o => bad({ shape: 'square', ordnung: o, lage: 1 }, /ordnung/)));
 check('(3) unknown shape rejected (also missing, null spec)', bad({ shape: 'pentagon', ordnung: 1, lage: 1 }, /unknown shape/) && bad({ ordnung: 1, lage: 1 }, /unknown shape/) && N.validateGridSpec(null).ok === false);
 check('(3) lage 0 / 3 / missing rejected', [0, 3, undefined].every(l => N.validateGridSpec({ shape: 'hex', ordnung: 1, lage: l }).ok === false));
@@ -79,7 +79,7 @@ ev(NS, `setGrid({shape:'square', ordnung:1, lage:1, legacyC1:true})`);
 check('(4) setGrid with the c = 1 marker -> nodeCount 1', ev(NS, 'nodeCount') === 1 && ev(NS, 'gridRevision') === r1 + 1);
 const before = snap(NS), rv = ev(NS, 'gridRevision');
 let thrown = 0;
-for (const s of [{ shape: 'hex', ordnung: 3, lage: 2 }, { shape: 'hex', ordnung: 0, lage: 1 }, { shape: 'pentagon', ordnung: 1, lage: 1 }]) { try { NS.setGrid(s); } catch (e) { thrown++; } }
+for (const s of [{ shape: 'hex', ordnung: 10, lage: 2 }, { shape: 'hex', ordnung: 0, lage: 1 }, { shape: 'pentagon', ordnung: 1, lage: 1 }]) { try { NS.setGrid(s); } catch (e) { thrown++; } }
 check('(4) setGrid with an invalid spec throws and leaves state and gridRevision untouched', thrown === 3 && snap(NS) === before && ev(NS, 'gridRevision') === rv);
 ev(NS, `projectGridSpec(fromLegacy(currentShape, 3)); shapeSizeFactor=3; rebuildGridFromConstruction({x:120,y:230},{x:310,y:260},4,1)`);
 check('(4) rebuildGridFromConstruction raises gridRevision', ev(NS, 'gridRevision') === rv + 1);

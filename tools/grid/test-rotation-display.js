@@ -150,7 +150,6 @@ check('(B) the handedness: constant on a rotation orbit, opposite on the two orb
     ['pattern-name-status', 'grid-info-status', 'nav-node-stepper', 'stepper', 'layer-node-count-input'].forEach(mkEl);
     const w = H.makeRenderWorld('square', 3, 3, 'rotation_reflection6'), sb = w.sb;
     sb.document = { body: {}, getElementById: id => els[id] || null }; sb.window = { UI: ui }; sb.UI = ui; sb.select = id => els[id.replace('#', '')] || null;
-    w.set('globalThis.__lage2 = true;');
     w.set("currentShape = 'square'; setGrid({ shape: 'square', ordnung: 4, lage: 1 });");
     sb.glossaryEntry = require(path.join(ROOT, 'core', 'glossary.js')).glossaryEntry;
     w.set('let patternNameCacheSignature = null; let patternNameCacheValue = null; let patternNameCacheTip = null;');

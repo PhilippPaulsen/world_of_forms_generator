@@ -75,14 +75,14 @@
     return timeline.keyframeLayerIds.indexOf(i) >= 0 || timeline.playbackLayerIndex === i;
   }
   function syncLage() {
-    if (typeof layerGridSpecOf !== 'function' || typeof lage2SwitchOn !== 'function') return;
+    if (typeof layerGridSpecOf !== 'function') return;
     const L = layer(), spec = L ? layerGridSpecOf(L) : null;
     document.querySelectorAll('.layer-shape-icon-btn').forEach(function (b) {
       const shape = b.getAttribute('data-shape'), on = !!L && b.classList.contains('active');
       const dot = on && spec.lage === 2;
       if (b.classList.contains('lage-2') !== dot) b.classList.toggle('lage-2', dot);
       let text = tr(SHAPE_KEY[shape], SHAPE_NAME[shape]);
-      if (on && lage2SwitchOn() && !inTimeline(L)) {
+      if (on && !inTimeline(L)) {
         if (spec.lage === 2) text = lageText(text, 2, 1);
         else if (spec.ordnung <= maxOrdnungFor(shape, 2)) text = lageText(text, 1, 2);
       }

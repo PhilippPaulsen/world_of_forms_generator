@@ -13,7 +13,7 @@ if (process.argv[2] === '--one') {
     for (const f of ['forms', 'symmetry', 'orbits']) vm.runInContext(fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8'), sb);
     sb.__spec = { shape, ordnung: n, lage }; sb.__view = { sizeFactor: 3, canvasW: 600, canvasH: 600 };
     const t = [];
-    let g; for (let i = 0; i < 15; i++) { const t0 = process.hrtime.bigint(); g = vm.runInContext('buildGrid(__spec, __view, { allowLage2: true })', sb); t.push(Number(process.hrtime.bigint() - t0) / 1e6); }
+    let g; for (let i = 0; i < 15; i++) { const t0 = process.hrtime.bigint(); g = vm.runInContext('buildGrid(__spec, __view, { beyondCeiling: true })', sb); t.push(Number(process.hrtime.bigint() - t0) / 1e6); }
     t.sort((a, b) => a - b);
     sb.__g = g; const t1 = process.hrtime.bigint();
     const tab = vm.runInContext(`computeThemeLineOrbits(__g.nodes, __g.centroid, ${JSON.stringify(shape)}, ${JSON.stringify(MODE[shape])}, __g.outerCorners)`, sb);
