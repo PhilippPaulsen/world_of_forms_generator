@@ -602,7 +602,7 @@ body.dark {
 /* Task 068c2: the info card's grid line ("Gitter: 3d2 · Knoten: 12"), a read-out under the pattern name. */
 #grid-info-status { display: block; margin-top: 4px; }
 /* Task 071: a v2 name of many lines is one unbroken string (tokens joined by +): it may break anywhere on a narrow card instead of running out of it. */
-#pattern-name-status { overflow-wrap: anywhere; }
+#pattern-name-status { overflow-wrap: anywhere; white-space: pre-line; }   /* task 072c: the mode "nur Drehung" shows the key and the source form on two lines */
 /* Task 071b: the name and grid block of the info card is quiet: left-aligned, ONE size, ONE weight, ONE colour (the card's text colour) - it replaces the centred, muted, smaller name. */
 #pattern-name-group { align-items: flex-start; text-align: left; }
 #pattern-name-group #pattern-name-status, #pattern-name-group #grid-info-status { font-size: var(--size-secondary); font-weight: var(--weight-regular); color: var(--color-text); opacity: 1; text-align: left; font-variant-numeric: tabular-nums; }

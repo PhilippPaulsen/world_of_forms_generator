@@ -287,5 +287,36 @@ function mainGroupFold(shape, x, y) {
     if (t < 1e-12) t = 0;
     return { r, t };
 }
+// ---- task 072c: the "nur Drehung" modes (the pure rotation group C3 / C4 / C6 of the main group) and the handedness of a pair under it --------------------------------
+// true when symmetryMode is the pure rotation group of the main group of the shape: triangle C3 and square C4 (rotation3 and rotation6 both), hexagon C6 (rotation6 only: rotation3 is the
+// hexagon's 3-fold group C3, which has no name yet). isMainGroupMode / mainGroupSpec are not touched.
+function isRotationMode(shape, symmetryMode) {
+    if (shape === 'triangle' || shape === 'square') return symmetryMode === 'rotation3' || symmetryMode === 'rotation6';
+    return shape === 'hex' && symmetryMode === 'rotation6';
+}
+// +1 / -1: the point lies in a sector that is a rotated copy of the shaded sector S0 / of its mirror image; 0: on an axis or in the centre. Canonical frame (y up).
+function mainGroupSectorType(shape, x, y) {
+    const { alpha0, w } = mainGroupSpec(shape);
+    if (Math.hypot(x, y) < _MG_EPS) return 0;
+    const u = (((Math.atan2(y, x) - alpha0) % _MG_TAU) + _MG_TAU) % _MG_TAU % (2 * w);
+    if (u < 1e-9 || Math.abs(u - w) < 1e-9 || Math.abs(u - 2 * w) < 1e-9) return 0;
+    return u < w ? 1 : -1;
+}
+// The handedness of the pair (a, b) = canonical points with the node numbers za, zb: which of the two pure-rotation orbits of its main-group orbit it belongs to (reports/072a).
+//   za != zb: the sector type of the end with the larger number (z1); an end on an axis: the sign of the angle from the z1 end to the other end (0 when collinear with the centre).
+//   za == zb: the common sector type of both ends, 0 when they differ or lie on an axis.   0 = the orbit is its own mirror image (geometrically achiral).
+function rotationHandedness(shape, a, b, za, zb) {
+    const EPS = _MG_EPS;
+    if (za !== zb) {
+        const e = za > zb ? a : b, f = za > zb ? b : a, s = mainGroupSectorType(shape, e.x, e.y);
+        if (s !== 0) return s;
+        if (Math.hypot(e.x, e.y) < EPS || Math.hypot(f.x, f.y) < EPS) return 0;
+        let d = (((Math.atan2(f.y, f.x) - Math.atan2(e.y, e.x)) % _MG_TAU) + _MG_TAU) % _MG_TAU; if (d > Math.PI + 1e-9) d -= _MG_TAU;
+        if (Math.abs(d) < 1e-9 || Math.abs(Math.abs(d) - Math.PI) < 1e-9) return 0;
+        return d > 0 ? 1 : -1;
+    }
+    const sa = mainGroupSectorType(shape, a.x, a.y), sb = mainGroupSectorType(shape, b.x, b.y);
+    return sa !== 0 && sa === sb ? sa : 0;
+}
 // distance of a side from the centre, in smallest mesh edges, for a grid of the given ordnung
 function mainGroupApothem(shape, n) { return shape === 'triangle' ? n / (2 * Math.sqrt(3)) : shape === 'square' ? n / 2 : n * Math.sqrt(3) / 2; }

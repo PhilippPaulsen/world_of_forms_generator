@@ -4864,7 +4864,7 @@ function patternNameTooltip(v2, spec) {
     const T = (key, vars) => (window.UI && UI.t ? UI.t(key, vars) : key);
     const term = id => T(glossaryEntry(id).termKey), text = id => T(glossaryEntry(id).textKey);
     const SHAPE_KEY = { triangle: 'shape.triangle', square: 'shape.square', hex: 'shape.hex' };
-    const lines = [`${v2.grid}: ${term('order')} ${spec.ordnung}, ${T(SHAPE_KEY[spec.shape])}, ${term('position')} ${spec.lage}, ${term('maingroup')} ${v2.group}, ${getGridNodeCount(spec)} ${term('nodes')}`];
+    const lines = [`${v2.grid}: ${term('order')} ${spec.ordnung}, ${T(SHAPE_KEY[spec.shape])}, ${term('position')} ${spec.lage}, ${v2.rotation ? T('sym.rotation') : term('maingroup') + ' ' + v2.group}, ${getGridNodeCount(spec)} ${term('nodes')}`];   // task 072c: the mode "nur Drehung" (v2.rotation) names the rotation instead of the main group
     const seen = new Set();
     v2.tokens.forEach(tk => {
         if (seen.has(tk.token)) return; seen.add(tk.token);
@@ -4874,6 +4874,11 @@ function patternNameTooltip(v2, spec) {
         if (tk.spiegelgleich) line += `; ${term('both')}: ${text('both')}`;
         lines.push(line);
     });
+    if (v2.rotation) {   // task 072c: the explanations that only the pure-rotation name needs, once each
+        lines.push(`${term('direction')}: ${text('direction')}`);   // the order of the numbers means something in every pure-rotation name
+        if (v2.tokens.some(tk => tk.law1c)) lines.push(`${term('law1c')}: ${text('law1c')}`);
+        lines.push(`${term('sourceform')}: ${text('sourceform')}`);
+    }
     return lines.join('\n');
 }
 
@@ -4928,8 +4933,8 @@ function updatePatternNameStatus() {
         // task 071: a main-group pattern (full 3* / 4* / 6*, no free endpoint, at least one line) shows the v2 name - the same function as the export name; every other case keeps the old name
         const sheetSpec = activeLayer !== 'base' && additionalLayers[activeLayer] ? layerGridSpecOf(additionalLayers[activeLayer]) : baseGridSpecNow();
         const sheetMode = gridOverride && gridOverride.symmetryMode !== undefined ? gridOverride.symmetryMode : symmetryMode;
-        const v2 = gridDisplayNameFor(sheetSpec, activeConnections(), sheetMode);
-        patternNameCacheValue = v2 ? v2.display : computeThemeLineName(activeConnections(), gridOverride && gridOverride.symmetryMode, gridOverride, gridOverride && gridOverride.shape);
+        const v2 = gridDisplayNameFor(sheetSpec, activeConnections(), sheetMode) || gridRotationNameFor(sheetSpec, activeConnections(), sheetMode);   // task 072c: or the pure-rotation name (display only)
+        patternNameCacheValue = v2 ? (v2.rotation ? v2.display + '\n' + v2.source : v2.display) : computeThemeLineName(activeConnections(), gridOverride && gridOverride.symmetryMode, gridOverride, gridOverride && gridOverride.shape);
         patternNameCacheTip = v2 ? patternNameTooltip(v2, sheetSpec) : null;
         patternNameCacheSignature = sig;
     }
