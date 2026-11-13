@@ -45,7 +45,7 @@ change('lines on the lage-2 grid', `connections = ${J(reps2.slice(10, 12))};`, {
 change('the shape', "currentShape = 'triangle'; setGrid({ shape: 'triangle', ordnung: 3, lage: 1 }); connections = [];", { text: 1, title: 1 });
 const reps3 = w.get('computeThemeLineOrbits(nodes, centroid, currentShape, symmetryMode, outerCorners).orbits.map(o => o.pairs[0].slice())');
 change('lines on the triangle', `connections = ${J(reps3.slice(3, 5))};`, { text: 1, title: 1 });
-change('the symmetry mode (rotation only: the old name, NO title)', "symmetryMode = 'rotation3';", { text: 1, title: 1 });
+change('the symmetry mode (rotation only: the old name, NO title)', "symmetryMode = 'reflection_only';", { text: 1, title: 1 });
 check('(4) reduced symmetry: no title attribute at all, the old name text', els['pattern-name-status'].attrs.title === undefined && !/^\d+[dq*][12]\//.test(els['pattern-name-status'].textContent), els['pattern-name-status'].textContent);
 change('back to the main group (the title returns)', "symmetryMode = 'rotation_reflection6';", { text: 1, title: 1 });
 check('(5) the title is there after the rebuilds', els['pattern-name-status'].attrs.title.startsWith('3d1: Ordnung 3'), els['pattern-name-status'].attrs.title);

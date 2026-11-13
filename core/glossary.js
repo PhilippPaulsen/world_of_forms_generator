@@ -19,6 +19,9 @@ const GLOSSARY = Object.freeze([
     Object.freeze({ id: 'mirror', termKey: 'glossary.mirror.term', textKey: 'glossary.mirror' }),
     Object.freeze({ id: 'both', termKey: 'glossary.both.term', textKey: 'glossary.both' }),
     Object.freeze({ id: 'nameform', termKey: 'glossary.nameform.term', textKey: 'glossary.nameform' }),
+    Object.freeze({ id: 'direction', termKey: 'glossary.direction.term', textKey: 'glossary.direction' }),   // task 072c: only the name of the mode "nur Drehung"
+    Object.freeze({ id: 'law1c', termKey: 'glossary.law1c.term', textKey: 'glossary.law1c' }),
+    Object.freeze({ id: 'sourceform', termKey: 'glossary.sourceform.term', textKey: 'glossary.sourceform' }),
 ]);
 // The ids of the terms a v2 display name (core/orbits.js gridDisplayNameFor) uses: the grid terms always, the line terms, and the overline / capital / aA only where the name carries them.
 function glossaryIdsForName(v2) {
@@ -26,6 +29,7 @@ function glossaryIdsForName(v2) {
     const ids = ['order', 'position', 'maingroup', 'formsign', 'nodes', 'nodenumber', 'family', 'letter', 'sector', 'nameform'];
     if (v2.tokens.some(t => t.key && t.key.gegen)) ids.push('bar');
     if (v2.tokens.some(t => t.spiegelgleich)) ids.push('both');
+    if (v2.rotation === true) { ids.push('sourceform', 'direction'); if (v2.tokens.some(t => t.law1c)) ids.push('law1c'); }   // task 072c
     return GLOSSARY.map(e => e.id).filter(id => ids.indexOf(id) >= 0);
 }
 function glossaryEntry(id) {
