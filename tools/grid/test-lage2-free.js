@@ -119,6 +119,7 @@ const STATE = () => T.get('JSON.stringify({ connections, nodes, gridSpec, gridRe
 // ---- 5. invalid transport input ----------------------------------------------------------------------------------------------------------------
 {
     const spec = { shape: 'square', ordnung: 3, lage: 2 }, tb = tableOf(spec), good = tb.entries[0].token, other1 = tableOf({ shape: 'square', ordnung: 3, lage: 1 }).entries.map(e => e.token).find(t => !tb.byToken.has(t));
+    T.run('connections = [[1, 2]];');   // a non-empty state, so a mutation before the validation shows
     const before = STATE();
     const q = o => 'v=2' + Object.entries(Object.assign({ shape: 'square', ordnung: '3', lage: '2', group: '4*', lines: good }, o)).map(([k, v]) => '&' + k + '=' + encodeURIComponent(v)).join('').replace(/^&v=2/, '');
     const cases = [
