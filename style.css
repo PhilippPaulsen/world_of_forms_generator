@@ -601,6 +601,8 @@ body.dark {
 
 /* Task 068c2: the info card's grid line ("Gitter: 3d2 · Knoten: 12"), a read-out under the pattern name. */
 #grid-info-status { display: block; margin-top: 4px; }
+/* Task 071: a v2 name of many lines is one unbroken string (tokens joined by +): it may break anywhere on a narrow card instead of running out of it. */
+#pattern-name-status { overflow-wrap: anywhere; }
 
 /* Task 068c3b: the active shape button of a lage-2 grid (Form row and layer panel) carries the same small corner dot (.lage-2, set by ui-form.js / ui-layer.js);
    currentColor = white on the black active button. */
