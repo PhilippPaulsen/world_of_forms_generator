@@ -544,6 +544,14 @@ function computeThemeLineName(connSet, mode, gridOverride, shapeOverride) {
 const _LK_ALPHABET = 'abcdefghiklmn';
 function _lkWrap(a) { return ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); }
 function _lkPtKey(x, y) { return Math.round(x * 1e6) + ',' + Math.round(y * 1e6); }
+// Task 072c2: the number n of sectors (Teildreiecke) a line touches, from its key: the RANK of the letter in the series of the shape (triangle a e i n, square a d g k n, hexagon a c e g i l n: the letters
+// at equal spacing of _LK_ALPHABET, formatted by computeLineKeyTable as _LK_ALPHABET[round((n - 1) * 12 / K)]), 1 .. K + 1. null for a letter that is not in the series of the shape. The one place of the inverse.
+function lineKeySectors(key, shape) {
+    if (!key || typeof key.buchstabe !== 'string' || !Object.prototype.hasOwnProperty.call(_LK_SHAPE_LETTER, shape)) return null;
+    const K = mainGroupSpec(shape).K, i = _LK_ALPHABET.indexOf(key.buchstabe), step = 12 / K;
+    if (i < 0 || i % step !== 0) return null;
+    return i / step + 1;
+}
 function lkFamilyName(z1, z2) { return (z1 >= 10 || z2 >= 10) ? z1 + '.' + z2 : '' + z1 + z2; }
 
 // one reading of an unordered pair from the end e (moved into S0 by each group element): [{ n, dir }] (dir +1 counter-clockwise, -1 clockwise, 0 none / antipodal)
