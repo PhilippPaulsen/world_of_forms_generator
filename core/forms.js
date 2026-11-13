@@ -420,13 +420,12 @@ function _alignmentConditionMet(baseShapeSizeFactor, baseNodeCount, layerShapeSi
     return D % divisor === 0;
 }
 
-// Node Count ceiling per shape. Triangle and hex stay at 7 (Group A, measured against hex: the orbit table costs ~3n^2
-// nodes there, 40 ms at 7 but 87 ms at 9 and 199 ms at 11 on the measuring machine). The square has real headroom - its
-// per-click cost was measured at ~29-39 ms at 13 (E = 12, drawing and face detection do not depend on the node count;
-// only the orbit table does) - so it goes to 13, not 15 (15 adds one nesting option and a first click of 80 ms).
-// Every place that bounds a node count reads this one table: the UI clamps (base and layer), the shape switches, the
-// catalog-URL validator and alignLayerToBase().
-const NODE_COUNT_MAX = { triangle: 7, square: 13, hex: 7 };
+// The ONE table of the lage-1 ceiling (task 069), in the legacy count c (triangle/square c = ordnung + 1, hex c = ordnung): ordnung 12 for every shape
+// (triangle 13, square 13, hex 12). The old ceilings (triangle 7, square 13, hex 7 = ordnung 6 / 12 / 7) were the enumeration practice of Hinterreiter's time and
+// a Group-A measurement of the orbit table; task 069 measured ordnung 12 on all three shapes (orbit table hex 12: 0.7 s, name table 0.14 s, draw() with 6 line orbits <= 10 ms).
+// Every place that bounds an order reads this table (maxNodeCountFor -> maxOrdnungFor(shape, 1) -> gridMaxOrdnung): the UI clamps (base and layer), the shape switches, the
+// session validator, the catalog transport and alignLayerToBase(). Lage 2 has its own ceiling (LAGE2_MAX).
+const NODE_COUNT_MAX = { triangle: 13, square: 13, hex: 12 };
 function maxNodeCountFor(shape) { return NODE_COUNT_MAX[shape] || 7; }
 
 // Roadmap 1.12 "Align to base": searches the layer's own reachable

@@ -82,7 +82,7 @@
   }
   function nodeMin() { return trigNetActive() ? (typeof gridMinOrdnungTrig === 'function' ? gridMinOrdnungTrig(currentShape) : 3) : 1; }   // task 068c2: the value is the ordnung (Sin/Tan: E >= 3, i.e. 3 / 3 / 4)
   function nodeMinMsg() { return trigNetActive() ? T['reason.node.min.trig'](nodeMin()) : T['reason.node.min']; }
-  function nodeMax() { return typeof gridMaxOrdnung === 'function' ? gridMaxOrdnung(currentShape, typeof gridSpec !== 'undefined' ? gridSpec.lage : 1) : 7; }
+  function nodeMax() { return typeof gridMaxOrdnung === 'function' ? gridMaxOrdnung(currentShape, typeof gridSpec !== 'undefined' ? gridSpec.lage : 1) : 12; }
   function nodeMaxMsg(max) { return (currentShape === 'square' ? T['reason.node.max.square'] : T['reason.node.max.other'])(max); }
 
   // dir +1 = the up chevron, -1 = the down chevron

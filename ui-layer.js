@@ -35,7 +35,7 @@
   function layer() {
     return typeof activeLayer !== 'undefined' && activeLayer !== 'base' && typeof additionalLayers !== 'undefined' && additionalLayers[activeLayer] || null;
   }
-  function nodeMax() { const L = layer(); return typeof gridMaxOrdnung === 'function' ? gridMaxOrdnung(L ? L.shape : 'triangle', L && typeof layerGridSpecOf === 'function' ? layerGridSpecOf(L).lage : 1) : 7; }   // task 068c2: the ordnung
+  function nodeMax() { const L = layer(); return typeof gridMaxOrdnung === 'function' ? gridMaxOrdnung(L ? L.shape : 'triangle', L && typeof layerGridSpecOf === 'function' ? layerGridSpecOf(L).lage : 1) : 12; }   // task 068c2: the ordnung
   function nodeMaxMsg(max) { const L = layer(); return (L && L.shape === 'square' ? T['reason.node.max.square'] : T['reason.node.max.other'])(max); }
 
   // dir +1 = the up chevron, -1 = the down chevron
