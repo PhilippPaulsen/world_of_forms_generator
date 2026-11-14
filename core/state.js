@@ -293,6 +293,29 @@ function setGrid(spec) {
     if (typeof gridControlsSync === 'function') gridControlsSync();   // task 068b: the page's inputs/buttons follow (set by sketch.js setup)
 }
 
+// Task 074 (size step 1): the ONLY write of a size change of the BASE (the #shape-size-input handler calls it, nothing else does). The grid of the same spec (shape, ordnung, lage)
+// is rebuilt at the new size and everything that is a statement about IDs or about the canvas keeps its meaning: connections and the redo stack (ID pairs; the ids are size-free and the free
+// endpoints keep theirs, so a redo entry stays valid: task 074 report), the free endpoints (absolute px: scaled about the canvas centre by old / new, exactly the scaling of the nodes, task 073)
+// and the alt-net seed (p, q scaled the same way, the net rebuilt from it). Still cleared as by rebuildGrid() (steps 2 and 3 keep them): layers, timeline, face colours with palette and anchor,
+// the net animation. The net spec (baseNetTransform) stays; a Field of an even new size is read as Single by netDomainEffective, as before.
+// Never throws after a change: an invalid size (not an integer 1..9) throws first. -> { changed, from, to, factor, kept: { lines, free, altNet }, lost: { layers, timeline, colors } }
+function resizeBase(neu) {
+    if (!Number.isInteger(neu) || neu < 1 || neu > 9) throw new Error('resizeBase: size must be an integer 1..9');
+    const old = shapeSizeFactor;
+    const lost = { layers: additionalLayers.length, timeline: !!timeline, colors: baseFaceAssignments instanceof Map && baseFaceAssignments.size > 0 };
+    if (neu === old) return { changed: false, from: old, to: neu, factor: 1, kept: { lines: connections.length, free: 0, altNet: false }, lost: { layers: 0, timeline: false, colors: false } };
+    const factor = old / neu, cx = canvasW / 2, cy = canvasH / 2;
+    const scale = (p) => ({ x: cx + (p.x - cx) * factor, y: cy + (p.y - cy) * factor });
+    const keepConns = connections, keepRedo = redoStack, seed = altNetSeed;
+    const free = nodes.filter(n => n.free).map(n => Object.assign({}, n, scale(n)));
+    shapeSizeFactor = neu;
+    try { rebuildGrid(currentShape); } catch (e) { shapeSizeFactor = old; throw e; }
+    if (seed) rebuildGridFromConstruction(scale(seed.p), scale(seed.q), seed.n, seed.side);   // sets altNetSeed to the scaled one
+    connections = keepConns; redoStack = keepRedo;
+    free.forEach(n => nodes.push(n));
+    return { changed: true, from: old, to: neu, factor, kept: { lines: connections.length, free: free.length, altNet: !!seed }, lost };
+}
+
 // Task 068b: the lage of the BASE grid (no UI yet: 068c). Like a shape change it clears connections, layers and the timeline (rebuildGrid) and the redo stack, and bumps gridRevision.
 // -> { ok: true, changed } | { ok: false, reason: 'invalid-lage' | 'ordnung-limit', limit? }; never throws, nothing is touched on a refusal.
 function setBaseLage(lage) {
