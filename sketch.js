@@ -204,13 +204,25 @@ function setup() {
         shapeSizeFactor = parseInt(shapeInput.value()) || 5;
         shapeInput.input(() => {
             let v = parseInt(shapeInput.value());
+            if (isNaN(v)) return; // a half-typed value changes nothing (it used to set the size to NaN)
             if (v < 1) v = 1; if (v > 9) v = 9; // Clamp
-            shapeSizeFactor = v;
-            rebuildGrid(currentShape);
-            renderLayerTabs();
-            updateOffsetControls();
-            updateTimelineControls();
-            redraw();
+            // Task 074: resizeBase() (core/state.js) is the one write of a size change: lines and free endpoints stay (scaled), layers, timeline and colours are still cleared - asked first, said after.
+            const plan = sizeChangePlan(v);
+            if (plan.same) { shapeInput.value(shapeSizeFactor); return; }
+            const doSizeChange = () => {
+                const r = resizeBase(v);
+                shapeInput.value(shapeSizeFactor);
+                renderLayerTabs(); // resizeBase() clears additionalLayers - the layer views follow
+                updateOffsetControls();
+                updateTimelineControls();
+                saySizeChange(r);
+                redraw();
+            };
+            if ((plan.loss.layers || plan.loss.timeline || plan.loss.colors) && window.timelineConfirm && window.UI && UI.t) {
+                window.timelineConfirm({ title: UI.t('size.confirm.title'), text: UI.t('size.confirm.text', { what: shapeLossWhat(plan.loss) }), confirmLabel: UI.t('size.confirm.go'), onConfirm: doSizeChange, returnFocus: () => { shapeInput.value(shapeSizeFactor); } });   // cancel: the field goes back to the size in force
+                return;
+            }
+            doSizeChange();
         });
     }
 
@@ -4833,6 +4845,27 @@ function shapeChangePlan(target) {
     const to = same ? from : gridSpecOnShape(from, target);
     return { same, from, to, clamped: !same && to.ordnung < from.ordnung ? { from: from.ordnung, to: to.ordnung } : null,
         loss: { lines: connections.length > 0, layers: additionalLayers.length, timeline: !!timeline, colors: baseFaceAssignments instanceof Map && baseFaceAssignments.size > 0 } };
+}
+// Task 074: what a change of the BASE size does. -> { same, from, to, loss: { layers, timeline, colors } } - the loss is what resizeBase() still clears (lines and free points are kept).
+function sizeChangePlan(target) {
+    return { same: target === shapeSizeFactor, from: shapeSizeFactor, to: target,
+        loss: { lines: false, layers: additionalLayers.length, timeline: !!timeline, colors: baseFaceAssignments instanceof Map && baseFaceAssignments.size > 0 } };
+}
+// The notice after a size change: "Größe 3 -> 5. Linien und freie Punkte erhalten. Geleert: Ebenen, Zeitleiste und Farben." (only what applies).
+function sizeChangeText(r) {
+    const t = (k, v, fb) => (window.UI && UI.t ? UI.t(k, v) : fb);
+    const keptWords = [];
+    if (r.kept.lines) keptWords.push(t('size.kept.lines', undefined, 'Linien'));
+    if (r.kept.free) keptWords.push(t('size.kept.free', undefined, 'freie Punkte'));
+    const and = t('shape.lost.and', undefined, 'und');
+    const parts = [t('note.size.head', { from: r.from, to: r.to }, `Größe ${r.from} -> ${r.to}.`)];
+    if (keptWords.length) parts.push(t('note.size.kept', { what: keptWords.join(' ' + and + ' ') }, `${keptWords.join(' ' + and + ' ')} erhalten.`));
+    const what = shapeLossWhat({ lines: false, layers: r.lost.layers, timeline: r.lost.timeline, colors: r.lost.colors });
+    if (what) parts.push(t('note.shape.cleared', { what }, `Geleert: ${what}.`));
+    return parts.join(' ');
+}
+function saySizeChange(r) {
+    if (r.changed && window.say) window.say('size-change', sizeChangeText(r), 'info');
 }
 // "Linien, Ebenen, Zeitleiste und Farben" - the words of what a shape change clears (only what is there), joined as a list.
 function shapeLossWhat(loss) {
