@@ -308,11 +308,6 @@ function setGrid(spec) {
 // Never throws after a change: an invalid size (not an integer 1..9) throws first.
 // -> { changed, from, to, factor, kept: { lines, free, altNet, layers, timeline, colors }, lost: { layers, timeline, colors, colorsCount, colorsTotal }, hints: { fieldNet } }
 const DEFAULT_GRAY_RULE = 'max-contrast-gray';
-function _realAssignments(store) {
-    const out = [];
-    if (store instanceof Map) store.forEach((a, k) => { if (a && a.rule !== DEFAULT_GRAY_RULE) out.push([k, a]); });
-    return out;
-}
 // the face snapshot of ONE sheet (sheet = null: the base, read from the globals as they are NOW; a layer: its own override), null when it has no faces
 function _sheetFaceSnapshot(conns, gridNodes, sheet) {
     const res = computeCellFaces(conns, gridNodes, null, null, sheet);
@@ -339,17 +334,20 @@ function _mapTrailKeys(oldSnap, newSnap, scale) {
     best.forEach(([ok, nk]) => { if (!taken.has(nk)) { taken.add(nk); map.set(ok, nk); } });
     return map;
 }
-// the re-keyed store and palette: every entry whose trail has a counterpart moves to its new key (the default grays too: the picture stays as it was); an entry without one is dropped, and only a REAL
-// assignment (rule other than the default gray) counts as lost - a gray that finds no face is simply filled in again by ensureDefaultGrayFill
-function _rekeyColors(store, palette, map) {
-    const out = new Map(); let lost = 0, kept = 0;
+// the re-keyed store and palette: every entry of a trail that is in the old picture and has a counterpart in the new one moves to its new key (the default grays too: the picture stays as it was).
+// An entry whose key names no face of the old picture (an orphan: reconciliation leaves those behind after an edit) shows nothing, is dropped and never counted. A live entry without a counterpart is dropped;
+// only a REAL assignment (rule other than the default gray) counts as lost - a gray that finds no face is simply filled in again by ensureDefaultGrayFill. total = the real, live entries.
+function _rekeyColors(store, palette, map, liveKeys) {
+    const out = new Map(); let lost = 0, kept = 0, total = 0;
     if (store instanceof Map) store.forEach((a, k) => {
+        if (!liveKeys || !liveKeys.has(k)) return;
         const real = a && a.rule !== DEFAULT_GRAY_RULE, nk = map.get(k);
+        if (real) total++;
         if (nk !== undefined && !out.has(nk)) { out.set(nk, a); if (real) kept++; } else if (real) lost++;
     });
     let pal = palette;
     if (palette) { const ov = new Map(); if (palette.overrides instanceof Map) palette.overrides.forEach((slot, k) => { const nk = map.get(k); if (nk !== undefined) ov.set(nk, slot); }); pal = Object.assign({}, palette, { overrides: ov }); }
-    return { store: out, palette: pal, kept, lost };
+    return { store: out, palette: pal, kept, lost, total };
 }
 function _resizeSaved() {
     return { shapeSizeFactor, nodes, centroid, outerCorners, connections, redoStack, altNetSeed, additionalLayers, timeline, activeLayer, baseFaceAssignments, baseFacePalette, baseFaceAnchor, baseLastHarmonyType,
@@ -390,11 +388,10 @@ function _resizeDo(neu, old) {
     free.forEach(n => nodes.push(n));
     let colorsTotal = 0, colorsKept = 0, colorsLost = 0;
     {
-        const total = _realAssignments(keep.store).length;
         const map = baseHas ? _mapTrailKeys(oldBase, _sheetFaceSnapshot(connections, nodes, null), scale) : new Map();
-        const k = _rekeyColors(keep.store, keep.palette, map);
+        const k = _rekeyColors(keep.store, keep.palette, map, oldBase ? oldBase.keys : null);
         baseFaceAssignments = k.store; baseFacePalette = k.palette;
-        colorsTotal += total; colorsKept += k.kept; colorsLost += k.lost;
+        colorsTotal += k.total; colorsKept += k.kept; colorsLost += k.lost;
     }
     baseFaceAnchor = keep.anchor; baseLastHarmonyType = keep.harmony; baseLastSelection = keep.selection; baseDistributionStrategy = keep.strategy;
     // the layers (new objects: a dry run restores the old ones untouched)
@@ -406,13 +403,12 @@ function _resizeDo(neu, old) {
         if (l.offsetX !== undefined) nl.offsetX = l.offsetX * factor;
         if (l.offsetY !== undefined) nl.offsetY = l.offsetY * factor;
         if (l.isTimelinePlayback) { nl._morphNodes = null; nl._morphConnections = null; }   // read afresh by the next applyTimelineFrame()
-        const total = _realAssignments(l.faceAssignments).length;
         if (l.faceAssignments !== undefined || l.facePalette !== undefined) {
             const map = hasStore(l.faceAssignments) ? _mapTrailKeys(oldLayer[i], _sheetFaceSnapshot(nl.connections, nl.nodes, faceSheetOverrideOfLayer(nl)), scale) : new Map();
-            const k = _rekeyColors(l.faceAssignments, l.facePalette, map);
+            const k = _rekeyColors(l.faceAssignments, l.facePalette, map, oldLayer[i] ? oldLayer[i].keys : null);
             if (l.faceAssignments !== undefined) nl.faceAssignments = k.store;
             if (l.facePalette !== undefined) nl.facePalette = k.palette;
-            colorsTotal += total; colorsKept += k.kept; colorsLost += k.lost;
+            colorsTotal += k.total; colorsKept += k.kept; colorsLost += k.lost;
         }
         return nl;
     });

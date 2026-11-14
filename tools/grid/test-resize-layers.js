@@ -268,6 +268,13 @@ const baseOf = (w) => JSON.parse(w.get('JSON.stringify({ nodes, centroid, outerC
     let cmp = 0, eq = 0;
     lb.forEach(of => { const m = { x: of.poly.reduce((s, p) => s + p.x, 0) / of.poly.length, y: of.poly.reduce((s, p) => s + p.y, 0) / of.poly.length }; if (!inPoly(m, of.poly)) return; const nf = la.find(g => inPoly(scaleP(m, 3 / 5), g.poly)); if (!nf) return; cmp++; if (nf.color === of.color) eq++; });
     check(`(5) a layer's own colours (${tot} real groups, square, 3 -> 5): re-keyed through the layer's sheet, ${eq}/${cmp} faces keep their colour, the layer's palette override follows, 0 lost`, tot > 0 && cmp > 5 && eq === cmp && rr.lost.colorsCount === 0 && rr.kept.colors >= tot && w.get('additionalLayers[0].facePalette.overrides.size') === 1, `${eq}/${cmp} ${J(rr)}`);
+    // an orphan (a real assignment whose key names no face of the picture) shows nothing: dropped, not counted, no dialog
+    setup(w, 'square', 3, 1, 3); w.set('connections = computeThemeLineOrbits(nodes, centroid, currentShape, symmetryMode, outerCorners).orbits.map(o => o.pairs[0].slice()).slice(0, 3);');
+    S.colorBase(w.ctx, { type: 'custom' });
+    const liveReal = w.get("Array.from(baseFaceAssignments.values()).filter(a => a.rule !== 'max-contrast-gray').length");
+    w.set("baseFaceAssignments.set('orphan-1', { hue: 1, w: 0, s: 0, rule: 'tetrad', params: null, displayColor: null }); baseFaceAssignments.set('orphan-2', { hue: 2, w: 0, s: 0, rule: 'tetrad', params: null, displayColor: null });");
+    const ro = w.get('resizeBase(5)');
+    check('(5) two orphan assignments next to ' + liveReal + ' live ones: only the live ones are counted (' + ro.lost.colorsTotal + '), 0 lost, the orphans are gone', ro.lost.colorsTotal === liveReal && ro.lost.colorsCount === 0 && !w.get("baseFaceAssignments.has('orphan-1') || baseFaceAssignments.has('orphan-2')"), J(ro.lost));
     // the default gray is not counted and is filled in again; a store with only gray has nothing to lose
     setup(w, 'square', 3, 1, 3); w.set('connections = computeThemeLineOrbits(nodes, centroid, currentShape, symmetryMode, outerCorners).orbits.map(o => o.pairs[0].slice()).slice(0, 3); computeCellFaces(connections, nodes, baseFaceAssignments);');
     const grayN = w.get('baseFaceAssignments.size'), rg = w.get('resizeBase(7)');

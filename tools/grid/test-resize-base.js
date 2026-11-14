@@ -277,21 +277,14 @@ const nameOf = (w, spec) => w.get(`(function () { const r = gridDisplayNameFor($
         check(`(9) with ${what}: no dialog, size 5, the line kept, the notice "Größe 3 -> 5. Linien erhalten. ${words} angepasst."`, x.log.dialogs.length === 0 && x.w.get('shapeSizeFactor') === 5 && x.w.get('connections.length') === 1 && x.log.said.length === 1 && x.log.said[0][1] === `Größe 3 -> 5. Linien erhalten. ${words} angepasst.` && x.input.v === '5', J(x.log.said));
     }
     x = mk(3, "connections = [[1, 2]]; baseFaceAssignments.set('k', { hue: 1, w: 0, s: 0, rule: 'tetrad', params: null, displayColor: null });");
-    const before = x.w.get('JSON.stringify([connections, baseFaceAssignments.size, shapeSizeFactor, nodes.length])');
     type(x, 5);
-    check('(9) a real colour assignment that has no face to go to: the dialog "Größe ändern?" opens first, the text says "1 von 1 Farbgruppen", "Ändern"; nothing has changed yet', x.log.dialogs.length === 1 && x.log.dialogs[0].title === 'Größe ändern?' && /gehen 1 von 1 Farbgruppen verloren/.test(x.log.dialogs[0].text) && x.log.dialogs[0].confirmLabel === 'Ändern' && x.w.get('JSON.stringify([connections, baseFaceAssignments.size, shapeSizeFactor, nodes.length])') === before && x.log.said.length === 0, J(x.log.dialogs.map(d => d.text)));
-    x.log.dialogs[0].returnFocus();
-    check('(9) cancel: nothing changed and the field goes back to 3', x.input.v === '3' && x.w.get('JSON.stringify([connections, baseFaceAssignments.size, shapeSizeFactor, nodes.length])') === before && x.log.said.length === 0);
-    type(x, 5); x.log.dialogs[1].onConfirm();
-    check('(9) confirm: size 5, the line kept, the notice "Größe 3 -> 5. Linien erhalten. Nicht erhalten: 1 von 1 Farbgruppen."', x.w.get('shapeSizeFactor') === 5 && x.w.get('connections.length') === 1 && x.log.said.length === 1 && x.log.said[0][1] === 'Größe 3 -> 5. Linien erhalten. Nicht erhalten: 1 von 1 Farbgruppen.' && x.input.v === '5', J(x.log.said));
+    check('(9) a real assignment whose key names no face (an orphan: it shows nothing): no dialog, dropped quietly, "Größe 3 -> 5. Linien erhalten." (task 075)', x.log.dialogs.length === 0 && x.w.get('baseFaceAssignments.size') === 0 && J(x.log.said) === J([['size-change', 'Größe 3 -> 5. Linien erhalten.', 'info']]), J(x.log.said));
     x = mk(3, "connections = [[1, 2]]; baseFaceAssignments.set('k', { hue: 1, w: 0, s: 0, rule: 'max-contrast-gray', params: null, displayColor: null });");
     type(x, 5);
     check('(9) the default gray is not an assignment: no dialog, no word about colours', x.log.dialogs.length === 0 && x.log.said.length === 1 && x.log.said[0][1] === 'Größe 3 -> 5. Linien erhalten.', J(x.log.said));
-    x = mk(3, "connections = [[1, 2]]; additionalLayers.push({ shape: 'square', connections: [], nodes: [], shapeSizeFactor: 3, gridSpec: { shape: 'square', ordnung: 2, lage: 1 } }); timeline = { keyframeLayerIds: [], playbackLayerIndex: null }; baseFaceAssignments.set('k', { hue: 1, w: 0, s: 0, rule: 'tetrad', params: null, displayColor: null });", 'en');
+    x = mk(3, "connections = [[1, 2]]; additionalLayers.push({ shape: 'square', connections: [], nodes: [], shapeSizeFactor: 3, gridSpec: { shape: 'square', ordnung: 2, lage: 1 } }); timeline = { keyframeLayerIds: [], playbackLayerIndex: null };", 'en');
     type(x, 6);
-    check('(9) English dialog: "Change size?", "Changing the size discards 1 of 1 color groups (faces merge or vanish). This cannot be undone.", "Change"', x.log.dialogs[0].title === 'Change size?' && x.log.dialogs[0].text === 'Changing the size discards 1 of 1 color groups (faces merge or vanish). This cannot be undone.' && x.log.dialogs[0].confirmLabel === 'Change', x.log.dialogs[0].text);
-    x.log.dialogs[0].onConfirm();
-    check('(9) English notice: "Size 3 -> 6. Lines kept. Layers and timeline adjusted. Not kept: 1 of 1 color groups."', x.log.said[0][1] === 'Size 3 -> 6. Lines kept. layers and timeline adjusted. Not kept: 1 of 1 color groups.', x.log.said[0] && x.log.said[0][1]);
+    check('(9) English notice: "Size 3 -> 6. Lines kept. layers and timeline adjusted." (no dialog)', x.log.dialogs.length === 0 && x.log.said[0][1] === 'Size 3 -> 6. Lines kept. layers and timeline adjusted.', x.log.said[0] && x.log.said[0][1]);
     check('(9) the text keys exist in German and English (non-empty, different)', ['size.confirm.title', 'size.confirm.text', 'size.confirm.go', 'note.size.head', 'note.size.kept', 'size.kept.lines', 'size.kept.free', 'size.adj.layers', 'size.adj.timeline', 'size.adj.colors', 'note.size.adjusted', 'note.size.colorsLost', 'note.size.fieldNet'].every(k => dict[k] && dict[k].de && dict[k].en && dict[k].de !== dict[k].en));
 }
 
