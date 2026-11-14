@@ -351,13 +351,13 @@ function _rekeyColors(store, palette, map, liveKeys) {
 }
 function _resizeSaved() {
     return { shapeSizeFactor, nodes, centroid, outerCorners, connections, redoStack, altNetSeed, additionalLayers, timeline, activeLayer, baseFaceAssignments, baseFacePalette, baseFaceAnchor, baseLastHarmonyType,
-        baseLastSelection, baseDistributionStrategy, baseNetAnimation, faceHover, gridRevision, gridSpec, nodeCount };
+        baseLastSelection, baseDistributionStrategy, baseNetAnimation, faceHover, gridRevision, gridSpec };
 }
 function _resizeRestore(S) {
     shapeSizeFactor = S.shapeSizeFactor; nodes = S.nodes; centroid = S.centroid; outerCorners = S.outerCorners; connections = S.connections; redoStack = S.redoStack; altNetSeed = S.altNetSeed;
     additionalLayers = S.additionalLayers; timeline = S.timeline; activeLayer = S.activeLayer; baseFaceAssignments = S.baseFaceAssignments; baseFacePalette = S.baseFacePalette; baseFaceAnchor = S.baseFaceAnchor;
     baseLastHarmonyType = S.baseLastHarmonyType; baseLastSelection = S.baseLastSelection; baseDistributionStrategy = S.baseDistributionStrategy; baseNetAnimation = S.baseNetAnimation; faceHover = S.faceHover;
-    gridRevision = S.gridRevision; gridSpec = S.gridSpec; nodeCount = S.nodeCount;
+    gridRevision = S.gridRevision; projectGridSpec(S.gridSpec);   // the one write of nodeCount (task 060)
 }
 function resizeBase(neu, opts) {
     if (!Number.isInteger(neu) || neu < 1 || neu > 9) throw new Error('resizeBase: size must be an integer 1..9');
