@@ -293,27 +293,135 @@ function setGrid(spec) {
     if (typeof gridControlsSync === 'function') gridControlsSync();   // task 068b: the page's inputs/buttons follow (set by sketch.js setup)
 }
 
-// Task 074 (size step 1): the ONLY write of a size change of the BASE (the #shape-size-input handler calls it, nothing else does). The grid of the same spec (shape, ordnung, lage)
-// is rebuilt at the new size and everything that is a statement about IDs or about the canvas keeps its meaning: connections and the redo stack (ID pairs; the ids are size-free and the free
-// endpoints keep theirs, so a redo entry stays valid: task 074 report), the free endpoints (absolute px: scaled about the canvas centre by old / new, exactly the scaling of the nodes, task 073)
-// and the alt-net seed (p, q scaled the same way, the net rebuilt from it). Still cleared as by rebuildGrid() (steps 2 and 3 keep them): layers, timeline, face colours with palette and anchor,
-// the net animation. The net spec (baseNetTransform) stays; a Field of an even new size is read as Single by netDomainEffective, as before.
-// Never throws after a change: an invalid size (not an integer 1..9) throws first. -> { changed, from, to, factor, kept: { lines, free, altNet }, lost: { layers, timeline, colors } }
-function resizeBase(neu) {
+// Task 074/075 (size steps 1-3): the ONLY write of a size change of the BASE (the #shape-size-input handler calls it, nothing else does). The grid of the same spec (shape, ordnung, lage)
+// is rebuilt at the new size and everything that is a statement about IDs or about the canvas keeps its meaning (all of it scaled about the canvas centre by old / new, exactly the scaling of
+// the nodes, tasks 073/074):
+//  - the base: connections and the redo stack (ID pairs), the free endpoints (absolute px), the alt-net seed (p, q; the net is rebuilt from it), and the face colours;
+//  - every layer (task 075): its own size L' = L * new / old (a fraction, kept internally; the stepper shows it rounded), its offset X / Y * old / new, its rotation unchanged, its gridSpec,
+//    connections, redo stack and free endpoints, and its face colours; the timeline (keyframe ids, pairings, flips, members, net specs: ids, indices and specs, no px) is the same object;
+//  - colours: the store of a sheet is keyed by faceTrailKey (absolute px, 0.01 px), so its REAL assignments (rule other than the default gray) are re-keyed: every face of the old picture is
+//    carried to the face of the new picture that contains its scaled interior point (core/facecolor.js faceTrailSnapshot / pointInPolygon / faceSamplePoints, read only), the palette overrides
+//    follow, palette / anchor / harmony type / selection / strategy carry no coordinates and stay. The default gray (ensureDefaultGrayFill) is not an assignment and never counted; its entries move with their trail, a trail without a counterpart gets a fresh gray.
+//    A trail whose faces merge or vanish at the new size (core/faces.js snaps nodes within FACE_EPSILON = 0.5 px, so tiny faces of a small shape merge) loses its colour: counted in lost.colorsCount.
+// Still cleared as by rebuildGrid(): the net animation. The net spec (baseNetTransform) stays; a Field of an even new size is read as Single by netDomainEffective, as before (hints.fieldNet).
+// opts.dryRun: computes everything, restores every global and returns the same report (the handler asks first when something is lost).
+// Never throws after a change: an invalid size (not an integer 1..9) throws first.
+// -> { changed, from, to, factor, kept: { lines, free, altNet, layers, timeline, colors }, lost: { layers, timeline, colors, colorsCount, colorsTotal }, hints: { fieldNet } }
+const DEFAULT_GRAY_RULE = 'max-contrast-gray';
+function _realAssignments(store) {
+    const out = [];
+    if (store instanceof Map) store.forEach((a, k) => { if (a && a.rule !== DEFAULT_GRAY_RULE) out.push([k, a]); });
+    return out;
+}
+// the face snapshot of ONE sheet (sheet = null: the base, read from the globals as they are NOW; a layer: its own override), null when it has no faces
+function _sheetFaceSnapshot(conns, gridNodes, sheet) {
+    const res = computeCellFaces(conns, gridNodes, null, null, sheet);
+    const group = sheetGroupElements(gridNodes, sheet);
+    return group && res.faces.length ? faceTrailSnapshot(res, group) : null;
+}
+// old trail key -> new trail key: every sample point of every old face, scaled, is looked up in the new faces; the key with most votes wins; two old keys never share one new key
+function _mapTrailKeys(oldSnap, newSnap, scale) {
+    const map = new Map();
+    if (!oldSnap || !newSnap) return map;
+    const boxes = newSnap.faces.map(f => ({ f, x0: Math.min(...f.poly.map(p => p.x)), x1: Math.max(...f.poly.map(p => p.x)), y0: Math.min(...f.poly.map(p => p.y)), y1: Math.max(...f.poly.map(p => p.y)) }));
+    const votes = new Map();
+    oldSnap.faces.forEach(of => of.samples.forEach(sp => {
+        const p = scale(sp);
+        const hit = boxes.find(b => p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1 && pointInPolygon(p, b.f.poly));
+        if (!hit) return;
+        if (!votes.has(of.key)) votes.set(of.key, new Map());
+        const m = votes.get(of.key); m.set(hit.f.key, (m.get(hit.f.key) || 0) + 1);
+    }));
+    const best = [];
+    votes.forEach((m, ok) => { let bk = null, bv = 0; m.forEach((v, nk) => { if (v > bv || (v === bv && nk < bk)) { bk = nk; bv = v; } }); best.push([ok, bk, bv]); });
+    best.sort((a, b) => b[2] - a[2] || (a[0] < b[0] ? -1 : 1));
+    const taken = new Set();
+    best.forEach(([ok, nk]) => { if (!taken.has(nk)) { taken.add(nk); map.set(ok, nk); } });
+    return map;
+}
+// the re-keyed store and palette: every entry whose trail has a counterpart moves to its new key (the default grays too: the picture stays as it was); an entry without one is dropped, and only a REAL
+// assignment (rule other than the default gray) counts as lost - a gray that finds no face is simply filled in again by ensureDefaultGrayFill
+function _rekeyColors(store, palette, map) {
+    const out = new Map(); let lost = 0, kept = 0;
+    if (store instanceof Map) store.forEach((a, k) => {
+        const real = a && a.rule !== DEFAULT_GRAY_RULE, nk = map.get(k);
+        if (nk !== undefined && !out.has(nk)) { out.set(nk, a); if (real) kept++; } else if (real) lost++;
+    });
+    let pal = palette;
+    if (palette) { const ov = new Map(); if (palette.overrides instanceof Map) palette.overrides.forEach((slot, k) => { const nk = map.get(k); if (nk !== undefined) ov.set(nk, slot); }); pal = Object.assign({}, palette, { overrides: ov }); }
+    return { store: out, palette: pal, kept, lost };
+}
+function _resizeSaved() {
+    return { shapeSizeFactor, nodes, centroid, outerCorners, connections, redoStack, altNetSeed, additionalLayers, timeline, activeLayer, baseFaceAssignments, baseFacePalette, baseFaceAnchor, baseLastHarmonyType,
+        baseLastSelection, baseDistributionStrategy, baseNetAnimation, faceHover, gridRevision, gridSpec, nodeCount };
+}
+function _resizeRestore(S) {
+    shapeSizeFactor = S.shapeSizeFactor; nodes = S.nodes; centroid = S.centroid; outerCorners = S.outerCorners; connections = S.connections; redoStack = S.redoStack; altNetSeed = S.altNetSeed;
+    additionalLayers = S.additionalLayers; timeline = S.timeline; activeLayer = S.activeLayer; baseFaceAssignments = S.baseFaceAssignments; baseFacePalette = S.baseFacePalette; baseFaceAnchor = S.baseFaceAnchor;
+    baseLastHarmonyType = S.baseLastHarmonyType; baseLastSelection = S.baseLastSelection; baseDistributionStrategy = S.baseDistributionStrategy; baseNetAnimation = S.baseNetAnimation; faceHover = S.faceHover;
+    gridRevision = S.gridRevision; gridSpec = S.gridSpec; nodeCount = S.nodeCount;
+}
+function resizeBase(neu, opts) {
     if (!Number.isInteger(neu) || neu < 1 || neu > 9) throw new Error('resizeBase: size must be an integer 1..9');
     const old = shapeSizeFactor;
-    const lost = { layers: additionalLayers.length, timeline: !!timeline, colors: baseFaceAssignments instanceof Map && baseFaceAssignments.size > 0 };
-    if (neu === old) return { changed: false, from: old, to: neu, factor: 1, kept: { lines: connections.length, free: 0, altNet: false }, lost: { layers: 0, timeline: false, colors: false } };
+    if (neu === old) return { changed: false, from: old, to: neu, factor: 1, kept: { lines: connections.length, free: 0, altNet: false, layers: 0, timeline: false, colors: 0 }, lost: { layers: 0, timeline: false, colors: false, colorsCount: 0, colorsTotal: 0 }, hints: { fieldNet: false } };
+    const saved = _resizeSaved();
+    let r;
+    try { r = _resizeDo(neu, old); } catch (e) { _resizeRestore(saved); throw e; }
+    if (opts && opts.dryRun) _resizeRestore(saved);
+    return r;
+}
+function _resizeDo(neu, old) {
     const factor = old / neu, cx = canvasW / 2, cy = canvasH / 2;
     const scale = (p) => ({ x: cx + (p.x - cx) * factor, y: cy + (p.y - cy) * factor });
-    const keepConns = connections, keepRedo = redoStack, seed = altNetSeed;
+    const keep = { conns: connections, redo: redoStack, seed: altNetSeed, layers: additionalLayers, tl: timeline, active: activeLayer, store: baseFaceAssignments, palette: baseFacePalette, anchor: baseFaceAnchor,
+        harmony: baseLastHarmonyType, selection: baseLastSelection, strategy: baseDistributionStrategy, netT: baseNetTransform };
     const free = nodes.filter(n => n.free).map(n => Object.assign({}, n, scale(n)));
+    // the faces of the OLD picture, of every sheet that holds a real colour (before anything is rebuilt)
+    const hasStore = (st) => st instanceof Map && st.size > 0;
+    const baseHas = hasStore(keep.store);
+    const oldBase = baseHas ? _sheetFaceSnapshot(keep.conns, nodes, null) : null;
+    const oldLayer = keep.layers.map(l => (hasStore(l.faceAssignments) ? _sheetFaceSnapshot(l.connections, l.nodes, faceSheetOverrideOfLayer(l)) : null));
+    // the base
     shapeSizeFactor = neu;
-    try { rebuildGrid(currentShape); } catch (e) { shapeSizeFactor = old; throw e; }
-    if (seed) rebuildGridFromConstruction(scale(seed.p), scale(seed.q), seed.n, seed.side);   // sets altNetSeed to the scaled one
-    connections = keepConns; redoStack = keepRedo;
+    rebuildGrid(currentShape);
+    if (keep.seed) rebuildGridFromConstruction(scale(keep.seed.p), scale(keep.seed.q), keep.seed.n, keep.seed.side);   // sets altNetSeed to the scaled one
+    connections = keep.conns; redoStack = keep.redo;
     free.forEach(n => nodes.push(n));
-    return { changed: true, from: old, to: neu, factor, kept: { lines: connections.length, free: free.length, altNet: !!seed }, lost };
+    let colorsTotal = 0, colorsKept = 0, colorsLost = 0;
+    {
+        const total = _realAssignments(keep.store).length;
+        const map = baseHas ? _mapTrailKeys(oldBase, _sheetFaceSnapshot(connections, nodes, null), scale) : new Map();
+        const k = _rekeyColors(keep.store, keep.palette, map);
+        baseFaceAssignments = k.store; baseFacePalette = k.palette;
+        colorsTotal += total; colorsKept += k.kept; colorsLost += k.lost;
+    }
+    baseFaceAnchor = keep.anchor; baseLastHarmonyType = keep.harmony; baseLastSelection = keep.selection; baseDistributionStrategy = keep.strategy;
+    // the layers (new objects: a dry run restores the old ones untouched)
+    additionalLayers = keep.layers.map((l, i) => {
+        const Ls = (l.shapeSizeFactor * neu) / old;
+        const g = layerGridForSpec(outerCorners, centroid, currentShape, neu, Ls, layerGridSpecOf(l), l.shape, canvasW, canvasH);
+        const freeL = (l.nodes || []).filter(n => n.free).map(n => Object.assign({}, n, scale(n)));
+        const nl = Object.assign({}, l, { shapeSizeFactor: Ls, nodes: g.nodes.concat(freeL), centroid: g.centroid, outerCorners: g.outerCorners });
+        if (l.offsetX !== undefined) nl.offsetX = l.offsetX * factor;
+        if (l.offsetY !== undefined) nl.offsetY = l.offsetY * factor;
+        if (l.isTimelinePlayback) { nl._morphNodes = null; nl._morphConnections = null; }   // read afresh by the next applyTimelineFrame()
+        const total = _realAssignments(l.faceAssignments).length;
+        if (l.faceAssignments !== undefined || l.facePalette !== undefined) {
+            const map = hasStore(l.faceAssignments) ? _mapTrailKeys(oldLayer[i], _sheetFaceSnapshot(nl.connections, nl.nodes, faceSheetOverrideOfLayer(nl)), scale) : new Map();
+            const k = _rekeyColors(l.faceAssignments, l.facePalette, map);
+            if (l.faceAssignments !== undefined) nl.faceAssignments = k.store;
+            if (l.facePalette !== undefined) nl.facePalette = k.palette;
+            colorsTotal += total; colorsKept += k.kept; colorsLost += k.lost;
+        }
+        return nl;
+    });
+    timeline = keep.tl; activeLayer = keep.active;
+    // a Field spec of the base or of a timeline net snapshot that was a field at the old size and is read as Single at the new one: said, not removed
+    const specs = [keep.netT].concat(keep.tl && keep.tl.netStates ? keep.tl.netStates : []).filter(sp => sp && sp.domain === 'field');
+    const fieldNet = specs.some(sp => netDomainEffective(sp, old).ignored === null && netDomainEffective(sp, neu).ignored !== null);
+    return { changed: true, from: old, to: neu, factor, kept: { lines: connections.length, free: free.length, altNet: !!keep.seed, layers: additionalLayers.length, timeline: !!keep.tl, colors: colorsKept },
+        lost: { layers: 0, timeline: false, colors: colorsLost > 0, colorsCount: colorsLost, colorsTotal }, hints: { fieldNet } };
 }
 
 // Task 068b: the lage of the BASE grid (no UI yet: 068c). Like a shape change it clears connections, layers and the timeline (rebuildGrid) and the redo stack, and bumps gridRevision.

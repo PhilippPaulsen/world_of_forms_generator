@@ -8,9 +8,9 @@
 //   4. alt net: the scaled seed gives the scaled net (0 px); seed, lines and free points kept
 //   5. nets: Single and Tiled 100 % congruent, Field odd -> recomputed (= rebuild), even -> Single (netDomainEffective)
 //   6. redo stack: kept as it is (decision in reports/074.md), every id in it still names a node
-//   7. what is lost stays lost (layers, timeline, colours, palette, anchor, net animation); same size and an invalid size touch nothing
+//   7. what is still cleared (the net animation) and what is kept since task 075 (layers, timeline, palette, anchor, harmony: tools/grid/test-resize-layers.js); same size and an invalid size touch nothing
 //   8. session round trip after a size change
-//   9. the handler (real text from sketch.js on fakes): lines only -> no dialog and the short notice; layers / timeline / colours -> dialog first, cancel changes nothing, texts de/en
+//   9. the handler (real text from sketch.js on fakes): no dialog and the notice for lines, layers, timeline; the dialog only when colour groups would be lost (task 075), cancel changes nothing, texts de/en
 //  10. sources: the handler calls resizeBase and no other write of shapeSizeFactor is left in sketch.js
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process'), crypto = require('crypto');
 const ROOT = path.join(__dirname, '..', '..');
@@ -205,11 +205,11 @@ const nameOf = (w, spec) => w.get(`(function () { const r = gridDisplayNameFor($
 {
     const w = W('square'); setup(w, 'square', 3, 1, 3);
     S.addLayer(w.ctx, { shape: 'square', order: 3, size: 3, offsetX: 30, offsetY: -30, rotation: 17, connections: [[1, 2]] });
-    w.set(`connections = [[1, 2]]; baseFaceAssignments.set('k', 1); baseFacePalette = { ruleId: 'x' }; baseFaceAnchor = { hueIndex: 1, registerIndex: 2 }; baseLastHarmonyType = 'x'; baseLastSelection = [1]; baseDistributionStrategy = 'area';
+    w.set(`connections = [[1, 2]]; baseFacePalette = { ruleId: 'x', idx: [], overrides: new Map() }; baseFaceAnchor = { hueIndex: 1, registerIndex: 2 }; baseLastHarmonyType = 'x'; baseLastSelection = [1]; baseDistributionStrategy = 'area';
         baseNetAnimation = { from: null }; activeLayer = 0; timeline = { keyframeLayerIds: [0], playbackLayerIndex: null }; symmetryMode = 'rotation3'; freeEndpointsEnabled = true; showFaces = true; baseNetTransform = ${J({ x: { kind: 'trig', w: -1 }, y: 'same' })};`);
     const rev = w.get('gridRevision'), r = w.get('resizeBase(7)');
-    check('(7) layers, timeline, colours, palette, anchor, harmony, selection, strategy, net animation are cleared; activeLayer is base', w.get('additionalLayers.length === 0 && timeline === null && baseFaceAssignments.size === 0 && baseFacePalette === null && baseFaceAnchor === null && baseLastHarmonyType === null && baseLastSelection === null && baseDistributionStrategy === null && baseNetAnimation === null && activeLayer === "base"'));
-    check('(7) kept: lines, symmetry mode, free-endpoint switch, face switch, the net spec; gridRevision +1 or more; the result names the loss', w.get('connections.length === 1 && symmetryMode === "rotation3" && freeEndpointsEnabled === true && showFaces === true && baseNetTransform !== null') && w.get('gridRevision') > rev && r.lost.layers === 1 && r.lost.timeline === true && r.lost.colors === true && r.changed === true && r.from === 3 && r.to === 7);
+    check('(7) the net animation is still cleared; since task 075 the layer (size 3 -> 7, offset scaled 3/7), the timeline object, palette, anchor, harmony type, selection and strategy are kept and activeLayer stays', w.get('baseNetAnimation === null && additionalLayers.length === 1 && additionalLayers[0].shapeSizeFactor === 7 && Math.abs(additionalLayers[0].offsetX - 30 * 3 / 7) < 1e-12 && additionalLayers[0].rotation === 17 && timeline !== null && timeline.keyframeLayerIds[0] === 0 && baseFacePalette !== null && baseFaceAnchor.hueIndex === 1 && baseLastHarmonyType === "x" && baseLastSelection[0] === 1 && baseDistributionStrategy === "area" && activeLayer === 0'));
+    check('(7) kept: lines, symmetry mode, free-endpoint switch, face switch, the net spec; gridRevision +1 or more; the result counts the layer and the timeline', w.get('connections.length === 1 && symmetryMode === "rotation3" && freeEndpointsEnabled === true && showFaces === true && baseNetTransform !== null') && w.get('gridRevision') > rev && r.kept.layers === 1 && r.kept.timeline === true && r.changed === true && r.from === 3 && r.to === 7);
     const snap = w.get('JSON.stringify([nodes, connections, gridRevision, shapeSizeFactor])');
     const same = w.get('resizeBase(7)');
     check('(7) same size: nothing is touched (nodes, lines, revision, size) and nothing is reported', same.changed === false && w.get('JSON.stringify([nodes, connections, gridRevision, shapeSizeFactor])') === snap && !same.lost.layers && !same.lost.timeline && !same.lost.colors);
@@ -245,7 +245,7 @@ const nameOf = (w, spec) => w.get(`(function () { const r = gridDisplayNameFor($
         const win = { UI: { t }, say: (k, text, kind) => log.said.push([k, text, kind]), timelineConfirm: o => log.dialogs.push(o) };
         const w = H.makeRenderWorld('square', 3, size, MODE);
         w.sb.document = { body: {} }; w.sb.window = win; w.sb.UI = win.UI; P5.forEach(f => { if (!w.sb[f]) w.sb[f] = () => { }; });
-        ['sizeChangePlan', 'sizeChangeText', 'saySizeChange', 'shapeLossWhat'].forEach(n => w.set(grab(n)));
+        ['sizeChangePlan', 'sizeChangeText', 'saySizeChange', 'shapeLossWhat', 'applyTimelineFrame', 'totalTimelineDurationMs'].forEach(n => w.set(grab(n)));
         const input = { v: String(size), handler: null, value(x) { if (x === undefined) return this.v; this.v = String(x); return this; }, input(f) { this.handler = f; } };
         Object.assign(w.sb, { shapeInput: input, renderLayerTabs() { log.calls.push('tabs'); }, updateOffsetControls() { }, updateTimelineControls() { log.calls.push('tl'); }, redraw() { log.calls.push('redraw'); } });
         w.set(block);
@@ -270,23 +270,29 @@ const nameOf = (w, spec) => w.get(`(function () { const r = gridDisplayNameFor($
     check('(9) the same size, a half-typed value and an empty field change nothing and say nothing', x.w.get('gridRevision') === rev && x.w.get('shapeSizeFactor') === 3 && x.log.said.length === 0 && x.log.dialogs.length === 0);
     type(x, 12); const a1 = x.w.get('shapeSizeFactor'); type(x, -4); const a2 = x.w.get('shapeSizeFactor');
     check('(9) the clamp 1..9 stays (12 -> 9, -4 -> 1)', a1 === 9 && a2 === 1, a1 + ' ' + a2);
-    // layers / timeline / colours: the dialog first
-    for (const [what, code, words] of [['a layer', "additionalLayers.push({ shape: 'square', connections: [], nodes: [] });", 'Ebenen'], ['a timeline', "timeline = { keyframeLayerIds: [], playbackLayerIndex: null };", 'Zeitleiste'], ['a colour assignment', "baseFaceAssignments.set('k', 1);", 'Farben']]) {
+    // layers / timeline: carried along (task 075), no dialog; a real colour assignment that cannot be carried (no faces: nothing to carry it to): the dialog first
+    for (const [what, code, words] of [['a layer', "additionalLayers.push({ shape: 'square', connections: [], nodes: [], shapeSizeFactor: 3, gridSpec: { shape: 'square', ordnung: 2, lage: 1 } });", 'Ebenen'], ['a timeline', "timeline = { keyframeLayerIds: [], playbackLayerIndex: null };", 'Zeitleiste']]) {
         x = mk(3, 'connections = [[1, 2]]; ' + code);
-        const before = x.w.get('JSON.stringify([connections, additionalLayers.length, !!timeline, baseFaceAssignments.size, shapeSizeFactor, nodes.length])');
         type(x, 5);
-        check(`(9) with ${what}: the dialog "Größe ändern?" opens first, the text names ${words}, "Ändern"; nothing has changed yet`, x.log.dialogs.length === 1 && x.log.dialogs[0].title === 'Größe ändern?' && x.log.dialogs[0].text.includes(words) && /gehen .* verloren/.test(x.log.dialogs[0].text) && x.log.dialogs[0].confirmLabel === 'Ändern' && x.w.get('JSON.stringify([connections, additionalLayers.length, !!timeline, baseFaceAssignments.size, shapeSizeFactor, nodes.length])') === before && x.log.said.length === 0, J(x.log.dialogs.map(d => d.text)));
-        x.log.dialogs[0].returnFocus();   // cancel: the dialog closes without onConfirm, the focus hook runs
-        check(`(9) cancel with ${what}: nothing changed and the field goes back to 3`, x.input.v === '3' && x.w.get('JSON.stringify([connections, additionalLayers.length, !!timeline, baseFaceAssignments.size, shapeSizeFactor, nodes.length])') === before && x.log.said.length === 0);
-        type(x, 5); x.log.dialogs[1].onConfirm();
-        check(`(9) confirm with ${what}: size 5, the line kept, the loss gone, the notice "Größe 3 -> 5. Linien erhalten. Geleert: ${words}."`, x.w.get('shapeSizeFactor') === 5 && x.w.get('connections.length') === 1 && x.w.get('additionalLayers.length === 0 && timeline === null && baseFaceAssignments.size === 0') && x.log.said.length === 1 && x.log.said[0][1] === `Größe 3 -> 5. Linien erhalten. Geleert: ${words}.` && x.input.v === '5', J(x.log.said));
+        check(`(9) with ${what}: no dialog, size 5, the line kept, the notice "Größe 3 -> 5. Linien erhalten. ${words} angepasst."`, x.log.dialogs.length === 0 && x.w.get('shapeSizeFactor') === 5 && x.w.get('connections.length') === 1 && x.log.said.length === 1 && x.log.said[0][1] === `Größe 3 -> 5. Linien erhalten. ${words} angepasst.` && x.input.v === '5', J(x.log.said));
     }
-    x = mk(3, "connections = [[1, 2]]; additionalLayers.push({ shape: 'square', connections: [], nodes: [] }); timeline = { keyframeLayerIds: [], playbackLayerIndex: null }; baseFaceAssignments.set('k', 1);", 'en');
+    x = mk(3, "connections = [[1, 2]]; baseFaceAssignments.set('k', { hue: 1, w: 0, s: 0, rule: 'tetrad', params: null, displayColor: null });");
+    const before = x.w.get('JSON.stringify([connections, baseFaceAssignments.size, shapeSizeFactor, nodes.length])');
+    type(x, 5);
+    check('(9) a real colour assignment that has no face to go to: the dialog "Größe ändern?" opens first, the text says "1 von 1 Farbgruppen", "Ändern"; nothing has changed yet', x.log.dialogs.length === 1 && x.log.dialogs[0].title === 'Größe ändern?' && /gehen 1 von 1 Farbgruppen verloren/.test(x.log.dialogs[0].text) && x.log.dialogs[0].confirmLabel === 'Ändern' && x.w.get('JSON.stringify([connections, baseFaceAssignments.size, shapeSizeFactor, nodes.length])') === before && x.log.said.length === 0, J(x.log.dialogs.map(d => d.text)));
+    x.log.dialogs[0].returnFocus();
+    check('(9) cancel: nothing changed and the field goes back to 3', x.input.v === '3' && x.w.get('JSON.stringify([connections, baseFaceAssignments.size, shapeSizeFactor, nodes.length])') === before && x.log.said.length === 0);
+    type(x, 5); x.log.dialogs[1].onConfirm();
+    check('(9) confirm: size 5, the line kept, the notice "Größe 3 -> 5. Linien erhalten. Nicht erhalten: 1 von 1 Farbgruppen."', x.w.get('shapeSizeFactor') === 5 && x.w.get('connections.length') === 1 && x.log.said.length === 1 && x.log.said[0][1] === 'Größe 3 -> 5. Linien erhalten. Nicht erhalten: 1 von 1 Farbgruppen.' && x.input.v === '5', J(x.log.said));
+    x = mk(3, "connections = [[1, 2]]; baseFaceAssignments.set('k', { hue: 1, w: 0, s: 0, rule: 'max-contrast-gray', params: null, displayColor: null });");
+    type(x, 5);
+    check('(9) the default gray is not an assignment: no dialog, no word about colours', x.log.dialogs.length === 0 && x.log.said.length === 1 && x.log.said[0][1] === 'Größe 3 -> 5. Linien erhalten.', J(x.log.said));
+    x = mk(3, "connections = [[1, 2]]; additionalLayers.push({ shape: 'square', connections: [], nodes: [], shapeSizeFactor: 3, gridSpec: { shape: 'square', ordnung: 2, lage: 1 } }); timeline = { keyframeLayerIds: [], playbackLayerIndex: null }; baseFaceAssignments.set('k', { hue: 1, w: 0, s: 0, rule: 'tetrad', params: null, displayColor: null });", 'en');
     type(x, 6);
-    check('(9) English dialog: "Change size?", "Changing the size discards layers, timeline and colors. This cannot be undone.", "Change"', x.log.dialogs[0].title === 'Change size?' && /^Changing the size discards layers, timeline and colou?rs\. This cannot be undone\.$/.test(x.log.dialogs[0].text) && x.log.dialogs[0].confirmLabel === 'Change', x.log.dialogs[0].text);
+    check('(9) English dialog: "Change size?", "Changing the size discards 1 of 1 color groups (faces merge or vanish). This cannot be undone.", "Change"', x.log.dialogs[0].title === 'Change size?' && x.log.dialogs[0].text === 'Changing the size discards 1 of 1 color groups (faces merge or vanish). This cannot be undone.' && x.log.dialogs[0].confirmLabel === 'Change', x.log.dialogs[0].text);
     x.log.dialogs[0].onConfirm();
-    check('(9) English notice: "Size 3 -> 6. Lines kept. Cleared: layers, timeline and colours."', /^Size 3 -> 6\. Lines kept\. Cleared: layers, timeline and colou?rs\.$/.test(x.log.said[0][1]), x.log.said[0] && x.log.said[0][1]);
-    check('(9) the text keys exist in German and English (non-empty, different)', ['size.confirm.title', 'size.confirm.text', 'size.confirm.go', 'note.size.head', 'note.size.kept', 'size.kept.lines', 'size.kept.free'].every(k => dict[k] && dict[k].de && dict[k].en && dict[k].de !== dict[k].en));
+    check('(9) English notice: "Size 3 -> 6. Lines kept. Layers and timeline adjusted. Not kept: 1 of 1 color groups."', x.log.said[0][1] === 'Size 3 -> 6. Lines kept. layers and timeline adjusted. Not kept: 1 of 1 color groups.', x.log.said[0] && x.log.said[0][1]);
+    check('(9) the text keys exist in German and English (non-empty, different)', ['size.confirm.title', 'size.confirm.text', 'size.confirm.go', 'note.size.head', 'note.size.kept', 'size.kept.lines', 'size.kept.free', 'size.adj.layers', 'size.adj.timeline', 'size.adj.colors', 'note.size.adjusted', 'note.size.colorsLost', 'note.size.fieldNet'].every(k => dict[k] && dict[k].de && dict[k].en && dict[k].de !== dict[k].en));
 }
 
 // ---- 10. sources ----------------------------------------------------------------------------------------------------------------------------------
@@ -295,7 +301,9 @@ const nameOf = (w, spec) => w.get(`(function () { const r = gridDisplayNameFor($
     const writes = code.filter(l => /(^|[^.\w])shapeSizeFactor\s*=[^=]/.test(l.replace(/\/\/.*$/, '')));
     check('(10) sketch.js writes shapeSizeFactor once: the input\'s initial read (setup); the handler goes through resizeBase', writes.length === 1 && /parseInt\(shapeInput\.value\(\)\)/.test(writes[0]) && /resizeBase\(v\)/.test(SK), writes.join(' | ').slice(0, 200));
     const st = read('core/state.js');
-    check('(10) core/state.js: rebuildGrid and setGrid do not write the size; resizeBase is the only function that sets it', (st.match(/shapeSizeFactor\s*=[^=]/g) || []).length === 3 && /function resizeBase\(neu\)/.test(st), (st.match(/shapeSizeFactor\s*=[^=]/g) || []).length);
+    const body = (name) => { const i = st.indexOf('function ' + name + '('); const j = st.indexOf('\nfunction ', i + 5); return st.slice(i, j < 0 ? undefined : j); };
+    const writers = ['rebuildGrid', 'setGrid', 'setBaseLage', 'setLayerLage', 'rebuildGridFromConstruction', 'projectGridSpec'].filter(n => /shapeSizeFactor\s*=[^=]/.test(body(n)));
+    check('(10) core/state.js: rebuildGrid, setGrid, setBaseLage, setLayerLage, rebuildGridFromConstruction do not write the size; it is written by resizeBase and its helpers (_resizeRestore, _resizeDo) only', writers.length === 0 && /shapeSizeFactor\s*=[^=]/.test(body('_resizeDo')) && /function resizeBase\(neu, opts\)/.test(st), J(writers));
 }
 
 console.log(`${pass}/${pass + fail} checks passed`);
