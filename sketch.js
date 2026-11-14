@@ -206,20 +206,22 @@ function setup() {
             let v = parseInt(shapeInput.value());
             if (isNaN(v)) return; // a half-typed value changes nothing (it used to set the size to NaN)
             if (v < 1) v = 1; if (v > 9) v = 9; // Clamp
-            // Task 074: resizeBase() (core/state.js) is the one write of a size change: lines and free endpoints stay (scaled), layers, timeline and colours are still cleared - asked first, said after.
+            // Tasks 074/075: resizeBase() (core/state.js) is the one write of a size change: lines, free endpoints, layers, timeline, alt net and colours are carried along (scaled); what cannot be
+            // carried (colour groups whose faces merge or vanish) is asked first (a dry run says it) and said after.
             const plan = sizeChangePlan(v);
             if (plan.same) { shapeInput.value(shapeSizeFactor); return; }
             const doSizeChange = () => {
                 const r = resizeBase(v);
                 shapeInput.value(shapeSizeFactor);
-                renderLayerTabs(); // resizeBase() clears additionalLayers - the layer views follow
+                renderLayerTabs(); // the layer objects were replaced - the layer views follow
                 updateOffsetControls();
                 updateTimelineControls();
+                if (timeline && timeline.playbackLayerIndex !== null) applyTimelineFrame(); // the playback layer's render substitute is read afresh at the new size
                 saySizeChange(r);
                 redraw();
             };
-            if ((plan.loss.layers || plan.loss.timeline || plan.loss.colors) && window.timelineConfirm && window.UI && UI.t) {
-                window.timelineConfirm({ title: UI.t('size.confirm.title'), text: UI.t('size.confirm.text', { what: shapeLossWhat(plan.loss) }), confirmLabel: UI.t('size.confirm.go'), onConfirm: doSizeChange, returnFocus: () => { shapeInput.value(shapeSizeFactor); } });   // cancel: the field goes back to the size in force
+            if (plan.loss.colors && window.timelineConfirm && window.UI && UI.t) {
+                window.timelineConfirm({ title: UI.t('size.confirm.title'), text: UI.t('size.confirm.text', { n: plan.colorsCount, m: plan.colorsTotal }), confirmLabel: UI.t('size.confirm.go'), onConfirm: doSizeChange, returnFocus: () => { shapeInput.value(shapeSizeFactor); } });   // cancel: the field goes back to the size in force
                 return;
             }
             doSizeChange();
@@ -1131,7 +1133,7 @@ function setup() {
             if (offsetXInput) offsetXInput.value(layer.offsetX);
             if (offsetYInput) offsetYInput.value(layer.offsetY);
             if (layerNodeCountInput) { layerNodeCountInput.value(layerGridSpecOf(layer).ordnung); layerNodeCountInput.elt.max = gridMaxOrdnung(layer.shape, layerGridSpecOf(layer).lage); }   // task 068c2: the ordnung
-            if (layerShapeSizeInput) layerShapeSizeInput.value(layer.shapeSizeFactor);
+            if (layerShapeSizeInput) layerShapeSizeInput.value(Math.round(layer.shapeSizeFactor));
             if (layerRotationInput) layerRotationInput.value(layer.rotation || 0);
             syncLayerAnimationDisplay(layer);
             // Roadmap 1.12 stage 4 (UI): active-state sync for the
@@ -1830,7 +1832,7 @@ function setup() {
             const result = (layerGridSpecOf(layer).lage !== 1 || baseGridSpecNow().lage !== 1) ? { achievable: false } : alignLayerToBase(shapeSizeFactor, nodeCount, layer.shapeSizeFactor, layer.nodeCount, layer.shape);
             if (result.achievable) {
                 updateActiveLayerGrid({ shapeSizeFactor: result.shapeSizeFactor, nodeCount: result.nodeCount });
-                if (layerShapeSizeInput) layerShapeSizeInput.value(layer.shapeSizeFactor);
+                if (layerShapeSizeInput) layerShapeSizeInput.value(Math.round(layer.shapeSizeFactor));
                 if (layerNodeCountInput) layerNodeCountInput.value(layerGridSpecOf(layer).ordnung);
                 if (window.UI) UI.notifyClear('align');
                 redraw();
@@ -4846,22 +4848,32 @@ function shapeChangePlan(target) {
     return { same, from, to, clamped: !same && to.ordnung < from.ordnung ? { from: from.ordnung, to: to.ordnung } : null,
         loss: { lines: connections.length > 0, layers: additionalLayers.length, timeline: !!timeline, colors: baseFaceAssignments instanceof Map && baseFaceAssignments.size > 0 } };
 }
-// Task 074: what a change of the BASE size does. -> { same, from, to, loss: { layers, timeline, colors } } - the loss is what resizeBase() still clears (lines and free points are kept).
+// Tasks 074/075: what a change of the BASE size does. -> { same, from, to, loss: { lines, layers, timeline, colors }, colorsCount, colorsTotal }. Only colour groups can still be lost (a dry run of resizeBase()
+// says how many: faces that merge or vanish at the new size); layers, timeline, lines and free points are carried along.
 function sizeChangePlan(target) {
-    return { same: target === shapeSizeFactor, from: shapeSizeFactor, to: target,
-        loss: { lines: false, layers: additionalLayers.length, timeline: !!timeline, colors: baseFaceAssignments instanceof Map && baseFaceAssignments.size > 0 } };
+    const plan = { same: target === shapeSizeFactor, from: shapeSizeFactor, to: target, loss: { lines: false, layers: 0, timeline: false, colors: false }, colorsCount: 0, colorsTotal: 0 };
+    if (plan.same) return plan;
+    let r = null;
+    try { r = resizeBase(target, { dryRun: true }); } catch (e) { r = null; }
+    if (r) { plan.colorsCount = r.lost.colorsCount; plan.colorsTotal = r.lost.colorsTotal; plan.loss.colors = r.lost.colorsCount > 0; }
+    return plan;
 }
-// The notice after a size change: "Größe 3 -> 5. Linien und freie Punkte erhalten. Geleert: Ebenen, Zeitleiste und Farben." (only what applies).
+// The notice after a size change: "Größe 3 -> 5. Linien und freie Punkte erhalten. Ebenen, Zeitleiste und Farben angepasst. Nicht erhalten: 2 von 5 Farbgruppen." (only what applies).
 function sizeChangeText(r) {
     const t = (k, v, fb) => (window.UI && UI.t ? UI.t(k, v) : fb);
-    const keptWords = [];
+    const and = t('shape.lost.and', undefined, 'und');
+    const list = (a) => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' ' + and + ' ' + a[a.length - 1]);
+    const keptWords = [], adjWords = [];
     if (r.kept.lines) keptWords.push(t('size.kept.lines', undefined, 'Linien'));
     if (r.kept.free) keptWords.push(t('size.kept.free', undefined, 'freie Punkte'));
-    const and = t('shape.lost.and', undefined, 'und');
+    if (r.kept.layers) adjWords.push(t('size.adj.layers', undefined, 'Ebenen'));
+    if (r.kept.timeline) adjWords.push(t('size.adj.timeline', undefined, 'Zeitleiste'));
+    if (r.kept.colors) adjWords.push(t('size.adj.colors', undefined, 'Farben'));
     const parts = [t('note.size.head', { from: r.from, to: r.to }, `Größe ${r.from} -> ${r.to}.`)];
-    if (keptWords.length) parts.push(t('note.size.kept', { what: keptWords.join(' ' + and + ' ') }, `${keptWords.join(' ' + and + ' ')} erhalten.`));
-    const what = shapeLossWhat({ lines: false, layers: r.lost.layers, timeline: r.lost.timeline, colors: r.lost.colors });
-    if (what) parts.push(t('note.shape.cleared', { what }, `Geleert: ${what}.`));
+    if (keptWords.length) parts.push(t('note.size.kept', { what: list(keptWords) }, `${list(keptWords)} erhalten.`));
+    if (adjWords.length) parts.push(t('note.size.adjusted', { what: list(adjWords) }, `${list(adjWords)} angepasst.`));
+    if (r.lost.colorsCount) parts.push(t('note.size.colorsLost', { n: r.lost.colorsCount, m: r.lost.colorsTotal }, `Nicht erhalten: ${r.lost.colorsCount} von ${r.lost.colorsTotal} Farbgruppen.`));
+    if (r.hints && r.hints.fieldNet) parts.push(t('note.size.fieldNet', { size: r.to }, `Feld-Netz gilt bei Größe ${r.to} als Einzel.`));
     return parts.join(' ');
 }
 function saySizeChange(r) {
