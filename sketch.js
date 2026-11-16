@@ -161,6 +161,7 @@ function setup() {
     canvasW = parseInt(sizeSlider?.value()) || 600;
     canvasH = canvasW;
     createCanvas(canvasW, canvasH).parent('canvas-container');
+    window.canvasSizeSync = canvasSizeSync;   // task 078: core/state.js calls it when canvasW / canvasH changed (a size, format or shape change of a non-square base)
     noLoop();
     installTapInput();
 
@@ -4851,7 +4852,7 @@ function shapeChangePlan(target) {
 // Tasks 074/075: what a change of the BASE size does. -> { same, from, to, loss: { lines, layers, timeline, colors }, colorsCount, colorsTotal }. Only colour groups can still be lost (a dry run of resizeBase()
 // says how many: faces that merge or vanish at the new size); layers, timeline, lines and free points are carried along.
 function sizeChangePlan(target) {
-    const plan = { same: target === shapeSizeFactor, from: shapeSizeFactor, to: target, loss: { lines: false, layers: 0, timeline: false, colors: false }, colorsCount: 0, colorsTotal: 0 };
+    const plan = { same: gridIsSquare() && target === shapeSizeFactor, from: shapeSizeFactor, to: target, loss: { lines: false, layers: 0, timeline: false, colors: false }, colorsCount: 0, colorsTotal: 0 };
     if (plan.same) return plan;
     let r = null;
     try { r = resizeBase(target, { dryRun: true }); } catch (e) { r = null; }
@@ -5287,6 +5288,18 @@ function installTapInput() {
     window.touchStarted = function () { };   // defined, empty, not returning false
 }
 
+// Task 078 (B2): the p5 canvas follows canvasW x canvasH (core/state.js sets them: setGridSize, resizeBase, a shape change of a non-square base). The off-screen fill buffer is dropped (it is
+// created at the canvas size on the next draw), and the CSS display size follows (style.css --canvas-ratio: set only for a non-square canvas, so a square one is styled exactly as before).
+function canvasSizeSync() {
+    if (width !== canvasW || height !== canvasH) {
+        resizeCanvas(canvasW, canvasH, true);   // no redraw here: the caller redraws once everything is final
+        if (crossLayerFillBuffer && crossLayerFillBuffer.remove) crossLayerFillBuffer.remove();
+        crossLayerFillBuffer = null; crossLayerFillBufferSignature = null;
+    }
+    const root = document.documentElement;   // style.css --canvas-ratio = W / H; absent (the CSS default 1) for a square canvas
+    if (canvasW === canvasH) root.style.removeProperty('--canvas-ratio'); else root.style.setProperty('--canvas-ratio', String(canvasW / canvasH));
+}
+
 // client pixels -> sketch units, the way p5 does it for mouseX / mouseY (getMousePos in p5 1.9.0: (clientX - rect.left) / (canvas.scrollWidth / width))
 function clientToSketch(clientX, clientY) {
     const cv = document.querySelector('#canvas-container canvas');
@@ -5319,7 +5332,7 @@ function drawnHitNodes() {
 }
 function nodeHit(x, y, pointerType) {
     const cv = document.querySelector('#canvas-container canvas');
-    const scale = cv && width ? cv.scrollWidth / width : NaN;
+    const scale = cv && width && height ? Math.min(cv.scrollWidth / width, cv.scrollHeight / height) : NaN;   // task 078: a canvas of any W x H is shown with one scale on both axes (the smaller one is the safe pick radius)
     const radius = freeEndpointsEnabled ? hitRadius('mouse', scale) : hitRadius(pointerType, scale);
     const n = pickNodeAt(drawnHitNodes(), x, y, radius);
     return { id: n ? n.id : null };

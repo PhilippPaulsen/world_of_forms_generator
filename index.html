@@ -8,7 +8,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="assets/fonts/SuisseIntl-Book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20261205gridfx">
+  <link rel="stylesheet" href="style.css?v=20261206gridfmt">
   <!-- Cache-busting for the ES-module graph behind core/farborgel-selection.mjs (below). The <script src> tags in
        this file carry ?v= by hand-bump (CLAUDE.md), but a module's own `import ... from './x.mjs'` cannot: this
        import map is the one place that gives every module in that graph the same ?v= as everything else (bump it
@@ -19,11 +19,11 @@
   <script type="importmap">
     {
     "imports": {
-      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20261205gridfx",
-      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20261205gridfx",
-      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20261205gridfx",
-      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20261205gridfx",
-      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20261205gridfx"
+      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20261206gridfmt",
+      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20261206gridfmt",
+      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20261206gridfmt",
+      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20261206gridfmt",
+      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20261206gridfmt"
     }
     }
   </script>
@@ -96,8 +96,9 @@
        Explicit width AND height (not flex:1, not aspect-ratio) - see below. */
     #canvas-container {
       /* Display size: 560px, or the viewport minus a gutter on each side
-         when that is smaller (--canvas-size, style.css). The sketch itself
-         stays 600x600 units (canvasW); the canvas is CSS-scaled and p5 maps
+         when that is smaller (--canvas-w / --canvas-h, style.css; task 078: for a non-square W x H sketch
+         the short side is 560px, --canvas-size is only the panel width). The sketch itself
+         is canvasW x canvasH units (600x600 by default); the canvas is CSS-scaled and p5 maps
          pointer positions back through scrollWidth/width (checked by
          tools/ui/check-pointer-mapping.js).
          Width and height are BOTH set from the same definite length. The
@@ -107,8 +108,8 @@
          left p5's inline 600px height, and the overflow:hidden container
          cropped 20px off the top and bottom (the frame lines). Nothing
          here depends on a percentage resolving any more. */
-      width: var(--canvas-size);
-      height: var(--canvas-size);
+      width: var(--canvas-w);
+      height: var(--canvas-h);
       flex: none;
       /* --gap (8px) above (nav row) and below (controls); .main-container has no flex gap of its own,
          so the space between canvas and the controls below is exactly this margin */
@@ -1586,55 +1587,55 @@
   <div id="ui-notices" class="notices" role="status" aria-live="polite"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
-  <script src="core/forms.js?v=20261205gridfx"></script>
-  <script src="core/state.js?v=20261205gridfx"></script>
-  <script src="core/symmetry.js?v=20261205gridfx"></script>
-  <script src="core/curves.js?v=20261205gridfx"></script>
-  <script src="core/netwarp.js?v=20261205gridfx"></script>
-  <script src="core/tiling.js?v=20261205gridfx"></script>
-  <script src="core/faces.js?v=20261205gridfx"></script>
-  <script src="core/orbits.js?v=20261205gridfx"></script>
-  <script src="core/glossary.js?v=20261205gridfx"></script>
-  <script src="core/color.js?v=20261205gridfx"></script>
-  <script src="core/facecolor.js?v=20261205gridfx"></script>
-  <script src="core/farborgel-bridge.js?v=20261205gridfx"></script>
-  <script src="core/export.js?v=20261205gridfx"></script>
-  <script src="core/symmetry-toggles.js?v=20261205gridfx"></script>
-  <script src="core/spatial-morph.js?v=20261205gridfx"></script>
-  <script src="core/spatial-morph-render.js?v=20261205gridfx"></script>
-  <script src="core/session.js?v=20261205gridfx"></script>
-  <script src="core/session-apply.js?v=20261205gridfx"></script>
-  <script src="core/session-store.js?v=20261205gridfx"></script>
-  <script src="core/session-writer.js?v=20261205gridfx"></script>
-  <script src="core/pointer-tap.js?v=20261205gridfx"></script>
-  <script src="core/pick-node.js?v=20261205gridfx"></script>
-  <script src="sketch.js?v=20261205gridfx"></script>
-  <script src="nav.js?v=20261205gridfx"></script>
-  <script src="ui-i18n.js?v=20261205gridfx"></script>
-  <script src="ui.js?v=20261205gridfx"></script>
-  <script src="ui-form.js?v=20261205gridfx"></script>
-  <script src="ui-layer.js?v=20261205gridfx"></script>
-  <script src="ui-timeline.js?v=20261205gridfx"></script>
-  <script src="ui-layers.js?v=20261205gridfx"></script>
-  <script src="ui-morph.js?v=20261205gridfx"></script>
-  <script src="ui-net-readout.js?v=20261205gridfx"></script>
-  <script src="ui-net.js?v=20261205gridfx"></script>
-  <script src="ui-farbe.js?v=20261205gridfx"></script>
-  <script src="ui-rail.js?v=20261205gridfx"></script>
-  <script src="ui-lines.js?v=20261205gridfx"></script>
+  <script src="core/forms.js?v=20261206gridfmt"></script>
+  <script src="core/state.js?v=20261206gridfmt"></script>
+  <script src="core/symmetry.js?v=20261206gridfmt"></script>
+  <script src="core/curves.js?v=20261206gridfmt"></script>
+  <script src="core/netwarp.js?v=20261206gridfmt"></script>
+  <script src="core/tiling.js?v=20261206gridfmt"></script>
+  <script src="core/faces.js?v=20261206gridfmt"></script>
+  <script src="core/orbits.js?v=20261206gridfmt"></script>
+  <script src="core/glossary.js?v=20261206gridfmt"></script>
+  <script src="core/color.js?v=20261206gridfmt"></script>
+  <script src="core/facecolor.js?v=20261206gridfmt"></script>
+  <script src="core/farborgel-bridge.js?v=20261206gridfmt"></script>
+  <script src="core/export.js?v=20261206gridfmt"></script>
+  <script src="core/symmetry-toggles.js?v=20261206gridfmt"></script>
+  <script src="core/spatial-morph.js?v=20261206gridfmt"></script>
+  <script src="core/spatial-morph-render.js?v=20261206gridfmt"></script>
+  <script src="core/session.js?v=20261206gridfmt"></script>
+  <script src="core/session-apply.js?v=20261206gridfmt"></script>
+  <script src="core/session-store.js?v=20261206gridfmt"></script>
+  <script src="core/session-writer.js?v=20261206gridfmt"></script>
+  <script src="core/pointer-tap.js?v=20261206gridfmt"></script>
+  <script src="core/pick-node.js?v=20261206gridfmt"></script>
+  <script src="sketch.js?v=20261206gridfmt"></script>
+  <script src="nav.js?v=20261206gridfmt"></script>
+  <script src="ui-i18n.js?v=20261206gridfmt"></script>
+  <script src="ui.js?v=20261206gridfmt"></script>
+  <script src="ui-form.js?v=20261206gridfmt"></script>
+  <script src="ui-layer.js?v=20261206gridfmt"></script>
+  <script src="ui-timeline.js?v=20261206gridfmt"></script>
+  <script src="ui-layers.js?v=20261206gridfmt"></script>
+  <script src="ui-morph.js?v=20261206gridfmt"></script>
+  <script src="ui-net-readout.js?v=20261206gridfmt"></script>
+  <script src="ui-net.js?v=20261206gridfmt"></script>
+  <script src="ui-farbe.js?v=20261206gridfmt"></script>
+  <script src="ui-rail.js?v=20261206gridfmt"></script>
+  <script src="ui-lines.js?v=20261206gridfmt"></script>
   <!-- The phone layout (phone layout, commit 1a): the DATA, then the ENGINE. Both load after every ui-*.js (the strips are built, the handlers are bound) and before the window load event, which is when p5 runs setup().
        The engine applies on the first 'tabchange' (nav.js, on DOMContentLoaded) and re-parents existing controls below 768px; see ui-phone.js. -->
   <!-- Commit 2 (the Farbe tab): the chip view of the face trails (the "Spuren" sub-tab). It reads the hidden model #face-colors-list and makes #ph-trail-chips / #ph-trail-stepper in a hidden holder; the engine moves them
        into the panel. It must load after ui-farbe.js (UI.onSync order: the model rows are rebuilt first) and before ui-phone-config.js. -->
-  <script src="ui-phone-chips.js?v=20261205gridfx"></script>
-  <script src="ui-phone-timeline.js?v=20261205gridfx"></script>
-  <script src="ui-phone-pairing.js?v=20261205gridfx"></script>
-  <script src="ui-phone-config.js?v=20261205gridfx"></script>
-  <script src="ui-phone.js?v=20261205gridfx"></script>
+  <script src="ui-phone-chips.js?v=20261206gridfmt"></script>
+  <script src="ui-phone-timeline.js?v=20261206gridfmt"></script>
+  <script src="ui-phone-pairing.js?v=20261206gridfmt"></script>
+  <script src="ui-phone-config.js?v=20261206gridfmt"></script>
+  <script src="ui-phone.js?v=20261206gridfmt"></script>
   <!-- Group D Phase B4: exposes window.farborgelBuildHarmonySelection (core/farborgel-selection.mjs)
        for ui-farbe.js/sketch.js (classic scripts) to call - a module script coexists fine with the
        classic p5-bootstrap scripts above (real-browser verified, no conflicts). -->
-  <script type="module" src="core/farborgel-selection.mjs?v=20261205gridfx"></script>
+  <script type="module" src="core/farborgel-selection.mjs?v=20261206gridfmt"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

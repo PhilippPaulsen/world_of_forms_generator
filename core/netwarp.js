@@ -380,7 +380,9 @@ function netTransformNow() {
     return netLerpSpecs(a.from, a.to, a.t || 0) || baseNetTransform;
 }
 // Whether the AUTHOR net is a real warp right now (a Regular net, or a shape the warp does not apply to, is not).
-function netAuthorWarpActive() { return !!(baseNetTransform && netWarpForBase(baseNetTransform, currentShape, outerCorners, nodeCount, shapeSizeFactor)); }
+// Task 078: the Shape Size the net reads: a non-square base is NaN (a Field is read as Single); sandboxes without core/state.js read shapeSizeFactor as before.
+function _netSize() { return typeof netSizeFactor === 'function' ? netSizeFactor() : shapeSizeFactor; }
+function netAuthorWarpActive() { return !!(baseNetTransform && netWarpForBase(baseNetTransform, currentShape, outerCorners, nodeCount, _netSize())); }
 // "Include net" on Add to Timeline: `override` = null (automatic) or true/false (chosen by the person). Automatic = ON exactly when a net warp
 // is active at that moment. The toggle flips the shown value; choosing the automatic value again returns to automatic.
 function timelineIncludeNetValue(override) { return override === null || override === undefined ? netAuthorWarpActive() : !!override; }
@@ -447,7 +449,7 @@ function netWarpSplitSegment(warp, p1, p2) {
 // The ready warp for the CURRENT base sheet (null = regular net or a shape the warp does not apply
 // to). Unlike activeNetWarp - installed only for the duration of one drawTessellation() - this is
 // what UI code, face detection and export use to ask "is a warp in force right now".
-function netWarpBaseNow() { const spec = netTransformNow(); return spec ? netWarpForBase(spec, currentShape, outerCorners, nodeCount, shapeSizeFactor) : null; }
+function netWarpBaseNow() { const spec = netTransformNow(); return spec ? netWarpForBase(spec, currentShape, outerCorners, nodeCount, _netSize()) : null; }
 function netWarpActive() { return netWarpBaseNow() !== null; }
 // Whether face detection/fills are refused for a sheet under the CURRENT warp: on a FIELD the base sheet's faces are exact
 // (F is affine inside every tile: faces are detected once on the regular cell, then mapped per tile). A LAYER (`sheet` given) is

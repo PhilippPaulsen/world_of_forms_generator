@@ -12,15 +12,27 @@
 let canvasW = 600;
 let canvasH = 600; // keep square
 
-let shapeSizeFactor = 5; // 1..9, adjustable via #shape-size-input. Task 077: the X (width) mesh count; with shapeSizeFactorY null the area is square (X = Y), as before
-// Task 077 (B1): the Y (height) mesh count. null = follows X (the default, every pre-077 path); a number 1..9 only through setGridSize().
+let shapeSizeFactor = 5; // 1..9, adjustable via #shape-size-input. Task 078: the EDGE factor e = 600 / shapeSizeFactor = min(X, Y) (every older reader - tiling, layers, net, export - means this); X = Y while shapeSizeFactorX / Y are null
+// Task 077/078: the mesh counts X (width) and Y (height) of a NON-square area, both null = square (X = Y = shapeSizeFactor, every pre-077 path). Written only by setGridSize() and resizeBase().
+let shapeSizeFactorX = null;
 let shapeSizeFactorY = null;
-function gridSizeX() { return shapeSizeFactor; }
+function gridIsSquare() { return shapeSizeFactorX === null && shapeSizeFactorY === null; }
+function gridSizeX() { return shapeSizeFactorX === null ? shapeSizeFactor : shapeSizeFactorX; }
 function gridSizeY() { return shapeSizeFactorY === null ? shapeSizeFactor : shapeSizeFactorY; }
-// The factor the cell edge divides (e = 600 / min(X, Y)); equals shapeSizeFactor while X = Y.
-function gridEdgeFactor() { return Math.min(gridSizeX(), gridSizeY()); }
+// The factor the cell edge divides (e = 600 / min(X, Y)) = shapeSizeFactor.
+function gridEdgeFactor() { return shapeSizeFactor; }
 // The explicit short side for the builders: only a non-square area passes it (a square one keeps the old canvasW / factor expression).
-function gridShortSideArg() { return shapeSizeFactorY === null ? undefined : GRID_SHORT_SIDE; }
+function gridShortSideArg() { return gridIsSquare() ? undefined : GRID_SHORT_SIDE; }
+// The tile count the net reads as its Shape Size: a Field needs X = Y (an odd square size); a non-square area is NaN, so netDomainEffective reads a Field as Single, with the same hint as an even size.
+function netSizeFactor() { return gridIsSquare() ? shapeSizeFactor : NaN; }
+// Task 078: the p5 canvas follows canvasW / canvasH (sketch.js sets the hook in setup: resizeCanvas, the fill buffer, the CSS size). Nothing without the hook (Node tests).
+const _resizeFlag = { busy: false };   // resizeBase() runs rebuildGrid() inside a (possibly dry) run: the canvas follows once, after it
+function _canvasSizeChanged() { if (!_resizeFlag.busy && typeof canvasSizeSync === 'function') canvasSizeSync(); }
+// Task 078: a non-square base takes the canvas of its CURRENT shape (the area depends on the shape); a square base never touches canvasW / canvasH here.
+function _syncNonSquareCanvas(shape) {
+    if (gridIsSquare()) return;
+    canvasW = gridWidth(shape, gridSizeX(), gridSizeY()); canvasH = gridHeight(shape, gridSizeX(), gridSizeY());
+}
 // Task 060 (G5a): gridSpec is the ONE writable truth of the base grid (core/forms.js GridSpec). nodeCount is its DERIVED legacy projection
 // (core/tiling.js and the legacy fassade read it); projectGridSpec() below is the only place that writes it.
 let gridSpec = { shape: 'triangle', ordnung: 2, lage: 1 };
@@ -276,6 +288,7 @@ function projectGridSpec(spec) {
 function rebuildGrid(shape) {
     // built first: an invalid shape throws before any state is touched
     const spec = gridSpec.shape === shape ? gridSpec : gridSpecOnShape(gridSpec, shape);   // task 068b: lage 2 keeps its lage (ordnung taken over, clamped); lage 1 as before
+    _syncNonSquareCanvas(shape);   // task 078: a non-square area is another size per shape (a no-op for a square base)
     const grid = buildGrid(spec, { sizeFactor: gridEdgeFactor(), canvasW, canvasH, shortSide: gridShortSideArg() });
     projectGridSpec(spec);
     connections = [];
@@ -289,16 +302,18 @@ function rebuildGrid(shape) {
 
     nodes = grid.nodes; centroid = grid.centroid; outerCorners = grid.outerCorners;
     gridRevision++;
+    _canvasSizeChanged();   // task 078: another shape is another area for a non-square base (the canvas hook; none in Node)
 }
 
 // Task 077 (B1): the ONE write of a non-square size. Validates first (throws before any state is touched: ratio above 1 : 3 or a size outside 1..9 is
 // rejected, never clamped), then sets X, Y, the canvas size (core/forms.js gridWidth / gridHeight of the current shape) and rebuilds the grid like
-// setGrid(). It does not resize the p5 canvas (task B2) and there is no UI path to it yet (task B4); tests and measurements call it.
+// setGrid(). It asks the canvas hook to follow (task 078); there is no UI path to it yet (task B4); tests and measurements call it. Task 078: shapeSizeFactor is then min(X, Y).
 function setGridSize(X, Y) {
     const v = validateGridSize(X, Y);
     if (!v.ok) throw new Error('setGridSize: ' + v.error);
-    shapeSizeFactor = X;
-    shapeSizeFactorY = Y === X ? null : Y;
+    shapeSizeFactor = Math.min(X, Y);
+    shapeSizeFactorX = X === Y ? null : X;
+    shapeSizeFactorY = X === Y ? null : Y;
     canvasW = gridWidth(currentShape, X, Y);
     canvasH = gridHeight(currentShape, X, Y);
     rebuildGrid(currentShape);
@@ -371,28 +386,45 @@ function _rekeyColors(store, palette, map, liveKeys) {
     return { store: out, palette: pal, kept, lost, total };
 }
 function _resizeSaved() {
-    return { shapeSizeFactor, nodes, centroid, outerCorners, connections, redoStack, altNetSeed, additionalLayers, timeline, activeLayer, baseFaceAssignments, baseFacePalette, baseFaceAnchor, baseLastHarmonyType,
+    return { shapeSizeFactor, shapeSizeFactorX, shapeSizeFactorY, canvasW, canvasH, nodes, centroid, outerCorners, connections, redoStack, altNetSeed, additionalLayers, timeline, activeLayer, baseFaceAssignments, baseFacePalette, baseFaceAnchor, baseLastHarmonyType,
         baseLastSelection, baseDistributionStrategy, baseNetAnimation, faceHover, gridRevision, gridSpec };
 }
 function _resizeRestore(S) {
-    shapeSizeFactor = S.shapeSizeFactor; nodes = S.nodes; centroid = S.centroid; outerCorners = S.outerCorners; connections = S.connections; redoStack = S.redoStack; altNetSeed = S.altNetSeed;
+    shapeSizeFactor = S.shapeSizeFactor; shapeSizeFactorX = S.shapeSizeFactorX; shapeSizeFactorY = S.shapeSizeFactorY; canvasW = S.canvasW; canvasH = S.canvasH; nodes = S.nodes; centroid = S.centroid; outerCorners = S.outerCorners; connections = S.connections; redoStack = S.redoStack; altNetSeed = S.altNetSeed;
     additionalLayers = S.additionalLayers; timeline = S.timeline; activeLayer = S.activeLayer; baseFaceAssignments = S.baseFaceAssignments; baseFacePalette = S.baseFacePalette; baseFaceAnchor = S.baseFaceAnchor;
     baseLastHarmonyType = S.baseLastHarmonyType; baseLastSelection = S.baseLastSelection; baseDistributionStrategy = S.baseDistributionStrategy; baseNetAnimation = S.baseNetAnimation; faceHover = S.faceHover;
     gridRevision = S.gridRevision; projectGridSpec(S.gridSpec);   // the one write of nodeCount (task 060)
 }
-function resizeBase(neu, opts) {
-    if (!Number.isInteger(neu) || neu < 1 || neu > 9) throw new Error('resizeBase: size must be an integer 1..9');
-    const old = shapeSizeFactor;
-    if (neu === old) return { changed: false, from: old, to: neu, factor: 1, kept: { lines: connections.length, free: 0, altNet: false, layers: 0, timeline: false, colors: 0 }, lost: { layers: 0, timeline: false, colors: false, colorsCount: 0, colorsTotal: 0 }, hints: { fieldNet: false } };
+// Task 078 (B2): resizeBase(X, Y?, opts?) - a size OR format change (X, Y) -> (X', Y'); Y' omitted = X' (a square, the old call resizeBase(n, opts) unchanged). e = 600 / min(X, Y), f = e1 / e2 = old / new
+// minimum, the centre moves from C1 = (W1/2, H1/2) to C2 = (W2/2, H2/2) and every point p becomes C2 + (p - C1) * f (the scaling of 074/075, about the canvas centre, with a centre that moves).
+// Invalid (not integers 1..9, ratio above 1 : 3): throws before anything is touched. The same size: nothing.
+function resizeBase(neuX, a, b) {
+    let neuY = neuX, opts = a;
+    if (typeof a === 'number' || (a !== undefined && a !== null && typeof a !== 'object')) { neuY = a; opts = b; }
+    if (!Number.isInteger(neuX) || neuX < 1 || neuX > 9 || !Number.isInteger(neuY) || neuY < 1 || neuY > 9) throw new Error('resizeBase: size must be an integer 1..9');
+    const vs = validateGridSize(neuX, neuY);
+    if (!vs.ok) throw new Error('resizeBase: ' + vs.error);
+    const X1 = gridSizeX(), Y1 = gridSizeY();
+    const lab = (x, y) => (x === y ? x : x + '/' + y);
+    if (neuX === X1 && neuY === Y1) return { changed: false, from: lab(X1, Y1), to: lab(neuX, neuY), factor: 1, kept: { lines: connections.length, free: 0, altNet: false, layers: 0, timeline: false, colors: 0 }, lost: { layers: 0, timeline: false, colors: false, colorsCount: 0, colorsTotal: 0 }, hints: { fieldNet: false } };
     const saved = _resizeSaved();
     let r;
-    try { r = _resizeDo(neu, old); } catch (e) { _resizeRestore(saved); throw e; }
-    if (opts && opts.dryRun) _resizeRestore(saved);
+    _resizeFlag.busy = true;
+    try { r = _resizeDo(neuX, neuY, X1, Y1); } catch (e) { _resizeRestore(saved); throw e; } finally { _resizeFlag.busy = false; }
+    r.from = lab(X1, Y1); r.to = lab(neuX, neuY);
+    if (opts && opts.dryRun) _resizeRestore(saved); else _canvasSizeChanged();
     return r;
 }
-function _resizeDo(neu, old) {
-    const factor = old / neu, cx = canvasW / 2, cy = canvasH / 2;
-    const scale = (p) => ({ x: cx + (p.x - cx) * factor, y: cy + (p.y - cy) * factor });
+function _resizeDo(X2, Y2, X1, Y1) {
+    const old = shapeSizeFactor, neu = Math.min(X2, Y2);   // the edge factors (min of X, Y): f = e2 / e1 = old / neu
+    const factor = old / neu, c1x = canvasW / 2, c1y = canvasH / 2, wasSquare = gridIsSquare();
+    // the new size: a square target keeps a square base's canvas as it is (600 x 600 in the app), every other target takes the area of its shape
+    shapeSizeFactor = neu;
+    shapeSizeFactorX = X2 === Y2 ? null : X2; shapeSizeFactorY = X2 === Y2 ? null : Y2;
+    if (X2 !== Y2) { canvasW = gridWidth(currentShape, X2, Y2); canvasH = gridHeight(currentShape, X2, Y2); }
+    else if (!wasSquare) { canvasW = GRID_SHORT_SIDE; canvasH = GRID_SHORT_SIDE; }
+    const cx = canvasW / 2, cy = canvasH / 2;   // C2
+    const scale = (p) => ({ x: cx + (p.x - c1x) * factor, y: cy + (p.y - c1y) * factor });
     const keep = { conns: connections, redo: redoStack, seed: altNetSeed, layers: additionalLayers, tl: timeline, active: activeLayer, store: baseFaceAssignments, palette: baseFacePalette, anchor: baseFaceAnchor,
         harmony: baseLastHarmonyType, selection: baseLastSelection, strategy: baseDistributionStrategy, netT: baseNetTransform };
     const free = nodes.filter(n => n.free).map(n => Object.assign({}, n, scale(n)));
@@ -402,7 +434,6 @@ function _resizeDo(neu, old) {
     const oldBase = baseHas ? _sheetFaceSnapshot(keep.conns, nodes, null) : null;
     const oldLayer = keep.layers.map(l => (hasStore(l.faceAssignments) ? _sheetFaceSnapshot(l.connections, l.nodes, faceSheetOverrideOfLayer(l)) : null));
     // the base
-    shapeSizeFactor = neu;
     rebuildGrid(currentShape);
     if (keep.seed) rebuildGridFromConstruction(scale(keep.seed.p), scale(keep.seed.q), keep.seed.n, keep.seed.side);   // sets altNetSeed to the scaled one
     connections = keep.conns; redoStack = keep.redo;
@@ -418,7 +449,7 @@ function _resizeDo(neu, old) {
     // the layers (new objects: a dry run restores the old ones untouched)
     additionalLayers = keep.layers.map((l, i) => {
         const Ls = (l.shapeSizeFactor * neu) / old;
-        const g = layerGridForSpec(outerCorners, centroid, currentShape, neu, Ls, layerGridSpecOf(l), l.shape, canvasW, canvasH);
+        const g = layerGridForSpec(outerCorners, centroid, currentShape, neu, Ls, layerGridSpecOf(l), l.shape, canvasW, canvasH, gridShortSideArg());
         const freeL = (l.nodes || []).filter(n => n.free).map(n => Object.assign({}, n, scale(n)));
         const nl = Object.assign({}, l, { shapeSizeFactor: Ls, nodes: g.nodes.concat(freeL), centroid: g.centroid, outerCorners: g.outerCorners });
         if (l.offsetX !== undefined) nl.offsetX = l.offsetX * factor;
@@ -436,8 +467,8 @@ function _resizeDo(neu, old) {
     timeline = keep.tl; activeLayer = keep.active;
     // a Field spec of the base or of a timeline net snapshot that was a field at the old size and is read as Single at the new one: said, not removed
     const specs = [keep.netT].concat(keep.tl && keep.tl.netStates ? keep.tl.netStates : []).filter(sp => sp && sp.domain === 'field');
-    const fieldNet = specs.some(sp => netDomainEffective(sp, old).ignored === null && netDomainEffective(sp, neu).ignored !== null);
-    return { changed: true, from: old, to: neu, factor, kept: { lines: connections.length, free: free.length, altNet: !!keep.seed, layers: additionalLayers.length, timeline: !!keep.tl, colors: colorsKept },
+    const fieldNet = specs.some(sp => netDomainEffective(sp, wasSquare ? old : NaN).ignored === null && netDomainEffective(sp, netSizeFactor()).ignored !== null);
+    return { changed: true, from: old, to: neu, fromX: X1, fromY: Y1, toX: X2, toY: Y2, factor, kept: { lines: connections.length, free: free.length, altNet: !!keep.seed, layers: additionalLayers.length, timeline: !!keep.tl, colors: colorsKept },
         lost: { layers: 0, timeline: false, colors: colorsLost > 0, colorsCount: colorsLost, colorsTotal }, hints: { fieldNet } };
 }
 
