@@ -296,7 +296,7 @@ const nameOf = (w, spec) => w.get(`(function () { const r = gridDisplayNameFor($
     const st = read('core/state.js');
     const body = (name) => { const i = st.indexOf('function ' + name + '('); const j = st.indexOf('\nfunction ', i + 5); return st.slice(i, j < 0 ? undefined : j); };
     const writers = ['rebuildGrid', 'setGrid', 'setBaseLage', 'setLayerLage', 'rebuildGridFromConstruction', 'projectGridSpec'].filter(n => /shapeSizeFactor\s*=[^=]/.test(body(n)));
-    check('(10) core/state.js: rebuildGrid, setGrid, setBaseLage, setLayerLage, rebuildGridFromConstruction do not write the size; it is written by resizeBase and its helpers (_resizeRestore, _resizeDo) only', writers.length === 0 && /shapeSizeFactor\s*=[^=]/.test(body('_resizeDo')) && /function resizeBase\(neu, opts\)/.test(st), J(writers));
+    check('(10) core/state.js: rebuildGrid, setGrid, setBaseLage, setLayerLage, rebuildGridFromConstruction do not write the size; it is written by resizeBase and its helpers (_resizeRestore, _resizeDo) only', writers.length === 0 && /shapeSizeFactor\s*=[^=]/.test(body('_resizeDo')) && /function resizeBase\(neuX, a, b\)/.test(st), J(writers));
 }
 
 console.log(`${pass}/${pass + fail} checks passed`);
