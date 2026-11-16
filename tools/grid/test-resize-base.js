@@ -237,7 +237,7 @@ const nameOf = (w, spec) => w.get(`(function () { const r = gridDisplayNameFor($
     const dict = (() => { const src = read('ui-i18n.js'); const m = {}; const rx = /'([\w.]+)': \{ de: '((?:[^'\\]|\\.)*)', en: '((?:[^'\\]|\\.)*)' \}/g; let k; while ((k = rx.exec(src))) m[k[1]] = { de: k[2], en: k[3] }; return m; })();
     const a0 = SK.indexOf('shapeInput.input(() => {'), b0 = SK.indexOf('// Node count (Number Input)');
     check('(9) the size handler block is found in sketch.js setup()', a0 > 0 && b0 > a0);
-    const block = SK.slice(a0, b0).slice(0, SK.slice(a0, b0).lastIndexOf('}'));   // without the closing brace of `if (shapeInput) {`
+    const block = SK.slice(a0, SK.indexOf('\n        });', a0) + '\n        });'.length); // task 080: the width handler only (it ends at its first closing `});`; the height handler follows)   // without the closing brace of `if (shapeInput) {`
     const P5 = ['fill', 'noFill', 'push', 'pop', 'stroke', 'noStroke', 'strokeWeight', 'ellipse', 'line', 'bezier'];
     const mk = (size, setupCode, lang) => {
         const log = { said: [], dialogs: [], calls: [] };
@@ -245,7 +245,7 @@ const nameOf = (w, spec) => w.get(`(function () { const r = gridDisplayNameFor($
         const win = { UI: { t }, say: (k, text, kind) => log.said.push([k, text, kind]), timelineConfirm: o => log.dialogs.push(o) };
         const w = H.makeRenderWorld('square', 3, size, MODE);
         w.sb.document = { body: {} }; w.sb.window = win; w.sb.UI = win.UI; P5.forEach(f => { if (!w.sb[f]) w.sb[f] = () => { }; });
-        ['sizeChangePlan', 'sizeChangeText', 'saySizeChange', 'shapeLossWhat', 'applyTimelineFrame', 'totalTimelineDurationMs'].forEach(n => w.set(grab(n)));
+        ['sizeAxisRange', 'sizeTargetFor', 'sizeLockIsOpen', 'sizeRatioNote', 'sizeChangeRun', 'sizeChangePlan', 'sizeChangeText', 'saySizeChange', 'shapeLossWhat', 'applyTimelineFrame', 'totalTimelineDurationMs'].forEach(n => w.set(grab(n))); w.set('var sizeLockOpen = false;');   // task 080
         const input = { v: String(size), handler: null, value(x) { if (x === undefined) return this.v; this.v = String(x); return this; }, input(f) { this.handler = f; } };
         Object.assign(w.sb, { shapeInput: input, renderLayerTabs() { log.calls.push('tabs'); }, updateOffsetControls() { }, updateTimelineControls() { log.calls.push('tl'); }, redraw() { log.calls.push('redraw'); } });
         w.set(block);
@@ -292,7 +292,7 @@ const nameOf = (w, spec) => w.get(`(function () { const r = gridDisplayNameFor($
 {
     const code = SK.split('\n').filter(l => !/^\s*\/\//.test(l));
     const writes = code.filter(l => /(^|[^.\w])shapeSizeFactor\s*=[^=]/.test(l.replace(/\/\/.*$/, '')));
-    check('(10) sketch.js writes shapeSizeFactor once: the input\'s initial read (setup); the handler goes through resizeBase', writes.length === 1 && /parseInt\(shapeInput\.value\(\)\)/.test(writes[0]) && /resizeBase\(v\)/.test(SK), writes.join(' | ').slice(0, 200));
+    check('(10) sketch.js writes shapeSizeFactor once: the input\'s initial read (setup); the handlers go through sizeChangeRun -> resizeBase(x, y) (task 080)', writes.length === 1 && /parseInt\(shapeInput\.value\(\)\)/.test(writes[0]) && /resizeBase\(x, y\)/.test(SK), writes.join(' | ').slice(0, 200));
     const st = read('core/state.js');
     const body = (name) => { const i = st.indexOf('function ' + name + '('); const j = st.indexOf('\nfunction ', i + 5); return st.slice(i, j < 0 ? undefined : j); };
     const writers = ['rebuildGrid', 'setGrid', 'setBaseLage', 'setLayerLage', 'rebuildGridFromConstruction', 'projectGridSpec'].filter(n => /shapeSizeFactor\s*=[^=]/.test(body(n)));

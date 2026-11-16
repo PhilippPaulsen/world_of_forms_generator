@@ -106,6 +106,7 @@ const INVENTORY = {
     'timeline-pairing-filter': ['decimal', 'sketch.js', 'parseFloat(timelinePairingFilterInput.elt.value)'],
     'node-count-input': ['integer (inputmode none)', 'ui.js UI.stepper + sketch.js', 'parseInt'],
     'shape-size-input': ['integer (inputmode none)', 'ui.js UI.stepper + sketch.js', 'parseInt'],
+    'shape-size-y-input': ['integer (inputmode none)', 'ui.js UI.stepper + sketch.js', 'parseInt'],   // task 080: the height
     'layer-node-count-input': ['integer (inputmode none)', 'ui.js UI.stepper + sketch.js', 'parseInt'],
     'layer-shape-size-input': ['integer (inputmode none)', 'ui.js UI.stepper + sketch.js', 'parseInt'],
     'farbe-anchor-hue-input': ['integer (inputmode none)', 'ui.js UI.stepper (ui-farbe.js)', 'parseInt'],

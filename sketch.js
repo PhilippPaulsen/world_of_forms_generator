@@ -168,7 +168,8 @@ function setup() {
     noLoop();
     installTapInput();
     window.addEventListener('resize', canvasFitSync); window.addEventListener('orientationchange', canvasFitSync);   // task 078b
-    window.canvasSizeSync = canvasSizeSync;   // task 078: core/state.js calls it when canvasW / canvasH changed (a size, format or shape change of a non-square base)
+    window.canvasSizeSync = canvasSizeSync;
+    window.sizeLockToggle = sizeLockToggle;   // task 080: the lock button of ui-form.js   // task 078: core/state.js calls it when canvasW / canvasH changed (a size, format or shape change of a non-square base)
 
     // Shape selection via Icons (Common class .shape-icon-btn)
     const shapeBtns = selectAll('.shape-icon-btn');
@@ -212,25 +213,25 @@ function setup() {
             let v = parseInt(shapeInput.value());
             if (isNaN(v)) return; // a half-typed value changes nothing (it used to set the size to NaN)
             if (v < 1) v = 1; if (v > 9) v = 9; // Clamp
-            // Tasks 074/075: resizeBase() (core/state.js) is the one write of a size change: lines, free endpoints, layers, timeline, alt net and colours are carried along (scaled); what cannot be
-            // carried (colour groups whose faces merge or vanish) is asked first (a dry run says it) and said after.
-            const plan = sizeChangePlan(v);
-            if (plan.same) { shapeInput.value(shapeSizeFactor); return; }
-            const doSizeChange = () => {
-                const r = resizeBase(v);
-                shapeInput.value(shapeSizeFactor);
-                renderLayerTabs(); // the layer objects were replaced - the layer views follow
-                updateOffsetControls();
-                updateTimelineControls();
-                if (timeline && timeline.playbackLayerIndex !== null) applyTimelineFrame(); // the playback layer's render substitute is read afresh at the new size
-                saySizeChange(r);
-                redraw();
-            };
-            if (plan.loss.colors && window.timelineConfirm && window.UI && UI.t) {
-                window.timelineConfirm({ title: UI.t('size.confirm.title'), text: UI.t('size.confirm.text', { n: plan.colorsCount, m: plan.colorsTotal }), confirmLabel: UI.t('size.confirm.go'), onConfirm: doSizeChange, returnFocus: () => { shapeInput.value(shapeSizeFactor); } });   // cancel: the field goes back to the size in force
-                return;
-            }
-            doSizeChange();
+            // Tasks 074/075/080: resizeBase() (core/state.js) is the one write of a size change (sizeChangeRun below): lines, free endpoints, layers, timeline, alt net and colours are carried along (scaled); what
+            // cannot be carried (colour groups whose faces merge or vanish) is asked first (a dry run says it) and said after. Locked (the default) the width sets X = Y; unlocked it is X against the held Y.
+            const t = sizeTargetFor('x', v);
+            if (t.clamped) sizeRatioNote();
+            sizeChangeRun(t.x, t.y, { sync: () => { shapeInput.value(gridSizeX()); } });
+        });
+    }
+
+    // Task 080: the height (Y) of an unlocked area - the same pattern, its own handler, the same one write (resizeBase). Locked, the field is aria-disabled and any value is put back.
+    const shapeYInput = select('#shape-size-y-input');
+    if (shapeYInput) {
+        shapeYInput.input(() => {
+            let v = parseInt(shapeYInput.value());
+            if (isNaN(v)) return;
+            if (!sizeLockIsOpen()) { shapeYInput.value(gridSizeY()); return; }
+            if (v < 1) v = 1; if (v > 9) v = 9;
+            const t = sizeTargetFor('y', v);
+            if (t.clamped) sizeRatioNote();
+            sizeChangeRun(t.x, t.y, { sync: () => { shapeYInput.value(gridSizeY()); } });
         });
     }
 
@@ -302,7 +303,7 @@ function setup() {
     if (catalogUrlPattern) {
         currentShape = catalogUrlPattern.shape;
         projectGridSpec(gridSpecForCount(currentShape, catalogUrlPattern.order, (catalogUrlPattern.spec && catalogUrlPattern.spec.lage) || 1));   // task 068b: the lage of the transport (task 072d: lage 1 or 2)
-        if (catalogUrlPattern.size) { setGridSize(catalogUrlPattern.size.x, catalogUrlPattern.size.y); if (shapeInput) shapeInput.value(shapeSizeFactor); }   // task 079: a link of a non-square area (validated in the parser, before this point)
+        if (catalogUrlPattern.size) { setGridSize(catalogUrlPattern.size.x, catalogUrlPattern.size.y); if (shapeInput) shapeInput.value(gridSizeX()); }   // task 079: a link of a non-square area (validated in the parser, before this point)
         shapeBtns.forEach(b => b.removeClass('active'));
         const matchingShapeBtn = shapeBtns.find(b => b.attribute('data-shape') === currentShape);
         if (matchingShapeBtn) matchingShapeBtn.addClass('active');
@@ -2091,7 +2092,8 @@ function setup() {
             shapeBtns.forEach(b => b.removeClass('active'));
             const match = shapeBtns.find(b => b.attribute('data-shape') === currentShape);
             if (match) match.addClass('active');
-            if (shapeInput) shapeInput.value(shapeSizeFactor);
+            if (shapeInput) shapeInput.value(gridSizeX());
+            sizeLockOpen = false;   // task 080: the lock is UI state; a restored square shows it closed, a non-square area shows it open (sizeLockIsOpen)
             if (nodeInput) nodeInput.value(gridSpec.ordnung);
             clampNodeCountToShape('Restore'); // the input's max for the restored shape; the restored count is within it, so no note
         },
@@ -4855,13 +4857,60 @@ function shapeChangePlan(target) {
     return { same, from, to, clamped: !same && to.ordnung < from.ordnung ? { from: from.ordnung, to: to.ordnung } : null,
         loss: { lines: connections.length > 0, layers: additionalLayers.length, timeline: !!timeline, colors: baseFaceAssignments instanceof Map && baseFaceAssignments.size > 0 } };
 }
+// Task 080 (B4): the aspect-ratio lock and the width / height counts. UI state only (never saved): the lock is open while the area is not square or after a click on it; a restore resets it (the hook below) so a
+// square shows it closed. The limits come from validateGridSize (core/forms.js) - no second table.
+let sizeLockOpen = false;
+function sizeLockIsOpen() { return sizeLockOpen || !gridIsSquare(); }
+// the allowed counts of one axis against the other count -> { min, max }
+function sizeAxisRange(axis, other) {
+    let min = null, max = null;
+    for (let v = 1; v <= 9; v++) { if ((axis === 'x' ? validateGridSize(v, other) : validateGridSize(other, v)).ok) { if (min === null) min = v; max = v; } }
+    return { min, max };
+}
+// what typing v on an axis asks for -> { x, y, clamped }: locked: X = Y = v; unlocked: v clamped into the axis range against the held other count
+function sizeTargetFor(axis, v) {
+    if (!sizeLockIsOpen()) return { x: v, y: v, clamped: false };
+    const other = axis === 'x' ? gridSizeY() : gridSizeX(), r = sizeAxisRange(axis, other), c = Math.min(r.max, Math.max(r.min, v));
+    return { x: axis === 'x' ? c : other, y: axis === 'y' ? c : other, clamped: c !== v };
+}
+function sizeRatioNote() { if (window.say) window.say('size-ratio', window.UI && UI.t ? UI.t('size.ratio.max') : 'Seitenverhältnis höchstens 1:3', 'info'); }
+// the ONE way a size / format change of the base runs (the width and height handlers and the lock): the plan (a dry run) first, a dialog only when colour groups would be lost, then resizeBase(x, y), the layer
+// views, the playback layer and the notice. o.sync() puts the fields back to the state in force (nothing changed, cancelled, or done); o.done(r) runs after a change.
+function sizeChangeRun(x, y, o) {
+    const plan = sizeChangePlan(x, y);
+    if (plan.same) { o.sync(); return; }
+    const doSizeChange = () => {
+        const r = resizeBase(x, y);
+        o.sync();
+        if (o.done) o.done(r);
+        renderLayerTabs(); // the layer objects were replaced - the layer views follow
+        updateOffsetControls();
+        updateTimelineControls();
+        if (timeline && timeline.playbackLayerIndex !== null) applyTimelineFrame(); // the playback layer's render substitute is read afresh at the new size
+        saySizeChange(r);
+        redraw();
+    };
+    if (plan.loss.colors && window.timelineConfirm && window.UI && UI.t) {
+        window.timelineConfirm({ title: UI.t('size.confirm.title'), text: UI.t('size.confirm.text', { n: plan.colorsCount, m: plan.colorsTotal }), confirmLabel: UI.t('size.confirm.go'), onConfirm: doSizeChange, returnFocus: () => { o.sync(); } });   // cancel: the fields go back to the size in force
+        return;
+    }
+    doSizeChange();
+}
+// the lock button: open it (nothing changes, Y = X), or close it - at X != Y the area becomes square again (Y := X, the same dialog for lost colours; cancel leaves it open and the format as it is)
+function sizeLockToggle() {
+    if (!sizeLockIsOpen()) { sizeLockOpen = true; if (window.uiSync) window.uiSync(); return; }
+    if (gridSizeX() === gridSizeY()) { sizeLockOpen = false; if (window.uiSync) window.uiSync(); return; }
+    sizeChangeRun(gridSizeX(), gridSizeX(), { sync: () => { if (window.uiSync) window.uiSync(); }, done: () => { sizeLockOpen = false; } });
+}
+
 // Tasks 074/075: what a change of the BASE size does. -> { same, from, to, loss: { lines, layers, timeline, colors }, colorsCount, colorsTotal }. Only colour groups can still be lost (a dry run of resizeBase()
 // says how many: faces that merge or vanish at the new size); layers, timeline, lines and free points are carried along.
-function sizeChangePlan(target) {
-    const plan = { same: gridIsSquare() && target === shapeSizeFactor, from: shapeSizeFactor, to: target, loss: { lines: false, layers: 0, timeline: false, colors: false }, colorsCount: 0, colorsTotal: 0 };
+function sizeChangePlan(target, targetY) {
+    if (targetY === undefined) targetY = target;
+    const plan = { same: gridSizeX() === target && gridSizeY() === targetY, from: shapeSizeFactor, to: target, loss: { lines: false, layers: 0, timeline: false, colors: false }, colorsCount: 0, colorsTotal: 0 };
     if (plan.same) return plan;
     let r = null;
-    try { r = resizeBase(target, { dryRun: true }); } catch (e) { r = null; }
+    try { r = resizeBase(target, targetY, { dryRun: true }); } catch (e) { r = null; }
     if (r) { plan.colorsCount = r.lost.colorsCount; plan.colorsTotal = r.lost.colorsTotal; plan.loss.colors = r.lost.colorsCount > 0; }
     return plan;
 }
