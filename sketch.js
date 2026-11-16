@@ -48,7 +48,11 @@ function parseCatalogUrlV2(params) {
     for (const k of ['orbitIds', 'order', 'symmetryMode']) if (params.has(k)) return reject('invalid', k + ' belongs to the old format');
     const ordnungRaw = params.get('ordnung'), lageRaw = params.get('lage'), linesRaw = params.get('lines');
     if (!/^[1-9]\d{0,2}$/.test(ordnungRaw || '') || (lageRaw !== '1' && lageRaw !== '2') || !linesRaw) return reject('invalid', 'ordnung, lage or lines missing or malformed');
-    const r = parseTransportV2({ shape: params.get('shape'), ordnung: parseInt(ordnungRaw, 10), lage: parseInt(lageRaw, 10), group: params.get('group'), lines: linesRaw.split(',') });
+    // task 079: size=XxY (optional, absent = square): two digits 1..9 and nothing else, then validateGridSize inside parseTransportV2 (before anything is touched)
+    let size;
+    if (params.getAll('size').length > 1) return reject('invalid', 'size given twice');
+    if (params.has('size')) { const m = /^([1-9])x([1-9])$/.exec(params.get('size')); if (!m) return reject('invalid', 'size must be XxY (two digits 1 to 9)'); size = { x: parseInt(m[1], 10), y: parseInt(m[2], 10) }; }
+    const r = parseTransportV2({ shape: params.get('shape'), ordnung: parseInt(ordnungRaw, 10), lage: parseInt(lageRaw, 10), group: params.get('group'), lines: linesRaw.split(','), size });
     if (!r.ok) return reject(r.code, r.detail);
     const layerRaw = params.get('layer');
     let layer = null;
@@ -80,10 +84,10 @@ function parseClipboardCatalogPattern(text) {
     const reject = (code, detail) => { catalogTransportRejection = { code, detail }; return null; };
     if (obj.version === undefined) return Object.prototype.hasOwnProperty.call(obj, 'orbitIds') ? reject('version', 'old format (orbitIds) without version 2') : null;   // task 066: the old paste format is refused, other JSON stays a quiet null
     if (obj.version !== 2) return reject('version', 'version ' + JSON.stringify(obj.version).slice(0, 20));
-    if (Object.keys(obj).some(k => !['version', 'grid', 'group', 'lines'].includes(k))) return reject('invalid', 'unknown field in a v2 pattern (an old-format field?)');
+    if (Object.keys(obj).some(k => !['version', 'grid', 'group', 'lines', 'size'].includes(k))) return reject('invalid', 'unknown field in a v2 pattern (an old-format field?)');
     const g = obj.grid;
     if (!g || typeof g !== 'object' || Object.keys(g).some(k => !['shape', 'ordnung', 'lage'].includes(k))) return reject('invalid', 'grid must be {shape, ordnung, lage}');
-    const r = parseTransportV2({ shape: g.shape, ordnung: g.ordnung, lage: g.lage, group: obj.group, lines: obj.lines });
+    const r = parseTransportV2({ shape: g.shape, ordnung: g.ordnung, lage: g.lage, group: obj.group, lines: obj.lines, size: obj.size });
     if (!r.ok) return reject(r.code, r.detail);
     return r.pattern;
 }
@@ -298,6 +302,7 @@ function setup() {
     if (catalogUrlPattern) {
         currentShape = catalogUrlPattern.shape;
         projectGridSpec(gridSpecForCount(currentShape, catalogUrlPattern.order, (catalogUrlPattern.spec && catalogUrlPattern.spec.lage) || 1));   // task 068b: the lage of the transport (task 072d: lage 1 or 2)
+        if (catalogUrlPattern.size) { setGridSize(catalogUrlPattern.size.x, catalogUrlPattern.size.y); if (shapeInput) shapeInput.value(shapeSizeFactor); }   // task 079: a link of a non-square area (validated in the parser, before this point)
         shapeBtns.forEach(b => b.removeClass('active'));
         const matchingShapeBtn = shapeBtns.find(b => b.attribute('data-shape') === currentShape);
         if (matchingShapeBtn) matchingShapeBtn.addClass('active');
