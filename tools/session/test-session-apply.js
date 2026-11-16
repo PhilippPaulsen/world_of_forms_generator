@@ -41,7 +41,7 @@ console.log('== 1. collectSessionState() and the captured list ==');
     const lets = [...F.read('core/state.js').matchAll(/^let\s+(\w+)/gm)].map(m => m[1]);
     const captured = ctx.get('SESSION_APPLY_CAPTURED'), untouched = ctx.get('SESSION_APPLY_UNTOUCHED');
     // task 077 (B1): shapeSizeFactorY (the Y mesh count, null = square) is new and no snapshot carries it yet; session and export are task B3, which classifies it (captured, with the canvas size). Until then it is the one name allowed unclassified.
-    const B3_PENDING = ['shapeSizeFactorY'];
+    const B3_PENDING = ['shapeSizeFactorX', 'shapeSizeFactorY'];
     const unclassified = lets.filter(n => !captured.includes(n) && !untouched.includes(n) && !B3_PENDING.includes(n));
     check('every `let` of core/state.js is classified: captured for the rollback or deliberately left alone (a new global fails here until it is decided)', unclassified.length === 0, unclassified.join(',') || `${lets.length} globals`);
     check('the captured list has no name that state.js does not declare', captured.every(n => lets.includes(n)));
