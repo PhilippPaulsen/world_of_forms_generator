@@ -69,6 +69,42 @@ function _subdivideTriangleInterior(A, B, C, nodeCount) {
     return nodes;
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Task 077 (B1): a base area of X x Y meshes (X wide, Y high), the cells undistorted. ONE source for the sizes.
+// The short side is GRID_SHORT_SIDE px and the cell edge e = GRID_SHORT_SIDE / min(X, Y); X = Y is 600 x 600 for every shape (as before).
+// Triangle: a row is (sqrt3/2) e high; long in Y (Y > X) H = Y * (sqrt3/2) * e, long in X W = X * e. Hexagon: the column step is (sqrt3/2) e;
+// long in X (X > Y) W = X * (sqrt3/2) * e, long in Y H = Y * e. Square: W = X e, H = Y e. M1: the number is the row / column count.
+// (M1 literally: where it gives a "long" side under 600 - triangle 7/8, 8/9, hexagon 8/7, 9/8 - that side is 584.6..593.8 px; the builders
+// therefore take the 600 as an explicit shortSide, never from min(W, H).)
+const GRID_SHORT_SIDE = 600;
+const GRID_MAX_RATIO = 3;          // max(X, Y) <= 3 * min(X, Y); beyond it the size is rejected, never clamped
+const GRID_SIZE_MAX = 9;
+// The ONE named edge placement: the centre is (W/2, H/2) and the frame runs THROUGH the edge meshes (half cells at the border are cut),
+// it is not fitted to whole meshes and (hexagon, long in X) not extended to the outer corners.
+const GRID_EDGE_PLACEMENT = 'through-edge-cells';
+
+function validateGridSize(X, Y) {
+    if (!Number.isInteger(X) || !Number.isInteger(Y) || X < 1 || Y < 1 || X > GRID_SIZE_MAX || Y > GRID_SIZE_MAX) return { ok: false, error: 'size must be two integers 1..' + GRID_SIZE_MAX + ', got ' + String(X) + ' / ' + String(Y) };
+    if (Math.max(X, Y) > GRID_MAX_RATIO * Math.min(X, Y)) return { ok: false, error: 'size ratio ' + X + ' / ' + Y + ' is above 1 : ' + GRID_MAX_RATIO };
+    return { ok: true };
+}
+function gridEdge(X, Y) { return GRID_SHORT_SIDE / Math.min(X, Y); }
+function gridWidth(shape, X, Y) {
+    if (X === Y) return GRID_SHORT_SIDE;
+    const e = gridEdge(X, Y);
+    if (X < Y) return GRID_SHORT_SIDE;
+    return shape === 'hex' ? X * (Math.sqrt(3) / 2) * e : X * e;
+}
+function gridHeight(shape, X, Y) {
+    if (X === Y) return GRID_SHORT_SIDE;
+    const e = gridEdge(X, Y);
+    if (Y < X) return GRID_SHORT_SIDE;
+    return shape === 'triangle' ? Y * (Math.sqrt(3) / 2) * e : Y * e;
+}
+function gridCenter(shape, X, Y) { return { x: gridWidth(shape, X, Y) / 2, y: gridHeight(shape, X, Y) / 2 }; }
+// the px the edge factor divides: an explicit shortSide, else the canvas width (every call before task 077)
+function _gridRefSide(canvasW, shortSide) { return shortSide === undefined ? canvasW : shortSide; }
+
 // Roadmap 1.12 stage 4: centerOverride - omitted (every pre-stage-4 call
 // site), this is byte-identical to before: the exact same cx/cy=canvas-
 // center expression, the exact same A/B/C/centroid derivation, untouched.
@@ -85,8 +121,8 @@ function _subdivideTriangleInterior(A, B, C, nodeCount) {
 // C = centroid+(+base/2,+h/3) - solved so (A+B+C)/3 = centroid exactly
 // in EXACT arithmetic (the -2h/3+h/3+h/3 terms cancel), independently
 // of whatever the returned `centroid` field is set to.
-function buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH, centerOverride) {
-    const base = canvasW / shapeSizeFactor; const h = (Math.sqrt(3) / 2) * base;
+function buildTriangleGrid(nodeCount, shapeSizeFactor, canvasW, canvasH, centerOverride, shortSide) {
+    const base = _gridRefSide(canvasW, shortSide) / shapeSizeFactor; const h = (Math.sqrt(3) / 2) * base;
     let A, B, C, centroid;
     if (centerOverride) {
         centroid = { x: centerOverride.x, y: centerOverride.y };
@@ -147,8 +183,8 @@ function _subdivideSquareInterior(corners, nodeCount) {
 // per layerGrid()'s own docblock) and centroid is set to the given value
 // exactly (object copy), guaranteeing bit-exact equality for
 // layerGrid()'s new cross-shape branch.
-function buildSquareGrid(nodeCount, shapeSizeFactor, canvasW, canvasH, centerOverride) {
-    const size = canvasW / shapeSizeFactor;
+function buildSquareGrid(nodeCount, shapeSizeFactor, canvasW, canvasH, centerOverride, shortSide) {
+    const size = _gridRefSide(canvasW, shortSide) / shapeSizeFactor;
     const cx = centerOverride ? centerOverride.x : canvasW / 2;
     const cy = centerOverride ? centerOverride.y : canvasH / 2;
     const startX = cx - size / 2; const startY = cy - size / 2;
@@ -212,9 +248,9 @@ function _subdivideHexInterior(outerCorners, centroid, nodeCount) {
 // approximately equal to centerOverride due to floating-point summation
 // noise across 6 corners, not guaranteed bit-exact), guaranteeing exact
 // equality for layerGrid()'s new cross-shape branch.
-function buildHexGrid(nodeCount, shapeSizeFactor, canvasW, canvasH, centerOverride) {
+function buildHexGrid(nodeCount, shapeSizeFactor, canvasW, canvasH, centerOverride, shortSide) {
     const outerCorners = [];
-    const shapeHeight = canvasH / shapeSizeFactor; const side = shapeHeight / Math.sqrt(3);
+    const shapeHeight = _gridRefSide(canvasW, shortSide) / shapeSizeFactor; const side = shapeHeight / Math.sqrt(3);   // task 077: was canvasH / shapeSizeFactor (the hexagon alone read the height) const side = shapeHeight / Math.sqrt(3);
     const cx = centerOverride ? centerOverride.x : canvasW / 2;
     const cy = centerOverride ? centerOverride.y : canvasH / 2;
     const topY = cy - shapeHeight / 2;
@@ -349,7 +385,7 @@ function completeEdgeToRegularPolygon(P, Q, n, side) {
 // computation, mirrorAxisDir() - already relies on) - not independently
 // re-centered at canvas-center, which would generally differ from the
 // base's own actual center (e.g. after an alt-net construction, 1.2).
-function layerGrid(baseOuterCorners, baseCentroid, baseShape, baseShapeSizeFactor, layerShapeSizeFactor, layerNodeCount, layerShape = baseShape, canvasW, canvasH) {
+function layerGrid(baseOuterCorners, baseCentroid, baseShape, baseShapeSizeFactor, layerShapeSizeFactor, layerNodeCount, layerShape = baseShape, canvasW, canvasH, shortSide) {
     if (layerShape === baseShape) {
         const ratio = baseShapeSizeFactor / layerShapeSizeFactor;
         const outerCorners = baseOuterCorners.map(c => ({
@@ -363,9 +399,9 @@ function layerGrid(baseOuterCorners, baseCentroid, baseShape, baseShapeSizeFacto
         return { nodes, centroid: baseCentroid, outerCorners };
     }
     let grid;
-    if (layerShape === 'triangle') grid = buildTriangleGrid(layerNodeCount, layerShapeSizeFactor, canvasW, canvasH, baseCentroid);
-    else if (layerShape === 'square') grid = buildSquareGrid(layerNodeCount, layerShapeSizeFactor, canvasW, canvasH, baseCentroid);
-    else grid = buildHexGrid(layerNodeCount, layerShapeSizeFactor, canvasW, canvasH, baseCentroid);
+    if (layerShape === 'triangle') grid = buildTriangleGrid(layerNodeCount, layerShapeSizeFactor, canvasW, canvasH, baseCentroid, shortSide);
+    else if (layerShape === 'square') grid = buildSquareGrid(layerNodeCount, layerShapeSizeFactor, canvasW, canvasH, baseCentroid, shortSide);
+    else grid = buildHexGrid(layerNodeCount, layerShapeSizeFactor, canvasW, canvasH, baseCentroid, shortSide);
     return { nodes: grid.nodes, centroid: baseCentroid, outerCorners: grid.outerCorners };
 }
 
@@ -605,7 +641,7 @@ function layerSpecMatchesBase(layerSpec, baseSpec) {
     return layerSpec.shape === baseSpec.shape && layerSpec.lage === baseSpec.lage;
 }
 
-// view = {sizeFactor, canvasW, canvasH, center?}. -> { grid: {shape, ordnung, lage}, nodes, centroid, outerCorners }.
+// view = {sizeFactor, canvasW, canvasH, center?, shortSide?} (shortSide: task 077, the px the edge factor divides; omitted = canvasW, as before). -> { grid: {shape, ordnung, lage}, nodes, centroid, outerCorners }.
 // opts.numbered (task 059): every node also carries u, v and its semantic node number zahl (numberGridNodes), for lage 1 as well as lage 2.
 // Lage 1: exactly the output of the three builders (no extra fields). Lage 2 (within LAGE2_MAX, or any order with opts.beyondCeiling): the lage-1 nodes
 // unchanged (same ids, x, y, order), then the centres of the smallest meshes appended with the next ids; every node of a lage-2
@@ -615,7 +651,7 @@ function buildGrid(spec, view, opts) {
     if (!v.ok) throw new Error('buildGrid: ' + v.error);
     const c = toLegacy(spec, opts);
     const build = spec.shape === 'triangle' ? buildTriangleGrid : spec.shape === 'square' ? buildSquareGrid : buildHexGrid;
-    const g = build(c, view.sizeFactor, view.canvasW, view.canvasH, view.center);
+    const g = build(c, view.sizeFactor, view.canvasW, view.canvasH, view.center, view.shortSide);
     const grid = { shape: spec.shape, ordnung: spec.ordnung, lage: spec.lage };
     if (spec.legacyC1 === true) grid.legacyC1 = true;
     if (spec.lage !== 2 && !(opts && opts.numbered === true)) return { grid, nodes: g.nodes, centroid: g.centroid, outerCorners: g.outerCorners };
@@ -636,8 +672,8 @@ function gridNodesWithUV(g, spec, opts) {
     return nodes;
 }
 // Task 067: the grid of a LAYER of `spec` - layerGrid() on the spec's legacy count, plus the lage-2 nodes. Lage 1: exactly layerGrid()'s result.
-function layerGridForSpec(baseOuterCorners, baseCentroid, baseShape, baseShapeSizeFactor, layerShapeSizeFactor, spec, layerShape, canvasW, canvasH) {
-    const lg = layerGrid(baseOuterCorners, baseCentroid, baseShape, baseShapeSizeFactor, layerShapeSizeFactor, toLegacy(spec), layerShape, canvasW, canvasH);
+function layerGridForSpec(baseOuterCorners, baseCentroid, baseShape, baseShapeSizeFactor, layerShapeSizeFactor, spec, layerShape, canvasW, canvasH, shortSide) {
+    const lg = layerGrid(baseOuterCorners, baseCentroid, baseShape, baseShapeSizeFactor, layerShapeSizeFactor, toLegacy(spec), layerShape, canvasW, canvasH, shortSide);
     if (spec.lage !== 2) return lg;
     return { nodes: gridNodesWithUV(lg, spec), centroid: lg.centroid, outerCorners: lg.outerCorners };
 }

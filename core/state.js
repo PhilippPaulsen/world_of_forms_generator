@@ -12,7 +12,15 @@
 let canvasW = 600;
 let canvasH = 600; // keep square
 
-let shapeSizeFactor = 5; // 1..9, adjustable via #shape-size-input
+let shapeSizeFactor = 5; // 1..9, adjustable via #shape-size-input. Task 077: the X (width) mesh count; with shapeSizeFactorY null the area is square (X = Y), as before
+// Task 077 (B1): the Y (height) mesh count. null = follows X (the default, every pre-077 path); a number 1..9 only through setGridSize().
+let shapeSizeFactorY = null;
+function gridSizeX() { return shapeSizeFactor; }
+function gridSizeY() { return shapeSizeFactorY === null ? shapeSizeFactor : shapeSizeFactorY; }
+// The factor the cell edge divides (e = 600 / min(X, Y)); equals shapeSizeFactor while X = Y.
+function gridEdgeFactor() { return Math.min(gridSizeX(), gridSizeY()); }
+// The explicit short side for the builders: only a non-square area passes it (a square one keeps the old canvasW / factor expression).
+function gridShortSideArg() { return shapeSizeFactorY === null ? undefined : GRID_SHORT_SIDE; }
 // Task 060 (G5a): gridSpec is the ONE writable truth of the base grid (core/forms.js GridSpec). nodeCount is its DERIVED legacy projection
 // (core/tiling.js and the legacy fassade read it); projectGridSpec() below is the only place that writes it.
 let gridSpec = { shape: 'triangle', ordnung: 2, lage: 1 };
@@ -268,7 +276,7 @@ function projectGridSpec(spec) {
 function rebuildGrid(shape) {
     // built first: an invalid shape throws before any state is touched
     const spec = gridSpec.shape === shape ? gridSpec : gridSpecOnShape(gridSpec, shape);   // task 068b: lage 2 keeps its lage (ordnung taken over, clamped); lage 1 as before
-    const grid = buildGrid(spec, { sizeFactor: shapeSizeFactor, canvasW, canvasH });
+    const grid = buildGrid(spec, { sizeFactor: gridEdgeFactor(), canvasW, canvasH, shortSide: gridShortSideArg() });
     projectGridSpec(spec);
     connections = [];
     additionalLayers = [];
@@ -281,6 +289,19 @@ function rebuildGrid(shape) {
 
     nodes = grid.nodes; centroid = grid.centroid; outerCorners = grid.outerCorners;
     gridRevision++;
+}
+
+// Task 077 (B1): the ONE write of a non-square size. Validates first (throws before any state is touched: ratio above 1 : 3 or a size outside 1..9 is
+// rejected, never clamped), then sets X, Y, the canvas size (core/forms.js gridWidth / gridHeight of the current shape) and rebuilds the grid like
+// setGrid(). It does not resize the p5 canvas (task B2) and there is no UI path to it yet (task B4); tests and measurements call it.
+function setGridSize(X, Y) {
+    const v = validateGridSize(X, Y);
+    if (!v.ok) throw new Error('setGridSize: ' + v.error);
+    shapeSizeFactor = X;
+    shapeSizeFactorY = Y === X ? null : Y;
+    canvasW = gridWidth(currentShape, X, Y);
+    canvasH = gridHeight(currentShape, X, Y);
+    rebuildGrid(currentShape);
 }
 
 // Task 057 (G2): the GridSpec entry point. Validates, sets currentShape and the derived nodeCount, rebuilds like rebuildGrid().
@@ -447,7 +468,7 @@ function setLayerLage(layer, lage) {
     projectLayerGridSpec(layer, { shape: spec.shape, ordnung: spec.ordnung, lage });
     layer.connections = [];
     layer.redoStack = [];
-    const g = layerGridForSpec(outerCorners, centroid, currentShape, shapeSizeFactor, layer.shapeSizeFactor, layer.gridSpec, layer.shape, canvasW, canvasH);
+    const g = layerGridForSpec(outerCorners, centroid, currentShape, gridEdgeFactor(), layer.shapeSizeFactor, layer.gridSpec, layer.shape, canvasW, canvasH, gridShortSideArg());
     layer.nodes = g.nodes; layer.centroid = g.centroid; layer.outerCorners = g.outerCorners;
     if (typeof gridControlsSync === 'function') gridControlsSync();
     return { ok: true, changed: true };
