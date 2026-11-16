@@ -15,8 +15,9 @@ const S = require(path.join(ROOT, 'tools', 'session', 'scenarios.js'));
 const SK = fs.readFileSync(process.env.SKETCH_JS || path.join(ROOT, 'sketch.js'), 'utf8');
 const MODE = 'rotation_reflection6', SHAPES = ['triangle', 'square', 'hex'], R3 = Math.sqrt(3);
 const FORMATS = [[3, 5], [5, 3], [5, 7], [3, 9], [7, 8], [8, 7]];
-const wantW = (sh, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(X, Y); return X < Y ? 600 : sh === 'hex' ? X * R3 / 2 * e : X * e; };
-const wantH = (sh, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(X, Y); return Y < X ? 600 : sh === 'triangle' ? Y * R3 / 2 * e : Y * e; };
+// task 081: the area follows the cells in both directions (triangle H = Y (sqrt3/2) e also across, hexagon W = X (sqrt3/2) e also upright)
+const wantW = (sh, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(X, Y); return sh === 'hex' ? X * R3 / 2 * e : X < Y ? 600 : X * e; };
+const wantH = (sh, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(X, Y); return sh === 'triangle' ? Y * R3 / 2 * e : Y < X ? 600 : Y * e; };
 const HOOK = 'var hookCalls = 0; var canvasSizeSync = function () { width = canvasW; height = canvasH; hookCalls++; };';
 const worlds = {};
 const FILES = process.env.ORBITS_JS ? { 'core/orbits.js': process.env.ORBITS_JS } : undefined;   // sabotage runs (the other core copies go in through the env of tools/session/fixtures.js)
@@ -107,6 +108,9 @@ const state = (w) => w.get('JSON.stringify([canvasW, canvasH, shapeSizeFactor, s
     const res2 = cases2.map(([name, f, code]) => { const r = S.planFor(tg, tamper(f)); const got = !r.v.ok ? 'invalid' : (r.p.ok ? 'ok' : r.p.code); return [name, got === code, got]; });
     check('(1) refused (not valid / canvas-mismatch), never applied: ' + cases2.map(c => c[0]).join('; '), res2.every(r => r[1]), J(res2.filter(r => !r[1])));
     check('(1) the planning and validating wrote nothing into the target world', tg.get('JSON.stringify([canvasW, canvasH, shapeSizeFactor, shapeSizeFactorX, shapeSizeFactorY, nodes, connections, gridSpec])') === before);
+    // task 081: a snapshot saved with the OLD area of a triangle across (X > Y: 1000 x 600) or a hexagon upright (Y > X: 600 x 1000) is refused as canvas-mismatch (deliberately: the area is another one now)
+    const oldArea = (shape, X, Y, cw, ch) => { const q = W(shape); setup(q, shape, 2, 1, X, Y); q.set('connections = [[1, 2]];'); const o = JSON.parse(J(S.snapOf(q.ctx, S.uiOf(q.ctx, 'spiegeling', 6)))); o.settings.canvas = { w: cw, h: ch }; const r = S.planFor(tg, o); return !r.v.ok ? 'invalid' : (r.p.ok ? 'ok' : r.p.code); };
+    check('(1) task 081: a snapshot with the old area of a triangle across (5/3 on 1000 x 600) or a hexagon upright (3/5 on 600 x 1000) is refused as canvas-mismatch; the new area (1000 x 519.6, 519.6 x 1000) plans', oldArea('triangle', 5, 3, 1000, 600) === 'canvas-mismatch' && oldArea('hex', 3, 5, 600, 1000) === 'canvas-mismatch' && oldArea('triangle', 5, 3, wantW('triangle', 5, 3), wantH('triangle', 5, 3)) !== 'canvas-mismatch' && oldArea('hex', 3, 5, wantW('hex', 3, 5), wantH('hex', 3, 5)) !== 'canvas-mismatch' && oldArea('square', 5, 3, 1000, 600) !== 'canvas-mismatch' && oldArea('triangle', 3, 5, 600, wantH('triangle', 3, 5)) !== 'canvas-mismatch');
     const sq = tamper(s => { s.size = { x: 4, y: 4 }; s.shapeSizeFactor = 4; });
     const rsq = S.planFor(tg, sq);
     check('(1) size x = y is read as a square (the key is dropped by the validator)', rsq.v.ok && !('size' in rsq.v.snapshot.settings));
