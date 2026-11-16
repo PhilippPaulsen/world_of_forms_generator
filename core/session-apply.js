@@ -47,7 +47,7 @@ const SESSION_APPLY_CAPTURED = Object.freeze([
     'baseNetTransform', 'baseNetAnimation', 'faceHover', 'spatialMorph', 'lineStyle',
 ]);
 // the `let`s of core/state.js apply deliberately leaves alone (gridRevision: a monotonic counter of base-grid rebuilds - a rollback must never rewind it, or a revision number could name two different grids; faceSelected: the chip view's outline of the selected trail, UI state it re-derives from the restored trails on its next tick; a rollback must not bring back a key of the old pattern)
-const SESSION_APPLY_UNTOUCHED = Object.freeze(['nodeCount', 'canvasW', 'canvasH', 'svgPathCollector', 'segmentCollector', 'activeNetWarp', 'faceSelected', 'gridRevision']);
+const SESSION_APPLY_UNTOUCHED = Object.freeze(['nodeCount', 'canvasW', 'canvasH', 'svgPathCollector', 'segmentCollector', 'activeNetWarp', 'faceSelected', 'gridRevision', 'shapeSizeFactorY']);
 
 // The live references, by name (NOT copies): enough to undo an apply, and to check by identity that an undo was complete.
 function captureSessionGlobals() {
