@@ -17,7 +17,7 @@ const fn = (SK.match(/\nfunction canvasFitSync\([\s\S]*?\n\}\n/) || [''])[0];
 // the CSS formula, evaluated: min(w0, max(hfit * r, 0.4 * wu))
 const FORMULA = 'min(var(--canvas-w0), max(calc(var(--canvas-hfit) * var(--canvas-ratio)), calc(0.4px * var(--canvas-wu))))';
 check('(1) --canvas-w is min(--canvas-w0, max(--canvas-hfit * ratio, 0.4px * --canvas-wu))', decl('canvas-w') === FORMULA, decl('canvas-w'));
-check('(1) the defaults make the new terms inert for a square canvas: --canvas-hfit 100000px, --canvas-wu 0', decl('canvas-hfit') === '100000px' && decl('canvas-wu') === '0', decl('canvas-hfit') + ' ' + decl('canvas-wu'));
+check('(1) the defaults make the new terms inert for a square canvas: --canvas-hfit 100000px, --canvas-wu 600 (task 081: the sketch width in units; the floor 0.4 * 600 = 240px is far under the 100000px)', decl('canvas-hfit') === '100000px' && decl('canvas-wu') === '600', decl('canvas-hfit') + ' ' + decl('canvas-wu'));
 const wCss = (w0, hfit, r, wu) => Math.min(w0, Math.max(hfit * r, 0.4 * wu));
 check('(1) with the defaults --canvas-w = --canvas-w0 (560 and a narrow 300) at every ratio 1', [560, 300, 632].every(w0 => wCss(w0, 100000, 1, 0) === w0));
 
@@ -46,5 +46,9 @@ check('(3) the floor does not lift a width-limited canvas: 9/3 at 768 px (w0 = 6
 // the phone layout defines its own pair and never reads the new variables
 const ph = (css.match(/html\.ph \{[^}]*--canvas-ratio[^}]*\}/) || [''])[0];
 check('(3) html.ph defines its own --canvas-h / --canvas-w and does not read --canvas-hfit or --canvas-wu', /--canvas-h:/.test(ph) && /--canvas-w:/.test(ph) && !/hfit|--canvas-wu/.test(ph), ph.slice(0, 80));
-check('(3) the new variables are read in :root only (one definition of --canvas-w there)', (css.match(/canvas-hfit/g) || []).length === 2 && (css.match(/--canvas-wu/g) || []).length === 2, (css.match(/canvas-hfit/g) || []).length + ' ' + (css.match(/--canvas-wu/g) || []).length);
+check('(3) the new variables are read in :root only (one definition of --canvas-w there)', (css.match(/canvas-hfit/g) || []).length === 2 && (css.match(/--canvas-wu/g) || []).length === 3, (css.match(/canvas-hfit/g) || []).length + ' ' + (css.match(/--canvas-wu/g) || []).length);
+// task 081: the display scale is 560 / 600 per sketch unit whatever the short side is: W * 560 / 600, limited by the available width (the triangle across is 1000 x 519.6: s = 0.9333, not 1.0777)
+check('(3) --canvas-w0 = min(--canvas-wu * --canvas-max / 600, --canvas-avail): the scale is the same for every shape and format', decl('canvas-w0') === 'min(calc(var(--canvas-wu) * var(--canvas-max) / 600), var(--canvas-avail))', decl('canvas-w0'));
+const w0Of = (wu, avail) => Math.min(wu * 560 / 600, avail);
+check('(3) a square (wu 600): 560px as before; triangle 5/3 (1000 x 519.6): 933.3px = s 0.9333 (it was 560 * 1.92 = 1077.7px); hexagon 3/5 (519.6 x 1000): 485.0px = s 0.9333; limited by the available width: 9/3 (1800) in 1144px', w0Of(600, 1144) === 560 && Math.abs(w0Of(1000, 1144) / 1000 - 560 / 600) < 1e-12 && Math.abs(w0Of(519.6, 1144) / 519.6 - 560 / 600) < 1e-12 && w0Of(1800, 1144) === 1144);
 console.log(`${pass}/${pass + fail} checks passed`); process.exit(fail ? 1 : 0);
