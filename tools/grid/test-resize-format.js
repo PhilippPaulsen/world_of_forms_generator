@@ -47,8 +47,7 @@ else {
 // ---- worlds and helpers -----------------------------------------------------------------------------------------------------------------------------
 const worlds = {};
 const HOOK = 'var canvasSizeSync = function () { width = canvasW; height = canvasH; hookCalls = (typeof hookCalls === "number" ? hookCalls : 0) + 1; };';   // what sketch.js does with resizeCanvas
-const FILES = process.env.STATE_JS ? { 'core/state.js': process.env.STATE_JS } : undefined;   // sabotage runs
-const W = (shape) => { if (!worlds[shape]) { worlds[shape] = H.makeRenderWorld(shape, 3, 3, MODE, FILES); worlds[shape].set(HOOK); } return worlds[shape]; };
+const W = (shape) => { if (!worlds[shape]) { worlds[shape] = H.makeRenderWorld(shape, 3, 3, MODE); worlds[shape].set(HOOK); } return worlds[shape]; };
 const setup = (w, shape, ord, lage, X, Y) => w.set(`currentShape = ${J(shape)}; projectGridSpec(${J({ shape, ordnung: ord, lage })}); shapeSizeFactorX = null; shapeSizeFactorY = null; canvasW = 600; canvasH = 600; width = 600; height = 600; setGridSize(${X}, ${Y}); symmetryMode = ${J(MODE)}; connections = []; redoStack = []; baseNetTransform = null; additionalLayers = []; timeline = null; altNetSeed = null; activeLayer = 'base'; baseFaceAssignments = new Map(); baseFacePalette = null; baseFaceAnchor = null; baseLastHarmonyType = null; baseLastSelection = null; baseDistributionStrategy = null; spatialMorph = { enabled: false, mode: 'linear', angleDeg: 0 }; rebuildGrid(currentShape);`);
 const addLayer = (w, o) => w.set(`(function () {
     const layer = { connections: ${J(o.connections || [])}, redoStack: ${J(o.redo || [])}, offsetX: ${o.offsetX || 0}, offsetY: ${o.offsetY || 0}, rotation: ${o.rotation || 0}, shape: ${J(o.shape)}, symmetryMode: ${J(o.mode || MODE)}, enabled: ${o.enabled !== false}, showFaces: ${!!o.showFaces}, shapeSizeFactor: ${o.size} };
