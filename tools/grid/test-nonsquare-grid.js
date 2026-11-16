@@ -11,18 +11,19 @@ let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const mk = (...src) => { const sb = { Math, console, Number, Error, Map, JSON, Object, radians: x => x * Math.PI / 180, cos: Math.cos, sin: Math.sin }; vm.createContext(sb); vm.runInContext(src.join('\n'), sb); return sb; };
 const ev = (sb, s) => vm.runInContext(s, sb);
-const S = mk(forms, state), O = mk(oldForms);
+const S = mk(forms, state), O = mk(oldForms), J = JSON.stringify;
 const shapes = ['triangle', 'square', 'hex'], R3 = Math.sqrt(3), EPS = 1e-9;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const angle = (p, q, r) => { const ux = q.x - p.x, uy = q.y - p.y, vx = r.x - q.x, vy = r.y - q.y; return Math.acos(-(ux * vx + uy * vy) / (Math.hypot(ux, uy) * Math.hypot(vx, vy))) * 180 / Math.PI; };
 const pairs = []; for (let x = 1; x <= 9; x++) for (let y = 1; y <= 9; y++) if (Math.max(x, y) <= 3 * Math.min(x, y)) pairs.push([x, y]);
 // the formula, written out independently of core/forms.js
-const wantW = (shape, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(X, Y); return X < Y ? 600 : shape === 'hex' ? X * R3 / 2 * e : X * e; };
-const wantH = (shape, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(X, Y); return Y < X ? 600 : shape === 'triangle' ? Y * R3 / 2 * e : Y * e; };
+// task 081: the area follows the cells in both directions (triangle W = X e, H = Y (sqrt3/2) e; hexagon W = X (sqrt3/2) e, H = Y e; square X e x Y e; X = Y is 600 x 600)
+const wantW = (shape, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(X, Y); return shape === 'hex' ? X * R3 / 2 * e : X < Y ? 600 : X * e; };
+const wantH = (shape, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(X, Y); return shape === 'triangle' ? Y * R3 / 2 * e : Y < X ? 600 : Y * e; };
 
 // (1) the table of reports/076.md section 3 as a counter-check (hand-entered numbers, not computed by the formula above)
 const T = [['triangle', 3, 5, 600, 866.0], ['square', 3, 5, 600, 1000], ['square', 2, 3, 600, 900], ['square', 5, 7, 600, 840], ['square', 3, 4, 600, 800], ['square', 4, 5, 600, 750], ['square', 5, 8, 600, 960], ['square', 5, 9, 600, 1080],
-    ['square', 1, 3, 600, 1800], ['square', 3, 1, 1800, 600], ['triangle', 3, 4, 600, 692.8], ['triangle', 5, 7, 600, 727.5], ['triangle', 2, 3, 600, 779.4], ['hex', 5, 3, 866.0, 600], ['hex', 3, 2, 779.4, 600], ['hex', 7, 5, 727.5, 600], ['triangle', 5, 3, 1000, 600], ['hex', 3, 5, 600, 1000]];
+    ['square', 1, 3, 600, 1800], ['square', 3, 1, 1800, 600], ['triangle', 3, 4, 600, 692.8], ['triangle', 5, 7, 600, 727.5], ['triangle', 2, 3, 600, 779.4], ['hex', 5, 3, 866.0, 600], ['hex', 3, 2, 779.4, 600], ['hex', 7, 5, 727.5, 600], ['triangle', 5, 3, 1000, 519.6], ['hex', 3, 5, 519.6, 1000], ['hex', 5, 3, 866.0, 600], ['triangle', 3, 5, 600, 866.0], ['triangle', 9, 3, 1800, 519.6], ['hex', 3, 9, 519.6, 1800], ['triangle', 7, 8, 600, 593.8], ['hex', 8, 7, 593.8, 600]];
 check('(1) table 076: ' + T.length + ' sizes (W x H to 0.05 px)', T.every(([sh, X, Y, w, h]) => Math.abs(S.gridWidth(sh, X, Y) - w) < 0.05 && Math.abs(S.gridHeight(sh, X, Y) - h) < 0.05),
     T.filter(([sh, X, Y, w, h]) => Math.abs(S.gridWidth(sh, X, Y) - w) >= 0.05 || Math.abs(S.gridHeight(sh, X, Y) - h) >= 0.05).map(t => t.join('/')));
 check('(1) W, H equal the formula for every shape and every admissible X, Y (' + pairs.length * 3 + ' sizes)', shapes.every(sh => pairs.every(([X, Y]) => S.gridWidth(sh, X, Y) === wantW(sh, X, Y) && S.gridHeight(sh, X, Y) === wantH(sh, X, Y))));
@@ -44,14 +45,14 @@ for (const sh of shapes) for (const [X, Y] of pairs) for (const ord of [1, 3]) {
     const xs = oc.map(p => p.x), ys = oc.map(p => p.y), cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
     if (Math.abs(cx - W / 2) > 1e-9 || Math.abs(cy - H / 2) > 1e-9) nBad.center++;
     // inside the frame; the hexagon with X = 1 overhangs by (2/sqrt3 - 1) e / 2 per side already on main at 1/1 (its width 1.155 e against a 600 frame): allowed only there, and only by that
-    const slack = (sh === 'hex' && X === 1) ? (2 / R3 - 1) * e / 2 + 1e-9 : 1e-9;
+    const slack = sh === 'hex' ? Math.max(0, (2 * e / R3 - W) / 2) + 1e-9 : 1e-9;
     if (!nodes.every(p => p.x >= -slack && p.x <= W + slack && p.y >= -slack && p.y <= H + slack)) nBad.frame++;
 }
 check('(2) setGridSize: canvas, X, Y, edge factor as set (' + nGrids + ' grids)', nBad.size === 0, nBad.size);
 check('(2) every outer edge is e = 600 / min(X, Y) (hexagon: its side e / sqrt3) in both directions (no distortion)', nBad.edge === 0, nBad.edge);
 check('(2) corner angles 60 / 90 / 120 degrees', nBad.angle === 0, nBad.angle);
 check('(2) the polygon is centred on (W/2, H/2)', nBad.center === 0, nBad.center);
-check('(2) every node lies in the frame (hexagon, X = 1: overhang only as on main)', nBad.frame === 0, nBad.frame);
+check('(2) every node lies in the frame (a hexagon one column wide protrudes by its corner tips, as it did on main at 1/1)', nBad.frame === 0, nBad.frame);
 // the cell is the same size whatever the other count is: the edge depends on min(X, Y) only
 check('(2) the edge depends on min(X, Y) only', shapes.every(sh => [1, 2, 3].every(m => [m, m + 1, 2 * m, 3 * m].filter(v => v <= 9).every(v => {
     ev(S, `currentShape = '${sh}'; projectGridSpec({ shape: '${sh}', ordnung: 2, lage: 1 }); setGridSize(${m}, ${v}); `); const a = JSON.parse(ev(S, 'JSON.stringify(outerCorners)'));
@@ -100,5 +101,42 @@ for (const ls of shapes) for (const L of [3, 4, 9]) {
 }
 check('(5) layers on a 3/5 base: the layer edge is 600 / L (L relative to the base edge, no layer X/Y)', ok5);
 check('(5) a layer built through addLayer-style state path takes the same short side (canvas ' + W35 + ' x ' + H35 + ')', W35 === 600 && H35 === 1000);
+
+
+// (5) task 081: the frame cuts the pattern only at whole or half cells, in both directions; the long side is at most 1800 px; nothing changed for the classes that were already right
+{
+    const old81 = cp.execFileSync('git', ['show', (process.env.BASE81 || '18fef84f') + ':core/forms.js'], { cwd: ROOT, encoding: 'utf8' });
+    const O81 = mk(old81);
+    const near = (v) => Math.abs(v - Math.round(v)) < 1e-9;
+    let nCut = 0, badCut = 0, maxLong = 0, badUnchanged = 0, nUnchanged = 0, changed = [];
+    for (const sh of shapes) for (const [X, Y] of pairs) {
+        const e = 600 / Math.min(X, Y), W = S.gridWidth(sh, X, Y), H = S.gridHeight(sh, X, Y), cx = W / 2, cy = H / 2;
+        maxLong = Math.max(maxLong, W, H);
+        // lattice pitch and the line of a cell edge through the centre cell, per shape (the base cell is centred on (W/2, H/2) by the builders)
+        let okX, okY;
+        if (sh === 'square') { okX = near(W / e); okY = near(H / e); }                                   // a whole number of cells each way: the edges fall on cell edges
+        else if (sh === 'triangle') { okX = near(W / (e / 2)); okY = near(H / (R3 / 2 * e)); }          // vertices every e / 2 along a row, rows (sqrt3/2) e high
+        else { okX = near(W / (R3 / 2 * e)); okY = near(H / (e / 2)); }                                // columns every (sqrt3/2) e, centres every e / 2 along a column
+        if (X === Y && sh !== 'square') continue;   // the exception: X = Y is 600 x 600 for every shape (byte-equal to before)
+        nCut++; if (!okX || !okY) badCut++;
+        // classes whose area did not change: the square always, the triangle upright (Y > X), the hexagon across (X > Y); and X = Y
+        const same = sh === 'square' || X === Y || (sh === 'triangle' && Y > X) || (sh === 'hex' && X > Y);
+        const ow = ev(O81, `gridWidth(${J(sh)}, ${X}, ${Y})`), oh = ev(O81, `gridHeight(${J(sh)}, ${X}, ${Y})`);
+        if (same) { nUnchanged++; if (ow !== W || oh !== H) badUnchanged++; } else changed.push([sh, X, Y]);
+    }
+    check(`(5) the area is a whole number of the cell steps in both directions for ${nCut} (shape, X, Y) with X != Y (and the square at X = Y): the frame cuts only at whole or half cells`, nCut === 3 * pairs.length - 2 * 9 && badCut === 0, badCut);
+    check('(5) the long side is at most 1800 px (' + maxLong.toFixed(1) + ' px at most)', maxLong <= 1800 + 1e-9);
+    check(`(5) the square (all X, Y), the triangle upright, the hexagon across and every X = Y are byte-equal to the tree before 081 (${nUnchanged} sizes: W, H)`, nUnchanged > 100 && badUnchanged === 0, badUnchanged);
+    check(`(5) only the triangle across and the hexagon upright changed (${changed.length} sizes): their short side is now sqrt3/2 * 600 = ${(R3 / 2 * 600).toFixed(1)} px at min(X, Y)`, changed.length > 0 && changed.every(([sh, X, Y]) => (sh === 'triangle' && X > Y) || (sh === 'hex' && Y > X)) && Math.abs(S.gridHeight('triangle', 5, 3) - R3 / 2 * 600) < 1e-9 && Math.abs(S.gridWidth('hex', 3, 5) - R3 / 2 * 600) < 1e-9);
+    // the builders at the unchanged classes: the whole grid (nodes, corners) equals the old tree through the state API
+    let bb = 0, nb = 0;
+    for (const sh of shapes) for (const [X, Y] of pairs) {
+        const same = sh === 'square' || X === Y || (sh === 'triangle' && Y > X) || (sh === 'hex' && X > Y); if (!same || X === Y) continue;
+        for (const c of [1, 3]) { const run = (sb) => ev(sb, `(function () { const w = gridWidth(${J(sh)}, ${X}, ${Y}), h = gridHeight(${J(sh)}, ${X}, ${Y}); return JSON.stringify(build${{ triangle: 'Triangle', square: 'Square', hex: 'Hex' }[sh]}Grid(${c}, ${Math.min(X, Y)}, w, h, undefined, 600)); })()`); nb++; if (run(S) !== run(O81)) bb++; }
+    }
+    check(`(5) the base grids (nodes, centroid, corners) of those classes are byte-equal to the tree before 081 (${nb} grids)`, nb > 100 && bb === 0, bb);
+    // the edge placement constant stays the one place
+    check('(5) GRID_EDGE_PLACEMENT is still the one named constant', ev(S, 'GRID_EDGE_PLACEMENT') === 'through-edge-cells' && (forms.match(/const GRID_EDGE_PLACEMENT/g) || []).length === 1);
+}
 
 console.log(`${pass}/${pass + fail} checks passed`); process.exit(fail ? 1 : 0);

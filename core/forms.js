@@ -72,15 +72,16 @@ function _subdivideTriangleInterior(A, B, C, nodeCount) {
 // ---------------------------------------------------------------------------------------------------------------------
 // Task 077 (B1): a base area of X x Y meshes (X wide, Y high), the cells undistorted. ONE source for the sizes.
 // The short side is GRID_SHORT_SIDE px and the cell edge e = GRID_SHORT_SIDE / min(X, Y); X = Y is 600 x 600 for every shape (as before).
-// Triangle: a row is (sqrt3/2) e high; long in Y (Y > X) H = Y * (sqrt3/2) * e, long in X W = X * e. Hexagon: the column step is (sqrt3/2) e;
-// long in X (X > Y) W = X * (sqrt3/2) * e, long in Y H = Y * e. Square: W = X e, H = Y e. M1: the number is the row / column count.
-// (M1 literally: where it gives a "long" side under 600 - triangle 7/8, 8/9, hexagon 8/7, 9/8 - that side is 584.6..593.8 px; the builders
-// therefore take the 600 as an explicit shortSide, never from min(W, H).)
+// Task 081: the area follows the cells in BOTH directions. Square: W = X e, H = Y e. Triangle: a row is (sqrt3/2) e high, a row is X e wide: W = X e, H = Y * (sqrt3/2) * e.
+// Hexagon: the column step is (sqrt3/2) e, a column is e high: W = X * (sqrt3/2) * e, H = Y e. M1: the number is the row / column count. X = Y stays 600 x 600 for every shape (the exception).
+// So the short side is 600 px for the square and 520 px (sqrt3/2 * 600 at min(X, Y)) for the triangle across and the hexagon upright; the long side is at most 3 * 600 = 1800 px (square, the triangle's
+// width, the hexagon's height: count * e <= 3 * 600) or 3 * (sqrt3/2) * 600 = 1559 px (the triangle's height, the hexagon's width). The builders take the 600 as an explicit shortSide (the edge), never from min(W, H).
 const GRID_SHORT_SIDE = 600;
 const GRID_MAX_RATIO = 3;          // max(X, Y) <= 3 * min(X, Y); beyond it the size is rejected, never clamped
 const GRID_SIZE_MAX = 9;
-// The ONE named edge placement: the centre is (W/2, H/2) and the frame runs THROUGH the edge meshes (half cells at the border are cut),
-// it is not fitted to whole meshes and (hexagon, long in X) not extended to the outer corners.
+// The ONE named edge placement: the centre is (W/2, H/2) and the frame runs THROUGH the edge meshes: across a whole cell edge or through the middle of a cell (half cells at the border), never
+// fitted to whole meshes and never extended to the outer corners. Task 081: with W and H a whole number of cell steps this holds for all three shapes (the square: steps of e; the triangle: rows of
+// (sqrt3/2) e high, vertices every e/2 along a row; the hexagon: columns every (sqrt3/2) e, centres every e/2 along a column).
 const GRID_EDGE_PLACEMENT = 'through-edge-cells';
 
 function validateGridSize(X, Y) {
@@ -89,17 +90,18 @@ function validateGridSize(X, Y) {
     return { ok: true };
 }
 function gridEdge(X, Y) { return GRID_SHORT_SIDE / Math.min(X, Y); }
+// The counts that carry the minimum are exactly GRID_SHORT_SIDE (count * e): the square's and the triangle's width and the square's and the hexagon's height keep the literal 600 (byte-equal to before).
 function gridWidth(shape, X, Y) {
     if (X === Y) return GRID_SHORT_SIDE;
     const e = gridEdge(X, Y);
-    if (X < Y) return GRID_SHORT_SIDE;
-    return shape === 'hex' ? X * (Math.sqrt(3) / 2) * e : X * e;
+    if (shape === 'hex') return X * (Math.sqrt(3) / 2) * e;   // task 081: also upright (Y > X), it was 600 there
+    return X < Y ? GRID_SHORT_SIDE : X * e;
 }
 function gridHeight(shape, X, Y) {
     if (X === Y) return GRID_SHORT_SIDE;
     const e = gridEdge(X, Y);
-    if (Y < X) return GRID_SHORT_SIDE;
-    return shape === 'triangle' ? Y * (Math.sqrt(3) / 2) * e : Y * e;
+    if (shape === 'triangle') return Y * (Math.sqrt(3) / 2) * e;   // task 081: also across (X > Y), it was 600 there
+    return Y < X ? GRID_SHORT_SIDE : Y * e;
 }
 function gridCenter(shape, X, Y) { return { x: gridWidth(shape, X, Y) / 2, y: gridHeight(shape, X, Y) / 2 }; }
 // the px the edge factor divides: an explicit shortSide, else the canvas width (every call before task 077)

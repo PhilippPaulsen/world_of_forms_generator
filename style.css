@@ -85,12 +85,14 @@
      --canvas-size stays the width of the panels under the canvas (face colours, timeline, morph, strip): it is NOT the canvas width any more. The phone layout (html.ph) defines its own pair below. */
   --canvas-ratio: 1;
   --canvas-avail: calc(100vw - 2 * var(--gutter));
-  --canvas-w0: min(calc(var(--canvas-max) * max(1, var(--canvas-ratio))), var(--canvas-avail));
+  /* Task 081: the display scale is --canvas-max / 600 per sketch unit (560 / 600) and never more, whatever the short side is (the triangle across and the hexagon upright are 520 units on their short side):
+     w0 = W * 560 / 600, limited by the available width. --canvas-wu = W (600 while the canvas is square). */
+  --canvas-w0: min(calc(var(--canvas-wu) * var(--canvas-max) / 600), var(--canvas-avail));
   /* Task 078b: a NON-square canvas is also limited by the window height: --canvas-hfit = window height - the head above the canvas - the --gap below it (sketch.js canvasFitSync, set only for a non-square canvas,
      updated on resize / orientationchange); --canvas-wu = the sketch width W in units. The display scale s = w / W never goes under 0.4 (then the page scrolls as before). Square: the defaults below
      (100000px, 0) make both terms inert: --canvas-w = --canvas-w0. The phone layout (html.ph) defines its own --canvas-w / --canvas-h. */
   --canvas-hfit: 100000px;
-  --canvas-wu: 0;
+  --canvas-wu: 600;
   --canvas-w: min(var(--canvas-w0), max(calc(var(--canvas-hfit) * var(--canvas-ratio)), calc(0.4px * var(--canvas-wu))));
   --canvas-h: calc(var(--canvas-w) / var(--canvas-ratio));
 }
