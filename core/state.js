@@ -350,24 +350,40 @@ function _sheetFaceSnapshot(conns, gridNodes, sheet) {
     const group = sheetGroupElements(gridNodes, sheet);
     return group && res.faces.length ? faceTrailSnapshot(res, group) : null;
 }
-// old trail key -> new trail key: every sample point of every old face, scaled, is looked up in the new faces; the key with most votes wins; two old keys never share one new key
+// Task 083: the map of a size change, old trail key -> new trail key(s). get(ok) is the PRIMARY new key (the one with most votes); `all` holds every new key of ok (1:N); entries() / iteration list every
+// (old, new) pair, so a reader of the pairs sees the whole relation. A new key belongs to ONE old key only.
+class _TrailMap extends Map {
+    constructor() { super(); this.all = new Map(); }
+    * entries() { for (const [ok, nks] of this.all) for (const nk of nks) yield [ok, nk]; }
+    [Symbol.iterator]() { return this.entries(); }
+}
+// old trail key -> new trail key(s): every sample point of every old face, scaled, is looked up in the new faces - the SMALLEST new face that contains it (a face nested in a bigger one is hit first, not the
+// enclosing one; task 083 class c). Every new key then goes to the old key with the most votes in it (the largest overlap wins; a tie goes to the smaller old key), so two old keys never share one new key; one old
+// key may get several new keys (task 083 class b: a trail that the 0.01 px key rounding splits in two keys in the new picture keeps its colour on both).
 function _mapTrailKeys(oldSnap, newSnap, scale) {
-    const map = new Map();
+    const map = new _TrailMap();
     if (!oldSnap || !newSnap) return map;
-    const boxes = newSnap.faces.map(f => ({ f, x0: Math.min(...f.poly.map(p => p.x)), x1: Math.max(...f.poly.map(p => p.x)), y0: Math.min(...f.poly.map(p => p.y)), y1: Math.max(...f.poly.map(p => p.y)) }));
-    const votes = new Map();
+    const boxes = newSnap.faces.map(f => ({ f, x0: Math.min(...f.poly.map(p => p.x)), x1: Math.max(...f.poly.map(p => p.x)), y0: Math.min(...f.poly.map(p => p.y)), y1: Math.max(...f.poly.map(p => p.y)), area: Math.abs(f.area) }));
+    boxes.sort((a, b) => a.area - b.area);   // smallest first (a stable sort: equal areas keep the order of the picture)
+    const votes = new Map();   // new key -> (old key -> votes)
     oldSnap.faces.forEach(of => of.samples.forEach(sp => {
         const p = scale(sp);
         const hit = boxes.find(b => p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1 && pointInPolygon(p, b.f.poly));
         if (!hit) return;
-        if (!votes.has(of.key)) votes.set(of.key, new Map());
-        const m = votes.get(of.key); m.set(hit.f.key, (m.get(hit.f.key) || 0) + 1);
+        if (!votes.has(hit.f.key)) votes.set(hit.f.key, new Map());
+        const m = votes.get(hit.f.key); m.set(of.key, (m.get(of.key) || 0) + 1);
     }));
-    const best = [];
-    votes.forEach((m, ok) => { let bk = null, bv = 0; m.forEach((v, nk) => { if (v > bv || (v === bv && nk < bk)) { bk = nk; bv = v; } }); best.push([ok, bk, bv]); });
-    best.sort((a, b) => b[2] - a[2] || (a[0] < b[0] ? -1 : 1));
-    const taken = new Set();
-    best.forEach(([ok, nk]) => { if (!taken.has(nk)) { taken.add(nk); map.set(ok, nk); } });
+    const owned = new Map();   // old key -> [[new key, votes], ...]
+    votes.forEach((m, nk) => {
+        let bk = null, bv = 0; m.forEach((v, ok) => { if (v > bv || (v === bv && ok < bk)) { bk = ok; bv = v; } });
+        if (!owned.has(bk)) owned.set(bk, []);
+        owned.get(bk).push([nk, bv]);
+    });
+    owned.forEach((list, ok) => {
+        list.sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+        map.set(ok, list[0][0]);
+        map.all.set(ok, list.map(e => e[0]));
+    });
     return map;
 }
 // the re-keyed store and palette: every entry of a trail that is in the old picture and has a counterpart in the new one moves to its new key (the default grays too: the picture stays as it was).
@@ -377,12 +393,14 @@ function _rekeyColors(store, palette, map, liveKeys) {
     const out = new Map(); let lost = 0, kept = 0, total = 0;
     if (store instanceof Map) store.forEach((a, k) => {
         if (!liveKeys || !liveKeys.has(k)) return;
-        const real = a && a.rule !== DEFAULT_GRAY_RULE, nk = map.get(k);
+        const real = a && a.rule !== DEFAULT_GRAY_RULE, nks = map.all ? (map.all.get(k) || []) : (map.get(k) !== undefined ? [map.get(k)] : []);
         if (real) total++;
-        if (nk !== undefined && !out.has(nk)) { out.set(nk, a); if (real) kept++; } else if (real) lost++;
+        let placed = false;
+        nks.forEach(nk => { if (!out.has(nk)) { out.set(nk, a); placed = true; } });   // task 083: every new key of the trail (1:N)
+        if (placed) { if (real) kept++; } else if (real) lost++;
     });
     let pal = palette;
-    if (palette) { const ov = new Map(); if (palette.overrides instanceof Map) palette.overrides.forEach((slot, k) => { const nk = map.get(k); if (nk !== undefined) ov.set(nk, slot); }); pal = Object.assign({}, palette, { overrides: ov }); }
+    if (palette) { const ov = new Map(); if (palette.overrides instanceof Map) palette.overrides.forEach((slot, k) => { (map.all ? (map.all.get(k) || []) : (map.get(k) !== undefined ? [map.get(k)] : [])).forEach(nk => ov.set(nk, slot)); }); pal = Object.assign({}, palette, { overrides: ov }); }
     return { store: out, palette: pal, kept, lost, total };
 }
 function _resizeSaved() {
