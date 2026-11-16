@@ -286,7 +286,7 @@ const baseOf = (w) => JSON.parse(w.get('JSON.stringify({ nodes, centroid, outerC
 {
     const dict = (() => { const src = read('ui-i18n.js'); const m = {}; const rx = /'([\w.]+)': \{ de: '((?:[^'\\]|\\.)*)', en: '((?:[^'\\]|\\.)*)' \}/g; let k; while ((k = rx.exec(src))) m[k[1]] = { de: k[2], en: k[3] }; return m; })();
     const a0 = SK.indexOf('shapeInput.input(() => {'), b0 = SK.indexOf('// Node count (Number Input)');
-    const block = SK.slice(a0, b0).slice(0, SK.slice(a0, b0).lastIndexOf('}'));
+    const block = SK.slice(a0, SK.indexOf('\n        });', a0) + '\n        });'.length); // task 080: the width handler only (it ends at its first closing `});`; the height handler follows)
     const P5 = ['fill', 'noFill', 'push', 'pop', 'stroke', 'noStroke', 'strokeWeight', 'ellipse', 'line', 'bezier'];
     const mk = (shape, ord, lage, size, setupCode, lang) => {
         const log = { said: [], dialogs: [], calls: [] };
@@ -294,7 +294,7 @@ const baseOf = (w) => JSON.parse(w.get('JSON.stringify({ nodes, centroid, outerC
         const win = { UI: { t }, say: (k, text, kind) => log.said.push([k, text, kind]), timelineConfirm: o => log.dialogs.push(o) };
         const w = H.makeRenderWorld(shape, 3, size, MODE);
         w.sb.document = { body: {} }; w.sb.window = win; w.sb.UI = win.UI; P5.forEach(f => { if (!w.sb[f]) w.sb[f] = () => { }; });
-        ['sizeChangePlan', 'sizeChangeText', 'saySizeChange', 'shapeLossWhat'].forEach(n => w.set(grab(n)));
+        ['sizeAxisRange', 'sizeTargetFor', 'sizeLockIsOpen', 'sizeRatioNote', 'sizeChangeRun', 'sizeChangePlan', 'sizeChangeText', 'saySizeChange', 'shapeLossWhat'].forEach(n => w.set(grab(n))); w.set('var sizeLockOpen = false;');   // task 080
         const input = { v: String(size), handler: null, value(x) { if (x === undefined) return this.v; this.v = String(x); return this; }, input(f) { this.handler = f; } };
         Object.assign(w.sb, { shapeInput: input, renderLayerTabs() { log.calls.push('tabs'); }, updateOffsetControls() { }, updateTimelineControls() { }, applyTimelineFrame() { log.calls.push('frame'); }, redraw() { log.calls.push('redraw'); } });
         w.set(block);
@@ -349,7 +349,7 @@ const baseOf = (w) => JSON.parse(w.get('JSON.stringify({ nodes, centroid, outerC
 // ---- 7. sources ----------------------------------------------------------------------------------------------------------------------------------
 {
     check('(7) the layer stepper shows the size rounded (a fraction is possible internally): both writes of #layer-shape-size-input use Math.round', (SK.match(/layerShapeSizeInput\.value\(Math\.round\(layer\.shapeSizeFactor\)\)/g) || []).length === 2 && !/layerShapeSizeInput\.value\(layer\.shapeSizeFactor\)/.test(SK));
-    check('(7) the handler asks through a dry run (sizeChangePlan -> resizeBase(..., { dryRun: true })) and only when colour groups are lost', /resizeBase\(target, \{ dryRun: true \}\)/.test(SK) && /plan\.loss\.colors && window\.timelineConfirm/.test(SK)  && !/plan\.loss\.layers \|\| plan\.loss\.timeline\) && window\.timelineConfirm[^\n]*size\.confirm/.test(SK));
+    check('(7) the handler asks through a dry run (sizeChangePlan -> resizeBase(..., { dryRun: true })) and only when colour groups are lost', /resizeBase\(target, targetY, \{ dryRun: true \}\)/.test(SK) && /plan\.loss\.colors && window\.timelineConfirm/.test(SK)  && !/plan\.loss\.layers \|\| plan\.loss\.timeline\) && window\.timelineConfirm[^\n]*size\.confirm/.test(SK));
     const st = read('core/state.js');
     check('(7) core/state.js: no layer or timeline is cleared by resizeBase (the layers are rebuilt as new objects, the timeline object is kept)', /additionalLayers = keep\.layers\.map/.test(st) && /timeline = keep\.tl;/.test(st) && !/layer\.faceAssignments = new Map\(\)/.test(st));
 }
