@@ -161,9 +161,9 @@ function setup() {
     canvasW = parseInt(sizeSlider?.value()) || 600;
     canvasH = canvasW;
     createCanvas(canvasW, canvasH).parent('canvas-container');
-    window.canvasSizeSync = canvasSizeSync;   // task 078: core/state.js calls it when canvasW / canvasH changed (a size, format or shape change of a non-square base)
     noLoop();
     installTapInput();
+    window.canvasSizeSync = canvasSizeSync;   // task 078: core/state.js calls it when canvasW / canvasH changed (a size, format or shape change of a non-square base)
 
     // Shape selection via Icons (Common class .shape-icon-btn)
     const shapeBtns = selectAll('.shape-icon-btn');
