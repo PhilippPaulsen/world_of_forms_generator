@@ -37,7 +37,7 @@ else {
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys)', a && keys.length > 3 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => read(f) === fs.readFileSync(path.join(oldDir, f), 'utf8');
-    check('(1) core/faces.js, core/tiling.js, core/facecolor.js, core/session*.js, core/export.js, tools/morph/off-path-golden.json unchanged', ['core/faces.js', 'core/tiling.js', 'core/facecolor.js', 'core/session.js', 'core/session-apply.js', 'core/session-store.js', 'core/session-writer.js', 'core/export.js', 'tools/morph/off-path-golden.json'].every(same));
+    check('(1) core/faces.js, core/tiling.js, core/facecolor.js, core/session-store.js, core/session-writer.js, tools/morph/off-path-golden.json unchanged (task 079: session.js, session-apply.js, export.js carry the size)', ['core/faces.js', 'core/tiling.js', 'core/facecolor.js', 'core/session-store.js', 'core/session-writer.js', 'tools/morph/off-path-golden.json'].every(same));
     const PROT = ['applyTimelineFrame', 'applyLayerConnectionsMorphFrame', 'resolveTimelineKeyframeCoords', 'resolveTimelineSegment', 'totalTimelineDurationMs', 'setTimelineProgress', 'toggleTimelinePlayback', 'previewTimelineSegmentMidpoint'];
     const oldSK = fs.readFileSync(path.join(oldDir, 'sketch.js'), 'utf8');
     const grabIn = (src, name) => { const m = src.match(new RegExp('\\nfunction ' + name + '\\([\\s\\S]*?\\n\\}\\n')); return m ? m[0] : null; };

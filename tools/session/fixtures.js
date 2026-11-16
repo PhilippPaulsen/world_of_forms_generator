@@ -34,7 +34,7 @@ function makeContext(opts) {
     files.push(fs.readFileSync(process.env.SPATIAL_MORPH_JS || path.join(ROOT, 'core', 'spatial-morph.js'), 'utf8'));   // the morph parameter helpers session.js calls (morph stage b); SPATIAL_MORPH_JS for sabotage runs
     files.push(read('core/symmetry-toggles.js'));   // symmetryModeFor() / symmetryCategoryFoldFor() - the pure half of the Form row's symmetry logic
     if (opts.state) files.push(process.env.STATE_JS ? fs.readFileSync(process.env.STATE_JS, 'utf8') : read('core/state.js'));   // STATE_JS: a sabotage copy
-    if (opts.export) files.push(read('core/export.js'));
+    if (opts.export) files.push(process.env.EXPORT_JS ? fs.readFileSync(process.env.EXPORT_JS, 'utf8') : read('core/export.js'));   // EXPORT_JS: a sabotage copy
     files.push(sessionSources());
     const sb = {
         console, dist: (a, b, c, d) => Math.hypot(c - a, d - b), sqrt: Math.sqrt, radians: d => d * Math.PI / 180, degrees: r => r * 180 / Math.PI,
