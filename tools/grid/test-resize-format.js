@@ -19,8 +19,9 @@ const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
 const OTHER = { triangle: 'square', square: 'hex', hex: 'triangle' };
 const R3 = Math.sqrt(3);
 // the sizes, written independently of core/forms.js
-const wantW = (sh, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(X, Y); return X < Y ? 600 : sh === 'hex' ? X * R3 / 2 * e : X * e; };
-const wantH = (sh, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(X, Y); return Y < X ? 600 : sh === 'triangle' ? Y * R3 / 2 * e : Y * e; };
+// task 081: the area follows the cells in both directions (triangle H = Y (sqrt3/2) e also across, hexagon W = X (sqrt3/2) e also upright)
+const wantW = (sh, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(X, Y); return sh === 'hex' ? X * R3 / 2 * e : X < Y ? 600 : X * e; };
+const wantH = (sh, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(X, Y); return sh === 'triangle' ? Y * R3 / 2 * e : Y < X ? 600 : Y * e; };
 
 // ---- 1. old tree ----------------------------------------------------------------------------------------------------------------------------------
 let oldDir = process.env.OLD_TREE || null;
@@ -243,7 +244,7 @@ const frameWorld = (w) => { w.set('width = canvasW; height = canvasH;'); return 
     const sq = stats.square;
     check(`(5) square (${sq.cases} patterns x format changes): every pattern whose faces survive is carried face by face (${sq.carried}/${sq.lost0Cases}); dry run = real run; palette override re-keyed`, sq.cases > 20 && sq.carried === sq.lost0Cases && sq.lost0Cases > 0.9 * sq.cases && sq.dryBad === 0 && sq.paletteBad === 0, J(sq));
     for (const shape of ['triangle', 'hex']) {
-        const s = stats[shape], exact = shape === 'triangle';
+        const s = stats[shape], exact = false;   // task 081: the face set of a pattern depends on the area of the picture (core/faces.js, also on main: 3/3 has two faces of the test pattern where 5/3 had one), and the triangle across is now another area; so the triangle is counted like the hexagon: >= 99 % of the real-coloured faces keep their colour
         check(`(5) ${shape} (${s.cases} patterns): ${exact ? `where no trail is lost the colours are carried face by face (${s.carried}/${s.lost0Cases})` : `${s.equal}/${s.faces} real-coloured faces keep their colour`}; ${s.lostAny} patterns lose trails (counted); dry run = real run`,
             s.cases > 10 && (exact ? s.carried === s.lost0Cases : s.equal >= 0.99 * s.faces) && s.dryBad === 0 && s.paletteBad === 0, J(s));
     }
