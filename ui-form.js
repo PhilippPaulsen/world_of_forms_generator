@@ -179,7 +179,7 @@
     // the More button says when the fold it holds is not the default (3, hexagon with Drehung)
     const three = applies && fold === 3;
     // task 080: on the phone the lock and the height stepper live under More, so the dot also says "the area is not square" (X != Y)
-    const dot = three || (document.documentElement.classList.contains('ph') && typeof gridIsSquare === 'function' && !gridIsSquare());
+    const dot = three || (!!document.documentElement && document.documentElement.classList.contains('ph') && typeof gridIsSquare === 'function' && !gridIsSquare());
     if (moreBtn.classList.contains('has-state') !== dot) moreBtn.classList.toggle('has-state', dot);
     const label = T[three ? 'more.label.fold3' : 'more.label'];
     if (moreBtn.getAttribute('aria-label') !== label) { moreBtn.setAttribute('aria-label', label); moreBtn.setAttribute('title', label); }
@@ -189,16 +189,18 @@
   // The lock is UI state only (sketch.js sizeLockIsOpen(): open while the area is not square or after a click; never saved). Locked = aria-pressed "true" (closed padlock), the height stepper aria-disabled and
   // showing X. Unlocked: the height is its own count. From 768px both sit in #nav-form behind the width stepper; on the phone (html.ph) they are moved into #more-form (#ov-size), and back.
   const lockBtn = $('#btn-size-lock'), yStepper = $('#nav-size-y-stepper'), ovSize = $('#ov-size'), ovSizeSection = $('#ov-size-section');
-  const sizeHome = yStepper.nextSibling;   // the divider behind the height stepper: the place to go back to
-  UI.guard(lockBtn, function () { window.sizeLockToggle(); });
+  const sizeHome = yStepper ? yStepper.nextSibling : null;   // the divider behind the height stepper: the place to go back to
+  if (lockBtn) UI.guard(lockBtn, function () { window.sizeLockToggle(); });
   function placeSizeControls() {
+    if (!lockBtn || !yStepper || !ovSize) return;   // a page (or a test world) without the controls
     const phone = document.documentElement.classList.contains('ph');
     if (phone && lockBtn.parentNode !== ovSize) { ovSize.appendChild(lockBtn); ovSize.appendChild(yStepper); ovSizeSection.hidden = false; }
     else if (!phone && lockBtn.parentNode === ovSize) { sizeHome.parentNode.insertBefore(lockBtn, sizeHome); sizeHome.parentNode.insertBefore(yStepper, sizeHome); ovSizeSection.hidden = true; }
   }
   placeSizeControls();
-  new MutationObserver(placeSizeControls).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  if (lockBtn && yStepper && typeof MutationObserver === 'function') new MutationObserver(placeSizeControls).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
   function syncSize() {
+    if (!lockBtn || !yStepper || !sizeYInput) return;
     const open = typeof sizeLockIsOpen === 'function' && sizeLockIsOpen();
     const pressed = open ? 'false' : 'true';
     if (lockBtn.getAttribute('aria-pressed') !== pressed) lockBtn.setAttribute('aria-pressed', pressed);
