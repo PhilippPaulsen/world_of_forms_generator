@@ -85,7 +85,13 @@
      --canvas-size stays the width of the panels under the canvas (face colours, timeline, morph, strip): it is NOT the canvas width any more. The phone layout (html.ph) defines its own pair below. */
   --canvas-ratio: 1;
   --canvas-avail: calc(100vw - 2 * var(--gutter));
-  --canvas-w: min(calc(var(--canvas-max) * max(1, var(--canvas-ratio))), var(--canvas-avail));
+  --canvas-w0: min(calc(var(--canvas-max) * max(1, var(--canvas-ratio))), var(--canvas-avail));
+  /* Task 078b: a NON-square canvas is also limited by the window height: --canvas-hfit = window height - the head above the canvas - the --gap below it (sketch.js canvasFitSync, set only for a non-square canvas,
+     updated on resize / orientationchange); --canvas-wu = the sketch width W in units. The display scale s = w / W never goes under 0.4 (then the page scrolls as before). Square: the defaults below
+     (100000px, 0) make both terms inert: --canvas-w = --canvas-w0. The phone layout (html.ph) defines its own --canvas-w / --canvas-h. */
+  --canvas-hfit: 100000px;
+  --canvas-wu: 0;
+  --canvas-w: min(var(--canvas-w0), max(calc(var(--canvas-hfit) * var(--canvas-ratio)), calc(0.4px * var(--canvas-wu))));
   --canvas-h: calc(var(--canvas-w) / var(--canvas-ratio));
 }
 /* from 768px the canvas sits in the middle grid column: what is left of the row after the two rails and the gaps */
