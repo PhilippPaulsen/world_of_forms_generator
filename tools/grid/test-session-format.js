@@ -1,6 +1,5 @@
 // Task 079 (B3): a pattern on an X x Y area (X != Y) survives the session round trip, the JSON / SVG export and the transport (link and paste); X = Y stays as it was.
-//   node tools/grid/test-session-format.js     CORE_SESSION_JS / ... not used; mutated copies of the sources go in through the env of the loaders:
-//   STATE_JS, SESSION_JS, SESSION_APPLY_JS (core, via tools/session/fixtures.js), SKETCH_JS (the transport parsers cut out of sketch.js), EXPORT_JS, ORBITS_JS (core via the render harness override below)
+//   node tools/grid/test-session-format.js     mutated copies (sabotage runs): STATE_JS, SESSION_JS, SESSION_APPLY_JS, EXPORT_JS (tools/session/fixtures.js), ORBITS_JS (the render harness override), SKETCH_JS (the transport parsers cut out of sketch.js)
 //   1. snapshot: size {x, y} only for X != Y (none for a square), validated; plan: the canvas must belong to the size, a square snapshot loads into a non-square page
 //   2. round trip: 3 shapes x ordnung 1..3 x lage 1/2 x 6 formats (3/5, 5/3, 5/7, 3/9, 7/8 triangle, 8/7 hexagon): snapshot -> apply into another world = identical snapshot AND export, with layers, free points,
 //      colours (and a timeline); the target's canvas, X, Y and the canvas hook follow; invalid sizes are refused without a mutation
@@ -20,7 +19,8 @@ const wantW = (sh, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(
 const wantH = (sh, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(X, Y); return Y < X ? 600 : sh === 'triangle' ? Y * R3 / 2 * e : Y * e; };
 const HOOK = 'var hookCalls = 0; var canvasSizeSync = function () { width = canvasW; height = canvasH; hookCalls++; };';
 const worlds = {};
-const W = (shape) => { if (!worlds[shape]) { worlds[shape] = H.makeRenderWorld(shape, 3, 3, MODE); worlds[shape].set(HOOK); worlds[shape].sb.document = { body: {} }; worlds[shape].sb.getComputedStyle = () => ({ getPropertyValue: () => '#ffffff' }); } return worlds[shape]; };
+const FILES = process.env.ORBITS_JS ? { 'core/orbits.js': process.env.ORBITS_JS } : undefined;   // sabotage runs (the other core copies go in through the env of tools/session/fixtures.js)
+const W = (shape) => { if (!worlds[shape]) { worlds[shape] = H.makeRenderWorld(shape, 3, 3, MODE, FILES); worlds[shape].set(HOOK); worlds[shape].sb.document = { body: {} }; worlds[shape].sb.getComputedStyle = () => ({ getPropertyValue: () => '#ffffff' }); } return worlds[shape]; };
 const setup = (w, shape, ord, lage, X, Y) => w.set(`currentShape = ${J(shape)}; projectGridSpec(${J({ shape, ordnung: ord, lage })}); shapeSizeFactorX = null; shapeSizeFactorY = null; canvasW = 600; canvasH = 600; width = 600; height = 600; setGridSize(${X}, ${Y}); symmetryMode = ${J(MODE)}; connections = []; redoStack = []; baseNetTransform = null; additionalLayers = []; timeline = null; altNetSeed = null; activeLayer = 'base'; baseFaceAssignments = new Map(); baseFacePalette = null; baseFaceAnchor = null; baseLastHarmonyType = null; baseLastSelection = null; baseDistributionStrategy = null; spatialMorph = { enabled: false, mode: 'linear', angleDeg: 0 }; showNodes = true; showFaces = false; freeEndpointsEnabled = false; lineColor = '#000000'; curveType = { kind: 'straight' }; rebuildGrid(currentShape);`);
 const addLayer = (w, o) => w.set(`(function () {
     const layer = { connections: ${J(o.connections || [])}, redoStack: [], offsetX: ${o.offsetX || 0}, offsetY: ${o.offsetY || 0}, rotation: ${o.rotation || 0}, shape: ${J(o.shape)}, symmetryMode: ${J(MODE)}, enabled: ${o.enabled !== false}, showFaces: false, shapeSizeFactor: ${o.size} };
@@ -56,7 +56,7 @@ const state = (w) => w.get('JSON.stringify([canvasW, canvasH, shapeSizeFactor, s
             if (!(ap && ap.ok)) { bad.ok++; if (!bad.first) bad.first = [shape, lage, ord, X, Y, J(ap).slice(0, 300), String(J(S.planFor(target, snap))).slice(0, 400)]; continue; }
             if (!S.safe(() => S.same(S.snapOf(target, tui), snap))) bad.snap++;
             if (!S.safe(() => S.same(S.exportOf(target), exp))) bad.exp++;
-            if (target.get('canvasW') !== wantW(shape, X, Y) || target.get('canvasH') !== wantH(shape, X, Y) || target.get('width') !== wantW(shape, X, Y) || target.get('height') !== wantH(shape, X, Y)) bad.canvas++;
+            if (target.get('canvasW') !== wantW(shape, X, Y) || target.get('canvasH') !== wantH(shape, X, Y) || target.get("typeof width === 'undefined' ? -1 : width") !== wantW(shape, X, Y) || target.get("typeof height === 'undefined' ? -1 : height") !== wantH(shape, X, Y)) bad.canvas++;
             if (target.get('[gridSizeX(), gridSizeY(), shapeSizeFactor, gridIsSquare()]').join() !== [X, Y, Math.min(X, Y), false].join()) bad.size++;
             if (target.get('hookCalls') < 1) bad.hook++;
             if (hooks.stale) bad.snap++;
