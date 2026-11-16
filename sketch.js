@@ -163,6 +163,7 @@ function setup() {
     createCanvas(canvasW, canvasH).parent('canvas-container');
     noLoop();
     installTapInput();
+    window.addEventListener('resize', canvasFitSync); window.addEventListener('orientationchange', canvasFitSync);   // task 078b
     window.canvasSizeSync = canvasSizeSync;   // task 078: core/state.js calls it when canvasW / canvasH changed (a size, format or shape change of a non-square base)
 
     // Shape selection via Icons (Common class .shape-icon-btn)
@@ -5298,6 +5299,17 @@ function canvasSizeSync() {
     }
     const root = document.documentElement;   // style.css --canvas-ratio = W / H; absent (the CSS default 1) for a square canvas
     if (canvasW === canvasH) root.style.removeProperty('--canvas-ratio'); else root.style.setProperty('--canvas-ratio', String(canvasW / canvasH));
+    canvasFitSync();
+}
+// Task 078b: the window-height limit of a NON-square canvas (style.css --canvas-hfit / --canvas-wu). The head above the canvas is MEASURED (the container's top in the document: the nav rows differ per width,
+// a fixed number would not), the window height is innerHeight; a square canvas removes both variables, so nothing about it changes. Runs from canvasSizeSync() and on resize / orientationchange.
+function canvasFitSync() {
+    const root = document.documentElement, box = document.querySelector('#canvas-container');
+    if (canvasW === canvasH || !box) { root.style.removeProperty('--canvas-hfit'); root.style.removeProperty('--canvas-wu'); return; }
+    const gap = parseFloat(getComputedStyle(root).getPropertyValue('--gap')) || 8;
+    const head = box.getBoundingClientRect().top + window.scrollY;
+    root.style.setProperty('--canvas-hfit', Math.max(0, window.innerHeight - head - gap) + 'px');
+    root.style.setProperty('--canvas-wu', String(canvasW));
 }
 
 // client pixels -> sketch units, the way p5 does it for mouseX / mouseY (getMousePos in p5 1.9.0: (clientX - rect.left) / (canvas.scrollWidth / width))
