@@ -59,7 +59,7 @@ check('(2) the edge depends on min(X, Y) only', shapes.every(sh => [1, 2, 3].eve
 
 // (3) rejection without mutation
 ev(S, "currentShape = 'square'; projectGridSpec({ shape: 'square', ordnung: 2, lage: 1 }); setGridSize(3, 5);");
-const snap = () => ev(S, 'JSON.stringify({canvasW, canvasH, shapeSizeFactor, shapeSizeFactorY, nodes, centroid, outerCorners, gridSpec, nodeCount, gridRevision, connections, additionalLayers})');
+const snap = () => ev(S, 'JSON.stringify({canvasW, canvasH, shapeSizeFactor, shapeSizeFactorX, shapeSizeFactorY, nodes, centroid, outerCorners, gridSpec, nodeCount, gridRevision, connections, additionalLayers})');
 const before = snap();
 const bad = [[1, 4], [4, 1], [2, 7], [9, 2], [1, 9], [9, 1], [0, 1], [1, 0], [10, 10], [3, 10], [1.5, 1.5], [3, 5.5], [NaN, 3], ['3', 3], [undefined, 3], [-1, -1]];
 const thrown = bad.map(([x, y]) => { try { S.__a = x; S.__b = y; ev(S, 'setGridSize(__a, __b)'); return false; } catch (e) { return /setGridSize/.test(e.message); } });
@@ -78,12 +78,12 @@ for (const sh of shapes) for (let c = 1; c <= 4; c++) for (let sf = 1; sf <= 9; 
 check('(4) the three builders at X = Y: byte-equal to ' + BASE + ' with and without shortSide 600 (' + n4 + ' grids)', bad4 === 0, bad4);
 let bad4b = 0, n4b = 0;
 for (const sh of shapes) for (let sf = 1; sf <= 9; sf++) {
-    ev(S, `currentShape = '${sh}'; projectGridSpec({ shape: '${sh}', ordnung: 3, lage: 1 }); shapeSizeFactor = ${sf}; shapeSizeFactorY = null; canvasW = 600; canvasH = 600; rebuildGrid(currentShape);`);
+    ev(S, `currentShape = '${sh}'; projectGridSpec({ shape: '${sh}', ordnung: 3, lage: 1 }); shapeSizeFactor = ${sf}; shapeSizeFactorX = null; shapeSizeFactorY = null; canvasW = 600; canvasH = 600; rebuildGrid(currentShape);`);
     const g = JSON.stringify(ev(S, '({ nodes, centroid, outerCorners })'));   // ordnung 3 = legacy count 4 (triangle/square), 3 (hex)
     const legacyC = sh === 'hex' ? 3 : 4, o2 = JSON.stringify(ev(O, `build${{ triangle: 'Triangle', square: 'Square', hex: 'Hex' }[sh]}Grid(${legacyC}, ${sf}, 600, 600)`));
     n4b++; if (g !== o2) bad4b++;
 }
-check('(4) rebuildGrid at X = Y (shapeSizeFactorY null): byte-equal to the old builders (' + n4b + ' grids)', bad4b === 0, bad4b);
+check('(4) rebuildGrid at X = Y (shapeSizeFactorX, Y null): byte-equal to the old builders (' + n4b + ' grids)', bad4b === 0, bad4b);
 check('(4) hexagon X = Y: the cell height is 600 / S as before (1/1 .. 9/9)', [1, 2, 3, 4, 5, 6, 7, 8, 9].every(sf => { ev(S, `currentShape = 'hex'; projectGridSpec({ shape: 'hex', ordnung: 2, lage: 1 }); setGridSize(${sf}, ${sf})`); const oc = JSON.parse(ev(S, 'JSON.stringify(outerCorners)')); return Math.abs(oc[4].y - oc[1].y - 600 / sf) < 1e-9 && ev(S, 'canvasW') === 600 && ev(S, 'canvasH') === 600; }));
 check('(4) a hexagon on a 900 x 500 canvas: the edge divides the width now (the old canvasH division is gone)', (() => { const a = JSON.parse(JSON.stringify(ev(S, 'buildHexGrid(2, 3, 900, 500).outerCorners'))); return Math.abs(a[4].y - a[1].y - 900 / 3) < 1e-9; })());
 

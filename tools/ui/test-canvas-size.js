@@ -44,14 +44,15 @@ for (const blk of PHONES.concat(DESKS)) top = top.replace(blk, '');
 const boxRules = PR.filter(r => r.sel.includes(BOX));
 const box = boxRules.length === 1 ? decls(boxRules[0].body) : {};
 
-const BASIS = 'min(var(--canvas-size), 100%)';
-const MARGIN = 'calc((100% - min(var(--canvas-size), 100%)) / 2)';
+// task 078: the box is --canvas-w x --canvas-h (= --canvas-size x --canvas-size while the canvas is square, pixel for pixel); --canvas-size is the panels' width
+const BASIS = 'min(var(--canvas-w), 100%)';
+const MARGIN = 'calc((100% - min(var(--canvas-w), 100%)) / 2)';
 
 console.log('== the rule below 768px ==');
 T('rule', () => {
     check('exactly one rule for the canvas container in all @media (max-width: 767px) blocks', boxRules.length === 1, boxRules.length + ' rule(s) in ' + PHONES.length + ' phone block(s)');
-    check('flex: 0 0 min(var(--canvas-size), 100%) - a basis the size of the canvas, never the whole row (and no shrink)', box.flex === '0 0 ' + BASIS, box.flex);
-    check('margin-left and margin-right are both half of what is left of the row: calc((100% - min(var(--canvas-size), 100%)) / 2)', box['margin-left'] === MARGIN && box['margin-right'] === MARGIN, box['margin-left'] + ' | ' + box['margin-right']);
+    check('flex: 0 0 min(var(--canvas-w), 100%) - a basis the size of the canvas, never the whole row (and no shrink)', box.flex === '0 0 ' + BASIS, box.flex);
+    check('margin-left and margin-right are both half of what is left of the row: calc((100% - min(var(--canvas-w), 100%)) / 2)', box['margin-left'] === MARGIN && box['margin-right'] === MARGIN, box['margin-left'] + ' | ' + box['margin-right']);
     check('order: 0 stays (test-rail-groups.js: the canvas keeps order 0 on the phone)', box.order === '0', box.order);
     check('the rule sets nothing else (no width, height, max-width, margin shorthand, aspect-ratio that could undo the square)', JSON.stringify(Object.keys(box).sort()) === JSON.stringify(['flex', 'margin-left', 'margin-right', 'order']), Object.keys(box).join(','));
     check('the old rule (flex: 0 0 100% on the container) is gone', !PR.some(r => r.sel.includes(BOX) && /flex:\s*0 0 100%/.test(r.body)) && !/#canvas-container[^{}]*\{[^{}]*flex:\s*0 0 100%/.test(top));
@@ -63,7 +64,7 @@ T('token', () => {
     check('--canvas-max is 560px and --canvas-size is min(var(--canvas-max), calc(100vw - 2 * var(--gutter)))', /--canvas-max:\s*560px/.test(css) && /--canvas-size:\s*min\(var\(--canvas-max\),\s*calc\(100vw - 2 \* var\(--gutter\)\)\)/.test(css));
     check('--gutter is 16px (the row\'s side padding below 768px is var(--gutter): 100vw - 32px is the row)', /--gutter:\s*16px/.test(css) && /\.canvas-row\s*\{[^{}]*padding:\s*0 var\(--gutter\)/.test(top));
     const inline = (HTML.match(/#canvas-container\s*\{[^{}]*\}/g) || []).join('\n');
-    check('index.html: the container is --canvas-size wide AND high (a square), flex: none, margin var(--gap) 0', /width:\s*var\(--canvas-size\)/.test(inline) && /height:\s*var\(--canvas-size\)/.test(inline) && /flex:\s*none/.test(inline) && /margin:\s*var\(--gap\) 0/.test(inline));
+    check('index.html: the container is --canvas-w wide and --canvas-h high (task 078; a square of --canvas-size while the canvas is square), flex: none, margin var(--gap) 0', /width:\s*var\(--canvas-w\)/.test(inline) && /height:\s*var\(--canvas-h\)/.test(inline) && /flex:\s*none/.test(inline) && /margin:\s*var\(--gap\) 0/.test(inline));
     check('index.html: the canvas fills its container (width and height 100%), so a square container is a square canvas', /#canvas-container canvas\s*\{[^{}]*width:\s*100% !important[^{}]*height:\s*100% !important/.test(HTML));
     check('from 768px the container sits in the grid\'s middle column (grid-column: 2) and the phone rule is not repeated there', DR.some(r => r.sel.includes(BOX)) === false && /\.canvas-row #canvas-container\s*\{[^{}]*grid-column:\s*2/.test(top));
 });
