@@ -146,6 +146,7 @@ function buildExportData(crossLayerData) {
         meta: {
             shapeType: currentShape,
             shapeSizeFactor,
+            ...(typeof shapeSizeFactorX !== 'undefined' && shapeSizeFactorX !== null && shapeSizeFactorY !== null && shapeSizeFactorX !== shapeSizeFactorY ? { size: { x: shapeSizeFactorX, y: shapeSizeFactorY } } : {}),   // task 079: only a non-square base (additive; X = Y stays byte-equal)
             grid: _exportGrid(baseSpec),
             symmetryMode,
             // Roadmap 1.5-B: this object-shorthand already captured

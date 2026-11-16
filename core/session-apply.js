@@ -32,27 +32,28 @@
  *
  * spatialMorph (the morph parameters) is replaced as a whole like every other global; a snapshot without the block restores the defaults.
  *
- * NEVER written by apply (not part of a snapshot): canvasW / canvasH (the canvas already exists; the plan checks them),
- * svgPathCollector / segmentCollector / activeNetWarp (per-redraw render collectors).
+ * Task 079: a non-square base: apply writes shapeSizeFactorX / Y (null = square) and canvasW / canvasH from the snapshot (the plan checked that the canvas belongs to the size) and asks the canvas hook
+ * (canvasSizeSync: resizeCanvas, the fill buffer, --canvas-ratio) to follow; a rollback restores both and asks again.
+ * NEVER written by apply (not part of a snapshot): svgPathCollector / segmentCollector / activeNetWarp (per-redraw render collectors).
  *
  * Depends on: core/state.js globals, core/facecolor.js setFaceAssignment(), core/session.js. Browser load order: after core/session.js.
  */
 
 // every global apply writes, in the order it writes them (Phase B). test-session-apply.js pins this list against the `let`s of core/state.js.
 const SESSION_APPLY_CAPTURED = Object.freeze([
-    'currentShape', 'gridSpec', 'shapeSizeFactor', 'symmetryMode', 'curveType', 'lineColor', 'showNodes', 'showFaces', 'freeEndpointsEnabled',
+    'currentShape', 'gridSpec', 'shapeSizeFactor', 'shapeSizeFactorX', 'shapeSizeFactorY', 'canvasW', 'canvasH', 'symmetryMode', 'curveType', 'lineColor', 'showNodes', 'showFaces', 'freeEndpointsEnabled',
     'nodes', 'centroid', 'outerCorners', 'altNetSeed',
     'connections', 'redoStack', 'baseFaceAssignments', 'baseFacePalette', 'baseFaceAnchor', 'baseLastHarmonyType', 'baseLastSelection', 'baseDistributionStrategy',
     'additionalLayers', 'timeline', 'activeLayer',
     'baseNetTransform', 'baseNetAnimation', 'faceHover', 'spatialMorph', 'lineStyle',
 ]);
 // the `let`s of core/state.js apply deliberately leaves alone (gridRevision: a monotonic counter of base-grid rebuilds - a rollback must never rewind it, or a revision number could name two different grids; faceSelected: the chip view's outline of the selected trail, UI state it re-derives from the restored trails on its next tick; a rollback must not bring back a key of the old pattern)
-const SESSION_APPLY_UNTOUCHED = Object.freeze(['nodeCount', 'canvasW', 'canvasH', 'svgPathCollector', 'segmentCollector', 'activeNetWarp', 'faceSelected', 'gridRevision']);
+const SESSION_APPLY_UNTOUCHED = Object.freeze(['nodeCount', 'svgPathCollector', 'segmentCollector', 'activeNetWarp', 'faceSelected', 'gridRevision']);
 
 // The live references, by name (NOT copies): enough to undo an apply, and to check by identity that an undo was complete.
 function captureSessionGlobals() {
     return {
-        currentShape, gridSpec, shapeSizeFactor, symmetryMode, curveType, lineColor, showNodes, showFaces, freeEndpointsEnabled,
+        currentShape, gridSpec, shapeSizeFactor, shapeSizeFactorX, shapeSizeFactorY, canvasW, canvasH, symmetryMode, curveType, lineColor, showNodes, showFaces, freeEndpointsEnabled,
         nodes, centroid, outerCorners, altNetSeed,
         connections, redoStack, baseFaceAssignments, baseFacePalette, baseFaceAnchor, baseLastHarmonyType, baseLastSelection, baseDistributionStrategy,
         additionalLayers, timeline, activeLayer,
@@ -60,13 +61,14 @@ function captureSessionGlobals() {
     };
 }
 function _restoreSessionGlobals(c) {
-    currentShape = c.currentShape; projectGridSpec(c.gridSpec); shapeSizeFactor = c.shapeSizeFactor; symmetryMode = c.symmetryMode; curveType = c.curveType;
+    currentShape = c.currentShape; projectGridSpec(c.gridSpec); shapeSizeFactor = c.shapeSizeFactor; shapeSizeFactorX = c.shapeSizeFactorX; shapeSizeFactorY = c.shapeSizeFactorY; canvasW = c.canvasW; canvasH = c.canvasH; symmetryMode = c.symmetryMode; curveType = c.curveType;
     lineColor = c.lineColor; showNodes = c.showNodes; showFaces = c.showFaces; freeEndpointsEnabled = c.freeEndpointsEnabled;
     nodes = c.nodes; centroid = c.centroid; outerCorners = c.outerCorners; altNetSeed = c.altNetSeed;
     connections = c.connections; redoStack = c.redoStack; baseFaceAssignments = c.baseFaceAssignments; baseFacePalette = c.baseFacePalette;
     baseFaceAnchor = c.baseFaceAnchor; baseLastHarmonyType = c.baseLastHarmonyType; baseLastSelection = c.baseLastSelection; baseDistributionStrategy = c.baseDistributionStrategy;
     additionalLayers = c.additionalLayers; timeline = c.timeline; activeLayer = c.activeLayer;
     baseNetTransform = c.baseNetTransform; baseNetAnimation = c.baseNetAnimation; faceHover = c.faceHover; spatialMorph = c.spatialMorph; lineStyle = c.lineStyle;
+    if (typeof canvasSizeSync === 'function') canvasSizeSync();   // task 079: the p5 canvas follows the restored size (a no-op when it did not change)
 }
 
 // The build size of a layer's nodes. A layer animation overwrites layer.shapeSizeFactor frame by frame WITHOUT rebuilding the nodes
@@ -83,7 +85,7 @@ function _layerGridFingerprint(layer, f) {
     SESSION_COLLECT_STATS.gridBuilds++;
     const spec = layerGridSpecOf(layer);
     // task 067: a lage-2 layer is rebuilt with its lage-2 nodes (u, v too); lage 1: the call it was
-    const lg = spec.lage === 2 ? layerGridForSpec(outerCorners, centroid, currentShape, shapeSizeFactor, f, spec, layer.shape, canvasW, canvasH) : layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, f, layer.nodeCount, layer.shape, canvasW, canvasH);
+    const lg = spec.lage === 2 ? layerGridForSpec(outerCorners, centroid, currentShape, shapeSizeFactor, f, spec, layer.shape, canvasW, canvasH, gridShortSideArg()) : layerGrid(outerCorners, centroid, currentShape, shapeSizeFactor, f, layer.nodeCount, layer.shape, canvasW, canvasH, gridShortSideArg());
     return sessionGridFingerprint(lg.nodes, spec);
 }
 function _sameFingerprint(a, b) { return a.count === b.count && a.hash === b.hash; }
@@ -123,7 +125,7 @@ function collectSessionState(symmetryUi, opts) {
         });
     }
     return {
-        currentShape, gridSpec, shapeSizeFactor, canvasW, canvasH, symmetryMode,
+        currentShape, gridSpec, shapeSizeFactor, shapeSizeFactorX, shapeSizeFactorY, canvasW, canvasH, symmetryMode,
         symmetryCategory: symmetryUi && typeof symmetryUi.category === 'function' ? symmetryUi.category() : null,
         symmetryFold: symmetryUi && typeof symmetryUi.fold === 'function' ? symmetryUi.fold() : null,
         curveType, lineColor, showNodes, showFaces, freeEndpointsEnabled, altNetSeed, baseNetTransform, spatialMorph, lineStyle,
@@ -229,6 +231,8 @@ function applySessionSnapshot(snapshot, plan, hooks, opts) {
         const st = snapshot.settings;
         step('B:settings');
         currentShape = st.shape; projectGridSpec(Object.assign({}, st.grid)); shapeSizeFactor = st.shapeSizeFactor; symmetryMode = st.symmetryMode; curveType = built.curveType;
+        shapeSizeFactorX = st.size ? st.size.x : null; shapeSizeFactorY = st.size ? st.size.y : null; canvasW = st.canvas.w; canvasH = st.canvas.h;   // task 079 (the plan checked that the canvas belongs to the size)
+        if (typeof canvasSizeSync === 'function') canvasSizeSync();
         lineColor = st.lineColor; showNodes = st.showNodes; showFaces = st.showFaces; freeEndpointsEnabled = st.freeEndpointsEnabled;
         step('B:grid');
         nodes = built.base.nodes; centroid = built.base.centroid; outerCorners = built.base.outerCorners; altNetSeed = built.altNetSeed;

@@ -59,6 +59,8 @@ function _sObj(x) { return typeof x === 'object' && x !== null && !Array.isArray
 function _sNum(x) { return typeof x === 'number' && Number.isFinite(x); }
 function _sInt(x) { return Number.isInteger(x); }
 function _sPos(x) { return Number.isInteger(x) && x >= 1; }
+// task 079: a canvas side of a non-square area is a real number (the long side of a triangle / hexagon area is a multiple of sqrt(3)/2 * e), not an integer
+function _sDim(x) { return _sNum(x) && x >= 1; }
 function _sCoord(x) { return _sNum(x) && Math.abs(x) <= 1e6; }
 function _sStr(x, max) { return typeof x === 'string' && x.length <= (max || 256); }
 // the UI's node-count ceiling per shape (core/forms.js maxNodeCountFor), or a coarse bound when that file is not loaded
@@ -182,6 +184,7 @@ function buildSessionSnapshot(s, now) {
         settings: Object.assign({
             shape: s.currentShape, grid: _snapGrid(baseSpec), shapeSizeFactor: s.shapeSizeFactor,
             canvas: { w: s.canvasW, h: s.canvasH },
+            ...(s.shapeSizeFactorX != null && s.shapeSizeFactorY != null && s.shapeSizeFactorX !== s.shapeSizeFactorY ? { size: { x: s.shapeSizeFactorX, y: s.shapeSizeFactorY } } : {}),   // task 079: only a non-square base (additive)
             symmetryMode: s.symmetryMode,
             symmetryCategory: s.symmetryCategory === undefined ? null : s.symmetryCategory,
             symmetryFold: s.symmetryFold === undefined ? null : s.symmetryFold,
@@ -363,7 +366,7 @@ function validateSession(input, opts) {
         if (!SESSION_SHAPES.includes(st.shape)) throw 'settings.shape must be triangle, square or hex';
         const baseGrid = _vGrid(st.grid, st.shape, 'settings.grid', opts);
         if (!_sNum(st.shapeSizeFactor) || st.shapeSizeFactor <= 0 || st.shapeSizeFactor > 100) throw 'settings.shapeSizeFactor must be a positive number';
-        if (!_sObj(st.canvas) || !_sPos(st.canvas.w) || !_sPos(st.canvas.h) || st.canvas.w > 10000 || st.canvas.h > 10000) throw 'settings.canvas must be {w, h}';
+        if (!_sObj(st.canvas) || !_sDim(st.canvas.w) || !_sDim(st.canvas.h) || st.canvas.w > 10000 || st.canvas.h > 10000) throw 'settings.canvas must be {w, h}';
         if (!SESSION_SYMMETRY_MODES.includes(st.symmetryMode)) throw 'settings.symmetryMode must be one of ' + SESSION_SYMMETRY_MODES.join(', ');
         if (!(st.symmetryCategory === null || st.symmetryCategory === undefined || _sStr(st.symmetryCategory, 32))) throw 'settings.symmetryCategory must be null or a short string';
         if (!(st.symmetryFold === null || st.symmetryFold === undefined || st.symmetryFold === 3 || st.symmetryFold === 6)) throw 'settings.symmetryFold must be null, 3 or 6';
@@ -379,7 +382,17 @@ function validateSession(input, opts) {
             altNetSeed = { p: { x: a.p.x, y: a.p.y }, q: { x: a.q.x, y: a.q.y }, side: a.side, n: a.n };
         }
         const netTransform = st.netTransform === null || st.netTransform === undefined ? null : _vNetSpec(st.netTransform, 'settings.netTransform');
-        const settings = { shape: st.shape, grid: _snapGrid(baseGrid), shapeSizeFactor: st.shapeSizeFactor, canvas: { w: st.canvas.w, h: st.canvas.h },
+        // task 079: size {x, y} is additive and optional (absent = square); valid only as a non-square pair of integers 1..9 within 1 : 3 whose smaller one is shapeSizeFactor; x = y is read as square
+        let size = null;
+        if (st.size !== undefined && st.size !== null) {
+            if (!_sObj(st.size) || !Number.isInteger(st.size.x) || !Number.isInteger(st.size.y)) throw 'settings.size must be {x, y} of two integers';
+            if (typeof validateGridSize === 'function') { const vs = validateGridSize(st.size.x, st.size.y); if (!vs.ok) throw 'settings.size: ' + vs.error; }
+            if (st.size.x !== st.size.y) {
+                if (st.shapeSizeFactor !== Math.min(st.size.x, st.size.y)) throw 'settings.size does not match shapeSizeFactor (the smaller count)';
+                size = { x: st.size.x, y: st.size.y };
+            }
+        }
+        const settings = { shape: st.shape, grid: _snapGrid(baseGrid), shapeSizeFactor: st.shapeSizeFactor, canvas: { w: st.canvas.w, h: st.canvas.h }, ...(size ? { size } : {}),
             symmetryMode: st.symmetryMode, symmetryCategory: st.symmetryCategory === undefined ? null : st.symmetryCategory, symmetryFold: st.symmetryFold === undefined ? null : st.symmetryFold,
             curveType, lineColor: st.lineColor, showNodes: st.showNodes, showFaces: st.showFaces, freeEndpointsEnabled: st.freeEndpointsEnabled, altNetSeed, netTransform };
         // spatial morph (morph stage b): additive, optional. Absent, malformed or equal to the defaults -> no key (the restore then sets the defaults); a bad field falls back to
@@ -464,7 +477,16 @@ function planSessionRestore(snapshot, live) {
             || typeof completeEdgeToRegularPolygon !== 'function' || typeof _subdivideTriangleInterior !== 'function' || typeof _subdivideSquareInterior !== 'function'
             || typeof _subdivideHexInterior !== 'function') return { ok: false, code: 'plan-error', detail: 'core/forms.js is not loaded' };
         const st = snapshot.settings;
-        if (!live || live.canvasW !== st.canvas.w || live.canvasH !== st.canvas.h) return { ok: false, code: 'canvas-mismatch', detail: `saved canvas ${st.canvas.w}x${st.canvas.h}, live ${live && live.canvasW}x${live && live.canvasH}` };
+        // task 079: a non-square snapshot (size {x, y}) carries its own canvas: it must be the area of that size for the shape (apply sets the canvas); a square one needs the live canvas as before, or - when the live
+        // canvas is non-square - the plain 600 x 600 that apply then sets
+        const shortSide = st.size ? GRID_SHORT_SIDE : undefined;
+        if (st.size) {
+            const wantW = gridWidth(st.shape, st.size.x, st.size.y), wantH = gridHeight(st.shape, st.size.x, st.size.y);
+            if (st.canvas.w !== wantW || st.canvas.h !== wantH) return { ok: false, code: 'canvas-mismatch', detail: `saved canvas ${st.canvas.w}x${st.canvas.h} does not belong to size ${st.size.x}/${st.size.y} (${wantW}x${wantH})` };
+        } else if (!live || live.canvasW !== st.canvas.w || live.canvasH !== st.canvas.h) {
+            const squareFromNonSquare = live && live.canvasW !== live.canvasH && st.canvas.w === GRID_SHORT_SIDE && st.canvas.h === GRID_SHORT_SIDE;
+            if (!squareFromNonSquare) return { ok: false, code: 'canvas-mismatch', detail: `saved canvas ${st.canvas.w}x${st.canvas.h}, live ${live && live.canvasW}x${live && live.canvasH}` };
+        }
         const baseSpec = st.grid;
         // lage 2 keeps u, v on every grid node (the fingerprint hashes them); lage 1 keeps {id, x, y} exactly as before
         const gridCopy = (nds, spec) => nds.map(n => spec.lage === 2 ? { id: n.id, x: n.x, y: n.y, u: n.u, v: n.v } : { id: n.id, x: n.x, y: n.y });
@@ -495,7 +517,7 @@ function planSessionRestore(snapshot, live) {
         } else {
             if (st.shape !== 'triangle' && st.shape !== 'square' && st.shape !== 'hex') return { ok: false, code: 'plan-error', detail: 'unknown shape' };
             const build = st.shape === 'triangle' ? buildTriangleGrid : st.shape === 'square' ? buildSquareGrid : buildHexGrid;
-            grid = build(toLegacy(baseSpec), st.shapeSizeFactor, st.canvas.w, st.canvas.h);
+            grid = build(toLegacy(baseSpec), st.shapeSizeFactor, st.canvas.w, st.canvas.h, undefined, shortSide);
             if (baseSpec.lage === 2) grid = { nodes: gridNodesWithUV(grid, baseSpec), centroid: grid.centroid, outerCorners: grid.outerCorners };
         }
         const base = sheetNodes(grid.nodes, snapshot.base, 'base', baseSpec);
@@ -503,7 +525,7 @@ function planSessionRestore(snapshot, live) {
         const plan = { base: { nodes: base.nodes, centroid: { x: grid.centroid.x, y: grid.centroid.y }, outerCorners: grid.outerCorners.map(c => ({ x: c.x, y: c.y })) }, layers: [] };
         for (let i = 0; i < snapshot.layers.length; i++) {
             const l = snapshot.layers[i];
-            const lg = layerGridForSpec(grid.outerCorners, grid.centroid, st.shape, st.shapeSizeFactor, l.shapeSizeFactor, l.grid, l.shape, st.canvas.w, st.canvas.h);
+            const lg = layerGridForSpec(grid.outerCorners, grid.centroid, st.shape, st.shapeSizeFactor, l.shapeSizeFactor, l.grid, l.shape, st.canvas.w, st.canvas.h, shortSide);
             const r = sheetNodes(lg.nodes, l, 'layers[' + i + ']', l.grid);
             if (r.error) return r.error;
             plan.layers.push({ nodes: r.nodes, centroid: { x: lg.centroid.x, y: lg.centroid.y }, outerCorners: lg.outerCorners.map(c => ({ x: c.x, y: c.y })) });
