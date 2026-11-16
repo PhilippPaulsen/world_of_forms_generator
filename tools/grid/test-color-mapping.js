@@ -99,4 +99,48 @@ for (const c of B) {
     w.sb.__a = oldV; w.sb.__b = newU; m = w.get('_mapTrailKeys(__a, __b, __id)');
     check('(map) a tie in the votes goes to the smaller old key (A)', m.get('A') === 'N' && !m.has('B'), J([...m.entries()]));
 }
+// ---- no face that was carried before is lost now: the old _mapTrailKeys (the tree before 083) against the new one, face by face, over a grid of patterns and size changes -------------------------------------------
+{
+    const cp = require('child_process'), fs = require('fs');
+    let oldFn = null;
+    try { oldFn = cp.execFileSync('git', ['show', (process.env.BASE083 || 'e463740e') + ':core/state.js'], { cwd: ROOT, encoding: 'utf8' }).match(/function _mapTrailKeys\([\s\S]*?\n\}\n/)[0].replace('function _mapTrailKeys', 'function _mapTrailKeysOld'); } catch (e) { oldFn = null; }
+    if (!oldFn) console.log('NOTE  the tree before 083 is not available: the face-by-face comparison is skipped');
+    else {
+        const SIZES = [[3, 3], [5, 5], [7, 7], [3, 5], [5, 3], [5, 7], [8, 7], [9, 3]];
+        let tot = 0, regress = 0, improved = 0, ex = [];
+        for (const shape of ['triangle', 'square', 'hex']) {
+            const w = H.makeRenderWorld(shape, 3, 3, MODE); w.set(oldFn); w.set('var canvasSizeSync = function () { width = canvasW; height = canvasH; };');
+            for (const ord of [2, 3]) for (const lage of [1, 2]) {
+                w.set(`currentShape = ${J(shape)}; projectGridSpec(${J({ shape, ordnung: ord, lage })}); setGridSize(3, 3); symmetryMode = ${J(MODE)};`);
+                const n = w.get('nodes.length'), sym = w.get('computeThemeLineOrbits(nodes, centroid, currentShape, symmetryMode, outerCorners).orbits.slice(0, 4).map(o => o.pairs[0].slice())');
+                const sets = [sym, [[1, n], [2, Math.max(3, n - 2)], [3, Math.max(4, n - 4)]]];
+                for (const conns of sets) {
+                    const snaps = {};
+                    for (const [X, Y] of SIZES) {
+                        w.set(`currentShape = ${J(shape)}; projectGridSpec(${J({ shape, ordnung: ord, lage })}); setGridSize(${X}, ${Y}); symmetryMode = ${J(MODE)}; connections = ${J(conns)};`);
+                        snaps[X + '/' + Y] = w.get('(function () { const r = computeCellFaces(connections, nodes, null); if (!r.faces.length) return null; const g = sheetGroupElements(nodes, null); const keys = computeFaceTrailKeys(r, g); return { w: canvasW, h: canvasH, snap: faceTrailSnapshot(r, g, keys) }; })()');
+                    }
+                    for (const A of SIZES) for (const B of SIZES) {
+                        if (A.join() === B.join()) continue;
+                        const s1 = snaps[A.join('/')], s2 = snaps[B.join('/')]; if (!s1 || !s2) continue;
+                        const f = Math.min(...A) / Math.min(...B), scale = (p) => ({ x: s2.w / 2 + (p.x - s1.w / 2) * f, y: s2.h / 2 + (p.y - s1.h / 2) * f });
+                        w.sb.__s1 = s1.snap; w.sb.__s2 = s2.snap; w.sb.__sc = scale;
+                        const mo = w.get('_mapTrailKeysOld(__s1, __s2, __sc)'), mn = w.get('_mapTrailKeys(__s1, __s2, __sc)');
+                        const own = (m) => { const c = new Map(); for (const [ok, nk] of m.entries()) if (!c.has(nk)) c.set(nk, ok); return c; };
+                        const cOld = own(mo), cNew = own(mn);
+                        const sorted = s2.snap.faces.slice().sort((a, b) => Math.abs(a.area) - Math.abs(b.area)), oldSorted = s1.snap.faces.map((b, i) => ({ b, i })).sort((x, y) => Math.abs(x.b.area) - Math.abs(y.b.area));
+                        s1.snap.faces.forEach((of, i) => {
+                            const mine = of.samples.find(sp => { const h = oldSorted.find(o => inPoly(sp, o.b.poly)); return h && h.i === i; }); if (!mine) return;
+                            const p = scale(mine), hit = sorted.find(a => inPoly(p, a.poly)); tot++;
+                            const ko = !!hit && cOld.get(hit.key) === of.key, kn = !!hit && cNew.get(hit.key) === of.key;
+                            if (ko && !kn) { regress++; if (ex.length < 3) ex.push([shape, ord, lage, A.join('/'), B.join('/'), i]); }
+                            if (!ko && kn) improved++;
+                        });
+                    }
+                }
+            }
+        }
+        check(`(diff) ${tot} old faces over 3 shapes x ordnung 2..3 x lage 1/2 x 2 line sets x 56 size changes: no face that kept its colour before loses it now (${regress} regressions), ${improved} faces gain it`, tot > 20000 && regress === 0, J(ex));
+    }
+}
 console.log(`${pass}/${pass + fail} checks passed`); process.exit(fail ? 1 : 0);

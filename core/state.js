@@ -358,32 +358,35 @@ class _TrailMap extends Map {
     [Symbol.iterator]() { return this.entries(); }
 }
 // old trail key -> new trail key(s): every sample point of every old face, scaled, is looked up in the new faces - the SMALLEST new face that contains it (a face nested in a bigger one is hit first, not the
-// enclosing one; task 083 class c). Every new key then goes to the old key with the most votes in it (the largest overlap wins; a tie goes to the smaller old key), so two old keys never share one new key; one old
-// key may get several new keys (task 083 class b: a trail that the 0.01 px key rounding splits in two keys in the new picture keeps its colour on both).
+// enclosing one; task 083 class c). Two steps, so nothing that was carried before is taken away: (1) as before, every old key takes its best new key (most votes; the old keys in the order of their votes, a tie
+// to the smaller key) and a new key is taken once; (2) every new key that is still free goes to the old key with the most votes in it (the largest overlap wins, a tie to the smaller old key) as one MORE key of
+// that trail (task 083 class b: a trail that the 0.01 px key rounding splits in two keys in the new picture keeps its colour on both). So no new key belongs to two old keys.
 function _mapTrailKeys(oldSnap, newSnap, scale) {
     const map = new _TrailMap();
     if (!oldSnap || !newSnap) return map;
     const boxes = newSnap.faces.map(f => ({ f, x0: Math.min(...f.poly.map(p => p.x)), x1: Math.max(...f.poly.map(p => p.x)), y0: Math.min(...f.poly.map(p => p.y)), y1: Math.max(...f.poly.map(p => p.y)), area: Math.abs(f.area) }));
     boxes.sort((a, b) => a.area - b.area);   // smallest first (a stable sort: equal areas keep the order of the picture)
-    const votes = new Map();   // new key -> (old key -> votes)
+    const votes = new Map();   // old key -> (new key -> votes)
     oldSnap.faces.forEach(of => of.samples.forEach(sp => {
         const p = scale(sp);
         const hit = boxes.find(b => p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1 && pointInPolygon(p, b.f.poly));
         if (!hit) return;
-        if (!votes.has(hit.f.key)) votes.set(hit.f.key, new Map());
-        const m = votes.get(hit.f.key); m.set(of.key, (m.get(of.key) || 0) + 1);
+        if (!votes.has(of.key)) votes.set(of.key, new Map());
+        const m = votes.get(of.key); m.set(hit.f.key, (m.get(hit.f.key) || 0) + 1);
     }));
-    const owned = new Map();   // old key -> [[new key, votes], ...]
-    votes.forEach((m, nk) => {
-        let bk = null, bv = 0; m.forEach((v, ok) => { if (v > bv || (v === bv && ok < bk)) { bk = ok; bv = v; } });
-        if (!owned.has(bk)) owned.set(bk, []);
-        owned.get(bk).push([nk, bv]);
-    });
-    owned.forEach((list, ok) => {
-        list.sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
-        map.set(ok, list[0][0]);
-        map.all.set(ok, list.map(e => e[0]));
-    });
+    const best = [];
+    votes.forEach((m, ok) => { let bk = null, bv = 0; m.forEach((v, nk) => { if (v > bv || (v === bv && nk < bk)) { bk = nk; bv = v; } }); best.push([ok, bk, bv]); });
+    best.sort((a, b) => b[2] - a[2] || (a[0] < b[0] ? -1 : 1));
+    const taken = new Set(), owned = new Map();   // owned: old key -> [new key, ...] (the primary first)
+    best.forEach(([ok, nk]) => { if (!taken.has(nk)) { taken.add(nk); owned.set(ok, [nk]); } });
+    const free = new Map();   // a free new key -> [old key, votes] with the most votes
+    votes.forEach((m, ok) => m.forEach((v, nk) => {
+        if (taken.has(nk)) return;
+        const cur = free.get(nk);
+        if (!cur || v > cur[1] || (v === cur[1] && ok < cur[0])) free.set(nk, [ok, v]);
+    }));
+    [...free.entries()].sort((a, b) => b[1][1] - a[1][1] || (a[0] < b[0] ? -1 : 1)).forEach(([nk, [ok]]) => { if (!owned.has(ok)) owned.set(ok, []); owned.get(ok).push(nk); });
+    owned.forEach((list, ok) => { map.set(ok, list[0]); map.all.set(ok, list); });
     return map;
 }
 // the re-keyed store and palette: every entry of a trail that is in the old picture and has a counterpart in the new one moves to its new key (the default grays too: the picture stays as it was).
