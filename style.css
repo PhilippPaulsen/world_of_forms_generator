@@ -80,6 +80,17 @@
      the height of #canvas-container (never derived through aspect-ratio
      or a percentage), so it cannot be resolved differently by an engine. */
   --canvas-size: min(var(--canvas-max), calc(100vw - 2 * var(--gutter)));
+  /* Task 078: the canvas box of a W x H sketch (a non-square area; the short side is 600 units, 560px shown). --canvas-ratio = W / H, set by sketch.js only for a non-square canvas (1 = square: every
+     value below is then --canvas-size, pixel for pixel). Display scale s = min(560 / 600, available width / W): the box is --canvas-max on its short side, or the available width when that is smaller.
+     --canvas-size stays the width of the panels under the canvas (face colours, timeline, morph, strip): it is NOT the canvas width any more. The phone layout (html.ph) defines its own pair below. */
+  --canvas-ratio: 1;
+  --canvas-avail: calc(100vw - 2 * var(--gutter));
+  --canvas-w: min(calc(var(--canvas-max) * max(1, var(--canvas-ratio))), var(--canvas-avail));
+  --canvas-h: calc(var(--canvas-w) / var(--canvas-ratio));
+}
+/* from 768px the canvas sits in the middle grid column: what is left of the row after the two rails and the gaps */
+@media (min-width: 768px) {
+  :root { --canvas-avail: calc(100vw - 48px - 2 * var(--target) - 2 * var(--gap)); }
 }
 
 /* Mouse: smaller controls. Touch keeps 48px and the 8px gap. */
@@ -1128,9 +1139,9 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
      outer size stays 100%: nothing else joins its line (the rail rows, and in the Farbe tab the groups that are display: contents, still wrap below it). Up to 592px the row is not wider than
      --canvas-size and every term is 0 or 100%: identical to the old rule. */
   .canvas-row #canvas-container {
-    flex: 0 0 min(var(--canvas-size), 100%);
-    margin-left: calc((100% - min(var(--canvas-size), 100%)) / 2);
-    margin-right: calc((100% - min(var(--canvas-size), 100%)) / 2);
+    flex: 0 0 min(var(--canvas-w), 100%);
+    margin-left: calc((100% - min(var(--canvas-w), 100%)) / 2);
+    margin-right: calc((100% - min(var(--canvas-w), 100%)) / 2);
     order: 0;
   }
   /* Two rows, each wrapping between groups only: a group is one flex item. At 320px the 6 icons of A + B + More (328px) do not fit the 288px row, so A (3) and B + More (3)
