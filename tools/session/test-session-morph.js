@@ -191,7 +191,7 @@ console.log('\n== 4. apply: restore, defaults for an old snapshot, a new object,
     const cap = src.get('SESSION_APPLY_CAPTURED'), unt = src.get('SESSION_APPLY_UNTOUCHED');
     check('spatialMorph is CAPTURED (apply writes it, so the rollback must hold it) and not on the left-alone list; captureSessionGlobals() returns it', cap.includes('spatialMorph') && !unt.includes('spatialMorph') && 'spatialMorph' in src.sb.captureSessionGlobals());
     const lets = [...F.read('core/state.js').matchAll(/^let\s+(\w+)/gm)].map(x => x[1]);
-    check('every `let` of core/state.js is still classified (the rule test-session-apply.js pins)', lets.every(n => cap.includes(n) || unt.includes(n) || n === 'shapeSizeFactorY' /* task 077: classified by B3 */) && lets.includes('spatialMorph'));
+    check('every `let` of core/state.js is still classified (the rule test-session-apply.js pins)', lets.every(n => cap.includes(n) || unt.includes(n) || n === 'shapeSizeFactorX' || n === 'shapeSizeFactorY' /* tasks 077/078: classified by B3 */) && lets.includes('spatialMorph'));
     check('collectSessionState() hands the live object over by reference (buildSessionSnapshot copies)', src.sb.collectSessionState(ui).spatialMorph === src.get('spatialMorph'));
 }
 
