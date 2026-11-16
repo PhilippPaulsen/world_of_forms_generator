@@ -11,6 +11,8 @@ let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const ctx = src => { const sb = { Math, console, Number, Object, Error, Map, JSON }; vm.createContext(sb); vm.runInContext(src, sb); return sb; };
 const O = ctx(oldForms), N = ctx(newForms);
+// task 077 pin change: the builders and layerGrid gained the optional trailing shortSide parameter (X x Y areas). Undo exactly those edits before comparing, so every other character of the function stays pinned.
+const un077 = (src, shape) => src.replace('_gridRefSide(canvasW, shortSide)', shape === 'hex' ? 'canvasH' : 'canvasW').replace(/, shortSide\)/g, ')').replace(/ const side = shapeHeight \/ Math\.sqrt\(3\);   \/\/ task 077[^\n]*/, ' const side = shapeHeight / Math.sqrt(3);');
 const J = JSON.stringify;
 const shapes = ['triangle', 'square', 'hex'];
 const oldB = { triangle: 'buildTriangleGrid', square: 'buildSquareGrid', hex: 'buildHexGrid' };
@@ -26,7 +28,7 @@ for (const shape of shapes) for (let c = 1; c <= (shape === 'square' ? 13 : 7); 
 }
 check('(1) buildGrid(fromLegacy) byte-equal to the old builders (' + n1 + ' grids)', bad1 === 0, bad1);
 check('(1) the three builders themselves unchanged (source of each function identical to BASE)',
-    shapes.every(s => ev(O, oldB[s] + '.toString()') === ev(N, oldB[s] + '.toString()')) && ['layerGrid', 'alignLayerToBase', '_alignmentConditionMet', '_subdivideTriangleInterior', '_subdivideSquareInterior', '_subdivideHexInterior'].every(f => ev(O, f + '.toString()') === ev(N, f + '.toString()')));
+    shapes.every(s => ev(O, oldB[s] + '.toString()') === un077(ev(N, oldB[s] + '.toString()'), s)) && un077(ev(N, 'layerGrid.toString()'), 'layerGrid') === ev(O, 'layerGrid.toString()') && ['alignLayerToBase', '_alignmentConditionMet', '_subdivideTriangleInterior', '_subdivideSquareInterior', '_subdivideHexInterior'].every(f => ev(O, f + '.toString()') === ev(N, f + '.toString()')));
 
 // (2) adapter roundtrip
 let rt = 0;
