@@ -34,6 +34,8 @@
     'reason.node.max.other': function (n) { return tr('reason.node.max.other', { n: n }, 'Höchste Ordnung bei dieser Form: ' + n + '.'); },
     get 'reason.size.min'() { return tr('reason.size.min', null, 'Kleinste Größe: 1.'); },
     get 'reason.size.max'() { return tr('reason.size.max', null, 'Größte Größe: 9.'); },
+    get 'reason.size.ratio'() { return tr('size.ratio.max', null, 'Seitenverhältnis höchstens 1:3'); },
+    get 'reason.size.lock'() { return tr('size.lock', null, 'Seitenverhältnis koppeln (Quadrat)'); },
     get 'reason.size.field.min'() { return tr('reason.size.field.min', null, 'Im Feld-Netz sind nur ungerade Größen von 3 bis 9 möglich; 3 ist die kleinste.'); },
     'note.size.field': function (from, to) { return tr('note.size.field', { from: from, to: to }, 'Feld-Netz: nur ungerade Größen, deshalb ' + from + ' → ' + to + '.'); },
     get 'reason.fold.hex'() { return tr('reason.fold.hex', null, 'Die Zähligkeit (3 oder 6) gilt nur beim Sechseck.'); },
@@ -68,7 +70,7 @@
   }
 
   // ---- steppers -------------------------------------------------------------
-  const nodeInput = $('#node-count-input'), sizeInput = $('#shape-size-input');
+  const nodeInput = $('#node-count-input'), sizeInput = $('#shape-size-input'), sizeYInput = $('#shape-size-y-input');
 
   function fieldActive() {
     return typeof baseNetTransform !== 'undefined' && !!baseNetTransform && baseNetTransform.domain === 'field';
@@ -103,8 +105,25 @@
   // stepper moves in twos then - and says so; it never produces an even size there. Without a Field it steps by 1
   // (an even size is fine for Single/Tiled and for no net). A TYPED even size in a Field is left to sketch.js, which
   // resets the domain to Single with a visible note (the size itself never changes).
-  function sizeCompute(dir) {
-    const cur = parseInt(sizeInput.value, 10) || 1;
+  // Task 080: the width (X) and the height (Y) stepper. While the lock is open (or the area is not square) a count is limited by validateGridSize against the other one (sketch.js sizeAxisRange: 1..9 and at
+  // most 1:3, no second table); while it is locked the width is the old stepper (it sets X = Y) and the Field rule below applies.
+  function sizeLimits(axis) {
+    const open = typeof sizeLockIsOpen === 'function' && sizeLockIsOpen();
+    if (!open) return { min: 1, max: 9, openLimit: false };
+    const other = axis === 'x' ? gridSizeY() : gridSizeX(), r = sizeAxisRange(axis, other);
+    return { min: r.min, max: r.max, openLimit: true };
+  }
+  function sizeCompute(dir, axis) {
+    axis = axis || 'x';
+    const input = axis === 'y' ? sizeYInput : sizeInput;
+    const cur = parseInt(input.value, 10) || 1;
+    const lim = sizeLimits(axis);
+    if (lim.openLimit) {
+      const to = cur + dir;
+      if (to < lim.min) return { to: null, reason: lim.min > 1 ? T['reason.size.ratio'] : T['reason.size.min'] };
+      if (to > lim.max) return { to: null, reason: lim.max < 9 ? T['reason.size.ratio'] : T['reason.size.max'] };
+      return { to: to };
+    }
     if (fieldActive()) {
       const to = cur % 2 === 0 ? cur + dir : cur + 2 * dir; // an even size cannot occur in a Field, but never step onto one
       if (to < 3) return { to: null, reason: T['reason.size.field.min'] };
@@ -116,13 +135,16 @@
     if (to > 9) return { to: null, reason: T['reason.size.max'] };
     return { to: to };
   }
-  function sizeRange() { return { min: 1, max: 9, minMsg: T['reason.size.min'], maxMsg: T['reason.size.max'] }; }
+  function sizeRange(axis) {
+    const lim = sizeLimits(axis || 'x');
+    return { min: lim.min, max: lim.max, minMsg: lim.min > 1 ? T['reason.size.ratio'] : T['reason.size.min'], maxMsg: lim.max < 9 ? T['reason.size.ratio'] : T['reason.size.max'] };
+  }
 
   const steppers = [];
   document.querySelectorAll('.nav-form .stepper').forEach(function (root) {
     const input = root.querySelector('input');
-    const isNode = input === nodeInput;
-    steppers.push(UI.stepper(root, { input: input, compute: isNode ? nodeCompute : sizeCompute, range: isNode ? nodeRange : sizeRange }));
+    const isNode = input === nodeInput, isY = input === sizeYInput;
+    steppers.push(UI.stepper(root, { input: input, compute: isNode ? nodeCompute : isY ? function (d) { return sizeCompute(d, 'y'); } : function (d) { return sizeCompute(d, 'x'); }, range: isNode ? nodeRange : isY ? function () { return sizeRange('y'); } : function () { return sizeRange('x'); } }));
   });
 
   // ---- symmetry: two independent toggles (Drehung, Spiegelung) + the hexagon's fold under More ------------------
@@ -156,14 +178,43 @@
     if (!applies && foldHint.textContent !== reason) foldHint.textContent = reason;
     // the More button says when the fold it holds is not the default (3, hexagon with Drehung)
     const three = applies && fold === 3;
-    if (moreBtn.classList.contains('has-state') !== three) moreBtn.classList.toggle('has-state', three);
+    // task 080: on the phone the lock and the height stepper live under More, so the dot also says "the area is not square" (X != Y)
+    const dot = three || (!!document.documentElement && document.documentElement.classList.contains('ph') && typeof gridIsSquare === 'function' && !gridIsSquare());
+    if (moreBtn.classList.contains('has-state') !== dot) moreBtn.classList.toggle('has-state', dot);
     const label = T[three ? 'more.label.fold3' : 'more.label'];
     if (moreBtn.getAttribute('aria-label') !== label) { moreBtn.setAttribute('aria-label', label); moreBtn.setAttribute('title', label); }
+  }
+
+  // ---- Task 080: the aspect-ratio lock and the height stepper ---------------------------------------------------------------------------
+  // The lock is UI state only (sketch.js sizeLockIsOpen(): open while the area is not square or after a click; never saved). Locked = aria-pressed "true" (closed padlock), the height stepper aria-disabled and
+  // showing X. Unlocked: the height is its own count. From 768px both sit in #nav-form behind the width stepper; on the phone (html.ph) they are moved into #more-form (#ov-size), and back.
+  const lockBtn = $('#btn-size-lock'), yStepper = $('#nav-size-y-stepper'), ovSize = $('#ov-size'), ovSizeSection = $('#ov-size-section');
+  const sizeHome = yStepper ? yStepper.nextSibling : null;   // the divider behind the height stepper: the place to go back to
+  if (lockBtn) UI.guard(lockBtn, function () { window.sizeLockToggle(); });
+  function placeSizeControls() {
+    if (!lockBtn || !yStepper || !ovSize) return;   // a page (or a test world) without the controls
+    const phone = document.documentElement.classList.contains('ph');
+    if (phone && lockBtn.parentNode !== ovSize) { ovSize.appendChild(lockBtn); ovSize.appendChild(yStepper); ovSizeSection.hidden = false; }
+    else if (!phone && lockBtn.parentNode === ovSize) { sizeHome.parentNode.insertBefore(lockBtn, sizeHome); sizeHome.parentNode.insertBefore(yStepper, sizeHome); ovSizeSection.hidden = true; }
+  }
+  placeSizeControls();
+  if (lockBtn && yStepper && typeof MutationObserver === 'function') new MutationObserver(placeSizeControls).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  function syncSize() {
+    if (!lockBtn || !yStepper || !sizeYInput) return;
+    const open = typeof sizeLockIsOpen === 'function' && sizeLockIsOpen();
+    const pressed = open ? 'false' : 'true';
+    if (lockBtn.getAttribute('aria-pressed') !== pressed) lockBtn.setAttribute('aria-pressed', pressed);
+    UI.setDisabled(yStepper, open ? null : T['reason.size.lock']);
+    if (typeof gridSizeX === 'function') {
+      if (document.activeElement !== sizeInput && sizeInput.value !== String(gridSizeX())) sizeInput.value = String(gridSizeX());
+      if (document.activeElement !== sizeYInput && sizeYInput.value !== String(gridSizeY())) sizeYInput.value = String(gridSizeY());
+    }
   }
 
   UI.overlay(moreBtn, $('#more-form'), { onOpen: syncSymmetry });
 
   UI.onSync(function () {
+    syncSize();
     steppers.forEach(function (s) { s.refresh(); });
     syncSymmetry();
     syncLage();

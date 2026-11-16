@@ -668,6 +668,13 @@ body.dark {
   .nav-form .stepper { order: 5; }
   .nav-form .nav-divider { display: none; }
 }
+/* Task 080: the aspect-ratio lock: a closed padlock while locked (aria-pressed="true", the default), an open one when the height is free */
+#btn-size-lock .ico-open { display: none; }
+#btn-size-lock[aria-pressed="false"] .ico-closed { display: none; }
+#btn-size-lock[aria-pressed="false"] .ico-open { display: block; }
+#ov-size-section[hidden] { display: none; }
+#nav-size-y-stepper[aria-disabled="true"] input { color: var(--color-disabled); }
+#ov-size { align-items: center; }
 
 /* Stepper: [icon  number | up/down chevrons] around an existing number input. It is exactly --target high, like every
    other control. The number is in the middle; the two stacked chevron halves on the right (like a compact native
