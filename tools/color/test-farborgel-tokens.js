@@ -100,7 +100,8 @@ console.log('\n== 2. every generator token is copied or consciously not ==');
         '--canvas-max': 'the generator\'s canvas layout', '--canvas-size': 'the generator\'s canvas layout', '--nav-h': 'the generator\'s nav-row layout',
         '--rail-gap': 'the generator\'s canvas rail layout', '--rail-group-gap': 'the generator\'s canvas rail layout',
         '--line-color': 'the generator\'s pattern-line color (set from JS for the p5 canvas; the Farborgel has no pattern canvas)',
-        '--canvas-ratio': 'the generator\'s canvas layout (task 078: W / H of a non-square canvas)', '--canvas-avail': 'the generator\'s canvas layout (task 078)', '--canvas-w': 'the generator\'s canvas layout (task 078)', '--canvas-h': 'the generator\'s canvas layout (task 078)'
+        '--canvas-ratio': 'the generator\'s canvas layout (task 078: W / H of a non-square canvas)', '--canvas-avail': 'the generator\'s canvas layout (task 078)', '--canvas-w': 'the generator\'s canvas layout (task 078)', '--canvas-h': 'the generator\'s canvas layout (task 078)',
+        '--canvas-w0': 'the generator\'s canvas layout (task 078b)', '--canvas-hfit': 'the generator\'s canvas layout (task 078b: window-height limit, set from JS)', '--canvas-wu': 'the generator\'s canvas layout (task 078b: sketch width in units, set from JS)'
     };
     const open = [...genTokens.keys()].filter(k => !farTokens.has(k) && !(k in NOT_COPIED));
     check(`${genTokens.size} generator tokens: ${farTokens.size - INLINE_TOKENS.length} copied, ${Object.keys(NOT_COPIED).length} declined with a reason, none undecided`, open.length === 0, open.join(', '));
