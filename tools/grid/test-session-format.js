@@ -15,8 +15,9 @@ const S = require(path.join(ROOT, 'tools', 'session', 'scenarios.js'));
 const SK = fs.readFileSync(process.env.SKETCH_JS || path.join(ROOT, 'sketch.js'), 'utf8');
 const MODE = 'rotation_reflection6', SHAPES = ['triangle', 'square', 'hex'], R3 = Math.sqrt(3);
 const FORMATS = [[3, 5], [5, 3], [5, 7], [3, 9], [7, 8], [8, 7]];
-const wantW = (sh, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(X, Y); return X < Y ? 600 : sh === 'hex' ? X * R3 / 2 * e : X * e; };
-const wantH = (sh, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(X, Y); return Y < X ? 600 : sh === 'triangle' ? Y * R3 / 2 * e : Y * e; };
+// task 081: the area follows the cells in both directions (triangle H = Y (sqrt3/2) e also across, hexagon W = X (sqrt3/2) e also upright)
+const wantW = (sh, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(X, Y); return sh === 'hex' ? X * R3 / 2 * e : X < Y ? 600 : X * e; };
+const wantH = (sh, X, Y) => { if (X === Y) return 600; const e = 600 / Math.min(X, Y); return sh === 'triangle' ? Y * R3 / 2 * e : Y < X ? 600 : Y * e; };
 const HOOK = 'var hookCalls = 0; var canvasSizeSync = function () { width = canvasW; height = canvasH; hookCalls++; };';
 const worlds = {};
 const FILES = process.env.ORBITS_JS ? { 'core/orbits.js': process.env.ORBITS_JS } : undefined;   // sabotage runs (the other core copies go in through the env of tools/session/fixtures.js)
