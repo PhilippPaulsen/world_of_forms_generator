@@ -808,6 +808,15 @@ function parseTransportV2(raw) {
     try {
         if (!raw || typeof raw !== 'object') return bad('not an object');
         const { shape, ordnung, lage, group, lines } = raw;
+        // task 079: size {x, y} is optional (absent = square); validated here, before anything else is looked at (nothing in this function mutates): integers 1..9 within 1 : 3 (validateGridSize); x = y is a square (no size)
+        let size = null;
+        if (raw.size !== undefined && raw.size !== null) {
+            const z = raw.size;
+            if (typeof z !== 'object' || Array.isArray(z) || Object.keys(z).some(k => k !== 'x' && k !== 'y') || !Number.isInteger(z.x) || !Number.isInteger(z.y)) return bad('size must be {x, y} of two integers');
+            const vs = validateGridSize(z.x, z.y);
+            if (!vs.ok) return bad(vs.error);
+            if (z.x !== z.y) size = { x: z.x, y: z.y };
+        }
         if (shape !== 'triangle' && shape !== 'square' && shape !== 'hex') return bad('unknown shape');
         if (lage !== 1 && lage !== 2) return bad('lage must be 1 or 2');   // task 072d: lage 2 loads, within LAGE2_MAX (validateGridSpec) and against its own line table below
         const spec = { shape, ordnung, lage };
@@ -821,7 +830,7 @@ function parseTransportV2(raw) {
         const keys = [];
         for (const tok of lines) { const k = parseLineKey(tok, { table }); if (!k) return bad('unknown line token ' + JSON.stringify(tok.slice(0, 12))); keys.push(k); }
         keys.sort(compareLineKeys);
-        return { ok: true, pattern: { v2: true, shape, spec, order: toLegacy(spec), symmetryMode: 'rotation_reflection6', group, keys, tokens: keys.map(k => formatLineKey(k)) } };
+        return { ok: true, pattern: Object.assign({ v2: true, shape, spec, order: toLegacy(spec), symmetryMode: 'rotation_reflection6', group, keys, tokens: keys.map(k => formatLineKey(k)) }, size ? { size } : {}) };
     } catch (e) { return bad('unexpected failure (' + (e && e.message) + ')'); }
 }
 // the representative connection [idA, idB] of every key of a parsed pattern, in the grid of `spec` (a layer's own ids are the same lattice ids); throws for a key the grid lacks
@@ -833,9 +842,11 @@ function transportConnectionsV2(pattern) {
 function formatTransportUrlV2(spec, keys, opts) {
     const toks = keys.slice().sort(compareLineKeys).map(k => formatLineKey(k));
     const p = new URLSearchParams({ v: String(TRANSPORT_V2_VERSION), shape: spec.shape, ordnung: String(spec.ordnung), lage: String(spec.lage), group: mainGroupSpec(spec.shape).name, lines: toks.join(',') });
+    if (opts && opts.size && opts.size.x !== opts.size.y) p.set('size', opts.size.x + 'x' + opts.size.y);   // task 079: only a non-square area (URL parameter size=XxY)
     if (opts && opts.layer === 'new') p.set('layer', 'new');
     return '?' + p.toString();
 }
-function formatTransportPasteV2(spec, keys) {
-    return JSON.stringify({ version: TRANSPORT_V2_VERSION, grid: { shape: spec.shape, ordnung: spec.ordnung, lage: spec.lage }, group: mainGroupSpec(spec.shape).name, lines: keys.slice().sort(compareLineKeys).map(k => formatLineKey(k)) });
+function formatTransportPasteV2(spec, keys, opts) {
+    const sz = opts && opts.size && opts.size.x !== opts.size.y ? { size: { x: opts.size.x, y: opts.size.y } } : {};   // task 079: only a non-square area
+    return JSON.stringify({ version: TRANSPORT_V2_VERSION, grid: { shape: spec.shape, ordnung: spec.ordnung, lage: spec.lage }, ...sz, group: mainGroupSpec(spec.shape).name, lines: keys.slice().sort(compareLineKeys).map(k => formatLineKey(k)) });
 }
