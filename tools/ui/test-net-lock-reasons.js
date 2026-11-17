@@ -19,7 +19,7 @@ const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log
 console.log('== the long note is gone; its Field sentence has a new home ==');
 {
     check('#net-locks-note is gone from index.html (no element, no id anywhere), from style.css and from sketch.js (no select, no writer, no variant texts)', !/net-locks-note/.test(HTML) && !/net-locks-note/.test(fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8')) && !/net-locks-note|dataset\.fieldText|dataset\.text\b/.test(SKETCH.replace(/\/\/[^\n]*/g, '')));
-    const info = (SKETCH.match(/fieldInfo\.html\(`([^`]*)`\)/) || [, ''])[1];
+    const info = (SKETCH.match(/htmlOnce\(fieldInfo, `([^`]*)`\)/) || [, ''])[1];
     check('the Field sentence about face fills lives in #net-field-info, in the same words: "Face fills are exact on a Field and work for the base sheet and for layers on the base grid (same shape and size, no offset, no rotation - every timeline playback layer); other layers are not filled."', info.includes('Face fills are exact on a Field and work for the base sheet and for layers on the base grid (same shape and size, no offset, no rotation - every timeline playback layer); other layers are not filled.'), info.slice(0, 60));
     check('...after the sentence that was already there ("Field: macro = R = ... tiles, micro = E = ... per tile.") and shown with it: only while a net is active on a Field', /^Field: macro = R = \$\{R\} tiles, micro = E = \$\{E0\} per tile\. Face fills/.test(info) && /fieldInfo\.elt\.hidden = !\(active && isField\);/.test(SKETCH) && /id="net-field-info" hidden/.test(HTML));
     const m = SKETCH.match(/if \(curveType\.kind !== 'straight'\) return '([^']*)';/);
