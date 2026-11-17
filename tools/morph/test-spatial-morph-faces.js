@@ -152,10 +152,10 @@ T('field faces', () => {
   }
   check(`square, every symmetry family x sizes 3 and 5 (${cases} cases): faces in every tile, only closed polygons`, sweepBad === '', sweepBad.slice(0, 300));
   let noShape = '';
-  for (const shape of ['hex']) {   // task 088: the triangle has a Field warp now (test-net-field-triangle.js); only the hexagon has none
-    const a = mk({ net: 'field', shape, sym: 'none', K: KF[shape] }); a.drawn();
+  for (const shape of ['hex', 'triangle']) {   // task 088/089: the triangle and the hexagon have a Field warp now (test-net-field-triangle.js, -hex.js); a TILED net has none on these shapes
+    const a = mk({ net: 'tiled', shape, sym: 'none', K: KF[shape] }); a.drawn();
     const b = mk({ net: null, shape, sym: 'none', K: KF[shape] }); b.drawn();
-    check(`${shape} (task 013): no net warp on this shape (netWarpForBase is square only), so a Field net changes nothing: the same status ok, the same number of faces, faces in every tile`, a.status().code === 'ok' && b.status().code === 'ok' && polys(a).length === polys(b).length && polys(a).length > 0 && stats(a).tilesWithFaces === stats(a).tiles, J({ s: a.status().code, n: polys(a).length, m: polys(b).length }));
+    check(`${shape} (task 013): no Tiled / Single net warp on this shape (netWarpForBase applies only a Field there), so a Tiled net changes nothing: the same status ok, the same number of faces, faces in every tile`, a.status().code === 'ok' && b.status().code === 'ok' && polys(a).length === polys(b).length && polys(a).length > 0 && stats(a).tilesWithFaces === stats(a).tiles, J({ s: a.status().code, n: polys(a).length, m: polys(b).length }));
   }
   // the polygons are warped at the END: the same cell without the warp has other vertices, and computeCellFaces saw REGULAR coordinates
   check('computeCellFaces runs on regular coordinates: activeNetWarp is null during every call (task 038: at most once per tile, once per distinct input)', w.get('__cfCalls') > 2 * w.get('spatialMorphRenderState.colorBuilds') && w.get('__cfCalls') <= st.tiles + 2 * w.get('spatialMorphRenderState.colorBuilds') && w.get('__cfWarpNull.every(Boolean)'), J({ calls: w.get('__cfCalls'), tiles: st.tiles, builds: w.get('spatialMorphRenderState.colorBuilds') }));
