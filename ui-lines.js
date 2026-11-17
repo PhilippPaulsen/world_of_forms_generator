@@ -20,8 +20,10 @@
   function show() {
     if (!lineStyle.visible) open = false;
     btn.classList.toggle('active', !!lineStyle.visible);
-    btn.setAttribute('aria-pressed', lineStyle.visible ? 'true' : 'false');
-    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    // task 084: write an attribute only when its value changes (show() runs on every sync)
+    const pressed = lineStyle.visible ? 'true' : 'false', expanded = open ? 'true' : 'false';
+    if (btn.getAttribute('aria-pressed') !== pressed) btn.setAttribute('aria-pressed', pressed);
+    if (btn.getAttribute('aria-expanded') !== expanded) btn.setAttribute('aria-expanded', expanded);
     if (group && group.hidden === open) group.hidden = !open;
     if (input && Number(input.value) !== lineStyle.weight) input.value = lineStyle.weight;
     if (out && out.textContent !== String(lineStyle.weight)) out.textContent = String(lineStyle.weight);

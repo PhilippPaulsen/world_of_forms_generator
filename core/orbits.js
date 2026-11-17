@@ -221,12 +221,11 @@ function _pairKey(a, b) {
 }
 
 // Roadmap 1.11 design session: the PRIMARY orbit-computation algorithm.
-// Burnside's lemma (see burnsideOrbitCount() below) only yields a
-// count, not which pairs group together - naming needs the actual
-// partition, so union-find over the group's induced permutations is
-// the real work here; the lemma is a cross-check on this result, not a
-// second way of arriving at it (see burnsideOrbitCount()'s own
-// comment).
+// Burnside's lemma only yields a count, not which pairs group together
+// - naming needs the actual partition, so union-find over the group's
+// induced permutations is the real work here. (The Burnside count that
+// once cross-checked this result, burnsideOrbitCount(), had no caller
+// left in the app or any test and was removed in task 084.)
 //
 // nodes/centroid/shape/symmetryMode are all explicit parameters (not
 // read as globals) so this stays testable headlessly with synthetic
@@ -359,46 +358,6 @@ function getGroupElementsCached(nodes, centroid, shape, symmetryMode, outerCorne
         byKey.set(key, hit);
     }
     return hit;
-}
-
-// Roadmap 1.11 design session: Burnside's lemma applied directly
-// (|orbits| = average, over every group element g, of |Fix(g)| - the
-// count of pairs g maps to themselves) - an INDEPENDENT count computed
-// via a different route than computeThemeLineOrbits()'s union-find
-// partitioning, kept as a standing regression cross-check (the two are
-// asserted equal for all 12 known real cases - see the test suite).
-// Deliberately not called from computeThemeLineOrbits() itself: once
-// verified by tests, this is redundant work to pay for on every real
-// call, not a live consistency guard - see this file's own docblock.
-function burnsideOrbitCount(nodes, centroid, shape, symmetryMode, outerCorners, eps = ORBIT_NODE_EPSILON) {
-    // Roadmap [orbits.js free-endpoint fix]: mirrors computeThemeLineOrbits()'s
-    // own free-node filter (see there) - this function isn't called from
-    // any live code path today (test-only cross-check, per this file's
-    // own docblock), but left unfiltered it would crash the same way if
-    // ever run against a free-node-containing grid in the future.
-    const orbitNodes = nodes.filter(n => !n.free);
-    const { rotAngles, hasReflection } = _rotAnglesAndReflectionFor(shape, symmetryMode);
-    const mirrorDir = _mirrorAxisDirPure(outerCorners, centroid, shape);
-    const ops = _buildGroupOps(rotAngles, hasReflection, mirrorDir);
-    const groupOrder = ops.length;
-
-    const pairs = [];
-    for (let i = 0; i < orbitNodes.length; i++) {
-        for (let j = i + 1; j < orbitNodes.length; j++) pairs.push([orbitNodes[i].id, orbitNodes[j].id]);
-    }
-
-    let fixedSum = 0;
-    ops.forEach(op => {
-        const perm = _computeNodePermutation(orbitNodes, centroid, op, eps);
-        let fixed = 0;
-        pairs.forEach(([a, b]) => {
-            const ia = perm.get(a), ib = perm.get(b);
-            if (_pairKey(ia, ib) === _pairKey(a, b)) fixed++;
-        });
-        fixedSum += fixed;
-    });
-
-    return fixedSum / groupOrder;
 }
 
 // Roadmap 1.11-B: formats a computeThemeLineOrbits() table + a specific

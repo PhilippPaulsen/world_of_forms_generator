@@ -147,7 +147,7 @@ console.log('\n== sketch.js: the dynamic title sites ==');
     const ALLOWED = [
         [/^b\.title = smooth \?/, 'macro cell button: visible text (4x2)'],
         [/^locked\.forEach\(b => \{ b\.elt\.dataset\.title = b\.elt\.title; \}\);/, 'remembers the static title of the Curve / Free / Face buttons'],
-        [/^fieldBtn\.elt\.title = fieldOk \?/, 'Field: visible text, the reason when it is not available'],
+        [/^if \(fieldBtn\.elt\.title !== fieldTitle\) fieldBtn\.elt\.title = fieldTitle/, 'Field: visible text, the reason when it is not available'],
         [/^fieldBtn\.elt\.dataset\.title = fieldBtn\.elt\.title;/, 'restores the Field title'],
         [/^alignBtn\.attribute\('title'/, 'Align to base: an icon button since layers 1b-1; the title is the reason while it is disabled, the name is the static aria-label'],
         [/^netBtn\.title = /, 'timeline keyframe "Net": visible text'],
