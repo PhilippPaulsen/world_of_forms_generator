@@ -263,7 +263,189 @@ const LAWS = { sinus: { kind: 'trig', w: -0.9 }, tangens: { kind: 'trig', w: 0.7
     outC.firstBreak = first;
 }
 
-const out = { A_triangleHex_oddXneY: outA, B_XeqY: outB, C_squareEven: outC };
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// 087c part 1: X, Y <-> E1, E2 (meshes), counts of triangles / hexagons W
+// ---------------------------------------------------------------------------------------------------------------------------------
+const outD = {};
+for (const shape of ['square', 'triangle', 'hex']) {
+    const w = W(shape);
+    for (const [X, Y] of [[3, 5], [5, 5]]) {
+        setup(w, shape, 3, X, Y);
+        outD[`${shape} ${X}/${Y}`] = w.get(`(function () {
+            const X = ${X}, Y = ${Y}, tiles = __tiles(), mw = getMeshWidth(), e = 600 / Math.min(X, Y), det = Math.abs(mw.v1.x * mw.v2.y - mw.v2.x * mw.v1.y);
+            const inC = tiles.filter(T => T.cen.x >= 0 && T.cen.x <= canvasW && T.cen.y >= 0 && T.cen.y <= canvasH);
+            const full = tiles.filter(T => T.poly.every(p => p.x >= -1e-6 && p.x <= canvasW + 1e-6 && p.y >= -1e-6 && p.y <= canvasH + 1e-6));
+            const poly = tiles[0].poly, area = (P) => { let a = 0; for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length]; a += p.x * q.y - q.x * p.y; } return Math.abs(a) / 2; };
+            const tileArea = area(poly), cellArea = (currentShape === 'hex' ? Math.sqrt(3) / 2 * e * e : currentShape === 'triangle' ? Math.sqrt(3) / 2 * e * e : e * e);   // the O frame cell dx x dy
+            return { canvas: [Math.round(canvasW * 100) / 100, Math.round(canvasH * 100) / 100], edge: e, latticeMeshArea: Math.round(det * 100) / 100, tileArea: Math.round(tileArea * 100) / 100, tilesCentreInCanvas: inC.length, tilesFullyInside: full.length,
+                canvasAreaOverTileArea: Math.round(canvasW * canvasH / tileArea * 1000) / 1000, rectMeshes_XY: X * Y, rectCellsOfCanvas: Math.round(canvasW * canvasH / cellArea * 1000) / 1000 };
+        })()`);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// 087c parts 2-4: E3 (even sizes), triangle / hexagon frames, images. Manual field warps (the 086 trick: field rectangle in c0/v1/v2, base tile in frame)
+// ---------------------------------------------------------------------------------------------------------------------------------
+const HELPERS2 = `
+var __mkField = function (spec, base, Rx, Ry, hx, hy) {
+    const ax = spec.x, ay = spec.y === 'same' ? spec.x : spec.y, fx = netFieldLaw(ax, Rx), fy = netFieldLaw(ay, Ry);
+    const det = base.v1.x * base.v2.y - base.v2.x * base.v1.y;
+    const c0 = { x: base.c0.x - hx * base.v1.x - hy * base.v2.x, y: base.c0.y - hx * base.v1.y - hy * base.v2.y }, v1 = { x: Rx * base.v1.x, y: Rx * base.v1.y }, v2 = { x: Ry * base.v2.x, y: Ry * base.v2.y };
+    return { fx: fx, fy: fy, altX: false, altY: false, repeat: false, domain: 'field', field: { Rt: 1, h: 0, Rx: Rx, Ry: Ry, hx: hx, hy: hy }, frame: { c0: base.c0, v1: base.v1, v2: base.v2, det: det }, domainIgnored: null, c0: c0, v1: v1, v2: v2, det: v1.x * v2.y - v2.x * v1.y };
+};
+// the polyline of the image of the straight segment p1p2 (vertices at the integer-sigma lines of the field law, any Rx, Ry, half-integer or integer h)
+var __poly = function (warp, p1, p2) {
+    const a = netWarpTileCoords(warp, p1), b = netWarpTileCoords(warp, p2), f = warp.field, hx = f.hx, hy = f.hy, Rx = f.Rx, Ry = f.Ry, ts = [];
+    if (warp.fx && a.s !== b.s) for (let m = 1; m < Rx; m++) { const sm = m - hx; if ((a.s - sm) * (b.s - sm) < 0) ts.push((sm - a.s) / (b.s - a.s)); }
+    if (warp.fy && a.t !== b.t) for (let m = 1; m < Ry; m++) { const tm = m - hy; if ((a.t - tm) * (b.t - tm) < 0) ts.push((tm - a.t) / (b.t - a.t)); }
+    ts.sort(function (x, y) { return x - y; });
+    const pts = [p1]; ts.forEach(function (t) { pts.push({ x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) }); }); pts.push(p2);
+    return pts.map(function (q) { return applyNetWarp(warp, q); });
+};
+var __shiftSegs = function (segs, sx, sy) { return segs.map(function (s) { return { x1: s.x1 + sx, y1: s.y1 + sy, x2: s.x2 + sx, y2: s.y2 + sy }; }); };
+var __inCanvas = function (p) { return p.x >= -1e-6 && p.x <= canvasW + 1e-6 && p.y >= -1e-6 && p.y <= canvasH + 1e-6; };
+// stats of a field warp over the current canvas: coverage, uncovered area, whole / cut meshes, visible meshes per axis, kinks of segments over macro lines, split cost, inverse
+var __stats = function (warp, sx, sy) {
+    const W_ = canvasW, H_ = canvasH, F = warp.frame || warp, f = warp.field, Rx = f.Rx, Ry = f.Ry, hx = f.hx, hy = f.hy, R = function (v) { return Math.round(v * 1e4) / 1e4; };
+    let ins = 0, tot = 0; for (let ix = 0; ix < 150; ix++) for (let iy = 0; iy < 150; iy++) { tot++; if (netWarpInsideNet(warp, { x: (ix + 0.5) / 150 * W_, y: (iy + 0.5) / 150 * H_ })) ins++; }
+    const at = function (s, t) { return applyNetWarp(warp, { x: F.c0.x + s * F.v1.x + t * F.v2.x, y: F.c0.y + s * F.v1.y + t * F.v2.y }); };
+    let whole = 0, cut = 0; const cols = {}, rows = {};
+    for (let a = 0; a < Rx; a++) for (let b = 0; b < Ry; b++) {
+        const i = a - hx, j = b - hy, c = [at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1)];
+        const x0 = Math.min.apply(null, c.map(function (p) { return p.x; })), x1 = Math.max.apply(null, c.map(function (p) { return p.x; })), y0 = Math.min.apply(null, c.map(function (p) { return p.y; })), y1 = Math.max.apply(null, c.map(function (p) { return p.y; }));
+        if (x1 <= 1e-6 || x0 >= W_ - 1e-6 || y1 <= 1e-6 || y0 >= H_ - 1e-6) continue;
+        if (c.every(__inCanvas)) whole++; else cut++;
+        cols[a] = 1; rows[b] = 1;
+    }
+    const segs = __shiftSegs(__regularSegs(), sx || 0, sy || 0).filter(function (s) { return __inCanvas({ x: s.x1, y: s.y1 }) && __inCanvas({ x: s.x2, y: s.y2 }); });
+    let cross = 0, maxK = 0, verts = 0; const t0 = Date.now();
+    segs.forEach(function (s) {
+        const pl = __poly(warp, { x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 });
+        if (pl.length > 2) { cross++; verts += pl.length - 2; const q1 = pl[0], q2 = pl[pl.length - 1]; for (let k = 1; k < pl.length - 1; k++) maxK = Math.max(maxK, __ptSeg(pl[k], q1, q2)); }
+    });
+    const ms = Date.now() - t0;
+    let inv = 0; for (let ix = 0; ix <= 10; ix++) for (let iy = 0; iy <= 10; iy++) { const p = { x: ix / 10 * W_, y: iy / 10 * H_ }, q = applyNetWarp(warp, invertNetWarp(warp, p)); inv = Math.max(inv, Math.hypot(q.x - p.x, q.y - p.y)); }
+    return { Rt: [Rx, Ry], coveragePct: R(100 * ins / tot), uncoveredPx2: Math.round((1 - ins / tot) * W_ * H_), meshesWhole: whole, meshesCut: cut, visibleCols: Object.keys(cols).length, visibleRows: Object.keys(rows).length,
+        segments: segs.length, segmentsOverMacro: cross, maxKinkPx: R(maxK), splitVertices: verts, splitMs: ms, inverseErrPx: inv };
+};
+`;
+const SPEC3 = { x: { kind: 'trig', w: -0.9 }, y: { kind: 'trig', w: 0.7 }, domain: 'field' };
+const LAWS3 = { sinus: { kind: 'trig', w: -0.9 }, tangens: { kind: 'trig', w: 0.7 }, geometric: { kind: 'geometric', w: Math.log(4) } };
+const oddUp = (n) => (n % 2 ? n : n + 1);
+const picsC = {};
+function svgPanels(name, panels) {
+    const gap = 30, W0 = panels[0].W, H0 = panels[0].H, n = panels.length, sc = Math.min(1, 420 / W0), pw = W0 * sc, ph = H0 * sc;
+    let svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + (n * (pw + gap) + gap) + '" height="' + (ph + 2 * gap + 10) + '"><rect width="100%" height="100%" fill="#fff"/>';
+    panels.forEach((p, i) => {
+        const ox = gap + i * (pw + gap), oy = gap + 6;
+        svg += '<g transform="translate(' + ox + ',' + oy + ') scale(' + sc + ')"><clipPath id="c' + i + '"><rect width="' + p.W + '" height="' + p.H + '"/></clipPath>';
+        svg += '<g clip-path="url(#c' + i + ')">' + p.lines.map(l => '<polyline fill="none" stroke="#1a3a8a" stroke-width="' + (1.2 / sc) + '" points="' + l.map(q => f2(q.x) + ',' + f2(q.y)).join(' ') + '"/>').join('') + '</g>';
+        svg += '<rect width="' + p.W + '" height="' + p.H + '" fill="none" stroke="#000" stroke-width="' + (2 / sc) + '"/>';
+        if (p.outline) svg += '<polygon fill="none" stroke="#d22" stroke-width="' + (2 / sc) + '" stroke-dasharray="' + (6 / sc) + ' ' + (4 / sc) + '" points="' + p.outline.map(q => f2(q.x) + ',' + f2(q.y)).join(' ') + '"/>';
+        svg += '<text x="0" y="' + (-8 / sc) + '" font-size="' + (13 / sc) + '" font-family="sans-serif">' + p.title + '</text></g>';
+    });
+    svg += '</svg>';
+    fs.mkdirSync(LOGDIR, { recursive: true });
+    fs.writeFileSync(path.join(LOGDIR, '087c-' + name + '.svg'), svg);
+    try { require('child_process').execFileSync('rsvg-convert', ['-w', String(Math.round(n * (pw + gap) + gap)), '-o', path.join(LOGDIR, '087c-' + name + '.png'), path.join(LOGDIR, '087c-' + name + '.svg')], { stdio: 'ignore' }); } catch (e) { }
+}
+const getPanel = (w, title, code) => Object.assign({ title }, w.get('(function () { const r = ' + code + '; return { lines: r.lines, outline: r.outline, W: canvasW, H: canvasH }; })()'));
+
+// ---- part 2: square, even sizes: E1 / E2 / E3 ----
+const outE = {};
+{
+    const w = W('square'); w.set(HELPERS2);
+    const buildWarp = `function (opt, X, Y, spec) {
+        const e = 600 / Math.min(X, Y), base = __frame('O', X, Y), sx = (opt === 'E3' && X % 2 === 0) ? e / 2 : 0, sy = (opt === 'E3' && Y % 2 === 0) ? e / 2 : 0;
+        const b = { c0: { x: base.c0.x + sx, y: base.c0.y + sy }, v1: base.v1, v2: base.v2 };
+        let Rx = X, Ry = Y, hx = (X - 1) / 2, hy = (Y - 1) / 2;
+        if (opt === 'E2') { Rx = X % 2 ? X : X + 1; Ry = Y % 2 ? Y : Y + 1; hx = (Rx - 1) / 2; hy = (Ry - 1) / 2; }
+        if (opt === 'E3') { hx = X / 2 === Math.floor(X / 2) ? X / 2 : (X - 1) / 2; hy = Y / 2 === Math.floor(Y / 2) ? Y / 2 : (Y - 1) / 2; }
+        return { warp: __mkField(spec, b, Rx, Ry, hx, hy), sx: sx, sy: sy, e: e };
+    }`;
+    w.set('var __buildE = ' + buildWarp + ';');
+    for (const [X, Y] of [[4, 4], [4, 5], [2, 6], [6, 5]]) {
+        setup(w, 'square', 3, X, Y);
+        w.set('connections = computeThemeLineOrbits(nodes, centroid, currentShape, symmetryMode, outerCorners).orbits.map(o => o.pairs[0].slice()).slice(0, 3);');
+        outE[`${X}/${Y}`] = {};
+        for (const [lawName, law] of Object.entries(LAWS3)) {
+            const rec = {};
+            for (const opt of ['E1', 'E2', 'E3']) {
+                rec[opt] = w.get(`(function () {
+                    const X = ${X}, Y = ${Y}, spec = ${J({ x: law, y: 'same', domain: 'field' })}, r = __buildE(${J(opt)}, X, Y, spec), warp = r.warp, F = warp.frame, f = warp.field, R = function (v) { return Math.round(v * 1e4) / 1e4; };
+                    const W_ = canvasW, H_ = canvasH, C = { x: W_ / 2, y: H_ / 2 };
+                    // kink inside the lattice tiles: tile i,j = base + i v1 + j v2 (the drawn lattice, shifted by (sx, sy) in E3), diagonal vs mapped chord
+                    let kink = 0, tiles = 0, kt = 0;
+                    for (let i = -8; i <= 8; i++) for (let j = -8; j <= 8; j++) {
+                        const a = { x: F.c0.x + i * F.v1.x, y: F.c0.y + j * F.v2.y }, b = { x: a.x + F.v1.x, y: a.y + F.v2.y };
+                        if (b.x < 0 || a.x > W_ || b.y < 0 || a.y > H_) continue;
+                        const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, qa = applyNetWarp(warp, a), qb = applyNetWarp(warp, b), qm = applyNetWarp(warp, m), k = Math.hypot(qm.x - (qa.x + qb.x) / 2, qm.y - (qa.y + qb.y) / 2);
+                        tiles++; if (k > 1e-6) kt++; kink = Math.max(kink, k);
+                    }
+                    let mx = 0, my = 0, r2 = 0, r4 = 0;
+                    for (let ix = 1; ix <= 9; ix++) for (let iy = 1; iy <= 9; iy++) {
+                        const p = { x: ix / 10 * W_, y: iy / 10 * H_ }, q = applyNetWarp(warp, p);
+                        const a = applyNetWarp(warp, { x: 2 * C.x - p.x, y: p.y }); mx = Math.max(mx, Math.hypot(a.x - (2 * C.x - q.x), a.y - q.y));
+                        const b = applyNetWarp(warp, { x: p.x, y: 2 * C.y - p.y }); my = Math.max(my, Math.hypot(b.x - q.x, b.y - (2 * C.y - q.y)));
+                        const c = applyNetWarp(warp, { x: 2 * C.x - p.x, y: 2 * C.y - p.y }); r2 = Math.max(r2, Math.hypot(c.x - (2 * C.x - q.x), c.y - (2 * C.y - q.y)));
+                        if (X === Y) { const d = applyNetWarp(warp, rotateAround(p, C, 90)), d2 = rotateAround(q, C, 90); r4 = Math.max(r4, Math.hypot(d.x - d2.x, d.y - d2.y)); }
+                    }
+                    const bl = applyNetWarp(warp, { x: 0, y: H_ / 2 }), bt = applyNetWarp(warp, { x: W_ / 2, y: 0 }), br = applyNetWarp(warp, { x: W_, y: H_ / 2 }), bb = applyNetWarp(warp, { x: W_ / 2, y: H_ });
+                    const st = __stats(warp, r.sx, r.sy);
+                    return { Rt: st.Rt, tilesInCanvas: tiles, tilesWithKink: kt, maxKinkInTilePx: R(kink), mirrorXErr: R(mx), mirrorYErr: R(my), rot180Err: R(r2), rot90Err: X === Y ? R(r4) : null, borderGapPx: R(Math.max(Math.abs(bl.x), Math.abs(bt.y), Math.abs(br.x - W_), Math.abs(bb.y - H_))),
+                        baseTileShiftVsAusPx: [R(r.sx), R(r.sy)], inverseErrPx: st.inverseErrPx, coveragePct: st.coveragePct, meshesWhole: st.meshesWhole, meshesCut: st.meshesCut };
+                })()`);
+            }
+            outE[`${X}/${Y}`][lawName] = rec;
+        }
+        if ((X === 4 && Y === 4) || (X === 4 && Y === 5)) {
+            const panels = ['E1', 'E2', 'E3'].map((opt) => getPanel(w, `square ${X}/${Y} ${opt} (sinus)`, `(function () {
+                const r = __buildE(${J(opt)}, ${X}, ${Y}, ${J({ x: LAWS3.sinus, y: 'same', domain: 'field' })}), warp = r.warp, F = warp.frame, f = warp.field;
+                const segs = __shiftSegs(__regularSegs(), r.sx, r.sy), lines = segs.map(function (s) { return __poly(warp, { x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }); });
+                const c = function (s, t) { return { x: F.c0.x + s * F.v1.x + t * F.v2.x, y: F.c0.y + s * F.v1.y + t * F.v2.y }; };
+                return { lines: lines, outline: [c(-f.hx, -f.hy), c(f.Rx - f.hx, -f.hy), c(f.Rx - f.hx, f.Ry - f.hy), c(-f.hx, f.Ry - f.hy)] };
+            })()`));
+            svgPanels(`square-${X}x${Y}-E1E2E3`, panels);
+        }
+    }
+}
+
+// ---- parts 3 + 4: triangle / hexagon frames ----
+const outF = {};
+for (const shape of ['triangle', 'hex']) {
+    const w = W(shape); w.set(HELPERS2);
+    w.set(`var __buildF = function (kind, X, Y, spec) {
+        const mw = getMeshWidth(), e = 600 / Math.min(X, Y), O = __frame('O', X, Y), P = __frame('P', X, Y);
+        if (kind === 'O') return __mkField(spec, O, X, Y, (X - 1) / 2, (Y - 1) / 2);
+        if (kind === 'Pexact') return __mkField(spec, P, X, Y, (X - 1) / 2, (Y - 1) / 2);
+        if (kind === 'Pcirc') { let best = null; const full = function (wp) { for (let ix = 0; ix < 40; ix++) for (let iy = 0; iy < 40; iy++) if (!netWarpInsideNet(wp, { x: (ix + 0.5) / 40 * canvasW, y: (iy + 0.5) / 40 * canvasH })) return false; return true; };
+            for (let Rx = X; Rx <= 21; Rx += 2) for (let Ry = Y; Ry <= 21; Ry += 2) { if (best && Rx * Ry >= best.n) continue; const wp = __mkField(spec, P, Rx, Ry, (Rx - 1) / 2, (Ry - 1) / 2); if (full(wp)) best = { n: Rx * Ry, wp: wp }; }
+            return best ? best.wp : __mkField(spec, P, 21, 21, 10, 10); }
+        if (kind === 'Ofine') { const b = { c0: { x: O.c0.x + O.v1.x / 3, y: O.c0.y }, v1: { x: O.v1.x / 3, y: 0 }, v2: O.v2 }, Rx = 3 * X; return __mkField(spec, b, Rx, Y, (Rx - 1) / 2, (Y - 1) / 2); }
+        if (kind === 'Pfine') { const v1 = mw.v1, v2 = mw.v2, f1 = { x: (v1.x + v2.x) / 3, y: (v1.y + v2.y) / 3 }, f2 = { x: (2 * v2.x - v1.x) / 3, y: (2 * v2.y - v1.y) / 3 }, k = 1 / 2, b = { c0: { x: centroid.x - k * (f1.x + f2.x), y: centroid.y - k * (f1.y + f2.y) }, v1: f1, v2: f2 };
+            const Rx = (function (n) { return n % 2 ? n : n + 1; })(3 * X + Math.ceil(Y / 2)), Ry = (function (n) { return n % 2 ? n : n + 1; })(3 * Y); return __mkField(spec, b, Rx, Ry, (Rx - 1) / 2, (Ry - 1) / 2); }
+    };`);
+    const kinds = shape === 'triangle' ? ['Pexact', 'Pcirc', 'O'] : ['Pexact', 'Pcirc', 'O', 'Ofine', 'Pfine'];
+    for (const [X, Y] of (shape === 'triangle' ? [[3, 5], [5, 3], [5, 5], [7, 5]] : [[3, 5], [5, 3], [5, 5]])) {
+        setup(w, shape, 3, X, Y);
+        w.set('connections = computeThemeLineOrbits(nodes, centroid, currentShape, symmetryMode, outerCorners).orbits.map(o => o.pairs[0].slice()).slice(0, 60);');   // many segments: the kink statistics need slanted edges too
+        const rec = {};
+        for (const kind of kinds) rec[kind] = w.get(`(function () { const wp = __buildF(${J(kind)}, ${X}, ${Y}, ${J(SPEC3)}); return wp ? __stats(wp, 0, 0) : null; })()`);
+        outF[`${shape} ${X}/${Y}`] = rec;
+        w.set('connections = computeThemeLineOrbits(nodes, centroid, currentShape, symmetryMode, outerCorners).orbits.map(o => o.pairs[0].slice()).slice(0, 6);');   // a lighter example form for the pictures
+        if (shape === 'triangle' || (X === 3 && Y === 5) || (X === 5 && Y === 5)) {
+            const pk = shape === 'triangle' ? ['Pexact', 'Pcirc', 'O'] : ['Pexact', 'Pcirc', 'O', 'Ofine', 'Pfine'];
+            const panels = pk.map((kind) => getPanel(w, `${shape} ${X}/${Y} frame ${kind}`, `(function () {
+                const warp = __buildF(${J(kind)}, ${X}, ${Y}, ${J(SPEC3)}), F = warp.frame, f = warp.field, segs = __regularSegs(), lines = segs.map(function (s) { return __poly(warp, { x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }); });
+                const c = function (s, t) { return { x: F.c0.x + s * F.v1.x + t * F.v2.x, y: F.c0.y + s * F.v1.y + t * F.v2.y }; };
+                return { lines: lines, outline: [c(-f.hx, -f.hy), c(f.Rx - f.hx, -f.hy), c(f.Rx - f.hx, f.Ry - f.hy), c(-f.hx, f.Ry - f.hy)] };
+            })()`));
+            svgPanels(`${shape}-${X}x${Y}-frames`, panels);
+        }
+    }
+}
+const out = { A_triangleHex_oddXneY: outA, B_XeqY: outB, C_squareEven: outC, D_part1_mapping: outD, E_part2_E3: outE, F_part34_frames: outF };
 if (WANT_SVG) {
     fs.mkdirSync(LOGDIR, { recursive: true });
     Object.entries(pics).forEach(([k, svg]) => fs.writeFileSync(path.join(LOGDIR, `087-${k}.svg`), svg));

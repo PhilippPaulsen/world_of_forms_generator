@@ -1,0 +1,5 @@
+# Auftrag 087c — Netz-Feld: Raster-Zuordnung, gerade Größen (E3), Dreieck-/Sechseck-Rahmen im Bild (Typ R, nur messen)
+Branch task/087-netz-dreieck-hex-messung (ab 4b4f7435), Skript tools/grid/measure-net-tri-hex.js erweitern. Schreiben nur: dieses Dokument, reports/087c.md, reports/logs/087c-*.svg/.png. Kein Merge, kein Push, keine Änderung in core/, sketch.js, Tests.
+Quellenbefund (Auftraggeber, Hinterreiter II S. 10-22): E1×E2 = Maschenzahl je Achse; △N = □N + Diagonalschar (W = 2·E1·E2); *N = △N mit ausgelassenen Linien (W = ⅓·E1·E2, Sechseck = 3 Maschen); gerade E sind Normalfall (Maschenlinie in der Mitte, Netz endet auf dem Rahmen).
+Teil 1: Zuordnung X,Y ↔ E (Maschen, W je Form, 3/5 und 5/5, Belege). Teil 2: Variante E3 (Kachelraster um eine halbe Kachel versetzt) für 4/4, 4/5, 2/6, 6/5 x Sinus/Tangens/Geo, Bilder 4/4 und 4/5 (E1, E2, E3). Teil 3: Dreieck 3/5, 5/3, 5/5, 7/5 mit drei Rahmen (P exakt, P umschreibend, Kasten O), Bilder. Teil 4: Sechseck 3/5, 5/3, 5/5 auf feinerem Maschengitter (E1·E2 = 3W), Bilder 3/5 und 5/5. Teil 5: Tabelle je Form, Empfehlung, ≤ 3 offene Fragen.
+Prüfung: guard.sh 149dad21 PASS, proof.sh L1 087 PASS.
