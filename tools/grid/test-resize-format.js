@@ -270,12 +270,14 @@ const frameWorld = (w) => { w.set('width = canvasW; height = canvasH;'); return 
     const sb = { document: { querySelector: () => ({ scrollWidth: 800, scrollHeight: 560 }) }, width: 1000, height: 600, freeEndpointsEnabled: false, hitRadius: (t, s) => { radii.push(s); return 18; }, pickNodeAt: () => null, drawnHitNodes: () => [] };
     require('vm').createContext(sb); require('vm').runInContext(grabFn('nodeHit'), sb); sb.nodeHit(10, 10, 'touch');
     check('(6) nodeHit on a 1000 x 600 canvas shown 800 x 560: the scale is min(0.8, 0.9333) = 0.8 (the smaller axis), not the width alone', radii.length === 1 && Math.abs(radii[0] - 0.8) < 1e-12, radii.join());
-    // the Field net: a Single on a non-square base, with the hint
+    // the Field net (task 086, was: a Single with the hint at every X != Y): a Field of odd X and Y stays a Field over X x Y tiles; an even axis reads it as Single, with the hint
     setup(w, 'square', 2, 1, 3, 3); w.set("baseNetTransform = { domain: 'field' };");
     const rF = w.get('resizeBase(3, 5)');
-    check('(6) a Field net of a square base at an odd size is read as Single on a 3/5 base (netSizeFactor NaN), with the hint hints.fieldNet', rF.hints.fieldNet === true && Number.isNaN(w.get('netSizeFactor()')) && w.get("netDomainEffective({ domain: 'field' }, netSizeFactor()).ignored !== null"), J(rF.hints));
+    check('(6) a Field net of a square base at an odd size stays a Field on a 3/5 base (netSizeFactors {3, 5}), no hint', rF.hints.fieldNet === false && w.get('netSizeFactors().x') === 3 && w.get('netSizeFactors().y') === 5 && w.get("netDomainEffective({ domain: 'field' }, netSizeFactors()).ignored === null"), J(rF.hints));
+    const rF3 = w.get('resizeBase(4, 5)');
+    check('(6) at 4/5 (an even axis) it is read as Single, with the hint hints.fieldNet', rF3.hints.fieldNet === true && w.get("netDomainEffective({ domain: 'field' }, netSizeFactors()).ignored !== null"), J(rF3.hints));
     const rF2 = w.get('resizeBase(5)');
-    check('(6) and a Field again on the square 5/5 (no hint: a Field before and after)', rF2.hints.fieldNet === false && w.get('netSizeFactor()') === 5);
+    check('(6) and a Field again on the square 5/5 (no hint: a Field before and after... it was Single before, so no hint)', rF2.hints.fieldNet === false && w.get('netSizeFactors().x') === 5 && w.get('netSizeFactors().y') === 5);
 }
 
 // ---- 7. sources -----------------------------------------------------------------------------------------------------------------------------------------

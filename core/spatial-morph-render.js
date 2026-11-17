@@ -199,7 +199,7 @@ function spatialMorphRenderAlign(plan, mode, realTimeline) {
 // factor than the base). The base sheet itself when the plan is the base fallback or the layer has no persisted grid. -> { outerCorners, centroid, nodes, shape, symmetryMode, nodeCount, sizeFactor }
 function spatialMorphRenderSource(plan) {
     const layer = (plan && plan.ids && plan.ids[0] !== 'base') ? additionalLayers[plan.ids[0]] : null;
-    if (!layer || !Array.isArray(layer.outerCorners) || layer.outerCorners.length < 3 || !layer.centroid) return { outerCorners, centroid, nodes, shape: currentShape, symmetryMode, nodeCount, sizeFactor: shapeSizeFactor };
+    if (!layer || !Array.isArray(layer.outerCorners) || layer.outerCorners.length < 3 || !layer.centroid) return { outerCorners, centroid, nodes, shape: currentShape, symmetryMode, nodeCount, sizeFactor: shapeSizeFactor, netSize: typeof netSizeFactors === 'function' ? netSizeFactors() : shapeSizeFactor };   // task 086: the base sheet's net reads the tile counts {x, y}
     return { outerCorners: layer.outerCorners, centroid: layer.centroid, nodes: layer.nodes || nodes, shape: layer.shape || currentShape, symmetryMode: layer.symmetryMode || symmetryMode, nodeCount: layer.nodeCount || nodeCount, sizeFactor: layer.shapeSizeFactor || shapeSizeFactor };
 }
 
@@ -513,7 +513,7 @@ function spatialMorphRenderDraw(sm) {
     const prevWarp = hasWarp ? activeNetWarp : null;
     if (hasWarp) {
         activeNetWarp = (typeof netWarpForBase === 'function' && typeof netTransformNow === 'function')
-            ? netWarpForBase(netTransformNow(), s.shape, s.outerCorners, s.nodeCount, s.sizeFactor)
+            ? netWarpForBase(netTransformNow(), s.shape, s.outerCorners, s.nodeCount, s.netSize !== undefined ? s.netSize : s.sizeFactor)
             : null;
     }
     let tiles, sym, started = false, tileMemo = null;

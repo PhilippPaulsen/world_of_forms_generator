@@ -223,7 +223,7 @@ console.log('\n== 9. export ==');
     const g = ex({ x: { kind: 'geometric', w: 1.2 }, y: 'same', domain: 'field' }, 3);
     check('geometric q in a field is per tile (Rt = 3): exp(w / 2)', Math.abs(g.x.q - Math.exp(1.2 / 2)) < 1e-12 && g.x.alternate === false);
     const exportSrc = fs.readFileSync(path.join(ROOT, 'core', 'export.js'), 'utf8');
-    check('core/export.js passes shapeSizeFactor (the tile count) to the description', exportSrc.includes('netTransformExportData(netTransformNow(), baseGridDivisions(), shapeSizeFactor)'));
+    check('core/export.js passes the net tile counts (_netSize(), task 086: {x, y} from netSizeFactors; was shapeSizeFactor) to the description', exportSrc.includes('netTransformExportData(netTransformNow(), baseGridDivisions(), _netSize())'));
 }
 
 // ============ 10. free endpoints ============
@@ -248,8 +248,8 @@ console.log('\n== 10. free endpoints on a field (option b) ==');
     const sk = fs.readFileSync(path.join(ROOT, 'sketch.js'), 'utf8');
     const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
     check('UI wiring (source): index.html has the Single / Tiled / Field buttons and no Repeat-tiles toggle; sketch.js resets Field for an invalid Shape Size, visibly',
-        ['single', 'tiled', 'field'].every(d => html.includes(`data-domain="${d}"`)) && !html.includes('net-repeat-btn') && sk.includes("netDomainEffective({ domain: 'field' }, R)") && sk.includes('so Field was reset to Single'));
-    check('sketch.js wires it: mousePressed() uses netWarpFieldLocal() for a field warp, the overlay passes the field option', sk.includes('netWarp && netWarp.field ? netWarpFieldLocal(') && sk.includes("domain: 'field', fieldTiles: field.Rt"));
+        ['single', 'tiled', 'field'].every(d => html.includes(`data-domain="${d}"`)) && !html.includes('net-repeat-btn') && sk.includes("netDomainEffective({ domain: 'field' }, Rs)") && sk.includes('so Field was reset to Single'));
+    check('sketch.js wires it: mousePressed() uses netWarpFieldLocal() for a field warp, the overlay passes the field option', sk.includes('netWarp && netWarp.field ? netWarpFieldLocal(') && sk.includes("domain: 'field', fieldTiles: field.Rx !== undefined ? { x: field.Rx, y: field.Ry } : field.Rt"));
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

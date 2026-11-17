@@ -122,7 +122,7 @@ const SK = read('SKETCH_JS', 'sketch.js');
         const sb = { select: s => els[s.replace('#', '')] || null, selectAll: () => [], document: { createElement: () => mkEl('created') }, window: {}, Math, Number, Object, String, JSON,
             curveBtn: null, freeBtn: null, faceBtn: null, nodeInput: null, say() { }, lockBtn() { }, updateCurveTypeControls() { }, redraw() { }, netLinesOn: false,
             currentShape: 'square', activeLayer: 'base', shapeSizeFactor: 3, nodeCount: 5, gridSpec: { ordnung: 5 }, curveType: { kind: 'straight' }, baseNetTransform: null, baseNetAnimation: null, timeline: null,
-            netWarpActive: () => !!sb.baseNetTransform, netDomainEffective: (s, R) => ({ ignored: (R % 2 === 1 && R >= 3 && R <= 9) ? null : 'even' }), baseGridDivisions: () => 4, netMacroOptions: () => [4], netMacroEffective: () => ({ valid: true }), netSpecMacro2Real: () => false,
+            netWarpActive: () => !!sb.baseNetTransform, netDomainEffective: (s, R) => { const ok = n => n % 2 === 1 && n >= 3 && n <= 9; return { ignored: (R && typeof R === 'object' ? ok(R.x) && ok(R.y) : ok(R)) ? null : 'even' }; }, /* task 086: R is the tile counts {x, y} now (was a number) */ baseGridDivisions: () => 4, netMacroOptions: () => [4], netMacroEffective: () => ({ valid: true }), netSpecMacro2Real: () => false,
             layerGridMatchesBase: () => true, additionalLayers: [], gridMinOrdnungTrig: () => 3, stateDomain: undefined };
         vm.createContext(sb);
         vm.runInContext('var netControlsSync = null, adoptNetState = null; var render = undefined;', sb);

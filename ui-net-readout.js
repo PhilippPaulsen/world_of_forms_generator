@@ -10,9 +10,11 @@
   // a domain this model does not know reads like Single (the default net); the dictionary key of its line
   function readoutKey(domain) { return Object.prototype.hasOwnProperty.call(KEYS, domain) ? KEYS[domain] : KEYS.single; }
   // n = the shape size (1..9): anything else is read as 1; t(key, { n }) = the translation
-  function readoutText(domain, n, t) {
-    const v = Math.round(Number(n));
-    return t(readoutKey(domain), { n: Number.isFinite(v) && v >= 1 ? v : 1 });
+  // task 086: m = the height count of a non-square Field ("Feld: 3 × 5 Kacheln"); absent or equal to n it is the square line, byte-equal to before
+  function readoutText(domain, n, t, m) {
+    const v = Math.round(Number(n)), vn = Number.isFinite(v) && v >= 1 ? v : 1, w = Math.round(Number(m));
+    if (readoutKey(domain) === KEYS.field && Number.isFinite(w) && w >= 1 && w !== vn) return t('net.readout.field2', { n: vn, m: w });
+    return t(readoutKey(domain), { n: vn });
   }
   const api = { readoutKey: readoutKey, readoutText: readoutText, KEYS: KEYS };
   root.netReadout = api;
