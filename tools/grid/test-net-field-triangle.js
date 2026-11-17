@@ -127,5 +127,25 @@ const fieldSpec = (law) => ({ x: law, y: law.kind === 'trig' ? { kind: 'trig', w
     setup(w, 'square', 3, 5, fieldSpec(LAWS.sinus), 4); const exq = w.get('buildExportData(null).meta.netTransform');
     check('(4) export: fieldTiles = the sizes, fieldMeshes = {x, y} of the triangle (boundaries Rx+1, Ry+1); the square has no fieldMeshes; session round trip identical (no mesh count in it)', !bad.first && exq.fieldMeshes === undefined, J(bad));
 }
+// ---- 5. timeline net snapshots on the triangle: playback t = 0, .5, 1 draws the lerp over the covering Field ----
+{
+    const w = world('triangle'); const bad = {};
+    const A = fieldSpec({ kind: 'trig', w: -0.8 }), B = fieldSpec({ kind: 'trig', w: -0.3 });
+    for (const [X, Y] of [[3, 5], [5, 5], [7, 5]]) {
+        setup(w, 'triangle', X, Y, A, 4);
+        const k1 = w.addKeyframeLayer([[1, 6]]), k2 = w.addKeyframeLayer([[2, 5]]);
+        S.addLayer(w.ctx, { shape: 'triangle', order: 3, size: Math.min(X, Y), playback: true });
+        w.setTimeline([k1, k2], { playbackLayerIndex: 2 });
+        w.set('additionalLayers[0]._timelineSavedEnabled = true; additionalLayers[1]._timelineSavedEnabled = true; timeline.segmentPairings = [[1, 0]]; timeline.segmentFlips = [null]; timeline.segmentMembers = [null];');
+        w.set(`timeline.netStates = [${J(A)}, ${J(B)}]; timeline.netLive = true;`);
+        for (const t of [0, 0.5, 1]) {
+            w.set(`timeline.currentFrame = { segmentIndex: 0, localT: ${t} };`);
+            const lerp = w.get(`netLerpSpecs(${J(A)}, ${J(B)}, ${t})`), now = w.get('netTransformNow()'), wp = w.get('netWarpBaseNow()');
+            if (J(now.x) !== J(lerp.x) || !wp || wp.domain !== 'field' || !wp.meshes) bad[`${X}/${Y}@${t}`] = 1;
+            const f1 = w.frame().length; if (!f1) bad.empty = 1;
+        }
+    }
+    check('(5) timeline net snapshots on the triangle (3/5, 5/5, 7/5), t = 0, .5, 1: the Field follows the lerp of the two snapshots', !Object.keys(bad).length, J(bad));
+}
 console.log(`${pass}/${pass + fail} checks passed`);
 if (fail) process.exit(1);
