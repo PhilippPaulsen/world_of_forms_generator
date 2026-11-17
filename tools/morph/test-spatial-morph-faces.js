@@ -30,6 +30,8 @@ const same = (a, b) => J(a) === J(b);
 const sha = (t) => crypto.createHash('sha256').update(t).digest('hex');
 const hashOf = (x) => sha(J(x)).slice(0, 16);
 const PRINT = process.argv.includes('--print-pins');
+// task 090: core/faces.js carries two documented hooks (netWarpRefineFaces, netWarpTileOutsideCanvas); the pin hashes it WITHOUT them (tools/grid/test-net-field-hex-faces.js (7) pins the hooks themselves)
+const stripHooks = (rel, t) => rel === 'core/faces.js' ? t.split('\n').filter((l) => !/netWarpTileOutsideCanvas\(activeNetWarp/.test(l)).map((l) => l.replace(/return typeof netWarpRefineFaces === 'function' \? netWarpRefineFaces\(result, activeNetWarp\) : result;.*$/, 'return result;')).join('\n') : t;
 
 // ---- pins: the tree before this stage (3108480a) ----------------------------------------------------------------------------------------------------------------------------------------------
 const PIN_FILES = {
@@ -241,7 +243,7 @@ T('restore', () => {
 // ---- 6. the protected files --------------------------------------------------------------------------------------------------------------------------------------------------------------------
 console.log('== 6. core/tiling.js and core/faces.js unchanged ==');
 T('pins', () => {
-  Object.keys(PIN_FILES).forEach((rel) => check(`${rel} is byte-identical to the tree before this stage (sha256)`, sha(fs.readFileSync(path.join(ROOT, rel), 'utf8')) === PIN_FILES[rel], sha(fs.readFileSync(path.join(ROOT, rel), 'utf8')).slice(0, 12)));
+  Object.keys(PIN_FILES).forEach((rel) => check(`${rel} is byte-identical to the tree before this stage (sha256)`, sha(stripHooks(rel, fs.readFileSync(path.join(ROOT, rel), 'utf8'))) === PIN_FILES[rel], sha(stripHooks(rel, fs.readFileSync(path.join(ROOT, rel), 'utf8'))).slice(0, 12)));
   const src = fs.readFileSync(process.env.SPATIAL_MORPH_RENDER_JS || path.join(ROOT, 'core', 'spatial-morph-render.js'), 'utf8');
   const names = [...src.matchAll(/^(?:function|const|let|var|class)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]);
   check('every top-level name of core/spatial-morph-render.js starts with spatialMorph + capital letter', names.length > 0 && names.every((n) => /^spatialMorph[A-Z]/.test(n)), names.filter((n) => !/^spatialMorph[A-Z]/.test(n)).join(','));
