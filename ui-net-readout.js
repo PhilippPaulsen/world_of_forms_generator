@@ -11,9 +11,9 @@
   function readoutKey(domain) { return Object.prototype.hasOwnProperty.call(KEYS, domain) ? KEYS[domain] : KEYS.single; }
   // n = the shape size (1..9): anything else is read as 1; t(key, { n }) = the translation
   // task 086: m = the height count of a non-square Field ("Feld: 3 × 5 Kacheln"); absent or equal to n it is the square line, byte-equal to before
-  function readoutText(domain, n, t, m, cut) {
+  function readoutText(domain, n, t, m, cut, hex) {
     const v = Math.round(Number(n)), vn = Number.isFinite(v) && v >= 1 ? v : 1, w = Math.round(Number(m));
-    if (cut && readoutKey(domain) === KEYS.field && Number.isFinite(w) && w >= 1) return t('net.readout.fieldCut', { n: vn, m: w });   // task 088: a Field that covers the canvas with cut edge meshes (the triangle)
+    if (cut && readoutKey(domain) === KEYS.field && Number.isFinite(w) && w >= 1) return t(hex ? 'net.readout.fieldCutHex' : 'net.readout.fieldCut', { n: vn, m: w });   // task 088: a Field that covers the canvas with cut edge meshes (the triangle)
     if (readoutKey(domain) === KEYS.field && Number.isFinite(w) && w >= 1 && w !== vn) return t('net.readout.field2', { n: vn, m: w });
     return t(readoutKey(domain), { n: vn });
   }
