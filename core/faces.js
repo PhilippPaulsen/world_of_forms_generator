@@ -1039,7 +1039,7 @@ function computeCellFaces(connSet, gridNodes = nodes, assignments = null, highli
         if (ensureDefaultGrayFill(assignments, trails) > 0) applyFaceAssignments(result, assignments, group);
     }
     if (highlightKey) markHighlightedTrail(result, highlightKey, group);
-    return result;
+    return typeof netWarpRefineFaces === 'function' ? netWarpRefineFaces(result, activeNetWarp) : result;   // task 090: a no-op except for the hexagon Field
 }
 
 // Roadmap 1.10b-i: every real (non-synthetic) node's own translated

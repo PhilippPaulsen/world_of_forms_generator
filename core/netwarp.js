@@ -303,7 +303,8 @@ function _netTriangleField(spec, corners, Rt) {
 }
 // Task 089: the hexagon sheet's Field. *N = triangle net with lines left out: the App counts X x Y hexagons, a hexagon = 3 rhombus meshes of the FINE lattice (E1 x E2 = 3 X Y), f1 = (v1 + v2) / 3, f2 = (2 v2 - v1) / 3
 // (v1 = c2 - c0, v2 = c4 - c0 of the hexagon's corners). Every hexagon corner is a node of that lattice anchored at the centroid. The base mesh starts at the centroid; the Field is the smallest odd (Rx, Ry) >= 3 (<= 27)
-// whose parallelogram, centred on the base mesh, contains the four canvas corners, so its edge meshes are cut by the canvas edge. A hexagon crosses mesh boundaries, so the base faces are refused (blocksFaces).
+// whose parallelogram, centred on the base mesh, contains the four canvas corners, so its edge meshes are cut by the canvas edge. A hexagon crosses mesh boundaries: task 090 splits the base faces
+// at those boundaries once (netWarpRefineFaces, called from computeCellFaces), so the per-vertex image is exact; layers and the morph (a `sheet` is given) stay refused.
 function _netHexField(spec, corners, Rt) {
     const dom = netDomainEffective(spec, Rt);
     if (dom.domain !== 'field' || !corners || corners.length !== 6) return null;   // a hexagon sheet has exactly 6 outer corners
@@ -324,7 +325,7 @@ function _netHexField(spec, corners, Rt) {
     if (!fx && !fy && !spec.keep) return null;
     const hx = (best.Rx - 1) / 2, hy = (best.Ry - 1) / 2;
     const fc0 = { x: cen.x - hx * f1.x - hy * f2.x, y: cen.y - hx * f1.y - hy * f2.y }, fv1 = { x: best.Rx * f1.x, y: best.Rx * f1.y }, fv2 = { x: best.Ry * f2.x, y: best.Ry * f2.y };
-    return { fx, fy, altX: false, altY: false, repeat: false, domain: 'field', field: { Rt: 1, h: 0, Rx: best.Rx, Ry: best.Ry, hx, hy }, meshes: { x: best.Rx, y: best.Ry, facesBlocked: true }, blocksFaces: true, frame: { c0: cen, v1: f1, v2: f2, det }, domainIgnored: null, c0: fc0, v1: fv1, v2: fv2, det: fv1.x * fv2.y - fv2.x * fv1.y };
+    return { fx, fy, altX: false, altY: false, repeat: false, domain: 'field', field: { Rt: 1, h: 0, Rx: best.Rx, Ry: best.Ry, hx, hy }, meshes: { x: best.Rx, y: best.Ry, facesPiecewise: true }, refineFaces: true, frame: { c0: cen, v1: f1, v2: f2, det }, domainIgnored: null, c0: fc0, v1: fv1, v2: fv2, det: fv1.x * fv2.y - fv2.x * fv1.y };
 }
 function netWarpForBase(spec, shape, corners, nodeCountValue, Rt) {
     if (spec && shape === 'hex') return _netHexField(spec, corners, Rt);
@@ -532,7 +533,7 @@ function netWarpActive() { return netWarpBaseNow() !== null; }
 // exact only when its grid IS the base's (sheet.gridMatchesBase: same shape and size, offset 0, rotation 0 - every timeline
 // playback layer): its segments never leave a base tile. Any other layer (offset/rotated/other size) crosses tile boundaries and
 // stays refused; every other warp (Single, Tiled: F smooth inside the tile) refuses all faces.
-function netWarpBlocksFaces(sheet) { const w = netWarpBaseNow(); return w !== null && (!w.field || w.blocksFaces === true || (!!sheet && !sheet.gridMatchesBase)); }
+function netWarpBlocksFaces(sheet) { const w = netWarpBaseNow(); return w !== null && (!w.field || (!!sheet && (w.refineFaces === true || !sheet.gridMatchesBase))); }
 
 // F^-1: the regular-space point whose image under the warp is `pt` (each axis law is strictly
 // increasing on [0,1], so a bisection per axis finds it; tiles are located by floor as in
@@ -623,8 +624,8 @@ function netTransformExportData(spec, E, Rt, meshes) {
     if (isField) {
         // Faces: exact on a field (affine per tile) - the BASE faces are exported in regular central-cell coordinates, the space of
         // geometry.nodes/edges; layers stay omitted (offset layers cross tile boundaries).
-        result.facesOmitted = !!(meshes && meshes.facesBlocked); result.layerFacesOmitted = true;   // task 089: the hexagon Field refuses faces (a hexagon crosses mesh boundaries)
-        if (!result.facesOmitted) result.facesMapping = 'regular central cell; each tile is the image under the per-tile affine map given by tileBoundaries';
+        result.facesOmitted = false; result.layerFacesOmitted = true;
+        result.facesMapping = meshes && meshes.facesPiecewise ? 'regular central cell; a face crosses mesh boundaries: its image in a tile is the polygon with its edges split at the mesh boundaries (the lines of tileBoundaries), each piece under the affine map of its mesh' : 'regular central cell; each tile is the image under the per-tile affine map given by tileBoundaries';   // task 090: hexagon
         result.fieldTiles = R.x === R.y ? R.x : { x: R.x, y: R.y };   // the outer tile count = the number of macro cells per axis (one number for X = Y)
         if (meshes) result.fieldMeshes = { x: meshes.x, y: meshes.y };   // task 088 (triangle): the meshes the law really runs over (the Field covers the canvas, edge meshes cut)
         const ay = spec.y === 'same' ? spec.x : spec.y, bounds = (axis, n) => { const f = netFieldLaw(axis, n); return Array.from({ length: n + 1 }, (_, k) => f ? f.field.P[k] : k); };
@@ -646,6 +647,35 @@ function netTransformFromExport(exported) {
     if (isField) spec.domain = 'field';
     if (Number.isInteger(exported.micro) && exported.micro > 1 && Number.isInteger(exported.macro)) spec.macro = exported.macro; // absent = not nested
     return spec;
+}
+
+// Task 090: the base faces under the hexagon Field. A face polygon (regular coordinates of the base cell) crosses the mesh boundaries (the lines s, t = integer of the fine lattice, in the warp's base frame): its edges are
+// split there ONCE (extra, collinear vertices on the same face), so mapping each vertex with applyNetWarp() gives the exact image (F is affine inside a mesh) - every tile sits the same way to the fine lattice
+// (the hexagon lattice is a sublattice of it), and the polygons are placed per vertex by drawFaceFillsAtTile(). A no-op for every other warp (`refineFaces` is only set by _netHexField) and for none.
+// Called at the end of computeCellFaces(); the colour work has run on the unrefined result already (identity of the faces and of their colours is untouched).
+function netWarpRefineFaces(result, warp) {
+    if (!warp || warp.refineFaces !== true || !warp.frame || !result || !result.faces || !result.faces.length) return result;
+    const F = warp.frame, nodes = result.nodes.slice(), byId = new Map(nodes.map(n => [n.id, n])), made = new Map();
+    let nextId = nodes.reduce((m, n) => (typeof n.id === 'number' && n.id > m ? n.id : m), 0) + 1;
+    const coords = p => { const dx = p.x - F.c0.x, dy = p.y - F.c0.y; return { s: (dx * F.v2.y - dy * F.v2.x) / F.det, t: (F.v1.x * dy - F.v1.y * dx) / F.det }; };
+    const EPS = 1e-9;
+    const nodeAt = (x, y) => { const key = Math.round(x * 1e6) + ',' + Math.round(y * 1e6); if (!made.has(key)) { const n = { id: nextId++, x, y, synthetic: true }; made.set(key, n); nodes.push(n); } return made.get(key).id; };
+    const faces = result.faces.map(face => {
+        const ids = face.nodeIds, out = [];
+        for (let i = 0; i < ids.length; i++) {
+            const a = byId.get(ids[i]), b = byId.get(ids[(i + 1) % ids.length]);
+            out.push(ids[i]);
+            const ca = coords(a), cb = coords(b), ts = [];
+            for (const [u0, u1] of [[ca.s, cb.s], [ca.t, cb.t]]) {
+                const lo = Math.min(u0, u1), hi = Math.max(u0, u1);
+                for (let k = Math.floor(lo) + 1; k <= Math.ceil(hi) - 1; k++) if (lo < k - EPS && hi > k + EPS) ts.push((k - u0) / (u1 - u0));
+            }
+            ts.sort((x, y) => x - y);
+            ts.forEach((t, j) => { if (j === 0 || t - ts[j - 1] > 1e-12) out.push(nodeAt(a.x + t * (b.x - a.x), a.y + t * (b.y - a.y))); });
+        }
+        return Object.assign({}, face, { nodeIds: out });
+    });
+    return Object.assign({}, result, { nodes, faces });
 }
 
 // ---- Net-line overlay (display aid): the actual grid lines of the warped net ----
