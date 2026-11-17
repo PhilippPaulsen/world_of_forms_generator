@@ -301,7 +301,33 @@ function _netTriangleField(spec, corners, Rt) {
     const fc0 = { x: base.c0.x - hx * v1.x - hy * v2.x, y: base.c0.y - hx * v1.y - hy * v2.y }, fv1 = { x: best.Rx * v1.x, y: best.Rx * v1.y }, fv2 = { x: best.Ry * v2.x, y: best.Ry * v2.y };
     return { fx, fy, altX: false, altY: false, repeat: false, domain: 'field', field: { Rt: 1, h: 0, Rx: best.Rx, Ry: best.Ry, hx, hy }, meshes: { x: best.Rx, y: best.Ry }, frame: { c0: base.c0, v1, v2, det }, domainIgnored: null, c0: fc0, v1: fv1, v2: fv2, det: fv1.x * fv2.y - fv2.x * fv1.y };
 }
+// Task 089: the hexagon sheet's Field. *N = triangle net with lines left out: the App counts X x Y hexagons, a hexagon = 3 rhombus meshes of the FINE lattice (E1 x E2 = 3 X Y), f1 = (v1 + v2) / 3, f2 = (2 v2 - v1) / 3
+// (v1 = c2 - c0, v2 = c4 - c0 of the hexagon's corners). Every hexagon corner is a node of that lattice anchored at the centroid. The base mesh starts at the centroid; the Field is the smallest odd (Rx, Ry) >= 3 (<= 27)
+// whose parallelogram, centred on the base mesh, contains the four canvas corners, so its edge meshes are cut by the canvas edge. A hexagon crosses mesh boundaries, so the base faces are refused (blocksFaces).
+function _netHexField(spec, corners, Rt) {
+    const dom = netDomainEffective(spec, Rt);
+    if (dom.domain !== 'field' || !corners || corners.length !== 6) return null;   // a hexagon sheet has exactly 6 outer corners
+    const v1 = { x: corners[2].x - corners[0].x, y: corners[2].y - corners[0].y }, v2 = { x: corners[4].x - corners[0].x, y: corners[4].y - corners[0].y };
+    const f1 = { x: (v1.x + v2.x) / 3, y: (v1.y + v2.y) / 3 }, f2 = { x: (2 * v2.x - v1.x) / 3, y: (2 * v2.y - v1.y) / 3 }, det = f1.x * f2.y - f2.x * f1.y;
+    if (!det) return null;
+    const cen = { x: corners.reduce((a, p) => a + p.x, 0) / 6, y: corners.reduce((a, p) => a + p.y, 0) / 6 };
+    const W = typeof canvasW !== 'undefined' ? canvasW : 600, H = typeof canvasH !== 'undefined' ? canvasH : 600;
+    const tc = [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: H }, { x: 0, y: H }].map(p => { const dx = p.x - cen.x, dy = p.y - cen.y; return { s: (dx * f2.y - dy * f2.x) / det, t: (f1.x * dy - f1.y * dx) / det }; });
+    let best = null;
+    for (let Rx = 3; Rx <= 27; Rx += 2) for (let Ry = 3; Ry <= 27; Ry += 2) {
+        if (best && Rx * Ry >= best.n) continue;
+        const hx = (Rx - 1) / 2, hy = (Ry - 1) / 2;
+        if (tc.every(c => c.s >= -hx - 1e-9 && c.s <= Rx - hx + 1e-9 && c.t >= -hy - 1e-9 && c.t <= Ry - hy + 1e-9)) best = { n: Rx * Ry, Rx, Ry };
+    }
+    if (!best) return null;   // no Field up to 27 x 27 covers the canvas: read as no net (never the case for the sizes 3..9)
+    const ax = spec.x, ay = spec.y === 'same' ? spec.x : spec.y, fx = netFieldLaw(ax, best.Rx), fy = netFieldLaw(ay, best.Ry);
+    if (!fx && !fy && !spec.keep) return null;
+    const hx = (best.Rx - 1) / 2, hy = (best.Ry - 1) / 2;
+    const fc0 = { x: cen.x - hx * f1.x - hy * f2.x, y: cen.y - hx * f1.y - hy * f2.y }, fv1 = { x: best.Rx * f1.x, y: best.Rx * f1.y }, fv2 = { x: best.Ry * f2.x, y: best.Ry * f2.y };
+    return { fx, fy, altX: false, altY: false, repeat: false, domain: 'field', field: { Rt: 1, h: 0, Rx: best.Rx, Ry: best.Ry, hx, hy }, meshes: { x: best.Rx, y: best.Ry, facesBlocked: true }, blocksFaces: true, frame: { c0: cen, v1: f1, v2: f2, det }, domainIgnored: null, c0: fc0, v1: fv1, v2: fv2, det: fv1.x * fv2.y - fv2.x * fv1.y };
+}
 function netWarpForBase(spec, shape, corners, nodeCountValue, Rt) {
+    if (spec && shape === 'hex') return _netHexField(spec, corners, Rt);
     if (spec && shape === 'triangle') return _netTriangleField(spec, corners, Rt);
     if (!spec || shape !== 'square' || !corners || corners.length < 4) return null;
     const c0 = corners[0], c1 = corners[1], c3 = corners[3];
@@ -506,7 +532,7 @@ function netWarpActive() { return netWarpBaseNow() !== null; }
 // exact only when its grid IS the base's (sheet.gridMatchesBase: same shape and size, offset 0, rotation 0 - every timeline
 // playback layer): its segments never leave a base tile. Any other layer (offset/rotated/other size) crosses tile boundaries and
 // stays refused; every other warp (Single, Tiled: F smooth inside the tile) refuses all faces.
-function netWarpBlocksFaces(sheet) { const w = netWarpBaseNow(); return w !== null && (!w.field || (!!sheet && !sheet.gridMatchesBase)); }
+function netWarpBlocksFaces(sheet) { const w = netWarpBaseNow(); return w !== null && (!w.field || w.blocksFaces === true || (!!sheet && !sheet.gridMatchesBase)); }
 
 // F^-1: the regular-space point whose image under the warp is `pt` (each axis law is strictly
 // increasing on [0,1], so a bisection per axis finds it; tiles are located by floor as in
@@ -597,8 +623,8 @@ function netTransformExportData(spec, E, Rt, meshes) {
     if (isField) {
         // Faces: exact on a field (affine per tile) - the BASE faces are exported in regular central-cell coordinates, the space of
         // geometry.nodes/edges; layers stay omitted (offset layers cross tile boundaries).
-        result.facesOmitted = false; result.layerFacesOmitted = true;
-        result.facesMapping = 'regular central cell; each tile is the image under the per-tile affine map given by tileBoundaries';
+        result.facesOmitted = !!(meshes && meshes.facesBlocked); result.layerFacesOmitted = true;   // task 089: the hexagon Field refuses faces (a hexagon crosses mesh boundaries)
+        if (!result.facesOmitted) result.facesMapping = 'regular central cell; each tile is the image under the per-tile affine map given by tileBoundaries';
         result.fieldTiles = R.x === R.y ? R.x : { x: R.x, y: R.y };   // the outer tile count = the number of macro cells per axis (one number for X = Y)
         if (meshes) result.fieldMeshes = { x: meshes.x, y: meshes.y };   // task 088 (triangle): the meshes the law really runs over (the Field covers the canvas, edge meshes cut)
         const ay = spec.y === 'same' ? spec.x : spec.y, bounds = (axis, n) => { const f = netFieldLaw(axis, n); return Array.from({ length: n + 1 }, (_, k) => f ? f.field.P[k] : k); };
