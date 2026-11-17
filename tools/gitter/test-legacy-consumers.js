@@ -13,7 +13,7 @@ const code = f => read(f).split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l))
 
 // ---- 1. removed names ----------------------------------------------------------------------------------------------------------------------------------
 const live = fs.readdirSync(ROOT).filter(f => /^(sketch|gallery|gallery-render|nav|ui[\w-]*)\.js$/.test(f)).concat(fs.readdirSync(path.join(ROOT, 'core')).filter(f => f.endsWith('.js')).map(f => 'core/' + f));
-const gone = ['legacyCatalogReader', 'isWellFormedCatalogPattern', 'CATALOG_URL_SHAPES', 'CATALOG_URL_MODES', 'computeThemeLineOrbitAssignments', 'GITTER_V2', 'GRID_V2', 'gitterV2', '_lkGate'];
+const gone = ['legacyCatalogReader', 'isWellFormedCatalogPattern', 'CATALOG_URL_SHAPES', 'CATALOG_URL_MODES', 'computeThemeLineOrbitAssignments', 'GITTER_V2', 'GRID_V2', 'gitterV2', '_lkGate', 'burnsideOrbitCount'];   // task 084: burnsideOrbitCount had no caller left
 const left = [];
 for (const f of live) { const c = code(f); for (const n of gone) if (new RegExp('\\b' + n + '\\b').test(c)) left.push(f + ':' + n); }
 check('(1) no live file (core/, sketch.js, ui*.js, gallery*.js) still contains a removed name (' + gone.join(', ') + ')', left.length === 0, left.join(' | '));

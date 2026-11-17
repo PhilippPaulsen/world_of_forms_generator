@@ -38,7 +38,7 @@ T('source', () => {
     const css = strip(CSS);
     check('style.css: the locked three look as the native disabled ones did (opacity 0.35, not-allowed) and have no hover fill (the hover rule is inside @media (hover: hover))', /#btn-toggle-curve\[aria-disabled="true"\], #btn-toggle-free\[aria-disabled="true"\], #btn-toggle-faces\[aria-disabled="true"\] \{ opacity: 0\.35; cursor: not-allowed; \}/.test(css) && /@media \(hover: hover\) \{\s*#btn-toggle-curve\[aria-disabled="true"\]:hover, #btn-toggle-free\[aria-disabled="true"\]:hover, #btn-toggle-faces\[aria-disabled="true"\]:hover \{ background: var\(--background\); \}\s*\}/.test(css));
     check('the long note #net-locks-note and the Include net warning #timeline-net-warning are gone (markup, CSS, writers)', !/net-locks-note|timeline-net-warning/.test(HTML + CSS + sk) && !/includeNetWarn/.test(sk));
-    const info = (SKETCH.match(/fieldInfo\.html\(`([^`]*)`\)/) || [, ''])[1];
+    const info = (SKETCH.match(/htmlOnce\(fieldInfo, `([^`]*)`\)/) || [, ''])[1];
     check('the Field sentence about face fills is not lost: #net-field-info carries it (same words) while a net is active on a Field', /Face fills are exact on a Field and work for the base sheet and for layers on the base grid \(same shape and size, no offset, no rotation - every timeline playback layer\); other layers are not filled\./.test(info) && /fieldInfo\.elt\.hidden = !\(active && isField\);/.test(sk));
 });
 function count(s, re) { return (s.match(re) || []).length; }

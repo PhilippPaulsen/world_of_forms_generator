@@ -148,8 +148,9 @@
     // Register shows the real atlas code (e.g. "pa"), not the 0-based index - FARBORGEL_REGISTER_ORDER
     // (core/farborgel-bridge.js, built in B2) is the same array the register widgets already index into;
     // registerIndex itself is untouched, this only changes the label. Hue stays numeric (1-24).
-    registerDisplay.textContent = a.registerIndex === null ? '–'
+    const registerText = a.registerIndex === null ? '–'
       : (typeof FARBORGEL_REGISTER_ORDER !== 'undefined' ? FARBORGEL_REGISTER_ORDER[a.registerIndex] : String(a.registerIndex));
+    if (registerDisplay.textContent !== registerText) registerDisplay.textContent = registerText;   // task 084: only when the text changes
     if (hueStepperApi) hueStepperApi.refresh();
     if (registerStepperApi) registerStepperApi.refresh();
   }
@@ -309,7 +310,8 @@
     if (!anchorKreisGroup) return;
     const a = anchorFor(activeLayer);
 
-    anchorHueContextDreieck.textContent = a ? T['anchor.hue.context'](a.hueIndex) : '';
+    const hueContextText = a ? T['anchor.hue.context'](a.hueIndex) : '';
+    if (anchorHueContextDreieck.textContent !== hueContextText) anchorHueContextDreieck.textContent = hueContextText;   // task 084: only when the text changes
 
     if (!a) { anchorKreisGroup.set(null); anchorDreieckGroup.set(null); return; }
 
@@ -643,7 +645,7 @@
     [anchorKreisGroup, anchorDreieckGroup].forEach(function (g) {
       if (g) g.radios.forEach(function (r) { UI.setDisabled(r, moduleWhy(true)); });
     });
-    if (harmonySelect) harmonySelect.disabled = !!loadingAny;
+    if (harmonySelect && harmonySelect.disabled !== !!loadingAny) harmonySelect.disabled = !!loadingAny;   // task 084: only when it changes
     if (strategyGroup) strategyGroup.radios.forEach(function (r) { UI.setDisabled(r, loadingSheet); });
     // Reset Color keeps sketch.js's own, untouched click handler (a DOM relocation, not new logic) - this
     // only dims it to match the row's eligibility; a click while "disabled" still runs resetFaceColors(),
