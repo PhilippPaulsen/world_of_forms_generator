@@ -152,10 +152,12 @@
     focusStepper.refresh();
     // spinbutton values for assistive technology
     const sp = (parseInt(strengthInput.value, 10) || 0) / 100, fp = (parseInt(focusInput.value, 10) || 0) / 100;
-    strengthDisplay.setAttribute('aria-valuenow', String(sp));
-    strengthDisplay.setAttribute('aria-valuetext', strengthDisplay.textContent);
-    focusDisplay.setAttribute('aria-valuenow', String(fp));
-    focusDisplay.setAttribute('aria-valuetext', focusDisplay.textContent);
+    // task 084: an attribute is written only when its value changes (sync runs on every redraw)
+    const setAria = function (el, name, v) { if (el.getAttribute(name) !== v) el.setAttribute(name, v); };
+    setAria(strengthDisplay, 'aria-valuenow', String(sp));
+    setAria(strengthDisplay, 'aria-valuetext', strengthDisplay.textContent);
+    setAria(focusDisplay, 'aria-valuenow', String(fp));
+    setAria(focusDisplay, 'aria-valuetext', focusDisplay.textContent);
     // exact fields follow the state unless being typed in
     if (document.activeElement !== strengthExact) showStrengthExact();
     if (document.activeElement !== focusExact) showFocusExact();
