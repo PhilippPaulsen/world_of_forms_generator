@@ -279,7 +279,30 @@ function _netWarpAxis(f, alt, s) {
 }
 
 // The warp for the base sheet as drawTessellation() uses it: square shapes only in Phase 1.
+// Task 088: the triangle sheet's Field. The frame is the lattice parallelogram of the triangle grid (v1 = C - B, v2 = C - A; a mesh = a rhombus of two triangles, E1 x E2 = X x Y meshes, W = 2 X Y triangles),
+// its base mesh c0 = centroid - 2/3 (v1 + v2) (the mesh that holds the base triangle). The Field is the SMALLEST odd (Rx, Ry) >= (X, Y), <= 21, whose parallelogram (centred on the base mesh) covers the whole
+// canvas: its edge meshes are cut by the canvas edge. The law runs over Rx x Ry meshes, so every mesh is an affine copy and nothing kinks inside a mesh. Only a Field applies to the triangle (no Single / Tiled).
+function _netTriangleField(spec, corners, Rt) {
+    const dom = netDomainEffective(spec, Rt);
+    if (dom.domain !== 'field' || !corners || corners.length !== 3) return null;   // a triangle sheet has exactly 3 outer corners
+    const A = corners[0], B = corners[1], C = corners[2], v1 = { x: C.x - B.x, y: C.y - B.y }, v2 = { x: C.x - A.x, y: C.y - A.y };
+    const cen = { x: (A.x + B.x + C.x) / 3, y: (A.y + B.y + C.y) / 3 }, det = v1.x * v2.y - v2.x * v1.y;
+    if (!det) return null;
+    const base = { c0: { x: cen.x - (2 / 3) * (v1.x + v2.x), y: cen.y - (2 / 3) * (v1.y + v2.y) }, v1, v2 };
+    const R = _netRt(Rt), W = typeof canvasW !== 'undefined' ? canvasW : 600, H = typeof canvasH !== 'undefined' ? canvasH : 600;
+    const tc = [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: H }, { x: 0, y: H }].map(p => { const dx = p.x - base.c0.x, dy = p.y - base.c0.y; return { s: (dx * v2.y - dy * v2.x) / det, t: (v1.x * dy - v1.y * dx) / det }; });
+    const covers = (Rx, Ry) => { const hx = (Rx - 1) / 2, hy = (Ry - 1) / 2; return tc.every(c => c.s >= -hx - 1e-9 && c.s <= Rx - hx + 1e-9 && c.t >= -hy - 1e-9 && c.t <= Ry - hy + 1e-9); };
+    let best = null;
+    for (let Rx = R.x; Rx <= 21; Rx += 2) for (let Ry = R.y; Ry <= 21; Ry += 2) { if (best && Rx * Ry >= best.n) continue; if (covers(Rx, Ry)) best = { n: Rx * Ry, Rx, Ry }; }
+    if (!best) best = { Rx: 21, Ry: 21 };
+    const ax = spec.x, ay = spec.y === 'same' ? spec.x : spec.y, fx = netFieldLaw(ax, best.Rx), fy = netFieldLaw(ay, best.Ry);
+    if (!fx && !fy && !spec.keep) return null;
+    const hx = (best.Rx - 1) / 2, hy = (best.Ry - 1) / 2;
+    const fc0 = { x: base.c0.x - hx * v1.x - hy * v2.x, y: base.c0.y - hx * v1.y - hy * v2.y }, fv1 = { x: best.Rx * v1.x, y: best.Rx * v1.y }, fv2 = { x: best.Ry * v2.x, y: best.Ry * v2.y };
+    return { fx, fy, altX: false, altY: false, repeat: false, domain: 'field', field: { Rt: 1, h: 0, Rx: best.Rx, Ry: best.Ry, hx, hy }, meshes: { x: best.Rx, y: best.Ry }, frame: { c0: base.c0, v1, v2, det }, domainIgnored: null, c0: fc0, v1: fv1, v2: fv2, det: fv1.x * fv2.y - fv2.x * fv1.y };
+}
 function netWarpForBase(spec, shape, corners, nodeCountValue, Rt) {
+    if (spec && shape === 'triangle') return _netTriangleField(spec, corners, Rt);
     if (!spec || shape !== 'square' || !corners || corners.length < 4) return null;
     const c0 = corners[0], c1 = corners[1], c3 = corners[3];
     // legacy signature (c = the legacy count): E comes from the one producer, getGridDivisions (an invalid c gives no warp, as c - 1 < 1 did)
@@ -547,7 +570,7 @@ function netWarpFieldLocal(warp, pt) {
 // Resolved per axis (y 'same' expanded); `a` (trig angle, radians) and `R`/`q` (geometric) are
 // derived values, written so a reader need not know the constants.
 function isFieldOf(spec, Rt) { return netDomainEffective(spec, Rt).domain === 'field'; }
-function netTransformExportData(spec, E, Rt) {
+function netTransformExportData(spec, E, Rt, meshes) {
     const ax = spec.x, ay = spec.y === 'same' ? spec.x : spec.y;
     const R = isFieldOf(spec, Rt) ? _netRt(Rt) : null;
     const describe = (axis, Rax) => {
@@ -577,8 +600,9 @@ function netTransformExportData(spec, E, Rt) {
         result.facesOmitted = false; result.layerFacesOmitted = true;
         result.facesMapping = 'regular central cell; each tile is the image under the per-tile affine map given by tileBoundaries';
         result.fieldTiles = R.x === R.y ? R.x : { x: R.x, y: R.y };   // the outer tile count = the number of macro cells per axis (one number for X = Y)
+        if (meshes) result.fieldMeshes = { x: meshes.x, y: meshes.y };   // task 088 (triangle): the meshes the law really runs over (the Field covers the canvas, edge meshes cut)
         const ay = spec.y === 'same' ? spec.x : spec.y, bounds = (axis, n) => { const f = netFieldLaw(axis, n); return Array.from({ length: n + 1 }, (_, k) => f ? f.field.P[k] : k); };
-        result.tileBoundaries = { unit: 'tiles', x: bounds(spec.x, R.x), y: bounds(ay, R.y) };   // P_k: where the tile boundaries sit in the field
+        result.tileBoundaries = { unit: 'tiles', x: bounds(spec.x, meshes ? meshes.x : R.x), y: bounds(ay, meshes ? meshes.y : R.y) };   // P_k: where the tile boundaries sit in the field
         if (spec.macro !== undefined && spec.macro !== null) result.macroIgnored = { requested: spec.macro, reason: 'intra-tile macro does not apply in a field (the micro grid is the clicked tile\'s own)' };
     }
     if (dom.ignored) result.domainIgnored = dom.ignored;
@@ -614,9 +638,10 @@ function netTransformFromExport(exported) {
 // Returns [{level: 'macro'|'micro', axis: 'v'|'h', x1, y1, x2, y2}], canvas coordinates. Positions come
 // from the same per-axis function applyNetWarp() uses (so `alternate` parity and repeat are honoured).
 function netGridLines(spec, corners, E, view, opts = {}) {
-    if (!corners || corners.length < 4 || !(E >= 1)) return [];
-    const c0 = corners[0], c1 = corners[1], c3 = corners[3];
-    const v1 = { x: c1.x - c0.x, y: c1.y - c0.y }, v2 = { x: c3.x - c0.x, y: c3.y - c0.y };
+    if ((!opts.frame && (!corners || corners.length < 4)) || !(E >= 1)) return [];
+    let c0 = corners[0], c1 = corners[1], c3 = corners[3];
+    let v1 = { x: c1.x - c0.x, y: c1.y - c0.y }, v2 = { x: c3.x - c0.x, y: c3.y - c0.y };
+    if (opts.frame) { c0 = opts.frame.c0; v1 = opts.frame.v1; v2 = opts.frame.v2; }   // task 088: the triangle's base mesh
     const det = v1.x * v2.y - v2.x * v1.y;
     if (!det) return [];
     const ax = spec ? spec.x : null, ay = spec ? (spec.y === 'same' ? spec.x : spec.y) : null;
