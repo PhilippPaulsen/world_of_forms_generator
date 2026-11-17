@@ -282,7 +282,7 @@ Object.keys(SHAPE_SPECS).forEach((shape) => T('shape ' + shape, () => {
   const inTile = tiles.every((t, ti) => t.every((q) => q.pts.every((a) => inCell(a, cells[ti]))));
   check(`${shape}: every face lies in its own tile (all vertices inside the tile's cell polygon, flip ${rec.filter((t) => t.flip).length} of ${rec.length} tiles): the tile transform is applied`, rec.length === tiles.length && inTile);
   const wn = mk({ shape, N: sp.interiorN, K, colored: true, net: 'field' }); wn.at(0.5);
-  check(`${shape}: a net (Field) changes nothing (it has no warp on this shape): same status, same number of faces, same fills as without`, wn.status().code === w.status().code && wn.get('__polys').length === w.get('__polys').length && J(wn.get('__polys').map((q) => q.fill)) === J(w.get('__polys').map((q) => q.fill)));
+  if (shape !== 'triangle') check(`${shape}: a net (Field) changes nothing (it has no warp on this shape; task 088: the triangle has one now): same status, same number of faces, same fills as without`, wn.status().code === w.status().code && wn.get('__polys').length === w.get('__polys').length && J(wn.get('__polys').map((q) => q.fill)) === J(w.get('__polys').map((q) => q.fill)));
   const off = mk({ shape, N: sp.interiorN, K, colored: true }); off.setMorph({ enabled: false, mode: 'linear', angleDeg: 0 }); off.at(0.5);
   check(`${shape}: switch off: no corner field is built, no morph face is drawn (status off)`, off.get('spatialMorphRenderState.colorBuilds') === 0 && off.status().code === 'off');
   // coverage: sum of the face areas / the cell, 11 values of p; the same lines through the NORMAL path give the same number for the worst tile
