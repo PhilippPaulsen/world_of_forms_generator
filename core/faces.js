@@ -1169,6 +1169,7 @@ function estimateCrossLayerSegmentCount(baseConnCount, layers) {
 function drawFaceFillsAtTile(facesResult, tileCentroid, flip180) {
     const { nodes: faceNodes, faces } = facesResult;
     if (!faces || !faces.length) return;
+    if (typeof netWarpTileOutsideCanvas === 'function' && netWarpTileOutsideCanvas(activeNetWarp, tileCentroid, flip180)) return;   // task 090: a tile entirely outside the canvas (hexagon Field only; a no-op elsewhere)
     const nodeById = new Map(faceNodes.map(n => [n.id, n]));
     // push()/pop(): noStroke()/fill() are ambient p5 drawing-style state,
     // not scoped to this call - draw()'s own stroke(lineColor)/noFill()

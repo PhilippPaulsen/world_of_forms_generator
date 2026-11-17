@@ -678,6 +678,27 @@ function netWarpRefineFaces(result, warp) {
     return Object.assign({}, result, { nodes, faces });
 }
 
+// Task 090: whether the tile at `tileCentroid` (placed like drawFaceFillsAtTile() places it) lies entirely outside the canvas under the hexagon Field, so its face fills need not be drawn. The image of the tile's hexagon is
+// piecewise affine; its vertices are the 6 corners, the crossings of its edges with the mesh lines and its centre (the centre of the hexagon is a lattice node), so the bounding box of those mapped points is that of the image.
+// A no-op (false) for every other warp. 1 px margin.
+function netWarpTileOutsideCanvas(warp, tileCentroid, flip180) {
+    if (!warp || warp.refineFaces !== true || !warp.frame || typeof outerCorners === 'undefined' || typeof toTileLocal !== 'function') return false;
+    const F = warp.frame, W = typeof canvasW !== 'undefined' ? canvasW : 600, H = typeof canvasH !== 'undefined' ? canvasH : 600;
+    const loc = outerCorners.map(p => toTileLocal(p, tileCentroid, flip180)), pts = loc.slice();
+    pts.push({ x: tileCentroid.x, y: tileCentroid.y });
+    const co = p => { const dx = p.x - F.c0.x, dy = p.y - F.c0.y; return { s: (dx * F.v2.y - dy * F.v2.x) / F.det, t: (F.v1.x * dy - F.v1.y * dx) / F.det }; };
+    for (let i = 0; i < loc.length; i++) {
+        const a = loc[i], b = loc[(i + 1) % loc.length], ca = co(a), cb = co(b);
+        for (const [u0, u1] of [[ca.s, cb.s], [ca.t, cb.t]]) {
+            const lo = Math.min(u0, u1), hi = Math.max(u0, u1);
+            for (let k = Math.floor(lo) + 1; k <= Math.ceil(hi) - 1; k++) if (lo < k - 1e-9 && hi > k + 1e-9) { const t = (k - u0) / (u1 - u0); pts.push({ x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) }); }
+        }
+    }
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const p of pts) { const q = applyNetWarp(warp, p); if (q.x < x0) x0 = q.x; if (q.x > x1) x1 = q.x; if (q.y < y0) y0 = q.y; if (q.y > y1) y1 = q.y; }
+    return x1 < -1 || x0 > W + 1 || y1 < -1 || y0 > H + 1;
+}
+
 // ---- Net-line overlay (display aid): the actual grid lines of the warped net ----
 
 // The lines of the net itself - one vertical and one horizontal line (in the warp's own frame) through
