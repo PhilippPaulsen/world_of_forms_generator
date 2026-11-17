@@ -165,7 +165,7 @@
     setLocked(focusExact, reasonFocus());
     // the readout line of the phone layout's Netz sheet: the active domain and the shape size (core/state.js), in the current language
     if (readoutEl && window.netReadout) {
-      const d = $('.net-domain-btn.active'), text = window.netReadout.readoutText(d ? d.dataset.domain : 'single', shapeSizeFactor, UI.t);
+      const d = $('.net-domain-btn.active'), dom = d ? d.dataset.domain : 'single', fld = dom === 'field' && typeof gridSizeX === 'function', text = window.netReadout.readoutText(dom, fld ? gridSizeX() : shapeSizeFactor, UI.t, fld ? gridSizeY() : undefined);   // task 086: a Field reads X and Y
       if (readoutEl.textContent !== text) readoutEl.textContent = text;
     }
   }
