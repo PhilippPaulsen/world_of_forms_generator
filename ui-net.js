@@ -45,7 +45,7 @@
   const strengthExact = $('#net-strength-exact'), focusExact = $('#net-focus-exact');
   const readoutEl = $('#net-readout');
 
-  function applies() { return currentShape === 'square' && activeLayer === 'base'; }
+  function applies() { return (currentShape === 'square' || currentShape === 'triangle') && activeLayer === 'base'; }
   function kind() {
     const b = kindBtns.find(function (x) { return x.classList.contains('active'); });
     return b ? b.dataset.kind : 'regular';
@@ -165,7 +165,7 @@
     setLocked(focusExact, reasonFocus());
     // the readout line of the phone layout's Netz sheet: the active domain and the shape size (core/state.js), in the current language
     if (readoutEl && window.netReadout) {
-      const d = $('.net-domain-btn.active'), dom = d ? d.dataset.domain : 'single', fld = dom === 'field' && typeof gridSizeX === 'function', text = window.netReadout.readoutText(dom, fld ? gridSizeX() : shapeSizeFactor, UI.t, fld ? gridSizeY() : undefined);   // task 086: a Field reads X and Y
+      const d = $('.net-domain-btn.active'), dom = d ? d.dataset.domain : 'single', fld = dom === 'field' && typeof gridSizeX === 'function', ms = fld && typeof netWarpBaseNow === 'function' && netWarpBaseNow() ? netWarpBaseNow().meshes : undefined, text = window.netReadout.readoutText(dom, ms ? ms.x : fld ? gridSizeX() : shapeSizeFactor, UI.t, ms ? ms.y : fld ? gridSizeY() : undefined, !!ms);   // task 086: a Field reads X and Y; task 088: the triangle's Field reads the meshes it covers, edge cut
       if (readoutEl.textContent !== text) readoutEl.textContent = text;
     }
   }

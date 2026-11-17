@@ -152,7 +152,7 @@ T('field faces', () => {
   }
   check(`square, every symmetry family x sizes 3 and 5 (${cases} cases): faces in every tile, only closed polygons`, sweepBad === '', sweepBad.slice(0, 300));
   let noShape = '';
-  for (const shape of ['hex', 'triangle']) {
+  for (const shape of ['hex']) {   // task 088: the triangle has a Field warp now (test-net-field-triangle.js); only the hexagon has none
     const a = mk({ net: 'field', shape, sym: 'none', K: KF[shape] }); a.drawn();
     const b = mk({ net: null, shape, sym: 'none', K: KF[shape] }); b.drawn();
     check(`${shape} (task 013): no net warp on this shape (netWarpForBase is square only), so a Field net changes nothing: the same status ok, the same number of faces, faces in every tile`, a.status().code === 'ok' && b.status().code === 'ok' && polys(a).length === polys(b).length && polys(a).length > 0 && stats(a).tilesWithFaces === stats(a).tiles, J({ s: a.status().code, n: polys(a).length, m: polys(b).length }));
