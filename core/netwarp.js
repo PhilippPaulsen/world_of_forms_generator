@@ -193,6 +193,14 @@ const NETWARP_MAX_FIELD_TILES = 9;   // = the largest Shape Size the UI offers
 // Which domain a spec asks for and which it gets: 'single' (one closed tile), 'tiled' (the wallpaper) or 'field'.
 // Rt = the outer tile count along an axis (Shape Size) - only the field needs it. A spec without `domain` reads its
 // legacy `repeat` boolean. An invalid request is IGNORED (falls back to the legacy reading), visibly: `ignored`.
+// Task 086: `Rt` is a number (the same count on both axes: every pre-086 caller) or {x, y} (the tile counts of a non-square area, see
+// netSizeFactors() in core/state.js). A bare number equal to the live shapeSizeFactor on a NON-square base means "the base's size": the
+// base sheet's callers that still pass shapeSizeFactor (core/tiling.js drawTessellation) read the same {x, y} as everybody else.
+function _netRt(Rt) {
+    if (typeof Rt === 'number' && typeof gridIsSquare === 'function' && !gridIsSquare() && Rt === shapeSizeFactor && typeof netSizeFactors === 'function') Rt = netSizeFactors();
+    if (Rt && typeof Rt === 'object') return { x: Rt.x, y: Rt.y };
+    return { x: Rt, y: Rt };
+}
 function netDomainEffective(spec, Rt) {
     const legacy = spec && spec.repeat ? 'tiled' : 'single';
     const req = spec ? spec.domain : undefined;
@@ -200,10 +208,16 @@ function netDomainEffective(spec, Rt) {
     if (req === 'single' || req === 'tiled') return { domain: req, ignored: null };
     let reason = null;
     if (req !== 'field') reason = `unknown domain '${req}'`;
-    else if (!Number.isInteger(Rt)) reason = 'a field needs an integer tile count (Shape Size)';
-    else if (Rt < 3) reason = 'a field needs at least 3 tiles (Shape Size 3, 5, 7 or 9): a trig law has no effect on 1 or 2 macro cells';
-    else if (Rt % 2 === 0) reason = 'a field needs an odd tile count (odd Shape Size) so the base tile is the central cell';
-    else if (Rt > NETWARP_MAX_FIELD_TILES) reason = `a field of ${Rt} tiles exceeds the ceiling ${NETWARP_MAX_FIELD_TILES}`;
+    else {
+        const R = _netRt(Rt), two = R.x !== R.y;
+        for (const n of [R.x, R.y]) {
+            if (!Number.isInteger(n)) reason = 'a field needs an integer tile count (Shape Size)';
+            else if (n < 3) reason = 'a field needs at least 3 tiles (Shape Size 3, 5, 7 or 9): a trig law has no effect on 1 or 2 macro cells';
+            else if (n % 2 === 0) reason = two ? 'a field needs an odd tile count on both axes (X and Y odd: 3, 5, 7 or 9) so the base tile is the central cell' : 'a field needs an odd tile count (odd Shape Size) so the base tile is the central cell';
+            else if (n > NETWARP_MAX_FIELD_TILES) reason = `a field of ${n} tiles exceeds the ceiling ${NETWARP_MAX_FIELD_TILES}`;
+            if (reason) break;
+        }
+    }
     if (reason) return { domain: legacy, ignored: { requested: req, reason } };
     return { domain: 'field', ignored: null };
 }
@@ -242,12 +256,21 @@ function makeNetWarp(spec, frame, E, Rt) {
     const dom = netDomainEffective(spec, Rt);
     const ax = spec.x, ay = spec.y === 'same' ? spec.x : spec.y;
     const isField = dom.domain === 'field';
-    const fx = isField ? netFieldLaw(ax, Rt) : netAxisLaw(ax, E, spec.macro), fy = isField ? netFieldLaw(ay, Rt) : netAxisLaw(ay, E, spec.macro);
+    const R = isField ? _netRt(Rt) : null;
+    const fx = isField ? netFieldLaw(ax, R.x) : netAxisLaw(ax, E, spec.macro), fy = isField ? netFieldLaw(ay, R.y) : netAxisLaw(ay, E, spec.macro);
     if (!fx && !fy && !spec.keep) return null;   // `keep` (an animation frame that happens to be exactly regular): stay a warp - closed net, domain and locks do not flicker
     const { c0, v1, v2 } = frame;
     const det = v1.x * v2.y - v2.x * v1.y;
     if (!det) return null;
-    return { fx, fy, altX: !isField && !!(ax && ax.alternate), altY: !isField && !!(ay && ay.alternate), repeat: dom.domain === 'tiled', domain: dom.domain, field: isField ? { Rt, h: (Rt - 1) / 2 } : null, domainIgnored: dom.ignored, c0, v1, v2, det };
+    if (isField && R.x !== R.y) {
+        // Task 086: a Rx x Ry field. core/tiling.js (byte-equal) reads warp.c0/v1/v2 with field {h, Rt} as ONE Rt x Rt square; here the whole field
+        // rectangle sits in c0/v1/v2 (h = 0, Rt = 1 make closedNetRectCorners() return it as is) and the base tile moves to warp.frame, which
+        // every function below reads through _netFrame().
+        const hx = (R.x - 1) / 2, hy = (R.y - 1) / 2;
+        const fc0 = { x: c0.x - hx * v1.x - hy * v2.x, y: c0.y - hx * v1.y - hy * v2.y }, fv1 = { x: R.x * v1.x, y: R.x * v1.y }, fv2 = { x: R.y * v2.x, y: R.y * v2.y };
+        return { fx, fy, altX: false, altY: false, repeat: false, domain: 'field', field: { Rt: 1, h: 0, Rx: R.x, Ry: R.y, hx, hy }, frame: { c0, v1, v2, det }, domainIgnored: dom.ignored, c0: fc0, v1: fv1, v2: fv2, det: fv1.x * fv2.y - fv2.x * fv1.y };
+    }
+    return { fx, fy, altX: !isField && !!(ax && ax.alternate), altY: !isField && !!(ay && ay.alternate), repeat: dom.domain === 'tiled', domain: dom.domain, field: isField ? { Rt: R.x, h: (R.x - 1) / 2 } : null, domainIgnored: dom.ignored, c0, v1, v2, det };
 }
 
 function _netWarpAxis(f, alt, s) {
@@ -264,28 +287,32 @@ function netWarpForBase(spec, shape, corners, nodeCountValue, Rt) {
     return makeNetWarp(spec, { c0, v1: { x: c1.x - c0.x, y: c1.y - c0.y }, v2: { x: c3.x - c0.x, y: c3.y - c0.y } }, E, Rt);
 }
 
+// Task 086: the BASE tile's frame {c0, v1, v2, det} (a Rx x Ry field keeps it in warp.frame, see makeNetWarp) and a field's half-extents [hx, hy].
+function _netFrame(warp) { return warp.frame || warp; }
+function _netFieldH(warp) { const f = warp.field; return f.Rx !== undefined ? [f.hx, f.hy] : [f.h, f.h]; }
 // Tile coordinates (s,t) of a point in the warp's frame: (0..1, 0..1) is the net's own tile.
 function netWarpTileCoords(warp, pt) {
-    const dx = pt.x - warp.c0.x, dy = pt.y - warp.c0.y;
-    return { s: (dx * warp.v2.y - dy * warp.v2.x) / warp.det, t: (warp.v1.x * dy - warp.v1.y * dx) / warp.det };
+    const F = _netFrame(warp), dx = pt.x - F.c0.x, dy = pt.y - F.c0.y;
+    return { s: (dx * F.v2.y - dy * F.v2.x) / F.det, t: (F.v1.x * dy - F.v1.y * dx) / F.det };
 }
 // Whether a warp is a CLOSED net (one tile, no repetition) and whether a point lies inside it.
 function netWarpIsClosed(warp) { return !!warp && !warp.repeat; }
 function netWarpInsideNet(warp, pt) {
     const c = netWarpTileCoords(warp, pt);
-    if (warp.field) { const h = warp.field.h; return c.s >= -h && c.s <= h + 1 && c.t >= -h && c.t <= h + 1; } // the whole field
+    if (warp.field) { const [hx, hy] = _netFieldH(warp); return c.s >= -hx && c.s <= hx + 1 && c.t >= -hy && c.t <= hy + 1; } // the whole field
     return c.s >= 0 && c.s <= 1 && c.t >= 0 && c.t <= 1;
 }
 
 function applyNetWarp(warp, pt) {
-    const dx = pt.x - warp.c0.x, dy = pt.y - warp.c0.y;
-    const s = (dx * warp.v2.y - dy * warp.v2.x) / warp.det;
-    const t = (warp.v1.x * dy - warp.v1.y * dx) / warp.det;
+    const W = _netFrame(warp);
+    const dx = pt.x - W.c0.x, dy = pt.y - W.c0.y;
+    const s = (dx * W.v2.y - dy * W.v2.x) / W.det;
+    const t = (W.v1.x * dy - W.v1.y * dx) / W.det;
     let x = pt.x, y = pt.y;
-    if (warp.field) { // Model 2: one law over the whole field (sigma = tile coordinate + h), affine inside each tile
-        const h = warp.field.h;
-        if (warp.fx) { const d = warp.fx(s + h) - h - s; x += d * warp.v1.x; y += d * warp.v1.y; }
-        if (warp.fy) { const d = warp.fy(t + h) - h - t; x += d * warp.v2.x; y += d * warp.v2.y; }
+    if (warp.field) { // Model 2: one law over the whole field (sigma = tile coordinate + h per axis), affine inside each tile
+        const [hx, hy] = _netFieldH(warp);
+        if (warp.fx) { const d = warp.fx(s + hx) - hx - s; x += d * W.v1.x; y += d * W.v1.y; }
+        if (warp.fy) { const d = warp.fy(t + hy) - hy - t; x += d * W.v2.x; y += d * W.v2.y; }
         return { x, y };
     }
     if (warp.fx) { const d = _netWarpAxis(warp.fx, warp.altX, s) - s; x += d * warp.v1.x; y += d * warp.v1.y; }
@@ -380,8 +407,8 @@ function netTransformNow() {
     return netLerpSpecs(a.from, a.to, a.t || 0) || baseNetTransform;
 }
 // Whether the AUTHOR net is a real warp right now (a Regular net, or a shape the warp does not apply to, is not).
-// Task 078: the Shape Size the net reads: a non-square base is NaN (a Field is read as Single); sandboxes without core/state.js read shapeSizeFactor as before.
-function _netSize() { return typeof netSizeFactor === 'function' ? netSizeFactor() : shapeSizeFactor; }
+// Task 086: the tile counts the net reads: {x, y} from netSizeFactors() (core/state.js, the one source); sandboxes without core/state.js read shapeSizeFactor as before.
+function _netSize() { return typeof netSizeFactors === 'function' ? netSizeFactors() : { x: shapeSizeFactor, y: shapeSizeFactor }; }
 function netAuthorWarpActive() { return !!(baseNetTransform && netWarpForBase(baseNetTransform, currentShape, outerCorners, nodeCount, _netSize())); }
 // "Include net" on Add to Timeline: `override` = null (automatic) or true/false (chosen by the person). Automatic = ON exactly when a net warp
 // is active at that moment. The toggle flips the shown value; choosing the automatic value again returns to automatic.
@@ -429,13 +456,13 @@ function netAnimationExportInfo() {
 // touching a boundary is not split. A corner (s and t both integers at one point) yields one point.
 function netWarpSplitSegment(warp, p1, p2) {
     if (!warp || !warp.field) return null;
-    const a = netWarpTileCoords(warp, p1), b = netWarpTileCoords(warp, p2), h = warp.field.h, EPS = 1e-9, ts = [];
-    const axis = (u0, u1, law) => {
+    const a = netWarpTileCoords(warp, p1), b = netWarpTileCoords(warp, p2), [hx, hy] = _netFieldH(warp), EPS = 1e-9, ts = [];
+    const axis = (u0, u1, law, h) => {
         if (!law) return;
         const lo = Math.min(u0, u1), hi = Math.max(u0, u1);
         for (let k = Math.max(-h + 1, Math.floor(lo)); k <= Math.min(h, Math.ceil(hi)); k++) if (lo < k - EPS && hi > k + EPS) ts.push((k - u0) / (u1 - u0));
     };
-    axis(a.s, b.s, warp.fx); axis(a.t, b.t, warp.fy);
+    axis(a.s, b.s, warp.fx, hx); axis(a.t, b.t, warp.fy, hy);
     if (!ts.length) return null;
     ts.sort((x, y) => x - y);
     const pts = [p1];
@@ -483,14 +510,15 @@ function _netWarpAxisInverse(f, alt, sOut) {
     return k + (flip ? 1 - li : li);
 }
 function invertNetWarp(warp, pt) {
-    const dx = pt.x - warp.c0.x, dy = pt.y - warp.c0.y;
-    const s = (dx * warp.v2.y - dy * warp.v2.x) / warp.det;
-    const t = (warp.v1.x * dy - warp.v1.y * dx) / warp.det;
+    const W = _netFrame(warp);
+    const dx = pt.x - W.c0.x, dy = pt.y - W.c0.y;
+    const s = (dx * W.v2.y - dy * W.v2.x) / W.det;
+    const t = (W.v1.x * dy - W.v1.y * dx) / W.det;
     let x = pt.x, y = pt.y;
     if (warp.field) { // closed form per tile of the field law
-        const h = warp.field.h;
-        if (warp.fx) { const d = _netFieldAxisInverse(warp.fx, s, h) - s; x += d * warp.v1.x; y += d * warp.v1.y; }
-        if (warp.fy) { const d = _netFieldAxisInverse(warp.fy, t, h) - t; x += d * warp.v2.x; y += d * warp.v2.y; }
+        const [hx, hy] = _netFieldH(warp);
+        if (warp.fx) { const d = _netFieldAxisInverse(warp.fx, s, hx) - s; x += d * W.v1.x; y += d * W.v1.y; }
+        if (warp.fy) { const d = _netFieldAxisInverse(warp.fy, t, hy) - t; x += d * W.v2.x; y += d * W.v2.y; }
         return { x, y };
     }
     if (warp.fx) { const d = _netWarpAxisInverse(warp.fx, warp.altX, s) - s; x += d * warp.v1.x; y += d * warp.v1.y; }
@@ -504,12 +532,12 @@ function invertNetWarp(warp, pt) {
 // clicked, or null (not a field, or outside it: nothing to attach to).
 function netWarpFieldLocal(warp, pt) {
     if (!warp || !warp.field || !netWarpInsideNet(warp, pt)) return null;
-    const h = warp.field.h, c = netWarpTileCoords(warp, pt);
-    const sr = warp.fx ? _netFieldAxisInverse(warp.fx, c.s, h) : c.s, tr = warp.fy ? _netFieldAxisInverse(warp.fy, c.t, h) : c.t;
+    const [hx, hy] = _netFieldH(warp), W = _netFrame(warp), c = netWarpTileCoords(warp, pt);
+    const sr = warp.fx ? _netFieldAxisInverse(warp.fx, c.s, hx) : c.s, tr = warp.fy ? _netFieldAxisInverse(warp.fy, c.t, hy) : c.t;
     let i = Math.floor(sr), j = Math.floor(tr);
-    if (i > h) i = h; if (j > h) j = h; if (i < -h) i = -h; if (j < -h) j = -h;   // a click exactly on the field's far edge
+    if (i > hx) i = hx; if (j > hy) j = hy; if (i < -hx) i = -hx; if (j < -hy) j = -hy;   // a click exactly on the field's far edge
     const l = sr - i, m = tr - j;
-    return { x: warp.c0.x + l * warp.v1.x + m * warp.v2.x, y: warp.c0.y + l * warp.v1.y + m * warp.v2.y, tile: { i, j }, local: { l, m } };
+    return { x: W.c0.x + l * W.v1.x + m * W.v2.x, y: W.c0.y + l * W.v1.y + m * W.v2.y, tile: { i, j }, local: { l, m } };
 }
 
 // meta.netTransform (export): the warp fully described, so the warped IMAGE is reproducible from
@@ -518,9 +546,11 @@ function netWarpFieldLocal(warp, pt) {
 // visibly rather than export stale data" rule as the curve case, but flagged instead of silent.
 // Resolved per axis (y 'same' expanded); `a` (trig angle, radians) and `R`/`q` (geometric) are
 // derived values, written so a reader need not know the constants.
+function isFieldOf(spec, Rt) { return netDomainEffective(spec, Rt).domain === 'field'; }
 function netTransformExportData(spec, E, Rt) {
     const ax = spec.x, ay = spec.y === 'same' ? spec.x : spec.y;
-    const describe = axis => {
+    const R = isFieldOf(spec, Rt) ? _netRt(Rt) : null;
+    const describe = (axis, Rax) => {
         if (!axis || axis.kind === 'uniform' || !axis.w) return { kind: 'uniform' };
         if (axis.kind === 'trig') {
             const w = Math.max(-1, Math.min(1, axis.w));
@@ -529,14 +559,14 @@ function netTransformExportData(spec, E, Rt) {
             return c === 0 ? { kind: 'trig', law: w < 0 ? 'sinus' : 'tangens', w, a: a0 } : { kind: 'trig', law: w < 0 ? 'sinus' : 'tangens', w, focus: c, a: a0 / (1 + Math.abs(c)), alternate: !isField && !!axis.alternate };
         }
         // q is per MACRO cell (Em = E when not nested; the tile count Rt in a field)
-        const qCount = isField ? Rt : eff.macro;
+        const qCount = isField ? Rax : eff.macro;
         return { kind: 'geometric', w: axis.w, R: Math.exp(axis.w), q: qCount >= 2 ? Math.exp(axis.w / (qCount - 1)) : null, alternate: !isField && !!axis.alternate };
     };
     const dom = netDomainEffective(spec, Rt), isField = dom.domain === 'field';
     const eff = isField ? { macro: E, micro: 1, valid: true } : netMacroEffective(spec.macro, E);
     const result = {
         version: 1, interpretation: true, domain: dom.domain === 'tiled' ? 'per-tile' : dom.domain, repeat: dom.domain === 'tiled', E, macro: eff.macro, micro: eff.micro,
-        x: describe(ax), y: describe(ay),
+        x: describe(ax, R && R.x), y: describe(ay, R && R.y),
         constants: { A_SIN: NETWARP_A_SIN, A_TAN: NETWARP_A_TAN },
         geometryIsRegular: true, facesOmitted: true
     };
@@ -546,9 +576,9 @@ function netTransformExportData(spec, E, Rt) {
         // geometry.nodes/edges; layers stay omitted (offset layers cross tile boundaries).
         result.facesOmitted = false; result.layerFacesOmitted = true;
         result.facesMapping = 'regular central cell; each tile is the image under the per-tile affine map given by tileBoundaries';
-        result.fieldTiles = Rt;   // the outer tile count = the number of macro cells per axis
-        const ay = spec.y === 'same' ? spec.x : spec.y, bounds = axis => { const f = netFieldLaw(axis, Rt); return Array.from({ length: Rt + 1 }, (_, k) => f ? f.field.P[k] : k); };
-        result.tileBoundaries = { unit: 'tiles', x: bounds(spec.x), y: bounds(ay) };   // P_k: where the tile boundaries sit in the field
+        result.fieldTiles = R.x === R.y ? R.x : { x: R.x, y: R.y };   // the outer tile count = the number of macro cells per axis (one number for X = Y)
+        const ay = spec.y === 'same' ? spec.x : spec.y, bounds = (axis, n) => { const f = netFieldLaw(axis, n); return Array.from({ length: n + 1 }, (_, k) => f ? f.field.P[k] : k); };
+        result.tileBoundaries = { unit: 'tiles', x: bounds(spec.x, R.x), y: bounds(ay, R.y) };   // P_k: where the tile boundaries sit in the field
         if (spec.macro !== undefined && spec.macro !== null) result.macroIgnored = { requested: spec.macro, reason: 'intra-tile macro does not apply in a field (the micro grid is the clicked tile\'s own)' };
     }
     if (dom.ignored) result.domainIgnored = dom.ignored;
@@ -590,9 +620,24 @@ function netGridLines(spec, corners, E, view, opts = {}) {
     const det = v1.x * v2.y - v2.x * v1.y;
     if (!det) return [];
     const ax = spec ? spec.x : null, ay = spec ? (spec.y === 'same' ? spec.x : spec.y) : null;
-    if (opts.domain === 'field' && opts.fieldTiles >= 3) {
+    const ft = opts.fieldTiles, fR = opts.domain === 'field' && ft ? (typeof ft === 'object' ? ft : { x: ft, y: ft }) : null;
+    if (fR && fR.x >= 3 && fR.y >= 3 && fR.x !== fR.y) {
+        // Task 086: a Rx x Ry field: the vertical lines run over the x tiles, the horizontal ones over the y tiles
+        const hx = (fR.x - 1) / 2, hy = (fR.y - 1) / 2, fxF = netFieldLaw(ax, fR.x), fyF = netFieldLaw(ay, fR.y), out = [];
+        const at = (s, t) => ({ x: c0.x + s * v1.x + t * v2.x, y: c0.y + s * v1.y + t * v2.y });
+        for (let k = 0; k <= fR.x; k++) for (let j = 0; j < (k === fR.x ? 1 : E); j++) {
+            const sig = k + j / E, s = (fxF ? fxF(sig) : sig) - hx, a = at(s, -hy), b = at(s, hy + 1), lv = j === 0 ? 'macro' : 'micro';
+            out.push({ level: lv, axis: 'v', x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+        }
+        for (let k = 0; k <= fR.y; k++) for (let j = 0; j < (k === fR.y ? 1 : E); j++) {
+            const sig = k + j / E, t = (fyF ? fyF(sig) : sig) - hy, c = at(-hx, t), d = at(hx + 1, t), lv = j === 0 ? 'macro' : 'micro';
+            out.push({ level: lv, axis: 'h', x1: c.x, y1: c.y, x2: d.x, y2: d.y });
+        }
+        return out;
+    }
+    if (fR && fR.x >= 3) {
         // Model 2: macro lines = the tile boundaries P_k, micro lines = the clicked tile's own E divisions inside each
-        const Rt = opts.fieldTiles, h = (Rt - 1) / 2, fxF = netFieldLaw(ax, Rt), fyF = netFieldLaw(ay, Rt), out = [];
+        const Rt = fR.x, h = (Rt - 1) / 2, fxF = netFieldLaw(ax, Rt), fyF = netFieldLaw(ay, Rt), out = [];
         const at = (s, t) => ({ x: c0.x + s * v1.x + t * v2.x, y: c0.y + s * v1.y + t * v2.y });
         for (let k = 0; k <= Rt; k++) for (let j = 0; j < (k === Rt ? 1 : E); j++) {
             const sig = k + j / E, lv = j === 0 ? 'macro' : 'micro';

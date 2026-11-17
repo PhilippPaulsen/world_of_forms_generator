@@ -119,6 +119,14 @@
     const cur = parseInt(input.value, 10) || 1;
     const lim = sizeLimits(axis);
     if (lim.openLimit) {
+      if (fieldActive()) {   // task 086: a Field spans X x Y tiles, each axis odd 3..9 by itself (ratio <= 1:3 always holds): odd steps of two per axis
+        const to = cur % 2 === 0 ? cur + dir : cur + 2 * dir;
+        if (to < 3) return { to: null, reason: T['reason.size.field.min'] };
+        if (to > 9) return { to: null, reason: T['reason.size.max'] };
+        if (to < lim.min) return { to: null, reason: T['reason.size.ratio'] };
+        if (to > lim.max) return { to: null, reason: T['reason.size.ratio'] };
+        return { to: to, note: Math.abs(to - cur) === 2 ? T['note.size.field'](cur, to) : undefined };
+      }
       const to = cur + dir;
       if (to < lim.min) return { to: null, reason: lim.min > 1 ? T['reason.size.ratio'] : T['reason.size.min'] };
       if (to > lim.max) return { to: null, reason: lim.max < 9 ? T['reason.size.ratio'] : T['reason.size.max'] };

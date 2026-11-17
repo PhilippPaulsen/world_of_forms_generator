@@ -620,8 +620,8 @@ function setup() {
             const notes = [];
             if (fromRegular) {
                 ui.axes = 'both';
-                const R = shapeSizeFactor;
-                if (netDomainEffective({ domain: 'field' }, R).ignored === null) setDomain('field');
+                const Rs = typeof netSizeFactors === 'function' ? netSizeFactors() : { x: shapeSizeFactor, y: shapeSizeFactor }, R = Rs.x === Rs.y ? Rs.x : Rs.x + '/' + Rs.y;   // task 086: the tile counts {x, y}
+                if (netDomainEffective({ domain: 'field' }, Rs).ignored === null) setDomain('field');
                 else { setDomain('single'); notes.push(window.UI && UI.t ? UI.t('note.net.fieldOddSize', { size: R, kept: R }) : `Feld braucht eine ungerade Größe (3, 5, 7, 9); ${R} passt nicht, deshalb Einzelnetz. Die Größe bleibt ${R}.`); }
             }
             if ((kind === 'sinus' || kind === 'tangens') && nodeCount < 4) {   // E >= 3, i.e. the legacy count 4 = ordnung 3 (triangle, square) / 4 (hex), task 068c2
@@ -701,13 +701,13 @@ function setup() {
             const active = netWarpActive();
             // Domain: adopt one set from the state; Field needs an odd Shape Size 3..9 - an even one is reset to Single, visibly
             const sd = stateDomain(); if (sd && sd !== ui.domain) { ui.domain = sd; render(); }
-            const R = shapeSizeFactor, fieldOk = netDomainEffective({ domain: 'field' }, R).ignored === null;
+            const Rs = typeof netSizeFactors === 'function' ? netSizeFactors() : { x: shapeSizeFactor, y: shapeSizeFactor }, R = Rs.x === Rs.y ? Rs.x : Rs.x + ' \u00d7 ' + Rs.y, Rmin = Math.min(Rs.x, Rs.y), fieldOk = netDomainEffective({ domain: 'field' }, Rs).ignored === null;
             if (ui.domain === 'field' && !fieldOk) {
                 setDomain('single'); render();
-                showFieldNote(`Shape Size ${R} ${Number.isInteger(R) && R % 2 === 0 ? 'is even' : 'is not a valid field size'}, so Field was reset to Single (Field needs an odd Shape Size: 3, 5, 7, 9).`);
+                showFieldNote(`Shape Size ${R} ${Rs.x === Rs.y && Rs.x % 2 === 0 ? 'is even' : 'is not a valid field size'}, so Field was reset to Single (Field needs an odd Shape Size in X and Y: 3, 5, 7, 9).`);
             }
             if (fieldBtn.elt.disabled !== !fieldOk) fieldBtn.elt.disabled = !fieldOk;
-            const fieldTitle = fieldOk ? fieldBtn.elt.dataset.title : 'Field needs an odd Shape Size (3, 5, 7, 9)';
+            const fieldTitle = fieldOk ? fieldBtn.elt.dataset.title : 'Field needs an odd Shape Size in X and Y (3, 5, 7, 9)';
             if (fieldBtn.elt.title !== fieldTitle) fieldBtn.elt.title = fieldTitle;
             if (fieldHint.elt.hidden !== fieldOk) fieldHint.elt.hidden = fieldOk;
             const isField = ui.domain === 'field', E0 = baseGridDivisions();
@@ -715,8 +715,8 @@ function setup() {
             if (active && isField) htmlOnce(fieldInfo, `Field: macro = R = ${R} tiles, micro = E = ${E0} per tile. Face fills are exact on a Field and work for the base sheet and for layers on the base grid (same shape and size, no offset, no rotation - every timeline playback layer); other layers are not filled.`);
             // The Shape Size hint says what Shape Size does in the CURRENT mode
             const hintText = !active ? null
-                : ui.domain === 'single' ? (R > 1 ? 'Single: one closed net. Shape Size 1 fills the canvas, larger sizes give a smaller net; Field (odd Shape Size 3-9) spreads the law over all the tiles instead.' : null)
-                : ui.domain === 'tiled' ? `Tiled: the warped tile is repeated ${R} times across the canvas, every copy alike.`
+                : ui.domain === 'single' ? (Rmin > 1 ? 'Single: one closed net. Shape Size 1 fills the canvas, larger sizes give a smaller net; Field (odd Shape Size 3-9) spreads the law over all the tiles instead.' : null)
+                : ui.domain === 'tiled' ? `Tiled: the warped tile is repeated ${Rmin} times across the canvas, every copy alike.`
                 : `Field: Shape Size is the number of macro cells (tiles) per axis; the net always fills the canvas.`;
             if (sizeHint.elt.hidden !== (hintText === null)) sizeHint.elt.hidden = hintText === null; if (hintText !== null) htmlOnce(sizeHint, hintText);
             // Macro cells: a chosen macro that no longer divides E (Node Count changed) is reset to smooth, visibly -
@@ -4426,7 +4426,7 @@ let netLinesOn = false;
 function drawNetLinesOverlay() {
     if (!netLinesOn || currentShape !== 'square') return;
     const nw = netWarpBaseNow(), closed = !!nw && !nw.repeat, field = nw && nw.field;
-    const lines = netGridLines(netTransformNow(), outerCorners, baseGridDivisions(), { x0: 0, y0: 0, x1: width, y1: height }, field ? { closed, domain: 'field', fieldTiles: field.Rt } : { closed });
+    const lines = netGridLines(netTransformNow(), outerCorners, baseGridDivisions(), { x0: 0, y0: 0, x1: width, y1: height }, field ? { closed, domain: 'field', fieldTiles: field.Rx !== undefined ? { x: field.Rx, y: field.Ry } : field.Rt } : { closed });
     push();
     strokeWeight(1);
     lines.forEach(l => {
@@ -4933,7 +4933,7 @@ function sizeChangeText(r) {
     if (keptWords.length) parts.push(t('note.size.kept', { what: list(keptWords) }, `${list(keptWords)} erhalten.`));
     if (adjWords.length) parts.push(t('note.size.adjusted', { what: list(adjWords) }, `${list(adjWords)} angepasst.`));
     if (r.lost.colorsCount) parts.push(t('note.size.colorsLost', { n: r.lost.colorsCount, m: r.lost.colorsTotal }, `Nicht erhalten: ${r.lost.colorsCount} von ${r.lost.colorsTotal} Farbgruppen.`));
-    if (r.hints && r.hints.fieldNet) parts.push(t('note.size.fieldNet', { size: r.to }, `Feld-Netz gilt bei Größe ${r.to} als Einzel.`));
+    if (r.hints && r.hints.fieldNet) parts.push(t('note.size.fieldNet', { size: r.toX === r.toY ? r.to : r.toX + '/' + r.toY }, `Feld-Netz gilt bei Größe ${r.toX === r.toY ? r.to : r.toX + '/' + r.toY} als Einzel.`));
     return parts.join(' ');
 }
 function saySizeChange(r) {

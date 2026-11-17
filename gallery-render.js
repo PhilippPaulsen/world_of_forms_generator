@@ -82,7 +82,8 @@ var activeNetWarp = null;
 var nodeCount = null;
 var gridSpec = null;   // task 067: core/forms.js baseGridSpecNow() reads it (a lage-2 base of the app); the gallery has none
 var shapeSizeFactor = null;
-var netSizeFactor = function () { return shapeSizeFactor; };   // task 078: core/netwarp.js reads the net size through it (core/state.js is not loaded here)
+var netSizeFactors = function () { return { x: shapeSizeFactor, y: shapeSizeFactor }; };   // task 086 (was netSizeFactor, task 078): core/netwarp.js reads the net's tile counts {x, y} through it (core/state.js is not loaded here)
+var gridIsSquare = function () { return true; };   // task 086: the gallery's areas are square
 
 // Replicated (not eval'd from core/state.js) for the same scoping
 // reason renderSingleCellSVG.js replicates it: core/state.js declares

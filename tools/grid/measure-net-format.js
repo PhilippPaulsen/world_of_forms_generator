@@ -139,7 +139,7 @@ const out = {};
         `);
         const stateInfo = w.get(`({
             shapeSizeFactor,
-            netSizeFactor: netSizeFactor(),
+            netSizeFactors: netSizeFactors(),   // task 086: was netSizeFactor() (NaN at X != Y)
             _netSize: _netSize(),
             netWarpBaseNowDomain: netWarpBaseNow() ? netWarpBaseNow().domain : null,
             netWarpBaseNowField: netWarpBaseNow() ? netWarpBaseNow().field : null,
@@ -674,6 +674,60 @@ const out = {};
         };
     }
     out.section3c_meaningfulE1E2 = summaryByShape;
+}
+
+// ============================================================================
+// 4. TASK 086: DAS 2D-FELD X x Y (alle 16 ungeraden Paare in {3,5,7,9}^2) UND DIE FAELLE OHNE FELD (gerade Achse, Dreieck, Sechseck)
+//    drawnTiles = Segmente / Segmente einer Kachel; Randfehler = Abstand des gewarpten Feldrands vom Canvasrand; Inverse = max |F(F^-1(p)) - p|;
+//    Flaeche = Summe der gewarpten Kachelflaechen gegen W*H; dotVsLineEndpointMaxDiffPx wie in Abschnitt 1.
+// ============================================================================
+{
+    const w = getWorld('square');
+    const spec = { x: { kind: 'trig', w: -0.8 }, y: { kind: 'trig', w: 0.6 }, repeat: false, domain: 'field' };
+    const rows = {};
+    const probe = (X, Y, wantField) => {
+        setupWorld(w, 'square', 3, 1, X, Y);
+        w.set(`connections = [[1, 6], [2, 5]]; baseNetTransform = ${J(spec)};`);
+        const segs = w.frame(), W_ = w.get('canvasW'), H_ = w.get('canvasH');
+        w.set(`baseNetTransform = ${J(Object.assign({}, spec, { domain: 'single' }))};`);
+        const perTile = w.frame().length;
+        w.set(`baseNetTransform = ${J(spec)};`);
+        const outside = segs.filter(s => [s.x1, s.x2].some(v => v < -1e-6 || v > W_ + 1e-6) || [s.y1, s.y2].some(v => v < -1e-6 || v > H_ + 1e-6)).length;
+        const base = w.get(`(function () {
+            const warp = netWarpBaseNow(), a = netWarpForBase(netTransformNow(), currentShape, outerCorners, nodeCount, shapeSizeFactor);
+            let dot = 0; for (const nd of nodes) { const p = applyNetWarp(a, nd), q = applyNetWarp(warp, nd); dot = Math.max(dot, Math.hypot(p.x - q.x, p.y - q.y)); }
+            const ex = buildExportData(null).meta.netTransform;
+            return { domain: warp.domain, ignored: !!warp.domainIgnored, dot, exportDomain: ex.domain, fieldTiles: ex.fieldTiles === undefined ? null : ex.fieldTiles, blocksFaces: netWarpBlocksFaces(), fieldOk: netDomainEffective({ domain: 'field' }, netSizeFactors()).ignored === null };
+        })()`);
+        const row = { drawnTiles: f6(segs.length / perTile), outsideSegments: outside, dotVsLineEndpointMaxDiffPx: f6(base.dot), domain: base.domain, exportDomain: base.exportDomain, fieldTiles: base.fieldTiles, domainIgnored: base.ignored, fieldBtnEnabled: base.fieldOk, blocksFaces: base.blocksFaces };
+        if (wantField) {
+            const g = w.get(`(function () {
+                const warp = netWarpBaseNow(), F = _netFrame(warp), [hx, hy] = _netFieldH(warp), W = canvasW, H = canvasH, at = (s, t) => ({ x: F.c0.x + s * F.v1.x + t * F.v2.x, y: F.c0.y + s * F.v1.y + t * F.v2.y });
+                let edge = 0; for (let i = 0; i <= 40; i++) { const u = i / 40, sx = -hx + u * (2 * hx + 1), ty = -hy + u * (2 * hy + 1);
+                    edge = Math.max(edge, Math.abs(applyNetWarp(warp, at(sx, -hy)).y), Math.abs(applyNetWarp(warp, at(sx, hy + 1)).y - H), Math.abs(applyNetWarp(warp, at(-hx, ty)).x), Math.abs(applyNetWarp(warp, at(hx + 1, ty)).x - W)); }
+                let inv = 0, seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+                for (let i = 0; i < 400; i++) { const p = { x: rnd() * W, y: rnd() * H }, q = applyNetWarp(warp, invertNetWarp(warp, p)); inv = Math.max(inv, Math.hypot(q.x - p.x, q.y - p.y)); }
+                let area = 0; for (let i = -hx; i <= hx; i++) for (let j = -hy; j <= hy; j++) { const c = [at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1)].map(p => applyNetWarp(warp, p)); let a = 0; for (let k = 0; k < 4; k++) { const p = c[k], q = c[(k + 1) % 4]; a += p.x * q.y - q.x * p.y; } area += Math.abs(a) / 2; }
+                return { edge, inv, areaDiff: Math.abs(area - W * H) };
+            })()`);
+            Object.assign(row, { edgeErrorPx: f6(g.edge), inverseMaxPx: g.inv, areaDiffPx2: f6(g.areaDiff) });
+        }
+        rows[`${X}/${Y}`] = row;
+    };
+    for (const X of [3, 5, 7, 9]) for (const Y of [3, 5, 7, 9]) probe(X, Y, true);
+    for (const [X, Y] of [[4, 5], [2, 6], [4, 4]]) probe(X, Y, false);
+    out.section4_task086_field2d = rows;
+    // Dreieck / Sechseck: kein Netz (netWarpForBase = null), Export ohne netTransform
+    const shapes = {};
+    for (const shape of ['triangle', 'hex']) {
+        const ws = getWorld(shape);
+        for (const [X, Y] of [[3, 3], [3, 5]]) {
+            setupWorld(ws, shape, 3, 1, X, Y);
+            ws.set(`connections = [[1, 6], [2, 5]]; baseNetTransform = ${J(spec)};`);
+            shapes[`${shape} ${X}/${Y}`] = ws.get('({ warp: netWarpBaseNow() === null ? null : "warp", netTransformInExport: buildExportData(null).meta.netTransform === undefined ? null : "present" })');
+        }
+    }
+    out.section4_task086_noField_shapes = shapes;
 }
 
 process.stdout.write(J(out, null, 2) + '\n');
