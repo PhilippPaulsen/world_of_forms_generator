@@ -120,11 +120,11 @@ const metrics = (w, X, Y, spec) => {
         if (segs.some(s => s.x1 < -1e-6 || s.x2 > W_ + 1e-6 || s.y1 < -1e-6 || s.y2 > H_ + 1e-6 && false)) note('drawn', [X, Y]);
     }
     check(`(2a) even / small axes (${n} sizes): Single with domainIgnored, no field, export domain 'single', faces blocked, dots = line ends`, n === 8 && !bad.first, J(bad));
-    for (const shape of ['triangle', 'hex']) for (const [X, Y] of [[3, 3], [3, 5]]) {
+    for (const shape of ['hex', 'triangle']) for (const [X, Y] of (shape === 'hex' ? [[3, 3], [3, 5]] : [[4, 4], [3, 4]])) {   // task 088: the triangle has a Field at odd sizes now (test-net-field-triangle.js)
         const ws = world(shape); setup(ws, shape, X, Y, FIELD);
         if (ws.get('netWarpBaseNow()') !== null || ws.get('netWarpActive()') !== false || ws.get('buildExportData(null).meta.netTransform') !== undefined) note('shape', [shape, X, Y]);
     }
-    check('(2b) triangle and hexagon (3/3, 3/5): no net warp at all, no netTransform in the export (the net applies to the square only)', !bad.first, J(bad));
+    check('(2b) hexagon (3/3, 3/5) and triangle at an even axis (4/4, 3/4): no net warp at all, no netTransform in the export', !bad.first, J(bad));
 }
 
 // ---- 3. export, session, timeline --------------------------------------------------------------------------------------------------------------------------
