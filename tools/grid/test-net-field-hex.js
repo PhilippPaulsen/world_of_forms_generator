@@ -61,10 +61,10 @@ const fieldSpec = (law) => ({ x: law, y: law.kind === 'trig' ? { kind: 'trig', w
         if (ln === 'regular') { if (!r.none && r.domain !== 'field') note('regular', [X, Y]); continue; }
         if (r.none || r.domain !== 'field') { note('none', [X, Y, ln]); continue; }
         if (!r.cov) note('cover', [X, Y, ln]); if (!r.odd) note('odd', [X, Y, J(r.meshes)]); if (!r.mono) note('mono', [X, Y, ln]); if (r.inv > 1e-8) note('inv', [X, Y, ln, r.inv]);
-        if (r.faces !== 0) note('facesNotEmpty', [X, Y, r.faces]); if (r.splitN < 20) note('splitN', [X, Y, ln, r.splitN]); if (r.nodePct < 100 - 1e-9) note('nodes', [X, Y, r.nodePct]); if (!r.blocks) note('facesNotBlocked', [X, Y]); if (r.split > 1e-9) note('split', [X, Y, ln, r.split]); if (r.dot > 1e-9) note('dot', [X, Y, ln, r.dot]); 
+        if (r.faces < 1) note('facesEmpty', [X, Y, r.faces]); if (r.splitN < 20) note('splitN', [X, Y, ln, r.splitN]); if (r.nodePct < 100 - 1e-9) note('nodes', [X, Y, r.nodePct]); if (r.blocks) note('facesBlocked', [X, Y]); if (r.split > 1e-9) note('split', [X, Y, ln, r.split]); if (r.dot > 1e-9) note('dot', [X, Y, ln, r.dot]); 
     }
     console.log('REPORT hexagons in the canvas / hexagons crossing a mesh boundary / Rx (sinus):', J(global.__agg));
-    check(`(1) 16 sizes x 4 laws (${n} cases): Field with odd Rx, Ry <= 21, canvas covered 100 %, monotone boundaries, F(F^-1) < 1e-8, hexagon corners on fine-lattice nodes (100 %), split exact, dots = line ends, faces refused (netWarpBlocksFaces, computeCellFaces empty)`, n === 64 && !bad.first, J(bad));
+    check(`(1) 16 sizes x 4 laws (${n} cases): Field with odd Rx, Ry <= 21, canvas covered 100 %, monotone boundaries, F(F^-1) < 1e-8, hexagon corners on fine-lattice nodes (100 %), split exact, dots = line ends, base faces allowed (task 090: netWarpBlocksFaces false for the base sheet)`, n === 64 && !bad.first, J(bad));
 
     // Aus <-> Field: a tiny strength moves nothing
     let cont = 0;
@@ -123,7 +123,7 @@ const fieldSpec = (law) => ({ x: law, y: law.kind === 'trig' ? { kind: 'trig', w
         setup(w, 'hex', X, Y, fieldSpec(LAWS.sinus), 4);
         const ex = w.get('buildExportData(null).meta.netTransform'), m = w.get('netWarpBaseNow().meshes');
         const want = X === Y ? X : { x: X, y: Y };
-        if (ex.domain !== 'field' || J(ex.fieldTiles) !== J(want) || J(ex.fieldMeshes) !== J({ x: m.x, y: m.y }) || ex.facesOmitted !== true) note('export', [X, Y, ex.fieldTiles, ex.fieldMeshes]);
+        if (ex.domain !== 'field' || J(ex.fieldTiles) !== J(want) || J(ex.fieldMeshes) !== J({ x: m.x, y: m.y }) || ex.facesOmitted !== false) note('export', [X, Y, ex.fieldTiles, ex.fieldMeshes]);
         if (ex.tileBoundaries.x.length !== m.x + 1 || ex.tileBoundaries.y.length !== m.y + 1) note('bounds', [X, Y]);
         const ui = S.uiOf(w.ctx, 'spiegeling', 6), snap = S.snapOf(w.ctx, ui), exp = S.exportOf(w.ctx);
         if (J(snap).includes('fieldMeshes') || J(snap).includes('Rx')) note('snap', [X, Y]);
@@ -133,7 +133,7 @@ const fieldSpec = (law) => ({ x: law, y: law.kind === 'trig' ? { kind: 'trig', w
     }
     setup(w, 'square', 3, 5, fieldSpec(LAWS.sinus), 4); const exq = w.get('buildExportData(null).meta.netTransform');
     setup(w, 'triangle', 3, 5, fieldSpec(LAWS.sinus), 4); const ext = w.get('buildExportData(null).meta.netTransform');
-    check('(4) export: fieldTiles = the sizes, fieldMeshes = {x, y} of the fine lattice (boundaries Rx+1, Ry+1) and facesOmitted for the hexagon; the square has no fieldMeshes, the triangle has them with faces; session round trip identical (no mesh count in it)', !bad.first && exq.fieldMeshes === undefined && ext.fieldMeshes !== undefined && ext.facesOmitted === false, J(bad));
+    check('(4) export: fieldTiles = the sizes, fieldMeshes = {x, y} of the fine lattice (boundaries Rx+1, Ry+1) and faces for the hexagon (task 090); the square has no fieldMeshes, the triangle has them with faces; session round trip identical (no mesh count in it)', !bad.first && exq.fieldMeshes === undefined && ext.fieldMeshes !== undefined && ext.facesOmitted === false, J(bad));
 }
 // ---- 5. timeline net snapshots on the hexagon: playback t = 0, .5, 1 draws the lerp over the covering Field ----
 {

@@ -4,6 +4,7 @@
 //   2. exactness: the refined polygon's image = the image of the regular edge (samples along every edge, < 1e-9 px); the refinement adds vertices for an asymmetric pattern, none for the triangle; the colours are those of Aus
 //   3. every other case (square, triangle with and without a Field, hexagon without a Field, Single, Tiled, Aus) is byte-equal to main and to the same code without the two hooks
 //   4. export: the hexagon Field writes faces (facesOmitted false, facesMapping says split), the triangle's flags unchanged; the layers' reason says Base sheet only
+//   7. core/faces.js differs from main by the two hooks only
 //   5. time per frame with faces (skip) against Aus with faces: <= 1.5 x
 const fs = require('fs'), path = require('path'), os = require('os'), { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
@@ -123,6 +124,16 @@ if (on('5')) {
     }
     console.log('REPORT frame time with faces (ms, 10 orbits, D6):', J(rep));
     check(`(5) time per frame with faces in the hexagon Field <= 1.5 x Aus with faces (worst of 5/5, 7/5, 9/9: ${worst.toFixed(2)})`, worst <= 1.5);
+}
+// ---- 7. core/faces.js differs from main (a51af63b) by the two documented hooks only ----
+if (on('7')) {
+    let diff = null; try { diff = execSync('git diff -U0 a51af63b -- core/faces.js', { cwd: ROOT }).toString(); } catch (e) { }
+    if (diff === null) check('(7) git or a51af63b is not available here: skipped', true);
+    else {
+        const added = diff.split('\n').filter(l => /^\+[^+]/.test(l)), removed = diff.split('\n').filter(l => /^-[^-]/.test(l));
+        check('(7) core/faces.js: exactly the two hooks (netWarpRefineFaces at the end of computeCellFaces replaces `return result;`, netWarpTileOutsideCanvas in drawFaceFillsAtTile)',
+            added.length === 2 && removed.length === 1 && /netWarpRefineFaces\(result, activeNetWarp\)/.test(added.join('')) && /netWarpTileOutsideCanvas\(activeNetWarp, tileCentroid, flip180\)/.test(added.join('')) && /^-\s+return result;$/.test(removed[0]), J({ added: added.length, removed: removed }));
+    }
 }
 console.log(`${pass}/${pass + fail} checks passed`);
 if (fail) process.exit(1);
