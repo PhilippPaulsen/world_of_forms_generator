@@ -36,4 +36,5 @@ engine. This repo is the canonical generator (`sketch.js` UI shell, portable `co
 State and next steps: `ROADMAP.md` ("Spatial morph: staged plan" > "Stand 2026-11-10", "Patterns block - STATUS",
 "Sheets redesign - STATUS", "Merge readiness"). Morph state after task 038: d3 filter, line switch, playback and
 spatial colours, SVG export and the frame memo are done; open: d3 relaxation, small items, Browser timing (ROADMAP).
+Non-square area (tasks 077 to 083): done (size X x Y within 1:3, lock and height stepper, form-true side lengths, session/export/transport `size=XxY`); colours are re-keyed at a size change (task 083, `core/state.js`). Open small items: `ROADMAP.md` ("Kleinigkeiten, nicht quadratische Fläche", "Aufräumen (Task 084)"). Task 084 removed `burnsideOrbitCount` and made the per-draw DOM writers write only on change.
 Grid position 2 (Lage 2): freely usable since task 072d - no switch, no `?lage2=1` (ignored): second click on the active shape button (dot), base and layers, ceiling `LAGE2_MAX` 12 / 12 / 9 in `core/forms.js`; session and transport (URL, paste) load it; the catalog (`gallery/v2`) stays position 1 only.
