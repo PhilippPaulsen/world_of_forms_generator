@@ -693,8 +693,11 @@ function setup() {
         const locked = [curveBtn, freeBtn, faceBtn].filter(Boolean);
         locked.forEach(b => { b.elt.dataset.title = b.elt.title; });
         let wasActive = null;
+        const htmlWritten = new WeakMap();   // task 084: the three hint texts below are written only when their text changes
+        const htmlOnce = (el, text) => { if (htmlWritten.get(el.elt) !== text) { htmlWritten.set(el.elt, text); el.html(text); } };
         netControlsSync = function () {
-            group.elt.hidden = !(currentShape === 'square' && activeLayer === 'base');
+            const groupHide = !(currentShape === 'square' && activeLayer === 'base');   // task 084: a hidden flag or title is written only when its value changes (this runs on every draw)
+            if (group.elt.hidden !== groupHide) group.elt.hidden = groupHide;
             const active = netWarpActive();
             // Domain: adopt one set from the state; Field needs an odd Shape Size 3..9 - an even one is reset to Single, visibly
             const sd = stateDomain(); if (sd && sd !== ui.domain) { ui.domain = sd; render(); }
@@ -703,18 +706,19 @@ function setup() {
                 setDomain('single'); render();
                 showFieldNote(`Shape Size ${R} ${Number.isInteger(R) && R % 2 === 0 ? 'is even' : 'is not a valid field size'}, so Field was reset to Single (Field needs an odd Shape Size: 3, 5, 7, 9).`);
             }
-            fieldBtn.elt.disabled = !fieldOk;
-            fieldBtn.elt.title = fieldOk ? fieldBtn.elt.dataset.title : 'Field needs an odd Shape Size (3, 5, 7, 9)';
-            fieldHint.elt.hidden = fieldOk;
+            if (fieldBtn.elt.disabled !== !fieldOk) fieldBtn.elt.disabled = !fieldOk;
+            const fieldTitle = fieldOk ? fieldBtn.elt.dataset.title : 'Field needs an odd Shape Size (3, 5, 7, 9)';
+            if (fieldBtn.elt.title !== fieldTitle) fieldBtn.elt.title = fieldTitle;
+            if (fieldHint.elt.hidden !== fieldOk) fieldHint.elt.hidden = fieldOk;
             const isField = ui.domain === 'field', E0 = baseGridDivisions();
-            fieldInfo.elt.hidden = !(active && isField);
-            if (active && isField) fieldInfo.html(`Field: macro = R = ${R} tiles, micro = E = ${E0} per tile. Face fills are exact on a Field and work for the base sheet and for layers on the base grid (same shape and size, no offset, no rotation - every timeline playback layer); other layers are not filled.`);
+            if (fieldInfo.elt.hidden !== !(active && isField)) fieldInfo.elt.hidden = !(active && isField);
+            if (active && isField) htmlOnce(fieldInfo, `Field: macro = R = ${R} tiles, micro = E = ${E0} per tile. Face fills are exact on a Field and work for the base sheet and for layers on the base grid (same shape and size, no offset, no rotation - every timeline playback layer); other layers are not filled.`);
             // The Shape Size hint says what Shape Size does in the CURRENT mode
             const hintText = !active ? null
                 : ui.domain === 'single' ? (R > 1 ? 'Single: one closed net. Shape Size 1 fills the canvas, larger sizes give a smaller net; Field (odd Shape Size 3-9) spreads the law over all the tiles instead.' : null)
                 : ui.domain === 'tiled' ? `Tiled: the warped tile is repeated ${R} times across the canvas, every copy alike.`
                 : `Field: Shape Size is the number of macro cells (tiles) per axis; the net always fills the canvas.`;
-            sizeHint.elt.hidden = hintText === null; if (hintText !== null) sizeHint.html(hintText);
+            if (sizeHint.elt.hidden !== (hintText === null)) sizeHint.elt.hidden = hintText === null; if (hintText !== null) htmlOnce(sizeHint, hintText);
             // Macro cells: a chosen macro that no longer divides E (Node Count changed) is reset to smooth, visibly -
             // never silently snapped to another divisor (the core would ignore it anyway: netMacroEffective()).
             const E = baseGridDivisions();
@@ -728,9 +732,9 @@ function setup() {
                 const was = ui.macro; setMacro(undefined);   // a valid divisor the current law no longer offers (Macro 2 after Geometric -> Sinus/Tangens/mixed)
                 showMacroNote(`Macro ${was} has no effect for this law (a trig law's macro points sit on its fixed points), so the net was reset to smooth (${E}\u00d71).`);
             }
-            macroRow.elt.hidden = !(active && nested && !isField);   // in a Field the micro grid is the clicked tile's own (see fieldInfo)
-            macroHint.elt.hidden = !(active && !nested && !isField);
-            if (active && !nested && !isField) { const geo = netSpecMacro2Real(baseNetTransform); macroHint.html(`Macro cells: not available for E = ${E} (Node Count ${nodeCount}) - E needs a divisor from ${geo ? 2 : 3} up to E \u2212 1, e.g. E = ${geo ? '4, 6, 8, 9, 10, 12' : '6, 8, 9, 10, 12'}.`); }
+            if (macroRow.elt.hidden !== !(active && nested && !isField)) macroRow.elt.hidden = !(active && nested && !isField);   // in a Field the micro grid is the clicked tile's own (see fieldInfo)
+            if (macroHint.elt.hidden !== !(active && !nested && !isField)) macroHint.elt.hidden = !(active && !nested && !isField);
+            if (active && !nested && !isField) { const geo = netSpecMacro2Real(baseNetTransform); htmlOnce(macroHint, `Macro cells: not available for E = ${E} (Node Count ${nodeCount}) - E needs a divisor from ${geo ? 2 : 3} up to E \u2212 1, e.g. E = ${geo ? '4, 6, 8, 9, 10, 12' : '6, 8, 9, 10, 12'}.`); }
             const sig = `${E}|${ui.macro}|${active && nested && !isField}|${options.join(',')}`;
             if (sig !== macroSig) {
                 macroSig = sig; macroBtns.elt.innerHTML = '';
@@ -4479,7 +4483,7 @@ function updateFaceColorsPanel() {
     const groupEl = document.getElementById('face-colors-group');
     if (!groupEl) return;
     const visible = activeShowFaces();
-    groupEl.hidden = !visible;
+    if (groupEl.hidden === visible) groupEl.hidden = !visible;   // task 084: only when it changes
     if (!visible) { faceColorsSignature = null; faceHover = null; return; }
     // The cross-layer overlay (drawn over every sheet's fills at 65% alpha) hides per-sheet colors while a
     // CURRENT result is displayed - same currency check draw() uses; a plain toggle, no panel rebuild.
