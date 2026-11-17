@@ -384,6 +384,7 @@
     'net.domain.single': { de: 'Einzeln', en: 'Single' },
     'net.domain.tiled': { de: 'Gekachelt', en: 'Tiled' },
     'net.domain.field': { de: 'Feld', en: 'Field' },
+    'net.readout.fieldCut': { de: 'Feld: {n} × {m} Kacheln, Rand angeschnitten', en: 'Field: {n} × {m} tiles, edge cut' },
     'net.readout.field2': { de: 'Feld: {n} × {m} Kacheln', en: 'Field: {n} × {m} tiles' },
     'net.readout.field': { de: 'Feld: {n} × {n} Kacheln', en: 'Field: {n} × {n} tiles' },
     'net.readout.tiled': { de: 'Gekachelt: {n} × {n}', en: 'Tiled: {n} × {n}' },

@@ -696,7 +696,7 @@ function setup() {
         const htmlWritten = new WeakMap();   // task 084: the three hint texts below are written only when their text changes
         const htmlOnce = (el, text) => { if (htmlWritten.get(el.elt) !== text) { htmlWritten.set(el.elt, text); el.html(text); } };
         netControlsSync = function () {
-            const groupHide = !(currentShape === 'square' && activeLayer === 'base');   // task 084: a hidden flag or title is written only when its value changes (this runs on every draw)
+            const groupHide = !((currentShape === 'square' || currentShape === 'triangle') && activeLayer === 'base');   // task 088: the triangle has the Netz row too (a Field only)   // task 084: a hidden flag or title is written only when its value changes (this runs on every draw)
             if (group.elt.hidden !== groupHide) group.elt.hidden = groupHide;
             const active = netWarpActive();
             // Domain: adopt one set from the state; Field needs an odd Shape Size 3..9 - an even one is reset to Single, visibly
@@ -707,6 +707,7 @@ function setup() {
                 showFieldNote(`Shape Size ${R} ${Rs.x === Rs.y && Rs.x % 2 === 0 ? 'is even' : 'is not a valid field size'}, so Field was reset to Single (Field needs an odd Shape Size in X and Y: 3, 5, 7, 9).`);
             }
             if (fieldBtn.elt.disabled !== !fieldOk) fieldBtn.elt.disabled = !fieldOk;
+            domainBtns.forEach(b => { if (b.elt.dataset.domain !== 'field') { const dis = currentShape === 'triangle'; if (b.elt.disabled !== dis) b.elt.disabled = dis; } });   // task 088: only a Field applies to the triangle
             const fieldTitle = fieldOk ? fieldBtn.elt.dataset.title : 'Field needs an odd Shape Size in X and Y (3, 5, 7, 9)';
             if (fieldBtn.elt.title !== fieldTitle) fieldBtn.elt.title = fieldTitle;
             if (fieldHint.elt.hidden !== fieldOk) fieldHint.elt.hidden = fieldOk;
@@ -4424,9 +4425,9 @@ let netControlsSync = null;
 // black, the finer micro level of a nested net red. Not exported; a PNG export of the canvas includes it.
 let netLinesOn = false;
 function drawNetLinesOverlay() {
-    if (!netLinesOn || currentShape !== 'square') return;
+    if (!netLinesOn || (currentShape !== 'square' && currentShape !== 'triangle')) return;
     const nw = netWarpBaseNow(), closed = !!nw && !nw.repeat, field = nw && nw.field;
-    const lines = netGridLines(netTransformNow(), outerCorners, baseGridDivisions(), { x0: 0, y0: 0, x1: width, y1: height }, field ? { closed, domain: 'field', fieldTiles: field.Rx !== undefined ? { x: field.Rx, y: field.Ry } : field.Rt } : { closed });
+    const lines = netGridLines(netTransformNow(), outerCorners, baseGridDivisions(), { x0: 0, y0: 0, x1: width, y1: height }, field ? { closed, domain: 'field', fieldTiles: field.Rx !== undefined ? { x: field.Rx, y: field.Ry } : field.Rt, frame: nw.meshes ? nw.frame : undefined } : { closed });
     push();
     strokeWeight(1);
     lines.forEach(l => {
