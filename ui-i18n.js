@@ -384,6 +384,7 @@
     'net.domain.single': { de: 'Einzeln', en: 'Single' },
     'net.domain.tiled': { de: 'Gekachelt', en: 'Tiled' },
     'net.domain.field': { de: 'Feld', en: 'Field' },
+    'net.readout.field2': { de: 'Feld: {n} × {m} Kacheln', en: 'Field: {n} × {m} tiles' },
     'net.readout.field': { de: 'Feld: {n} × {n} Kacheln', en: 'Field: {n} × {n} tiles' },
     'net.readout.tiled': { de: 'Gekachelt: {n} × {n}', en: 'Tiled: {n} × {n}' },
     'net.readout.single': { de: 'Einzeln: ein Netz', en: 'Single: one net' },
@@ -391,11 +392,11 @@
     'net.domain.tiled.title': { de: 'Gekachelt: die gewarpte Kachel wird so oft über die Fläche wiederholt, wie die Größe sagt, jede Kopie gleich', en: 'Tiled: the warped tile is repeated across the canvas by Shape Size, every copy alike' },
     'net.domain.field.title': { de: 'Feld: das Gesetz spannt über alle Größe × Größe Kacheln; jede Kachel ist eine skalierte Kopie des angeklickten Musters (ungerade Größe 3, 5, 7, 9)', en: 'Field: the law spans all Shape Size x Shape Size tiles; each tile is a scaled copy of the clicked pattern (odd Shape Size 3, 5, 7, 9)' },
     'net.alternate.title': { de: 'Nur bei Gekachelt: jede zweite Kachel spiegeln, damit die Maschenweiten über die Nähte weiterlaufen (eine Deutung: das Buch zeigt das für Linienmotive, nicht für die Abstandsfunktion)', en: 'Only in Tiled mode: mirror every other tile so mesh widths run on across tile seams (an interpretation - the book shows this for line motifs, not for the spacing function)' },
-    'net.hint.fieldOdd': { de: 'Feld braucht eine ungerade Größe (3, 5, 7, 9).', en: 'Field needs an odd Shape Size (3, 5, 7, 9).' },
+    'net.hint.fieldOdd': { de: 'Feld braucht ungerade Größen in X und Y (3, 5, 7, 9).', en: 'Field needs odd Shape Sizes in X and Y (3, 5, 7, 9).' },
     'net.macro': { de: 'Macro-Zellen (Macro × Micro)', en: 'Macro cells (macro × micro)' },
     'net.focus.title': { de: 'Wo die breiteste (Sinus) / schmalste (Tangens) Masche in der Kachel liegt: -1 = linker Rand, 0 = Mitte, +1 = rechter Rand', en: 'Where the widest (sinus) / narrowest (tangens) mesh sits in the tile: -1 = left edge, 0 = centre, +1 = right edge' },
     'net.alternate': { de: 'Kacheln spiegeln', en: 'Mirror alternate tiles' },
-    'net.reason.fieldOdd': { de: 'Feld braucht eine ungerade Größe', en: 'Field needs an odd shape size' },
+    'net.reason.fieldOdd': { de: 'Feld braucht ungerade Größen in X und Y', en: 'Field needs odd shape sizes in X and Y' },
     'net.reason.focus': { de: 'Fokus gilt für Sin und Tan', en: 'Focus applies to Sin and Tan' },
 
     // ---- the phone layout's labels (sheets redesign, commit 6a): the sub-tab names, the sheet hosts (also the names of their "..." buttons), the tool row and sub-tab row groups ----
