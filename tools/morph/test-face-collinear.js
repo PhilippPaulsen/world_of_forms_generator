@@ -120,5 +120,16 @@ const run = (sb, segs) => sb.__f(segs.map((g) => Object.assign({}, g)), []);
     const r = w.get(`(function () { faceRepairCollinear = true; const lines = [[{ x: 0, y: 0 }, { x: 10, y: 10 }]]; const s = spatialMorphRenderSource({ ids: [0] }); spatialMorphRenderTileFaces(lines, s, null); const afterOn = faceRepairCollinear; faceRepairCollinear = false; spatialMorphRenderTileFaces(lines, s, null); return { afterOn, afterOff: faceRepairCollinear }; })()`);
     check('6b. spatialMorphRenderTileFaces restores the value it read (true stays true, false stays false)', hasSwitch && r.afterOn === true && r.afterOff === false, J(r));
 }
+// ---- 6c. the angle sort: counter-clockwise from +x without trig; the atan2 version folds an angle of -1e-17 rad to 0 (360 - 5.7e-16 rounds to 360)
+{
+    const mkAdj = (src, on) => { const sb = { console, Math }; vm.createContext(sb); vm.runInContext(src + (on === undefined ? '' : `\nfaceRepairCollinear = ${on};`) + '\nvar __a = _buildFaceAdjacency;', sb); return sb.__a; };
+    const nodes = [{ id: 'o', x: 0, y: 0 }, { id: 'a', x: 1, y: -1e-17 }, { id: 'b', x: 0, y: 1 }, { id: 'c', x: -1, y: 0 }, { id: 'd', x: 0, y: -1 }, { id: 'e', x: 1, y: 1e-17 }];
+    const edges = [['o', 'a'], ['o', 'b'], ['o', 'c'], ['o', 'd'], ['o', 'e']];
+    const order = (adj) => adj.o.map((e) => e.neighborId).join('');
+    check('6c. switch ON: the edges around a node are in exact counter-clockwise order (e a: +1e-17 first, -1e-17 last)', hasSwitch && order(mkAdj(NEW_SRC, true)(nodes, edges)) === 'ebcda', hasSwitch ? order(mkAdj(NEW_SRC, true)(nodes, edges)) : '-');
+    const g = [{ id: 'o', x: 0, y: 0 }, { id: 'a', x: 3, y: 4 }, { id: 'b', x: -2, y: 5 }, { id: 'c', x: -7, y: -1 }, { id: 'd', x: 4, y: -9 }];
+    const ge = [['o', 'a'], ['o', 'b'], ['o', 'c'], ['o', 'd']];
+    check('6d. generic directions: ON and OFF give the same order, OFF is the old order', order(mkAdj(NEW_SRC, true)(g, ge)) === order(mkAdj(NEW_SRC, false)(g, ge)) && J(mkAdj(NEW_SRC, hasSwitch ? false : undefined)(g, ge)) === J(mkAdj(OLD_SRC)(g, ge)));
+}
 console.log(`${pass}/${pass + fail} checks passed`);
 process.exit(fail ? 1 : 0);
