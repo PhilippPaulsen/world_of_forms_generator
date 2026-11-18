@@ -27,6 +27,7 @@ let failures = 0, checks = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
 process.on('uncaughtException', (e) => { console.log('FAIL  the test run itself crashed: ' + (e && e.stack)); process.exit(1); });
 const J = (x) => JSON.stringify(x);
+const { SEAM_MAX } = require('./seam-rule.js');
 const BASE = '8ad40398';   // main before task 036
 
 // ---- file copies (old tree, sabotage) -----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -115,7 +116,9 @@ function compare(label, w) {
     if (polyOk) live.polys.forEach((r, i) => {
         const s = polys[i];
         if (s.hex !== hexOf(w, r.fill)) hexOk = false;
-        if (s.pts.length !== r.pts.length || Math.abs(area(s.pts) - area(r.pts)) > 0.5 + 2e-3 * area(r.pts)) shapeOk = false;
+        // task 096: the SVG polygon is the exact face, the canvas polygon is that face DRAWN grown (outwards by at most SEAM_MAX per vertex): same vertex count, the canvas area is not smaller and exceeds the exact one by at most perimeter x SEAM_MAX
+        const slack = 0.5 + 2e-3 * area(r.pts), per = s.pts.reduce((t, q, k) => { const n = s.pts[(k + 1) % s.pts.length]; return t + Math.hypot(q[0] - n[0], q[1] - n[1]); }, 0);
+        if (s.pts.length !== r.pts.length || area(r.pts) < area(s.pts) - slack || area(r.pts) > area(s.pts) + per * SEAM_MAX + slack) shapeOk = false;
     });
     check(`${label}: ${live.lines.length} lines = ${paths.length} paths, coordinates equal the frame's line calls (max ${maxd.toFixed(4)})`, lineOk && coordOk);
     check(`${label}: ${live.polys.length} polygons = ${polys.length}, fill hex in drawing order`, polyOk && hexOk, new Set(polys.map((p) => p.hex)).size + ' hex');

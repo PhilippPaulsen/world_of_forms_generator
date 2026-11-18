@@ -27,8 +27,15 @@ const BASE_FILE = path.join(os.tmpdir(), `spatial-morph-render-${BASE}-${process
 const REF_TXT = execSync(`git show ${BASE}:core/spatial-morph-render.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString()
   .replace("    try {\n        activeNetWarp = null;", "    const savedRepair = (typeof faceRepairCollinear !== 'undefined') ? faceRepairCollinear : null;\n    try {\n        if (savedRepair !== null) faceRepairCollinear = true;\n        activeNetWarp = null;")
   .replace("        if (typeof segmentCollector !== 'undefined') segmentCollector = savedCollector;\n    }\n}", "        if (typeof segmentCollector !== 'undefined') segmentCollector = savedCollector;\n        if (savedRepair !== null) faceRepairCollinear = savedRepair;\n    }\n}");
+// task 096: ...and the same DRAWING of the faces (grown fills, spatialMorphRenderGrow and its constants, taken from the file under test: this test is about the reuse, the drawing rule itself is pinned by test-morph-seams.js and the
+// rule check in test-spatial-morph-faces.js): the old spatialMorphRenderFillFaces is replaced by the current block from '// Task 096' up to the end of spatialMorphRenderFillFaces
+const CUR_TXT = fs.readFileSync(path.join(ROOT, 'core', 'spatial-morph-render.js'), 'utf8');
+const DRAW_BLOCK = CUR_TXT.slice(CUR_TXT.indexOf('// Task 096: the seams.'), CUR_TXT.indexOf('// Task 038: the faces and the colours of a tile'));
+const oldFillStart = REF_TXT.indexOf('function spatialMorphRenderFillFaces('), oldFillEnd = REF_TXT.indexOf('\n}\n', oldFillStart) + 3;
+if (DRAW_BLOCK.length < 200 || oldFillStart < 0) throw new Error('reference render file: the drawing block could not be replaced');
+const REF_TXT2 = REF_TXT.slice(0, oldFillStart) + DRAW_BLOCK + REF_TXT.slice(oldFillEnd);
 if (!/faceRepairCollinear = true/.test(REF_TXT) || !/faceRepairCollinear = savedRepair/.test(REF_TXT)) throw new Error('reference render file: the switch lines could not be added');
-fs.writeFileSync(BASE_FILE, REF_TXT);
+fs.writeFileSync(BASE_FILE, REF_TXT2);
 process.on('exit', () => { try { fs.unlinkSync(BASE_FILE); } catch (e) { } });
 // both keyframes with the SAME lines but different colours: the tiles share their cell lines and differ in their weights (the colours differ with the weights)
 PAIRS['same-lines'] = { N: 3, sym: 'none', k0: [[1, 5], [2, 8], [3, 7], [4, 6], [1, 9]], k1: [[1, 5], [2, 8], [3, 7], [4, 6], [1, 9]], colour: true };
@@ -99,7 +106,7 @@ for (const [name, mode, max] of [['hex-typical', 'linear', 0.1], ['hex-typical',
     check('the same frame drawn twice computes the same number of times (nothing carried over from the frame before)', c1[0] > 0 && J(c1) === J(c2), J(c1) + ' / ' + J(c2));
     const keys = Object.keys(a.get('spatialMorphRenderState')).sort().join(',');
     check('spatialMorphRenderState has no new member (no cache state outside the frame)', keys === 'colorBuilds,colorCache,faceStats,frames,seamCache,seamCheck,seamChecks,seamHits,seamLastMs,span,spanComputes,spanKey,status', keys);
-    const src = fs.readFileSync(process.env.SPATIAL_MORPH_RENDER_JS || path.join(ROOT, 'core', 'spatial-morph-render.js'), 'utf8');
+    const src = fs.readFileSync(path.join(ROOT, 'core', 'spatial-morph-render.js'), 'utf8');
     const tops = [...src.matchAll(/^(?:function|const|let|var)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]);
     check('every top-level name of the file carries the prefix spatialMorph[A-Z]', tops.length > 20 && tops.every((n) => /^spatialMorph[A-Z]/.test(n)), tops.filter((n) => !/^spatialMorph[A-Z]/.test(n)).join(','));
     check('spatialMorphRenderTileMemo() makes a fresh memo and spatialMorphRenderDraw() drops it in its finally (clear())', /tileMemo = facesDrawn \? spatialMorphRenderTileMemo\(\) : null/.test(src) && /finally \{\s*if \(tileMemo\) tileMemo\.clear\(\);/.test(src));
@@ -117,5 +124,15 @@ for (const [name, mode, max] of [['hex-typical', 'linear', 0.1], ['hex-typical',
     check('a frame that throws half way: status renderError, and the next frame equals a fresh world\'s (nothing left behind)', err === 'renderError' && A.polys === B.polys && A.calls === B.calls, err);
 }
 
+// task 096: the drawn polygons against the exact faces (the same world with the growing switched off): faces moved outwards by at most SEAM_MAX, same count / order / fill / vertex count
+{
+  const { seamRule, SEAM_MAX } = require('./seam-rule.js');
+  for (const name of ['coloured', 'hex-coloured', 'tri-coloured']) {
+    const { a } = pair(name, 'linear'); const g = frame(a, 0.5); const gp = JSON.parse(g.polys);
+    a.set('spatialMorphRenderGrow = (p) => p;'); const e = frame(a, 0.5); const ep = JSON.parse(e.polys);
+    const r = seamRule(gp, ep);
+    check(`${name} linear: the drawn polygons are the exact faces moved outwards by at most ${SEAM_MAX} px (${gp.length} polygons, ${r.grown} grown, largest move ${r.worst})`, r.ok && gp.length > 0 && r.grown > 0, r.why);
+  }
+}
 console.log(`\n${checks - failures}/${checks} checks passed`);
 process.exit(failures ? 1 : 0);
