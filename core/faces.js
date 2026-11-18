@@ -612,6 +612,28 @@ function splitSegments(segments, realNodes) {
                 }
             }
         }
+        // the "intersections" of almost parallel segments are arbitrary points along the shared run (noise decides where): every segment that runs through such a
+        // point within FACE_EPSILON splits there too, so overlapping segments all carry the same break points (otherwise a chord and a chain describe one run)
+        const loose = [];
+        for (let i = 0; i < segments.length; i++) {
+            for (let j = i + 1; j < segments.length; j++) {
+                const a = segments[i], b = segments[j], hit = segmentIntersection(a, b);
+                if (!hit) continue;
+                const cross = Math.abs((a.x2 - a.x1) * (b.y2 - b.y1) - (a.y2 - a.y1) * (b.x2 - b.x1));
+                if (cross < 1e-3 * Math.hypot(a.x2 - a.x1, a.y2 - a.y1) * Math.hypot(b.x2 - b.x1, b.y2 - b.y1)) loose.push([hit.x, hit.y]);
+            }
+        }
+        if (loose.length) {
+            for (let i = 0; i < segments.length; i++) {
+                const a = segments[i], dx = a.x2 - a.x1, dy = a.y2 - a.y1, L2 = dx * dx + dy * dy;
+                if (L2 < 1e-18) continue;
+                for (const [px, py] of loose) {
+                    const t = ((px - a.x1) * dx + (py - a.y1) * dy) / L2;
+                    if (t <= 0 || t >= 1) continue;
+                    if (Math.hypot(px - (a.x1 + t * dx), py - (a.y1 + t * dy)) <= FACE_EPSILON) breaks[i].push(t);
+                }
+            }
+        }
     }
     const edgeMap = new Map();
     const edgeMeta = new Map();
