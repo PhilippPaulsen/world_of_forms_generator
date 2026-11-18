@@ -131,11 +131,11 @@ if (on('7')) {
     if (diff === null) check('(7) git or a51af63b is not available here: skipped', true);
     else {
         const added = diff.split('\n').filter(l => /^\+[^+]/.test(l)), removed = diff.split('\n').filter(l => /^-[^-]/.test(l));
-        // task 095: since then faces.js also carries the collinear repair behind the switch faceRepairCollinear: 67 ADDED lines, none removed, against 7307ec7e (pin: was 0 added; before, `added.length === 2`)
+        // task 095: since then faces.js also carries the collinear repair behind the switch faceRepairCollinear: 137 ADDED lines, none removed, against 7307ec7e (pin: was 0 added; before, `added.length === 2`)
         let d95 = null; try { d95 = execSync('git diff -U0 7307ec7e -- core/faces.js', { cwd: ROOT }).toString().split('\n'); } catch (e) { }
-        check('(7b) core/faces.js against 7307ec7e (task 095): exactly 67 added lines (59 + 8 marker lines), none removed, the switch defaults to false', d95 === null || (d95.filter(l => /^\+[^+]/.test(l)).length === 67 && d95.filter(l => /^-[^-]/.test(l)).length === 0 && /^\+let faceRepairCollinear = false;$/m.test(d95.join('\n'))));
-        check('(7) core/faces.js: exactly the two hooks plus the 67 lines of task 095 (netWarpRefineFaces at the end of computeCellFaces replaces `return result;`, netWarpTileOutsideCanvas in drawFaceFillsAtTile)',
-            added.length === 2 + 67 && removed.length === 1 && /netWarpRefineFaces\(result, activeNetWarp\)/.test(added.join('')) && /netWarpTileOutsideCanvas\(activeNetWarp, tileCentroid, flip180\)/.test(added.join('')) && /^-\s+return result;$/.test(removed[0]), J({ added: added.length, removed: removed }));
+        check('(7b) core/faces.js against 7307ec7e (task 095): exactly 137 added lines (task 095: 59 + 8 marker lines; task 098: 70), none removed, the switch defaults to false', d95 === null || (d95.filter(l => /^\+[^+]/.test(l)).length === 137 && d95.filter(l => /^-[^-]/.test(l)).length === 0 && /^\+let faceRepairCollinear = false;$/m.test(d95.join('\n'))));
+        check('(7) core/faces.js: exactly the two hooks plus the 137 lines of tasks 095 and 098 (netWarpRefineFaces at the end of computeCellFaces replaces `return result;`, netWarpTileOutsideCanvas in drawFaceFillsAtTile)',
+            added.length === 2 + 137 && removed.length === 1 && /netWarpRefineFaces\(result, activeNetWarp\)/.test(added.join('')) && /netWarpTileOutsideCanvas\(activeNetWarp, tileCentroid, flip180\)/.test(added.join('')) && /^-\s+return result;$/.test(removed[0]), J({ added: added.length, removed: removed }));
     }
 }
 console.log(`${pass}/${pass + fail} checks passed`);

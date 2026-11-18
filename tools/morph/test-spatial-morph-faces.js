@@ -33,7 +33,7 @@ const sha = (t) => crypto.createHash('sha256').update(t).digest('hex');
 const hashOf = (x) => sha(J(x)).slice(0, 16);
 const PRINT = process.argv.includes('--print-pins');
 // task 090: core/faces.js carries two documented hooks (netWarpRefineFaces, netWarpTileOutsideCanvas); the pin hashes it WITHOUT them (tools/grid/test-net-field-hex-faces.js (7) pins the hooks themselves)
-const stripHooks = (rel, t) => rel === 'core/faces.js' ? t.replace(/^[ \t]*\/\/ task 095 \{\n[\s\S]*?^[ \t]*\/\/ task 095 \}\n/gm, '').split('\n').filter((l) => !/netWarpTileOutsideCanvas\(activeNetWarp/.test(l)).map((l) => l.replace(/return typeof netWarpRefineFaces === 'function' \? netWarpRefineFaces\(result, activeNetWarp\) : result;.*$/, 'return result;')).join('\n') : t;
+const stripHooks = (rel, t) => rel === 'core/faces.js' ? t.replace(/^[ \t]*\/\/ task 09[58] \{\n[\s\S]*?^[ \t]*\/\/ task 09[58] \}\n/gm, '').split('\n').filter((l) => !/netWarpTileOutsideCanvas\(activeNetWarp/.test(l)).map((l) => l.replace(/return typeof netWarpRefineFaces === 'function' \? netWarpRefineFaces\(result, activeNetWarp\) : result;.*$/, 'return result;')).join('\n') : t;
 
 // ---- pins: the tree before this stage (3108480a) ----------------------------------------------------------------------------------------------------------------------------------------------
 const PIN_FILES = {
