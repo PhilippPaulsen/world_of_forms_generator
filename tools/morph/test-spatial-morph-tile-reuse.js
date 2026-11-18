@@ -23,7 +23,12 @@ const { build, PAIRS } = require('./measure-color-jumps.js');
 // the reference = core/spatial-morph-render.js of main BEFORE task 038 (git show), so a defect of the file under test cannot hide in both worlds; a sabotage copy (SPATIAL_MORPH_RENDER_JS) is only the world under test
 const BASE = '13d141f1';
 const BASE_FILE = path.join(os.tmpdir(), `spatial-morph-render-${BASE}-${process.pid}.js`);
-fs.writeFileSync(BASE_FILE, execSync(`git show ${BASE}:core/spatial-morph-render.js`, { cwd: ROOT, maxBuffer: 1 << 26 }));
+// task 095: the reference render file gets the same switch lines as the file under test (spatialMorphRenderTileFaces switches the collinear repair of core/faces.js on), otherwise the reference would draw the old, holed faces and the two worlds could not be equal
+const REF_TXT = execSync(`git show ${BASE}:core/spatial-morph-render.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString()
+  .replace("    try {\n        activeNetWarp = null;", "    const savedRepair = (typeof faceRepairCollinear !== 'undefined') ? faceRepairCollinear : null;\n    try {\n        if (savedRepair !== null) faceRepairCollinear = true;\n        activeNetWarp = null;")
+  .replace("        if (typeof segmentCollector !== 'undefined') segmentCollector = savedCollector;\n    }\n}", "        if (typeof segmentCollector !== 'undefined') segmentCollector = savedCollector;\n        if (savedRepair !== null) faceRepairCollinear = savedRepair;\n    }\n}");
+if (!/faceRepairCollinear = true/.test(REF_TXT) || !/faceRepairCollinear = savedRepair/.test(REF_TXT)) throw new Error('reference render file: the switch lines could not be added');
+fs.writeFileSync(BASE_FILE, REF_TXT);
 process.on('exit', () => { try { fs.unlinkSync(BASE_FILE); } catch (e) { } });
 // both keyframes with the SAME lines but different colours: the tiles share their cell lines and differ in their weights (the colours differ with the weights)
 PAIRS['same-lines'] = { N: 3, sym: 'none', k0: [[1, 5], [2, 8], [3, 7], [4, 6], [1, 9]], k1: [[1, 5], [2, 8], [3, 7], [4, 6], [1, 9]], colour: true };
