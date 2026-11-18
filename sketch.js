@@ -4428,7 +4428,7 @@ let netLinesOn = false;
 function drawNetLinesOverlay() {
     if (!netLinesOn || (currentShape !== 'square' && currentShape !== 'triangle' && currentShape !== 'hex')) return;
     const nw = netWarpBaseNow(), closed = !!nw && !nw.repeat, field = nw && nw.field;
-    const lines = netGridLines(netTransformNow(), outerCorners, baseGridDivisions(), { x0: 0, y0: 0, x1: width, y1: height }, field ? { closed, domain: 'field', fieldTiles: field.Rx !== undefined ? { x: field.Rx, y: field.Ry } : field.Rt, frame: nw.meshes ? nw.frame : undefined } : { closed });
+    const lines = netGridLines(netTransformNow(), outerCorners, baseGridDivisions(), { x0: 0, y0: 0, x1: width, y1: height }, field ? { closed, domain: 'field', fieldTiles: field.Rx !== undefined ? { x: field.Rx, y: field.Ry } : field.Rt, frame: nw.meshes ? nw.frame : undefined, ...(currentShape === 'triangle' ? { diagonal: true } : {}) } : { closed });   // task 093: the triangle also shows the lattice diagonal of every mesh
     push();
     strokeWeight(1);
     lines.forEach(l => {
