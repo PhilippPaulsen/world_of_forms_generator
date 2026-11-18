@@ -312,5 +312,5 @@ function runMain() {
     const o = JSON.stringify({ variant, shard, results });
     if (out) fs.writeFileSync(out, o); else console.log(o);
 }
-module.exports = { CONFIGS, build, frameAt, analyseFrame, runSequence, rasterize, variantSource, variantFile, W, NT, setDiff, polyArea };
+module.exports = { CONFIGS, acceptedSeed, build, frameAt, analyseFrame, runSequence, rasterize, variantSource, variantFile, W, NT, setDiff, polyArea };
 if (require.main === module) { const cmd = process.argv[2]; if (cmd === 'run') runMain(); else require('./measure-face-artifacts-report.js').main(cmd, process.argv.slice(3)); }
