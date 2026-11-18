@@ -681,7 +681,7 @@ function netWarpRefineFaces(result, warp) {
 // Task 090: whether the tile at `tileCentroid` (placed like drawFaceFillsAtTile() places it) lies entirely outside the canvas under the hexagon Field, so its face fills need not be drawn. The image of the tile's hexagon is
 // piecewise affine; its vertices are the 6 corners, the crossings of its edges with the mesh lines and its centre (the centre of the hexagon is a lattice node), so the bounding box of those mapped points is that of the image.
 // A no-op (false) for every other warp. 1 px margin.
-function netWarpTileOutsideCanvas(warp, tileCentroid, flip180) {
+function netWarpTileOutsideCanvas(warp, tileCentroid, flip180, margin) {
     if (!warp || warp.refineFaces !== true || !warp.frame || typeof outerCorners === 'undefined' || typeof toTileLocal !== 'function') return false;
     const F = warp.frame, W = typeof canvasW !== 'undefined' ? canvasW : 600, H = typeof canvasH !== 'undefined' ? canvasH : 600;
     const loc = outerCorners.map(p => toTileLocal(p, tileCentroid, flip180)), pts = loc.slice();
@@ -696,7 +696,8 @@ function netWarpTileOutsideCanvas(warp, tileCentroid, flip180) {
     }
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (const p of pts) { const q = applyNetWarp(warp, p); if (q.x < x0) x0 = q.x; if (q.x > x1) x1 = q.x; if (q.y < y0) y0 = q.y; if (q.y > y1) y1 = q.y; }
-    return x1 < -1 || x0 > W + 1 || y1 < -1 || y0 > H + 1;
+    const m = typeof margin === 'number' ? margin : 1;   // task 091: the morph passes a conservative margin (a morph polygon may leave its tile's frame)
+    return x1 < -m || x0 > W + m || y1 < -m || y0 > H + m;
 }
 
 // ---- Net-line overlay (display aid): the actual grid lines of the warped net ----
