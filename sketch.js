@@ -622,7 +622,8 @@ function setup() {
                 ui.axes = 'both';
                 const Rs = typeof netSizeFactors === 'function' ? netSizeFactors() : { x: shapeSizeFactor, y: shapeSizeFactor }, R = Rs.x === Rs.y ? Rs.x : Rs.x + '/' + Rs.y;   // task 086: the tile counts {x, y}
                 if (netDomainEffective({ domain: 'field' }, Rs).ignored === null) setDomain('field');
-                else { setDomain('single'); notes.push(window.UI && UI.t ? UI.t('note.net.fieldOddSize', { size: R, kept: R }) : `Feld braucht eine ungerade Größe (3, 5, 7, 9); ${R} passt nicht, deshalb Einzelnetz. Die Größe bleibt ${R}.`); }
+                else { setDomain('single'); const noNet = currentShape !== 'square';   // task 092: the triangle and the hexagon have no Single net: there is no net at that size
+                    notes.push(window.UI && UI.t ? UI.t(noNet ? 'note.net.fieldOddSizeNoNet' : 'note.net.fieldOddSize', { size: R, kept: R }) : (noNet ? `Feld braucht ungerade Größen in X und Y (3, 5, 7, 9); bei ${R} gibt es hier kein Netz. Die Größe bleibt ${R}.` : `Feld braucht eine ungerade Größe (3, 5, 7, 9); ${R} passt nicht, deshalb Einzelnetz. Die Größe bleibt ${R}.`)); }
             }
             if ((kind === 'sinus' || kind === 'tangens') && nodeCount < 4) {   // E >= 3, i.e. the legacy count 4 = ordnung 3 (triangle, square) / 4 (hex), task 068c2
                 const minO = gridMinOrdnungTrig(currentShape);
@@ -704,7 +705,8 @@ function setup() {
             const Rs = typeof netSizeFactors === 'function' ? netSizeFactors() : { x: shapeSizeFactor, y: shapeSizeFactor }, R = Rs.x === Rs.y ? Rs.x : Rs.x + ' \u00d7 ' + Rs.y, Rmin = Math.min(Rs.x, Rs.y), fieldOk = netDomainEffective({ domain: 'field' }, Rs).ignored === null;
             if (ui.domain === 'field' && !fieldOk) {
                 setDomain('single'); render();
-                showFieldNote(`Shape Size ${R} ${Rs.x === Rs.y && Rs.x % 2 === 0 ? 'is even' : 'is not a valid field size'}, so Field was reset to Single (Field needs an odd Shape Size in X and Y: 3, 5, 7, 9).`);
+                showFieldNote(currentShape !== 'square' ? `Shape Size ${R} ${Rs.x === Rs.y && Rs.x % 2 === 0 ? 'is even' : 'is not a valid field size'}: the field net applies only at odd sizes (3, 5, 7, 9) in X and Y, so there is no net here.`   // task 092: no Single net on the triangle and the hexagon
+                    : `Shape Size ${R} ${Rs.x === Rs.y && Rs.x % 2 === 0 ? 'is even' : 'is not a valid field size'}, so Field was reset to Single (Field needs an odd Shape Size in X and Y: 3, 5, 7, 9).`);
             }
             if (fieldBtn.elt.disabled !== !fieldOk) fieldBtn.elt.disabled = !fieldOk;
             domainBtns.forEach(b => { if (b.elt.dataset.domain !== 'field') { const dis = currentShape === 'triangle' || currentShape === 'hex'; if (b.elt.disabled !== dis) b.elt.disabled = dis; } });   // task 088: only a Field applies to the triangle
@@ -4935,7 +4937,7 @@ function sizeChangeText(r) {
     if (keptWords.length) parts.push(t('note.size.kept', { what: list(keptWords) }, `${list(keptWords)} erhalten.`));
     if (adjWords.length) parts.push(t('note.size.adjusted', { what: list(adjWords) }, `${list(adjWords)} angepasst.`));
     if (r.lost.colorsCount) parts.push(t('note.size.colorsLost', { n: r.lost.colorsCount, m: r.lost.colorsTotal }, `Nicht erhalten: ${r.lost.colorsCount} von ${r.lost.colorsTotal} Farbgruppen.`));
-    if (r.hints && r.hints.fieldNet) parts.push(t('note.size.fieldNet', { size: r.toX === r.toY ? r.to : r.toX + '/' + r.toY }, `Feld-Netz gilt bei Größe ${r.toX === r.toY ? r.to : r.toX + '/' + r.toY} als Einzel.`));
+    if (r.hints && r.hints.fieldNet) { const sz = r.toX === r.toY ? r.to : r.toX + '/' + r.toY; parts.push(currentShape !== 'square' ? t('note.size.fieldNetNoNet', { size: sz }, `Feld-Netz gilt nur bei ungeraden Größen: bei Größe ${sz} kein Netz.`) : t('note.size.fieldNet', { size: sz }, `Feld-Netz gilt bei Größe ${sz} als Einzel.`)); }   // task 092: the triangle and the hexagon have no Single net
     return parts.join(' ');
 }
 function saySizeChange(r) {
