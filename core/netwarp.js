@@ -717,13 +717,36 @@ function netWarpTileOutsideCanvas(warp, tileCentroid, flip180, margin) {
 // from the same per-axis function applyNetWarp() uses (so `alternate` parity and repeat are honoured).
 function netGridLines(spec, corners, E, view, opts = {}) {
     if ((!opts.frame && (!corners || corners.length < 4)) || !(E >= 1)) return [];
-    let c0 = corners[0], c1 = corners[1], c3 = corners[3];
-    let v1 = { x: c1.x - c0.x, y: c1.y - c0.y }, v2 = { x: c3.x - c0.x, y: c3.y - c0.y };
-    if (opts.frame) { c0 = opts.frame.c0; v1 = opts.frame.v1; v2 = opts.frame.v2; }   // task 088: the triangle's base mesh
+    let c0, v1, v2;
+    if (opts.frame) { c0 = opts.frame.c0; v1 = opts.frame.v1; v2 = opts.frame.v2; }   // task 088: the base mesh of the triangle / hexagon (task 092: read BEFORE corners[3]: a triangle has 3 corners, the old order threw)
+    else { c0 = corners[0]; const c1 = corners[1], c3 = corners[3]; v1 = { x: c1.x - c0.x, y: c1.y - c0.y }; v2 = { x: c3.x - c0.x, y: c3.y - c0.y }; }
     const det = v1.x * v2.y - v2.x * v1.y;
     if (!det) return [];
     const ax = spec ? spec.x : null, ay = spec ? (spec.y === 'same' ? spec.x : spec.y) : null;
     const ft = opts.fieldTiles, fR = opts.domain === 'field' && ft ? (typeof ft === 'object' ? ft : { x: ft, y: ft }) : null;
+    if (opts.frame) {
+        // Task 092: the triangle / hexagon Field: the MESH lines of the field (s, t = integer in the base mesh's frame, mapped by the law, clipped to the view); the subdivisions "E per tile" have no meaning there (a mesh is
+        // not the tile). opts.diagonal (pictures only): also the lattice diagonal of every mesh (the polyline through the mapped nodes).
+        if (!fR || !(fR.x >= 3 && fR.y >= 3)) return [];
+        const hx = (fR.x - 1) / 2, hy = (fR.y - 1) / 2, fxF = netFieldLaw(ax, fR.x), fyF = netFieldLaw(ay, fR.y), out = [];
+        const at = (s, t) => ({ x: c0.x + s * v1.x + t * v2.x, y: c0.y + s * v1.y + t * v2.y });
+        const clip = (a, b) => {   // Liang-Barsky against the view rectangle (no view: unclipped)
+            if (!view) return [a, b];
+            let t0 = 0, t1 = 1; const dx = b.x - a.x, dy = b.y - a.y;
+            for (const [p, q] of [[-dx, a.x - view.x0], [dx, view.x1 - a.x], [-dy, a.y - view.y0], [dy, view.y1 - a.y]]) {
+                if (p === 0) { if (q < 0) return null; } else { const r = q / p; if (p < 0) { if (r > t1) return null; if (r > t0) t0 = r; } else { if (r < t0) return null; if (r < t1) t1 = r; } }
+            }
+            return [{ x: a.x + t0 * dx, y: a.y + t0 * dy }, { x: a.x + t1 * dx, y: a.y + t1 * dy }];
+        };
+        const add = (a, b, axis, level) => { const c = clip(a, b); if (c) out.push({ level, axis, x1: c[0].x, y1: c[0].y, x2: c[1].x, y2: c[1].y }); };
+        for (let k = 0; k <= fR.x; k++) { const s = (fxF ? fxF(k) : k) - hx; add(at(s, -hy), at(s, hy + 1), 'v', 'macro'); }
+        for (let k = 0; k <= fR.y; k++) { const t = (fyF ? fyF(k) : k) - hy; add(at(-hx, t), at(hx + 1, t), 'h', 'macro'); }
+        if (opts.diagonal) {
+            const P = (a, b) => at((fxF ? fxF(a) : a) - hx, (fyF ? fyF(b) : b) - hy);
+            for (let m = 1; m < fR.x + fR.y; m++) for (let k = Math.max(0, m - fR.y); k < Math.min(fR.x, m); k++) add(P(k + 1, m - k - 1), P(k, m - k), 'd', 'macro');
+        }
+        return out;
+    }
     if (fR && fR.x >= 3 && fR.y >= 3 && fR.x !== fR.y) {
         // Task 086: a Rx x Ry field: the vertical lines run over the x tiles, the horizontal ones over the y tiles
         const hx = (fR.x - 1) / 2, hy = (fR.y - 1) / 2, fxF = netFieldLaw(ax, fR.x), fyF = netFieldLaw(ay, fR.y), out = [];

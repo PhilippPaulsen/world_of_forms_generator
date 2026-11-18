@@ -197,16 +197,21 @@
   });
 
   // ---- disabled with a reason --------------------------------------------
-  function setDisabled(el, reason) {
+  // Task 092: `owner` (optional, a short name) marks WHO set a lock: a call that lifts a lock with another owner leaves it alone (two writers, ui-farbe.js and the stepper refresh, used to cancel each other's locks on the
+  // same chevron). A call without an owner behaves exactly as before (it sets, overwrites and lifts any lock).
+  function setDisabled(el, reason, owner) {
     if (!el) return;
     if (reason) {
       if (el.getAttribute('aria-disabled') !== 'true') el.setAttribute('aria-disabled', 'true');
       if (el.dataset.reason !== reason) el.dataset.reason = reason;
       if (el.dataset.baseTitle === undefined) el.dataset.baseTitle = el.getAttribute('title') || '';
       if (el.getAttribute('title') !== reason) el.setAttribute('title', reason);
+      if (owner) { if (el.dataset.lockOwner !== owner) el.dataset.lockOwner = owner; } else if (el.dataset.lockOwner !== undefined) delete el.dataset.lockOwner;
     } else if (el.getAttribute('aria-disabled') === 'true') {
+      if (owner && el.dataset.lockOwner !== undefined && el.dataset.lockOwner !== owner) return;   // someone else's lock stays
       el.removeAttribute('aria-disabled');
       delete el.dataset.reason;
+      delete el.dataset.lockOwner;
       if (el.dataset.baseTitle !== undefined) { el.setAttribute('title', el.dataset.baseTitle); delete el.dataset.baseTitle; }
     }
   }
@@ -395,7 +400,7 @@
       if (!isNaN(cur) && document.activeElement !== input) last = cur; // follows programmatic changes (catalog, shape switch)
       buttons.forEach(function (b) {
         const r = compute(parseInt(b.dataset.dir, 10));
-        setDisabled(b, r.to === null || r.to === undefined ? r.reason : null);
+        setDisabled(b, r.to === null || r.to === undefined ? r.reason : null, 'stepper');
       });
     }
     const holds = [];
