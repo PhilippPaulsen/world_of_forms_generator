@@ -9,6 +9,8 @@
 const fs = require('fs'), path = require('path'), os = require('os'), { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
 const { makeRenderWorld } = require(path.join(ROOT, 'tools', 'morph', 'render-harness.js'));
+const { seamRule, SEAM_MAX } = require(path.join(ROOT, 'tools', 'morph', 'seam-rule.js'));   // task 096: a drawn polygon is its face moved outwards by at most SEAM_MAX
+const EXACT = 'spatialMorphRenderGrow = (p) => p;';   // the same frame with the exact face polygons: the reference of the strict geometry checks
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const J = JSON.stringify;
@@ -75,13 +77,14 @@ if (on('2')) {
     const bad = []; const key = P => P.map(p => p[0].toFixed(6) + ',' + p[1].toFixed(6)).join(';');
     const wq = makeRenderWorld('hex', 3, 5, 'rotation_reflection6', FILES); const all = wq.get('computeThemeLineOrbits(nodes, centroid, currentShape, symmetryMode, outerCorners).orbits.map(o => o.pairs[0].slice())'); const LINES = all.slice(0, 10);
     for (const t of [0, 1]) {
-        const wm = at(mk({ size: 5, sym: 'rotation_reflection6', K: [LINES, LINES], states: [A, B] }), t), wmP = polys(wm).map(p => p.pts);
+        const wg = at(mk({ size: 5, sym: 'rotation_reflection6', K: [LINES, LINES], states: [A, B] }), t), wm0 = mk({ size: 5, sym: 'rotation_reflection6', K: [LINES, LINES], states: [A, B] }); wm0.set(EXACT); const wm = at(wm0, t), wmP = polys(wm).map(p => p.pts);   // task 096: strict against the exact polygons, plus the drawing rule
+        { const r = seamRule(polys(wg), polys(wm)); if (!r.ok || !(r.grown > 0)) bad.push(['rule', t, r.why]); }
         const ws = makeRenderWorld('hex', 3, 5, 'rotation_reflection6', FILES); ws.set(STUB); ws.baseConnections(LINES); ws.set(`baseNetTransform = ${J(t === 0 ? A : B)}; showFaces = true;`); ws.set('__polys.length = 0; drawTessellation();');
         const inC = P => P.some(p => p[0] >= 0 && p[0] <= 600 && p[1] >= 0 && p[1] <= 600);
         const a = new Set(wmP.filter(inC).map(key)), b = polys(ws).map(p => p.pts).filter(inC).map(key);
         const miss = b.filter(x => !a.has(x)).length; if (!b.length || miss > 0) bad.push([t, b.length, a.size, miss]);
     }
-    check('(2) t = 0 and t = 1: the morph\'s face polygons inside the canvas are those of the static pattern (same closed cell) under net A / B (6 decimals = < 1e-6 px)', bad.length === 0, J(bad));
+    check('(2) t = 0 and t = 1: the morph\'s face polygons inside the canvas are those of the static pattern (same closed cell) under net A / B (6 decimals = < 1e-6 px; the exact polygons, and the drawn ones are those moved outwards by at most ' + SEAM_MAX + ' px)', bad.length === 0, J(bad));
 }
 if (on('1b')) {
     // the tile skip loses no visible polygon: the polygons that touch the canvas are the same with and without it (sets and counts), also between two different patterns (keyframes of different symmetry)
@@ -131,13 +134,15 @@ if (on('4')) {
     else {
         const mkMain = (o) => { const keep = process.env.SPATIAL_MORPH_RENDER_JS; process.env.SPATIAL_MORPH_RENDER_JS = mainFiles['spatial-morph-render']; const w = mk(Object.assign({}, o, { files: { 'core/netwarp.js': mainFiles.netwarp } })); if (keep === undefined) delete process.env.SPATIAL_MORPH_RENDER_JS; else process.env.SPATIAL_MORPH_RENDER_JS = keep; return w; };
         const probe = (w) => { w.set('__polys.length = 0; __pairs.length = 0;'); w.set('drawTessellation();'); return J([w.get('__polys'), w.get('__calls ? 0 : 0'), w.get('spatialMorphStatus().code')]); };
-        const bad = {}; let n = 0;
+        const bad = {}, ruleBad = []; let n = 0;
         const FIELD = A, TILED = { x: { kind: 'trig', w: -0.4 }, y: 'same', repeat: true, domain: 'tiled' };
         for (const shape of ['square', 'triangle', 'hex']) for (const net of [null, FIELD, TILED]) for (const morph of [true, false]) {
             if (shape === 'hex' && net === FIELD) continue;
-            const wa = mk({ shape, size: 3, K: KF[shape], net, morph }), wb = mkMain({ shape, size: 3, K: KF[shape], net, morph }); n++;
+            const wa = mk({ shape, size: 3, K: KF[shape], net, morph }), wb = mkMain({ shape, size: 3, K: KF[shape], net, morph }), wg = mk({ shape, size: 3, K: KF[shape], net, morph }); n++;
+            wa.set(EXACT);   // task 096: byte-equal to main on the EXACT polygons; the drawn ones follow the rule below
+            if (morph) { wg.set('__polys.length = 0; drawTessellation();'); wb.set('__polys.length = 0; drawTessellation();'); const r = seamRule(wg.get('__polys'), wb.get('__polys')); if (!r.ok) ruleBad.push([shape, net && net.domain, r.why]); }
             if (probe(wa) !== probe(wb)) bad[shape + (net && net.domain)] = (bad[shape + (net && net.domain)] || 0) + 1; }
-        check(`(4) square, triangle (with and without a Field), hexagon (no net, Tiled), with and without the morph (${n} cases): faces and status byte-equal to main`, n === 16 && Object.keys(bad).length === 0, J(bad));
+        check(`(4) square, triangle (with and without a Field), hexagon (no net, Tiled), with and without the morph (${n} cases): faces and status byte-equal to main (the drawn polygons: the exact faces moved outwards by at most ${SEAM_MAX} px)`, n === 16 && Object.keys(bad).length === 0 && ruleBad.length === 0, J({ bad, ruleBad }));
     }
 }
 if (on('5')) {
