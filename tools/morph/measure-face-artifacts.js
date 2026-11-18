@@ -307,7 +307,7 @@ function runMain() {
     const results = [];
     for (const j of mine) {
         const cfg = CONFIGS[j.ci];
-        try { const r = runSequence(cfg, j.net, j.seed, j.mode, { variant }); r.ci = j.ci; results.push(r); }
+        try { const r = runSequence(cfg, j.net, j.seed, j.mode, { variant, eps: process.env.NOEPS ? false : undefined }); r.ci = j.ci; results.push(r); }
         catch (e) { results.push({ ci: j.ci, cfg, net: j.net, seed: j.seed, mode: j.mode, ok: false, error: String(e && e.stack).slice(0, 300) }); }
     }
     const o = JSON.stringify({ variant, shard, results });
