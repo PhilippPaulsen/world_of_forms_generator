@@ -434,6 +434,25 @@ function spatialMorphRenderTileRadius(s) { let r = 0; (s.outerCorners || []).for
 
 // Fills the faces of one tile (the same tile transform as its lines, then the warp of the field net) -> the number of faces drawn. colors (optional) = the fill of every face, parallel to the faces; without it the face's
 // own colour (the default orbit color). ONE push() with its pop() in a finally: the p5 style is back whatever happens.
+// Task 096: the seams. Every polygon is filled with noStroke(), so two neighbours that share an edge are each anti-aliased on it and the background shows through as a hairline. An OPAQUE fill therefore also gets a thin
+// contour in its own colour (round joins), which covers the anti-aliased rim of both neighbours; the later polygon wins on the shared edge, the edge moves by at most half the width. A translucent fill (alpha < 1) gets
+// NO contour (it would cover twice where polygons overlap) and a colour in an unknown format gets none either: the old drawing. The morph's own fills are always opaque (#rrggbb, hsl()).
+const spatialMorphSeamWidth = 0.6;   // px; the one place to tune it
+function spatialMorphRenderFillOpaque(c) {
+    if (typeof c !== 'string') return false;
+    const t = c.trim().toLowerCase();
+    let m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(t);
+    if (m) return true;
+    m = /^#([0-9a-f]{4}|[0-9a-f]{8})$/.exec(t);
+    if (m) return m[1].length === 4 ? m[1][3] === 'f' : m[1].slice(6) === 'ff';
+    m = /^(rgb|rgba|hsl|hsla)\(([^)]*)\)$/.exec(t);
+    if (!m) return false;
+    const parts = m[2].split(/[\s,\/]+/).filter((x) => x !== '');
+    if (parts.length === 3) return true;
+    if (parts.length !== 4) return false;
+    const a = parts[3].endsWith('%') ? parseFloat(parts[3]) / 100 : parseFloat(parts[3]);
+    return Number.isFinite(a) && a >= 1;
+}
 function spatialMorphRenderFillFaces(res, tile, warp, colors) {
     if (typeof netWarpRefineFaces === 'function' && warp && warp.refineFaces === true) res = netWarpRefineFaces(res, warp);   // task 091: the hexagon Field: the polygons are split at the mesh lines first (a no-op for every other warp)
     const faces = res && res.faces;
@@ -442,8 +461,12 @@ function spatialMorphRenderFillFaces(res, tile, warp, colors) {
     push();
     try {
         noStroke();
+        const seams = typeof stroke === 'function' && typeof strokeWeight === 'function';
+        if (seams) { strokeWeight(spatialMorphSeamWidth); if (typeof strokeJoin === 'function' && typeof ROUND !== 'undefined') strokeJoin(ROUND); }
         faces.forEach((face, fi) => {
-            fill(colors && colors[fi] ? colors[fi] : face.color);
+            const c = colors && colors[fi] ? colors[fi] : face.color;
+            fill(c);
+            if (seams && spatialMorphRenderFillOpaque(c)) stroke(c); else noStroke();
             beginShape();
             face.nodeIds.forEach((id) => {
                 const p = toTileLocal(byId.get(id), tile.c, tile.flip, tile.rot);
