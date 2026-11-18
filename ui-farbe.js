@@ -640,7 +640,7 @@
     [kreisTrigger, dreieckTrigger].forEach(function (b) { if (b) UI.setDisabled(b, why); });
     Object.keys(harmonyBtns).forEach(function (type) { if (harmonyBtns[type]) UI.setDisabled(harmonyBtns[type], loadingAny); });
     [hueStepperRoot, registerStepperRoot].forEach(function (root) {
-      if (root) root.querySelectorAll('.stepper-btn').forEach(function (b) { UI.setDisabled(b, loadingSheet); });
+      if (root) root.querySelectorAll('.stepper-btn').forEach(function (b) { UI.setDisabled(b, loadingSheet, 'farbe'); });   // task 092: its own locks only (the stepper refresh in ui.js sets its own)
     });
     [anchorKreisGroup, anchorDreieckGroup].forEach(function (g) {
       if (g) g.radios.forEach(function (r) { UI.setDisabled(r, moduleWhy(true)); });

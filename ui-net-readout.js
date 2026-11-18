@@ -17,7 +17,10 @@
     if (readoutKey(domain) === KEYS.field && Number.isFinite(w) && w >= 1 && w !== vn) return t('net.readout.field2', { n: vn, m: w });
     return t(readoutKey(domain), { n: vn });
   }
-  const api = { readoutKey: readoutKey, readoutText: readoutText, KEYS: KEYS };
+  // task 092: the domain the readout names. The active domain button is only updated by the next draw() (sketch.js netControlsSync resets a Field at an invalid size to Single there), so right after a size change the
+  // button still says 'field': a Field that the size no longer allows (fieldOk false) is read as Single at once.
+  function readoutDomain(activeDomain, fieldOk) { return activeDomain === 'field' && fieldOk === false ? 'single' : activeDomain; }
+  const api = { readoutKey: readoutKey, readoutText: readoutText, readoutDomain: readoutDomain, KEYS: KEYS };
   root.netReadout = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
