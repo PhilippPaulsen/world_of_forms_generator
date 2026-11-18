@@ -426,6 +426,9 @@ function spatialMorphRenderFaceColorsRaster(res, fields, w, want) {
     }
 }
 
+// The radius of the sheet's cell (the largest distance of an outer corner from the centroid): the margin the face skip keeps around the canvas.
+function spatialMorphRenderTileRadius(s) { let r = 0; (s.outerCorners || []).forEach((p) => { r = Math.max(r, Math.hypot(p.x - s.centroid.x, p.y - s.centroid.y)); }); return r; }
+
 // Fills the faces of one tile (the same tile transform as its lines, then the warp of the field net) -> the number of faces drawn. colors (optional) = the fill of every face, parallel to the faces; without it the face's
 // own colour (the default orbit color). ONE push() with its pop() in a finally: the p5 style is back whatever happens.
 function spatialMorphRenderFillFaces(res, tile, warp, colors) {
@@ -556,7 +559,9 @@ function spatialMorphRenderDraw(sm) {
             const tile = tiles[t];
             const axisDir = sym.hasReflection ? (tile.axis || mirrorAxisDir()) : null;
             const wTile = weightsAt(tile.c);
-            if (facesDrawn) {
+            // task 091: the hexagon Field: a tile entirely outside the canvas (with a margin of one tile radius: a morph polygon may leave its tile's frame) needs no faces (a no-op for every other warp)
+            const skipFaces = facesDrawn && warpField && activeNetWarp.refineFaces === true && typeof netWarpTileOutsideCanvas === 'function' && netWarpTileOutsideCanvas(activeNetWarp, tile.c, tile.flip, spatialMorphRenderTileRadius(s));
+            if (facesDrawn && !skipFaces) {
                 // the cell's lines in canonical coordinates (the identity operation: symmetry copies are made by computeCellFaces()), behind this tile's lines
                 const cellLines = prepared.map((pl) => [pl.a, pl.b].map((d) => {
                     const wEdge = (d.onBoundary && d.moved) ? weightsAt(spatialMorphRenderToWorld(d.sample, tile, sym.ops[0], null)) : null;
