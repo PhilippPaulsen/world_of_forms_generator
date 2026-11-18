@@ -354,12 +354,14 @@ function neighborhoodRadiusTiles(R, M, residualMag) {
 // unit-cube) coordinate scale, not this app's pixel canvas.
 const FACE_EPSILON = 0.5;
 
+// task 095 {
 // Task 095: collinear repair, OFF by default (the old code runs unchanged). When true: (1) splitSegments() also splits a segment at every endpoint of another
 // segment that lies within FACE_EPSILON of its interior (collinear overlaps and T-junctions that segmentIntersection() reports as "no hit"), and (2)
 // _buildFaceAdjacency() sorts the edges around a node without trig (half plane, then cross product). Only the spatial morph's face pass switches it on,
 // for the duration of one computeCellFaces() call (core/spatial-morph-render.js spatialMorphRenderTileFaces); every further change needs a new approval.
 let faceRepairCollinear = false;
 
+// task 095 }
 // Canonical string key for a segment, independent of endpoint order
 // (so a connection drawn as [a,b] and a duplicate drawn as [b,a] -
 // e.g. from clicking the same two nodes twice - collapse to the same
@@ -598,6 +600,7 @@ function splitSegments(segments, realNodes) {
             }
         }
     }
+// task 095 {
     if (faceRepairCollinear) {
         for (let i = 0; i < segments.length; i++) {
             const a = segments[i], dx = a.x2 - a.x1, dy = a.y2 - a.y1, L2 = dx * dx + dy * dy;
@@ -635,6 +638,7 @@ function splitSegments(segments, realNodes) {
             }
         }
     }
+// task 095 }
     const edgeMap = new Map();
     const edgeMeta = new Map();
     for (let i = 0; i < segments.length; i++) {
@@ -709,16 +713,19 @@ function _buildFaceAdjacency(faceNodes, edges) {
     faceNodes.forEach(n => { adjacency[n.id] = []; });
     edges.forEach(([aId, bId]) => {
         const a = nodeById.get(aId), b = nodeById.get(bId);
+// task 095 {
         if (faceRepairCollinear) {
             adjacency[aId].push({ neighborId: bId, dx: b.x - a.x, dy: b.y - a.y });
             adjacency[bId].push({ neighborId: aId, dx: a.x - b.x, dy: a.y - b.y });
             return;
         }
+// task 095 }
         const angleAB = (Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI + 360) % 360;
         const angleBA = (Math.atan2(a.y - b.y, a.x - b.x) * 180 / Math.PI + 360) % 360;
         adjacency[aId].push({ neighborId: bId, angleDeg: angleAB });
         adjacency[bId].push({ neighborId: aId, angleDeg: angleBA });
     });
+// task 095 {
     if (faceRepairCollinear) {
         // counter-clockwise from the +x axis like the atan2 order: upper half plane first, then cross product, equal direction by length
         const half = (e) => (e.dy > 0 || (e.dy === 0 && e.dx > 0)) ? 0 : 1;
@@ -731,6 +738,7 @@ function _buildFaceAdjacency(faceNodes, edges) {
         }));
         return adjacency;
     }
+// task 095 }
     Object.keys(adjacency).forEach(id => adjacency[id].sort((x, y) => x.angleDeg - y.angleDeg));
     return adjacency;
 }
