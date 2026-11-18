@@ -43,7 +43,7 @@ async function measureFaceSeams(o) {
     const setBg = (c) => document.body.style.setProperty('--panel-bg-color', c);
     const BG1 = [255, 0, 255], BG2 = [0, 255, 0], dn = Math.hypot(255, 255, 255);
     const NEWFN = window.__newFill || (window.__newFill = (0, eval)('spatialMorphRenderFillFaces'));
-    const OLDFN = (0, eval)('(' + __OLD_FILL_SRC.replace(/^function spatialMorphRenderFillFaces/, 'function') + ')');
+    const OLDFN = o.selfTest ? NEWFN : (0, eval)('(' + __OLD_FILL_SRC.replace(/^function spatialMorphRenderFillFaces/, 'function') + ')');   // selfTest: old = new, the ratio must be 1 (bias of the alternation)
     const useOld = (b) => { (0, eval)('0'); window.spatialMorphRenderFillFaces = b ? OLDFN : NEWFN; };
     const draw = (bg) => { setBg(`rgb(${bg})`); redraw(); return px(); };
     const stats = (p1, p2) => {
@@ -76,7 +76,7 @@ async function measureFaceSeams(o) {
             rows.push(rec);
             if (o.compare) {   // old and new, same frame, magenta background
                 useOld(true); const q0 = draw(BG1); const q0b = draw(BG2); useOld(false); const q1 = draw(BG1);
-                const W = canvas().width, H = canvas().height; let changed = 0, interior = 0, interiorSum = 0, interiorMax = 0, rim = 0, interiorChanged = 0;
+                const W = canvas().width, H = canvas().height; let changed = 0, interiorChangedExposed = 0, interior = 0, interiorSum = 0, interiorMax = 0, rim = 0, interiorChanged = 0;
                 const same = (i, j) => q0[i] === q0[j] && q0[i + 1] === q0[j + 1] && q0[i + 2] === q0[j + 2];
                 for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
                     const i = (y * W + x) * 4, d = Math.abs(q0[i] - q1[i]) + Math.abs(q0[i + 1] - q1[i + 1]) + Math.abs(q0[i + 2] - q1[i + 2]);
@@ -84,13 +84,20 @@ async function measureFaceSeams(o) {
                     if (x < 4 || y < 4 || x >= W - 4 || y >= H - 4) continue;
                     let uni = true;   // a uniform 9 x 9 neighbourhood in BOTH backgrounds of the old draw = a face interior (>= 2 css px from any edge at density 2)
                     for (let dy = -4; dy <= 4 && uni; dy += 2) for (let dx = -4; dx <= 4; dx += 2) { const j = ((y + dy) * W + (x + dx)) * 4; if (!same(i, j)) { uni = false; break; } }
-                    if (uni) { interior++; interiorSum += d / 3; interiorMax = Math.max(interiorMax, d); if (d > 0) interiorChanged++; }
+                    if (uni) { interior++; interiorSum += d / 3; interiorMax = Math.max(interiorMax, d); if (d > 0) { interiorChanged++; if (q0[i] !== q0b[i] || q0[i + 1] !== q0b[i + 1] || q0[i + 2] !== q0b[i + 2]) interiorChangedExposed++; } }
                 }
-                compare.push({ id, t, lines, changedShare: +(changed / (W * H)).toFixed(6), changedPx: changed, interiorPx: interior, interiorMeanDiff: interior ? +(interiorSum / interior).toFixed(6) : 0, interiorMaxDiff: interiorMax, interiorChanged, rimChanged: rim });
-                // frame time, median of 7 redraws each
-                const med = (fn) => { const a = []; for (let k = 0; k < 7; k++) { const t0 = performance.now(); fn(); a.push(performance.now() - t0); } a.sort((x, y) => x - y); return a[3]; };
-                setBg('rgb(255,0,255)'); useOld(true); redraw(); const tOld = med(() => redraw()); useOld(false); redraw(); const tNew = med(() => redraw());
+                compare.push({ id, t, lines, changedShare: +(changed / (W * H)).toFixed(6), changedPx: changed, interiorPx: interior, interiorMeanDiff: interior ? +(interiorSum / interior).toFixed(6) : 0, interiorMaxDiff: interiorMax, interiorChanged, interiorChangedExposed, rimChanged: rim });
+                if (lines === 'off' && !o.noTime) {
+                // frame time like a playback: 36 frames at p = 0.30 ... 0.65 (every frame has other lines, the faces are computed again); at EACH p old and new are drawn back to back, the order alternating (ABBA),
+                // and the time includes the canvas flush (a 1 x 1 getImageData): block-wise alternation drifted by tens of percent in this pane, the per-frame pairs do not (selfTest: ratio 1)
+                setBg('rgb(255,0,255)'); const to = [], tn = [];
+                const one = (isOld, p) => { useOld(isOld); (0, eval)(`timeline.elapsedMs = ${p} * ${total}; applyTimelineFrame();`); const t0 = performance.now(); redraw(); canvas().getContext('2d').getImageData(0, 0, 1, 1); return performance.now() - t0; };
+                for (let w = 0; w < 4; w++) { one(true, 0.4); one(false, 0.4); }
+                for (let i = 0; i < 36; i++) { const p = 0.3 + 0.01 * i; if (i % 2) { const a = one(true, p), b = one(false, p); to.push(a); tn.push(b); } else { const b = one(false, p), a = one(true, p); to.push(a); tn.push(b); } }
+                to.sort((x, y) => x - y); tn.sort((x, y) => x - y); const tOld = to[18], tNew = tn[18]; useOld(false);
+                (0, eval)(`timeline.elapsedMs = ${t} * ${total}; applyTimelineFrame();`);
                 time.push({ id, t, lines, oldMs: +tOld.toFixed(2), newMs: +tNew.toFixed(2) });
+                }
             }
         }
         (0, eval)(`lineColor = ${JSON.stringify(savedLine)};`);
