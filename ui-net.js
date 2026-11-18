@@ -165,7 +165,7 @@
     setLocked(focusExact, reasonFocus());
     // the readout line of the phone layout's Netz sheet: the active domain and the shape size (core/state.js), in the current language
     if (readoutEl && window.netReadout) {
-      const d = $('.net-domain-btn.active'), dom = d ? d.dataset.domain : 'single', fld = dom === 'field' && typeof gridSizeX === 'function', ms = fld && typeof netWarpBaseNow === 'function' && netWarpBaseNow() ? netWarpBaseNow().meshes : undefined, hexF = !!ms && currentShape === 'hex', text = window.netReadout.readoutText(dom, hexF ? gridSizeX() : ms ? ms.x : fld ? gridSizeX() : shapeSizeFactor, UI.t, hexF ? gridSizeY() : ms ? ms.y : fld ? gridSizeY() : undefined, !!ms, hexF);   // task 086: a Field reads X and Y; task 088: the triangle's Field reads the meshes it covers, edge cut
+      const d = $('.net-domain-btn.active'), dom = window.netReadout.readoutDomain(d ? d.dataset.domain : 'single', typeof netDomainEffective === 'function' && typeof netSizeFactors === 'function' ? netDomainEffective({ domain: 'field' }, netSizeFactors()).ignored === null : undefined), fld = dom === 'field' && typeof gridSizeX === 'function', ms = fld && typeof netWarpBaseNow === 'function' && netWarpBaseNow() ? netWarpBaseNow().meshes : undefined, hexF = !!ms && currentShape === 'hex', text = window.netReadout.readoutText(dom, hexF ? gridSizeX() : ms ? ms.x : fld ? gridSizeX() : shapeSizeFactor, UI.t, hexF ? gridSizeY() : ms ? ms.y : fld ? gridSizeY() : undefined, !!ms, hexF);   // task 086: a Field reads X and Y; task 088: the triangle's Field reads the meshes it covers, edge cut
       if (readoutEl.textContent !== text) readoutEl.textContent = text;
     }
   }
