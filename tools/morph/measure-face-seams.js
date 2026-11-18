@@ -87,7 +87,7 @@ async function measureFaceSeams(o) {
                     if (uni) { interior++; interiorSum += d / 3; interiorMax = Math.max(interiorMax, d); if (d > 0) { interiorChanged++; if (q0[i] !== q0b[i] || q0[i + 1] !== q0b[i + 1] || q0[i + 2] !== q0b[i + 2]) interiorChangedExposed++; } }
                 }
                 compare.push({ id, t, lines, changedShare: +(changed / (W * H)).toFixed(6), changedPx: changed, interiorPx: interior, interiorMeanDiff: interior ? +(interiorSum / interior).toFixed(6) : 0, interiorMaxDiff: interiorMax, interiorChanged, interiorChangedExposed, rimChanged: rim });
-                if (lines === 'off' && !o.noTime) {
+                if (lines === 'off' && t === 0.5 && !o.noTime) {
                 // frame time like a playback: 36 frames at p = 0.30 ... 0.65 (every frame has other lines, the faces are computed again); at EACH p old and new are drawn back to back, the order alternating (ABBA),
                 // and the time includes the canvas flush (a 1 x 1 getImageData): block-wise alternation drifted by tens of percent in this pane, the per-frame pairs do not (selfTest: ratio 1)
                 setBg('rgb(255,0,255)'); const to = [], tn = [];
