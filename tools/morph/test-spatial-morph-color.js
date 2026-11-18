@@ -289,7 +289,7 @@ Object.keys(SHAPE_SPECS).forEach((shape) => T('shape ' + shape, () => {
   const cov = measureCoverage(sp.dense, 'radial');
   say(shape, 'coverage', J(cov));
   check(`${shape}: coverage of the cell (${sp.dense}, radial, 11 values of p, ${cov.tiles} tiles): smallest ${cov.min} >= ${sp.coverageMin} (measured 0.9974 .. 1 on the hexagon pairs and 0.9829 .. 1 on the triangle pairs; the gap is the known FACE_EPSILON limit of core/faces.js), no tile without faces`, cov.min >= sp.coverageMin && cov.noFaces === 0, J({ min: cov.min, noFaces: cov.noFaces }));
-  check(`${shape}: ...and the same lines of the worst tile through the normal path (computeCellFaces) cover the same: ${cov.coverageNormal} = ${cov.min}`, Math.abs(cov.coverageNormal - cov.min) < 1e-3);
+  check(`${shape}: ...and the same lines of the worst tile through the normal path (computeCellFaces) cover the same or LESS than the morph (task 095: the morph's cell faces run with the collinear repair, the normal path does not: ${cov.coverageNormal} <= ${cov.min})`, cov.coverageNormal <= cov.min + 1e-3);
   // end colours = the normal image (a gray is a fill), both stores filled by a normal frame and never drawn
   [['stores filled by a normal frame', true], ['layers never drawn', false]].forEach(([what, drawn]) => {
     const g = mk({ shape, N: sp.interiorN, K, colored: false });

@@ -243,7 +243,9 @@ function spatialMorphRenderTileFaces(lines, s, sheet) {
     if (typeof computeCellFaces !== 'function' || !Array.isArray(lines) || lines.length === 0) return none;
     const savedWarp = activeNetWarp;
     const savedCollector = (typeof segmentCollector !== 'undefined') ? segmentCollector : null;
+    const savedRepair = (typeof faceRepairCollinear !== 'undefined') ? faceRepairCollinear : null;   // task 095: the collinear repair of core/faces.js is ON for the morph's cell faces only (the keyframes' colour fields stay on the old code)
     try {
+        if (savedRepair !== null) faceRepairCollinear = true;
         activeNetWarp = null;
         if (typeof segmentCollector !== 'undefined') segmentCollector = null;
         // free: true keeps the synthetic nodes out of the symmetry group of the grid nodes (core/orbits.js filters them), so the real nodes alone fix the group
@@ -263,6 +265,7 @@ function spatialMorphRenderTileFaces(lines, s, sheet) {
     } finally {
         activeNetWarp = savedWarp;
         if (typeof segmentCollector !== 'undefined') segmentCollector = savedCollector;
+        if (savedRepair !== null) faceRepairCollinear = savedRepair;
     }
 }
 
