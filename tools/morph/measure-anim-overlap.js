@@ -38,7 +38,9 @@ const ANALYSE = `
     });
     // the faces EXACTLY as findFaces returned them (list order = the order they are filled in; a prototype's ordering is in here), with their component
     var rn = new Map(L.result.nodes.map(function (n) { return [n.id, n]; }));
-    L.result.faces.forEach(function (f) { faces.push({ comp: compOf.get(f.nodeIds[0]), area: f.area, poly: f.nodeIds.map(function (id) { var n = rn.get(id); return [n.x, n.y]; }) }); });
+    var __ord = (typeof _faceDrawOrderResult === 'function') ? _faceDrawOrderResult(L.result) : null;   // task 098: the order the faces are DRAWN in (null = the data order)
+    globalThis.__anaTriggered = !!__ord;
+    (__ord ? __ord.faces : L.result.faces).forEach(function (f) { faces.push({ comp: compOf.get(f.nodeIds[0]), area: f.area, poly: f.nodeIds.map(function (id) { var n = rn.get(id); return [n.x, n.y]; }) }); });
     return { comps: out, faces: faces, nodes: nodes.length, edges: edges.length };
   };
 })();`;
@@ -136,6 +138,7 @@ if (require.main === module) {
       for (let i = 0; i < A.NT; i++) {
         let fi; try { fi = frameInfo(w, i); } catch (e) { rec.error = String(e).slice(0, 120); break; }
         rec.frames++; if (fi.fa.n === 0) rec.zero++;
+        else { const trig = w.get('(function () { var l = globalThis.__anaGet(); return l && l.result && typeof _faceDrawOrderResult === "function" ? !!_faceDrawOrderResult(l.result) : false; })()'); if (trig) { rec.trig = (rec.trig || 0) + 1; if (!(fi.fa.overPx2 > 0)) rec.trigNoOverlap = (rec.trigNoOverlap || 0) + 1; } }
         if (fi.fa.overPx2 > 0) {
           const an = w.get('globalThis.__anaRun()'); const ov = an ? overlapPairs(an) : { total: 0, pairs: {} }, cl = an ? classify(an, ov) : { cls: 'noanalysis' };
           rec.over.push({ i, overPx2: fi.fa.overPx2, gapPx2: fi.fa.gapPx2, n: fi.fa.n, cellOverlap: Math.round(ov.total), wrong: cl.wrong, cls: cl.cls, same: cl.sameComp, diff: cl.diffComp, comps: an && an.comps.map((c) => [c.nodes, c.pos, c.neg, c.branch, c.bounded]) });

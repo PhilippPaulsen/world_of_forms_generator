@@ -1226,6 +1226,70 @@ function estimateCrossLayerSegmentCount(baseConnCount, layers) {
     return anchorsPerSheet * copiesPerConnection * (baseConnCount + layerConnCount);
 }
 
+// task 098 {
+// Draw order of a face result (task 098): the faces of ONE connected component never overlap, but a component that lies INSIDE a face of another one (a small closed outline around a large pattern, as an animation
+// frame can have) is covered by that face's full polygon when the face is filled after it. So when the faces fall into several groups (faces that share a node) and one group's bounding box contains another's, the faces
+// are filled in PAINTER order: the largest |area| first (stable on ties), so the enclosing face comes before what lies inside it. Only the DRAWING is reordered: the result of computeCellFaces() / findFaces() is never touched
+// (the sorted copy is a new object holding the SAME face objects). The decision and the order are made in cell coordinates, before the tile transform, so they do not depend on the tile's flip. The bounding-box test is a filter
+// (it may fire for non-nested groups, it never misses a nested one); a face result with one group, or no group that contains another, is drawn in its data order exactly as before.
+const _faceDrawOrderCache = new WeakMap();   // facesResult -> { n, first, last, sorted } (sorted: the reordered result object, or null)
+const _faceSortedResults = new WeakSet();   // the reordered copies themselves (drawn as they are)
+function _faceDrawOrderResult(facesResult) {
+    const faces = facesResult.faces, n = faces.length;
+    const c = _faceDrawOrderCache.get(facesResult);
+    if (c && c.n === n && c.first === faces[0] && c.last === faces[n - 1]) return c.sorted;   // a result changed in place (other length, other first / last face) is recomputed
+    const sorted = _computeFaceDrawOrderResult(facesResult);
+    _faceDrawOrderCache.set(facesResult, { n, first: faces[0], last: faces[n - 1], sorted });
+    if (sorted) _faceSortedResults.add(sorted);
+    return sorted;
+}
+function _computeFaceDrawOrderResult(facesResult) {
+    const { nodes: faceNodes, faces } = facesResult, n = faces.length;
+    if (n < 2) return null;
+    const byId = new Map(faceNodes.map(nd => [nd.id, nd]));
+    const parent = new Array(n);
+    for (let i = 0; i < n; i++) parent[i] = i;
+    const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+    const firstFace = new Map();
+    for (let i = 0; i < n; i++) {
+        for (const id of faces[i].nodeIds) {
+            const j = firstFace.get(id);
+            if (j === undefined) firstFace.set(id, i);
+            else { const a = find(i), b = find(j); if (a !== b) parent[a] = b; }
+        }
+    }
+    const boxes = new Map();
+    for (let i = 0; i < n; i++) {
+        const r = find(i);
+        let b = boxes.get(r);
+        if (!b) { b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity }; boxes.set(r, b); }
+        for (const id of faces[i].nodeIds) {
+            const nd = byId.get(id);
+            if (!nd) continue;
+            if (nd.x < b.x0) b.x0 = nd.x; if (nd.x > b.x1) b.x1 = nd.x;
+            if (nd.y < b.y0) b.y0 = nd.y; if (nd.y > b.y1) b.y1 = nd.y;
+        }
+    }
+    if (boxes.size < 2) return null;
+    const list = Array.from(boxes.values());
+    let enclosing = false;
+    for (let a = 0; a < list.length && !enclosing; a++) {
+        for (let b = 0; b < list.length; b++) {
+            if (a === b) continue;
+            if (list[a].x0 <= list[b].x0 && list[a].y0 <= list[b].y0 && list[a].x1 >= list[b].x1 && list[a].y1 >= list[b].y1) { enclosing = true; break; }
+        }
+    }
+    if (!enclosing) return null;
+    const order = [];
+    for (let i = 0; i < n; i++) order.push(i);
+    const size = (f) => (Number.isFinite(f.area) ? Math.abs(f.area) : 0);
+    order.sort((a, b) => (size(faces[b]) - size(faces[a])) || (a - b));   // the index breaks ties: stable whatever the engine's sort
+    let same = true;
+    for (let i = 0; i < n; i++) if (order[i] !== i) { same = false; break; }
+    if (same) return null;
+    return { nodes: faceNodes, faces: order.map(i => faces[i]) };
+}
+// task 098 }
 // Draws one sheet's already-computed faces (computeCellFaces() result)
 // at one tessellated tile position, using the exact same toTileLocal()
 // transform drawShapeCell() uses for lines - so face fills line up with
@@ -1238,6 +1302,12 @@ function drawFaceFillsAtTile(facesResult, tileCentroid, flip180) {
     const { nodes: faceNodes, faces } = facesResult;
     if (!faces || !faces.length) return;
     if (typeof netWarpTileOutsideCanvas === 'function' && netWarpTileOutsideCanvas(activeNetWarp, tileCentroid, flip180)) return;   // task 090: a tile entirely outside the canvas (hexagon Field only; a no-op elsewhere)
+// task 098 {
+    if (!_faceSortedResults.has(facesResult)) {
+        const sortedResult = _faceDrawOrderResult(facesResult);
+        if (sortedResult) { drawFaceFillsAtTile(sortedResult, tileCentroid, flip180); return; }
+    }
+// task 098 }
     const nodeById = new Map(faceNodes.map(n => [n.id, n]));
     // push()/pop(): noStroke()/fill() are ambient p5 drawing-style state,
     // not scoped to this call - draw()'s own stroke(lineColor)/noFill()
