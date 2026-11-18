@@ -705,8 +705,7 @@ function setup() {
             const Rs = typeof netSizeFactors === 'function' ? netSizeFactors() : { x: shapeSizeFactor, y: shapeSizeFactor }, R = Rs.x === Rs.y ? Rs.x : Rs.x + ' \u00d7 ' + Rs.y, Rmin = Math.min(Rs.x, Rs.y), fieldOk = netDomainEffective({ domain: 'field' }, Rs).ignored === null;
             if (ui.domain === 'field' && !fieldOk) {
                 setDomain('single'); render();
-                showFieldNote(currentShape !== 'square' ? `Shape Size ${R} ${Rs.x === Rs.y && Rs.x % 2 === 0 ? 'is even' : 'is not a valid field size'}: the field net applies only at odd sizes (3, 5, 7, 9) in X and Y, so there is no net here.`   // task 092: no Single net on the triangle and the hexagon
-                    : `Shape Size ${R} ${Rs.x === Rs.y && Rs.x % 2 === 0 ? 'is even' : 'is not a valid field size'}, so Field was reset to Single (Field needs an odd Shape Size in X and Y: 3, 5, 7, 9).`);
+                showFieldNote(`Shape Size ${R} ${Rs.x === Rs.y && Rs.x % 2 === 0 ? 'is even' : 'is not a valid field size'}${currentShape !== 'square' ? ': the field net applies only at odd sizes (3, 5, 7, 9) in X and Y, so there is no net here.' : ', so Field was reset to Single (Field needs an odd Shape Size in X and Y: 3, 5, 7, 9).'}`);   // task 092: no Single net on the triangle and the hexagon
             }
             if (fieldBtn.elt.disabled !== !fieldOk) fieldBtn.elt.disabled = !fieldOk;
             domainBtns.forEach(b => { if (b.elt.dataset.domain !== 'field') { const dis = currentShape === 'triangle' || currentShape === 'hex'; if (b.elt.disabled !== dis) b.elt.disabled = dis; } });   // task 088: only a Field applies to the triangle
