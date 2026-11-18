@@ -1,0 +1,7 @@
+# Auftrag 096 — Nähte im Morph-Render (Typ K, klein)
+Branch task/096-morph-naehte von main d7271e2b (nach Merge 095). Auftragstext: siehe Nachricht des Auftraggebers; Kern:
+- Ziel: Haarlinien zwischen benachbarten Füllflächen im Morph beseitigen (094 Teil 2: 0,92–1,87 % der Fläche ohne Linien, 0,2–0,8 % mit Linien auf Hintergrundanteil). Ursache Canvas-Antialiasing der Füllkanten; faces.js nicht beteiligt.
+- Umfang: nur spatialMorphRenderFillFaces (core/spatial-morph-render.js). Dünne Kontur in Füllfarbe (0,5–0,75 px, runde Verbindungen); deckende und transparente Füllungen getrennt. Nicht ändern: faces.js, tiling.js, facecolor.js, die acht geschützten Funktionen, off-path-golden.json, Baselines, gallery/v2, statischer Zeichenpfad. Messen (nicht ändern): zeigt der statische Pfad dieselben Nähte?
+- Messgrößen (tools/morph/measure-face-seams.js, Browser): Anteil Pixel mit Hintergrund > 2 % <= 0,5 % (ohne Linien); Pixel > 50 % Hintergrund: 0; mittlere Farbabweichung der Flächeninneren (>= 2 px vom Rand) 0; Gesamtdeckung wächst <= 0,3 % des Canvas; Frame-Zeit <= +10 %; AUS-Pfad-Golden 30/30 vorher/nachher in derselben Pane; test-spatial-morph-* grün (Pins nur eigener Commit).
+- Test tools/morph/test-morph-seams.js; 5 Sabotagen (Kontur aus, Farbe falsch, 3 px, Kontur bei transparent, Kontur im statischen Pfad).
+- Abschluss: ?v=-Bump (3 Dateien), proof L3 096, guard nur spatial-morph-render.js, reports/096.md mit Bildern reports/logs/096-*.png (Sechseck-Feld t=0,5), Frage zum Merge. Nicht mergen, nicht pushen.
