@@ -434,6 +434,62 @@ function spatialMorphRenderTileRadius(s) { let r = 0; (s.outerCorners || []).for
 
 // Fills the faces of one tile (the same tile transform as its lines, then the warp of the field net) -> the number of faces drawn. colors (optional) = the fill of every face, parallel to the faces; without it the face's
 // own colour (the default orbit color). ONE push() with its pop() in a finally: the p5 style is back whatever happens.
+// Task 096: the seams. Every polygon is filled with noStroke(), so two neighbours that share an edge are each anti-aliased on it and the background shows through as a hairline. An OPAQUE fill is therefore DRAWN grown by
+// spatialMorphSeamWidth / 2 on every side (a miter offset of the polygon, a vertex moves at most spatialMorphSeamMiterLimit x the offset): the rim of each neighbour then overlaps the other, the later polygon wins on the
+// shared edge, the edge moves by at most half the width. (A contour in the fill colour does the same but costs a stroke per polygon: +51 to +117 % frame time with the canvas flush, commit 2/6 of task 096, reports/096.md;
+// the grown fill costs one fill.) Only the DRAWING is grown, on the canvas: the faces (the result of spatialMorphRenderTileFaces, shared by tiles) are never touched, and the SVG export (svgPathCollector set) gets the exact
+// polygons. A translucent fill (alpha < 1) is NOT grown (it would cover twice where polygons overlap), a colour in an unknown format is not either, and neither is a splitter (area < spatialMorphSeamMinArea px^2),
+// a polygon with fewer than 3 vertices or one with a zero-length edge pair that has no direction: the old drawing. The morph's own fills are always opaque (#rrggbb, hsl()).
+const spatialMorphSeamWidth = 0.6;   // px; the one place to tune it (each polygon grows by half of it)
+const spatialMorphSeamMiterLimit = 1.6;   // a vertex moves at most this many times the offset (sharp corners): 0.48 px for the 0.3 px offset, so the pattern's rim moves by less than 0.5 px
+const spatialMorphSeamMinArea = 1;   // px^2; smaller polygons (splitters) are not grown
+function spatialMorphRenderFillOpaque(c) {
+    if (typeof c !== 'string') return false;
+    if (c.length === 7 && c.charCodeAt(0) === 35) return /^#[0-9a-fA-F]{6}$/.test(c);   // the morph's own colours (linearToHex): the common case first
+    const t = c.trim().toLowerCase();
+    let m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(t);
+    if (m) return true;
+    m = /^#([0-9a-f]{4}|[0-9a-f]{8})$/.exec(t);
+    if (m) return m[1].length === 4 ? m[1][3] === 'f' : m[1].slice(6) === 'ff';
+    m = /^(rgb|rgba|hsl|hsla)\(([^)]*)\)$/.exec(t);
+    if (!m) return false;
+    const parts = m[2].split(/[\s,\/]+/).filter((x) => x !== '');
+    if (parts.length === 3) return true;
+    if (parts.length !== 4) return false;
+    const a = parts[3].endsWith('%') ? parseFloat(parts[3]) / 100 : parseFloat(parts[3]);
+    return Number.isFinite(a) && a >= 1;
+}
+// The polygon [{ x, y }, ...] grown by d on every side: each vertex moves along the bisector of its two edge normals by d / cos(half the turning angle), at most spatialMorphSeamMiterLimit * d. Returns the SAME array for a
+// polygon with fewer than 3 vertices or an area below spatialMorphSeamMinArea; otherwise a new array of new points (same count, same order). Pure; the input is not touched.
+let spatialMorphSeamScratch = new Float64Array(256);   // unit outward normals of the edges, two numbers per edge (NaN = zero-length edge); reused, grown when a polygon is bigger
+function spatialMorphRenderGrow(pts, d) {
+    const n = pts.length;
+    if (n < 3 || !(d > 0)) return pts;
+    let A = 0, p = pts[n - 1];
+    for (let i = 0; i < n; i++) { const q = pts[i]; A += p.x * q.y - q.x * p.y; p = q; }
+    A /= 2;
+    if (!(Math.abs(A) >= spatialMorphSeamMinArea)) return pts;
+    if (spatialMorphSeamScratch.length < 2 * n) spatialMorphSeamScratch = new Float64Array(2 * n + 64);
+    const N = spatialMorphSeamScratch, sg = A > 0 ? 1 : -1, out = new Array(n), cap = spatialMorphSeamMiterLimit;
+    for (let i = 0; i < n; i++) {
+        const a = pts[i], b = pts[i + 1 === n ? 0 : i + 1], dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy);
+        if (L > 1e-12) { N[2 * i] = sg * dy / L; N[2 * i + 1] = -sg * dx / L; } else { N[2 * i] = NaN; N[2 * i + 1] = NaN; }
+    }
+    for (let i = 0; i < n; i++) {
+        const j = i === 0 ? n - 1 : i - 1;   // the edge arriving at vertex i is j -> i, the leaving one i -> i + 1
+        let ax = N[2 * j], ay = N[2 * j + 1], bx = N[2 * i], by = N[2 * i + 1];
+        if (ax !== ax) { ax = bx; ay = by; }
+        if (bx !== bx) { bx = ax; by = ay; }
+        if (ax !== ax) { out[i] = pts[i]; continue; }
+        const k = 1 + ax * bx + ay * by;
+        let mx, my;
+        if (k < 1e-6) { mx = ax; my = ay; } else { mx = (ax + bx) / k; my = (ay + by) / k; }
+        const len = Math.hypot(mx, my);
+        if (len > cap) { mx *= cap / len; my *= cap / len; }
+        out[i] = { x: pts[i].x + d * mx, y: pts[i].y + d * my };
+    }
+    return out;
+}
 function spatialMorphRenderFillFaces(res, tile, warp, colors) {
     if (typeof netWarpRefineFaces === 'function' && warp && warp.refineFaces === true) res = netWarpRefineFaces(res, warp);   // task 091: the hexagon Field: the polygons are split at the mesh lines first (a no-op for every other warp)
     const faces = res && res.faces;
@@ -442,14 +498,17 @@ function spatialMorphRenderFillFaces(res, tile, warp, colors) {
     push();
     try {
         noStroke();
+        const grow = (typeof svgPathCollector !== 'undefined' && svgPathCollector) ? 0 : spatialMorphSeamWidth / 2;   // the SVG export gets the exact faces
         faces.forEach((face, fi) => {
-            fill(colors && colors[fi] ? colors[fi] : face.color);
-            beginShape();
-            face.nodeIds.forEach((id) => {
+            const c = colors && colors[fi] ? colors[fi] : face.color;
+            fill(c);
+            let pts = face.nodeIds.map((id) => {
                 const p = toTileLocal(byId.get(id), tile.c, tile.flip, tile.rot);
-                const q = warp ? applyNetWarp(warp, p) : p;
-                vertex(q.x, q.y);
+                return warp ? applyNetWarp(warp, p) : p;
             });
+            if (grow > 0 && spatialMorphRenderFillOpaque(c)) pts = spatialMorphRenderGrow(pts, grow);
+            beginShape();
+            for (let i = 0; i < pts.length; i++) vertex(pts[i].x, pts[i].y);
             endShape(CLOSE);
         });
     } finally {

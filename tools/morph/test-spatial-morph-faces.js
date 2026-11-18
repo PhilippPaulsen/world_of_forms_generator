@@ -21,6 +21,8 @@ const crypto = require('crypto');
 const ROOT = path.join(__dirname, '..', '..');
 const { makeRenderWorld } = require('./render-harness.js');
 const M = require(path.join(ROOT, 'core', 'spatial-morph.js'));
+const { seamRule, SEAM_MAX } = require('./seam-rule.js');   // task 096: a drawn polygon is its face moved outwards by at most SEAM_MAX
+const exactOf = (w) => { w.set('spatialMorphRenderGrow = (p) => p;'); return w; };   // the same frame with the exact face polygons (the reference of the strict geometry checks)
 
 let failures = 0, checks = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
@@ -163,7 +165,11 @@ T('field faces', () => {
   check('computeCellFaces runs on regular coordinates: activeNetWarp is null during every call (task 038: at most once per tile, once per distinct input)', w.get('__cfCalls') > 2 * w.get('spatialMorphRenderState.colorBuilds') && w.get('__cfCalls') <= st.tiles + 2 * w.get('spatialMorphRenderState.colorBuilds') && w.get('__cfWarpNull.every(Boolean)'), J({ calls: w.get('__cfCalls'), tiles: st.tiles, builds: w.get('spatialMorphRenderState.colorBuilds') }));
   const regular = w.get(`(function () { const s = spatialMorphRenderSource({ ids: [0] }); return s.outerCorners.map((p) => [p.x, p.y]); })()`);
   const inside = ps.every((p) => p.pts.every((q) => q[0] >= -1e-6 && q[0] <= 600 + 1e-6 && q[1] >= -1e-6 && q[1] <= 600 + 1e-6));
-  check('the warped polygons stay on the canvas', inside && regular.length >= 3);
+  const we = exactOf(SCENES['field-faces-on']()); we.drawn(); const exactPs = polys(we);
+  const insideExact = exactPs.every((p) => p.pts.every((q) => q[0] >= -1e-6 && q[0] <= 600 + 1e-6 && q[1] >= -1e-6 && q[1] <= 600 + 1e-6));
+  check('the warped (exact) face polygons stay on the canvas', insideExact && regular.length >= 3);
+  const rule = seamRule(ps, exactPs);
+  check(`task 096: the drawn polygons are the exact faces moved outwards by at most ${SEAM_MAX} px (same count, order, fill, vertex count; ${rule.grown} grown, largest move ${rule.worst})`, rule.ok, rule.why);
 });
 
 // ---- 3b. no net: faces too, unwarped (stage f1b) -------------------------------------------------------------------------------------------------------------------------------------------------
@@ -178,9 +184,12 @@ T('no net faces', () => {
   // UNWARPED: the faces of a cell tile the cell exactly, so the polygons sum to tiles x cell area and span exactly the union of the tile cells; any distortion (scale or shift) breaks one of the two
   const geo = w.get(`(function () { const tl = spatialMorphRenderRecordTiles(); const cells = tl.map((t) => outerCorners.map((p) => toTileLocal(p, t.c, t.flip, t.rot))); return { n: tl.length, cells: cells.map((c) => c.map((p) => [p.x, p.y])) }; })()`);
   const cellArea = geo.cells.map((c) => area(c)).reduce((a, b) => a + b, 0);
-  const sum = ps.reduce((a, p) => a + area(p.pts), 0);
+  const wExact = exactOf(SCENES['nonet-faces-on']()); wExact.drawn(); const psExact = polys(wExact);   // task 096: the strict geometry checks run on the exact face polygons
+  const ruleN = seamRule(ps, psExact);
+  check(`task 096: no net: the drawn polygons are the exact faces moved outwards by at most ${SEAM_MAX} px (${ruleN.grown} grown, largest move ${ruleN.worst})`, ruleN.ok, ruleN.why);
+  const sum = psExact.reduce((a, p) => a + area(p.pts), 0);
   const box = (list) => { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; list.forEach((q) => { x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]); }); return [x0, y0, x1, y1]; };
-  const bp = box([].concat(...ps.map((p) => p.pts))), bc = box([].concat(...geo.cells));
+  const bp = box([].concat(...psExact.map((p) => p.pts))), bc = box([].concat(...geo.cells));
   check('no net: the polygons are NOT distorted - their areas sum to the cell areas and their extent is the extent of the tile cells', geo.n === st.tiles && Math.abs(sum - cellArea) < 1e-6 * cellArea && bp.every((v, i) => Math.abs(v - bc[i]) < 1e-6), J({ sum: Math.round(sum), cellArea: Math.round(cellArea), bp, bc }));
   // activeNetWarp / style restored as for the field net
   const r = SCENES['nonet-faces-on'](); r.set("const __sent = { __sentinel: 1 }; activeNetWarp = __sent; __style = { fill: 'F0', stroke: 'S0' };"); const sty = r.get('JSON.stringify(__style)'); r.run('spatialMorphTryDraw()');
