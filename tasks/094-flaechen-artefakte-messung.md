@@ -1,0 +1,17 @@
+# Auftrag 094 — Flächen-Artefakte in Morph und Animation: Messung und Wurzelanalyse (Typ R, nur messen)
+
+Branch task/094-flaechen-artefakte-messung von main 5dfdbea6 (nach Merge 092/093). Ausnahme vom Schreibverbot nur: tasks/094-*.md, reports/094.md, Messskripte unter tools/ (neu), Bilder in reports/logs (nicht committen). Keine Änderung in core/, sketch.js oder an Tests. core/faces.js nur lesen; Prototypen nur in einer Kopie im Testlauf (vm). Kein Merge, kein Push. Kontingent: /usage vorher/nachher; nach jedem Teil reports/094.md ergänzen; bei Woche >= 90 % nach dem laufenden Teil stoppen.
+
+**Anlass:** Der Auftraggeber sieht bei Morph und Animation teilweise Artefakte an den Flächen und erhofft sich Linderung durch die zurückgestellte Wurzelreparatur in core/faces.js. Bekannt aus 083: Restfehler der Farbzuordnung mit Ursache in faces.js (FACE_EPSILON fest 0,5 px, Teilung an kollinearen Segmenten, atan2-ULP; Flächenzahl hängt vom Bildmittelpunkt ab). Offen: welche Artefakte es gibt und wie viel aus faces.js stammt.
+
+**Teil 1 — Artefakt-Detektor** (tools/morph/measure-face-artifacts.js): Morph-Zeitleisten mit dem Szenenbau von test-spatial-morph-faces, je Frame: (1) Flächenzahl-Sprünge; (2) Abdeckung (Summe Polygonflächen gegen erwartet, Lücken/Überlappungen in px² und %); (3) ungültige Polygone (Selbstüberschneidung, Splitter, doppelte Eckpunkte, Abstand < 1e-6); (4) Kontinuität (Schwerpunktsprung > 2 px, Farbwechsel derselben Fläche); (5) Robustheit (Eckpunkte um 1e-9 px gestört: ändert sich die Flächenmenge?); (6) Empfindlichkeit gegen FACE_EPSILON 0,05 / 0,5 / 2 px (nur Kopie). Matrix: Quadrat, Dreieck, Sechseck; Netz ohne/mit Feld (3/3, 5/5, 7/5); >= 6 Symmetriefamilien (none, rotation3, rotation6, rotation_reflection6, Ordnung 2, 4, 5); 30 Keyframe-Paare (feste Seeds), t = 0…1 in 41 Schritten; zusätzlich ein Lauf der Animation (Zeitleiste ohne Raum-Morph), soweit anderer Pfad.
+
+**Teil 2 — Sichtbare Nähte im Browser** (127.0.0.1): Quadrat, Dreieck, Sechseck (5/5, Feld und ohne Netz), je 3 Zeitpunkte: Anteil der Canvas-Pixel mit Hintergrundfarbe innerhalb der abgedeckten Fläche (Anti-Aliasing-Nähte), noStroke()-Füllung wie heute. Zahlen und Beispielbilder (reports/logs, nicht committen). Eigene Klasse, nicht faces.js.
+
+**Teil 3 — Klassifikation:** Jeden Artefakttyp einer Klasse zuordnen (a Numerik faces.js; b Morph-Zuordnung/Lerp spatial-morph-render.js; c Teilung/Abbildung im Feld netWarpRefineFaces; d Rendering; e sonstige), mit Häufigkeit, Frame-Beispiel, Schwere, Datei:Zeile.
+
+**Teil 4 — Wirkung einer Wurzelreparatur an der Kopie:** In einer Kopie von core/faces.js (im Skript): (1) FACE_EPSILON relativ zur Geometrie, (2) stabile kollineare Segmente und winkelrobuste Sortierung. Detektor erneut; je Klasse vorher/nachher; Flächenzahl bei verschobenem Bildmittelpunkt; Anzahl geänderter Farbzuordnungen (Trail-Schlüssel) auf den Baselines.
+
+**Teil 5 — Ergebnis und Empfehlung:** Tabelle Klasse × Häufigkeit × Schwere × Anteil, der verschwindet; Risiko einer echten Änderung (betroffene Baselines/Golden, Pins, Aufwand, Reihenfolge, Messgrößen, Sabotagen); klare Empfehlung; höchstens 3 offene Entscheidungen. Bilder: die 6 schlimmsten Frames (reports/logs, nicht committen), je Klasse eines.
+
+**Prüfung:** `bash tools/guard.sh 5dfdbea6` PASS und `bash tools/proof.sh L1 094`. Bericht reports/094.md (begrenzt, Tabellen mit Zahlen), /usage vorher/nachher (vorher: 5h 59 %, Woche 9 %), was nicht gemessen wurde.
