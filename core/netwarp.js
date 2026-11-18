@@ -533,7 +533,7 @@ function netWarpActive() { return netWarpBaseNow() !== null; }
 // exact only when its grid IS the base's (sheet.gridMatchesBase: same shape and size, offset 0, rotation 0 - every timeline
 // playback layer): its segments never leave a base tile. Any other layer (offset/rotated/other size) crosses tile boundaries and
 // stays refused; every other warp (Single, Tiled: F smooth inside the tile) refuses all faces.
-function netWarpBlocksFaces(sheet) { const w = netWarpBaseNow(); return w !== null && (!w.field || (!!sheet && (w.refineFaces === true || !sheet.gridMatchesBase))); }
+function netWarpBlocksFaces(sheet) { const w = netWarpBaseNow(); return w !== null && (!w.field || (!!sheet && ((w.refineFaces === true && sheet.morphRefine !== true) || !sheet.gridMatchesBase))); }
 
 // F^-1: the regular-space point whose image under the warp is `pt` (each axis law is strictly
 // increasing on [0,1], so a bisection per axis finds it; tiles are located by floor as in
