@@ -36,7 +36,7 @@ const stripHooks = (rel, t) => rel === 'core/faces.js' ? t.split('\n').filter((l
 // ---- pins: the tree before this stage (3108480a) ----------------------------------------------------------------------------------------------------------------------------------------------
 const PIN_FILES = {
   'core/tiling.js': 'ca6b9c1c77c7d7973f3deb61a1218dff991351e6bed3e5f1ed06c1de5501aa77',
-  'core/faces.js': 'aebc7ceab383339f4e589d53c9e8a9679575466f01b7899fa0b4a6404e611235',
+  'core/faces.js': '7ea3692aaea7dcccbc88f40a0ed7f143aee75ef6fc6b4f3f1456ceb236759895',   // task 095: was aebc7cea... (+ the collinear repair behind the switch faceRepairCollinear, 59 added lines, nothing removed)
 };
 // the hash of every line() / bezier() call of the morph frame in these scenes, taken from core/spatial-morph-render.js of 3108480a (node ... --print-pins with SPATIAL_MORPH_RENDER_JS = that file)
 const LINES_BEFORE = { 'field-faces-off': '5d37aa20c703d3d2', 'field-faces-on': '5d37aa20c703d3d2', 'tiled-faces-on': '15fe329eabaada62', 'single-faces-on': '9c6fa7396bb0297c', 'nonet-faces-on': 'f8dc63cc0a2e678f', 'curve-field-faces-on': '4f53cda18c2baa0c' };
