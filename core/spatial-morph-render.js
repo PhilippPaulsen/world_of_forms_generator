@@ -426,9 +426,13 @@ function spatialMorphRenderFaceColorsRaster(res, fields, w, want) {
     }
 }
 
+// The radius of the sheet's cell (the largest distance of an outer corner from the centroid): the margin the face skip keeps around the canvas.
+function spatialMorphRenderTileRadius(s) { let r = 0; (s.outerCorners || []).forEach((p) => { r = Math.max(r, Math.hypot(p.x - s.centroid.x, p.y - s.centroid.y)); }); return r; }
+
 // Fills the faces of one tile (the same tile transform as its lines, then the warp of the field net) -> the number of faces drawn. colors (optional) = the fill of every face, parallel to the faces; without it the face's
 // own colour (the default orbit color). ONE push() with its pop() in a finally: the p5 style is back whatever happens.
 function spatialMorphRenderFillFaces(res, tile, warp, colors) {
+    if (typeof netWarpRefineFaces === 'function' && warp && warp.refineFaces === true) res = netWarpRefineFaces(res, warp);   // task 091: the hexagon Field: the polygons are split at the mesh lines first (a no-op for every other warp)
     const faces = res && res.faces;
     if (!faces || faces.length === 0) return 0;
     const byId = new Map(res.nodes.map((n) => [n.id, n]));
@@ -544,7 +548,7 @@ function spatialMorphRenderDraw(sm) {
         warpField = !!(hasWarp && activeNetWarp && activeNetWarp.field);
         const noNet = hasWarp && !activeNetWarp;   // no net in force: the polygons are drawn as computed (activeNetWarp stays null)
         const facesDrawn = facesAsked && (noNet || warpField);   // a Single or Tiled net: lines only (status netFacesNeedField)
-        const faceSheet = (plan.ids && plan.ids[0] !== 'base') ? { shape: s.shape, symmetryMode: s.symmetryMode, centroid: s.centroid, outerCorners: s.outerCorners, gridMatchesBase: true } : null;   // the field warp in force was built for THIS grid, so its faces are exact
+        const faceSheet = (plan.ids && plan.ids[0] !== 'base') ? { shape: s.shape, symmetryMode: s.symmetryMode, centroid: s.centroid, outerCorners: s.outerCorners, gridMatchesBase: true, morphRefine: true } : null;   // the field warp in force was built for THIS grid, so its faces are exact
         const faceStats = { tiles: 0, tilesWithFaces: 0, faces: 0 };
         spatialMorphRenderState.faceStats = faceStats;
         const cornerFields = facesDrawn ? spatialMorphRenderCornerFields(spatialMorphRenderCornerIds(plan, mode, aligned.keyframeCount), aligned.keyframeCount, mode) : null;   // morph stages 006b / 010: the colour fields of the corner keyframes
@@ -555,7 +559,9 @@ function spatialMorphRenderDraw(sm) {
             const tile = tiles[t];
             const axisDir = sym.hasReflection ? (tile.axis || mirrorAxisDir()) : null;
             const wTile = weightsAt(tile.c);
-            if (facesDrawn) {
+            // task 091: the hexagon Field: a tile entirely outside the canvas (with a margin of one tile radius: a morph polygon may leave its tile's frame) needs no faces (a no-op for every other warp)
+            const skipFaces = facesDrawn && warpField && activeNetWarp.refineFaces === true && typeof netWarpTileOutsideCanvas === 'function' && netWarpTileOutsideCanvas(activeNetWarp, tile.c, tile.flip, spatialMorphRenderTileRadius(s));
+            if (facesDrawn && !skipFaces) {
                 // the cell's lines in canonical coordinates (the identity operation: symmetry copies are made by computeCellFaces()), behind this tile's lines
                 const cellLines = prepared.map((pl) => [pl.a, pl.b].map((d) => {
                     const wEdge = (d.onBoundary && d.moved) ? weightsAt(spatialMorphRenderToWorld(d.sample, tile, sym.ops[0], null)) : null;
