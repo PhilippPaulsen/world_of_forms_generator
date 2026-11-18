@@ -1,0 +1,9 @@
+# Auftrag 095 — faces.js: Kollinear-Reparatur, nur im Morph-Pfad (Typ K)
+Branch task/095-faces-kollinear von main 7307ec7e (nach Merge 094). Auftragstext: siehe Nachricht des Auftraggebers; Kern:
+- Ziel: große Löcher in den Morph-Flächen beseitigen (kollineare Überlappung, segmentIntersection -> null). Statische Muster, Farb-Baselines, Animations-Normalpfad unverändert.
+- Freigabe nur für core/faces.js: (1) splitSegments: Endpunkte innerhalb Eps (fest 0,5) auf fremdem Segment teilen es; (2) _buildFaceAdjacency: atan2-freie Sortierung (Halbebene + Kreuzprodukt); (3) Modul-Schalter faceRepairCollinear (Standard false) aktiviert 1 und 2, false = altes Verhalten identisch. Nicht: FACE_EPSILON, relatives Eps, Splitterfilter, die zwei Haken. git diff main -- core/faces.js nur diese drei Punkte.
+- Einbindung: spatialMorphRenderFillFaces setzt den Schalter für die Dauer des Aufrufs (try/finally, vorherigen Wert zurück); lässt er sich an der Berechnungsstelle nicht sauber setzen: stoppen und berichten.
+- Messgrößen (measure-face-artifacts.js, 396 Läufe): Löcher > 5000 px² <= 20 Frames; Seed 5015 t#23 <= 100 px²; 1e-9-Instabilität <= 1700; Selbstüberschneidung <= 17 073; Splitter <= 86 043 + 5 %; Frame-Zeit <= +15 %; Corpus 258/258 identisch (Schalter aus); AUS-Pfad-Golden 30/30 im Browser; acht geschützte Funktionen byte-gleich; tiling.js, facecolor.js, off-path-golden.json, Baselines, gallery/v2 unverändert.
+- Test tools/morph/test-face-collinear.js; 5 Sabotagen (Teilung aus, atan2 zurück, Eps x10, Schalter Standard true, Schalter im Morph nicht gesetzt).
+- Pins test-spatial-morph-faces (6) und test-net-field-hex-faces (7) nur im eigenen Commit; proof L3 095; guard FAIL erwartet (nur faces.js und spatial-morph-render.js); ?v=-Bump in index.html, gallery.html, color-harmony/ui/index.html.
+- Abschluss: CLAUDE.md und ROADMAP.md ergänzen; reports/095.md; nicht mergen, nicht pushen.
