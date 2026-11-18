@@ -16,6 +16,7 @@ const world = (shape, files) => makeRenderWorld(shape, 3, 3, 'rotation_reflectio
 const setup = (w, shape, X, Y, spec) => w.set(`currentShape = ${J(shape)}; projectGridSpec({ shape: ${J(shape)}, ordnung: 4, lage: 1 }); shapeSizeFactorX = null; shapeSizeFactorY = null; canvasW = 600; canvasH = 600; width = 600; height = 600; setGridSize(${X}, ${Y}); rebuildGrid(currentShape); baseNetTransform = ${J(spec)};`);
 const fieldSpec = (law) => ({ x: law, y: 'same', repeat: false, domain: 'field' });
 const LAWS = { sinus: { kind: 'trig', w: -0.7 }, geometric: { kind: 'geometric', w: Math.log(4) } };
+const OPTSD = `(function () { const o = OPTS_; return o ? Object.assign({ diagonal: true }, o) : null; })()`.replace('OPTS_', '(function () { const nw = netWarpBaseNow(); if (!nw) return null; const f = nw.field; return { closed: true, domain: "field", fieldTiles: f.Rx !== undefined ? { x: f.Rx, y: f.Ry } : f.Rt, frame: nw.meshes ? nw.frame : undefined }; })()');
 const OPTS = `(function () { const nw = netWarpBaseNow(); if (!nw) return null; const f = nw.field; return { closed: true, domain: 'field', fieldTiles: f.Rx !== undefined ? { x: f.Rx, y: f.Ry } : f.Rt, frame: nw.meshes ? nw.frame : undefined }; })()`;
 
 {
@@ -39,17 +40,17 @@ const OPTS = `(function () { const nw = netWarpBaseNow(); if (!nw) return null; 
 }
 {
     // (2) the real drawNetLinesOverlay
-    const SK = fs.readFileSync(path.join(ROOT, 'sketch.js'), 'utf8'), m = SK.match(/function drawNetLinesOverlay\(\) \{[\s\S]*?\n\}\n/);
+    const SK = fs.readFileSync(process.env.SKETCH_JS || path.join(ROOT, 'sketch.js'), 'utf8'), m = SK.match(/function drawNetLinesOverlay\(\) \{[\s\S]*?\n\}\n/);
     const bad = []; 
     for (const [shape, X, Y] of [['triangle', 5, 5], ['triangle', 3, 5], ['hex', 5, 5], ['square', 5, 5]]) {
         const w = world(shape); setup(w, shape, X, Y, fieldSpec(LAWS.sinus));
         w.set(`var netLinesOn = true, __lines = 0; push = function () { }; pop = function () { }; strokeWeight = function () { }; stroke = function () { }; line = function () { __lines++; };`);
         w.set(m[0]);
         let err = null; try { w.set('drawNetLinesOverlay();'); } catch (e) { err = String(e).slice(0, 80); }
-        const want = w.get(`netGridLines(netTransformNow(), outerCorners, baseGridDivisions(), { x0: 0, y0: 0, x1: width, y1: height }, ${OPTS}).length`);
+        const want = w.get(`netGridLines(netTransformNow(), outerCorners, baseGridDivisions(), { x0: 0, y0: 0, x1: width, y1: height }, ${shape === 'triangle' ? OPTSD : OPTS}).length`);
         if (err || w.get('__lines') !== want || !(want > 0)) bad.push([shape, X, Y, err, w.get('__lines'), want]);
     }
-    check('(2) drawNetLinesOverlay (from sketch.js) draws the lines of netGridLines for the triangle, hexagon and square and does not throw', bad.length === 0, J(bad));
+    check('(2) drawNetLinesOverlay (from sketch.js) draws the lines of netGridLines (the triangle WITH the diagonal, hexagon and square without) and does not throw', bad.length === 0, J(bad));
 }
 {
     // (3) square byte-equal to main, a triangle without a Field: no lines, no error
@@ -72,6 +73,30 @@ const OPTS = `(function () { const nw = netWarpBaseNow(); if (!nw) return null; 
     const r = w.get(`(function () { const o = ${OPTS}; const a = netGridLines(netTransformNow(), outerCorners, baseGridDivisions(), { x0: 0, y0: 0, x1: width, y1: height }, o), b = netGridLines(netTransformNow(), outerCorners, baseGridDivisions(), { x0: 0, y0: 0, x1: width, y1: height }, Object.assign({ diagonal: true }, o));
         return { mesh: a.length, withDiag: b.length, diag: b.filter(l => l.axis === 'd').length, same: JSON.stringify(b.filter(l => l.axis !== 'd')) === JSON.stringify(a) }; })()`);
     check('(4) opts.diagonal (pictures only) adds diagonal lines and leaves the mesh lines as they are', r.diag > 0 && r.same && r.withDiag === r.mesh + r.diag, J(r));
+}
+{
+    // (5) task 093: the triangle's diagonals (the lattice diagonal of every mesh, mapped and clipped): present, inside the canvas, on the mapped diagonal of ONE mesh (< 1e-9 px), exactly one per mesh
+    const bad = {}, note = (k, v) => { bad[k] = (bad[k] || 0) + 1; if (!bad.first) bad.first = [k, v]; }; let n = 0, diags = 0;
+    const w = world('triangle');
+    for (const [X, Y] of [[3, 5], [5, 5], [7, 5], [9, 9]]) for (const [ln, law] of [['sinus', { kind: 'trig', w: -0.7 }], ['tangens', { kind: 'trig', w: 0.6 }]]) {
+        setup(w, 'triangle', X, Y, fieldSpec(law)); n++;
+        const r = w.get(`(function () { let L; try { L = netGridLines(netTransformNow(), outerCorners, baseGridDivisions(), { x0: 0, y0: 0, x1: width, y1: height }, ${OPTSD}).filter(l => l.axis === 'd'); } catch (e) { return { err: String(e) }; }
+            const nw = netWarpBaseNow(), [hx, hy] = _netFieldH(nw), f = nw.field, W = width, H = height; let inside = true, worst = 0, dup = 0; const seen = new Set();
+            L.forEach(l => { for (const p of [{ x: l.x1, y: l.y1 }, { x: l.x2, y: l.y2 }]) if (p.x < -1e-9 || p.x > W + 1e-9 || p.y < -1e-9 || p.y > H + 1e-9) inside = false;
+                const pts = [{ x: l.x1, y: l.y1 }, { x: (l.x1 + l.x2) / 2, y: (l.y1 + l.y2) / 2 }, { x: l.x2, y: l.y2 }].map(p => netWarpTileCoords(nw, invertNetWarp(nw, p)));
+                const u = pts.map(c => c.s + hx + c.t + hy), m = Math.round(u[0]); worst = Math.max(worst, ...u.map(x => Math.abs(x - m)));   // s + t constant = an integer: the diagonal of a mesh (the third lattice direction)
+                const mid = pts[1], ms = Math.floor(mid.s + hx), mt = Math.floor(mid.t + hy), key = ms + ',' + mt;
+                if (pts.some(c => c.s + hx < ms - 1e-9 || c.s + hx > ms + 1 + 1e-9 || c.t + hy < mt - 1e-9 || c.t + hy > mt + 1 + 1e-9)) worst = Math.max(worst, 1);   // one mesh only
+                if (seen.has(key)) dup++; seen.add(key); });
+            // every mesh whose diagonal midpoint is inside the canvas has its diagonal
+            const fxF = nw.fx, fyF = nw.fy, F = _netFrame(nw), at = (s, t) => ({ x: F.c0.x + s * F.v1.x + t * F.v2.x, y: F.c0.y + s * F.v1.y + t * F.v2.y }); let missing = 0;
+            for (let a = 0; a < f.Rx; a++) for (let b = 0; b < f.Ry; b++) { const p = (i, j) => at((fxF ? fxF(i) : i) - hx, (fyF ? fyF(j) : j) - hy), P = p(a + 1, b), Q = p(a, b + 1), c = { x: (P.x + Q.x) / 2, y: (P.y + Q.y) / 2 };
+                if (c.x > 1e-6 && c.x < W - 1e-6 && c.y > 1e-6 && c.y < H - 1e-6 && !seen.has(a + ',' + b)) missing++; }
+            return { n: L.length, inside, worst, dup, missing }; })()`);
+        if (r.err) { note('threw', [X, Y, ln, r.err]); continue; } diags += r.n;
+        if (!(r.n > 0)) note('none', [X, Y, ln]); if (!r.inside) note('outside', [X, Y, ln]); if (r.worst > 1e-9) note('offdiag', [X, Y, ln, r.worst]); if (r.dup) note('twice', [X, Y, ln]); if (r.missing) note('missing', [X, Y, ln, r.missing]);
+    }
+    check(`(5) triangle 3/5 ... 9/9 x sinus, tangens (${n} cases, ${diags} diagonals): present, inside the canvas, on the mapped lattice diagonal of one mesh (< 1e-9 px), one per mesh`, n === 8 && !bad.first, J(bad));
 }
 console.log(`${pass}/${pass + fail} checks passed`);
 if (fail) process.exit(1);
