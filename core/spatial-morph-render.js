@@ -440,6 +440,7 @@ function spatialMorphRenderTileRadius(s) { let r = 0; (s.outerCorners || []).for
 const spatialMorphSeamWidth = 0.6;   // px; the one place to tune it
 function spatialMorphRenderFillOpaque(c) {
     if (typeof c !== 'string') return false;
+    if (c.length === 7 && c.charCodeAt(0) === 35) return /^#[0-9a-fA-F]{6}$/.test(c);   // the morph's own colours (linearToHex): the common case first
     const t = c.trim().toLowerCase();
     let m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(t);
     if (m) return true;
