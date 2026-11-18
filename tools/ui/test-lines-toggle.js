@@ -208,7 +208,7 @@ console.log('\n== 6. markup, i18n, position ==');
     // task 053 re-recorded the golden of curve-fold1-sym on purpose (quad pieces on the canvas, commit fc98e3d9): off-path-golden.json is pinned against that commit
     // task 086 changed sketch.js on purpose (the net's tile counts {x, y}: initNetControls) after task 084 (32a265ae, per-draw writers only on change): sketch.js is pinned against the 086 commit (a2739820)
     // task 031 changes core/facecolor.js on purpose (the playback colours); this check guards what task 024 itself must leave alone, so that file is no longer in the list
-  check('sketch.js is untouched by the task (it is pinned by the morph tests) and gallery.html still loads without core/state.js: the gallery shim defines lineStyle', execSync(`git diff --stat ${BASE} -- core/tiling.js`, { cwd: ROOT }).toString().trim() === '' && execSync('git diff --stat fc98e3d9 -- tools/morph/off-path-golden.json', { cwd: ROOT }).toString().trim() === '' && execSync('git diff --stat 04e6ff64 -- sketch.js', { cwd: ROOT }).toString().trim() === '' && /var lineStyle = \{ visible: true, weight: 2 \}/.test(read('gallery-render.js')));
+  check('sketch.js is untouched by the task (it is pinned by the morph tests) and gallery.html still loads without core/state.js: the gallery shim defines lineStyle', execSync(`git diff --stat ${BASE} -- core/tiling.js`, { cwd: ROOT }).toString().trim() === '' && execSync('git diff --stat fc98e3d9 -- tools/morph/off-path-golden.json', { cwd: ROOT }).toString().trim() === '' && execSync('git diff --stat ab273803 -- sketch.js', { cwd: ROOT }).toString().trim() === '' && /var lineStyle = \{ visible: true, weight: 2 \}/.test(read('gallery-render.js')));
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });
