@@ -22,6 +22,7 @@ function variantSource(v) {
     const eps = /^eps(.+)$/.exec(v);
     if (eps) return patch(s, 'const FACE_EPSILON = 0.5;', `const FACE_EPSILON = ${eps[1]};`);
     if (v === 'base') return s;
+    if (v === 'old') return require('child_process').execSync('git show 7307ec7e:core/faces.js', { cwd: ROOT, maxBuffer: 1 << 26 }).toString();   // task 095: core/faces.js of main before the repair
     if (v === 'rel' || v === 'repair') {
         // (1) FACE_EPSILON relative to the size of the geometry: 1e-3 of the bounding-box diagonal of the segments handed to findFaces() (0.5 px stays the floor for a 500 px diagonal)
         s = patch(s, 'const FACE_EPSILON = 0.5;', 'let FACE_EPSILON = 0.5;');
@@ -69,7 +70,7 @@ function variantSource(v) {
 }
 const tmpFiles = {};
 function variantFile(v) {
-    if (v === 'base') return undefined;
+    if (v === 'base') return process.env.FACES_JS || undefined;   // task 095: FACES_JS = another copy of core/faces.js for the base variant (the old file, sabotage copies)
     if (!tmpFiles[v]) { const p = path.join(os.tmpdir(), `faces094-${process.pid}-${v}.js`); fs.writeFileSync(p, variantSource(v)); tmpFiles[v] = p; }
     return tmpFiles[v];
 }
