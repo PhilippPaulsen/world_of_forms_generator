@@ -25,6 +25,7 @@ function build(cfg, mode, seed, files) {
   const w = makeRenderWorld(cfg.shape, cfg.order, cfg.size, cfg.sym, files); w.set(STUB);
   const ids = w.get('nodes.filter((n) => !n.free).map((n) => n.id)'), K = keyframes(ids, seed), L = LAWS[cfg.law], NA = net(L[0]), NB = net(L[1]);
   w.dims = [w.get('canvasW'), w.get('canvasH')]; w.K = K;
+  w.set('if (typeof spatialMorphRenderGrow === "function") spatialMorphRenderGrow = (p) => p;');   // task 096 draws the morph faces grown by 0.3 px: the detector wants the exact face polygons
   if (mode === 'static') { w.baseConnections(K[0]); w.set(`showFaces = true; baseNetTransform = ${JSON.stringify(NA)};`); w.setMorph({ enabled: false, mode: 'linear', angleDeg: 0 }); }
   else {
     w.baseConnections(K[0]); const ls = K.map((k) => w.addKeyframeLayer(k)); ls.forEach((i) => w.set(`additionalLayers[${i}].showFaces = true;`)); w.setTimeline(ls);
