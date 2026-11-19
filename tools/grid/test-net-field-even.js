@@ -248,7 +248,7 @@ if (!CHILD) {
     for (const X of [3, 5, 7, 9]) for (const Y of [3, 5, 7, 9]) for (const name of ['mixed', 'geometric']) cases.push(['square', X, Y, SPECS[name], 'odd']);
     const NOFIELD = { single: Object.assign({}, SPECS.mixed, { domain: 'single' }), tiled: Object.assign({}, SPECS.mixed, { domain: 'tiled', repeat: true }) };
     for (const [X, Y] of [[4, 4], [3, 4], [4, 3], [2, 5], [6, 6], [8, 3], [1, 2]]) for (const [nm, sp] of [['none', null], ['single', NOFIELD.single], ['tiled', NOFIELD.tiled]]) cases.push(['square', X, Y, sp, 'even-nofield-' + nm]);
-    for (const shape of ['triangle', 'hex']) for (let X = 1; X <= 9; X++) for (const Y of [1, 2, 3, 4, 5, 7, 8, 9]) if (Math.max(X, Y) <= 3 * Math.min(X, Y)) for (const name of ['mixed', 'geometric']) cases.push([shape, X, Y, SPECS[name], shape + '-field']);
+    for (const shape of ['triangle', 'hex']) for (let X = 1; X <= 9; X++) for (const Y of [1, 2, 3, 4, 5, 7, 8, 9]) if (Math.max(X, Y) <= 3 * Math.min(X, Y) && !(shape === 'triangle' && ((X % 2 === 0 && X >= 4) || (Y % 2 === 0 && Y >= 4)))) for (const name of ['mixed', 'geometric']) cases.push([shape, X, Y, SPECS[name], shape + '-field']);   // task 108: the triangle at an even size with a Field is a Field now (test-net-field-triangle-even.js)
     for (const [shape, X, Y, spec, kind] of cases) {
         const a = snap(wOf('main', shape), shape, X, Y, spec), b = snap(wOf('new', shape), shape, X, Y, spec); n++;
         if (a !== b) diffs.push([shape, X, Y, kind]);
@@ -256,7 +256,7 @@ if (!CHILD) {
             const wn = wOf('new', shape); wn.set('netFieldMinTiles = 2;'); try { if (snap(wn, shape, X, Y, spec) !== a) diffs.push([shape, X, Y, 'odd-min2']); } finally { wn.set('netFieldMinTiles = 3;'); }
         }
     }
-    check(`(4) frames, warps, domains, exports, overlays and apply / invert / inside / local / split byte-equal to main ${MAIN}: odd x odd (floor 3 and 2), an even square without a field (none / Single / Tiled), the triangle and the hexagon with a Field at all sizes, even and odd (${n} cases)`, diffs.length === 0 && n > 250, J(diffs.slice(0, 6)) + ' n=' + n);
+    check(`(4) frames, warps, domains, exports, overlays and apply / invert / inside / local / split byte-equal to main ${MAIN}: odd x odd (floor 3 and 2), an even square without a field (none / Single / Tiled), the hexagon with a Field at all sizes, the triangle with a Field except with an even axis >= 4 (task 108: a Field now, or another ignored-reason text when the other axis is below 3) (${n} cases)`, diffs.length === 0 && n > 200, J(diffs.slice(0, 6)) + ' n=' + n);
 }
 
 // ---- 5. the floor and the shape rule --------------------------------------------------------------------------------------------------------------------------
@@ -269,15 +269,16 @@ if (!CHILD) {
         squareFloor: !eff('square', 2, 2) && !eff('square', 2, 5) && !eff('square', 1, 3) && eff('square', 3, 3),
         squareMax: !eff('square', 10, 4),
         triHexOdd: eff('triangle', 3, 5) && eff('hex', 9, 9) && eff('triangle', 3, 3),
-        triHexEven: !eff('triangle', 4, 4) && !eff('hex', 4, 4) && !eff('triangle', 3, 4) && !eff('hex', 4, 3) && !eff('triangle', 8, 8) && !eff('hex', 6, 5),
+        hexEven: !eff('hex', 4, 4) && !eff('hex', 4, 3) && !eff('hex', 6, 5) && !eff('hex', 8, 8),   // task 108: the hexagon refuses an even count
+        triEven: eff('triangle', 4, 4) && eff('triangle', 3, 4) && eff('triangle', 8, 8) && !eff('triangle', 2, 4) && !eff('triangle', 1, 1),   // task 108: the triangle takes 3..9 at any parity
         noShape: !eff(undefined, 4, 4) && !eff(undefined, 3, 4) && eff(undefined, 5, 5) && eff(undefined, 3, 5),   // no shape = the conservative rule: odd counts only
         unknownShape: !eff('circle', 4, 4) && !eff(null, 4, 4) && !eff('', 4, 4) && eff('circle', 5, 5),
     };
     // the real warp builders: the square builds an even field at the default floor, the triangle and the hexagon do not (they have no warp at an even size)
     setup(w, 'square', 4, 4, SPECS.mixed); const sq = w.get('netWarpBaseNow()'); rules.squareWarp = !!sq && sq.domain === 'field';
-    for (const shape of ['triangle', 'hex']) { const wt = world(shape); setup(wt, shape, 4, 4, SPECS.mixed); rules['warp_' + shape] = wt.get('netWarpBaseNow()') === null; }
+    for (const shape of ['triangle', 'hex']) { const wt = world(shape); setup(wt, shape, 4, 4, SPECS.mixed); rules['warp_' + shape] = shape === 'triangle' ? (wt.get('netWarpBaseNow()') || {}).domain === 'field' : wt.get('netWarpBaseNow()') === null; }
     const wn2 = world('square'); wn2.set('netFieldMinTiles = 2;'); const two = wn2.get("netDomainEffective({ domain: 'field' }, { x: 2, y: 4 }, 'square').ignored === null && netDomainEffective({ domain: 'field' }, { x: 2, y: 4 }, 'triangle').ignored !== null"); rules.floor2 = two;
-    check('(5a) netFieldMinTiles is 3 by default; an even count is a Field on the square only (3..9, floor 3, ceiling 9); the triangle and the hexagon refuse it; no or an unknown shape reads the conservative rule (odd only); the real builders agree', Object.values(rules).every(Boolean), J(rules));
+    check('(5a) netFieldMinTiles is 3 by default; an even count is a Field on the square and (task 108) the triangle (3..9, floor 3, ceiling 9); the hexagon refuses it; no or an unknown shape reads the conservative rule (odd only); the real builders agree', Object.values(rules).every(Boolean), J(rules));
     const users = [];
     const scan = (dirp, rec) => { for (const f of fs.readdirSync(dirp)) { const fp = path.join(dirp, f); const st = fs.statSync(fp); if (st.isDirectory()) { if (rec && !['node_modules', 'tools', 'reports', 'docs', 'tasks', '.git', 'assets', 'gallery', 'notebooks'].includes(f)) scan(fp, rec); } else if (/\.(js|mjs|html)$/.test(f) && /netFieldMinTiles|netFieldEven/.test(fs.readFileSync(fp, 'utf8'))) users.push(path.relative(ROOT, fp)); } };
     scan(ROOT, true);
@@ -343,8 +344,8 @@ if (!CHILD && !process.env.EVEN_NOSAB) {
         ['T on the wrong axis (shift vector swaps tx / ty)', 'shiftVec: { x: evenKeys.tx * v1.x + evenKeys.ty * v2.x, y: evenKeys.tx * v1.y + evenKeys.ty * v2.y }', 'shiftVec: { x: evenKeys.ty * v1.x + evenKeys.tx * v2.x, y: evenKeys.ty * v1.y + evenKeys.tx * v2.y }'],
         ['lo / hi swapped (n / 2 - 1 tiles left, n / 2 right)', 'const hx = Math.floor(R.x / 2), hy = Math.floor(R.y / 2), evX', 'const hx = Math.floor((R.x - 1) / 2), hy = Math.floor((R.y - 1) / 2), evX'],
         ['floor 2 by default (n = 2 reachable)', 'let netFieldMinTiles = 3;', 'let netFieldMinTiles = 2;'],
-        ['triangle / hexagon get an even field', "const sq = shape === 'square', evenOk = sq && n % 2 === 0;", "const sq = true, evenOk = sq && n % 2 === 0;"],
-        ['an unknown or missing shape is read as the square (not conservative)', "const sq = shape === 'square', evenOk = sq && n % 2 === 0;", "const sq = shape !== 'triangle' && shape !== 'hex', evenOk = sq && n % 2 === 0;"],
+        ['the hexagon gets an even field (and an unknown shape too)', "const sq = shape === 'square', evenOk = (sq || shape === 'triangle') && n % 2 === 0;", "const sq = true, evenOk = (sq || shape === 'triangle') && n % 2 === 0;"],
+        ['an unknown or missing shape is read as the square (not conservative)', "const sq = shape === 'square', evenOk = (sq || shape === 'triangle') && n % 2 === 0;", "const sq = shape !== 'triangle' && shape !== 'hex', evenOk = (sq || shape === 'triangle') && n % 2 === 0;"],
         ['an odd axis gets T', 'tx: evX ? 0.5 : 0, ty: evY ? 0.5 : 0', 'tx: 0.5, ty: 0.5'],
         ['inversion without the T subtraction', 'if (warp.field) pt = _netBackShift(warp, pt);   // task 105: pt is an image-space point', 'if (false) pt = _netBackShift(warp, pt);   // task 105: pt is an image-space point'],
         ['split with T instead of regular points', 'const a = netWarpTileCoords(warp, p1), b = netWarpTileCoords(warp, p2)', 'const a = netWarpTileCoords(warp, _netBackShift(warp, p1)), b = netWarpTileCoords(warp, _netBackShift(warp, p2))'],
