@@ -186,10 +186,10 @@ console.log('\n== 7. an invalid field is ignored, visibly ==');
     const sb = makeSb(SRC_NEW, 4, 3, 'none'), eff = (rt, extra) => sb.netDomainEffective({ ...S, domain: 'field', ...extra }, rt);
     check('odd R = 3, 5, 7, 9 are fields', [3, 5, 7, 9].every(r => eff(r).domain === 'field' && eff(r).ignored === null));
     const bad = (rt, frag, legacy) => { const e = eff(rt, legacy); return e.domain === (legacy && legacy.repeat ? 'tiled' : 'single') && e.ignored && e.ignored.requested === 'field' && e.ignored.reason.includes(frag); };
-    check('refused with a reason: R = 1, 2 (too few), 4, 6, 8 (even), 11 (beyond the ceiling), 3.5 (not an integer), undefined', bad(1, 'at least 3') && bad(2, 'at least 3') && bad(4, 'odd') && bad(6, 'odd') && bad(8, 'odd') && bad(11, 'ceiling') && bad(3.5, 'integer') && bad(undefined, 'integer'));
+    check('refused with a reason (no shape = the conservative rule, task 106): R = 1, 2 (too few), 4, 6, 8 (even), 11 (beyond the ceiling), 3.5 (not an integer), undefined', bad(1, 'at least 3') && bad(2, 'at least 3') && bad(4, 'odd') && bad(6, 'odd') && bad(8, 'odd') && bad(11, 'ceiling') && bad(3.5, 'integer') && bad(undefined, 'integer'));
     check('the fallback is the legacy reading: repeat true -> tiled, otherwise single', bad(4, 'odd', { repeat: true }) && bad(4, 'odd', { repeat: false }));
-    const a = makeSb(SRC_NEW, 4, 4, 'none'), b = makeSb(SRC_NEW, 4, 4, 'none'); a.baseNetTransform = { ...S, domain: 'field' }; b.baseNetTransform = { ...S, repeat: false }; seed = 3; const cn = randConns(a, 3);
-    check('an ignored field (Shape Size 4) draws exactly what the legacy spec draws', JSON.stringify(draw(a, { ...S, domain: 'field' }, cn, 'none')) === JSON.stringify(draw(b, { ...S, repeat: false }, cn, 'none')));
+    const a = makeSb(SRC_NEW, 4, 2, 'none'), b = makeSb(SRC_NEW, 4, 2, 'none'); a.baseNetTransform = { ...S, domain: 'field' }; b.baseNetTransform = { ...S, repeat: false }; seed = 3; const cn = randConns(a, 3);
+    check('an ignored field (Shape Size 2; task 106: 4 is a Field of the square now) draws exactly what the legacy spec draws', JSON.stringify(draw(a, { ...S, domain: 'field' }, cn, 'none')) === JSON.stringify(draw(b, { ...S, repeat: false }, cn, 'none')));
     check('unknown domain strings are ignored too', sb.netDomainEffective({ ...S, domain: 'foo' }, 3).ignored.reason.includes("unknown domain 'foo'"));
     sb.baseNetTransform = { x: { kind: 'trig', w: 0 }, y: 'same', domain: 'field' }; check('a field with w = 0 is the identity (no warp)', sb.netWarpBaseNow() === null);
 }
@@ -248,7 +248,7 @@ console.log('\n== 10. free endpoints on a field (option b) ==');
     const sk = fs.readFileSync(path.join(ROOT, 'sketch.js'), 'utf8');
     const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
     check('UI wiring (source): index.html has the Single / Tiled / Field buttons and no Repeat-tiles toggle; sketch.js resets Field for an invalid Shape Size, visibly',
-        ['single', 'tiled', 'field'].every(d => html.includes(`data-domain="${d}"`)) && !html.includes('net-repeat-btn') && sk.includes("netDomainEffective({ domain: 'field' }, Rs)") && sk.includes('so Field was reset to Single'));
+        ['single', 'tiled', 'field'].every(d => html.includes(`data-domain="${d}"`)) && !html.includes('net-repeat-btn') && sk.includes("netDomainEffective({ domain: 'field' }, Rs, currentShape)") && sk.includes('so Field was reset to Single'));
     check('sketch.js wires it: mousePressed() uses netWarpFieldLocal() for a field warp, the overlay passes the field option', sk.includes('netWarp && netWarp.field ? netWarpFieldLocal(') && sk.includes("domain: 'field', fieldTiles: field.Rx !== undefined ? { x: field.Rx, y: field.Ry } : field.Rt"));
 }
 

@@ -12,7 +12,7 @@ const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log
 
 // ---- the OLD German of sketch.js (reference) ----
 const oldMin = from => `Sin und Tan brauchen mindestens Ordnung 3; Ordnung von ${from - 1} auf 3 gesetzt.`;   // task 068c2: the text names the ordnung (this fixture: ordnung = nodeCount - 1, minimum 3)
-const oldOdd = R => `Feld braucht eine ungerade Größe (3, 5, 7, 9); ${R} passt nicht, deshalb Einzelnetz. Die Größe bleibt ${R}.`;
+const oldOdd = R => `Feld braucht in X und Y mindestens Größe 3; ${R} passt nicht, deshalb Einzelnetz. Die Größe bleibt ${R}.`;   // task 106: the square's text for a size the Field does not take (key note.net.fieldMinSize; the stub below refuses every even R)
 
 // applyNetKindChoice cut out of sketch.js and run alone with stubs; mode: 'none' (no UI: fallback), 'de', 'en'
 const sk = src('SKETCH_JS', 'sketch.js');
@@ -35,7 +35,7 @@ console.log('== German equals the old text (dictionary on, dictionary off) ==');
 [2, 4, 6].forEach(R => { const w = oldOdd(R); check('fieldOddSize ' + R + ': dictionary de = old', run('de', 'geo', true, 9, R) === w, run('de', 'geo', true, 9, R)); check('fieldOddSize ' + R + ': fallback = old', run('none', 'geo', true, 9, R) === w, run('none', 'geo', true, 9, R)); });
 console.log('== English ==');
 check('minNodes en', run('en', 'sinus', false, 3, 5) === 'Sin and Tan need at least order 3; order changed from 2 to 3.', run('en', 'sinus', false, 3, 5));
-check('fieldOddSize en', run('en', 'geo', true, 9, 4) === 'Field needs an odd size (3, 5, 7, 9); 4 does not fit, so single net. The size stays 4.', run('en', 'geo', true, 9, 4));
+check('fieldOddSize en', run('en', 'geo', true, 9, 4) === 'Field needs size 3 or more in X and Y; 4 does not fit, so single net. The size stays 4.', run('en', 'geo', true, 9, 4));
 check('no {placeholder} is left in the English notes', !/[{}]/.test(run('en', 'sinus', false, 3, 5) + run('en', 'geo', true, 9, 4)));
 
 // ---- core/color.js rules ----

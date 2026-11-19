@@ -107,7 +107,7 @@ const metrics = (w, X, Y, spec) => {
 {
     const w = world('square'); let n = 0, bad = {}, hints = 0;
     const note = (k, v) => { bad[k] = (bad[k] || 0) + 1; if (!bad.first) bad.first = [k, v]; };
-    for (const [X, Y] of [[4, 5], [5, 4], [2, 6], [4, 4], [6, 7], [3, 4], [1, 3], [2, 2]]) {
+    for (const [X, Y] of [[2, 6], [1, 3], [2, 2], [1, 1], [2, 5], [3, 1], [1, 2], [2, 4]]) {   // task 106: an axis below 3 (an even size from 4 on is a Field of the square now: test-net-field-even.js)
         setup(w, 'square', X, Y, FIELD); n++;
         const warp = w.get('netWarpBaseNow()'), ex = w.get('buildExportData(null).meta.netTransform');
         if (!warp || warp.domain !== 'single' || warp.field !== null || !warp.domainIgnored) note('warp', [X, Y, warp && warp.domain]);
@@ -119,7 +119,7 @@ const metrics = (w, X, Y, spec) => {
         const segs = w.frame(), W_ = w.get('canvasW'), H_ = w.get('canvasH');
         if (segs.some(s => s.x1 < -1e-6 || s.x2 > W_ + 1e-6 || s.y1 < -1e-6 || s.y2 > H_ + 1e-6 && false)) note('drawn', [X, Y]);
     }
-    check(`(2a) even / small axes (${n} sizes): Single with domainIgnored, no field, export domain 'single', faces blocked, dots = line ends`, n === 8 && !bad.first, J(bad));
+    check(`(2a) small axes, an axis below 3 (${n} sizes): Single with domainIgnored, no field, export domain 'single', faces blocked, dots = line ends`, n === 8 && !bad.first, J(bad));
     for (const shape of ['hex', 'triangle']) for (const [X, Y] of [[4, 4], [3, 4]]) {   // task 088/089: the triangle and the hexagon have a Field at odd sizes now (test-net-field-triangle.js, -hex.js)
         const ws = world(shape); setup(ws, shape, X, Y, FIELD);
         if (ws.get('netWarpBaseNow()') !== null || ws.get('netWarpActive()') !== false || ws.get('buildExportData(null).meta.netTransform') !== undefined) note('shape', [shape, X, Y]);
@@ -208,8 +208,8 @@ const metrics = (w, X, Y, spec) => {
     check('(4a) resizeBase 3/3 -> 3/5 -> 5/7 -> 3/3 -> 5/5 -> 3/9 -> 9/3 -> 7/7 with an active Field: the Field stays (no hint), the nodes and the warp are the fresh build of that size', !bad.first, J(bad));
     // to an even / small size: Single and the hint; from a Single to an odd one: no hint
     setup(w, 'square', 3, 5, FIELD);
-    const r1 = w.run('resizeBase(4, 5)'), d1 = w.get('netWarpBaseNow().domain');
-    check('(4b) 3/5 -> 4/5 (an even axis): the hint "Field net is read as Single" and the drawn net is Single', r1.hints.fieldNet === true && d1 === 'single', J([r1.hints, d1]));
+    const r1 = w.run('resizeBase(2, 5)'), d1 = w.get('netWarpBaseNow().domain');
+    check('(4b) 3/5 -> 2/5 (an axis below 3; task 106: 4/5 stays a Field): the hint "Field net is read as Single" and the drawn net is Single', r1.hints.fieldNet === true && d1 === 'single', J([r1.hints, d1]));
     const r2 = w.run('resizeBase(3, 5)'), d2 = w.get('netWarpBaseNow().domain');
     check('(4c) 4/5 -> 3/5 (Single read as Field again): no hint, the Field is back', r2.hints.fieldNet === false && d2 === 'field', J([r2.hints, d2]));
     setup(w, 'square', 3, 3, SINGLE);
@@ -238,7 +238,7 @@ const metrics = (w, X, Y, spec) => {
         const bad = {}; const note = (k, v) => { bad[k] = (bad[k] || 0) + 1; if (!bad.first) bad.first = [k, v]; };
         let n = 0;
         const specs = [FIELD, FIELDG, { x: { kind: 'trig', w: 0.7, alternate: true }, y: 'same', repeat: true, domain: 'tiled' }, SINGLE, { x: { kind: 'geometric', w: 1.1 }, y: 'same', repeat: false, macro: 3 }];
-        for (const sz of [3, 4, 5, 7, 9]) for (const spec of specs) {
+        for (const sz of [3, 5, 7, 9]) for (const spec of specs) {   // task 106: 4 left out, an even square is a Field now (compared in test-net-field-even.js section 4)
             setup(wn, 'square', sz, sz, spec); setup(wm, 'square', sz, sz, spec); n++;
             const probe = w2 => w2.get(`(function () {
                 const segs = (segmentCollector = [], drawTessellation(), segmentCollector.slice()); segmentCollector = null;
@@ -249,7 +249,7 @@ const metrics = (w, X, Y, spec) => {
             })()`);
             if (probe(wn) !== probe(wm)) note('differs', [sz, J(spec).slice(0, 60)]);
         }
-        check(`(5) X = Y (sizes 3,4,5,7,9 x 5 specs = ${n} cases): drawn segments, export, overlay lines, warp, apply / invert / split / local are byte-equal to main (317d0132)`, n === 25 && !bad.first, J(bad));
+        check(`(5) X = Y (sizes 3,5,7,9 x 5 specs = ${n} cases): drawn segments, export, overlay lines, warp, apply / invert / split / local are byte-equal to main (317d0132)`, n === 20 && !bad.first, J(bad));
         // X != Y with a Single: the net is the same on both (only the Field and the readers of shapeSizeFactor differ)
         const bad2 = {}; let m = 0;
         for (const [X, Y] of [[3, 5], [5, 7], [4, 5]]) for (const spec of [SINGLE, { x: { kind: 'trig', w: 0.7 }, y: 'same', repeat: true, domain: 'tiled' }]) {
@@ -289,7 +289,7 @@ const metrics = (w, X, Y, spec) => {
         const fieldBtn = sel('#net-field-btn'), kindBtn = k => kinds.find(b => b.elt.dataset.kind === k);
         const bad = {}; const note = (k, v) => { bad[k] = (bad[k] || 0) + 1; if (!bad.first) bad.first = [k, v]; };
         let n = 0;
-        for (const [X, Y, shapeOk] of [[3, 3, true], [3, 5, true], [5, 3, true], [5, 7, true], [9, 3, true], [7, 9, true], [4, 5, false], [5, 4, false], [2, 6, false], [4, 4, false], [6, 7, false], [4, 3, false]]) {
+        for (const [X, Y, shapeOk] of [[3, 3, true], [3, 5, true], [5, 3, true], [5, 7, true], [9, 3, true], [7, 9, true], [4, 5, true], [5, 4, true], [2, 6, false], [4, 4, true], [6, 7, true], [4, 3, true]]) {
             setup(w, 'square', X, Y, null); n++;
             w.set('baseNetTransform = null;');
             try {
@@ -305,12 +305,12 @@ const metrics = (w, X, Y, spec) => {
             } catch (e) { note('threw', [X, Y, String(e && e.message).slice(0, 160)]); }
             sb.__toasts.length = 0;
         }
-        check(`(6a) Netz row, a kind chosen from Regular (${n} sizes): Field exactly at odd X and Y (3/5 ... 9/7), else Single with the hint; #net-field-btn disabled exactly when Single holds; dots = line ends`, n === 12 && !bad.first, J(bad));
+        check(`(6a) Netz row, a kind chosen from Regular (${n} sizes): Field exactly when X and Y are both 3 or more (task 106: even sizes too: 4/5, 4/4, 6/7), else Single with the hint (2/6); #net-field-btn disabled exactly when Single holds; dots = line ends`, n === 12 && !bad.first, J(bad));
         // a Field set at a valid size, then the size becomes even: reset to Single, visibly, and the button is grey
         setup(w, 'square', 3, 5, null); kindBtn('regular').press(); kindBtn('sinus').press(); sel('#net-strength-input').value('50'); sel('#net-strength-input').inputFn(); sb.netControlsSync();
-        w.run('resizeBase(4, 5)'); sb.netControlsSync();
+        w.run('resizeBase(2, 5)'); sb.netControlsSync();
         const d = w.get('baseNetTransform && baseNetTransform.domain');
-        check('(6b) Field at 3/5, then the size 4/5: the Netz row resets the domain to Single and the button is disabled', d === undefined && fieldBtn.elt.disabled === true, J([d, fieldBtn.elt.disabled]));
+        check('(6b) Field at 3/5, then the size 2/5 (task 106: 4/5 would stay a Field): the Netz row resets the domain to Single and the button is disabled', d === undefined && fieldBtn.elt.disabled === true, J([d, fieldBtn.elt.disabled]));
         w.run('resizeBase(3, 7)'); sb.netControlsSync();
         check('(6c) back at an odd 3/7: the button is enabled again (the domain stays Single until chosen)', fieldBtn.elt.disabled === false);
     }

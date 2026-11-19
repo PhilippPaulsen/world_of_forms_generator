@@ -133,9 +133,9 @@ const SK = read('SKETCH_JS', 'sketch.js');
             const call = () => vm.runInContext('netControlsSync()', sb);
             call(); reset(); call(); call(); call();
             check('(4) netControlsSync (net off): three calls with unchanged state write NOTHING (#net-group, #net-field-btn title, #net-field-hint, #net-field-info, #net-size-hint, #net-macro-row, #net-macro-hint): 0', total() === 0, J(writes));
-            // a real change: size 4 (even: Field is not available) -> field hint shown, title changes, once; then 0
-            reset(); sb.shapeSizeFactor = 4; call();
-            check('(4) a real change (Shape Size 4, Field not available) IS written: the field hint is shown (hidden false), the Field button title changes, once each', writes['net-field-hint.hidden'] === 1 && els['net-field-hint'].hidden === false && writes['net-field-btn.title'] === 1 && els['net-field-btn'].title.startsWith('Field needs an odd'), J([writes, els['net-field-btn'].title]));
+            // a real change: size 2 (below 3: Field is not available; task 106: 4 is a Field of the square) -> field hint shown, title changes, once; then 0
+            reset(); sb.shapeSizeFactor = 2; call();
+            check('(4) a real change (Shape Size 2, Field not available) IS written: the field hint is shown (hidden false), the Field button title changes, once each', writes['net-field-hint.hidden'] === 1 && els['net-field-hint'].hidden === false && writes['net-field-btn.title'] === 1 && els['net-field-btn'].title.startsWith('Field needs Shape Size 3 or more'), J([writes, els['net-field-btn'].title]));
             reset(); call(); call(); check('(4) and the next calls write 0 again', total() === 0, J(writes));
             // net on (Field, size 3): the group info text is written once, not on every call
             reset(); sb.shapeSizeFactor = 3; sb.baseNetTransform = { x: { kind: 'trig', w: -0.5 }, y: 'same', domain: 'field', repeat: false }; call();

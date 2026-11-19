@@ -37,6 +37,7 @@
     get 'reason.size.ratio'() { return tr('size.ratio.max', null, 'Seitenverhältnis höchstens 1:3'); },
     get 'reason.size.lock'() { return tr('size.lock', null, 'Seitenverhältnis koppeln (Quadrat)'); },
     get 'reason.size.field.min'() { return tr('reason.size.field.min', null, 'Im Feld-Netz sind nur ungerade Größen von 3 bis 9 möglich; 3 ist die kleinste.'); },
+    get 'reason.size.fieldSq.min'() { return tr('reason.size.fieldSq.min', null, 'Im Feld-Netz ist 3 die kleinste Größe.'); },   // task 106: the square's Field (any size 3..9)
     'note.size.field': function (from, to) { return tr('note.size.field', { from: from, to: to }, 'Feld-Netz: nur ungerade Größen, deshalb ' + from + ' → ' + to + '.'); },
     get 'reason.fold.hex'() { return tr('reason.fold.hex', null, 'Die Zähligkeit (3 oder 6) gilt nur beim Sechseck.'); },
     get 'reason.fold.rotation'() { return tr('reason.fold.rotation', null, 'Die Zähligkeit gilt nur mit Drehung.'); },
@@ -75,6 +76,8 @@
   function fieldActive() {
     return typeof baseNetTransform !== 'undefined' && !!baseNetTransform && baseNetTransform.domain === 'field';
   }
+  // task 106: the SQUARE's Field takes every size 3..9 (even ones too: steps of one); the triangle and the hexagon stay at odd sizes (steps of two)
+  function fieldSquare() { return typeof currentShape !== 'undefined' && currentShape === 'square'; }
   // A Sin or Tan net needs at least 4 nodes (at 3 the law sits on its fixed points and shows no effect), so the stepper
   // does not go below 4 while one is active (sketch.js raises a lower count when the kind is chosen, and says so).
   function trigNetActive() {
@@ -101,7 +104,7 @@
     return { min: nodeMin(), max: max, minMsg: nodeMinMsg(), maxMsg: nodeMaxMsg(max) };
   }
 
-  // Shape Size: 1..9. While a Field net is active only odd sizes 3..9 are valid (a Field needs an odd size), so the
+  // Shape Size: 1..9. While a Field net is active on the triangle or the hexagon only odd sizes 3..9 are valid (task 106: the square's Field takes every size 3..9, steps of one), so the
   // stepper moves in twos then - and says so; it never produces an even size there. Without a Field it steps by 1
   // (an even size is fine for Single/Tiled and for no net). A TYPED even size in a Field is left to sketch.js, which
   // resets the domain to Single with a visible note (the size itself never changes).
@@ -119,7 +122,15 @@
     const cur = parseInt(input.value, 10) || 1;
     const lim = sizeLimits(axis);
     if (lim.openLimit) {
-      if (fieldActive()) {   // task 086: a Field spans X x Y tiles, each axis odd 3..9 by itself (ratio <= 1:3 always holds): odd steps of two per axis
+      if (fieldActive() && fieldSquare()) {   // task 106: the square's Field: steps of one, 3..9 per axis, within 1 : 3 against the other axis
+        const to = cur + dir;
+        if (to < 3) return { to: null, reason: T['reason.size.fieldSq.min'] };
+        if (to > 9) return { to: null, reason: T['reason.size.max'] };
+        if (to < lim.min) return { to: null, reason: T['reason.size.ratio'] };
+        if (to > lim.max) return { to: null, reason: T['reason.size.ratio'] };
+        return { to: to };
+      }
+      if (fieldActive()) {   // task 086: a Field spans X x Y tiles, each axis odd 3..9 by itself (ratio <= 1:3 always holds): odd steps of two per axis (the triangle and the hexagon since task 106)
         const to = cur % 2 === 0 ? cur + dir : cur + 2 * dir;
         if (to < 3) return { to: null, reason: T['reason.size.field.min'] };
         if (to > 9) return { to: null, reason: T['reason.size.max'] };
@@ -132,8 +143,14 @@
       if (to > lim.max) return { to: null, reason: lim.max < 9 ? T['reason.size.ratio'] : T['reason.size.max'] };
       return { to: to };
     }
+    if (fieldActive() && fieldSquare()) {   // task 106: the square's Field, lock closed (X = Y): steps of one, 3..9
+      const to = cur + dir;
+      if (to < 3) return { to: null, reason: T['reason.size.fieldSq.min'] };
+      if (to > 9) return { to: null, reason: T['reason.size.max'] };
+      return { to: to };
+    }
     if (fieldActive()) {
-      const to = cur % 2 === 0 ? cur + dir : cur + 2 * dir; // an even size cannot occur in a Field, but never step onto one
+      const to = cur % 2 === 0 ? cur + dir : cur + 2 * dir; // an even size cannot occur in a Field of the triangle or the hexagon, but never step onto one
       if (to < 3) return { to: null, reason: T['reason.size.field.min'] };
       if (to > 9) return { to: null, reason: T['reason.size.max'] };
       return { to: to, note: Math.abs(to - cur) === 2 ? T['note.size.field'](cur, to) : undefined };
