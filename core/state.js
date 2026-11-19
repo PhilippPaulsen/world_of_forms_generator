@@ -24,7 +24,7 @@ function gridEdgeFactor() { return shapeSizeFactor; }
 // The explicit short side for the builders: only a non-square area passes it (a square one keeps the old canvasW / factor expression).
 function gridShortSideArg() { return gridIsSquare() ? undefined : GRID_SHORT_SIDE; }
 // Task 086: the tile counts the net reads (ONE source for every net reader): {x: X, y: Y} (width and height mesh count; X = Y for a square area).
-// netDomainEffective() reads a Field only when both are odd 3..9 (then it spans X x Y macro tiles), else Single with a hint.
+// netDomainEffective() reads a Field when both are 3..9 on the square (any parity; task 106) or odd 3..9 on the triangle / hexagon (then it spans X x Y macro tiles), else Single with a hint.
 function netSizeFactors() { return { x: gridSizeX(), y: gridSizeY() }; }
 // Task 078: the p5 canvas follows canvasW / canvasH (sketch.js sets the hook in setup: resizeCanvas, the fill buffer, the CSS size). Nothing without the hook (Node tests).
 const _resizeFlag = { busy: false };   // resizeBase() runs rebuildGrid() inside a (possibly dry) run: the canvas follows once, after it
@@ -489,7 +489,7 @@ function _resizeDo(X2, Y2, X1, Y1) {
     timeline = keep.tl; activeLayer = keep.active;
     // a Field spec of the base or of a timeline net snapshot that was a field at the old size and is read as Single at the new one: said, not removed
     const specs = [keep.netT].concat(keep.tl && keep.tl.netStates ? keep.tl.netStates : []).filter(sp => sp && sp.domain === 'field');
-    const fieldNet = specs.some(sp => netDomainEffective(sp, { x: X1, y: Y1 }).ignored === null && netDomainEffective(sp, netSizeFactors()).ignored !== null);
+    const fieldNet = specs.some(sp => netDomainEffective(sp, { x: X1, y: Y1 }, currentShape).ignored === null && netDomainEffective(sp, netSizeFactors(), currentShape).ignored !== null);
     return { changed: true, from: old, to: neu, fromX: X1, fromY: Y1, toX: X2, toY: Y2, factor, kept: { lines: connections.length, free: free.length, altNet: !!keep.seed, layers: additionalLayers.length, timeline: !!keep.tl, colors: colorsKept },
         lost: { layers: 0, timeline: false, colors: colorsLost > 0, colorsCount: colorsLost, colorsTotal }, hints: { fieldNet } };
 }

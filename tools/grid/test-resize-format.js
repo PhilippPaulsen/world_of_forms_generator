@@ -34,7 +34,7 @@ else {
     for (const script of ['tools/grid/measure-g5a.js', 'tools/grid/measure-g5b.js', 'tools/session/measure-g6a.js', 'tools/grid/measure-g6b.js', 'tools/grid/measure-lage2-app.js', 'tools/grid/measure-size-change.js']) {
         let a, b, err = '';
         try { a = JSON.parse(run(oldDir, script)); b = JSON.parse(run(ROOT, script)); } catch (e) { err = String(e.message).slice(0, 200); }
-        const keys = a ? Object.keys(b) : [], bad = a ? keys.filter(k => J(a[k]) !== J(b[k])) : [];
+        const keys = a ? Object.keys(b) : [], bad = a ? keys.filter(k => J(script === 'tools/grid/measure-size-change.js' && k === 'H' ? Object.assign({}, a[k], { frames: Object.assign({}, a[k].frames, { field: null }) }) : a[k]) !== J(script === 'tools/grid/measure-size-change.js' && k === 'H' ? Object.assign({}, b[k], { frames: Object.assign({}, b[k].frames, { field: null }) }) : b[k])) : [];   // task 106: key H without its Field frames (the square's Field exists at even sizes now: 4 -> 6, 2 -> 4 differ from the old tree on purpose); everything else, the Single and Tiled frames included, stays equal
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys)', a && keys.length > 3 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => (f === 'core/faces.js' ? ((t) => t.replace(/^[ \t]*\/\/ task (09[58]|103) \{\n[\s\S]*?^[ \t]*\/\/ task (09[58]|103) \}\n/gm, ''))(read(f)).split('\n').filter(l => !/netWarpTileOutsideCanvas\(activeNetWarp/.test(l)).map(l => l.replace(/return typeof netWarpRefineFaces === 'function' \? netWarpRefineFaces\(result, activeNetWarp\) : result;.*$/, 'return result;')).join('\n') : f === 'core/facecolor.js' ? read(f).replace(/^[ \t]*\/\/ task 100 \{\n[\s\S]*?^[ \t]*\/\/ task 100 \}\n/gm, '') : read(f)) === fs.readFileSync(path.join(oldDir, f), 'utf8');   // task 100: the marked blocks of core/facecolor.js are not part of the comparison   // task 090: core/faces.js carries two documented hooks (the only exception to its protection); compared without them (test-net-field-hex-faces.js (7) pins the hooks themselves)
@@ -274,8 +274,8 @@ const frameWorld = (w) => { w.set('width = canvasW; height = canvasH;'); return 
     setup(w, 'square', 2, 1, 3, 3); w.set("baseNetTransform = { domain: 'field' };");
     const rF = w.get('resizeBase(3, 5)');
     check('(6) a Field net of a square base at an odd size stays a Field on a 3/5 base (netSizeFactors {3, 5}), no hint', rF.hints.fieldNet === false && w.get('netSizeFactors().x') === 3 && w.get('netSizeFactors().y') === 5 && w.get("netDomainEffective({ domain: 'field' }, netSizeFactors()).ignored === null"), J(rF.hints));
-    const rF3 = w.get('resizeBase(4, 5)');
-    check('(6) at 4/5 (an even axis) it is read as Single, with the hint hints.fieldNet', rF3.hints.fieldNet === true && w.get("netDomainEffective({ domain: 'field' }, netSizeFactors()).ignored !== null"), J(rF3.hints));
+    const rF3 = w.get('resizeBase(2, 5)');
+    check('(6) at 2/5 (an axis below 3; task 106: 4/5 stays a Field) it is read as Single, with the hint hints.fieldNet', rF3.hints.fieldNet === true && w.get("netDomainEffective({ domain: 'field' }, netSizeFactors(), currentShape).ignored !== null"), J(rF3.hints));
     const rF2 = w.get('resizeBase(5)');
     check('(6) and a Field again on the square 5/5 (no hint: a Field before and after... it was Single before, so no hint)', rF2.hints.fieldNet === false && w.get('netSizeFactors().x') === 5 && w.get('netSizeFactors().y') === 5);
 }

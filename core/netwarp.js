@@ -189,11 +189,11 @@ function _netSmoothLaw(axis, E) {
 
 // ---- Field domain (Model 2): the law over the whole repeated span ----
 const NETWARP_MAX_FIELD_TILES = 9;   // = the largest Shape Size the UI offers
-// Task 105 (N2a-1): the Field on an EVEN tile count per axis (2, 4, 6, 8). OFF by default: nothing reads or writes it but the tests and measurement scripts (a plain global `let`, like faceRepairCollinear in core/faces.js);
-// no URL, session, import or UI path switches it on. While it is off, netDomainEffective() refuses an even count exactly as before and every result is byte-equal to the build without this block.
-// The model: the field rectangle is the canvas [0, W] x [0, H]; on an even axis the mesh line sits at the canvas centre, so the picture of the net is moved by T = e/2 (+ direction) against the plain grid
-// (picture = F(p + T), p regular): the tiles of the field are lo = n/2 tiles left and hi = n/2 - 1 right of the base tile, and the regular-space field rectangle is [0, W] - T (warp.c0/v1/v2, core/tiling.js untouched).
-let netFieldEven = false;
+// Task 105 (N2a-1) / 106 (N2a-2): the Field on an EVEN tile count per axis of the SQUARE. The model: the field rectangle is the canvas [0, W] x [0, H]; on an even axis the mesh line sits at the canvas centre, so the picture of the net is moved
+// by T = e/2 (+ direction) against the plain grid (picture = F(p + T), p regular): the tiles of the field are lo = n/2 tiles left and hi = n/2 - 1 right of the base tile, and the regular-space field rectangle is [0, W] - T
+// (warp.c0/v1/v2, core/tiling.js untouched). Task 106: the triangle and the hexagon stay at odd counts; netDomainEffective() takes the shape as its third argument and WITHOUT a known shape reads the conservative rule (odd counts only).
+// netFieldMinTiles = the smallest field axis of the square (the UI floor 3); only the tests and measurement scripts set it to 2 (a plain global `let`, like faceRepairCollinear in core/faces.js): no URL, session, import or UI path writes it.
+let netFieldMinTiles = 3;
 
 // Which domain a spec asks for and which it gets: 'single' (one closed tile), 'tiled' (the wallpaper) or 'field'.
 // Rt = the outer tile count along an axis (Shape Size) - only the field needs it. A spec without `domain` reads its
@@ -206,7 +206,8 @@ function _netRt(Rt) {
     if (Rt && typeof Rt === 'object') return { x: Rt.x, y: Rt.y };
     return { x: Rt, y: Rt };
 }
-function netDomainEffective(spec, Rt) {
+// Task 106: `shape` ('square' | 'triangle' | 'hex'): an even count is a Field only on the square (counts netFieldMinTiles..9); a missing or unknown shape reads the conservative rule (odd 3..9).
+function netDomainEffective(spec, Rt, shape) {
     const legacy = spec && spec.repeat ? 'tiled' : 'single';
     const req = spec ? spec.domain : undefined;
     if (req === undefined || req === null) return { domain: legacy, ignored: null };
@@ -216,9 +217,9 @@ function netDomainEffective(spec, Rt) {
     else {
         const R = _netRt(Rt), two = R.x !== R.y;
         for (const n of [R.x, R.y]) {
-            const evenOk = netFieldEven && n % 2 === 0;   // task 105: an even count is a field only with the switch (model only, not offered by the UI)
+            const sq = shape === 'square', evenOk = sq && n % 2 === 0;   // task 106: an even count is a field on the square only
             if (!Number.isInteger(n)) reason = 'a field needs an integer tile count (Shape Size)';
-            else if (n < (evenOk ? 2 : 3)) reason = 'a field needs at least 3 tiles (Shape Size 3, 5, 7 or 9): a trig law has no effect on 1 or 2 macro cells';
+            else if (n < (sq ? netFieldMinTiles : 3)) reason = 'a field needs at least 3 tiles (Shape Size 3, 5, 7 or 9): a trig law has no effect on 1 or 2 macro cells';
             else if (n % 2 === 0 && !evenOk) reason = two ? 'a field needs an odd tile count on both axes (X and Y odd: 3, 5, 7 or 9) so the base tile is the central cell' : 'a field needs an odd tile count (odd Shape Size) so the base tile is the central cell';
             else if (n > NETWARP_MAX_FIELD_TILES) reason = `a field of ${n} tiles exceeds the ceiling ${NETWARP_MAX_FIELD_TILES}`;
             if (reason) break;
@@ -259,7 +260,7 @@ function _netFieldAxisInverse(f, sOut, h) {
 // (so the sink stays untouched and the output is byte-identical to a build without this module).
 function makeNetWarp(spec, frame, E, Rt) {
     if (!spec || !frame) return null;
-    const dom = netDomainEffective(spec, Rt);
+    const dom = netDomainEffective(spec, Rt, 'square');   // task 106: a warp built here is the square's (netWarpForBase routes the triangle and the hexagon to their own builders)
     const ax = spec.x, ay = spec.y === 'same' ? spec.x : spec.y;
     const isField = dom.domain === 'field';
     const R = isField ? _netRt(Rt) : null;
@@ -291,7 +292,7 @@ function _netWarpAxis(f, alt, s) {
 // its base mesh c0 = centroid - 2/3 (v1 + v2) (the mesh that holds the base triangle). The Field is the SMALLEST odd (Rx, Ry) >= (X, Y), <= 21, whose parallelogram (centred on the base mesh) covers the whole
 // canvas: its edge meshes are cut by the canvas edge. The law runs over Rx x Ry meshes, so every mesh is an affine copy and nothing kinks inside a mesh. Only a Field applies to the triangle (no Single / Tiled).
 function _netTriangleField(spec, corners, Rt) {
-    const dom = netDomainEffective(spec, Rt);
+    const dom = netDomainEffective(spec, Rt, 'triangle');
     if (dom.domain !== 'field' || !corners || corners.length !== 3) return null;   // a triangle sheet has exactly 3 outer corners
     const A = corners[0], B = corners[1], C = corners[2], v1 = { x: C.x - B.x, y: C.y - B.y }, v2 = { x: C.x - A.x, y: C.y - A.y };
     const cen = { x: (A.x + B.x + C.x) / 3, y: (A.y + B.y + C.y) / 3 }, det = v1.x * v2.y - v2.x * v1.y;
@@ -314,7 +315,7 @@ function _netTriangleField(spec, corners, Rt) {
 // whose parallelogram, centred on the base mesh, contains the four canvas corners, so its edge meshes are cut by the canvas edge. A hexagon crosses mesh boundaries: task 090 splits the base faces
 // at those boundaries once (netWarpRefineFaces, called from computeCellFaces), so the per-vertex image is exact; layers and the morph (a `sheet` is given) stay refused.
 function _netHexField(spec, corners, Rt) {
-    const dom = netDomainEffective(spec, Rt);
+    const dom = netDomainEffective(spec, Rt, 'hex');
     if (dom.domain !== 'field' || !corners || corners.length !== 6) return null;   // a hexagon sheet has exactly 6 outer corners
     const v1 = { x: corners[2].x - corners[0].x, y: corners[2].y - corners[0].y }, v2 = { x: corners[4].x - corners[0].x, y: corners[4].y - corners[0].y };
     const f1 = { x: (v1.x + v2.x) / 3, y: (v1.y + v2.y) / 3 }, f2 = { x: (2 * v2.x - v1.x) / 3, y: (2 * v2.y - v1.y) / 3 }, det = f1.x * f2.y - f2.x * f1.y;
@@ -403,6 +404,11 @@ function netAnimationCompat(from, to) {
     const A = _netAnimNorm(from), B = _netAnimNorm(to);
     if (!A.any && !B.any && A.dom !== B.dom) return { ok: false, reason: `the domain differs (${A.dom} vs ${B.dom}) - a different geometry cannot be interpolated` };
     const dom = A.any ? B.dom : A.dom;
+    // task 106: at an even size of the square a Field moves the picture by half a tile against a Regular net (a captured {regular: true}), so the two cannot be interpolated (a jump at t = 0+); Field <-> Field is fine
+    if (dom === 'field' && A.any !== B.any && typeof currentShape !== 'undefined' && currentShape === 'square' && typeof netSizeFactors === 'function') {
+        const Rs = netSizeFactors();
+        if ((Rs.x % 2 === 0 || Rs.y % 2 === 0) && netDomainEffective({ domain: 'field' }, Rs, 'square').ignored === null) return { ok: false, reason: 'at an even size a Field moves the picture by half a tile against a Regular net, so the two cannot be interpolated' };
+    }
     if (dom !== 'field' && !A.any && !B.any && A.macro !== B.macro) return { ok: false, reason: `the macro cells differ (${A.macro === null ? 'none' : A.macro} vs ${B.macro === null ? 'none' : B.macro})` };
     for (const axis of ['x', 'y']) {
         const fa = _netAnimFamily(A[axis]), fb = _netAnimFamily(B[axis]);
@@ -611,10 +617,10 @@ function netWarpFieldLocal(warp, pt) {
 // visibly rather than export stale data" rule as the curve case, but flagged instead of silent.
 // Resolved per axis (y 'same' expanded); `a` (trig angle, radians) and `R`/`q` (geometric) are
 // derived values, written so a reader need not know the constants.
-function isFieldOf(spec, Rt) { return netDomainEffective(spec, Rt).domain === 'field'; }
-function netTransformExportData(spec, E, Rt, meshes) {
+function isFieldOf(spec, Rt, shape) { return netDomainEffective(spec, Rt, shape).domain === 'field'; }
+function netTransformExportData(spec, E, Rt, meshes, shape) {   // task 106: shape = the sheet's shape (core/export.js passes currentShape); without it the conservative rule applies
     const ax = spec.x, ay = spec.y === 'same' ? spec.x : spec.y;
-    const R = isFieldOf(spec, Rt) ? _netRt(Rt) : null;
+    const R = isFieldOf(spec, Rt, shape) ? _netRt(Rt) : null;
     const describe = (axis, Rax) => {
         if (!axis || axis.kind === 'uniform' || !axis.w) return { kind: 'uniform' };
         if (axis.kind === 'trig') {
@@ -627,7 +633,7 @@ function netTransformExportData(spec, E, Rt, meshes) {
         const qCount = isField ? Rax : eff.macro;
         return { kind: 'geometric', w: axis.w, R: Math.exp(axis.w), q: qCount >= 2 ? Math.exp(axis.w / (qCount - 1)) : null, alternate: !isField && !!axis.alternate };
     };
-    const dom = netDomainEffective(spec, Rt), isField = dom.domain === 'field';
+    const dom = netDomainEffective(spec, Rt, shape), isField = dom.domain === 'field';
     const eff = isField ? { macro: E, micro: 1, valid: true } : netMacroEffective(spec.macro, E);
     const result = {
         version: 1, interpretation: true, domain: dom.domain === 'tiled' ? 'per-tile' : dom.domain, repeat: dom.domain === 'tiled', E, macro: eff.macro, micro: eff.micro,
