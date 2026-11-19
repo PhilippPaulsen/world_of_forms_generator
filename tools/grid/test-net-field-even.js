@@ -1,12 +1,12 @@
-// Task 105 (N2a-1): the Field net on an EVEN tile count per axis (core/netwarp.js, switch `netFieldEven`, OFF by default; no UI path, task 104 plan N2a-1).
+// Task 105 (N2a-1) / 106 (N2a-2): the Field net on an EVEN tile count per axis of the SQUARE (core/netwarp.js; task 106: free for the square, the triangle and the hexagon stay odd; the floor of the square's axis is `netFieldMinTiles` = 3, the tests set 2).
 //   node tools/grid/test-net-field-even.js      sabotage runs: the test mutates core/netwarp.js into temp copies and runs ITSELF (EVEN_FAST=1) with NETWARP_JS = the copy: every run must fail (section 7)
 //   1. every size pair with an even axis (2, 4, 6, 8 per axis, mixed with 3, 5, 7, 9; ratio <= 1:3) x 5 laws (regular, sinus, tangens, mixed axes, geometric): X * Y tiles drawn, 0 segments outside, field edge on the canvas edge (0 px),
 //      every tile affine (kink 0), the tile areas fill W x H, mesh line at the canvas centre on an even axis / base tile centre at the centre on an odd one (symmetric laws), F(F^-1(p)) < 1e-8, trig symmetry (mirror, 180 deg, 90 deg at X = Y) 0 px,
 //      dots = line ends (0 px, also against the warp core/tiling.js reads), hit test (invert(dot) = node, dot inside), faces allowed, the jump against Aus = e/2 per even axis
 //   2. T exactly once per caller (task 105 step 0): applyNetWarp, invertNetWarp, netWarpInsideNet, netWarpFieldLocal, netWarpSplitSegment, netGridLines
 //   3. Fig. 14 (E = 3 x 4): 4 x 3 and 3 x 4 sinus / tangens: mesh line in the middle of the even axis only
-//   4. odd axes and the switch OFF: frames, warps, exports, overlays, apply / invert / inside / local / split byte-equal to main 25016726
-//   5. the switch: default false, nothing but core/netwarp.js reads or writes it, an import (with or without fieldBase / gridShiftPx) cannot switch it on, export fields only for an even axis
+//   4. byte-equal to main 25016726 (frames, warps, exports, overlays, apply / invert / inside / local / split): odd x odd, an even square WITHOUT a field (no net / Single / Tiled), the triangle and the hexagon with a Field at every size 1..9 (even and odd)
+//   5. the floor `netFieldMinTiles`: default 3, nothing but core/netwarp.js reads or writes it, an import (with or without fieldBase / gridShiftPx) cannot change it, the shape rule (even: square only; no or unknown shape = odd only), export fields only for an even axis
 //   6. (kept for numbering) the jump in px
 const fs = require('fs'), path = require('path'), os = require('os'), { execSync, spawnSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
@@ -39,7 +39,7 @@ const PAIRS = [];
 for (let X = 2; X <= 9; X++) for (let Y = 2; Y <= 9; Y++) if ((X % 2 === 0 || Y % 2 === 0) && Math.max(X, Y) <= 3 * Math.min(X, Y)) PAIRS.push([X, Y]);
 const FASTPAIRS = [[4, 4], [3, 4], [4, 3], [2, 5], [6, 5]];
 const USE = FAST ? FASTPAIRS : PAIRS;
-const withEven = (w, fn) => { w.set('netFieldEven = true;'); try { return fn(); } finally { w.set('netFieldEven = false;'); } };
+const withEven = (w, fn) => { w.set('netFieldMinTiles = 2;'); try { return fn(); } finally { w.set('netFieldMinTiles = 3;'); } };   // n = 2 is a model case only (task 106: the UI floor is 3)
 
 // the in-vm measurement of one case (switch ON)
 const metrics = (w, X, Y, specName) => {
@@ -228,46 +228,66 @@ const framed = (w, X, Y, spec) => {
 if (!CHILD) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'even105-')), mainFile = path.join(dir, 'netwarp.js');
     fs.writeFileSync(mainFile, execSync(`git show ${MAIN}:core/netwarp.js`, { cwd: ROOT, maxBuffer: 1 << 26 }));
-    const wMain = world('square', { 'core/netwarp.js': mainFile }), wNew = world('square', {});
-    const snap = (w, X, Y, spec) => {
-        setup(w, 'square', X, Y, spec);
+    const MAINFILES = { 'core/netwarp.js': mainFile };   // state.js / export.js of the tree stay (they only pass the shape on; main's netDomainEffective ignores the extra argument)
+    const worlds = {};
+    const wOf = (kind, shape) => worlds[kind + shape] || (worlds[kind + shape] = world(shape, kind === 'main' ? MAINFILES : {}));
+    const snap = (w, shape, X, Y, spec) => {
+        setup(w, shape, X, Y, spec);
         return J(w.get(`(function () {
             const warp = netWarpBaseNow(), out = { warp: warp ? JSON.parse(JSON.stringify(warp)) : null, domain: netDomainEffective(baseNetTransform, netSizeFactors()), blocks: netWarpBlocksFaces(), exp: buildExportData(null).meta.netTransform || null };
-            out.exp2 = baseNetTransform ? netTransformExportData(baseNetTransform, baseGridDivisions(), _netSize(), undefined) : null;
+            ${shape === 'square' ? '' : 'out.domainShape = netDomainEffective(baseNetTransform, netSizeFactors(), currentShape);'}
+            out.exp2 = baseNetTransform ? netTransformExportData(baseNetTransform, baseGridDivisions(), _netSize(), undefined, currentShape) : null;
             out.lines = netGridLines(netTransformNow(), outerCorners, baseGridDivisions(), { x0: 0, y0: 0, x1: width, y1: height }, warp && warp.field ? { closed: true, domain: 'field', fieldTiles: warp.field.Rx !== undefined ? { x: warp.field.Rx, y: warp.field.Ry } : warp.field.Rt } : { closed: !!warp && !warp.repeat });
             if (warp) { let seed = 3; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647; const pts = []; for (let i = 0; i < 60; i++) { const p = { x: rnd() * canvasW, y: rnd() * canvasH }, q = { x: rnd() * canvasW, y: rnd() * canvasH };
                 pts.push([applyNetWarp(warp, p), invertNetWarp(warp, p), netWarpInsideNet(warp, p), warp.field ? netWarpFieldLocal(warp, p) : null, netWarpSplitSegment(warp, p, q)]); } out.pts = pts; }
             return out;
         })()`)) + J(w.frame());
     };
-    let n = 0, diffs = [];
+    let n = 0; const diffs = [];
     const cases = [];
-    for (const X of [3, 5, 7, 9]) for (const Y of [3, 5, 7, 9]) for (const name of ['mixed', 'geometric']) cases.push([X, Y, name, 'odd']);
-    for (const [X, Y] of [[4, 4], [3, 4], [4, 3], [2, 5], [6, 6], [8, 3]]) for (const name of ['mixed', 'sinus']) cases.push([X, Y, name, 'even-off']);
-    for (const [X, Y, name, kind] of cases) {
-        const a = snap(wMain, X, Y, SPECS[name]), b = snap(wNew, X, Y, SPECS[name]); n++;
-        if (a !== b) diffs.push([X, Y, name, kind]);
-        if (kind === 'odd') {   // the same with the switch ON: odd axes are not touched by it
-            wNew.set('netFieldEven = true;'); try { if (snap(wNew, X, Y, SPECS[name]) !== a) diffs.push([X, Y, name, 'odd-on']); } finally { wNew.set('netFieldEven = false;'); }
+    for (const X of [3, 5, 7, 9]) for (const Y of [3, 5, 7, 9]) for (const name of ['mixed', 'geometric']) cases.push(['square', X, Y, SPECS[name], 'odd']);
+    const NOFIELD = { single: Object.assign({}, SPECS.mixed, { domain: 'single' }), tiled: Object.assign({}, SPECS.mixed, { domain: 'tiled', repeat: true }) };
+    for (const [X, Y] of [[4, 4], [3, 4], [4, 3], [2, 5], [6, 6], [8, 3], [1, 2]]) for (const [nm, sp] of [['none', null], ['single', NOFIELD.single], ['tiled', NOFIELD.tiled]]) cases.push(['square', X, Y, sp, 'even-nofield-' + nm]);
+    for (const shape of ['triangle', 'hex']) for (let X = 1; X <= 9; X++) for (const Y of [1, 2, 3, 4, 5, 7, 8, 9]) if (Math.max(X, Y) <= 3 * Math.min(X, Y)) for (const name of ['mixed', 'geometric']) cases.push([shape, X, Y, SPECS[name], shape + '-field']);
+    for (const [shape, X, Y, spec, kind] of cases) {
+        const a = snap(wOf('main', shape), shape, X, Y, spec), b = snap(wOf('new', shape), shape, X, Y, spec); n++;
+        if (a !== b) diffs.push([shape, X, Y, kind]);
+        if (kind === 'odd') {   // the same with the floor lowered to 2: odd axes are not touched by it
+            const wn = wOf('new', shape); wn.set('netFieldMinTiles = 2;'); try { if (snap(wn, shape, X, Y, spec) !== a) diffs.push([shape, X, Y, 'odd-min2']); } finally { wn.set('netFieldMinTiles = 3;'); }
         }
     }
-    check(`(4) frames, warps, domains, exports, overlays and apply / invert / inside / local / split byte-equal to main ${MAIN}: odd x odd (switch off and on) and even sizes with the switch off (${n} cases)`, diffs.length === 0, J(diffs.slice(0, 4)));
+    check(`(4) frames, warps, domains, exports, overlays and apply / invert / inside / local / split byte-equal to main ${MAIN}: odd x odd (floor 3 and 2), an even square without a field (none / Single / Tiled), the triangle and the hexagon with a Field at all sizes, even and odd (${n} cases)`, diffs.length === 0 && n > 250, J(diffs.slice(0, 6)) + ' n=' + n);
 }
 
-// ---- 5. the switch -------------------------------------------------------------------------------------------------------------------------------------------
+// ---- 5. the floor and the shape rule --------------------------------------------------------------------------------------------------------------------------
 {
     const w = world('square');
-    check('(5a) netFieldEven is false by default in a fresh world; the even field is refused (Single, domainIgnored) while it is off', w.get('netFieldEven') === false && (() => { setup(w, 'square', 4, 4, SPECS.mixed); const wp = w.get('netWarpBaseNow()'); return wp.domain === 'single' && !!wp.domainIgnored; })());
+    const eff = (shape, X, Y) => w.get(`netDomainEffective({ domain: 'field' }, { x: ${X}, y: ${Y} }${shape === undefined ? '' : ', ' + J(shape)}).ignored === null`);
+    const rules = {
+        floor: w.get('netFieldMinTiles') === 3,
+        squareEven: eff('square', 4, 4) && eff('square', 3, 4) && eff('square', 4, 3) && eff('square', 8, 8) && eff('square', 6, 5),
+        squareFloor: !eff('square', 2, 2) && !eff('square', 2, 5) && !eff('square', 1, 3) && eff('square', 3, 3),
+        squareMax: !eff('square', 10, 4),
+        triHexOdd: eff('triangle', 3, 5) && eff('hex', 9, 9) && eff('triangle', 3, 3),
+        triHexEven: !eff('triangle', 4, 4) && !eff('hex', 4, 4) && !eff('triangle', 3, 4) && !eff('hex', 4, 3) && !eff('triangle', 8, 8) && !eff('hex', 6, 5),
+        noShape: !eff(undefined, 4, 4) && !eff(undefined, 3, 4) && eff(undefined, 5, 5) && eff(undefined, 3, 5),   // no shape = the conservative rule: odd counts only
+        unknownShape: !eff('circle', 4, 4) && !eff(null, 4, 4) && !eff('', 4, 4) && eff('circle', 5, 5),
+    };
+    // the real warp builders: the square builds an even field at the default floor, the triangle and the hexagon do not (they have no warp at an even size)
+    setup(w, 'square', 4, 4, SPECS.mixed); const sq = w.get('netWarpBaseNow()'); rules.squareWarp = !!sq && sq.domain === 'field';
+    for (const shape of ['triangle', 'hex']) { const wt = world(shape); setup(wt, shape, 4, 4, SPECS.mixed); rules['warp_' + shape] = wt.get('netWarpBaseNow()') === null; }
+    const wn2 = world('square'); wn2.set('netFieldMinTiles = 2;'); const two = wn2.get("netDomainEffective({ domain: 'field' }, { x: 2, y: 4 }, 'square').ignored === null && netDomainEffective({ domain: 'field' }, { x: 2, y: 4 }, 'triangle').ignored !== null"); rules.floor2 = two;
+    check('(5a) netFieldMinTiles is 3 by default; an even count is a Field on the square only (3..9, floor 3, ceiling 9); the triangle and the hexagon refuse it; no or an unknown shape reads the conservative rule (odd only); the real builders agree', Object.values(rules).every(Boolean), J(rules));
     const users = [];
-    const scan = (dirp, rec) => { for (const f of fs.readdirSync(dirp)) { const fp = path.join(dirp, f); const st = fs.statSync(fp); if (st.isDirectory()) { if (rec && !['node_modules', 'tools', 'reports', 'docs', 'tasks', '.git', 'assets', 'gallery', 'notebooks'].includes(f)) scan(fp, rec); } else if (/\.(js|mjs|html)$/.test(f) && /netFieldEven/.test(fs.readFileSync(fp, 'utf8'))) users.push(path.relative(ROOT, fp)); } };
+    const scan = (dirp, rec) => { for (const f of fs.readdirSync(dirp)) { const fp = path.join(dirp, f); const st = fs.statSync(fp); if (st.isDirectory()) { if (rec && !['node_modules', 'tools', 'reports', 'docs', 'tasks', '.git', 'assets', 'gallery', 'notebooks'].includes(f)) scan(fp, rec); } else if (/\.(js|mjs|html)$/.test(f) && /netFieldMinTiles|netFieldEven/.test(fs.readFileSync(fp, 'utf8'))) users.push(path.relative(ROOT, fp)); } };
     scan(ROOT, true);
     const expected = process.env.NETWARP_JS ? null : ['core/netwarp.js'];
-    check('(5b) nothing but core/netwarp.js mentions netFieldEven (no sketch.js, ui, session, export, html, URL path)', expected === null || J(users) === J(expected), J(users));
-    // an import of an even-field export (with and without the two extra fields) neither changes the switch nor the spec reading
+    check('(5b) nothing but core/netwarp.js mentions netFieldMinTiles (no sketch.js, ui, session, export, html, URL path) and netFieldEven is gone everywhere', expected === null || J(users) === J(expected), J(users));
+    // an import of an even-field export (with and without the two extra fields) neither changes the floor nor the spec reading
     const base = { version: 1, domain: 'field', repeat: false, x: { kind: 'trig', law: 'sinus', w: -0.8, a: 1.04 }, y: { kind: 'trig', law: 'tangens', w: 0.6, a: 0.72 }, fieldTiles: { x: 4, y: 3 } };
-    const withExtra = Object.assign({}, base, { fieldBase: { x: { lo: 2, hi: 1 }, y: { lo: 1, hi: 1 } }, gridShiftPx: { x: 75, y: 0 } });
-    const r = w.get(`(function () { const a = netTransformFromExport(${J(base)}), b = netTransformFromExport(${J(withExtra)}); return { same: JSON.stringify(a) === JSON.stringify(b), dom: a.domain, sw: netFieldEven }; })()`);
-    check('(5c) netTransformFromExport: an export without fieldBase / gridShiftPx imports exactly as one with them (the importer reads neither); the import never switches netFieldEven on', r.same && r.dom === 'field' && r.sw === false, J(r));
+    const withExtra = Object.assign({}, base, { fieldBase: { x: { lo: 2, hi: 1 }, y: { lo: 1, hi: 1 } }, gridShiftPx: { x: 75, y: 0 }, netFieldMinTiles: 2 });
+    const r = w.get(`(function () { const a = netTransformFromExport(${J(base)}), b = netTransformFromExport(${J(withExtra)}); return { same: JSON.stringify(a) === JSON.stringify(b), dom: a.domain, floor: netFieldMinTiles }; })()`);
+    check('(5c) netTransformFromExport: an export without fieldBase / gridShiftPx imports exactly as one with them (the importer reads neither, not even a foreign netFieldMinTiles key); the import never changes netFieldMinTiles', r.same && r.dom === 'field' && r.floor === 3, J(r));
     // export: fieldBase / gridShiftPx only for an even axis (switch on); an odd field exports exactly as before
     const bad = [];
     withEven(w, () => {
@@ -280,7 +300,7 @@ if (!CHILD) {
             if (!even && ex.domain !== 'field') bad.push(['domain', X, Y]);
         }
     });
-    check('(5d) export (switch on): fieldBase {lo, hi} and gridShiftPx {x, y} (e/2 per even axis) only when an axis is even, odd fields carry neither', bad.length === 0, J(bad));
+    check('(5d) export (square, even axes): fieldBase {lo, hi} and gridShiftPx {x, y} (e/2 per even axis) only when an axis is even, odd fields carry neither', bad.length === 0, J(bad));
 }
 
 // ---- 7. sabotage runs: the test runs itself against mutated copies of core/netwarp.js -------------------------------------------------------------------------------
@@ -290,7 +310,9 @@ if (!CHILD && !process.env.EVEN_NOSAB) {
         ['T left out (applyNetWarp)', "if (T) { x += T.x; y += T.y; }", ''],
         ['T on the wrong axis (shift vector swaps tx / ty)', 'shiftVec: { x: evenKeys.tx * v1.x + evenKeys.ty * v2.x, y: evenKeys.tx * v1.y + evenKeys.ty * v2.y }', 'shiftVec: { x: evenKeys.ty * v1.x + evenKeys.tx * v2.x, y: evenKeys.ty * v1.y + evenKeys.tx * v2.y }'],
         ['lo / hi swapped (n / 2 - 1 tiles left, n / 2 right)', 'const hx = Math.floor(R.x / 2), hy = Math.floor(R.y / 2), evX', 'const hx = Math.floor((R.x - 1) / 2), hy = Math.floor((R.y - 1) / 2), evX'],
-        ['switch on by default', 'let netFieldEven = false;', 'let netFieldEven = true;'],
+        ['floor 2 by default (n = 2 reachable)', 'let netFieldMinTiles = 3;', 'let netFieldMinTiles = 2;'],
+        ['triangle / hexagon get an even field', "const sq = shape === 'square', evenOk = sq && n % 2 === 0;", "const sq = true, evenOk = sq && n % 2 === 0;"],
+        ['an unknown or missing shape is read as the square (not conservative)', "const sq = shape === 'square', evenOk = sq && n % 2 === 0;", "const sq = shape !== 'triangle' && shape !== 'hex', evenOk = sq && n % 2 === 0;"],
         ['an odd axis gets T', 'tx: evX ? 0.5 : 0, ty: evY ? 0.5 : 0', 'tx: 0.5, ty: 0.5'],
         ['inversion without the T subtraction', 'if (warp.field) pt = _netBackShift(warp, pt);   // task 105: pt is an image-space point', 'if (false) pt = _netBackShift(warp, pt);   // task 105: pt is an image-space point'],
         ['split with T instead of regular points', 'const a = netWarpTileCoords(warp, p1), b = netWarpTileCoords(warp, p2)', 'const a = netWarpTileCoords(warp, _netBackShift(warp, p1)), b = netWarpTileCoords(warp, _netBackShift(warp, p2))'],
