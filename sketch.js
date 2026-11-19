@@ -621,9 +621,9 @@ function setup() {
             if (fromRegular) {
                 ui.axes = 'both';
                 const Rs = typeof netSizeFactors === 'function' ? netSizeFactors() : { x: shapeSizeFactor, y: shapeSizeFactor }, R = Rs.x === Rs.y ? Rs.x : Rs.x + '/' + Rs.y;   // task 086: the tile counts {x, y}
-                if (netDomainEffective({ domain: 'field' }, Rs).ignored === null) setDomain('field');
-                else { setDomain('single'); const noNet = currentShape !== 'square';   // task 092: the triangle and the hexagon have no Single net: there is no net at that size
-                    notes.push(window.UI && UI.t ? UI.t(noNet ? 'note.net.fieldOddSizeNoNet' : 'note.net.fieldOddSize', { size: R, kept: R }) : (noNet ? `Feld braucht ungerade Größen in X und Y (3, 5, 7, 9); bei ${R} gibt es hier kein Netz. Die Größe bleibt ${R}.` : `Feld braucht eine ungerade Größe (3, 5, 7, 9); ${R} passt nicht, deshalb Einzelnetz. Die Größe bleibt ${R}.`)); }
+                if (netDomainEffective({ domain: 'field' }, Rs, currentShape).ignored === null) setDomain('field');
+                else { setDomain('single'); const noNet = currentShape !== 'square';   // task 092: the triangle and the hexagon have no Single net: there is no net at that size (task 106: the square's Field takes every size 3..9, so only a size below 3 gets here)
+                    notes.push(window.UI && UI.t ? UI.t(noNet ? 'note.net.fieldOddSizeNoNet' : 'note.net.fieldMinSize', { size: R, kept: R }) : (noNet ? `Feld braucht ungerade Größen in X und Y (3, 5, 7, 9); bei ${R} gibt es hier kein Netz. Die Größe bleibt ${R}.` : `Feld braucht in X und Y mindestens Größe 3; ${R} passt nicht, deshalb Einzelnetz. Die Größe bleibt ${R}.`)); }
             }
             if ((kind === 'sinus' || kind === 'tangens') && nodeCount < 4) {   // E >= 3, i.e. the legacy count 4 = ordnung 3 (triangle, square) / 4 (hex), task 068c2
                 const minO = gridMinOrdnungTrig(currentShape);
@@ -702,22 +702,25 @@ function setup() {
             const active = netWarpActive();
             // Domain: adopt one set from the state; Field needs an odd Shape Size 3..9 - an even one is reset to Single, visibly
             const sd = stateDomain(); if (sd && sd !== ui.domain) { ui.domain = sd; render(); }
-            const Rs = typeof netSizeFactors === 'function' ? netSizeFactors() : { x: shapeSizeFactor, y: shapeSizeFactor }, R = Rs.x === Rs.y ? Rs.x : Rs.x + ' \u00d7 ' + Rs.y, Rmin = Math.min(Rs.x, Rs.y), fieldOk = netDomainEffective({ domain: 'field' }, Rs).ignored === null;
+            const Rs = typeof netSizeFactors === 'function' ? netSizeFactors() : { x: shapeSizeFactor, y: shapeSizeFactor }, R = Rs.x === Rs.y ? Rs.x : Rs.x + ' \u00d7 ' + Rs.y, Rmin = Math.min(Rs.x, Rs.y), fieldOk = netDomainEffective({ domain: 'field' }, Rs, currentShape).ignored === null, sqShape = currentShape === 'square';   // task 106: the shape decides which sizes a Field takes
             if (ui.domain === 'field' && !fieldOk) {
                 setDomain('single'); render();
-                showFieldNote(`Shape Size ${R} ${Rs.x === Rs.y && Rs.x % 2 === 0 ? 'is even' : 'is not a valid field size'}${currentShape !== 'square' ? ': the field net applies only at odd sizes (3, 5, 7, 9) in X and Y, so there is no net here.' : ', so Field was reset to Single (Field needs an odd Shape Size in X and Y: 3, 5, 7, 9).'}`);   // task 092: no Single net on the triangle and the hexagon
+                showFieldNote(`Shape Size ${R} ${!sqShape && Rs.x === Rs.y && Rs.x % 2 === 0 ? 'is even' : 'is not a valid field size'}${!sqShape ? ': the field net applies only at odd sizes (3, 5, 7, 9) in X and Y, so there is no net here.' : ', so Field was reset to Single (Field needs Shape Size 3 or more in X and Y).'}`);   // task 092: no Single net on the triangle and the hexagon
             }
             if (fieldBtn.elt.disabled !== !fieldOk) fieldBtn.elt.disabled = !fieldOk;
             domainBtns.forEach(b => { if (b.elt.dataset.domain !== 'field') { const dis = currentShape === 'triangle' || currentShape === 'hex'; if (b.elt.disabled !== dis) b.elt.disabled = dis; } });   // task 088: only a Field applies to the triangle
-            const fieldTitle = fieldOk ? fieldBtn.elt.dataset.title : 'Field needs an odd Shape Size in X and Y (3, 5, 7, 9)';
+            const fieldTitle = fieldOk ? (sqShape && window.UI && UI.t ? UI.t('net.domain.field.titleSq') : fieldBtn.elt.dataset.title) : (sqShape ? 'Field needs Shape Size 3 or more in X and Y' : 'Field needs an odd Shape Size in X and Y (3, 5, 7, 9)');   // task 106
             if (fieldBtn.elt.title !== fieldTitle) fieldBtn.elt.title = fieldTitle;
+            { const hk = sqShape ? 'net.hint.fieldMin' : 'net.hint.fieldOdd';   // task 106: the hint under the domain buttons names the sizes of the CURRENT shape (data-i18n follows, so a language change re-translates it)
+              if (fieldHint.elt.dataset.i18n !== hk) { fieldHint.elt.dataset.i18n = hk; fieldHint.elt.textContent = window.UI && UI.t ? UI.t(hk) : (sqShape ? 'Feld braucht in X und Y mindestens Größe 3.' : 'Feld braucht ungerade Größen in X und Y (3, 5, 7, 9).'); } }
             if (fieldHint.elt.hidden !== fieldOk) fieldHint.elt.hidden = fieldOk;
             const isField = ui.domain === 'field', E0 = baseGridDivisions();
             if (fieldInfo.elt.hidden !== !(active && isField)) fieldInfo.elt.hidden = !(active && isField);
-            if (active && isField) htmlOnce(fieldInfo, `Field: macro = R = ${R} tiles, micro = E = ${E0} per tile. Face fills are exact on a Field and work for the base sheet and for layers on the base grid (same shape and size, no offset, no rotation - every timeline playback layer); other layers are not filled.`);
+            if (active && isField) htmlOnce(fieldInfo, `Field: macro = R = ${R} tiles, micro = E = ${E0} per tile. Face fills are exact on a Field and work for the base sheet and for layers on the base grid (same shape and size, no offset, no rotation - every timeline playback layer); other layers are not filled.`
+                + (sqShape && window.UI && UI.t && (Rs.x * Rs.y < 7 || Rs.x * Rs.y > 12) ? ' ' + UI.t('net.hint.optimum', { w: Rs.x * Rs.y }) : ''));   // task 106: the optimum of Hinterreiter II p. 17 (7 to 12 meshes for squares) as a hint only, here and not in the readout
             // The Shape Size hint says what Shape Size does in the CURRENT mode
             const hintText = !active ? null
-                : ui.domain === 'single' ? (Rmin > 1 ? 'Single: one closed net. Shape Size 1 fills the canvas, larger sizes give a smaller net; Field (odd Shape Size 3-9) spreads the law over all the tiles instead.' : null)
+                : ui.domain === 'single' ? (Rmin > 1 ? 'Single: one closed net. Shape Size 1 fills the canvas, larger sizes give a smaller net; Field (Shape Size 3-9) spreads the law over all the tiles instead.' : null)
                 : ui.domain === 'tiled' ? `Tiled: the warped tile is repeated ${Rmin} times across the canvas, every copy alike.`
                 : `Field: Shape Size is the number of macro cells (tiles) per axis; the net always fills the canvas.`;
             if (sizeHint.elt.hidden !== (hintText === null)) sizeHint.elt.hidden = hintText === null; if (hintText !== null) htmlOnce(sizeHint, hintText);
@@ -4445,7 +4448,7 @@ function drawNetLinesOverlay() {
 function faceFillsUnavailableReason() {
     // Faces are exact only on a FIELD warp (affine per tile), and only for the base sheet (offset layers cross tile boundaries)
     const nw = netWarpBaseNow();
-    if (nw && !nw.field) return 'Face fills are off on a Single or Tiled net transform (the warp is not affine inside a tile, so faces would not fit the lines). Use Field (odd Shape Size 3-9), or set the net to Regular on the Base sheet.';
+    if (nw && !nw.field) return 'Face fills are off on a Single or Tiled net transform (the warp is not affine inside a tile, so faces would not fit the lines). Use Field (Shape Size 3-9), or set the net to Regular on the Base sheet.';
     if (nw && nw.field && activeLayer !== 'base' && !layerGridMatchesBase(additionalLayers[activeLayer])) return 'Face fills on a Field are drawn for the Base sheet and for layers on the base grid (same shape and size, no offset, no rotation) - this layer is offset, rotated or of another size, so its lines cross tile boundaries.';
     if (nw && nw.refineFaces && activeLayer !== 'base') return 'Face fills on a hexagon Field are drawn for the Base sheet only (task 090).';
     if (curveType.kind !== 'straight') return 'Face fills need straight lines (curve/free mode is on; both are under Mehr).';
