@@ -288,7 +288,7 @@ if (!CHILD && !process.env.EVEN_NOSAB) {
     const src = fs.readFileSync(path.join(ROOT, 'core', 'netwarp.js'), 'utf8'), dir = fs.mkdtempSync(path.join(os.tmpdir(), 'even105sab-'));
     const SAB = [
         ['T left out (applyNetWarp)', "if (T) { x += T.x; y += T.y; }", ''],
-        ['T on the wrong axis (shift vector swaps tx / ty)', 'return { x: f.tx * F.v1.x + f.ty * F.v2.x, y: f.tx * F.v1.y + f.ty * F.v2.y };', 'return { x: f.ty * F.v1.x + f.tx * F.v2.x, y: f.ty * F.v1.y + f.tx * F.v2.y };'],
+        ['T on the wrong axis (shift vector swaps tx / ty)', 'shiftVec: { x: evenKeys.tx * v1.x + evenKeys.ty * v2.x, y: evenKeys.tx * v1.y + evenKeys.ty * v2.y }', 'shiftVec: { x: evenKeys.ty * v1.x + evenKeys.tx * v2.x, y: evenKeys.ty * v1.y + evenKeys.tx * v2.y }'],
         ['lo / hi swapped (n / 2 - 1 tiles left, n / 2 right)', 'const hx = Math.floor(R.x / 2), hy = Math.floor(R.y / 2), evX', 'const hx = Math.floor((R.x - 1) / 2), hy = Math.floor((R.y - 1) / 2), evX'],
         ['switch on by default', 'let netFieldEven = false;', 'let netFieldEven = true;'],
         ['an odd axis gets T', 'tx: evX ? 0.5 : 0, ty: evY ? 0.5 : 0', 'tx: 0.5, ty: 0.5'],
