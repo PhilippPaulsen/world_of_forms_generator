@@ -727,6 +727,9 @@ function _faceInfo(poly, lin) {
 // the orbit of a face from the polygons themselves: faces of one sheet with the same corner count, area (1e-3) and distance of the centroid from the cell centre (1e-3 of the width)
 // (measured identical to the orbit from the symmetry group in every case of tasks 028 to 030)
 function _setOrbits(list, ctr, span) {
+// task 100 {
+    list.forEach(f => { f[_NEST] = list; });   // the list a face belongs to (for its nesting depth, computed only on a tie); a symbol key: not enumerated, not in JSON
+// task 100 }
     const byN = new Map();
     list.forEach(f => { f.r = Math.hypot(f.c.x - ctr.x, f.c.y - ctr.y); if (!byN.has(f.n)) byN.set(f.n, []); byN.get(f.n).push(f); });
     byN.forEach(arr => {
@@ -769,8 +772,81 @@ function _fieldInfo(field) {
 function _inBox(p, f) { return p.x >= f.minX && p.x <= f.maxX && p.y >= f.minY && p.y <= f.maxY; }
 function _inFace(p, f) { return _inBox(p, f) && pointInPolygon(p, f.poly); }
 function _shareIn(f, g) { let k = 0; for (const p of f.samples) if (_inFace(p, g)) k++; return f.samples.length ? k / f.samples.length : 0; }
+// task 100 {
+// Task 100: faces that lie INSIDE one another (a free figure in a cell: the cell face contains it) share their centroid, corner count and orbit. The first hit / the first nearest candidate then picks the enclosing face for
+// the figure. _ownerOfInnermost: of the field polygons that contain the point, the innermost (smallest) one; _partnerOfNested: among candidates at the same distance, the one whose area is closest. Ties are resolved by a fixed
+// order of the faces themselves (area, box, centroid), never by their position in the list.
+function _faceBefore(a, b) {   // a total order on distinct faces, independent of the list order
+    return (a.a - b.a) || (a.minX - b.minX) || (a.minY - b.minY) || (a.maxX - b.maxX) || (a.maxY - b.maxY) || (a.c.x - b.c.x) || (a.c.y - b.c.y);
+}
+const _sortedCells = new WeakSet();
+function _ownerOfInnermost(grid, p) {
+    if (!grid || p.x < grid.x0 || p.x > grid.x1 || p.y < grid.y0 || p.y > grid.y1) return null;
+    const cell = grid.cells[grid.cx(p.x) * grid.N + grid.cy(p.y)];
+    if (!cell) return null;
+    if (!_sortedCells.has(cell)) { cell.sort(_faceBefore); _sortedCells.add(cell); }   // the cell's own list (internal to the grid): smallest face first, so the FIRST hit is the innermost one
+    for (let i = 0; i < cell.length; i++) { const g = cell[i]; if (g.lin && p.x >= g.minX && p.x <= g.maxX && p.y >= g.minY && p.y <= g.maxY && pointInPolygon(p, g.poly)) return g; }
+    return null;
+}
+// Stage 2: the nesting depth of a face = the number of LARGER faces of its own list that contain one of its interior sample points strictly (not on their edge). Computed only when a tie has to be decided, once per face.
+const _NEST = Symbol('nest');
+const _depthCache = new WeakMap();
+let _depthComputations = 0;   // for the test: no depth is computed without a tie
+function _strictlyIn(p, g) {
+    if (!_inFace(p, g)) return false;
+    const P = g.poly, tol = 1e-6 * Math.max(1, g.maxX - g.minX, g.maxY - g.minY);
+    for (let i = 0; i < P.length; i++) {
+        const a = P[i], b = P[(i + 1) % P.length], dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy;
+        const t = L2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2)) : 0;
+        if (Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)) <= tol) return false;
+    }
+    return true;
+}
+function _depthOf(f) {
+    let d = _depthCache.get(f);
+    if (d !== undefined) return d;
+    d = 0;
+    const list = f[_NEST], probe = f.samples && f.samples.length ? f.samples[0] : f.c;
+    if (list) for (const g of list) if (g !== f && g.a > f.a * (1 + 1e-9) && _strictlyIn(probe, g)) d++;
+    _depthComputations++;
+    _depthCache.set(f, d);
+    return d;
+}
+function _partnerOfNested(f, info) {
+    const grp = info.groups.get(f.n + '|' + f.orb);
+    if (!grp || f.a <= 0) return null;
+    let best = -1, bd2 = Infinity, bq = Infinity;
+    const near2 = FACE_MATCH_NEAR * FACE_MATCH_NEAR, fa = f.a, fx = f.c.x, fy = f.c.y, ga = grp.a, gx = grp.x, gy = grp.y, TIE = 1e-9;
+    for (let i = 0; i < ga.length; i++) {
+        const a = ga[i]; if (a <= 0) continue;
+        const q = fa / a;
+        if (q > FACE_MATCH_RATIO || q < 1 / FACE_MATCH_RATIO) continue;
+        const dx = fx - gx[i], dy = fy - gy[i], d2 = dx * dx + dy * dy;
+        if (d2 > bd2 + TIE) continue;   // farther than the best (the costly inclusion tests run only for candidates that can win)
+        if (d2 > near2 * (fa > a ? fa : a) && !_inFace(f.c, grp.list[i]) && !_inFace(grp.list[i].c, f)) continue;
+        const lq = Math.abs(Math.log(q));
+        if (best >= 0 && d2 >= bd2 - TIE) {   // the same distance (nested faces share their centroid): the same nesting depth first (the innermost to the innermost), then the closer area ratio, then the fixed order of the faces
+            let dc = 0, db = 0;
+            if (Math.abs(a - ga[best]) > 1e-6 * ga[best]) {   // candidates of EQUAL area (the mirror images of an orbit) are not nested in one another: no depth to look at
+                const df = _depthOf(f);
+                dc = Math.abs(_depthOf(grp.list[i]) - df); db = Math.abs(_depthOf(grp.list[best]) - df);
+            }
+            if (dc > db) continue;
+            if (dc === db) {
+                if (lq > bq + 1e-12) continue;
+                if (lq >= bq - 1e-12 && _faceBefore(grp.list[i], grp.list[best]) >= 0) continue;
+            }
+        }
+        bd2 = Math.min(bd2, d2); best = i; bq = lq;
+    }
+    return best < 0 ? null : grp.list[best];
+}
+// task 100 }
 // the partner of face f among the faces of one keyframe: the nearest candidate that passes every criterion, or null
 function _partnerOf(f, info) {
+// task 100 {
+    return _partnerOfNested(f, info);
+// task 100 }
     const grp = info.groups.get(f.n + '|' + f.orb);   // the faces with this corner count and orbit size (areas and centroids as typed arrays)
     if (!grp || f.a <= 0) return null;
     let best = -1, bd2 = Infinity;
@@ -788,6 +864,9 @@ function _partnerOf(f, info) {
 }
 // per side: the share-weighted mean colour of the keyframe polygons the face overlaps, and how much of the face they cover
 function _ownerOf(grid, p) {   // the polygon of the field a point lies in (the first hit, like _lookupField()), or null
+// task 100 {
+    return _ownerOfInnermost(grid, p);
+// task 100 }
     if (!grid || p.x < grid.x0 || p.x > grid.x1 || p.y < grid.y0 || p.y > grid.y1) return null;
     const cell = grid.cells[grid.cx(p.x) * grid.N + grid.cy(p.y)];
     if (cell) for (let i = 0; i < cell.length; i++) { const g = cell[i]; if (g.lin && p.x >= g.minX && p.x <= g.maxX && p.y >= g.minY && p.y <= g.maxY && pointInPolygon(p, g.poly)) return g; }

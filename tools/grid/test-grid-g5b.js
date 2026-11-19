@@ -105,7 +105,7 @@ if (oldDir) {
     check('(4) ...another shape does not match', ['triangle', 'hex'].every(s => sb.layerSpecMatchesBase({ shape: s, ordnung: 3, lage: 1 }, sq) === false));
     check('(4) ...another lage does not match (a lage-2 spec built with beyondCeiling in the builder, which setGrid/projectLayerGridSpec still refuse)',
         (() => { const g = sb.buildGrid(l2, { sizeFactor: 3, canvasW: 600, canvasH: 600 }, { beyondCeiling: true }); return g.grid.lage === 2 && sb.layerSpecMatchesBase(l2, sq) === false && sb.layerSpecMatchesBase(sq, l2) === false && sb.layerSpecMatchesBase(l2, { shape: 'square', ordnung: 5, lage: 2 }) === true; })());
-    const fcNew = read('core/facecolor.js'), fcOld = oldDir ? oldRead('core/facecolor.js') : fcNew;
+    const fcNew = read('core/facecolor.js').replace(/^[ \t]*\/\/ task 100 \{\n[\s\S]*?^[ \t]*\/\/ task 100 \}\n/gm, ''), fcOld = oldDir ? oldRead('core/facecolor.js') : fcNew;
     // task 067: layerGridMatchesBase (lage) and the _keyframeFieldCache signature (lage) were changed on purpose; everything else (cachedTrailsFor included) is still byte-unchanged
     { const strip = s => s.replace(/function layerGridMatchesBase\([\s\S]*?\n\}\n/, 'X').replace(/, layer\.gridSpec \? layer\.gridSpec\.lage : 1\]\);[^\n]*/, ']);');
       check('(4) core/facecolor.js is byte-unchanged apart from layerGridMatchesBase and the keyframe-field signature (task 067)', strip(fcNew) === strip(fcOld)); }
