@@ -191,7 +191,7 @@ function _netSmoothLaw(axis, E) {
 const NETWARP_MAX_FIELD_TILES = 9;   // = the largest Shape Size the UI offers
 // Task 105 (N2a-1) / 106 (N2a-2): the Field on an EVEN tile count per axis of the SQUARE. The model: the field rectangle is the canvas [0, W] x [0, H]; on an even axis the mesh line sits at the canvas centre, so the picture of the net is moved
 // by T = e/2 (+ direction) against the plain grid (picture = F(p + T), p regular): the tiles of the field are lo = n/2 tiles left and hi = n/2 - 1 right of the base tile, and the regular-space field rectangle is [0, W] - T
-// (warp.c0/v1/v2, core/tiling.js untouched). Task 106: the triangle and the hexagon stay at odd counts; netDomainEffective() takes the shape as its third argument and WITHOUT a known shape reads the conservative rule (odd counts only).
+// (warp.c0/v1/v2, core/tiling.js untouched). Task 106: the hexagon stays at odd counts (task 108: the TRIANGLE takes every size 3..9 too, WITHOUT a shift: its Field is a covering parallelogram of odd Rx x Ry meshes found by a search, so the parity of X, Y does not touch the warp); netDomainEffective() takes the shape as its third argument and WITHOUT a known shape reads the conservative rule (odd counts only).
 // netFieldMinTiles = the smallest field axis of the square (the UI floor 3); only the tests and measurement scripts set it to 2 (a plain global `let`, like faceRepairCollinear in core/faces.js): no URL, session, import or UI path writes it.
 let netFieldMinTiles = 3;
 
@@ -206,7 +206,7 @@ function _netRt(Rt) {
     if (Rt && typeof Rt === 'object') return { x: Rt.x, y: Rt.y };
     return { x: Rt, y: Rt };
 }
-// Task 106: `shape` ('square' | 'triangle' | 'hex'): an even count is a Field only on the square (counts netFieldMinTiles..9); a missing or unknown shape reads the conservative rule (odd 3..9).
+// Task 106: `shape` ('square' | 'triangle' | 'hex'): an even count is a Field on the square (counts netFieldMinTiles..9) and on the triangle (3..9, task 108); a missing or unknown shape reads the conservative rule (odd 3..9).
 function netDomainEffective(spec, Rt, shape) {
     const legacy = spec && spec.repeat ? 'tiled' : 'single';
     const req = spec ? spec.domain : undefined;
@@ -217,7 +217,7 @@ function netDomainEffective(spec, Rt, shape) {
     else {
         const R = _netRt(Rt), two = R.x !== R.y;
         for (const n of [R.x, R.y]) {
-            const sq = shape === 'square', evenOk = sq && n % 2 === 0;   // task 106: an even count is a field on the square only
+            const sq = shape === 'square', evenOk = (sq || shape === 'triangle') && n % 2 === 0;   // task 106: an even count is a field on the square; task 108: and on the triangle (floor 3, no shift)
             if (!Number.isInteger(n)) reason = 'a field needs an integer tile count (Shape Size)';
             else if (n < (sq ? netFieldMinTiles : 3)) reason = 'a field needs at least 3 tiles (Shape Size 3, 5, 7 or 9): a trig law has no effect on 1 or 2 macro cells';
             else if (n % 2 === 0 && !evenOk) reason = two ? 'a field needs an odd tile count on both axes (X and Y odd: 3, 5, 7 or 9) so the base tile is the central cell' : 'a field needs an odd tile count (odd Shape Size) so the base tile is the central cell';
@@ -302,7 +302,7 @@ function _netTriangleField(spec, corners, Rt) {
     const tc = [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: H }, { x: 0, y: H }].map(p => { const dx = p.x - base.c0.x, dy = p.y - base.c0.y; return { s: (dx * v2.y - dy * v2.x) / det, t: (v1.x * dy - v1.y * dx) / det }; });
     const covers = (Rx, Ry) => { const hx = (Rx - 1) / 2, hy = (Ry - 1) / 2; return tc.every(c => c.s >= -hx - 1e-9 && c.s <= Rx - hx + 1e-9 && c.t >= -hy - 1e-9 && c.t <= Ry - hy + 1e-9); };
     let best = null;
-    for (let Rx = R.x; Rx <= 21; Rx += 2) for (let Ry = R.y; Ry <= 21; Ry += 2) { if (best && Rx * Ry >= best.n) continue; if (covers(Rx, Ry)) best = { n: Rx * Ry, Rx, Ry }; }
+    for (let Rx = R.x | 1; Rx <= 21; Rx += 2) for (let Ry = R.y | 1; Ry <= 21; Ry += 2)   /* task 108: start at the next ODD count (an even X would give an even Rx and a half-integer hx) */ { if (best && Rx * Ry >= best.n) continue; if (covers(Rx, Ry)) best = { n: Rx * Ry, Rx, Ry }; }
     if (!best) best = { Rx: 21, Ry: 21 };
     const ax = spec.x, ay = spec.y === 'same' ? spec.x : spec.y, fx = netFieldLaw(ax, best.Rx), fy = netFieldLaw(ay, best.Ry);
     if (!fx && !fy && !spec.keep) return null;
@@ -647,7 +647,7 @@ function netTransformExportData(spec, E, Rt, meshes, shape) {   // task 106: sha
         // geometry.nodes/edges; layers stay omitted (offset layers cross tile boundaries).
         result.facesOmitted = false; result.layerFacesOmitted = true;
         result.facesMapping = meshes && meshes.facesPiecewise ? 'regular central cell; a face crosses mesh boundaries: its image in a tile is the polygon with its edges split at the mesh boundaries (the lines of tileBoundaries), each piece under the affine map of its mesh' : 'regular central cell; each tile is the image under the per-tile affine map given by tileBoundaries';   // task 090: hexagon
-        if (R.x % 2 === 0 || R.y % 2 === 0) {   // task 105 (only an even axis, i.e. only with netFieldEven): where the base tile sits in the field and by how many px the picture is moved against the plain grid; nothing else reads these
+        if (shape === 'square' && (R.x % 2 === 0 || R.y % 2 === 0)) {   // task 108: the square only (the triangle's even sizes have no shift); task 105 (only an even axis, i.e. only with netFieldEven): where the base tile sits in the field and by how many px the picture is moved against the plain grid; nothing else reads these
             const lo = n => Math.floor(n / 2), e = typeof GRID_SHORT_SIDE !== 'undefined' ? GRID_SHORT_SIDE / Math.min(R.x, R.y) : null;
             result.fieldBase = { x: { lo: lo(R.x), hi: R.x - 1 - lo(R.x) }, y: { lo: lo(R.y), hi: R.y - 1 - lo(R.y) } };
             if (e !== null) result.gridShiftPx = { x: R.x % 2 === 0 ? e / 2 : 0, y: R.y % 2 === 0 ? e / 2 : 0 };

@@ -24,7 +24,7 @@ function gridEdgeFactor() { return shapeSizeFactor; }
 // The explicit short side for the builders: only a non-square area passes it (a square one keeps the old canvasW / factor expression).
 function gridShortSideArg() { return gridIsSquare() ? undefined : GRID_SHORT_SIDE; }
 // Task 086: the tile counts the net reads (ONE source for every net reader): {x: X, y: Y} (width and height mesh count; X = Y for a square area).
-// netDomainEffective() reads a Field when both are 3..9 on the square (any parity; task 106) or odd 3..9 on the triangle / hexagon (then it spans X x Y macro tiles), else Single with a hint.
+// netDomainEffective() reads a Field when both are 3..9 on the square and the triangle (any parity; task 106 / 108) or odd 3..9 on the hexagon (the triangle and the hexagon span a covering Rx x Ry mesh field), else Single with a hint.
 function netSizeFactors() { return { x: gridSizeX(), y: gridSizeY() }; }
 // Task 078: the p5 canvas follows canvasW / canvasH (sketch.js sets the hook in setup: resizeCanvas, the fill buffer, the CSS size). Nothing without the hook (Node tests).
 const _resizeFlag = { busy: false };   // resizeBase() runs rebuildGrid() inside a (possibly dry) run: the canvas follows once, after it

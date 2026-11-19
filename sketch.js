@@ -622,8 +622,8 @@ function setup() {
                 ui.axes = 'both';
                 const Rs = typeof netSizeFactors === 'function' ? netSizeFactors() : { x: shapeSizeFactor, y: shapeSizeFactor }, R = Rs.x === Rs.y ? Rs.x : Rs.x + '/' + Rs.y;   // task 086: the tile counts {x, y}
                 if (netDomainEffective({ domain: 'field' }, Rs, currentShape).ignored === null) setDomain('field');
-                else { setDomain('single'); const noNet = currentShape !== 'square';   // task 092: the triangle and the hexagon have no Single net: there is no net at that size (task 106: the square's Field takes every size 3..9, so only a size below 3 gets here)
-                    notes.push(window.UI && UI.t ? UI.t(noNet ? 'note.net.fieldOddSizeNoNet' : 'note.net.fieldMinSize', { size: R, kept: R }) : (noNet ? `Feld braucht ungerade Größen in X und Y (3, 5, 7, 9); bei ${R} gibt es hier kein Netz. Die Größe bleibt ${R}.` : `Feld braucht in X und Y mindestens Größe 3; ${R} passt nicht, deshalb Einzelnetz. Die Größe bleibt ${R}.`)); }
+                else { setDomain('single'); const noNet = currentShape !== 'square', evenShape = currentShape === 'square' || currentShape === 'triangle';   // task 092: the triangle and the hexagon have no Single net: there is no net at that size (task 106: the square's Field takes every size 3..9, so only a size below 3 gets here)
+                    notes.push(window.UI && UI.t ? UI.t(noNet ? (evenShape ? 'note.net.fieldMinSizeNoNet' : 'note.net.fieldOddSizeNoNet') : 'note.net.fieldMinSize', { size: R, kept: R }) : (noNet ? (evenShape ? `Feld braucht in X und Y mindestens Größe 3; bei ${R} gibt es hier kein Netz. Die Größe bleibt ${R}.` : `Feld braucht ungerade Größen in X und Y (3, 5, 7, 9); bei ${R} gibt es hier kein Netz. Die Größe bleibt ${R}.`) : `Feld braucht in X und Y mindestens Größe 3; ${R} passt nicht, deshalb Einzelnetz. Die Größe bleibt ${R}.`)); }
             }
             if ((kind === 'sinus' || kind === 'tangens') && nodeCount < 4) {   // E >= 3, i.e. the legacy count 4 = ordnung 3 (triangle, square) / 4 (hex), task 068c2
                 const minO = gridMinOrdnungTrig(currentShape);
@@ -702,17 +702,17 @@ function setup() {
             const active = netWarpActive();
             // Domain: adopt one set from the state; Field needs an odd Shape Size 3..9 - an even one is reset to Single, visibly
             const sd = stateDomain(); if (sd && sd !== ui.domain) { ui.domain = sd; render(); }
-            const Rs = typeof netSizeFactors === 'function' ? netSizeFactors() : { x: shapeSizeFactor, y: shapeSizeFactor }, R = Rs.x === Rs.y ? Rs.x : Rs.x + ' \u00d7 ' + Rs.y, Rmin = Math.min(Rs.x, Rs.y), fieldOk = netDomainEffective({ domain: 'field' }, Rs, currentShape).ignored === null, sqShape = currentShape === 'square';   // task 106: the shape decides which sizes a Field takes
+            const Rs = typeof netSizeFactors === 'function' ? netSizeFactors() : { x: shapeSizeFactor, y: shapeSizeFactor }, R = Rs.x === Rs.y ? Rs.x : Rs.x + ' \u00d7 ' + Rs.y, Rmin = Math.min(Rs.x, Rs.y), fieldOk = netDomainEffective({ domain: 'field' }, Rs, currentShape).ignored === null, sqShape = currentShape === 'square', evenShape = sqShape || currentShape === 'triangle';   // task 106 / 108: the shape decides which sizes a Field takes (evenShape: any size 3..9 - the square and the triangle)
             if (ui.domain === 'field' && !fieldOk) {
                 setDomain('single'); render();
-                showFieldNote(`Shape Size ${R} ${!sqShape && Rs.x === Rs.y && Rs.x % 2 === 0 ? 'is even' : 'is not a valid field size'}${!sqShape ? ': the field net applies only at odd sizes (3, 5, 7, 9) in X and Y, so there is no net here.' : ', so Field was reset to Single (Field needs Shape Size 3 or more in X and Y).'}`);   // task 092: no Single net on the triangle and the hexagon
+                showFieldNote(`Shape Size ${R} ${!evenShape && Rs.x === Rs.y && Rs.x % 2 === 0 ? 'is even' : 'is not a valid field size'}${!evenShape ? ': the field net applies only at odd sizes (3, 5, 7, 9) in X and Y, so there is no net here.' : !sqShape ? ': the field net applies only from size 3 in X and Y, so there is no net here.' : ', so Field was reset to Single (Field needs Shape Size 3 or more in X and Y).'}`);   // task 092: no Single net on the triangle and the hexagon
             }
             if (fieldBtn.elt.disabled !== !fieldOk) fieldBtn.elt.disabled = !fieldOk;
             domainBtns.forEach(b => { if (b.elt.dataset.domain !== 'field') { const dis = currentShape === 'triangle' || currentShape === 'hex'; if (b.elt.disabled !== dis) b.elt.disabled = dis; } });   // task 088: only a Field applies to the triangle
-            const fieldTitle = fieldOk ? (sqShape && window.UI && UI.t ? UI.t('net.domain.field.titleSq') : fieldBtn.elt.dataset.title) : (sqShape ? 'Field needs Shape Size 3 or more in X and Y' : 'Field needs an odd Shape Size in X and Y (3, 5, 7, 9)');   // task 106
+            const fieldTitle = fieldOk ? (evenShape && window.UI && UI.t ? UI.t(sqShape ? 'net.domain.field.titleSq' : 'net.domain.field.titleEven') : fieldBtn.elt.dataset.title) : (evenShape ? 'Field needs Shape Size 3 or more in X and Y' : 'Field needs an odd Shape Size in X and Y (3, 5, 7, 9)');   // task 106
             if (fieldBtn.elt.title !== fieldTitle) fieldBtn.elt.title = fieldTitle;
-            { const hk = sqShape ? 'net.hint.fieldMin' : 'net.hint.fieldOdd';   // task 106: the hint under the domain buttons names the sizes of the CURRENT shape (data-i18n follows, so a language change re-translates it)
-              if (fieldHint.elt.dataset.i18n !== hk) { fieldHint.elt.dataset.i18n = hk; fieldHint.elt.textContent = window.UI && UI.t ? UI.t(hk) : (sqShape ? 'Feld braucht in X und Y mindestens Größe 3.' : 'Feld braucht ungerade Größen in X und Y (3, 5, 7, 9).'); } }
+            { const hk = evenShape ? 'net.hint.fieldMin' : 'net.hint.fieldOdd';   // task 106: the hint under the domain buttons names the sizes of the CURRENT shape (data-i18n follows, so a language change re-translates it)
+              if (fieldHint.elt.dataset.i18n !== hk) { fieldHint.elt.dataset.i18n = hk; fieldHint.elt.textContent = window.UI && UI.t ? UI.t(hk) : (evenShape ? 'Feld braucht in X und Y mindestens Größe 3.' : 'Feld braucht ungerade Größen in X und Y (3, 5, 7, 9).'); } }
             if (fieldHint.elt.hidden !== fieldOk) fieldHint.elt.hidden = fieldOk;
             const isField = ui.domain === 'field', E0 = baseGridDivisions();
             if (fieldInfo.elt.hidden !== !(active && isField)) fieldInfo.elt.hidden = !(active && isField);
@@ -4939,7 +4939,7 @@ function sizeChangeText(r) {
     if (keptWords.length) parts.push(t('note.size.kept', { what: list(keptWords) }, `${list(keptWords)} erhalten.`));
     if (adjWords.length) parts.push(t('note.size.adjusted', { what: list(adjWords) }, `${list(adjWords)} angepasst.`));
     if (r.lost.colorsCount) parts.push(t('note.size.colorsLost', { n: r.lost.colorsCount, m: r.lost.colorsTotal }, `Nicht erhalten: ${r.lost.colorsCount} von ${r.lost.colorsTotal} Farbgruppen.`));
-    if (r.hints && r.hints.fieldNet) { const sz = r.toX === r.toY ? r.to : r.toX + '/' + r.toY; parts.push(currentShape !== 'square' ? t('note.size.fieldNetNoNet', { size: sz }, `Feld-Netz gilt nur bei ungeraden Größen: bei Größe ${sz} kein Netz.`) : t('note.size.fieldNet', { size: sz }, `Feld-Netz gilt bei Größe ${sz} als Einzel.`)); }   // task 092: the triangle and the hexagon have no Single net
+    if (r.hints && r.hints.fieldNet) { const sz = r.toX === r.toY ? r.to : r.toX + '/' + r.toY; parts.push(currentShape === 'triangle' ? t('note.size.fieldNetNoNetMin', { size: sz }, `Feld-Netz braucht mindestens Größe 3: bei Größe ${sz} kein Netz.`) : currentShape !== 'square' ? t('note.size.fieldNetNoNet', { size: sz }, `Feld-Netz gilt nur bei ungeraden Größen: bei Größe ${sz} kein Netz.`) : t('note.size.fieldNet', { size: sz }, `Feld-Netz gilt bei Größe ${sz} als Einzel.`)); }   // task 092: the triangle and the hexagon have no Single net
     return parts.join(' ');
 }
 function saySizeChange(r) {
