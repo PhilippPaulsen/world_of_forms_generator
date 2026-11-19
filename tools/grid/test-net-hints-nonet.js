@@ -27,8 +27,8 @@ function run(shape, X, Y) {
     kinds[0].press(); kinds[1].press(); const inp = els.get('#net-strength-input'); inp.value('50'); inp.inputFn(); sb.netControlsSync();
     return toasts.join(' | ');
 }
-const sq = run('square', 2, 2), tri = run('triangle', 4, 4), hex = run('hex', 3, 4);
-check('(1) square at a size below 3 (task 106: 4/4 is a Field of the square now, no hint): the hint says "Einzelnetz" (a Single net is drawn); triangle and hexagon: "kein Netz" and not "Einzelnetz"', /Einzelnetz/.test(sq) && /kein Netz/.test(tri) && !/Einzelnetz/.test(tri) && /kein Netz/.test(hex) && !/Einzelnetz/.test(hex), J([sq, tri, hex]));
+const sq = run('square', 2, 2), tri = run('triangle', 2, 2)   /* task 108: 4/4 is a Field of the triangle now; the triangle's no-net case is a size below 3 */, hex = run('hex', 3, 4);
+check('(1) square at a size below 3 (task 106: 4/4 is a Field of the square now, no hint; task 108: and of the triangle: its no-net case is 2/2): the hint says "Einzelnetz" (a Single net is drawn); triangle and hexagon: "kein Netz" and not "Einzelnetz"', /Einzelnetz/.test(sq) && /kein Netz/.test(tri) && !/Einzelnetz/.test(tri) && /kein Netz/.test(hex) && !/Einzelnetz/.test(hex), J([sq, tri, hex]));
 const ictx = vm.createContext({ window: {}, document: undefined, console }); ictx.window.document = undefined;
 vm.runInContext(fs.readFileSync(process.env.UI_I18N_JS || path.join(ROOT, 'ui-i18n.js'), 'utf8'), ictx, { filename: 'ui-i18n.js' });
 const I = vm.runInContext('typeof uiI18n !== "undefined" ? uiI18n : window.uiI18n', ictx), tr = (lang, k, p) => { I.setLang(lang); return I.t(k, p); };
@@ -37,6 +37,6 @@ check('(2) dictionary (de / en): note.net.fieldOddSizeNoNet and note.size.fieldN
     && /bei 4 gibt es hier kein Netz\. Die Größe bleibt 4\./.test(tr('de', 'note.net.fieldOddSizeNoNet', { size: 4, kept: 4 })) && /at 4 there is no net here\. The size stays 4\./.test(tr('en', 'note.net.fieldOddSizeNoNet', { size: 4, kept: 4 }))
     && tr('de', 'note.size.fieldNet', { size: 4 }) === 'Feld-Netz gilt bei Größe 4 als Einzel.' && /deshalb Einzelnetz/.test(tr('de', 'note.net.fieldOddSize', { size: 4, kept: 4 })));
 const sk = SKETCH;
-check('(3) the size-change hint (resizeBase hints.fieldNet) names the no-net text for the triangle and the hexagon', /currentShape !== 'square' \? t\('note\.size\.fieldNetNoNet'/.test(sk) && /t\('note\.size\.fieldNet'/.test(sk));
+check('(3) the size-change hint (resizeBase hints.fieldNet) names the no-net text for the triangle and the hexagon', /currentShape !== 'square' \? t\('note\.size\.fieldNetNoNet'/.test(sk) && /t\('note\.size\.fieldNet'/.test(sk) && /t\('note\.size\.fieldNetNoNetMin'/.test(sk));
 console.log(`${pass}/${pass + fail} checks passed`);
 if (fail) process.exit(1);
