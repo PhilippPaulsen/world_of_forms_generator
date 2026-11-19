@@ -47,17 +47,18 @@ const nameOf = (e) => NEST.find((x) => x.poly === e.poly) ? NEST.find((x) => x.p
 }
 // ---- 2. partner ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 {
-  const live = (poly) => { const f = N.__faceInfo(poly.map((p) => ({ x: p.x, y: p.y })), null); N.__setOrb([f], { x: 60, y: 60 }, 120); return f; };
+  // the live faces are the faces of ONE cell (a list), as in the morph / the playback: the whole nest is in the list, so each face has its depth
+  const liveList = (sb) => { const l = NEST.map((e) => sb.__faceInfo(e.poly.map((p) => ({ x: p.x, y: p.y })), null)); sb.__setOrb(l, { x: 60, y: 60 }, 120); return l; };
   let bad = [];
   for (const order of perms(NEST)) {
-    const info = field(N, order);
-    for (const target of NEST) {
-      const p = N.__par(live(target.poly), info);
+    const info = field(N, order), L = liveList(N);
+    NEST.forEach((target, i) => {
+      const p = N.__par(L[i], info);
       if (!p || nameOf({ poly: p.poly }) !== target.name) bad.push(order.map((e) => e.name).join('') + ' ' + target.name + '->' + (p ? nameOf({ poly: p.poly }) : null));
-    }
+    });
   }
   check('2a. the live cell, large and small square each get their own partner (the closest area at the same distance), all 6 list orders', bad.length === 0, bad.slice(0, 4).join(' | '));
-  const oi = field(O, NEST), pf = O.__par((() => { const f = O.__faceInfo(SMALL.map((p) => ({ x: p.x, y: p.y })), null); O.__setOrb([f], { x: 60, y: 60 }, 120); return f; })(), oi);
+  const oi = field(O, NEST), pf = O.__par(liveList(O)[2], oi);
   check('2b. the file of main gives the live small square NOT the small square as partner when the larger faces are listed first (the defect)', pf && nameOf({ poly: pf.poly }) !== 'small');
 }
 // ---- 3. not nested: same as main ----------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -92,11 +93,53 @@ const nameOf = (e) => NEST.find((x) => x.poly === e.poly) ? NEST.find((x) => x.p
 // ---- 5. a whole correspondence colour ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 {
   const A = field(N, NEST), B = field(N, [{ poly: CELL, lin: LIGHT }, { poly: MID, lin: DARK }, { poly: SMALL, lin: DARK }]);
-  const lf = N.__faceInfo(SMALL.map((p) => ({ x: p.x, y: p.y })), null), cell = N.__faceInfo(CELL.map((p) => ({ x: p.x, y: p.y })), null);
-  N.__setOrb([lf, cell], { x: 60, y: 60 }, 120);
+  const L5 = NEST.map((e) => N.__faceInfo(e.poly.map((p) => ({ x: p.x, y: p.y })), null)); N.__setOrb(L5, { x: 60, y: 60 }, 120);
+  const lf = L5[2], cell = L5[0];
   const c0 = N.__corr(lf, A, B, 0), c1 = N.__corr(lf, A, B, 1), cc = N.__corr(cell, A, B, 0.5);
   const near = (a, b) => a && a.every((v, i) => Math.abs(v - b[i]) < 0.02);
   check('5. the small square takes the dark colour of both keyframes at t = 0 and t = 1 (not the cell\'s light one); the cell stays light', near(c0, DARK) && near(c1, DARK) && near(cc, LIGHT), J([c0, c1, cc]));
+}
+// ---- 6. depth (stage 2) ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+{
+  const GROW = sq(30, 30, 100, 100);   // a growing square (4 900 px2): by area it is closer to the cell (14 400) than to the small square (1 600)
+  const fieldA = [{ poly: CELL, lin: LIGHT }, { poly: SMALL, lin: DARK }], fieldB = [{ poly: CELL, lin: LIGHT }, { poly: MID, lin: MIDC }];
+  const liveOf = (sb) => { const l = [CELL, GROW].map((p) => sb.__faceInfo(p.map((q) => ({ x: q.x, y: q.y })), null)); sb.__setOrb(l, { x: 60, y: 60 }, 120); return l; };
+  let bad = [];
+  for (const order of perms(fieldA)) {
+    const L = liveOf(N), info = field(N, order), p = N.__par(L[1], info);
+    if (!p || p.poly !== SMALL) bad.push(order.map((e) => e === fieldA[0] ? 'cell' : 'small').join('') + '->' + (p ? p.a : null));
+    const pc = N.__par(L[0], info); if (!pc || pc.poly !== CELL) bad.push('cell->' + (pc ? pc.a : null));
+  }
+  check('6a. a growing square (by area closer to the cell than to the small square) is matched to the SMALL square: the same nesting depth; the cell to the cell; both list orders', bad.length === 0, bad.join(' | '));
+  const pB = N.__par(liveOf(N)[1], field(N, fieldB));
+  check('6b. ...and in the other keyframe (a mid square) to the mid square', pB && pB.poly === MID);
+  // no tie, no depth
+  const c0 = vm.runInContext('_depthComputations', N);
+  const sep = [{ poly: sq(10, 10, 40, 40), lin: LIGHT }, { poly: sq(110, 10, 140, 40), lin: MIDC }, { poly: sq(10, 110, 50, 150), lin: DARK }];
+  const fi = (() => { const f = sep.map((e) => ({ poly: e.poly, lin: e.lin })); f.ctr = { x: 75, y: 75 }; f.span = 150; return N.__fi(f); })();
+  const ls = sep.map((e) => N.__faceInfo(e.poly.map((q) => ({ x: q.x + 1, y: q.y })), null)); N.__setOrb(ls, { x: 75, y: 75 }, 150);
+  ls.forEach((x) => N.__par(x, fi));
+  check('6c. without a tie no nesting depth is computed (counter unchanged over 3 lookups among separate squares)', vm.runInContext('_depthComputations', N) === c0, vm.runInContext('_depthComputations', N) + ' vs ' + c0);
+  const c1 = vm.runInContext('_depthComputations', N); N.__par(liveOf(N)[1], field(N, fieldA));
+  check('6d. with a tie (nested candidates at the same distance) the depth is computed', vm.runInContext('_depthComputations', N) > c1);
+  // an edge: a square touching the cell edge is still inside the cell (depth 1); side-by-side faces sharing an edge are not nested in each other (depth 0)
+  const touch = sq(0, 40, 40, 80);
+  const lt = [CELL, touch].map((p) => N.__faceInfo(p.map((q) => ({ x: q.x, y: q.y })), null)); N.__setOrb(lt, { x: 60, y: 60 }, 120);
+  const left = sq(0, 0, 60, 120), right = sq(60, 0, 120, 120);
+  const lr = [left, right].map((p) => N.__faceInfo(p.map((q) => ({ x: q.x, y: q.y })), null)); N.__setOrb(lr, { x: 60, y: 60 }, 120);
+  const depth = vm.runInContext('_depthOf', N);
+  check('6e. a square that touches the cell edge has depth 1 (the cell), the cell 0; two faces that share an edge have depth 0 each', depth(lt[1]) === 1 && depth(lt[0]) === 0 && depth(lr[0]) === 0 && depth(lr[1]) === 0, J([depth(lt[1]), depth(lt[0]), depth(lr[0]), depth(lr[1])]));
+}
+// ---- 7. the shared data are not changed ----------------------------------------------------------------------------------------------------------------------------------------------------------
+{
+  const SC = require('./measure-scene-099.js'), os = require('os');
+  const oldFile = path.join(os.tmpdir(), `facecolor100-old-${process.pid}.js`); fs.writeFileSync(oldFile, OLD_FC); process.on('exit', () => { try { fs.unlinkSync(oldFile); } catch (e) { } });
+  const run = (file) => { const out = []; for (const mode of ['morph', 'anim']) {
+    const w = SC.build(mode, { files: file ? { 'core/facecolor.js': file } : undefined });
+    w.set('globalThis.__snap = []; { const f = findFaces; findFaces = function () { const r = f.apply(this, arguments); globalThis.__snap.push(r); return r; }; }');
+    for (const t of [0.25, 0.5, 0.75]) { SC.frameAt(w, t); out.push(w.get('JSON.stringify(globalThis.__snap, (k, v) => k === "color" ? undefined : v)')); w.set('globalThis.__snap.length = 0;'); } } return out; };
+  const a = run(process.env.FACECOLOR_JS || null), b = run(oldFile);
+  check(`7. the findFaces results of morph and playback frames (6 frames) are byte-equal (colours aside: the playback pass writes them into the faces by design) to those with the file of main after the whole colour pass: nothing else of a shared face object is changed`, a.length === 6 && J(a) === J(b) && a.every((x) => x.length > 100));
 }
 console.log(`${pass}/${pass + fail} checks passed`);
 process.exit(fail ? 1 : 0);
