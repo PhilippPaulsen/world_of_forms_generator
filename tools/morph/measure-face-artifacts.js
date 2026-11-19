@@ -126,6 +126,7 @@ function build(cfg, net, seed, mode, variant, extraSeedFiles) {
         w.setTimeline(L);
         if (net === 'field') { w.set(`baseNetTransform = ${JSON.stringify(NET_A)}; timeline.netStates = ${JSON.stringify([NET_A, NET_B])}; timeline.netLive = true;`); }
         w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 });
+        w.set('if (typeof spatialMorphRenderGrow === "function") spatialMorphRenderGrow = (p) => p;');   // task 103: the detectors want the EXACT face polygons; task 096 draws them grown by 0.3 px (measurement trap)
     } else {   // the animation: timeline playback of the connection morph WITHOUT the spatial morph (playback layer, normal face pass)
         w.baseConnections([]);
         const L = K.map((k) => w.addKeyframeLayer(k));
