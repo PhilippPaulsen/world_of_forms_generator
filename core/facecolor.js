@@ -728,7 +728,7 @@ function _faceInfo(poly, lin) {
 // (measured identical to the orbit from the symmetry group in every case of tasks 028 to 030)
 function _setOrbits(list, ctr, span) {
 // task 100 {
-    list.forEach(f => Object.defineProperty(f, 'nest', { value: list, writable: true, configurable: true }));   // the list a face belongs to (for its nesting depth, computed only on a tie); not enumerable
+    list.forEach(f => { f[_NEST] = list; });   // the list a face belongs to (for its nesting depth, computed only on a tie); a symbol key: not enumerated, not in JSON
 // task 100 }
     const byN = new Map();
     list.forEach(f => { f.r = Math.hypot(f.c.x - ctr.x, f.c.y - ctr.y); if (!byN.has(f.n)) byN.set(f.n, []); byN.get(f.n).push(f); });
@@ -790,6 +790,7 @@ function _ownerOfInnermost(grid, p) {
     return best;
 }
 // Stage 2: the nesting depth of a face = the number of LARGER faces of its own list that contain one of its interior sample points strictly (not on their edge). Computed only when a tie has to be decided, once per face.
+const _NEST = Symbol('nest');
 const _depthCache = new WeakMap();
 let _depthComputations = 0;   // for the test: no depth is computed without a tie
 function _strictlyIn(p, g) {
@@ -806,7 +807,7 @@ function _depthOf(f) {
     let d = _depthCache.get(f);
     if (d !== undefined) return d;
     d = 0;
-    const list = f.nest, probe = f.samples && f.samples.length ? f.samples[0] : f.c;
+    const list = f[_NEST], probe = f.samples && f.samples.length ? f.samples[0] : f.c;
     if (list) for (const g of list) if (g !== f && g.a > f.a * (1 + 1e-9) && _strictlyIn(probe, g)) d++;
     _depthComputations++;
     _depthCache.set(f, d);
@@ -826,7 +827,11 @@ function _partnerOfNested(f, info) {
         if (d2 > near2 * (fa > a ? fa : a) && !_inFace(f.c, grp.list[i]) && !_inFace(grp.list[i].c, f)) continue;
         const lq = Math.abs(Math.log(q));
         if (best >= 0 && d2 >= bd2 - TIE) {   // the same distance (nested faces share their centroid): the same nesting depth first (the innermost to the innermost), then the closer area ratio, then the fixed order of the faces
-            const df = _depthOf(f), dc = Math.abs(_depthOf(grp.list[i]) - df), db = Math.abs(_depthOf(grp.list[best]) - df);
+            let dc = 0, db = 0;
+            if (Math.abs(a - ga[best]) > 1e-6 * ga[best]) {   // candidates of EQUAL area (the mirror images of an orbit) are not nested in one another: no depth to look at
+                const df = _depthOf(f);
+                dc = Math.abs(_depthOf(grp.list[i]) - df); db = Math.abs(_depthOf(grp.list[best]) - df);
+            }
             if (dc > db) continue;
             if (dc === db) {
                 if (lq > bq + 1e-12) continue;

@@ -83,7 +83,7 @@ const PARTNER = (t) => t
 PROTOS.partner = PARTNER;
 PROTOS.both = (t) => PROTOS.inner(PARTNER(t));
 const protoFiles = {};
-function protoFiles099(v) { if (!v || v === 'base') return undefined; if (!protoFiles[v]) { const out = PROTOS[v](FC_SRC); if (out === FC_SRC) throw new Error('prototype anchor missing: ' + v); const p = path.join(os.tmpdir(), `facecolor099-${process.pid}-${v}.js`); fs.writeFileSync(p, out); protoFiles[v] = p; } return { 'core/facecolor.js': protoFiles[v] }; }
+function protoFiles099(v) { if (!v || v === 'base') return undefined; if (v.startsWith('file:')) return { 'core/facecolor.js': v.slice(5) }; if (!protoFiles[v]) { const out = PROTOS[v](FC_SRC); if (out === FC_SRC) throw new Error('prototype anchor missing: ' + v); const p = path.join(os.tmpdir(), `facecolor099-${process.pid}-${v}.js`); fs.writeFileSync(p, out); protoFiles[v] = p; } return { 'core/facecolor.js': protoFiles[v] }; }
 process.on('exit', () => { Object.values(protoFiles).forEach((p) => { try { fs.unlinkSync(p); } catch (e) { } }); });
 module.exports = { protoFiles: protoFiles099, build, frameAt, picture, hexRgb, BORDER, SQ1, SQ2 };
 if (require.main === module && process.argv[2] === 'frames') {
