@@ -41,7 +41,7 @@ else {
     for (const script of ['tools/grid/measure-g5a.js', 'tools/grid/measure-g5b.js', 'tools/session/measure-g6a.js', 'tools/grid/measure-g6b.js', 'tools/grid/measure-lage2-app.js', 'tools/grid/measure-size-change.js']) {
         let a, b, err = '';
         try { a = JSON.parse(run(oldDir, script)); b = JSON.parse(run(ROOT, script)); } catch (e) { err = String(e.message).slice(0, 200); }
-        const keys = a ? Object.keys(b) : [], bad = a ? keys.filter(k => J(a[k]) !== J(b[k])) : [];
+        const keys = a ? Object.keys(b) : [], bad = a ? keys.filter(k => J(script === 'tools/grid/measure-size-change.js' && k === 'H' ? Object.assign({}, a[k], { frames: Object.assign({}, a[k].frames, { field: null }) }) : a[k]) !== J(script === 'tools/grid/measure-size-change.js' && k === 'H' ? Object.assign({}, b[k], { frames: Object.assign({}, b[k].frames, { field: null }) }) : b[k])) : [];   // task 106: key H without its Field frames (the square's Field exists at even sizes now: 4 -> 6, 2 -> 4 differ from the old tree on purpose); everything else, the Single and Tiled frames included, stays equal
         check('(1) ' + script + ' equals the old tree (' + keys.length + ' keys)', a && keys.length > 3 && bad.length === 0, err || bad.slice(0, 3).join(' | '));
     }
     const same = f => (f === 'core/faces.js' ? ((t) => t.replace(/^[ \t]*\/\/ task (09[58]|103) \{\n[\s\S]*?^[ \t]*\/\/ task (09[58]|103) \}\n/gm, ''))(read(f)).split('\n').filter(l => !/netWarpTileOutsideCanvas\(activeNetWarp/.test(l)).map(l => l.replace(/return typeof netWarpRefineFaces === 'function' \? netWarpRefineFaces\(result, activeNetWarp\) : result;.*$/, 'return result;')).join('\n') : f === 'core/facecolor.js' ? read(f).replace(/^[ \t]*\/\/ task 100 \{\n[\s\S]*?^[ \t]*\/\/ task 100 \}\n/gm, '') : read(f)) === fs.readFileSync(path.join(oldDir, f), 'utf8');   // task 100: the marked blocks of core/facecolor.js are not part of the comparison   // task 090: core/faces.js carries two documented hooks (the only exception to its protection); compared without them (test-net-field-hex-faces.js (7) pins the hooks themselves)
@@ -333,8 +333,8 @@ const baseOf = (w) => JSON.parse(w.get('JSON.stringify({ nodes, centroid, outerC
     check('(6) default gray only: no dialog, "Größe 3 -> 5. Linien erhalten." (no word about colours)', x.log.dialogs.length === 0 && J(x.log.said) === J([['size-change', 'Größe 3 -> 5. Linien erhalten.', 'info']]), J(x.log.said));
     // Field net
     x = mk('square', 3, 1, 5, "connections = [[1, 5]]; baseNetTransform = { x: { kind: 'trig', w: -1 }, y: 'same', domain: 'field' };");
-    type(x, 4);
-    check('(6) a Field net and an even new size: said, not removed: "... Feld-Netz gilt bei Größe 4 als Einzel."; the spec stays', x.log.said.length === 1 && x.log.said[0][1] === 'Größe 5 -> 4. Linien erhalten. Feld-Netz gilt bei Größe 4 als Einzel.' && x.w.get("baseNetTransform.domain") === 'field', J(x.log.said));
+    type(x, 2);   // task 106: 4 is a Field of the square now; a size below 3 is not
+    check('(6) a Field net and a new size below 3: said, not removed: "... Feld-Netz gilt bei Größe 2 als Einzel."; the spec stays', x.log.said.length === 1 && x.log.said[0][1] === 'Größe 5 -> 2. Linien erhalten. Feld-Netz gilt bei Größe 2 als Einzel.' && x.w.get("baseNetTransform.domain") === 'field', J(x.log.said));
     x = mk('square', 3, 1, 5, "connections = [[1, 5]]; baseNetTransform = { x: { kind: 'trig', w: -1 }, y: 'same', domain: 'field' };");
     type(x, 7);
     check('(6) a Field net and an odd new size: no hint', x.log.said[0][1] === 'Größe 5 -> 7. Linien erhalten.', J(x.log.said));

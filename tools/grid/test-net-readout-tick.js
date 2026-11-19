@@ -24,6 +24,6 @@ for (const shape of ['square', 'triangle', 'hex']) {
     if (!/^Feld: /.test(before) || stateStill !== 'field' || !/^Einzeln/.test(after)) bad.push([shape, before, stateStill, after]);
 }
 check('(2) right after resizeBase(3, 4) (the state still says Field, no draw ran): the readout text is "Einzeln: ein Netz", at 3/3 "Feld: ..."', bad.length === 0, J(bad));
-check('(3) ui-net.js reads the domain through netReadout.readoutDomain with the field-valid flag (netDomainEffective over netSizeFactors)', /netReadout\.readoutDomain\(d \? d\.dataset\.domain : 'single', typeof netDomainEffective === 'function' && typeof netSizeFactors === 'function' \? netDomainEffective\(\{ domain: 'field' \}, netSizeFactors\(\)\)\.ignored === null : undefined\)/.test(NET));
+check('(3) ui-net.js reads the domain through netReadout.readoutDomain with the field-valid flag (netDomainEffective over netSizeFactors and the shape, task 106)', /netReadout\.readoutDomain\(d \? d\.dataset\.domain : 'single', typeof netDomainEffective === 'function' && typeof netSizeFactors === 'function' \? netDomainEffective\(\{ domain: 'field' \}, netSizeFactors\(\), currentShape\)\.ignored === null : undefined\)/.test(NET));
 console.log(`${pass}/${pass + fail} checks passed`);
 if (fail) process.exit(1);
