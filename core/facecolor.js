@@ -779,15 +779,14 @@ function _shareIn(f, g) { let k = 0; for (const p of f.samples) if (_inFace(p, g
 function _faceBefore(a, b) {   // a total order on distinct faces, independent of the list order
     return (a.a - b.a) || (a.minX - b.minX) || (a.minY - b.minY) || (a.maxX - b.maxX) || (a.maxY - b.maxY) || (a.c.x - b.c.x) || (a.c.y - b.c.y);
 }
+const _sortedCells = new WeakSet();
 function _ownerOfInnermost(grid, p) {
     if (!grid || p.x < grid.x0 || p.x > grid.x1 || p.y < grid.y0 || p.y > grid.y1) return null;
     const cell = grid.cells[grid.cx(p.x) * grid.N + grid.cy(p.y)];
-    let best = null;
-    if (cell) for (let i = 0; i < cell.length; i++) {
-        const g = cell[i];
-        if (g.lin && p.x >= g.minX && p.x <= g.maxX && p.y >= g.minY && p.y <= g.maxY && pointInPolygon(p, g.poly) && (best === null || _faceBefore(g, best) < 0)) best = g;
-    }
-    return best;
+    if (!cell) return null;
+    if (!_sortedCells.has(cell)) { cell.sort(_faceBefore); _sortedCells.add(cell); }   // the cell's own list (internal to the grid): smallest face first, so the FIRST hit is the innermost one
+    for (let i = 0; i < cell.length; i++) { const g = cell[i]; if (g.lin && p.x >= g.minX && p.x <= g.maxX && p.y >= g.minY && p.y <= g.maxY && pointInPolygon(p, g.poly)) return g; }
+    return null;
 }
 // Stage 2: the nesting depth of a face = the number of LARGER faces of its own list that contain one of its interior sample points strictly (not on their edge). Computed only when a tie has to be decided, once per face.
 const _NEST = Symbol('nest');
