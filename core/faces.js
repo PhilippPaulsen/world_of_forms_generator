@@ -391,6 +391,44 @@ function dedupeSegments(segments) {
     return result;
 }
 
+// task 103 {
+// Task 103: shadow lines, ONLY with faceRepairCollinear (the spatial morph's cell faces). A segment is dropped for the face finding when BOTH of its endpoints lie within
+// FACE_EPSILON of the SAME strictly longer segment (length(host) > length(segment) + 1e-9): such a line is a near-collinear copy of the host and, merged with it by the
+// epsilon node snapping, made whole regions drop out of the faces (task 102: 37 % of a cell). Equal-length lines never drop each other; the host is any segment of the
+// input (dropped or not), so the result does not depend on the list order. Works IN PLACE on the fresh array dedupeSegments() returned (the caller's list and the drawn
+// lines are not touched). A bounding box test comes before the distance test. Every further change needs a new approval.
+function _dropShadowed(segs) {
+    const n = segs.length;
+    if (n < 2) return segs;
+    const len = new Array(n), x0 = new Array(n), x1 = new Array(n), y0 = new Array(n), y1 = new Array(n);
+    for (let i = 0; i < n; i++) {
+        const s = segs[i];
+        len[i] = Math.hypot(s.x2 - s.x1, s.y2 - s.y1);
+        x0[i] = Math.min(s.x1, s.x2) - FACE_EPSILON; x1[i] = Math.max(s.x1, s.x2) + FACE_EPSILON;
+        y0[i] = Math.min(s.y1, s.y2) - FACE_EPSILON; y1[i] = Math.max(s.y1, s.y2) + FACE_EPSILON;
+    }
+    const near = (px, py, b) => {
+        const dx = b.x2 - b.x1, dy = b.y2 - b.y1, l2 = dx * dx + dy * dy;
+        const t = l2 > 0 ? Math.max(0, Math.min(1, ((px - b.x1) * dx + (py - b.y1) * dy) / l2)) : 0;
+        return Math.hypot(px - (b.x1 + t * dx), py - (b.y1 + t * dy)) <= FACE_EPSILON;
+    };
+    const drop = new Array(n).fill(false);
+    let any = false;
+    for (let i = 0; i < n; i++) {
+        const a = segs[i];
+        for (let j = 0; j < n; j++) {
+            if (j === i || !(len[j] > len[i] + 1e-9)) continue;
+            if (a.x1 < x0[j] || a.x1 > x1[j] || a.x2 < x0[j] || a.x2 > x1[j] || a.y1 < y0[j] || a.y1 > y1[j] || a.y2 < y0[j] || a.y2 > y1[j]) continue;
+            if (near(a.x1, a.y1, segs[j]) && near(a.x2, a.y2, segs[j])) { drop[i] = true; any = true; break; }
+        }
+    }
+    if (!any) return segs;
+    let k = 0;
+    for (let i = 0; i < n; i++) if (!drop[i]) segs[k++] = segs[i];
+    segs.length = k;
+    return segs;
+}
+// task 103 }
 // Bounded-segment intersection (not infinite-line): returns null unless
 // the crossing point actually lies on both segments (t and u in [0,1],
 // with a small tolerance so touching-at-endpoint T-junctions - e.g. one
@@ -956,6 +994,9 @@ const CROSS_SHEET_COLOR = 'hsl(0, 0%, 40%)';
 // which component's own outer face.
 function findFaces(segments, realNodes) {
     const deduped = dedupeSegments(segments);
+// task 103 {
+    if (faceRepairCollinear) _dropShadowed(deduped);
+// task 103 }
     const { nodes: faceNodes, edges, edgeMeta } = splitSegments(deduped, realNodes);
     if (edges.length === 0) return { nodes: faceNodes, faces: [] };
 
