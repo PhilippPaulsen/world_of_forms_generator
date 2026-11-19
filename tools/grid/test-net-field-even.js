@@ -303,6 +303,38 @@ if (!CHILD) {
     check('(5d) export (square, even axes): fieldBase {lo, hi} and gridShiftPx {x, y} (e/2 per even axis) only when an axis is even, odd fields carry neither', bad.length === 0, J(bad));
 }
 
+// ---- 6. layers and the spatial morph under an even Field (task 106: the Field is free, so these must be as right as at an odd size) ------------------------------------
+{
+    const bad = {}; const note = (k, v) => { bad[k] = (bad[k] || 0) + 1; if (!bad.first) bad.first = [k, v]; };
+    const SPEC6 = { x: { kind: 'trig', w: -0.8 }, y: { kind: 'trig', w: 0.6 }, repeat: false, domain: 'field' };
+    const reset = (w, X, Y) => w.set(`currentShape = 'square'; shapeSizeFactorX = null; shapeSizeFactorY = null; canvasW = 600; canvasH = 600; width = 600; height = 600; setGridSize(${X}, ${Y}); symmetryMode = ${J(MODE)}; connections = [[1, 6], [2, 5]]; redoStack = []; baseNetTransform = null; additionalLayers = []; timeline = null; showFaces = false; rebuildGrid(currentShape); connections = [[1, 6], [2, 5]];`);
+    // (a) a layer's drawn pieces, mapped back by invertNetWarp, lie on the regular segments of the same layer (offset / rotation / another mode), at even and odd sizes
+    let nl = 0;
+    for (const [X, Y] of FAST ? [[4, 4], [3, 4]] : [[4, 4], [3, 4], [4, 3], [6, 5], [5, 5], [3, 5]]) for (const layer of [null, { offsetX: 20, offsetY: -10 }, { rotation: 17, offsetX: 5 }, { mode: 'rotation_reflection3', offsetX: -30, offsetY: 25, rotation: 90 }]) {
+        const w = world('square'); w.set('netFieldMinTiles = 2;'); reset(w, X, Y);
+        if (layer) S.addLayer(w.ctx, Object.assign({ shape: 'square', order: 3, size: X, connections: [[1, 9], [3, 7], [2, 8]] }, layer));
+        const reg = w.frame(); w.set(`baseNetTransform = ${J(SPEC6)};`); const net = w.frame(); nl++;
+        const step = Math.max(1, Math.floor(net.length / 120)); let worst = 0;
+        for (let i = 0; i < net.length; i += step) { const sg = net[i], m = w.get(`(function () { const wp = netWarpBaseNow(); return invertNetWarp(wp, { x: ${(sg.x1 + sg.x2) / 2}, y: ${(sg.y1 + sg.y2) / 2} }); })()`); let best = 1e9;
+            for (const r of reg) { const dx = r.x2 - r.x1, dy = r.y2 - r.y1, L = dx * dx + dy * dy, u = L ? Math.max(0, Math.min(1, ((m.x - r.x1) * dx + (m.y - r.y1) * dy) / L)) : 0; best = Math.min(best, Math.hypot(m.x - (r.x1 + u * dx), m.y - (r.y1 + u * dy))); } worst = Math.max(worst, best); }
+        if (worst > 1e-6) note('layerPreimage', [X, Y, layer && Object.keys(layer).join('+'), worst]);
+    }
+    // (b) the spatial morph (two keyframe layers, lines and faces): status netActive, the same counts per tile at every size, nothing outside the canvas
+    const STUB = fs.readFileSync(path.join(ROOT, 'tools', 'morph', 'test-spatial-morph-faces.js'), 'utf8').match(/const STUB = `([\s\S]*?)`;/);
+    let nm = 0; const per = new Set();
+    for (const [X, Y] of FAST ? [[3, 3], [4, 4]] : [[3, 3], [5, 5], [4, 4], [3, 4], [6, 5]]) for (const faces of [false, true]) {
+        const w = H.makeRenderWorld('square', 3, 3, 'rotation_reflection3', FILES); w.set(HOOK); if (STUB) w.set(STUB[1]); reset(w, X, Y); w.set(`symmetryMode = 'rotation_reflection3';`);
+        const K0 = [[1, 5], [2, 8], [3, 7]], K1 = [[2, 6], [4, 8], [1, 9]]; w.baseConnections(K0); const ids = [K0, K1].map(k => w.addKeyframeLayer(k)); ids.forEach(i => w.set(`additionalLayers[${i}].showFaces = ${faces};`)); w.setTimeline(ids);
+        w.set(`baseNetTransform = ${J(SPEC6)};`); w.setMorph({ enabled: true, mode: 'linear', angleDeg: 0 }); nm++;
+        const segs = w.frame(), W_ = w.get('canvasW'), H_ = w.get('canvasH'), polys = STUB ? w.get('__polys') : [];
+        if (w.status().code !== 'netActive') note('morphStatus', [X, Y, faces, w.status().code]);
+        if (segs.filter(sg => [sg.x1, sg.x2].some(v => v < -1e-6 || v > W_ + 1e-6) || [sg.y1, sg.y2].some(v => v < -1e-6 || v > H_ + 1e-6)).length) note('morphOutside', [X, Y, faces]);
+        per.add('seg' + (segs.length / (X * Y)).toFixed(3)); if (faces) per.add('poly' + (polys.length / (X * Y)).toFixed(2));
+    }
+    if (per.size !== 2) note('morphPerTile', [...per]);   // 24 segments and 40 polygons per tile at every size, even or odd
+    check(`(6) layers (${nl} cases: offset, rotation, mode; even and odd sizes: drawn pieces map back onto the regular segments, worst < 1e-6 px) and the spatial morph (${nm} scenes: status netActive, X*Y tiles with 24 segments and 40 faces each, nothing outside the canvas) under an even Field`, !bad.first && per.size === 2, J(bad) + J([...per]));
+}
+
 // ---- 7. sabotage runs: the test runs itself against mutated copies of core/netwarp.js -------------------------------------------------------------------------------
 if (!CHILD && !process.env.EVEN_NOSAB) {
     const src = fs.readFileSync(path.join(ROOT, 'core', 'netwarp.js'), 'utf8'), dir = fs.mkdtempSync(path.join(os.tmpdir(), 'even105sab-'));
