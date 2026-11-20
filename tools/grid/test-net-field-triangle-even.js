@@ -100,12 +100,12 @@ const PAIRS = []; for (let X = 3; X <= 9; X++) for (let Y = 3; Y <= 9; Y++) if (
     const ok = (shape, X, Y) => w.get(`netDomainEffective({ domain: 'field' }, { x: ${X}, y: ${Y} }${shape === undefined ? '' : ', ' + J(shape)}).ignored === null`);
     for (let n = 1; n <= 10; n++) {
         if (ok('triangle', n, n) !== (n >= 3 && n <= 9)) note('triangle', n);
-        if (ok('hex', n, n) !== (n >= 3 && n <= 9 && n % 2 === 1)) note('hex', n);
+        if (ok('hex', n, n) !== (n >= 3 && n <= 9)) note('hex', n);   // task 109: the hexagon takes 3..9 at any parity
         if (ok('square', n, n) !== (n >= 3 && n <= 9)) note('square', n);
         for (const s of [undefined, null, '', 'circle', 'Triangle']) if (ok(s, n, n) !== (n >= 3 && n <= 9 && n % 2 === 1)) note('unknown', [String(s), n]);
     }
-    for (const [X, Y] of [[4, 3], [3, 4], [6, 5], [4, 9]]) if (!ok('triangle', X, Y) || ok('hex', X, Y)) note('mixed', [X, Y]);
-    check('(4) netDomainEffective: the triangle takes 3..9 at any parity (1, 2, 10 refused, mixed axes too), the hexagon odd only, the square 3..9, no or an unknown shape odd only', !bad.first, J(bad));
+    for (const [X, Y] of [[4, 3], [3, 4], [6, 5], [4, 9]]) if (!ok('triangle', X, Y) || !ok('hex', X, Y)) note('mixed', [X, Y]);
+    check('(4) netDomainEffective: the triangle takes 3..9 at any parity (1, 2, 10 refused, mixed axes too), the hexagon (task 109) 3..9 too, the square 3..9, no or an unknown shape odd only', !bad.first, J(bad));
 }
 
 // ---- 5. byte-equal to main ---------------------------------------------------------------------------------------------------------------------------------
@@ -129,7 +129,7 @@ if (!CHILD) {
     const NOFIELD = { single: Object.assign({}, SPECS.mixed, { domain: 'single' }), tiled: Object.assign({}, SPECS.mixed, { domain: 'tiled', repeat: true }) };
     const cases = [];
     for (const [X, Y] of PAIRS) if (X % 2 === 1 && Y % 2 === 1) for (const nm of ['mixed', 'geometric', 'sinus']) cases.push(['triangle', X, Y, SPECS[nm], 'tri-odd']);
-    for (const shape of ['hex', 'square']) for (let X = 1; X <= 9; X++) for (let Y = 1; Y <= 9; Y++) if (Math.max(X, Y) <= 3 * Math.min(X, Y)) for (const nm of ['mixed', 'geometric']) cases.push([shape, X, Y, SPECS[nm], shape + '-field']);
+    for (const shape of ['hex', 'square']) for (let X = 1; X <= 9; X++) for (let Y = 1; Y <= 9; Y++) if (Math.max(X, Y) <= 3 * Math.min(X, Y) && !(shape === 'hex' && ((X % 2 === 0 && X >= 4) || (Y % 2 === 0 && Y >= 4)))) for (const nm of ['mixed', 'geometric']) cases.push([shape, X, Y, SPECS[nm], shape + '-field']);   // task 109: the hexagon at an even size with a Field is a Field now (test-net-field-hex-even.js)
     for (let X = 1; X <= 9; X += 1) for (const Y of [1, 2, 3, 4, 5, 8]) if (Math.max(X, Y) <= 3 * Math.min(X, Y)) for (const [nm, sp] of [['none', null], ['single', NOFIELD.single], ['tiled', NOFIELD.tiled]]) cases.push(['triangle', X, Y, sp, 'tri-nofield-' + nm]);
     // the triangle at sizes below 3 with a Field stays "no net" as on main
     for (const [X, Y] of [[1, 1], [2, 2], [1, 2], [2, 3], [3, 2]]) cases.push(['triangle', X, Y, SPECS.mixed, 'tri-small']);
@@ -137,20 +137,19 @@ if (!CHILD) {
     for (const [shape, X, Y, spec, kind] of cases) { const a = snap(wOf('main', shape), shape, X, Y, spec), b = snap(wOf('new', shape), shape, X, Y, spec); n++; if (a !== b) diffs.push([shape, X, Y, kind]); }
     // ... and the triangle at an EVEN size with a Field is NOT the main picture (main: no net): the opposite check, so the equality above is not vacuous
     let changed = 0, total = 0; for (const [X, Y] of PAIRS) if (X % 2 === 0 || Y % 2 === 0) { total++; if (snap(wOf('main', 'triangle'), 'triangle', X, Y, SPECS.mixed) !== snap(wOf('new', 'triangle'), 'triangle', X, Y, SPECS.mixed)) changed++; }
-    check(`(5) byte-equal to main ${MAIN}: triangle odd with a Field, the hexagon and the square at ALL sizes 1..9 with a Field (even too), the triangle without a Field and below size 3 (${n} cases); the triangle at an even size with a Field is a new picture (${changed} of ${total} differ)`, diffs.length === 0 && n > 250 && changed === total, J(diffs.slice(0, 6)) + ` n=${n} changed=${changed}/${total}`);
+    check(`(5) byte-equal to main ${MAIN}: triangle odd with a Field, the hexagon (except with an even axis >= 4, task 109) and the square at the sizes 1..9 with a Field, the triangle without a Field and below size 3 (${n} cases); the triangle at an even size with a Field is a new picture (${changed} of ${total} differ)`, diffs.length === 0 && n > 250 && changed === total, J(diffs.slice(0, 6)) + ` n=${n} changed=${changed}/${total}`);
 }
 
 // ---- 6. sabotage runs --------------------------------------------------------------------------------------------------------------------------------------
 if (!CHILD) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tri108s-')), src = fs.readFileSync(path.join(ROOT, 'core', 'netwarp.js'), 'utf8');
     const SAB = [
-        ['the hexagon gets even sizes', "(sq || shape === 'triangle') && n % 2 === 0", "(sq || shape === 'triangle' || shape === 'hex') && n % 2 === 0"],
         ['the square shift (shiftVec) in the triangle code', "meshes: { x: best.Rx, y: best.Ry }, frame: { c0: base.c0, v1, v2, det }", "meshes: { x: best.Rx, y: best.Ry }, shiftVec: { x: 0.5 * v1.x, y: 0.5 * v1.y }, frame: { c0: base.c0, v1, v2, det }"],
         ['the triangle search starts at an even count', "for (let Rx = R.x | 1;", "for (let Rx = R.x;"],
         ['the export writes fieldBase / gridShiftPx for the triangle', "if (shape === 'square' && (R.x % 2 === 0 || R.y % 2 === 0))", "if ((R.x % 2 === 0 || R.y % 2 === 0))"],
         ['size 2 opens the triangle Field', "else if (n < (sq ? netFieldMinTiles : 3))", "else if (n < (sq || shape === 'triangle' ? 2 : 3))"],
-        ['an unknown shape is read as the triangle', "(sq || shape === 'triangle') && n % 2 === 0", "(sq || shape !== 'hex') && n % 2 === 0"],
-        ['the triangle even gate is gone', "(sq || shape === 'triangle') && n % 2 === 0", "sq && n % 2 === 0"],
+        ['an unknown shape is read as the triangle', "(sq || shape === 'triangle' || shape === 'hex') && n % 2 === 0", "(sq || shape !== 'circle_never') && n % 2 === 0"],
+        ['the triangle even gate is gone', "(sq || shape === 'triangle' || shape === 'hex') && n % 2 === 0", "(sq || shape === 'hex') && n % 2 === 0"],
         ['the Timeline guard applies to every shape', "currentShape === 'square' && typeof netSizeFactors === 'function'", "typeof netSizeFactors === 'function'"],
     ];
     let red = 0; const notRed = [];

@@ -62,18 +62,8 @@ function run(shape, X, Y) {
             if (r.btnTitle !== 'Field needs Shape Size 3 or more in X and Y') note('sqBtnTitle', [X, Y, r.btnTitle]);
         }
     }
-    for (const shape of ['hex']) for (const [X, Y] of [[3, 3], [5, 5], [3, 5], [9, 9], [4, 4], [3, 4], [4, 3], [6, 5], [2, 2], [1, 3]]) {   // task 108: the triangle takes every size 3..9; its table is in test-net-triangle-even-ui.js
-        const r = run(shape, X, Y); n++; const odd = X % 2 === 1 && Y % 2 === 1 && X >= 3 && Y >= 3;
-        if (odd) { if (r.domain !== 'field' || r.btnDisabled || !r.hintHidden || r.toasts !== '' || r.warp !== 'field') note('tri-odd', [shape, X, Y, r.domain, r.toasts]); }
-        else {
-            const sz = X === Y ? X : X + '/' + Y;
-            if (r.domain === 'field' || r.warp !== null) note('tri-even-field', [shape, X, Y, r.domain, r.warp]);
-            if (!r.btnDisabled || r.hintHidden || r.hintKey !== 'net.hint.fieldOdd' || r.hintText !== T('de', 'net.hint.fieldOdd')) note('tri-hint', [shape, X, Y, r.hintKey, r.hintText]);
-            if (!r.toasts.includes(T('de', 'note.net.fieldOddSizeNoNet', { size: sz, kept: sz }))) note('tri-toast', [shape, X, Y, r.toasts]);
-            if (r.btnTitle !== 'Field needs an odd Shape Size in X and Y (3, 5, 7, 9)') note('tri-title', [shape, X, Y, r.btnTitle]);
-        }
-    }
-    check(`(1) hint table: square 3..9 (also even) is a Field, a size below 3 is Single with note.net.fieldMinSize / net.hint.fieldMin / its own title; the hexagon: odd sizes are a Field, every other size has no net with the old texts (the triangle: test-net-triangle-even-ui.js); all 12 keys in de and en (${n} runs)`, !bad.first && n === 22, J(bad));
+    // task 108 / 109: the triangle and the hexagon take every size 3..9; their tables are in test-net-triangle-even-ui.js and test-net-hex-even-ui.js
+    check(`(1) hint table: square 3..9 (also even) is a Field, a size below 3 is Single with note.net.fieldMinSize / net.hint.fieldMin / its own title; the triangle and the hexagon: test-net-triangle-even-ui.js, test-net-hex-even-ui.js; all 12 keys in de and en (${n} runs)`, !bad.first && n === 12, J(bad));
 }
 
 // ---- 2. the optimum hint -------------------------------------------------------------------------------------------------------------------------------
@@ -119,9 +109,9 @@ function run(shape, X, Y) {
         // square, Field, lock open: per axis, ratio <= 1:3
         [stepper('square', true, 3, 4, true, 'x', 1), { to: 4 }], [stepper('square', true, 3, 4, true, 'y', 1), { to: 5 }], [stepper('square', true, 3, 4, true, 'y', -1), { to: 3 }], [stepper('square', true, 4, 3, true, 'y', -1), { to: null, reason: 'SQMIN' }],
         [stepper('square', true, 3, 9, true, 'y', 1), { to: null, reason: 'MAX' }], [stepper('square', true, 3, 9, true, 'x', 1), { to: 4 }], [stepper('square', true, 3, 9, true, 'x', -1), { to: null, reason: 'SQMIN' }], [stepper('square', true, 3, 8, true, 'y', 1), { to: 9 }],
-        // triangle and hexagon: odd twos, as before
-        [stepper('triangle', false, 5, 5, true, 'x', 1), { to: 6 }], [stepper('hex', false, 5, 5, true, 'x', -1), { to: 3, note: 'NOTE53' }], [stepper('triangle', false, 3, 3, true, 'x', -1), { to: null, reason: 'SQMIN' }], [stepper('hex', true, 3, 5, true, 'x', 1), { to: 5, note: 'NOTE35' }],
-        [stepper('hex', true, 3, 5, true, 'y', 1), { to: 7, note: 'NOTE57' }], [stepper('triangle', false, 9, 9, true, 'x', 1), { to: null, reason: 'MAX' }],
+        // triangle (task 108) and hexagon (task 109): steps of one
+        [stepper('triangle', false, 5, 5, true, 'x', 1), { to: 6 }], [stepper('hex', false, 5, 5, true, 'x', -1), { to: 4 }], [stepper('triangle', false, 3, 3, true, 'x', -1), { to: null, reason: 'SQMIN' }], [stepper('hex', true, 3, 5, true, 'x', 1), { to: 4 }],
+        [stepper('hex', true, 3, 5, true, 'y', 1), { to: 6 }], [stepper('triangle', false, 9, 9, true, 'x', 1), { to: null, reason: 'MAX' }],
         // no Field: steps of one on every shape
         [stepper('square', false, 4, 4, false, 'x', 1), { to: 5 }], [stepper('triangle', true, 3, 5, false, 'x', 1), { to: 4 }], [stepper('hex', false, 2, 2, false, 'x', -1), { to: 1 }],
     ];
@@ -173,9 +163,9 @@ function run(shape, X, Y) {
             const args = argsOf(text, m.index + m[0].length), lineNo = text.slice(0, m.index).split('\n').length; calls.push([f, lineNo, line.trim().slice(0, 120), args.length >= 3 && /^(currentShape|'square'|'triangle'|'hex'|shape)$/.test(args[2])]); } }
     const noShape = calls.filter(c => !c[3]);
     console.log('REPORT netDomainEffective callers (file:line, passes the shape):', J(calls.map(c => [c[0] + ':' + c[1], c[3]])));
-    // and the function itself: no or an unknown shape reads the conservative rule (an even count is never a Field), the hexagon refuses it, the triangle (task 108) and the square take it
+    // and the function itself: no or an unknown shape reads the conservative rule (an even count is never a Field), the triangle (task 108), the hexagon (task 109) and the square take it
     { const wd = makeRenderWorld('square', 3, 3, 'rotation_reflection6', FILES), ok = (shape) => wd.get(`netDomainEffective({ domain: 'field' }, { x: 4, y: 4 }${shape === undefined ? '' : ', ' + J(shape)}).ignored === null`);
-      check('(5b) netDomainEffective at 4/4: no shape, null, "" and an unknown shape refuse the even Field, triangle and hexagon refuse it, the square takes it', !ok() && !ok(null) && !ok('') && !ok('circle') && ok('triangle') && !ok('hex') && ok('square')); }
+      check('(5b) netDomainEffective at 4/4: no shape, null, "" and an unknown shape refuse the even Field, triangle and hexagon refuse it, the square takes it', !ok() && !ok(null) && !ok('') && !ok('circle') && ok('triangle') && ok('hex') && ok('square')); }
     check(`(5) every netDomainEffective caller passes the shape (${calls.length} callers in core/, sketch.js, ui-*.js, gallery-render.js)`, calls.length >= 8 && noShape.length === 0, J(noShape));
 }
 
@@ -184,8 +174,7 @@ if (!CHILD) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'evenui106-'));
     const rd = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
     const SAB = [
-        ['the hexagon gets an even Field', 'NETWARP_JS', 'core/netwarp.js', "const sq = shape === 'square', evenOk = (sq || shape === 'triangle') && n % 2 === 0;", "const sq = true, evenOk = (sq || shape === 'triangle') && n % 2 === 0;"],
-        ['an unknown or missing shape is read as the square', 'NETWARP_JS', 'core/netwarp.js', "const sq = shape === 'square', evenOk = (sq || shape === 'triangle') && n % 2 === 0;", "const sq = shape !== 'triangle' && shape !== 'hex', evenOk = (sq || shape === 'triangle') && n % 2 === 0;"],
+        ['an unknown or missing shape is read as the square', 'NETWARP_JS', 'core/netwarp.js', "const sq = shape === 'square', evenOk = (sq || shape === 'triangle' || shape === 'hex') && n % 2 === 0;", "const sq = shape !== 'triangle' && shape !== 'hex', evenOk = (sq || shape === 'triangle' || shape === 'hex') && n % 2 === 0;"],
         ['floor 2 by default', 'NETWARP_JS', 'core/netwarp.js', 'let netFieldMinTiles = 3;', 'let netFieldMinTiles = 2;'],
         ['Timeline guard removed (Aus <-> Field at an even size interpolates)', 'NETWARP_JS', 'core/netwarp.js', "if (dom === 'field' && A.any !== B.any && typeof currentShape", "if (false && dom === 'field' && A.any !== B.any && typeof currentShape"],
         ['stepper: the square steps in twos in a Field (lock open)', 'UI_FORM_JS', 'ui-form.js', "      if (fieldActive() && fieldAnySize()) {   // task 106 / 108: the square's and the triangle's Field: steps of one", "      if (false && fieldActive() && fieldAnySize()) {   // task 106 / 108: the square's and the triangle's Field: steps of one"],
@@ -194,7 +183,7 @@ if (!CHILD) {
         ['hint key net.hint.optimum without its english text', 'UI_I18N_JS', 'ui-i18n.js', "en: 'According to Hinterreiter (vol. II, p. 17) square nets work best with 7 to 12 meshes; this net has {w}.'", "en: ''"],
         ['the optimum hint in the size hint instead of #net-field-info', 'SKETCH_JS', 'sketch.js', "if (active && isField) htmlOnce(fieldInfo, `Field: macro", "if (active && isField) htmlOnce(sizeHint, `Field: macro"],
         ['the hint line keeps the odd text on the square', 'SKETCH_JS', 'sketch.js', "const hk = evenShape ? 'net.hint.fieldMin' : 'net.hint.fieldOdd';", "const hk = 'net.hint.fieldOdd';"],
-        ['the shape rule of the controls reads every shape as the square', 'SKETCH_JS', 'sketch.js', "sqShape = currentShape === 'square', evenShape = sqShape || currentShape === 'triangle';", "sqShape = true, evenShape = true;"],
+        ['the shape rule of the controls reads every shape as the square', 'SKETCH_JS', 'sketch.js', "sqShape = currentShape === 'square', evenShape = sqShape || currentShape === 'triangle' || currentShape === 'hex';", "sqShape = true, evenShape = true;"],
         ['the readout of ui-net.js does not pass the shape (an even square reads as Single)', 'UI_NET_JS', 'ui-net.js', "netDomainEffective({ domain: 'field' }, netSizeFactors(), currentShape).ignored === null", "netDomainEffective({ domain: 'field' }, netSizeFactors()).ignored === null"],
         ['a caller forgets the shape (core/state.js resize hint)', 'STATE_CALLER', 'core/state.js', "netDomainEffective(sp, netSizeFactors(), currentShape)", "netDomainEffective(sp, netSizeFactors())"],
     ];
