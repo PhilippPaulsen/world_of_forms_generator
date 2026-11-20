@@ -104,8 +104,8 @@ const fieldSpec = (law) => ({ x: law, y: law.kind === 'trig' ? { kind: 'trig', w
         check(`(3) triangle / hexagon without a Field and square with and without one (${n} cases): drawn segments, export, net-active flag byte-equal to main`, n > 30 && !bad.triangle && !bad.hex && !bad.square, J(bad));
         const w = world('triangle'); setup(w, 'triangle', 2, 2, fieldSpec(LAWS.sinus)); const ev = w.get('netWarpBaseNow() === null && netDomainEffective({ domain: "field" }, netSizeFactors()).ignored !== null');   // task 108: the triangle takes every size 3..9; only a size below 3 has no net
         setup(w, 'triangle', 3, 4, fieldSpec(LAWS.sinus)); const od = w.get('netWarpBaseNow() !== null');
-        const wh = world('hex'); setup(wh, 'hex', 4, 4, fieldSpec(LAWS.sinus));   // task 089: the hexagon has a Field at odd sizes now
-        check('(3b) the triangle at 2/2: no net warp (as before), at 3/4: a Field (task 108); the hexagon at 4/4: no net warp (as before)', ev && od && wh.get('netWarpBaseNow() === null'));
+        const wh = world('hex'); setup(wh, 'hex', 2, 2, fieldSpec(LAWS.sinus));   // task 089: the hexagon has a Field at odd sizes; task 109: at every size 3..9, so only a size below 3 has no net
+        check('(3b) the triangle at 2/2: no net warp (as before), at 3/4: a Field (task 108); the hexagon at 2/2: no net warp (task 109: 4/4 is a Field)', ev && od && wh.get('netWarpBaseNow() === null'));
     }
 }
 
