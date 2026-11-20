@@ -109,10 +109,10 @@ const fieldSpec = (law) => ({ x: law, y: law.kind === 'trig' ? { kind: 'trig', w
         const specs = [null, { x: { kind: 'trig', w: 0.7 }, y: 'same', repeat: false, domain: 'single' }, { x: { kind: 'trig', w: -0.7 }, y: 'same', repeat: true, domain: 'tiled' }, { x: { kind: 'geometric', w: 1.1 }, y: 'same', repeat: false, macro: 3 }];
         for (const shape of ['triangle', 'hex', 'square']) { const wn = mk(shape, false), wm = mk(shape, true); for (const sz of (shape === 'square' ? [3, 5] : [3, 4, 5])) for (const spec of (shape === 'hex' ? specs : specs.concat([fieldSpec(LAWS.sinus), fieldSpec(LAWS.geometric)]))) { if (shape === 'triangle' && spec && spec.domain === 'field' && sz % 2 === 0) continue; /* task 108: the triangle's Field at an even size is a Field now (test-net-field-triangle-even.js) */ setup(wn, shape, sz, sz, spec, 6); setup(wm, shape, sz, sz, spec, 6); n++; if (probe(wn) !== probe(wm)) bad[shape] = (bad[shape] || 0) + 1; } }
         check(`(3) hexagon without a Field, triangle and square with and without one (${n} cases): drawn segments, export, net-active flag byte-equal to main`, n > 30 && !bad.triangle && !bad.hex && !bad.square, J(bad));
-        const w = world('hex'); setup(w, 'hex', 4, 4, fieldSpec(LAWS.sinus)); const ev = w.get('netWarpBaseNow() === null && netDomainEffective({ domain: "field" }, netSizeFactors()).ignored !== null');   // an even size: no net on the hexagon
-        setup(w, 'hex', 3, 4, fieldSpec(LAWS.sinus)); const od = w.get('netWarpBaseNow() === null');
+        const w = world('hex'); setup(w, 'hex', 2, 2, fieldSpec(LAWS.sinus)); const ev = w.get('netWarpBaseNow() === null && netDomainEffective({ domain: "field" }, netSizeFactors()).ignored !== null');   // task 109: a size below 3: no net on the hexagon (an even size 3..9 is a Field now: test-net-field-hex-even.js)
+        setup(w, 'hex', 1, 3, fieldSpec(LAWS.sinus)); const od = w.get('netWarpBaseNow() === null');
         const wh = world('hex'); setup(wh, 'hex', 3, 3, fieldSpec(LAWS.sinus));
-        check('(3b) an even axis on the hexagon (4/4, 3/4): no net warp (as before); the hexagon at 3/3 has the Field now', ev && od && wh.get('netWarpBaseNow() && netWarpBaseNow().domain === "field"'));
+        check('(3b) a size below 3 on the hexagon (2/2, 1/3): no net warp (task 109: 4/4, 3/4 are a Field); the hexagon at 3/3 has the Field now', ev && od && wh.get('netWarpBaseNow() && netWarpBaseNow().domain === "field"'));
     }
 }
 
