@@ -88,7 +88,7 @@ let TABLE = [];
         for (const shape of ['triangle', 'hex']) for (const [X, Y] of [[3, 3], [4, 4], [3, 4], [4, 3], [5, 5], [6, 5], [8, 8], [9, 9], [3, 5], [5, 3]]) {
             const r = run(shape, X, Y); n++; const text = T(lang, 'net.hint.optimum', { w: X * Y });
             if (r.infoHidden) note('infoHidden', [lang, shape, X, Y]);
-            if (r.info.includes(text) || /Hinterreiter|Maschen|7 to 12|7 bis 12|meshes/.test(r.info.replace(/Hinterreiter's/g, ''))) note('optimum', [lang, shape, X, Y, r.info.slice(-90)]);
+            if (r.info.includes(text) || /Hinterreiter|Maschen|7 to 12|7 bis 12|meshes/.test(r.info.replace(/ ?(Net family|Netzfamilie) [^)]*\)\./g, '').replace(/Hinterreiter's/g, ''))) note('optimum', [lang, shape, X, Y, r.info.slice(-90)]);
         }
         const r = run('square', 9, 9); if (!r.info.includes(T(lang, 'net.hint.optimum', { w: 81 }))) note('squareLost', [lang]);   // the square still has it
     }
