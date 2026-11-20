@@ -13,6 +13,7 @@ const SAB = [
     ['the frames are not handed to the ZIP as Blobs', 'await zip.add(animFrameName(i + 1, ft.n, \'png\'), bytes, blob);', 'await zip.add(animFrameName(i + 1, ft.n, \'png\'), bytes);'],
     ['bilinear is not refused', "sm.mode === 'bilinear') return 'static'", "sm.mode === 'bilinear') return null"],
     ['no wait for the background check', 'while (!env.idle() && env.now() - t0 < 15000)', 'while (false)'],
+    ['the busy background check is not parked', '        if (!env.idle()) env.pauseBackground();', ''],
     ['an error does not restore the state (the restore sits after the try)', '    } finally {\n        try { env.density.set(saved.density)', '    } finally {\n        if (result && result.code === \'error\') return result;\n        try { env.density.set(saved.density)'],
 ];
 let bad = 0;

@@ -60,6 +60,7 @@ function mkWorld(o) {
         density: { get: () => W.density, set: (d) => { W.log.push(['density', d]); W.density = d; } },
         millis: () => W.clock, now: () => W.clock, sleep: async (ms) => { W.clock += ms; W.log.push(['sleep', ms]); },
         idle: () => { W.idleCalls++; return W.idleCalls > o.idleAfter; },
+        pauseBackground: () => { W.log.push(['pauseBackground']); },
         status: { get: () => W.status, set: (h) => { W.status = h; } },
         pauseTimeline: (p) => { W.log.push(['pause', p]); W.tl.elapsedMs = p; W.tl.playing = false; W.loop = false; },
         applyFrame: () => { W.log.push(['applyFrame']); W.tl.currentFrame = { segmentIndex: 1, localT: 0.99 }; W.status = 'applied'; },
@@ -153,9 +154,10 @@ const untouched = (W) => !W.log.some(l => ['progress', 'redraw', 'density', 'pau
     {
         const W = mkWorld({ idleAfter: 3 }); const r = await runAnimationExport(W.env, opts({ frames: 3 }));
         const iFirst = W.log.findIndex(l => l[0] === 'progress'), sleeps = W.log.slice(0, iFirst).filter(l => l[0] === 'sleep').length;
-        check('the first frame waits until the background check is quiet (3 busy answers = 3 waits of 50 ms)', r.ok && sleeps === 3 && W.idleCalls === 4, sleeps);
+        check('the first frame waits until the background check is quiet (3 busy answers = 3 waits of 50 ms)', r.ok && sleeps === 3 && W.idleCalls === 5, sleeps);
         const W2 = mkWorld({ idleAfter: 1e9 }); const t0 = W2.clock; const r2 = await runAnimationExport(W2.env, opts({ frames: 2 }));
         check('a check that never ends does not hold the export: after 15 s it goes on', r2.ok && W2.clock - t0 >= 15000 && W2.clock - t0 < 15200, W2.clock - t0);
+        check('a check that never ends is parked once for the export (pauseBackground); one that ends in time is left alone', W2.log.filter(l => l[0] === 'pauseBackground').length === 1 && W.log.filter(l => l[0] === 'pauseBackground').length === 0);
         const W3 = mkWorld({}); await runAnimationExport(W3.env, opts({ frames: 6 }));
         const blobs = W3.parts.filter(p => p instanceof Blob), arrays = W3.parts.filter(p => p instanceof Uint8Array);
         check('the ZIP parts hold the frames as Blobs (6), the Uint8Arrays are only headers and the directory (no frame bytes kept)', blobs.length === 6 && arrays.every(a => a.length < 120), `${blobs.length} blobs, largest array ${Math.max(...arrays.map(a => a.length))}`);
