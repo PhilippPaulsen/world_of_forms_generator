@@ -5490,7 +5490,7 @@ async function runAnimationExport(env, opts) {
     } catch (e) {
         result = { ok: false, code: 'error', message: String(e && e.message || e) };
     } finally {
-        try { env.density.set(saved.density); } catch (e) { /* the density is not ours to lose the rest over */ }
+        try { env.density.set(saved.density); } catch (e) { }   // a failing density must not stop the rest of the restore (no block comment here: the old source-text tests strip comments with a regex)
         tl.elapsedMs = position; tl.playing = false; tl.startTime = saved.startTime; tl.netLive = saved.netLive;
         env.applyFrame();   // applyTimelineFrame(): the playback layer and currentFrame of the restored position
         tl.currentFrame = saved.currentFrame;
