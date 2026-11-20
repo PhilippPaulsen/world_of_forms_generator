@@ -123,16 +123,16 @@ const EVENPAIRS = PAIRS.filter(([X, Y]) => X % 2 === 0 || Y % 2 === 0);
     check(`(4) netAnimationCompat (${rows} rows, hexagon and square, even and odd sizes): hexagon Regular <-> Field ok at every size, the square refuses only at an even size, Field <-> Field ok, Field <-> Tiled refused`, !bad.first, J(bad));
 }
 
-// ---- 5. layers stay locked ----------------------------------------------------------------------------------------------------------------------------
+// ---- 5. layers off the base grid stay locked (task 113: layers on the base grid are free) ----------------------------------------------------------------------------------------------------------------------------
 {
     const w = world('hex', 'rotation_reflection6'); const bad = {}; const note = (k, v) => { bad[k] = (bad[k] || 0) + 1; if (!bad.first) bad.first = [k, v]; }; let n = 0;
     for (const [X, Y] of [[4, 4], [3, 4], [4, 3], [6, 5], [8, 8], [6, 6], [3, 3], [5, 5], [9, 9]]) {
         setup(w, 'hex', X, Y, SPECS.sinus, 'rotation_reflection6', 8); n++;
-        const r = w.get(`(function () { showFaces = true; const base = computeCellFaces(connections, nodes, null, null, null).faces.length, lay = computeCellFaces(connections, nodes, null, null, { gridMatchesBase: true }).faces.length, lay2 = computeCellFaces(connections, nodes, null, null, { gridMatchesBase: false }).faces.length, morph = netWarpBlocksFaces({ gridMatchesBase: true, morphRefine: true });
-            return { base, lay, lay2, morph, bBase: netWarpBlocksFaces(), bLay: netWarpBlocksFaces({ gridMatchesBase: true }), bLay2: netWarpBlocksFaces({ gridMatchesBase: false }) }; })()`);
-        if (r.base < 1 || r.bBase) note('base', [X, Y, r.base]); if (r.lay !== 0 || r.lay2 !== 0 || !r.bLay || !r.bLay2) note('layerNotLocked', [X, Y, r.lay, r.lay2]); if (r.morph !== false) note('morphRefine', [X, Y, r.morph]);
+        const r = w.get(`(function () { showFaces = true; const base = computeCellFaces(connections, nodes, null, null, null).faces.length, lay2 = computeCellFaces(connections, nodes, null, null, { gridMatchesBase: false }).faces.length;   // task 113: a sheet on the base grid is not refused (its faces need a real layer sheet: test-net-field-hex-layer-faces.js)
+            return { base, lay2, morph: netWarpBlocksFaces({ gridMatchesBase: true, morphRefine: true }), bBase: netWarpBlocksFaces(), bLay: netWarpBlocksFaces({ gridMatchesBase: true }), bLay2: netWarpBlocksFaces({ gridMatchesBase: false }) }; })()`);
+        if (r.base < 1 || r.bBase) note('base', [X, Y, r.base]); if (r.lay2 !== 0 || r.bLay || !r.bLay2) note('layerLock', [X, Y, r.lay2, r.bLay, r.bLay2]); if (r.morph !== false) note('morphRefine', [X, Y, r.morph]);
     }
-    check(`(5) layers under the hexagon Field (${n} sizes, even and odd): a layer sheet gets 0 faces and netWarpBlocksFaces says so ("Base sheet only"), the base sheet gets its faces, the morph path (morphRefine) is not locked (netWarpBlocksFaces false)`, !bad.first, J(bad));
+    check(`(5) layers under the hexagon Field (${n} sizes, even and odd): a sheet off the base grid gets 0 faces and netWarpBlocksFaces says so, a sheet on the base grid is not refused (task 113), the base sheet gets its faces, the morph path is not locked`, !bad.first, J(bad));
 }
 
 // ---- 6. faces at even sizes ---------------------------------------------------------------------------------------------------------------------------
@@ -213,7 +213,7 @@ if (!CHILD) {
         ['size 2 opens the hexagon Field', "else if (n < (sq ? netFieldMinTiles : 3))", "else if (n < (sq || shape === 'hex' ? 2 : 3))"],
         ['the square shift (shiftVec) in the hexagon code', "refineFaces: true, frame: { c0: cen, v1: f1, v2: f2, det }", "refineFaces: true, shiftVec: { x: 0.5 * f1.x, y: 0.5 * f1.y }, frame: { c0: cen, v1: f1, v2: f2, det }"],
         ['the export writes fieldBase / gridShiftPx for the hexagon', "if (shape === 'square' && (R.x % 2 === 0 || R.y % 2 === 0))", "if ((R.x % 2 === 0 || R.y % 2 === 0))"],
-        ['the layer lock under the hexagon Field is removed', "(w.refineFaces === true && sheet.morphRefine !== true) ||", "(false) ||"],
+        ['a layer off the base grid is freed (the grid rule is gone)', "(!!sheet && !sheet.gridMatchesBase)", 'false'],
         ['the face refinement is switched off', "if (!warp || warp.refineFaces !== true || !warp.frame || !result", "if (true || !warp || warp.refineFaces !== true || !warp.frame || !result"],
         ['the tile skip is removed (never skips)', "    return x1 < -m || x0 > W + m || y1 < -m || y0 > H + m;", "    return false;"],
         ['the tile skip skips too much (always skips)', "    return x1 < -m || x0 > W + m || y1 < -m || y0 > H + m;", "    return true;"],
