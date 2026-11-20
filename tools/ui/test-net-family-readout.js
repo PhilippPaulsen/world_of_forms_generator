@@ -123,7 +123,7 @@ if (!CHILD) {
         ['the english sentence of the hexagon is missing', 'UI_I18N_JS', 'ui-i18n.js', "en: 'Net family *N (hexagon net, Hinterreiter vol. II, p. 14).'", "en: ''"],
         ['the mark key of the hexagon is missing in en', 'UI_I18N_JS', 'ui-i18n.js', "'net.family.hex': { de: '*N', en: '*N' }", "'net.family.hex': { de: '*N' }"],
         ['the sentence of #net-field-info is removed', 'SKETCH_JS', 'sketch.js', "${optHint}${famHint}`);", "${optHint}`);"],
-        ['the sentence also without a Field net', 'SKETCH_JS', 'sketch.js', "const famHint = evenShape && window.UI && UI.t ? ' ' + UI.t('net.family.info.' + currentShape) : '';", "const famHint = evenShape && window.UI && UI.t ? ' ' + UI.t('net.family.info.' + currentShape) : ''; if (!isField) htmlOnce(fieldInfo, UI.t('net.family.info.' + currentShape));"],
+        ['the sentence also without a Field net', 'SKETCH_JS', 'sketch.js', "const famHint = evenShape && window.UI && UI.t ? ' ' + UI.t({ square: 'net.family.info.square', triangle: 'net.family.info.triangle', hex: 'net.family.info.hex' }[currentShape]) : '';", "const famHint = evenShape && window.UI && UI.t ? ' ' + UI.t({ square: 'net.family.info.square', triangle: 'net.family.info.triangle', hex: 'net.family.info.hex' }[currentShape]) : ''; if (!isField) htmlOnce(fieldInfo, UI.t('net.family.info.hex'));"],
     ];
     let red = 0; const notRed = [];
     SAB.forEach(([name, envKey, file, from, to], i) => {
