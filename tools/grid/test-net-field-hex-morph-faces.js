@@ -122,8 +122,8 @@ if (on('6')) {
 }
 if (on('3')) {
     const w = mk({ size: 5 }); const ok = (code) => w.get(code);
-    check('(3) hexagon Field: a real layer sheet is refused, the morph sheet passes; square and triangle: unchanged',
-        ok('netWarpBlocksFaces({ gridMatchesBase: true })') === true && ok('netWarpBlocksFaces({ gridMatchesBase: true, morphRefine: true })') === false && ok('netWarpBlocksFaces({ gridMatchesBase: false, morphRefine: true })') === true && ok('netWarpBlocksFaces(null)') === false);
+    check('(3) hexagon Field (task 113): a layer sheet on the base grid passes, one off it is refused, the morph sheet passes; square and triangle: unchanged',
+        ok('netWarpBlocksFaces({ gridMatchesBase: true })') === false && ok('netWarpBlocksFaces({ gridMatchesBase: false })') === true && ok('netWarpBlocksFaces({ gridMatchesBase: true, morphRefine: true })') === false && ok('netWarpBlocksFaces({ gridMatchesBase: false, morphRefine: true })') === true && ok('netWarpBlocksFaces(null)') === false);
     const bad = []; for (const shape of ['square', 'triangle']) { const wq = mk({ shape, size: 5, K: KF[shape] }); if (wq.get('netWarpBlocksFaces({ gridMatchesBase: true })') !== false || wq.get('netWarpBlocksFaces({ gridMatchesBase: false })') !== true) bad.push(shape); }
     check('(3b) square and triangle Field: a base-grid sheet passes, another is refused (as before)', bad.length === 0, J(bad));
 }
