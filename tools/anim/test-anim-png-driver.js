@@ -53,7 +53,7 @@ function mkWorld(o) {
     const fakePng = (t, density) => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.from(String(Math.round(t * 1e6)).padStart(8, '0') + 'd' + density), Buffer.alloc(o.bytes, Math.round(t * 200))]);
     W.fakePng = fakePng;
     W.env = {
-        timeline: () => W.tl, totalMs: () => W.tl.segmentDurationsMs.reduce((a, b) => a + b, 0), segmentOk: () => W.segOk, otherClockPlaying: () => W.otherClock, spatialMorph: () => o.sm,
+        timeline: () => W.tl, totalMs: () => W.tl.segmentDurationsMs.reduce((a, b) => a + b, 0), segmentOk: () => W.segOk, otherClockPlaying: () => W.otherClock, morphBlock: () => o.sm,
         setProgress: (t) => { W.log.push(['progress', t, W.tl.playing]); W.tl.elapsedMs = t * W.env.totalMs(); W.tl.playing = false; W.tl.netLive = true; W.tl.currentFrame = { segmentIndex: 1, localT: t }; W.status = 'frame ' + t; },
         redraw: () => { W.redraws++; W.log.push(['redraw']); },
         toBlob: async () => { const k = W.frameCalls++; if (k === W.throwAt) throw new Error('canvas lost'); if (k === W.failAt) return null; W.densitySeen.push(W.density); return new Blob([fakePng(W.tl.elapsedMs / W.env.totalMs(), W.density)]); },
