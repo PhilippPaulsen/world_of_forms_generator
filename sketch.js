@@ -5443,7 +5443,7 @@ function animExportPrecheck(env) {
     if (!tl || !Array.isArray(tl.keyframeLayerIds) || tl.keyframeLayerIds.length < 2 || !Array.isArray(tl.segmentDurationsMs) || tl.segmentDurationsMs.length < 1) return 'noTimeline';
     for (let s = 0; s < tl.segmentDurationsMs.length; s++) if (!env.segmentOk(s)) return 'unresolved';
     if (env.otherClockPlaying()) return 'otherClockPlaying';
-    const sm = env.spatialMorph();
+    const sm = env.morphBlock();
     if (sm && sm.enabled && sm.mode === 'bilinear') return 'static';
     return null;
 }
@@ -5514,7 +5514,7 @@ function animExportEnv(extra) {
         totalMs: () => totalTimelineDurationMs(timeline),
         segmentOk: (s) => resolveTimelineKeyframeCoords(timeline, s).ok,
         otherClockPlaying: () => additionalLayers.some(l => l.animation && l.animation.playing) || !!(baseNetAnimation && baseNetAnimation.playing),
-        spatialMorph: () => getSpatialMorph(),
+        morphBlock: () => getSpatialMorph(),
         setProgress: (t) => setTimelineProgress(t),
         redraw: () => redraw(),
         toBlob: () => new Promise((resolve) => { const c = cv(); if (!c) resolve(null); else c.toBlob((b) => resolve(b), 'image/png'); }),
