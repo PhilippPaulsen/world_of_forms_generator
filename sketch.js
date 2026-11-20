@@ -5468,6 +5468,7 @@ async function runAnimationExport(env, opts) {
         env.onProgress({ phase: 'prepare', i: 0, n: ft.n, ms: 0 });
         const t0 = env.now();
         while (!env.idle() && env.now() - t0 < 15000) { if (env.shouldCancel()) break; await env.sleep(50); }
+        if (!env.idle()) env.pauseBackground();   // still busy after 15 s: park the check for the export (its timer is re-armed by the next render of the pairing editor), else it takes a second of every frame
         env.density.set(opts.density);
         for (let i = 0; i < ft.n; i++) {
             if (env.shouldCancel()) { result = { ok: false, code: 'cancelled', done: i }; break; }
@@ -5522,6 +5523,7 @@ function animExportEnv(extra) {
         now: () => performance.now(),
         sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
         idle: () => timelineImageCheckIdle(),
+        pauseBackground: () => timelineImageCheckStop(),
         status: { get: () => { const e = statusEl(); return e ? e.innerHTML : ''; }, set: (h) => { const e = statusEl(); if (e) e.innerHTML = h; } },
         pauseTimeline: (position) => { timeline.elapsedMs = position; timeline.playing = false; syncAnimationLoopState(); },
         applyFrame: () => applyTimelineFrame(),
