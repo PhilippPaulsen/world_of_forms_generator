@@ -75,9 +75,9 @@ function run(shape, X, Y) {
             const r = run('square', X, Y), w_ = X * Y, want = w_ < 7 || w_ > 12, text = T(lang, 'net.hint.optimum', { w: w_ });
             if (r.infoHidden) note('infoHidden', [lang, X, Y]);
             if (want !== r.info.includes(text)) note('optimum', [lang, X, Y, w_, want, r.info.slice(-80)]);
-            if (!want && /Hinterreiter|Maschen|meshes/.test(r.info.replace(/Hinterreiter's/g, ''))) note('extra', [lang, X, Y]);
+            if (!want && /Hinterreiter|Maschen|meshes/.test(r.info.replace(/ ?(Net family|Netzfamilie) [^)]*\)\./g, '').replace(/Hinterreiter's/g, ''))) note('extra', [lang, X, Y]);
         }
-        for (const shape of ['triangle', 'hex']) for (const [X, Y] of [[3, 3], [5, 5], [9, 9], [3, 5]]) { const r = run(shape, X, Y); if (/Hinterreiter|Maschen|7 to 12|7 bis 12/.test(r.info)) note('triOptimum', [lang, shape, X, Y]); }
+        for (const shape of ['triangle', 'hex']) for (const [X, Y] of [[3, 3], [5, 5], [9, 9], [3, 5]]) { const r = run(shape, X, Y); if (/Hinterreiter|Maschen|7 to 12|7 bis 12/.test(r.info.replace(/ ?(Net family|Netzfamilie) [^)]*\)\./g, ''))) note('triOptimum', [lang, shape, X, Y]); }
     }
     LANG = 'de';
     // the readout line is the old one (byte-equal to main for odd sizes): no optimum text, the same words at an even size
