@@ -110,6 +110,7 @@ const INVENTORY = {
     'layer-node-count-input': ['integer (inputmode none)', 'ui.js UI.stepper + sketch.js', 'parseInt'],
     'layer-shape-size-input': ['integer (inputmode none)', 'ui.js UI.stepper + sketch.js', 'parseInt'],
     'farbe-anchor-hue-input': ['integer (inputmode none)', 'ui.js UI.stepper (ui-farbe.js)', 'parseInt'],
+    'export-anim-frames': ['integer (inputmode numeric), the frame count of the animation export, 2 or more', 'sketch.js animExportRefresh / animExportStart', 'Number(E.frames.value), whole numbers only'],   // task 116
     'morph-angle-input': ['text, readonly display of the morph angle ("135\u00B0"), no typing, inputmode none', 'ui-morph.js UI.stepper with a compute() (45 degree grid, wrap)', 'parseFloat(input.value)'],   // stage e2a
 };
 T('inventory', () => {
