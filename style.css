@@ -1326,6 +1326,19 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
   .dialog-content .restart-actions button:hover { background: var(--hover-bg); }
 }
 
+/* === The animation export block in the Download dialog (task 116; index.html #export-anim, sketch.js animExport*()) ===================================================================
+   A column inside .dialog-content: no html.ph rule is needed (the dialog scrolls, the buttons, the select and the number field already get the --target size from the phone and the coarse rules). */
+.export-anim { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--text); }
+.export-anim[hidden], .export-anim-run[hidden] { display: none; }
+.export-anim-title { margin: 0; font-weight: 600; }
+.export-anim-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; }
+.export-anim-row input[type="number"] { width: 6em; }
+.export-anim-note { margin: 0; min-height: 1.2em; font-size: 0.9em; }
+.export-anim-run { display: flex; flex-direction: column; gap: 6px; }
+.export-anim-run progress { width: 100%; }
+.export-anim .format-btn[aria-pressed="true"] { background: var(--text); color: var(--background); }
+.export-anim .format-btn:disabled { opacity: 0.5; cursor: default; }
+
 /* === The layer strip (layer-table commit 4; ui-layers.js builds it) ==================================================================================================
    The phone view of the same model: two rows of --target buttons with 8px gaps, left-aligned at the gutter (.canvas-row's 16px padding), directly under the canvas. Shown below 768px for
    BOTH pointer types (from 768px the rail or the table shows). Row 1 (.lr-g1) = the Base chip and "+" (fixed) around the layer chips, which scroll SIDEWAYS (.lr-chips: overflow-x: auto, no
