@@ -135,6 +135,15 @@ const refCrc = (b) => (typeof zlib.crc32 === 'function') ? zlib.crc32(b) : Numbe
         check('data that is not a Uint8Array throws (a string, an ArrayBuffer, an array)', await (async () => { for (const d of ['abc', new ArrayBuffer(3), [1, 2]]) if (!(await rejectsR(() => W().add('a', d), /Uint8Array/))) return false; return true; })());
         check('add() or finish() after finish() throws', await (async () => { const w = W(); w.finish(); return (await rejectsR(() => w.add('a', new Uint8Array(1)), /finish/)) && throwsR(() => w.finish(), /finish/); })());
         check('method deflate without a function throws; an unknown method throws; a deflate that gives no Uint8Array throws', throwsR(() => A.animZipWriter({ method: 'deflate' }), /deflate/) && throwsR(() => A.animZipWriter({ method: 'bzip2' }), /method/) && await rejectsR(() => A.animZipWriter({ method: 'deflate', deflate: () => 'x' }).add('a', new Uint8Array(1)), /Uint8Array/));
+        {   // task 116: a handle (a Blob of the same bytes) goes into the parts in place of the data
+            const w = A.animZipWriter({}), raw = [crypto.randomBytes(3000), crypto.randomBytes(10)], blobs = raw.map(b => new Blob([b]));
+            for (let i = 0; i < 2; i++) await w.add(`h${i}.png`, new Uint8Array(raw[i]), blobs[i]);
+            const res = w.finish();
+            const bufs = []; for (const p of res.parts) bufs.push(p instanceof Blob ? Buffer.from(await p.arrayBuffer()) : Buffer.from(p.buffer, p.byteOffset, p.byteLength));
+            const buf = Buffer.concat(bufs); let rd, err = null; try { rd = readZip(buf); } catch (e) { err = e.message; }
+            check('add(name, bytes, handle): the Blob handles are the parts (the bytes arrays are not kept), the ZIP reads back with the right bytes, CRC and size', !err && res.parts.includes(blobs[0]) && res.parts.includes(blobs[1]) && !res.parts.some(p => p instanceof Uint8Array && p.length === 3000) && res.size === buf.length && rd.length === 2 && rd[0].data.equals(raw[0]) && rd[1].data.equals(raw[1]) && rd[0].crc === refCrc(raw[0]), err || '');
+            check('a handle with method deflate throws (the handle would not be the compressed data)', await rejectsR(() => A.animZipWriter({ method: 'deflate', deflate: (b) => b }).add('a.svg', new Uint8Array(2), new Blob([new Uint8Array(2)])), /handle/));
+        }
     }
     console.log('== 5. the limits of the format ==');
     {

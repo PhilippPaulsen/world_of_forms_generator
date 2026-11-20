@@ -77,8 +77,10 @@ function animZipWriter(opts) {
     const entries = [], names = new Set(), parts = [];
     let offset = 0, finished = false;
 
-    // add(name, bytes): bytes = the UNcompressed Uint8Array. Resolves once the entry is in (always a Promise: deflate may be asynchronous).
-    async function add(name, bytes) {
+    // add(name, bytes, handle): bytes = the UNcompressed Uint8Array (CRC, size, and for deflate the input). handle (optional, task 116) = what goes into the PARTS in place of the stored data: a Blob of the
+    // very same bytes, so the caller need not keep every frame as a Uint8Array in the JS heap. It is the caller's word that the handle holds exactly the bytes that would have gone in (store: `bytes`;
+    // deflate: the compressed bytes, which the caller then has to produce itself, so the handle is for store). Resolves once the entry is in (always a Promise: deflate may be asynchronous).
+    async function add(name, bytes, handle) {
         if (finished) throw new Error('animZipWriter: finish() was already called');
         if (!(bytes instanceof Uint8Array)) throw new TypeError('animZipWriter: data must be a Uint8Array');
         if (entries.length >= animZipMaxEntries) throw new RangeError('animZipWriter: more than ' + animZipMaxEntries + ' entries need ZIP64 (not supported)');
@@ -100,7 +102,8 @@ function animZipWriter(opts) {
         v.setUint32(0, 0x04034b50, true); v.setUint16(4, 20, true); v.setUint16(6, 0, true); v.setUint16(8, m, true); v.setUint16(10, animZipDosTime, true); v.setUint16(12, animZipDosDate, true);
         v.setUint32(14, crc, true); v.setUint32(18, data.length, true); v.setUint32(22, bytes.length, true); v.setUint16(26, nm.length, true); v.setUint16(28, 0, true);
         lh.set(nm, 30);
-        parts.push(lh, data);
+        if (handle !== undefined && method !== 'store') throw new RangeError('animZipWriter: a handle is for method "store" only');
+        parts.push(lh, handle !== undefined ? handle : data);
         entries.push({ nm, m, crc, csize: data.length, usize: bytes.length, offset });
         names.add(name);
         offset = used;
