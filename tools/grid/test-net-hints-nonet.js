@@ -27,7 +27,7 @@ function run(shape, X, Y) {
     kinds[0].press(); kinds[1].press(); const inp = els.get('#net-strength-input'); inp.value('50'); inp.inputFn(); sb.netControlsSync();
     return toasts.join(' | ');
 }
-const sq = run('square', 2, 2), tri = run('triangle', 2, 2)   /* task 108: 4/4 is a Field of the triangle now; the triangle's no-net case is a size below 3 */, hex = run('hex', 3, 4);
+const sq = run('square', 2, 2), tri = run('triangle', 2, 2)   /* task 108: 4/4 is a Field of the triangle now; the triangle's no-net case is a size below 3 */, hex = run('hex', 2, 2)   /* task 109: 3/4 is a Field of the hexagon now; its no-net case is a size below 3 */;
 check('(1) square at a size below 3 (task 106: 4/4 is a Field of the square now, no hint; task 108: and of the triangle: its no-net case is 2/2): the hint says "Einzelnetz" (a Single net is drawn); triangle and hexagon: "kein Netz" and not "Einzelnetz"', /Einzelnetz/.test(sq) && /kein Netz/.test(tri) && !/Einzelnetz/.test(tri) && /kein Netz/.test(hex) && !/Einzelnetz/.test(hex), J([sq, tri, hex]));
 const ictx = vm.createContext({ window: {}, document: undefined, console }); ictx.window.document = undefined;
 vm.runInContext(fs.readFileSync(process.env.UI_I18N_JS || path.join(ROOT, 'ui-i18n.js'), 'utf8'), ictx, { filename: 'ui-i18n.js' });

@@ -453,7 +453,7 @@
     // ---- the Info card (sheets redesign, commit 6b): the sections "Netz" and "Zeitleiste"; each line is one key, the German is the text of the markup; short on purpose (6c): no line over 140 characters ----
     'info.net.title': { de: 'Netz', en: 'Net' },
     'info.net.kinds': { de: 'Sinus: Maschen zum Kachelrand hin schmaler. Tangens: breiter. Geometrisch: gleiches Verhältnis.', en: 'Sine: meshes get narrower towards the tile edge. Tangent: wider. Geometric: same ratio each step.' },
-    'info.net.field': { de: 'Feld: ein Gesetz über alle Kacheln; bei Quadrat und Dreieck Größe 3 bis 9, beim Sechseck ungerade Größe von 3 bis 9.', en: 'Field: one law across all tiles; size 3 to 9 on the square and the triangle, odd size 3 to 9 on the hexagon.' },
+    'info.net.field': { de: 'Feld: ein Gesetz über alle Kacheln; Größe 3 bis 9.', en: 'Field: one law across all tiles; size 3 to 9.' },
     'info.net.locks': { de: 'Solange ein Netz aktiv ist, sind Kurve und Frei aus.', en: 'While a net is active, Curve and Free are off.' },
     'info.tl.title': { de: 'Zeitleiste', en: 'Timeline' },
     'info.tl.keyframes': { de: 'Ein Keyframe ist eine Ebene mit gefüllter Raute. Sie muss zum vorigen passen (Form, Ordnung, Lage, Größe, Symmetrie, Linienzahl).', en: 'A keyframe is a layer with a filled diamond. It must match the previous one (shape, order, position, size, symmetry, number of lines).' },

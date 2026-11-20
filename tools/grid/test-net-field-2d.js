@@ -120,11 +120,11 @@ const metrics = (w, X, Y, spec) => {
         if (segs.some(s => s.x1 < -1e-6 || s.x2 > W_ + 1e-6 || s.y1 < -1e-6 || s.y2 > H_ + 1e-6 && false)) note('drawn', [X, Y]);
     }
     check(`(2a) small axes, an axis below 3 (${n} sizes): Single with domainIgnored, no field, export domain 'single', faces blocked, dots = line ends`, n === 8 && !bad.first, J(bad));
-    for (const [shape, X, Y] of [['hex', 4, 4], ['hex', 3, 4], ['triangle', 2, 2], ['triangle', 1, 3]]) {   // task 088/089: the triangle and the hexagon have a Field at odd sizes now; task 108: the triangle at every size 3..9 (test-net-field-triangle-even.js), so only an axis below 3 is no net there; the hexagon at an even axis
+    for (const [shape, X, Y] of [['hex', 2, 2], ['hex', 1, 3], ['triangle', 2, 2], ['triangle', 1, 3]]) {   // task 088/089: the triangle and the hexagon have a Field at odd sizes now; task 108: the triangle at every size 3..9 (test-net-field-triangle-even.js), so only an axis below 3 is no net there; the hexagon at an even axis
         const ws = world(shape); setup(ws, shape, X, Y, FIELD);
         if (ws.get('netWarpBaseNow()') !== null || ws.get('netWarpActive()') !== false || ws.get('buildExportData(null).meta.netTransform') !== undefined) note('shape', [shape, X, Y]);
     }
-    check('(2b) hexagon at an even axis (4/4, 3/4) and triangle with an axis below 3 (2/2, 1/3): no net warp at all, no netTransform in the export', !bad.first, J(bad));
+    check('(2b) hexagon and triangle with an axis below 3 (2/2, 1/3; tasks 108 / 109: the even sizes 3..9 are a Field): no net warp at all, no netTransform in the export', !bad.first, J(bad));
 }
 
 // ---- 3. export, session, timeline --------------------------------------------------------------------------------------------------------------------------

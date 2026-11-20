@@ -57,7 +57,7 @@ T('dictionary', () => {
     check('the statements have no {placeholders} (the card is static text)', ALL.every(k => !/\{\w+\}/.test(DICT[k].de) && !/\{\w+\}/.test(DICT[k].en)));
     const want = {
         'info.net.kinds': ['Sinus: Maschen zum Kachelrand hin schmaler. Tangens: breiter. Geometrisch: gleiches Verhältnis.', 'Sine: meshes get narrower towards the tile edge. Tangent: wider. Geometric: same ratio each step.'],
-        'info.net.field': ['Feld: ein Gesetz über alle Kacheln; bei Quadrat und Dreieck Größe 3 bis 9, beim Sechseck ungerade Größe von 3 bis 9.', 'Field: one law across all tiles; size 3 to 9 on the square and the triangle, odd size 3 to 9 on the hexagon.'],   // task 108: the triangle's Field takes every size 3..9 too (wording approved in the plan 108; before: task 106 for the square)
+        'info.net.field': ['Feld: ein Gesetz über alle Kacheln; Größe 3 bis 9.', 'Field: one law across all tiles; size 3 to 9.'],   // task 109: all three shapes take every size 3..9 (wording approved in the plan 109; before: task 108 triangle, task 106 square)
         'info.net.locks': ['Solange ein Netz aktiv ist, sind Kurve und Frei aus.', 'While a net is active, Curve and Free are off.'],
         'info.tl.keyframes': ['Ein Keyframe ist eine Ebene mit gefüllter Raute. Sie muss zum vorigen passen (Form, Ordnung, Lage, Größe, Symmetrie, Linienzahl).', 'A keyframe is a layer with a filled diamond. It must match the previous one (shape, order, position, size, symmetry, number of lines).'],
         'info.tl.net': ['Das Netz bewegt sich nur, wenn jeder Keyframe ein Netz hat und je zwei benachbarte Netze zusammenpassen.', 'The net only moves when every keyframe has a net and each two neighbouring nets fit together.']

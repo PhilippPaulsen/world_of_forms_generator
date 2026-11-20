@@ -1,6 +1,6 @@
 // Task 108 (T1): the Field of the TRIANGLE at every size 3..9 (even too, no shift), the hexagon at odd sizes only, the square as in task 106 - the controls, texts, stepper.
 //   node tools/ui/test-net-triangle-even-ui.js      sabotage runs (section 6): the test runs ITSELF against mutated copies via NETWARP_JS, SKETCH_JS, UI_FORM_JS, UI_I18N_JS
-//   1. hint table (shape x size): triangle Field 3..9 (toast-free, enabled, own title), size < 3 no net with note.net.fieldMinSizeNoNet / net.hint.fieldMin; hexagon and square keep their texts; keys in de AND en
+//   1. hint table (shape x size): triangle Field 3..9 (toast-free, enabled, own title), size < 3 no net with note.net.fieldMinSizeNoNet / net.hint.fieldMin; the square keeps its texts (the hexagon: test-net-hex-even-ui.js); keys in de AND en
 //   2. the optimum hint (7..12 meshes) never appears for the triangle (nor the hexagon), still for the square
 //   3. the size stepper: triangle Field steps by one 3..9 (lock closed and open), hexagon keeps odd twos, square as before
 //   4. the size-change note at a size below 3: triangle note.size.fieldNetNoNetMin, hexagon note.size.fieldNetNoNet, square note.size.fieldNet
@@ -67,17 +67,7 @@ let TABLE = [];
             if (r.btnTitle !== 'Field needs Shape Size 3 or more in X and Y') note('triBtnTitle', [X, Y, r.btnTitle]);
         }
     }
-    for (const [X, Y] of [[3, 3], [5, 5], [3, 5], [9, 9], [4, 4], [3, 4], [4, 3], [6, 5], [8, 8], [2, 2], [1, 3]]) {   // the hexagon: odd sizes a Field, every other size the OLD texts
-        const r = run('hex', X, Y); n++; const odd = X % 2 === 1 && Y % 2 === 1 && X >= 3 && Y >= 3;
-        TABLE.push(['hex', sz(X, Y), odd ? 'Feld' : 'kein Netz', r.toasts || '-', r.hintKey, r.btnTitle.slice(0, 40)]);
-        if (odd) { if (r.domain !== 'field' || r.btnDisabled || !r.hintHidden || r.toasts !== '' || r.warp !== 'field') note('hexOdd', [X, Y, r.domain, r.toasts]); }
-        else {
-            if (r.domain === 'field' || r.warp !== null) note('hexEvenField', [X, Y, r.domain, r.warp]);
-            if (!r.btnDisabled || r.hintHidden || r.hintKey !== 'net.hint.fieldOdd' || r.hintText !== T('de', 'net.hint.fieldOdd')) note('hexHint', [X, Y, r.hintKey, r.hintText]);
-            if (!r.toasts.includes(T('de', 'note.net.fieldOddSizeNoNet', { size: sz(X, Y), kept: sz(X, Y) }))) note('hexToast', [X, Y, r.toasts]);
-            if (r.btnTitle !== 'Field needs an odd Shape Size in X and Y (3, 5, 7, 9)') note('hexTitle', [X, Y, r.btnTitle]);
-        }
-    }
+    // task 109: the hexagon takes every size 3..9 too: its table is in test-net-hex-even-ui.js
     for (const [X, Y] of [[3, 3], [4, 4], [6, 5], [2, 2], [1, 3]]) {   // the square: as in task 106
         const r = run('square', X, Y); n++; const ok = X >= 3 && Y >= 3;
         if (ok !== (r.domain === 'field' && r.warp === 'field')) note('sq', [X, Y, r.domain, r.warp]);
@@ -86,7 +76,7 @@ let TABLE = [];
     LANG = 'en';   // the same table in english: the right english text in the right case
     for (const [X, Y] of [[4, 4], [2, 2]]) { const r = run('triangle', X, Y); if (X >= 3 ? r.toasts !== '' || r.btnTitle !== T('en', 'net.domain.field.titleEven') : !r.toasts.includes(T('en', 'note.net.fieldMinSizeNoNet', { size: X, kept: X })) || r.hintText !== T('en', 'net.hint.fieldMin')) note('triEn', [X, Y, r.toasts, r.hintText, r.btnTitle]); n++; }
     LANG = 'de';
-    check(`(1) hint table (${n} runs): triangle 3..9 (also even) is a Field (no toast, enabled, own title), a size below 3 has no net with note.net.fieldMinSizeNoNet / net.hint.fieldMin; hexagon and square keep their texts; all ${KEYS_NEW.length + KEYS_HEX.length} keys in de and en`, !bad.first && n === 13 + 11 + 5 + 2, J(bad));
+    check(`(1) hint table (${n} runs): triangle 3..9 (also even) is a Field (no toast, enabled, own title), a size below 3 has no net with note.net.fieldMinSizeNoNet / net.hint.fieldMin; the square keeps its texts (the hexagon: test-net-hex-even-ui.js); all ${KEYS_NEW.length + KEYS_HEX.length} keys in de and en`, !bad.first && n === 13 + 5 + 2, J(bad));
     console.log('TABLE', J(TABLE));
 }
 
@@ -96,7 +86,6 @@ let TABLE = [];
     for (const lang of ['de', 'en']) {
         LANG = lang;
         for (const shape of ['triangle', 'hex']) for (const [X, Y] of [[3, 3], [4, 4], [3, 4], [4, 3], [5, 5], [6, 5], [8, 8], [9, 9], [3, 5], [5, 3]]) {
-            if (shape === 'hex' && (X % 2 === 0 || Y % 2 === 0)) continue;
             const r = run(shape, X, Y); n++; const text = T(lang, 'net.hint.optimum', { w: X * Y });
             if (r.infoHidden) note('infoHidden', [lang, shape, X, Y]);
             if (r.info.includes(text) || /Hinterreiter|Maschen|7 to 12|7 bis 12|meshes/.test(r.info.replace(/Hinterreiter's/g, ''))) note('optimum', [lang, shape, X, Y, r.info.slice(-90)]);
@@ -125,22 +114,22 @@ let TABLE = [];
         [stepper('triangle', true, 3, 4, true, 'x', 1), { to: 4 }], [stepper('triangle', true, 3, 4, true, 'y', 1), { to: 5 }], [stepper('triangle', true, 3, 4, true, 'y', -1), { to: 3 }], [stepper('triangle', true, 4, 3, true, 'y', -1), { to: null, reason: 'SQMIN' }],
         [stepper('triangle', true, 3, 9, true, 'y', 1), { to: null, reason: 'MAX' }], [stepper('triangle', true, 3, 9, true, 'x', 1), { to: 4 }], [stepper('triangle', true, 3, 9, true, 'x', -1), { to: null, reason: 'SQMIN' }], [stepper('triangle', true, 3, 8, true, 'y', 1), { to: 9 }],
         [stepper('triangle', true, 6, 9, true, 'x', 1), { to: 7 }], [stepper('triangle', true, 3, 3, false, 'y', -1), { to: 2 }],
-        // hexagon: odd twos, as before
-        [stepper('hex', false, 5, 5, true, 'x', 1), { to: 7, note: 'NOTE57' }], [stepper('hex', false, 5, 5, true, 'x', -1), { to: 3, note: 'NOTE53' }], [stepper('hex', false, 3, 3, true, 'x', -1), { to: null, reason: 'FMIN' }], [stepper('hex', true, 3, 5, true, 'x', 1), { to: 5, note: 'NOTE35' }], [stepper('hex', false, 9, 9, true, 'x', 1), { to: null, reason: 'MAX' }],
+        // hexagon (task 109): steps of one
+        [stepper('hex', false, 5, 5, true, 'x', 1), { to: 6 }], [stepper('hex', false, 5, 5, true, 'x', -1), { to: 4 }], [stepper('hex', false, 3, 3, true, 'x', -1), { to: null, reason: 'SQMIN' }], [stepper('hex', true, 3, 5, true, 'x', 1), { to: 4 }], [stepper('hex', false, 9, 9, true, 'x', 1), { to: null, reason: 'MAX' }],
         // square: as in 106
         [stepper('square', false, 4, 4, true, 'x', 1), { to: 5 }], [stepper('square', false, 3, 3, true, 'x', -1), { to: null, reason: 'SQMIN' }], [stepper('square', true, 3, 4, true, 'y', 1), { to: 5 }],
         // no Field: steps of one
         [stepper('triangle', false, 4, 4, false, 'x', 1), { to: 5 }], [stepper('hex', false, 2, 2, false, 'x', -1), { to: 1 }],
     ];
     const bad = cases.map(([got, want], i) => [i, got, J(want)]).filter(([, a, b]) => a !== b);
-    check(`(3) sizeCompute: the triangle's Field steps by one from 3 to 9 (lock closed and open; SQMIN below 3, MAX above 9, ratio 1:3 respected), the hexagon keeps odd twos with their notes, the square as in 106, no Field steps by one (${cases.length} cases)`, bad.length === 0 && cases.length >= 27, J(bad));
+    check(`(3) sizeCompute: the triangle's Field steps by one from 3 to 9 (lock closed and open; SQMIN below 3, MAX above 9, ratio 1:3 respected), the hexagon (task 109) steps by one too, the square as in 106, no Field steps by one (${cases.length} cases)`, bad.length === 0 && cases.length >= 27, J(bad));
 }
 
 // ---- 4. the size-change note below 3 ---------------------------------------------------------------------------------------------------------------------
 {
     const bad = {}; const note = (k, v) => { bad[k] = (bad[k] || 0) + 1; if (!bad.first) bad.first = [k, v]; };
     const fnText = SKETCH.slice(SKETCH.indexOf('function sizeChangeText(r) {'), SKETCH.indexOf('function saySizeChange'));
-    for (const lang of ['de', 'en']) for (const [shape, key] of [['triangle', 'note.size.fieldNetNoNetMin'], ['hex', 'note.size.fieldNetNoNet'], ['square', 'note.size.fieldNet']]) {
+    for (const lang of ['de', 'en']) for (const [shape, key] of [['triangle', 'note.size.fieldNetNoNetMin'], ['hex', 'note.size.fieldNetNoNetMin'], ['square', 'note.size.fieldNet']]) {
         LANG = lang;
         const w = makeRenderWorld(shape, 3, 3, 'rotation_reflection6', FILES), sb = w.sb;
         w.set(`currentShape = ${J(shape)}; projectGridSpec({ shape: ${J(shape)}, ordnung: 4, lage: 1 }); shapeSizeFactorX = null; shapeSizeFactorY = null; canvasW = 600; canvasH = 600; setGridSize(3, 3); rebuildGrid(currentShape); baseNetTransform = { x: { kind: 'trig', w: -0.5 }, y: 'same', repeat: false, domain: 'field' };`);
@@ -180,16 +169,14 @@ if (!CHILD) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'evenui108-'));
     const rd = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
     const SAB = [
-        ['the hexagon gets even sizes', 'NETWARP_JS', 'core/netwarp.js', "(sq || shape === 'triangle') && n % 2 === 0", "(sq || shape === 'triangle' || shape === 'hex') && n % 2 === 0"],
         ['size 2 opens the triangle Field', 'NETWARP_JS', 'core/netwarp.js', "else if (n < (sq ? netFieldMinTiles : 3))", "else if (n < (sq || shape === 'triangle' ? 2 : 3))"],
-        ['stepper: the triangle steps in odd twos (lock closed)', 'UI_FORM_JS', 'ui-form.js', "function fieldAnySize() { return typeof currentShape !== 'undefined' && (currentShape === 'square' || currentShape === 'triangle'); }", "function fieldAnySize() { return typeof currentShape !== 'undefined' && currentShape === 'square'; }"],
+        ['stepper: the triangle steps in odd twos (lock closed)', 'UI_FORM_JS', 'ui-form.js', "function fieldAnySize() { return typeof currentShape !== 'undefined' && (currentShape === 'square' || currentShape === 'triangle' || currentShape === 'hex'); }", "function fieldAnySize() { return typeof currentShape !== 'undefined' && (currentShape === 'square' || currentShape === 'hex'); }"],
         ['hint key note.net.fieldMinSizeNoNet without english', 'UI_I18N_JS', 'ui-i18n.js', "en: 'Field needs size 3 or more in X and Y; at {size} there is no net here. The size stays {kept}.' },\n    'note.net.fieldMinSize'", "en: '' },\n    'note.net.fieldMinSize'"],
         ['key note.size.fieldNetNoNetMin missing', 'UI_I18N_JS', 'ui-i18n.js', "'note.size.fieldNetNoNetMin': {", "'note.size.fieldNetNoNetMinX': {"],
         ['title text mentions the odd rule', 'UI_I18N_JS', 'ui-i18n.js', "en: 'Field: the law spans all tiles; each tile is a scaled copy of the clicked pattern (size 3 to 9)'", "en: 'Field: the law spans all tiles at odd sizes; each tile is a scaled copy of the clicked pattern (size 3 to 9)'"],
         ['the optimum hint also for the triangle', 'SKETCH_JS', 'sketch.js', "const optHint = sqShape && window.UI", "const optHint = evenShape && window.UI"],
-        ['the triangle keeps the odd hint line', 'SKETCH_JS', 'sketch.js', "const hk = evenShape ? 'net.hint.fieldMin' : 'net.hint.fieldOdd';", "const hk = sqShape ? 'net.hint.fieldMin' : 'net.hint.fieldOdd';"],
-        ['the triangle size-change note is the hexagon one', 'SKETCH_JS', 'sketch.js', "currentShape === 'triangle' ? t('note.size.fieldNetNoNetMin'", "false ? t('note.size.fieldNetNoNetMin'"],
-        ['the hexagon is read as evenShape', 'SKETCH_JS', 'sketch.js', "evenShape = sqShape || currentShape === 'triangle';", "evenShape = sqShape || currentShape === 'triangle' || currentShape === 'hex';"],
+        ['the triangle keeps the odd hint line', 'SKETCH_JS', 'sketch.js', "const hk = evenShape ? 'net.hint.fieldMin' : 'net.hint.fieldOdd';", "const hk = sqShape || currentShape === 'hex' ? 'net.hint.fieldMin' : 'net.hint.fieldOdd';"],
+        ['the triangle size-change note is the hexagon one', 'SKETCH_JS', 'sketch.js', "currentShape !== 'square' ? t('note.size.fieldNetNoNetMin'", "false ? t('note.size.fieldNetNoNetMin'"],
     ];
     let red = 0; const notRed = [];
     SAB.forEach(([name, envKey, file, from, to], i) => {
