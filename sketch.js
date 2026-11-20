@@ -717,7 +717,8 @@ function setup() {
             const isField = ui.domain === 'field', E0 = baseGridDivisions();
             if (fieldInfo.elt.hidden !== !(active && isField)) fieldInfo.elt.hidden = !(active && isField);
             const optHint = sqShape && window.UI && UI.t && (Rs.x * Rs.y < 7 || Rs.x * Rs.y > 12) ? ' ' + UI.t('net.hint.optimum', { w: Rs.x * Rs.y }) : '';   // task 106: the optimum of Hinterreiter II p. 17 (7 to 12 meshes for squares) as a hint only, here and not in the readout
-            if (active && isField) htmlOnce(fieldInfo, `Field: macro = R = ${R} tiles, micro = E = ${E0} per tile. Face fills are exact on a Field and work for the base sheet and for layers on the base grid (same shape and size, no offset, no rotation - every timeline playback layer); other layers are not filled.${optHint}`);
+            const famHint = evenShape && window.UI && UI.t ? ' ' + UI.t('net.family.info.' + currentShape) : '';   // task 111: the net family of the shape (Hinterreiter vol. II), after the optimum hint
+            if (active && isField) htmlOnce(fieldInfo, `Field: macro = R = ${R} tiles, micro = E = ${E0} per tile. Face fills are exact on a Field and work for the base sheet and for layers on the base grid (same shape and size, no offset, no rotation - every timeline playback layer); other layers are not filled.${optHint}${famHint}`);
             // The Shape Size hint says what Shape Size does in the CURRENT mode
             const hintText = !active ? null
                 : ui.domain === 'single' ? (Rmin > 1 ? 'Single: one closed net. Shape Size 1 fills the canvas, larger sizes give a smaller net; Field (Shape Size 3-9) spreads the law over all the tiles instead.' : null)
