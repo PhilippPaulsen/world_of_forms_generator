@@ -1455,14 +1455,14 @@
         </div>
         <div id="net-macro-hint" hidden></div>
         <!-- Domain: Single = one closed net (default), Tiled = the warped tile repeated by Shape Size, Field = the law
-             over the whole repeated span (Shape Size 3-9 on the square and the triangle, odd 3-9 on the hexagon; each tile an affine copy - Hinterreiter's Netzart 1.1).
+             over the whole repeated span (Shape Size 3-9 on the square, the triangle and the hexagon; each tile an affine copy - Hinterreiter's Netzart 1.1).
              sketch.js's netControlsSync() disables Field at a size it does not take and resets it, visibly. -->
         <div class="icon-row" id="net-domain-row">
           <button class="layer-btn net-domain-btn active" data-domain="single" id="net-domain-single" title="Einzeln: ein geschlossenes Netz, wie in Hinterreiters Figuren (Größe 1 füllt die Fläche)" data-i18n="net.domain.single" data-i18n-title="net.domain.single.title">Einzeln</button>
           <button class="layer-btn net-domain-btn" data-domain="tiled" id="net-domain-tiled" title="Gekachelt: die gewarpte Kachel wird so oft über die Fläche wiederholt, wie die Größe sagt, jede Kopie gleich" data-i18n="net.domain.tiled" data-i18n-title="net.domain.tiled.title">Gekachelt</button>
           <button class="layer-btn net-domain-btn" data-domain="field" id="net-field-btn" title="Feld: das Gesetz spannt über alle Größe × Größe Kacheln; jede Kachel ist eine skalierte Kopie des angeklickten Musters (ungerade Größe 3, 5, 7, 9)" data-i18n="net.domain.field" data-i18n-title="net.domain.field.title">Feld</button>
         </div>
-        <div id="net-field-hint" hidden data-i18n="net.hint.fieldOdd">Feld braucht ungerade Größen in X und Y (3, 5, 7, 9).</div>
+        <div id="net-field-hint" hidden data-i18n="net.hint.fieldMin">Feld braucht in X und Y mindestens Größe 3.</div>
         <div id="net-field-info" hidden></div>
         <div class="icon-row">
           <button class="layer-btn" id="net-lines-btn" title="Netzlinien zeigen" aria-label="Netzlinien zeigen" data-i18n="netz.lines.button"></button>
@@ -1589,7 +1589,7 @@
       <details class="info-section" id="info-net">
         <summary data-i18n="info.net.title">Netz</summary>
         <p data-i18n="info.net.kinds">Sinus: Maschen zum Kachelrand hin schmaler. Tangens: breiter. Geometrisch: gleiches Verhältnis.</p>
-        <p data-i18n="info.net.field">Feld: ein Gesetz über alle Kacheln; bei Quadrat und Dreieck Größe 3 bis 9, beim Sechseck ungerade Größe von 3 bis 9.</p>
+        <p data-i18n="info.net.field">Feld: ein Gesetz über alle Kacheln; Größe 3 bis 9.</p>
         <p data-i18n="info.net.locks">Solange ein Netz aktiv ist, sind Kurve und Frei aus.</p>
       </details>
       <details class="info-section" id="info-tl">
