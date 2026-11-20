@@ -109,8 +109,8 @@ if (on('4')) {
     const ex = w.get('buildExportData(null)'), nt = ex.meta.netTransform;
     const wt = world('triangle', 'rotation_reflection6'); setup(wt, 'triangle', 5, 5, fieldSpec(LAWS.sinus), 'rotation_reflection6', 3); const nt2 = wt.get('buildExportData(null).meta.netTransform');
     const SK = fs.readFileSync(path.join(ROOT, 'sketch.js'), 'utf8');
-    check('(4) export: the hexagon Field writes faces (geometry.faces, facesOmitted false, facesMapping names the split), the triangle keeps its mapping text; the layers reason says Base sheet only',
-        nt.facesOmitted === false && Array.isArray(ex.geometry.faces) && ex.geometry.faces.length > 0 && /split/.test(nt.facesMapping) && nt2.facesOmitted === false && /per-tile affine map/.test(nt2.facesMapping) && /hexagon Field are drawn for the Base sheet only/.test(SK),
+    check('(4) export: the hexagon Field writes faces (geometry.faces, facesOmitted false, facesMapping names the split), the triangle keeps its mapping text; the layers reason: task 113 removed the hexagon-only sentence (a base-grid layer has faces)',
+        nt.facesOmitted === false && Array.isArray(ex.geometry.faces) && ex.geometry.faces.length > 0 && /split/.test(nt.facesMapping) && nt2.facesOmitted === false && /per-tile affine map/.test(nt2.facesMapping) && !/hexagon Field are drawn for the Base sheet only/.test(SK),
         J([nt.facesOmitted, nt.facesMapping && nt.facesMapping.slice(0, 40)]));
 }
 

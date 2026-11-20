@@ -4451,7 +4451,6 @@ function faceFillsUnavailableReason() {
     const nw = netWarpBaseNow();
     if (nw && !nw.field) return 'Face fills are off on a Single or Tiled net transform (the warp is not affine inside a tile, so faces would not fit the lines). Use Field (Shape Size 3-9), or set the net to Regular on the Base sheet.';
     if (nw && nw.field && activeLayer !== 'base' && !layerGridMatchesBase(additionalLayers[activeLayer])) return 'Face fills on a Field are drawn for the Base sheet and for layers on the base grid (same shape and size, no offset, no rotation) - this layer is offset, rotated or of another size, so its lines cross tile boundaries.';
-    if (nw && nw.refineFaces && activeLayer !== 'base') return 'Face fills on a hexagon Field are drawn for the Base sheet only (task 090).';
     if (curveType.kind !== 'straight') return 'Face fills need straight lines (curve/free mode is on; both are under Mehr).';
     if (activeLayer === 'base') return null;
     const l = additionalLayers[activeLayer];
