@@ -12,6 +12,7 @@ const SAB = [
     ['compressed size in the local header = the uncompressed size', 'v.setUint32(18, data.length, true); v.setUint32(22, bytes.length, true);', 'v.setUint32(18, bytes.length, true); v.setUint32(22, bytes.length, true);'],
     ['entry limit off by one (65 536 pass)', 'if (entries.length >= animZipMaxEntries) throw', 'if (entries.length > animZipMaxEntries) throw'],
     ['4 GiB check removed', 'used > animZipMaxBytes', 'false'],
+    ['the handle is ignored (the bytes go into the parts)', 'parts.push(lh, handle !== undefined ? handle : data);', 'parts.push(lh, data);'],
     ['frame names without padding', "String(i).padStart(Math.max(4, String(n).length), '0')", 'String(i)'],
 ];
 let bad = 0;

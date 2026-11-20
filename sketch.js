@@ -2030,15 +2030,18 @@ function setup() {
     if (dlBtn && exportOverlay) {
         dlBtn.mousePressed(() => {
             exportOverlay.removeClass('hidden');
+            animExportDialogOpened();
         });
         closeExportBtn && closeExportBtn.mousePressed(() => {
+            if (animExportCancelIfRunning()) return;   // task 116: while an animation export runs, Close / Escape cancel it
             exportOverlay.addClass('hidden');
         });
         // Close on background click
         exportOverlay.mousePressed((e) => {
-            if (e.target.id === 'export-overlay') exportOverlay.addClass('hidden');
+            if (e.target.id === 'export-overlay' && !animExportCancelIfRunning()) exportOverlay.addClass('hidden');
         });
     }
+    animExportInit();
 
     const pngBtn = select('#export-png');
     pngBtn && pngBtn.mousePressed(() => {
@@ -5423,4 +5426,197 @@ function addRandomConnection() {
     if (activeNodeArr.length < 2) return;
     let i = floor(random(activeNodeArr.length)); let j = floor(random(activeNodeArr.length));
     if (i === j) return; activeConnections().push([activeNodeArr[i].id, activeNodeArr[j].id]);
+}
+
+// ----------------- ANIMATION EXPORT: PNG SEQUENCE AS A ZIP (task 116, stage 2 of tasks/114-animationsexport-plan.md) -----------------
+// One frame of the timeline (or of the spatial morph, which follows timeline.elapsedMs) at progress t is setTimelineProgress(t) + redraw() + canvas.toBlob(): no clock is read while the timeline is paused.
+// runAnimationExport() is the whole procedure with its dependencies handed in (env), so tools/anim/test-anim-png-driver.js runs it on stand-ins; animExportEnv() wires the real page. The building blocks
+// (frame times, names, ZIP, estimate, limits) are core/anim-export.js. The eight timeline functions are only CALLED here. Nothing in draw() changes.
+// Codes: ok, cancelled, tooBig, static (bilinear), noTimeline, unresolved, otherClockPlaying, error.
+function timelineImageCheckIdle() {
+    const C = timelineImageCheck;
+    return C.timer === null && C.job.i >= C.job.queue.length;
+}
+// null when an export may start, else the code that says why not (nothing is changed).
+function animExportPrecheck(env) {
+    const tl = env.timeline();
+    if (!tl || !Array.isArray(tl.keyframeLayerIds) || tl.keyframeLayerIds.length < 2 || !Array.isArray(tl.segmentDurationsMs) || tl.segmentDurationsMs.length < 1) return 'noTimeline';
+    for (let s = 0; s < tl.segmentDurationsMs.length; s++) if (!env.segmentOk(s)) return 'unresolved';
+    if (env.otherClockPlaying()) return 'otherClockPlaying';
+    const sm = env.morphBlock();
+    if (sm && sm.enabled && sm.mode === 'bilinear') return 'static';
+    return null;
+}
+// opts = { fps | frames, density (1 | 2), bytesPerFrame (the estimate) }; env.onProgress({ phase: 'prepare' | 'frame', i, n, ms }).
+// The state is put back in every case (also a cancel and an error): the position, paused; the status text; the pixel density; the playback layer's frame.
+async function runAnimationExport(env, opts) {
+    const why = animExportPrecheck(env);
+    if (why) return { ok: false, code: why };
+    const tl = env.timeline(), total = env.totalMs();
+    let ft;
+    try { ft = animFrameTimes(opts.frames !== undefined ? { frames: opts.frames } : { totalMs: total, fps: opts.fps }); }
+    catch (e) { return { ok: false, code: 'error', message: String(e && e.message || e) }; }
+    const est = animExportEstimate({ frames: ft.n, bytesPerFrame: opts.bytesPerFrame });
+    if (!est.withinLimits) return { ok: false, code: 'tooBig', allowedFrames: est.allowedFrames, estimate: est };
+    const saved = { elapsedMs: tl.elapsedMs, startTime: tl.startTime, netLive: tl.netLive, currentFrame: tl.currentFrame, status: env.status.get(), density: env.density.get() };
+    let position = tl.elapsedMs;
+    if (tl.playing) position = Math.max(0, Math.min(total, env.millis() - tl.startTime));   // the same pause as toggleTimelinePlayback()
+    env.pauseTimeline(position);
+    const zip = animZipWriter({ method: 'store' });
+    let result;
+    try {
+        env.onProgress({ phase: 'prepare', i: 0, n: ft.n, ms: 0 });
+        const t0 = env.now();
+        while (!env.idle() && env.now() - t0 < 15000) { if (env.shouldCancel()) break; await env.sleep(50); }
+        if (!env.idle()) env.pauseBackground();   // still busy after 15 s: park the check for the export (its timer is re-armed by the next render of the pairing editor), else it takes a second of every frame
+        env.density.set(opts.density);
+        for (let i = 0; i < ft.n; i++) {
+            if (env.shouldCancel()) { result = { ok: false, code: 'cancelled', done: i }; break; }
+            const f0 = env.now();
+            env.setProgress(ft.times[i]);
+            env.redraw();
+            const blob = await env.toBlob();
+            if (!blob) throw new Error('the canvas gave no image');
+            const bytes = new Uint8Array(await blob.arrayBuffer());
+            await zip.add(animFrameName(i + 1, ft.n, 'png'), bytes, blob);   // the Blob goes into the parts, the bytes are dropped after the CRC
+            env.onProgress({ phase: 'frame', i: i + 1, n: ft.n, ms: env.now() - f0 });
+            await env.sleep(0);
+        }
+        if (!result) {
+            const z = zip.finish();
+            env.download(env.makeBlob(z.parts, 'application/zip'), 'world_of_forms_animation.zip');
+            result = { ok: true, code: 'ok', n: ft.n, bytes: z.size };
+        }
+    } catch (e) {
+        result = { ok: false, code: 'error', message: String(e && e.message || e) };
+    } finally {
+        try { env.density.set(saved.density); } catch (e) { }   // a failing density must not stop the rest of the restore (no block comment here: the old source-text tests strip comments with a regex)
+        tl.elapsedMs = position; tl.playing = false; tl.startTime = saved.startTime; tl.netLive = saved.netLive;
+        env.applyFrame();   // applyTimelineFrame(): the playback layer and currentFrame of the restored position
+        tl.currentFrame = saved.currentFrame;
+        env.status.set(saved.status);
+        env.syncLoop();
+        env.redraw();
+    }
+    return result;
+}
+// "1,2 MB" / "1.2 MB" (kB below a MiB); lang 'de' writes the comma.
+function animExportSizeText(bytes, lang) {
+    const mb = bytes / 1048576, v = mb >= 1 ? mb : Math.max(1, bytes / 1024), s = (v >= 10 ? Math.round(v) : Math.round(v * 10) / 10).toString();
+    return (lang === 'de' ? s.replace('.', ',') : s) + (mb >= 1 ? ' MB' : ' kB');
+}
+// the real page behind the env
+function animExportEnv(extra) {
+    const cv = () => document.querySelector('#canvas-container canvas');
+    const statusEl = () => document.getElementById('timeline-status');
+    return Object.assign({
+        timeline: () => timeline,
+        totalMs: () => totalTimelineDurationMs(timeline),
+        segmentOk: (s) => resolveTimelineKeyframeCoords(timeline, s).ok,
+        otherClockPlaying: () => additionalLayers.some(l => l.animation && l.animation.playing) || !!(baseNetAnimation && baseNetAnimation.playing),
+        morphBlock: () => getSpatialMorph(),
+        setProgress: (t) => setTimelineProgress(t),
+        redraw: () => redraw(),
+        toBlob: () => new Promise((resolve) => { const c = cv(); if (!c) resolve(null); else c.toBlob((b) => resolve(b), 'image/png'); }),
+        density: { get: () => pixelDensity(), set: (d) => { if (pixelDensity() !== d) pixelDensity(d); } },
+        millis: () => millis(),
+        now: () => performance.now(),
+        sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+        idle: () => timelineImageCheckIdle(),
+        pauseBackground: () => timelineImageCheckStop(),
+        status: { get: () => { const e = statusEl(); return e ? e.innerHTML : ''; }, set: (h) => { const e = statusEl(); if (e) e.innerHTML = h; } },
+        pauseTimeline: (position) => { timeline.elapsedMs = position; timeline.playing = false; syncAnimationLoopState(); },
+        applyFrame: () => applyTimelineFrame(),
+        syncLoop: () => syncAnimationLoopState(),
+        makeBlob: (parts, type) => new Blob(parts, { type }),
+        download: (blob, name) => downloadBlob(blob, name, 'application/zip'),
+        onProgress: () => { },
+        shouldCancel: () => false,
+    }, extra || {});
+}
+// ---- the dialog block (index.html #export-anim) ----
+const animExportUi = { fps: 24, density: 1, frames: null, running: false, cancel: false, seq: 0 };
+function animExportT(name, params) { const key = 'export.anim.' + name; return (window.UI && UI.t) ? UI.t(key, params) : key; }
+function animExportLang() { return (window.UI && UI.lang) || 'de'; }
+function animExportEls() {
+    const g = (id) => document.getElementById(id);
+    return { block: g('export-anim'), fps: g('export-anim-fps'), frames: g('export-anim-frames'), s1: g('export-anim-size1'), s2: g('export-anim-size2'), estimate: g('export-anim-estimate'), msg: g('export-anim-msg'),
+        start: g('export-anim-start'), progress: g('export-anim-progress'), progressText: g('export-anim-progress-text'), cancel: g('export-anim-cancel'), run: g('export-anim-run'), formats: ['export-png', 'export-json', 'export-svg'].map(g) };
+}
+function animExportCancelIfRunning() {
+    if (!animExportUi.running) return false;
+    animExportUi.cancel = true;
+    return true;
+}
+// what the dialog shows now: visibility, option texts, the estimate and the message; the start button follows
+async function animExportRefresh(keepMsg) {
+    const E = animExportEls(), U = animExportUi;
+    if (!E.block || U.running) return;
+    const have = !!(timeline && timeline.keyframeLayerIds.length >= 2 && timeline.segmentDurationsMs.length >= 1);
+    E.block.hidden = !have;
+    if (!have) return;
+    const seq = ++U.seq, env = animExportEnv(), total = env.totalMs(), auto = Math.max(2, Math.round(total / 1000 * U.fps));
+    if (U.frames === null) E.frames.value = String(auto);
+    Array.prototype.forEach.call(E.fps.options, (o) => { o.textContent = animExportT('fpsValue', { n: o.value }); });
+    E.fps.value = String(U.fps);
+    E.s1.textContent = animExportT('size1', { w: width, h: height }); E.s2.textContent = animExportT('size2', { w: width * 2, h: height * 2 });
+    E.s1.setAttribute('aria-pressed', String(U.density === 1)); E.s2.setAttribute('aria-pressed', String(U.density === 2));
+    const n = Number(E.frames.value), whole = Number.isInteger(n) && n >= 2;
+    let code = animExportPrecheck(env), text = '';
+    if (code === 'noTimeline') { E.block.hidden = true; return; }
+    if (!code && !whole) { code = 'framesInvalid'; }
+    let est = null;
+    if (!code) {
+        const c = document.querySelector('#canvas-container canvas');
+        const blob = c ? await new Promise((r) => c.toBlob((b) => r(b), 'image/png')) : null;   // the picture that is shown now: size per pixel x the pixels of the chosen density
+        if (seq !== U.seq || U.running) return;
+        const per = blob && c.width * c.height ? blob.size / (c.width * c.height) : 0.25;
+        est = animExportEstimate({ frames: n, bytesPerFrame: Math.round(per * width * height * U.density * U.density) });
+        text = animExportT('estimate', { size: animExportSizeText(est.totalBytes, animExportLang()), n });
+        if (!est.withinLimits) code = 'tooBig';
+    }
+    E.estimate.textContent = text;
+    if (!keepMsg || code) E.msg.textContent = code ? animExportT(code === 'otherClockPlaying' ? 'otherClock' : code, { max: est ? est.allowedFrames : '' }) : '';
+    E.start.disabled = !!code;
+}
+function animExportDialogOpened() {
+    const E = animExportEls();
+    if (E.msg) E.msg.textContent = '';
+    animExportRefresh();
+}
+async function animExportStart() {
+    const E = animExportEls(), U = animExportUi;
+    if (U.running || E.start.disabled) return;
+    const n = Number(E.frames.value), c = document.querySelector('#canvas-container canvas');
+    const blob = c ? await new Promise((r) => c.toBlob((b) => r(b), 'image/png')) : null;
+    const per = blob && c.width * c.height ? blob.size / (c.width * c.height) : 0.25;
+    const opts = { frames: n, density: U.density, bytesPerFrame: Math.round(per * width * height * U.density * U.density) };
+    U.running = true; U.cancel = false;
+    const lock = (on) => { [E.fps, E.frames, E.s1, E.s2, E.start].concat(E.formats).forEach((el) => { if (el) el.disabled = on; }); E.run.hidden = !on; E.start.hidden = on; };
+    lock(true);
+    E.msg.textContent = ''; E.progress.max = n; E.progress.value = 0; E.progressText.textContent = animExportT('prepare');
+    const env = animExportEnv({
+        shouldCancel: () => U.cancel,
+        onProgress: (p) => {
+            if (p.phase === 'prepare') { E.progressText.textContent = animExportT('prepare'); return; }
+            E.progress.value = p.i;
+            E.progressText.textContent = animExportT('progress', { i: p.i, n: p.n }) + (p.ms > 2500 ? ' · ' + animExportT('slow', { s: (p.ms / 1000).toFixed(1) }) : '');
+        },
+    });
+    const res = await runAnimationExport(env, opts);
+    U.running = false; U.cancel = false;
+    lock(false);
+    let key = res.code === 'ok' ? 'done' : (res.code === 'otherClockPlaying' ? 'otherClock' : res.code);
+    E.msg.textContent = animExportT(key, { n: res.n, size: res.bytes ? animExportSizeText(res.bytes, animExportLang()) : '', max: res.allowedFrames, msg: res.message });
+    await animExportRefresh(true);   // the outcome of this run stays in the message line unless the options now say something else
+}
+function animExportInit() {
+    const E = animExportEls(), U = animExportUi;
+    if (!E.block) return;
+    E.fps.addEventListener('change', () => { U.fps = Number(E.fps.value) || 24; U.frames = null; animExportRefresh(); });
+    E.frames.addEventListener('input', () => { U.frames = E.frames.value; animExportRefresh(); });
+    E.s1.addEventListener('click', () => { U.density = 1; animExportRefresh(); });
+    E.s2.addEventListener('click', () => { U.density = 2; animExportRefresh(); });
+    E.start.addEventListener('click', () => { animExportStart(); });
+    E.cancel.addEventListener('click', () => { animExportCancelIfRunning(); });
 }
