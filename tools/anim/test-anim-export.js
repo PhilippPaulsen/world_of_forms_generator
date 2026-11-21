@@ -142,7 +142,9 @@ const refCrc = (b) => (typeof zlib.crc32 === 'function') ? zlib.crc32(b) : Numbe
             const bufs = []; for (const p of res.parts) bufs.push(p instanceof Blob ? Buffer.from(await p.arrayBuffer()) : Buffer.from(p.buffer, p.byteOffset, p.byteLength));
             const buf = Buffer.concat(bufs); let rd, err = null; try { rd = readZip(buf); } catch (e) { err = e.message; }
             check('add(name, bytes, handle): the Blob handles are the parts (the bytes arrays are not kept), the ZIP reads back with the right bytes, CRC and size', !err && res.parts.includes(blobs[0]) && res.parts.includes(blobs[1]) && !res.parts.some(p => p instanceof Uint8Array && p.length === 3000) && res.size === buf.length && rd.length === 2 && rd[0].data.equals(raw[0]) && rd[1].data.equals(raw[1]) && rd[0].crc === refCrc(raw[0]), err || '');
-            check('a handle with method deflate throws (the handle would not be the compressed data)', await rejectsR(() => A.animZipWriter({ method: 'deflate', deflate: (b) => b }).add('a.svg', new Uint8Array(2), new Blob([new Uint8Array(2)])), /handle/));
+            { const w2 = A.animZipWriter({ method: 'deflate', deflate: (b) => new Uint8Array(zlib.deflateRawSync(b)) }), svg = Buffer.from('<svg>' + '<path d="M0,0L9,9"/>'.repeat(300) + '</svg>'), packed = zlib.deflateRawSync(svg), hb = new Blob([packed]);
+              await w2.add('a.svg', new Uint8Array(svg), hb); const r2 = w2.finish(); const buf2 = Buffer.concat(await Promise.all(r2.parts.map(async p => p instanceof Blob ? Buffer.from(await p.arrayBuffer()) : Buffer.from(p.buffer, p.byteOffset, p.byteLength)))); let rd2, e2 = null; try { rd2 = readZip(buf2); } catch (e) { e2 = e.message; }
+              check('task 117: a handle with method deflate is the COMPRESSED data: the Blob is the part, the ZIP reads back (method 8, the inflated bytes, CRC of the uncompressed)', !e2 && r2.parts.includes(hb) && rd2.length === 1 && rd2[0].method === 8 && rd2[0].data.equals(svg) && rd2[0].crc === refCrc(svg) && rd2[0].csize === packed.length, e2 || ''); }
         }
     }
     console.log('== 5. the limits of the format ==');
