@@ -127,6 +127,11 @@ if (mode === 'det') {
             let polyOut = 0, polyBytes = 0, polyTot = 0, pathOut = 0, pathBytes = 0, pathTot = 0;
             for (const m of a.matchAll(/    <polygon points="([^"]*)"[^>]*\/>\n/g)) { polyTot++; const pts = m[1].split(' ').map(p => p.split(',').map(Number)); if (out(pts.map(p => p[0]), pts.map(p => p[1]))) { polyOut++; polyBytes += m[0].length; } }
             for (const m of a.matchAll(/    <path d="([^"]*)" \/>\n/g)) { pathTot++; const n = m[1].match(/-?\d+(?:\.\d+)?/g).map(Number), xs = n.filter((_, i) => i % 2 === 0), ys = n.filter((_, i) => i % 2 === 1); if (out(xs, ys)) { pathOut++; pathBytes += m[0].length; } }
+            // task 117 (before a possible stage 4): what is left AFTER PACKING when the elements completely outside the canvas are dropped (deflate level 6, as CompressionStream uses)
+            const keep = a.replace(/    <polygon points="([^"]*)"[^>]*\/>\n/g, (m0, pts) => { const q = pts.split(' ').map(p => p.split(',').map(Number)); return out(q.map(p => p[0]), q.map(p => p[1])) ? '' : m0; })
+                .replace(/    <path d="([^"]*)" \/>\n/g, (m0, d) => { const n = d.match(/-?\d+(?:\.\d+)?/g).map(Number); return out(n.filter((_, i) => i % 2 === 0), n.filter((_, i) => i % 2 === 1)) ? '' : m0; });
+            const [tp0, p0] = ms(() => zlib.deflateRawSync(a, { level: 6 }).length), [tp1, p1] = ms(() => zlib.deflateRawSync(keep, { level: 6 }).length);
+            console.log(J({ name, rawKB: Math.round(a.length / 1024), clippedRawKB: Math.round(keep.length / 1024), packedKB: Math.round(p0 / 1024), clippedPackedKB: Math.round(p1 / 1024), packedSaved: +(1 - p1 / p0).toFixed(2), packMs: Math.round(tp0), clippedPackMs: Math.round(tp1) }));
             console.log(J({ name, canvas: W + 'x' + H, polygons: polyTot, polygonsOutside: polyOut, polygonOutsideKB: Math.round(polyBytes / 1024), paths: pathTot, pathsOutside: pathOut, pathOutsideKB: Math.round(pathBytes / 1024), totalKB: Math.round(a.length / 1024), outsideShare: +((polyBytes + pathBytes) / a.length).toFixed(3) }));
         }
     }
