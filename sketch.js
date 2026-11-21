@@ -5447,50 +5447,62 @@ function animExportPrecheck(env) {
     if (sm && sm.enabled && sm.mode === 'bilinear') return 'static';
     return null;
 }
-// opts = { fps | frames, density (1 | 2), bytesPerFrame (the estimate) }; env.onProgress({ phase: 'prepare' | 'frame', i, n, ms }).
+// opts = { fps | frames, density (1 | 2), bytesPerFrame (the estimate), format ('png' default | 'svg'), noFaces (svg only) }; env.onProgress({ phase: 'prepare' | 'frame', i, n, ms }).
+// format 'svg' (task 117): a frame is generateSVGString() after setProgress(t), no redraw, no pixel density, no canvas; deflate-raw per entry; with noFaces the face flags are off ONLY inside env.svgFrame, which is
+// synchronous: they are back before the first await of the frame.
 // The state is put back in every case (also a cancel and an error): the position, paused; the status text; the pixel density; the playback layer's frame.
 async function runAnimationExport(env, opts) {
     const why = animExportPrecheck(env);
     if (why) return { ok: false, code: why };
+    const svg = opts.format === 'svg';
+    if (svg && !env.deflate) return { ok: false, code: 'noCompression' };
     const tl = env.timeline(), total = env.totalMs();
     let ft;
     try { ft = animFrameTimes(opts.frames !== undefined ? { frames: opts.frames } : { totalMs: total, fps: opts.fps }); }
     catch (e) { return { ok: false, code: 'error', message: String(e && e.message || e) }; }
     const est = animExportEstimate({ frames: ft.n, bytesPerFrame: opts.bytesPerFrame });
     if (!est.withinLimits) return { ok: false, code: 'tooBig', allowedFrames: est.allowedFrames, estimate: est };
-    const saved = { elapsedMs: tl.elapsedMs, startTime: tl.startTime, netLive: tl.netLive, currentFrame: tl.currentFrame, status: env.status.get(), density: env.density.get() };
+    const saved = { elapsedMs: tl.elapsedMs, startTime: tl.startTime, netLive: tl.netLive, currentFrame: tl.currentFrame, status: env.status.get(), density: svg ? null : env.density.get() };
     let position = tl.elapsedMs;
     if (tl.playing) position = Math.max(0, Math.min(total, env.millis() - tl.startTime));   // the same pause as toggleTimelinePlayback()
     env.pauseTimeline(position);
-    const zip = animZipWriter({ method: 'store' });
+    let packedNow = null;
+    const zip = animZipWriter(svg ? { method: 'deflate', deflate: () => packedNow } : { method: 'store' });
     let result;
     try {
         env.onProgress({ phase: 'prepare', i: 0, n: ft.n, ms: 0 });
         const t0 = env.now();
         while (!env.idle() && env.now() - t0 < 15000) { if (env.shouldCancel()) break; await env.sleep(50); }
         if (!env.idle()) env.pauseBackground();   // still busy after 15 s: park the check for the export (its timer is re-armed by the next render of the pairing editor), else it takes a second of every frame
-        env.density.set(opts.density);
+        if (!svg) env.density.set(opts.density);
         for (let i = 0; i < ft.n; i++) {
             if (env.shouldCancel()) { result = { ok: false, code: 'cancelled', done: i }; break; }
             const f0 = env.now();
             env.setProgress(ft.times[i]);
-            env.redraw();
-            const blob = await env.toBlob();
-            if (!blob) throw new Error('the canvas gave no image');
-            const bytes = new Uint8Array(await blob.arrayBuffer());
-            await zip.add(animFrameName(i + 1, ft.n, 'png'), bytes, blob);   // the Blob goes into the parts, the bytes are dropped after the CRC
+            if (svg) {
+                const bytes = env.encode(env.svgFrame(opts.noFaces === true));   // synchronous: the face flags are already back here, before the first await
+                packedNow = await env.deflate(bytes);
+                await zip.add(animFrameName(i + 1, ft.n, 'svg'), bytes, env.makeBlob([packedNow], 'application/octet-stream'));   // the Blob of the PACKED bytes goes into the parts
+                packedNow = null;
+            } else {
+                env.redraw();
+                const blob = await env.toBlob();
+                if (!blob) throw new Error('the canvas gave no image');
+                const bytes = new Uint8Array(await blob.arrayBuffer());
+                await zip.add(animFrameName(i + 1, ft.n, 'png'), bytes, blob);   // the Blob goes into the parts, the bytes are dropped after the CRC
+            }
             env.onProgress({ phase: 'frame', i: i + 1, n: ft.n, ms: env.now() - f0 });
             await env.sleep(0);
         }
         if (!result) {
             const z = zip.finish();
-            env.download(env.makeBlob(z.parts, 'application/zip'), 'world_of_forms_animation.zip');
+            env.download(env.makeBlob(z.parts, 'application/zip'), svg ? 'world_of_forms_animation_svg.zip' : 'world_of_forms_animation.zip');
             result = { ok: true, code: 'ok', n: ft.n, bytes: z.size };
         }
     } catch (e) {
         result = { ok: false, code: 'error', message: String(e && e.message || e) };
     } finally {
-        try { env.density.set(saved.density); } catch (e) { }   // a failing density must not stop the rest of the restore (no block comment here: the old source-text tests strip comments with a regex)
+        if (!svg) { try { env.density.set(saved.density); } catch (e) { } }   // a failing density must not stop the rest of the restore (no block comment here: the old source-text tests strip comments with a regex)
         tl.elapsedMs = position; tl.playing = false; tl.startTime = saved.startTime; tl.netLive = saved.netLive;
         env.applyFrame();   // applyTimelineFrame(): the playback layer and currentFrame of the restored position
         tl.currentFrame = saved.currentFrame;
@@ -5499,6 +5511,29 @@ async function runAnimationExport(env, opts) {
         env.redraw();
     }
     return result;
+}
+// One SVG frame of the CURRENT state. noFaces: the face fills are switched off by their flags (showFaces of the base and of every layer, which the keyframes, the playback layer and the morph follow), so
+// they are never computed; the result is the same SVG minus its polygon group (measured, task 117). Synchronous on purpose: the flags are back before the caller's next await.
+function animExportSvgString(noFaces) {
+    if (!noFaces) return generateSVGString();
+    const base = showFaces, layers = additionalLayers.map((l) => l.showFaces);
+    showFaces = false;
+    additionalLayers.forEach((l) => { l.showFaces = false; });
+    try { return generateSVGString(); }
+    finally { showFaces = base; additionalLayers.forEach((l, k) => { l.showFaces = layers[k]; }); }
+}
+// raw deflate (what a ZIP entry of method 8 holds) through the built-in CompressionStream
+async function animExportDeflate(bytes) {
+    const out = new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw')));
+    return new Uint8Array(await out.arrayBuffer());
+}
+// the estimate of an SVG sequence from ONE probe frame of the state that is shown now (nothing is changed): sizes and times
+async function animExportProbeSvg(env, noFaces) {
+    const t0 = env.now();
+    const bytes = env.encode(env.svgFrame(noFaces));
+    const genMs = env.now() - t0, p0 = env.now();
+    const packed = await env.deflate(bytes);
+    return { raw: bytes.length, packed: packed.length, genMs, packMs: env.now() - p0 };
 }
 // "1,2 MB" / "1.2 MB" (kB below a MiB); lang 'de' writes the comma.
 function animExportSizeText(bytes, lang) {
@@ -5524,6 +5559,9 @@ function animExportEnv(extra) {
         sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
         idle: () => timelineImageCheckIdle(),
         pauseBackground: () => timelineImageCheckStop(),
+        svgFrame: (noFaces) => animExportSvgString(noFaces),
+        encode: (text) => new TextEncoder().encode(text),
+        deflate: (typeof CompressionStream === 'function') ? animExportDeflate : null,
         status: { get: () => { const e = statusEl(); return e ? e.innerHTML : ''; }, set: (h) => { const e = statusEl(); if (e) e.innerHTML = h; } },
         pauseTimeline: (position) => { timeline.elapsedMs = position; timeline.playing = false; syncAnimationLoopState(); },
         applyFrame: () => applyTimelineFrame(),
@@ -5535,18 +5573,32 @@ function animExportEnv(extra) {
     }, extra || {});
 }
 // ---- the dialog block (index.html #export-anim) ----
-const animExportUi = { fps: 24, density: 1, frames: null, running: false, cancel: false, seq: 0 };
+const animExportUi = { fps: 24, density: 1, frames: null, running: false, cancel: false, seq: 0, format: 'png', faces: true, probe: null };
 function animExportT(name, params) { const key = 'export.anim.' + name; return (window.UI && UI.t) ? UI.t(key, params) : key; }
 function animExportLang() { return (window.UI && UI.lang) || 'de'; }
 function animExportEls() {
     const g = (id) => document.getElementById(id);
     return { block: g('export-anim'), fps: g('export-anim-fps'), frames: g('export-anim-frames'), s1: g('export-anim-size1'), s2: g('export-anim-size2'), estimate: g('export-anim-estimate'), msg: g('export-anim-msg'),
-        start: g('export-anim-start'), progress: g('export-anim-progress'), progressText: g('export-anim-progress-text'), cancel: g('export-anim-cancel'), run: g('export-anim-run'), formats: ['export-png', 'export-json', 'export-svg'].map(g) };
+        start: g('export-anim-start'), progress: g('export-anim-progress'), progressText: g('export-anim-progress-text'), cancel: g('export-anim-cancel'), run: g('export-anim-run'), formats: ['export-png', 'export-json', 'export-svg'].map(g),
+        fmtPng: g('export-anim-fmt-png'), fmtSvg: g('export-anim-fmt-svg'), sizeGroup: g('export-anim-size-group'), facesGroup: g('export-anim-faces-group'), facesOn: g('export-anim-faces-on'), facesOff: g('export-anim-faces-off'), net: g('export-anim-netnote') };
 }
 function animExportCancelIfRunning() {
     if (!animExportUi.running) return false;
     animExportUi.cancel = true;
     return true;
+}
+function animExportTimeText(ms) { const s = Math.max(1, Math.round(ms / 1000)); return s < 90 ? animExportT('timeSec', { n: s }) : animExportT('timeMin', { n: Math.round(s / 60) }); }
+// the bytes of one frame of the sequence in the ZIP: PNG from the picture that is shown now (size per pixel x the pixels of the chosen density), SVG from the probe frame (packed size); null while the probe is missing
+async function animExportBytesPerFrame() {
+    const U = animExportUi;
+    if (U.format === 'svg') {
+        if (!U.probe || U.probe.faces !== U.faces) { U.probe = null; const r = await animExportProbeSvg(animExportEnv(), !U.faces); U.probe = Object.assign({ faces: U.faces }, r); }
+        return { bytes: U.probe.packed, perFrameMs: U.probe.genMs + U.probe.packMs };
+    }
+    const c = document.querySelector('#canvas-container canvas');
+    const blob = c ? await new Promise((r) => c.toBlob((b) => r(b), 'image/png')) : null;
+    const per = blob && c.width * c.height ? blob.size / (c.width * c.height) : 0.25;
+    return { bytes: Math.round(per * width * height * U.density * U.density), perFrameMs: 0 };
 }
 // what the dialog shows now: visibility, option texts, the estimate and the message; the start button follows
 async function animExportRefresh(keepMsg) {
@@ -5555,25 +5607,30 @@ async function animExportRefresh(keepMsg) {
     const have = !!(timeline && timeline.keyframeLayerIds.length >= 2 && timeline.segmentDurationsMs.length >= 1);
     E.block.hidden = !have;
     if (!have) return;
-    const seq = ++U.seq, env = animExportEnv(), total = env.totalMs(), auto = Math.max(2, Math.round(total / 1000 * U.fps));
+    const seq = ++U.seq, env = animExportEnv(), total = env.totalMs(), auto = Math.max(2, Math.round(total / 1000 * U.fps)), svg = U.format === 'svg';
     if (U.frames === null) E.frames.value = String(auto);
     Array.prototype.forEach.call(E.fps.options, (o) => { o.textContent = animExportT('fpsValue', { n: o.value }); });
     E.fps.value = String(U.fps);
     E.s1.textContent = animExportT('size1', { w: width, h: height }); E.s2.textContent = animExportT('size2', { w: width * 2, h: height * 2 });
     E.s1.setAttribute('aria-pressed', String(U.density === 1)); E.s2.setAttribute('aria-pressed', String(U.density === 2));
+    E.fmtPng.setAttribute('aria-pressed', String(!svg)); E.fmtSvg.setAttribute('aria-pressed', String(svg));
+    E.facesOn.setAttribute('aria-pressed', String(U.faces)); E.facesOff.setAttribute('aria-pressed', String(!U.faces));
+    E.sizeGroup.hidden = svg; E.facesGroup.hidden = !svg;
+    E.net.hidden = !(svg && netLinesOn); E.net.textContent = E.net.hidden ? '' : animExportT('svgNetNote');
     const n = Number(E.frames.value), whole = Number.isInteger(n) && n >= 2;
     let code = animExportPrecheck(env), text = '';
     if (code === 'noTimeline') { E.block.hidden = true; return; }
+    if (!code && svg && !env.deflate) code = 'noCompression';
     if (!code && !whole) { code = 'framesInvalid'; }
     let est = null;
     if (!code) {
-        const c = document.querySelector('#canvas-container canvas');
-        const blob = c ? await new Promise((r) => c.toBlob((b) => r(b), 'image/png')) : null;   // the picture that is shown now: size per pixel x the pixels of the chosen density
+        if (svg && (!U.probe || U.probe.faces !== U.faces)) { E.estimate.textContent = animExportT('probing'); E.start.disabled = true; E.msg.textContent = ''; await env.sleep(0); if (seq !== U.seq || U.running) return; }
+        let b;
+        try { b = await animExportBytesPerFrame(); } catch (e) { E.msg.textContent = animExportT('error', { msg: String(e && e.message || e) }); E.estimate.textContent = ''; E.start.disabled = true; return; }
         if (seq !== U.seq || U.running) return;
-        const per = blob && c.width * c.height ? blob.size / (c.width * c.height) : 0.25;
-        est = animExportEstimate({ frames: n, bytesPerFrame: Math.round(per * width * height * U.density * U.density) });
-        text = animExportT('estimate', { size: animExportSizeText(est.totalBytes, animExportLang()), n });
-        if (!est.withinLimits) code = 'tooBig';
+        est = animExportEstimate({ frames: n, bytesPerFrame: b.bytes });
+        text = svg ? animExportT('estimateSvg', { size: animExportSizeText(est.totalBytes, animExportLang()), n, time: animExportTimeText(n * b.perFrameMs) }) : animExportT('estimate', { size: animExportSizeText(est.totalBytes, animExportLang()), n });
+        if (!est.withinLimits) code = svg ? 'tooBigSvg' : 'tooBig';
     }
     E.estimate.textContent = text;
     if (!keepMsg || code) E.msg.textContent = code ? animExportT(code === 'otherClockPlaying' ? 'otherClock' : code, { max: est ? est.allowedFrames : '' }) : '';
@@ -5581,18 +5638,18 @@ async function animExportRefresh(keepMsg) {
 }
 function animExportDialogOpened() {
     const E = animExportEls();
+    animExportUi.probe = null;   // the probe frame belongs to the state that was shown when the dialog opened
     if (E.msg) E.msg.textContent = '';
     animExportRefresh();
 }
 async function animExportStart() {
     const E = animExportEls(), U = animExportUi;
     if (U.running || E.start.disabled) return;
-    const n = Number(E.frames.value), c = document.querySelector('#canvas-container canvas');
-    const blob = c ? await new Promise((r) => c.toBlob((b) => r(b), 'image/png')) : null;
-    const per = blob && c.width * c.height ? blob.size / (c.width * c.height) : 0.25;
-    const opts = { frames: n, density: U.density, bytesPerFrame: Math.round(per * width * height * U.density * U.density) };
+    const n = Number(E.frames.value), svg = U.format === 'svg';
+    const b = await animExportBytesPerFrame();
+    const opts = { frames: n, density: U.density, bytesPerFrame: b.bytes, format: U.format, noFaces: svg && !U.faces };
     U.running = true; U.cancel = false;
-    const lock = (on) => { [E.fps, E.frames, E.s1, E.s2, E.start].concat(E.formats).forEach((el) => { if (el) el.disabled = on; }); E.run.hidden = !on; E.start.hidden = on; };
+    const lock = (on) => { [E.fps, E.frames, E.s1, E.s2, E.fmtPng, E.fmtSvg, E.facesOn, E.facesOff, E.start].concat(E.formats).forEach((el) => { if (el) el.disabled = on; }); E.run.hidden = !on; E.start.hidden = on; };
     lock(true);
     E.msg.textContent = ''; E.progress.max = n; E.progress.value = 0; E.progressText.textContent = animExportT('prepare');
     const env = animExportEnv({
@@ -5606,7 +5663,7 @@ async function animExportStart() {
     const res = await runAnimationExport(env, opts);
     U.running = false; U.cancel = false;
     lock(false);
-    let key = res.code === 'ok' ? 'done' : (res.code === 'otherClockPlaying' ? 'otherClock' : res.code);
+    let key = res.code === 'ok' ? 'done' : (res.code === 'otherClockPlaying' ? 'otherClock' : (res.code === 'tooBig' && svg ? 'tooBigSvg' : res.code));
     E.msg.textContent = animExportT(key, { n: res.n, size: res.bytes ? animExportSizeText(res.bytes, animExportLang()) : '', max: res.allowedFrames, msg: res.message });
     await animExportRefresh(true);   // the outcome of this run stays in the message line unless the options now say something else
 }
@@ -5617,6 +5674,10 @@ function animExportInit() {
     E.frames.addEventListener('input', () => { U.frames = E.frames.value; animExportRefresh(); });
     E.s1.addEventListener('click', () => { U.density = 1; animExportRefresh(); });
     E.s2.addEventListener('click', () => { U.density = 2; animExportRefresh(); });
+    E.fmtPng.addEventListener('click', () => { U.format = 'png'; animExportRefresh(); });
+    E.fmtSvg.addEventListener('click', () => { U.format = 'svg'; animExportRefresh(); });
+    E.facesOn.addEventListener('click', () => { U.faces = true; animExportRefresh(); });
+    E.facesOff.addEventListener('click', () => { U.faces = false; animExportRefresh(); });
     E.start.addEventListener('click', () => { animExportStart(); });
     E.cancel.addEventListener('click', () => { animExportCancelIfRunning(); });
 }

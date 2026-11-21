@@ -1329,7 +1329,8 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
 /* === The animation export block in the Download dialog (task 116; index.html #export-anim, sketch.js animExport*()) ===================================================================
    A column inside .dialog-content: no html.ph rule is needed (the dialog scrolls, the buttons, the select and the number field already get the --target size from the phone and the coarse rules). */
 .export-anim { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--text); }
-.export-anim[hidden], .export-anim-run[hidden] { display: none; }
+.export-anim[hidden], .export-anim-run[hidden], .export-anim-group[hidden], .export-anim-note[hidden] { display: none; }
+.export-anim-group { display: flex; flex-direction: column; gap: 6px; }
 .export-anim-title { margin: 0; font-weight: 600; }
 .export-anim-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; }
 .export-anim-row input[type="number"] { width: 6em; }
