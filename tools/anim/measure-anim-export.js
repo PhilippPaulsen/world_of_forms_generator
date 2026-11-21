@@ -2,6 +2,8 @@
 //   node tools/anim/measure-anim-export.js det        determinism: the same t gives the same frame (20 times t; forward, backward, shuffled; timeline playback layer, spatial morph, hexagon Field)
 //   node tools/anim/measure-anim-export.js svg        SVG per frame: bytes, ms, polygons; faces on/off, net on/off; timeline and spatial morph
 //   node tools/anim/measure-anim-export.js zip        a "store" ZIP writer (own, no compression): bytes, ms for 30 / 120 / 300 frames, check against zlib deflate and `unzip -t`
+//   node tools/anim/measure-anim-export.js noface     task 117: the face fills switched off by the FLAGS (showFaces of the base and of every layer) instead of by post-processing: is the SVG the same minus the polygon group, and what does it save?
+//   node tools/anim/measure-anim-export.js clip       task 117: how many polygons and paths of a frame lie completely outside the canvas, and the bytes they take
 //   node tools/anim/measure-anim-export.js time       frame time (draw only, and SVG) with hexagon Field, layers, timeline, morph; stop line 2500 ms
 // The browser half (PNG per frame, memory) is tools/anim/measure-png-frames.browser.js.
 'use strict';
@@ -106,6 +108,28 @@ if (mode === 'det') {
     }
     for (const X of [4, 8]) { run(`hex ${X}/${X} Field, 3 layers, timeline`, mkHex(X, 3, 'timeline')); run(`hex ${X}/${X} Field, 3 layers, morph`, mkHex(X, 3, 'morph')); }
     rows.forEach(r => console.log(J(r)));
+} else if (mode === 'noface' || mode === 'clip') {
+    const GROUP = /  <g stroke="none">\n[\s\S]*?  <\/g>\n/;
+    const flagsOff = (w) => w.set('showFaces = false; additionalLayers.forEach(l => { l.showFaces = false; });');
+    const cases = [['timeline square 3/3', () => mk({ kind: 'timeline' })], ['morph square 3/3', () => mk({ kind: 'morph' })], ['morph square 3/3 field net', () => mk({ kind: 'morph', net: FIELD })],
+        ['hex 4/4 Field, 3 layers, timeline', () => mkHex(4, 3, 'timeline')], ['hex 4/4 Field, 3 layers, morph', () => mkHex(4, 3, 'morph')], ['hex 8/8 Field, 3 layers, morph', () => mkHex(8, 3, 'morph')]];
+    for (const [name, make] of cases) {
+        const w = make(); w.at(0.5); w.svg();
+        const [tOn, a] = ms(() => w.svg());
+        if (mode === 'noface') {
+            const post = a.replace(GROUP, '');
+            flagsOff(w); w.at(0.5); w.svg(); const [tOff, b] = ms(() => w.svg());
+            const [tDraw] = ms(() => w.draw());
+            console.log(J({ name, onMs: +tOn.toFixed(0), flagsOffMs: +tOff.toFixed(0), onKB: Math.round(a.length / 1024), flagsOffKB: Math.round(b.length / 1024), equalToPostProcessed: b === post, polygonsOn: (a.match(/<polygon /g) || []).length, polygonsOff: (b.match(/<polygon /g) || []).length, drawMsFlagsOff: +tDraw.toFixed(0) }));
+        } else {
+            const W = Number((a.match(/ width="(\d+(?:\.\d+)?)"/) || [])[1]), H = Number((a.match(/ height="(\d+(?:\.\d+)?)"/) || [])[1]);
+            const out = (xs, ys) => Math.max(...xs) < 0 || Math.min(...xs) > W || Math.max(...ys) < 0 || Math.min(...ys) > H;
+            let polyOut = 0, polyBytes = 0, polyTot = 0, pathOut = 0, pathBytes = 0, pathTot = 0;
+            for (const m of a.matchAll(/    <polygon points="([^"]*)"[^>]*\/>\n/g)) { polyTot++; const pts = m[1].split(' ').map(p => p.split(',').map(Number)); if (out(pts.map(p => p[0]), pts.map(p => p[1]))) { polyOut++; polyBytes += m[0].length; } }
+            for (const m of a.matchAll(/    <path d="([^"]*)" \/>\n/g)) { pathTot++; const n = m[1].match(/-?\d+(?:\.\d+)?/g).map(Number), xs = n.filter((_, i) => i % 2 === 0), ys = n.filter((_, i) => i % 2 === 1); if (out(xs, ys)) { pathOut++; pathBytes += m[0].length; } }
+            console.log(J({ name, canvas: W + 'x' + H, polygons: polyTot, polygonsOutside: polyOut, polygonOutsideKB: Math.round(polyBytes / 1024), paths: pathTot, pathsOutside: pathOut, pathOutsideKB: Math.round(pathBytes / 1024), totalKB: Math.round(a.length / 1024), outsideShare: +((polyBytes + pathBytes) / a.length).toFixed(3) }));
+        }
+    }
 } else if (mode === 'time') {
     // frame time as the app pays it: a draw (stubs, no pixels) and the SVG string; the stop line is 2500 ms per frame
     for (const X of [4, 8, 9]) for (const layers of [0, 3, 5]) for (const kind of ['timeline', 'morph']) {
@@ -146,4 +170,4 @@ if (mode === 'det') {
         console.log(J({ kind, frames: n, rawMB: +(raw / 1048576).toFixed(2), storeMB: +(z.length / 1048576).toFixed(2), overheadB: z.length - raw, storeMs: +tz.toFixed(1), deflateMB: +(dsize / 1048576).toFixed(2), deflateMs: +td.toFixed(0), unzip: ok, pythonTestzipNames: py }));
     }
     fs.rmSync(tmp, { recursive: true, force: true });
-} else { console.error('mode: det | svg | time | zip'); process.exit(2); }
+} else { console.error('mode: det | svg | noface | clip | time | zip'); process.exit(2); }
