@@ -46,6 +46,11 @@ function suite(i18nSrc, artSrc, coreSrc) {
   for (const sh of ['square', 'triangle', 'hex']) for (const id of ['off', 'n1', 'n3c']) for (const d of [1, -1]) { const r = model.step(sh, id, d); if (r.reason) reasons.add(r.reason); }
   for (const sh of ['square', 'triangle', 'hex']) for (let a = 1; a <= 13; a++) for (let b = 1; b <= 14; b++) for (const d of [1, -1]) { for (const r of [model.stepA(a, b, d, sh), model.stepB(a, b, d)]) if (r.reason) reasons.add(r.reason); }   // task 124: the triangle's a >= 1 reason
   for (const sh of ['square', 'triangle', 'hex']) for (const f of ['full', 'half']) { const r = model.formatAvail(sh, f); if (r.reason) reasons.add(r.reason); }   // task 124: the half format on the triangle
+  // task 126: every reason the hint of a spec that draws no net can give (every shape, format, a and b the core refuses or accepts)
+  for (const sh of ['square', 'triangle', 'hex', 'circle']) for (const f of ['full', 'half']) for (const fam of ['\u25a1N', '\u25b3N']) for (const a of [0, 1, 2, 3, 12]) for (const b of [1, 2, 3, 4.5, 12, 13]) {
+    const h = model.invalidHint({ effective: core.netProjectiveEffective, forShape: core.netProjectiveForShape }, core.netProjectiveSpec(a, b, f, fam), sh);
+    if (h) { reasons.add(h.key); reasons.add(h.shortKey); }
+  }
   model.later().forEach(l => reasons.add(l.reason));
   reasons.forEach(k => keys.set(k, 'model'));
   for (const a of model.ART) { keys.set('net.art.name.' + a.id, 'dynamic'); keys.set('net.art.tip.' + a.id, 'dynamic'); }
