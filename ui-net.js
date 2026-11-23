@@ -1,5 +1,5 @@
 /*
- * The Netz nav row (UI rework 4c): Aus | Sin | Tan | Geo, the strength stepper, and the "Mehr" overlay. It wires
+ * The Netz nav row (UI rework 4c; task 122: the Netzart stepper - | 1 | 3C in front, see below): Sin | Tan | Geo, the strength stepper, and the "Mehr" overlay. It wires
  * markup that already exists in index.html to the EXISTING net logic in sketch.js (initNetControls()) - the net
  * controls are moved, not duplicated:
  *
@@ -32,12 +32,13 @@
     get 'reason.focus.max'() { return tr('reason.focus.max', null, 'Größter Fokus: 1,0.'); },
     get 'reason.focus.min'() { return tr('reason.focus.min', null, 'Kleinster Fokus: −1,0.'); },
     get 'reason.focus.exact'() { return tr('reason.focus.exact', null, 'Der Fokus liegt zwischen −1,00 und 1,00.'); },
+    get 'reason.art.needsN1'() { return tr('net.art.reason.needsN1', null, 'Das Gesetz gilt für Netzart 1. Netzart 1 wählen.'); },
   };
   const $ = function (s) { return document.querySelector(s); };
 
   const row = $('#nav-netz'), panel = $('#more-netz'), moreBtn = $('#btn-more-netz');
   const kindBtns = Array.prototype.slice.call(row.querySelectorAll('.net-kind-btn'));
-  const strengthRoot = row.querySelector('.stepper');
+  const strengthRoot = $('#net-strength-stepper');   // task 122: the row has more steppers now (Netzart, a, b)
   const strengthInput = $('#net-strength-input'), strengthDisplay = $('#net-strength-value');
   const focusRoot = panel.querySelector('#net-focus-row .stepper');
   const focusRowEl = $('#net-focus-row');
@@ -54,8 +55,8 @@
   // the phone layout disables the Fokus stepper (aria-disabled on its root, with the reason) while sketch.js hides the Fokus row (Aus, Geo); the exact field says the same and is locked
   // At 768px and up (the Netz surface, patterns C0b-3) nothing disables the stepper - the layout's follow rule is the phone's - but the exact field sits in the overlay's rows whatever sketch.js does with the Fokus row,
   // so the hidden row itself says "does not apply" (Aus, Geo), with the same text the phone layout writes.
-  function reasonFocus() { return reasonAll() || (UI.isDisabled(focusRoot) ? focusRoot.dataset.reason || '' : null) || (focusRowEl && focusRowEl.hidden ? UI.t('net.reason.focus') : null); }
-  function reasonStrength() { return reasonAll() || (kind() === 'regular' ? T['reason.net.needsKind'] : null); }
+  function reasonFocus() { return reasonAll() || (artNow() !== 'n1' ? T['reason.art.needsN1'] : null) || (UI.isDisabled(focusRoot) ? focusRoot.dataset.reason || '' : null) || (focusRowEl && focusRowEl.hidden ? UI.t('net.reason.focus') : null); }
+  function reasonStrength() { return reasonAll() || (artNow() !== 'n1' ? T['reason.art.needsN1'] : null) || (kind() === 'regular' ? T['reason.net.needsKind'] : null); }   // task 122: the strength is Netzart 1's
 
   // ---- kinds: a radiogroup whose state sketch.js owns ------------------------------------------------------------
   kindBtns.forEach(function (b) { UI.checkedFromActive(b); });
@@ -140,10 +141,121 @@
   // ---- the More overlay -------------------------------------------------------------------------------------------
   const overlay = UI.overlay(moreBtn, panel, { onOpen: sync });
 
+
+  // ---- task 122 (3C-3): the Netzart stepper and the Moebius net (3C) controls ---------------------------------------------------------------------------
+  // The stepper (-, 1, 3C) replaces the Aus button; it chooses through sketch.js's window.netArtSet() (the panel state lives there). The table of what a shape offers is ui-net-art.js (window.netArt, pure).
+  // Under 3C the Sin / Tan / Geo group and the strength give way to a, b, the format and "W . stretch" at the ACTUAL canvas; the Mehr overlay lists the suggestions and the Netzarten with their reasons.
+  const netArt = window.netArt;
+  const artRoot = $('#net-art-stepper'), artInput = $('#net-art-input'), artDisplay = $('#net-art-value');
+  const cluster3c = $('#net-3c'), aRoot = $('#net-a-stepper'), aInput = $('#net-a-input'), aDisplay = $('#net-a-value'), bRoot = $('#net-b-stepper'), bInput = $('#net-b-input'), bDisplay = $('#net-b-value');
+  const fmtGroup = $('#net-format');
+  const fmtBtns = Array.prototype.slice.call(document.querySelectorAll('.net-format-btn')), infoEl = $('#net-3c-info');
+  const more3c = $('#net-3c-more'), frameEl = $('#net-3c-frame'), suggestEl = $('#net-3c-suggest'), noteEl = $('#net-3c-note'), listEl = $('#net-art-list'), strengthSection = $('#net-strength-section');
+  const kindsGroup = $('#nav-kinds'), strengthStepperEl = $('#net-strength-stepper'), dividerA = row.querySelector('.nav-divider-a');
+  const tt = function (key, params) { return window.UI && UI.t ? UI.t(key, params) : key; };
+  const langNow = function () { return (window.UI && UI.lang) || 'de'; };
+  const core3c = function () { return { spec: netProjectiveSpec, info: netProjectiveInfo }; };
+  function artNow() { return !baseNetTransform ? 'off' : baseNetTransform.kind === 'projective' ? 'n3c' : 'n1'; }
+  function spec3c() { return artNow() === 'n3c' ? baseNetTransform : null; }
+  let last3c = null;   // the last 3C choice (a, b, format): coming back to 3C starts from it
+  function artIndex(id) { for (let i = 0; i < netArt.ART.length; i++) if (netArt.ART[i].id === id) return i; return 0; }
+  function choose(id) {
+    if (typeof window.netArtSet !== 'function') return;
+    if (id === 'n3c') window.netArtSet('3c', last3c || netArt.defaultFor(core3c(), canvasW, canvasH));
+    else window.netArtSet(id === 'off' ? 'off' : 'n1');
+  }
+  function artCompute(dir) {
+    const why = reasonAll(); if (why) return { to: null, reason: why };
+    const r = netArt.step(currentShape, artNow(), dir);
+    return r.to === null ? { to: null, reason: tt(r.reason) } : { to: artIndex(r.to) };
+  }
+  function abCompute(which, dir) {
+    const why = reasonAll(), s = spec3c(); if (why) return { to: null, reason: why }; if (!s) return { to: null, reason: tt('net.art.reason.min') };
+    const a = Math.round(s.a), b = Math.round(s.b), r = which === 'a' ? netArt.stepA(a, b, dir) : netArt.stepB(a, b, dir);
+    return r.to === null ? { to: null, reason: tt(r.reason) } : { to: r.to };
+  }
+  const artStepper = UI.stepper(artRoot, { input: artInput, compute: artCompute, noTyping: true, keyEl: artDisplay });
+  const aStepper = UI.stepper(aRoot, { input: aInput, compute: function (d) { return abCompute('a', d); }, noTyping: true, keyEl: aDisplay });
+  const bStepper = UI.stepper(bRoot, { input: bInput, compute: function (d) { return abCompute('b', d); }, noTyping: true, keyEl: bDisplay });
+  artInput.addEventListener('input', function () { const id = netArt.ART[parseInt(artInput.value, 10)]; if (id && id.id !== artNow()) choose(id.id); });
+  function set3c(a, b, format) { if (typeof window.netArtSet === 'function') window.netArtSet('3c', { a: a, b: b, format: format }); }
+  aInput.addEventListener('input', function () { const s = spec3c(); if (s) set3c(parseInt(aInput.value, 10), Math.round(s.b), s.format); });
+  bInput.addEventListener('input', function () { const s = spec3c(); if (s) set3c(Math.round(s.a), parseInt(bInput.value, 10), s.format); });
+  fmtBtns.forEach(function (b) { b.addEventListener('click', function () { const s = spec3c(); if (!s || UI.isDisabled(b)) return; set3c(Math.round(s.a), Math.round(s.b), b.dataset.format); }); });
+  const setAria = function (el, name, v) { if (el.getAttribute(name) !== v) el.setAttribute(name, v); };   // task 084: an attribute is written only when its value changes (sync runs on every redraw)
+  const setText = function (el, v) { if (el.textContent !== v) el.textContent = v; };
+  const setHidden = function (el, v) { if (el.hidden !== v) el.hidden = v; };
+  let moreSig = null, suggestCache = {};
+  function fmtWord(f) { return tt(f === 'half' ? 'net.3c.format.half' : 'net.3c.format.full'); }
+  function syncArt(all) {
+    const a3 = artNow(), idx = artIndex(a3), cur = spec3c(), ents = netArt.entries(currentShape);
+    if (cur && Number.isInteger(cur.a) && Number.isInteger(cur.b)) last3c = { a: cur.a, b: cur.b, format: cur.format };
+    if (artInput.value !== String(idx)) artInput.value = String(idx);
+    setText(artDisplay, netArt.ART[idx].short);
+    setAria(artDisplay, 'aria-valuenow', String(idx));
+    setAria(artDisplay, 'aria-valuetext', tt('net.art.name.' + a3));
+    const tip = tt('net.art.tip.' + a3); if (artDisplay.title !== tip) artDisplay.title = tip;
+    artStepper.refresh();
+    // the Netzart 1 group (Sin / Tan / Geo, strength) is shown for "-" and 1 and gives way to the 3C controls under 3C
+    const is3 = a3 === 'n3c';
+    setHidden(kindsGroup, is3); setHidden(strengthStepperEl, is3); if (dividerA) setHidden(dividerA, is3); setHidden(cluster3c, !is3);
+    setHidden(more3c, !is3); setHidden(strengthSection, is3);
+    [aRoot, bRoot, fmtGroup].forEach(function (el) { setHidden(el, !is3); });   // the layout moves them out of the cluster: each one is hidden on its own
+    { const dr = $('#net-domain-row'), ar = $('#net-axes-row'); if (dr) setHidden(dr, is3); if (ar) setHidden(ar, is3); }   // the layout moves them out of #net-group: hidden here, not by a class of the group
+    let line3 = null;
+    const why3 = is3 && !ents[artIndex('n3c')].ok ? tt(ents[artIndex('n3c')].reason) : null;   // a 3C spec on a shape that has no 3C (the core draws no net): a, b and the format stay, locked, and the line says why
+    [aRoot, bRoot].forEach(function (el) { UI.setDisabled(el, why3 || all || null); });
+    if (why3) { setText(infoEl, why3 + ' \u26a0'); infoEl.classList.add('warn'); if (infoEl.title !== why3) infoEl.title = why3; line3 = why3; }
+    else if (is3 && typeof netProjectiveInfo === 'function') {
+      const info = netProjectiveInfo(cur, canvasW, canvasH), sm = netArt.summary(info, langNow()), wn = netArt.warnings(info);
+      const a = Math.round(cur.a), b = Math.round(cur.b);
+      setText(aDisplay, String(a)); setText(bDisplay, String(b));
+      if (aInput.value !== String(a)) aInput.value = String(a);
+      if (bInput.value !== String(b)) bInput.value = String(b);
+      setAria(aDisplay, 'aria-valuenow', String(a)); setAria(bDisplay, 'aria-valuenow', String(b));
+      aStepper.refresh(); bStepper.refresh();
+      fmtBtns.forEach(function (bt) { const on = bt.dataset.format === cur.format; bt.classList.toggle('active', on); setAria(bt, 'aria-checked', on ? 'true' : 'false'); UI.setDisabled(bt, why3 || all); });
+      if (sm) {
+        line3 = tt('net.3c.info', { w: sm.W, s: sm.stretch });
+        const warn = [];
+        if (wn.stretch) warn.push(tt('net.3c.warn.stretch', { s: sm.stretch }));
+        if (wn.wLow) warn.push(tt('net.3c.warn.wLow', { w: sm.W })); if (wn.wHigh) warn.push(tt('net.3c.warn.wHigh', { w: sm.W }));
+        const shown = line3 + (warn.length ? ' ⚠' : '');
+        setText(infoEl, shown); infoEl.classList.toggle('warn', warn.length > 0); if (infoEl.title !== warn.join(' ')) infoEl.title = warn.join(' ');
+        setText(noteEl, warn.join(' '));
+      }
+    }
+    // the Mehr overlay: rewritten only when what it shows changes (sync runs on every redraw)
+    const sig = [a3, currentShape, langNow(), canvasW, canvasH, cur ? cur.a + ',' + cur.b + ',' + cur.format : ''].join('|');
+    if (sig !== moreSig) {
+      moreSig = sig;
+      // the Netzarten of this shape: what is available, and every other with its reason
+      listEl.innerHTML = '';
+      const add = function (name, state) { const li = document.createElement('li'); li.textContent = tt('net.art.list.row', { name: name, state: state }); listEl.appendChild(li); };
+      ents.filter(function (e) { return e.id !== 'off'; }).forEach(function (e) { add(tt('net.art.name.' + e.id), e.ok ? tt('net.art.list.ok') : tt(e.reason)); });
+      netArt.later().forEach(function (l) { add(tt('net.art.list.later', { label: l.label }), tt(l.reason)); });
+      if (is3 && typeof netProjectiveInfo === 'function') {
+        setText(frameEl, tt('net.3c.frame', { w: canvasW, h: canvasH }));
+        const ck = canvasW + 'x' + canvasH, sg = suggestCache[ck] || (suggestCache = {}, suggestCache[ck] = netArt.suggest(core3c(), canvasW, canvasH));
+        suggestEl.innerHTML = '';
+        sg.list.forEach(function (c) {
+          const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'layer-btn net-3c-suggest-btn';
+          const w = netArt.num(c.W, 2, langNow()), st = netArt.num(c.stretch, 1, langNow()), f = fmtWord(c.format);
+          bt.textContent = tt('net.3c.suggest.item', { a: c.a, b: c.b, fmt: f, w: w, s: st }); bt.title = tt('net.3c.suggest.itemTitle', { a: c.a, b: c.b, fmt: f, w: w, s: st });
+          if (cur && Math.round(cur.a) === c.a && Math.round(cur.b) === c.b && cur.format === c.format) bt.classList.add('active');
+          bt.addEventListener('click', function () { set3c(c.a, c.b, c.format); });
+          suggestEl.appendChild(bt);
+        });
+        if (!sg.list.length && sg.best) { const p = document.createElement('p'); p.className = 'net-3c-note'; p.textContent = tt('net.3c.suggest.none', { w: canvasW, h: canvasH, a: sg.best.a, b: sg.best.b, fmt: fmtWord(sg.best.format), s: netArt.num(sg.best.stretch, 1, langNow()) }); suggestEl.appendChild(p); }
+      }
+    }
+    return line3;
+  }
   // ---- sync (on every redraw) ------------------------------------------------------------------------------------
   function sync() {
     const all = reasonAll();
-    kindBtns.forEach(function (b) { UI.setDisabled(b, all); });
+    const line3 = syncArt(all);
+    kindBtns.forEach(function (b) { UI.setDisabled(b, all || (artNow() === 'off' ? T['reason.art.needsN1'] : null)); });   // task 122: the law applies to Netzart 1; with "-" the group stays visible and says so
     axesBtns.forEach(function (b) { UI.setDisabled(b, all); });   // hidden with #net-group elsewhere; in the phone layout's panel they stay visible, so they say why
     UI.setDisabled(reverseBtn, all);
     UI.setDisabled(moreBtn, all);
@@ -164,6 +276,7 @@
     setLocked(strengthExact, reasonStrength());
     setLocked(focusExact, reasonFocus());
     // the readout line of the phone layout's Netz sheet: the active domain and the shape size (core/state.js), in the current language
+    if (line3 !== null) { if (readoutEl && readoutEl.textContent !== line3) readoutEl.textContent = line3; return; }   // task 122: under 3C the line is W and the stretch (the last thing sync() does)
     if (readoutEl && window.netReadout) {
       const d = $('.net-domain-btn.active'), dom = window.netReadout.readoutDomain(d ? d.dataset.domain : 'single', typeof netDomainEffective === 'function' && typeof netSizeFactors === 'function' ? netDomainEffective({ domain: 'field' }, netSizeFactors(), currentShape).ignored === null : undefined), fld = dom === 'field' && typeof gridSizeX === 'function', ms = fld && typeof netWarpBaseNow === 'function' && netWarpBaseNow() ? netWarpBaseNow().meshes : undefined, hexF = !!ms && currentShape === 'hex', text = window.netReadout.readoutText(dom, hexF ? gridSizeX() : ms ? ms.x : fld ? gridSizeX() : shapeSizeFactor, UI.t, hexF ? gridSizeY() : ms ? ms.y : fld ? gridSizeY() : undefined, !!ms, hexF), family = window.netReadout.readoutFamily(currentShape, dom, typeof netWarpActive === 'function' && netWarpActive(), UI.t), line = family ? family + ' \u00b7 ' + text : text;   // task 086: a Field reads X and Y; task 088: the triangle's Field reads the meshes it covers, edge cut; task 111: the family name in front (Field and an active net only)
       if (readoutEl.textContent !== line) readoutEl.textContent = line;

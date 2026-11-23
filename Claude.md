@@ -19,7 +19,7 @@ engine. This repo is the canonical generator (`sketch.js` UI shell, portable `co
 - Last full run: 2026-11-05, tree `1d393eda`, 95 files (91 `tools/` + 4 Farborgel), 0 failed.
 
 ## Current references
-- Phone: `tools/ui/baseline-phone-5.json` (407 KB). Widths >= 768: `tools/ui/baseline-cleanup-11.json`
+- Phone: `tools/ui/baseline-phone-6.json` (434 KB, task 122; the Netz tab differs from main only in the Art panel). Widths >= 768: `tools/ui/baseline-netzart-12.json` (945 KB, task 122). Before task 122: `baseline-phone-5.json` (407 KB), `baseline-cleanup-11.json`
   (944 KB, 104 KB headroom to 1 MB: the next extension needs a trim). Both morph stage e2c, tree `b8723e9c`.
 - Compare: `node tools/ui/compare-baseline.js <reference> <new file>`; 0 differences for no layout change.
 

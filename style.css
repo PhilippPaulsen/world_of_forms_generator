@@ -978,6 +978,24 @@ body.dark {
 }
 .overlay #net-focus-row, .overlay #net-macro-row { width: 100%; }
 
+/* task 122 (3C-3): the Netzart stepper (- | 1 | 3C) in front of the kinds, the Netzart 3C controls (a, b, format, W and stretch) in their place, and the Mehr sections. Tokens only: weights 400 / 600, sizes 12 / 16. */
+#net-art-value { min-width: 3ch; font-weight: var(--weight-strong); }
+.net-3c { display: flex; align-items: center; gap: var(--gap); flex: none; }
+.net-3c[hidden], .nav-kinds[hidden], .nav-divider[hidden], #nav-netz .stepper[hidden], #nav-netz .nav-cluster[hidden] { display: none; }
+.net-3c-letter { display: inline-block; width: var(--icon); text-align: center; font-size: var(--size-base); font-weight: var(--weight-strong); line-height: 1; }
+.net-format-btn { width: calc(var(--target) + 12px); font-size: var(--size-base); font-weight: var(--weight-regular); }
+.net-3c-info { font-size: var(--size-base); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--color-secondary); }
+.net-3c-info.warn { color: var(--color-text); font-weight: var(--weight-strong); }
+#net-group.net-3c-on #net-axes-row, #net-group.net-3c-on #net-domain-row { display: none; }
+.net-3c-note { margin: 0; font-size: var(--size-secondary); color: var(--color-secondary); }
+.net-3c-note:empty { display: none; }
+.net-3c-suggest { flex-wrap: wrap; }
+.net-3c-suggest .layer-btn { width: auto; padding: 0 12px; font-size: var(--size-base); font-variant-numeric: tabular-nums; }
+#net-domain-row[hidden], #net-axes-row[hidden] { display: none; }
+.net-art-sections { display: flex; flex-direction: column; gap: 16px; }
+.net-art-sections > .overlay-section[hidden] { display: none; }
+.net-art-list { margin: 0; padding-left: 1.2em; font-size: var(--size-secondary); color: var(--color-secondary); display: flex; flex-direction: column; gap: 4px; }
+
 /* Phone: two rows of --bar-h (Aus/Sin/Tan/Geo + More, then the strength stepper). 4 x (--target + 12) + 3 x 8 gaps + 8 +
    More = 320px at --target 48 (fits a 360px phone). */
 @media (max-width: 767px) {
@@ -1654,7 +1672,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
      ================================================================================================================================================================================ */
 
   /* Art: the four kind buttons are 60px wide ("Aus" / "Sin" / "Tan" / "Geo", as in the Netz row); the text buttons of the panel (Both / X / Y, Reverse) are --target high */
-  html.ph .ph-slot .net-kind-btn { width: 60px; }
+  html.ph .ph-slot .net-kind-btn { width: 48px; }   /* task 122: three laws in the panel (Aus is a hidden technical element), 48px so the format buttons fit the Reverse slot */
+  html.ph .ph-slot .net-format-btn { width: 48px; padding: 0; }
+  @media (max-width: 339px) {
+    html.ph .ph-slot #net-art-stepper > .stepper-display, html.ph .ph-slot #net-a-stepper > .stepper-display, html.ph .ph-slot #net-b-stepper > .stepper-display, html.ph .ph-slot #net-strength-stepper > .stepper-display { width: 40px; min-width: 40px; }   /* task 122: the four display steppers of the Art panel give up 8px on the narrowest phones (the Farbe register stepper keeps its width) */
+  }
   html.ph .ph-slot .layer-btn { box-sizing: border-box; min-height: var(--target); }
 
   /* Net lines: the text button of the Netz sheet (#more-netz) becomes an icon in the tool row - two wavy lines drawn with a mask, so the button, its text (the accessible name), its title and its active state

@@ -596,13 +596,15 @@ function setup() {
         // for an odd Shape Size 3..9 (netDomainEffective); an even one resets it to Single, visibly.
         const domainBtns = selectAll('.net-domain-btn'), fieldBtn = select('#net-field-btn'), fieldHint = select('#net-field-hint'), fieldInfo = select('#net-field-info');
         const showFieldNote = text => { say('net-field', text, 'info'); };
+        const is3C = () => !!baseNetTransform && baseNetTransform.kind === 'projective';   // task 122: the Moebius net (core/netwarp.js) is not a Netzart 1 spec: the guards below keep this panel from reading or rewriting it
+        let memo = null, was3C = null;   // task 122: the Netzart 1 panel state while "-" or 3C is chosen (netArtSet)
         const stateDomain = () => baseNetTransform ? (baseNetTransform.domain === 'field' ? 'field' : baseNetTransform.domain === 'tiled' ? 'tiled' : baseNetTransform.domain === 'single' ? 'single' : (baseNetTransform.repeat ? 'tiled' : 'single')) : null;
-        const setDomain = d => { ui.domain = d; if (baseNetTransform) { baseNetTransform.domain = d === 'field' ? 'field' : undefined; baseNetTransform.repeat = d === 'tiled'; } };
+        const setDomain = d => { ui.domain = d; if (baseNetTransform && !is3C()) { baseNetTransform.domain = d === 'field' ? 'field' : undefined; baseNetTransform.repeat = d === 'tiled'; } };
         // Macro cells (nested net): ui.macro = the chosen macro count, undefined = smooth (macro = E). The state's
         // baseNetTransform.macro is kept equal to it; the row lists the valid divisors of E = nodeCount - 1.
         const macroRow = select('#net-macro-row'), macroBtns = select('#net-macro-buttons'), macroHint = select('#net-macro-hint');
         let macroSig = null;
-        const setMacro = v => { ui.macro = v; if (baseNetTransform) baseNetTransform.macro = v; };
+        const setMacro = v => { ui.macro = v; if (baseNetTransform && !is3C()) baseNetTransform.macro = v; };
         const showMacroNote = text => { say('net-macro', text, 'info'); };
         const target = () => (ui.axes === 'y' ? ui.y : ui.x);
         const axisSpec = c => c.mode === 'regular' ? { kind: 'uniform', w: 0 }
@@ -632,7 +634,14 @@ function setup() {
             }
             if (notes.length && window.UI) UI.toast(notes.join(' '), 6000);
         }
+        function afterAuthorEdit() {
+            if (baseNetAnimation && baseNetAnimation.live && !baseNetAnimation.playing) baseNetAnimation.live = false;
+            if (timeline && timeline.netLive && !timeline.playing) timeline.netLive = false;
+            render(); netControlsSync(); redraw(); if (window.syncNetAnimationDisplay) window.syncNetAnimationDisplay();
+            if (window.syncTimelineNetUi) window.syncTimelineNetUi();
+        }
         function commit() {
+            if (is3C()) { afterAuthorEdit(); return; }   // task 122: a Netzart 1 control must not replace a 3C spec
             if (ui.axes === 'both') ui.y = Object.assign({}, ui.x);
             const allRegular = ui.x.mode === 'regular' && ui.y.mode === 'regular';
             if (baseNetTransform && baseNetTransform.macro !== ui.macro) ui.macro = baseNetTransform.macro; // adopt a macro set from the state
@@ -699,7 +708,19 @@ function setup() {
         netControlsSync = function () {
             const groupHide = !((currentShape === 'square' || currentShape === 'triangle' || currentShape === 'hex') && activeLayer === 'base');   // task 088/089: the triangle and the hexagon have the Netz row too (a Field only)   // task 084: a hidden flag or title is written only when its value changes (this runs on every draw)
             if (group.elt.hidden !== groupHide) group.elt.hidden = groupHide;
-            const active = netWarpActive();
+            const active = netWarpActive(), on3C = is3C();
+            if (was3C !== on3C) { was3C = on3C; group.elt.classList.toggle('net-3c-on', on3C); }   // task 122: the group knows 3C (class), written only when it changes
+            if (on3C) {   // task 122: the Moebius net: no Field / Macro / Focus notes, faces allowed like on a Field (base sheet and layers on the base grid), curve and free off
+                [fieldHint, fieldInfo, macroRow, macroHint, sizeHint, focusRow, geoRow].forEach(el => { if (!el.elt.hidden) el.elt.hidden = true; });
+                if (curveType.kind !== 'straight') { curveType = { kind: 'straight' }; curveBtn && curveBtn.removeClass('active'); freeBtn && freeBtn.removeClass('active'); updateCurveTypeControls(); }
+                const faceOk3 = active && (activeLayer === 'base' || layerGridMatchesBase(additionalLayers[activeLayer])), sig3 = `3c|${active}|${faceOk3}`;
+                if (sig3 !== wasActive) {
+                    [curveBtn, freeBtn].filter(Boolean).forEach(b => lockBtn(b, active ? 'Off while a net transform is active. Set the net back to Regular (Base sheet, square) to use curves again.' : null));
+                    if (faceBtn) lockBtn(faceBtn, faceOk3 ? null : 'Face fills on a 3C net: the base sheet and layers on the base grid (same shape and size, no offset, no rotation) only');
+                    wasActive = sig3;
+                }
+                return;
+            }
             // Domain: adopt one set from the state; Field needs an odd Shape Size 3..9 - an even one is reset to Single, visibly
             const sd = stateDomain(); if (sd && sd !== ui.domain) { ui.domain = sd; render(); }
             const Rs = typeof netSizeFactors === 'function' ? netSizeFactors() : { x: shapeSizeFactor, y: shapeSizeFactor }, R = Rs.x === Rs.y ? Rs.x : Rs.x + ' \u00d7 ' + Rs.y, Rmin = Math.min(Rs.x, Rs.y), fieldOk = netDomainEffective({ domain: 'field' }, Rs, currentShape).ignored === null, sqShape = currentShape === 'square', evenShape = sqShape || currentShape === 'triangle' || currentShape === 'hex';   // task 106 / 108: the shape decides which sizes a Field takes (evenShape: any size 3..9 - the square and the triangle)
@@ -783,6 +804,7 @@ function setup() {
             return c;
         }
         adoptNetState = function () {
+            if (is3C()) { render(); return; }   // task 122: a restored 3C net keeps the Netzart 1 memory of this panel
             const spec = baseNetTransform;
             if (!spec) { ui.axes = 'both'; ui.domain = 'single'; ui.macro = undefined; ui.x = fresh(); ui.y = fresh(); }
             else {
@@ -792,6 +814,16 @@ function setup() {
                 ui.domain = stateDomain(); ui.macro = spec.macro;
             }
             render();
+        };
+        // task 122: the Netzart stepper of the Netz row (ui-net.js) chooses with this: art = 'off' | 'n1' | '3c' (par = {a, b, format} for '3c'). Netzart 1 keeps its law, strength, focus, domain and macro while
+        // "-" or 3C is chosen (memo / ui) and comes back; a 3C change only writes a spec of core/netwarp.js, never a Netzart 1 one.
+        window.netArtSet = function (art, par) {
+            if (ui.x.mode !== 'regular' || ui.y.mode !== 'regular') memo = { axes: ui.axes, domain: ui.domain, macro: ui.macro, x: Object.assign({}, ui.x), y: Object.assign({}, ui.y) };
+            if (art === '3c') { baseNetTransform = netProjectiveSpec(par.a, par.b, par.format); afterAuthorEdit(); return; }
+            if (art === 'off') { ui.x = fresh(); ui.y = fresh(); baseNetTransform = null; commit(); return; }
+            if (memo) { ui.axes = memo.axes; ui.domain = memo.domain; ui.macro = memo.macro; ui.x = memo.x; ui.y = memo.y; }
+            if (ui.x.mode === 'regular' && ui.y.mode === 'regular') { ui.axes = 'both'; ui.x.mode = 'sinus'; ui.y = Object.assign({}, ui.x); applyNetKindChoice('sinus', true); }
+            baseNetTransform = null; commit();
         };
         fieldBtn.elt.dataset.title = fieldBtn.elt.title;   // restored when Field becomes available again
         // (The standalone net animation's controls - Set Start / Set End / Play / progress - were removed from the UI: see the comment above
