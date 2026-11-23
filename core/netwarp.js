@@ -338,11 +338,16 @@ function _netHexField(spec, corners, Rt) {
     return { fx, fy, altX: false, altY: false, repeat: false, domain: 'field', field: { Rt: 1, h: 0, Rx: best.Rx, Ry: best.Ry, hx, hy }, meshes: { x: best.Rx, y: best.Ry, facesPiecewise: true }, refineFaces: true, frame: { c0: cen, v1: f1, v2: f2, det }, domainIgnored: null, c0: fc0, v1: fv1, v2: fv2, det: fv1.x * fv2.y - fv2.x * fv1.y };
 }
 function netWarpForBase(spec, shape, corners, nodeCountValue, Rt) {
-    if (spec && spec.kind === 'projective') {   // task 121: the square; task 124 (3C-2): the triangle (frame of _netTriangleField); the hexagon has none; a family that does not fit the shape builds nothing
+    if (spec && spec.kind === 'projective') {   // task 121: the square; task 124 (3C-2): the triangle (frame of _netTriangleField); task 127 (3C-4): the hexagon (frame of _netHexField); a family that does not fit the shape builds nothing
         if (!netProjectiveEffective(spec, shape).valid) return null;
         spec = netProjectiveForShape(spec, shape);
         if (shape === 'square' && corners && corners.length >= 4) return makeNetWarp(spec, { c0: corners[0], v1: { x: corners[1].x - corners[0].x, y: corners[1].y - corners[0].y }, v2: { x: corners[3].x - corners[0].x, y: corners[3].y - corners[0].y } }, -1, Rt);
         if (shape === 'triangle' && corners && corners.length === 3) { const A = corners[0], B = corners[1], C = corners[2]; return makeNetWarp(spec, { c0: { x: A.x + B.x - C.x, y: A.y + B.y - C.y }, v1: { x: C.x - B.x, y: C.y - B.y }, v2: { x: C.x - A.x, y: C.y - A.y } }, -1, Rt); }
+        if (shape === 'hex' && corners && corners.length === 6) {   // task 127 (3C-4): the hexagon: the fine lattice of _netHexField (f1 = (v1 + v2) / 3, f2 = (2 v2 - v1) / 3, anchored at the centroid) is the triangle lattice (p, q) = (s, t)
+            const v1 = { x: corners[2].x - corners[0].x, y: corners[2].y - corners[0].y }, v2 = { x: corners[4].x - corners[0].x, y: corners[4].y - corners[0].y };
+            const cen = { x: corners.reduce((a, q) => a + q.x, 0) / 6, y: corners.reduce((a, q) => a + q.y, 0) / 6 };
+            return makeNetWarp(spec, { c0: cen, v1: { x: (v1.x + v2.x) / 3, y: (v1.y + v2.y) / 3 }, v2: { x: (2 * v2.x - v1.x) / 3, y: (2 * v2.y - v1.y) / 3 } }, -1, Rt);
+        }
         return null;
     }
     if (spec && shape === 'hex') return _netHexField(spec, corners, Rt);
@@ -430,7 +435,7 @@ function netAnimationCompat(from, to) {
 }
 function netLerpSpecs(from, to, t) {
     if (!netAnimationCompat(from, to).ok) return null;
-    if (_netIsProjective(from)) return { kind: 'projective', a: (1 - t) * from.a + t * to.a, b: (1 - t) * from.b + t * to.b, format: from.format, family: from.family, interp: true };   // task 121: a, b real in between
+    if (_netIsProjective(from)) return Object.assign({ kind: 'projective', a: (1 - t) * from.a + t * to.a, b: (1 - t) * from.b + t * to.b, format: from.format, family: from.family, interp: true }, from.family === '*N' ? { cls: from.cls | 0 } : {});   // task 121: a, b real in between; task 127: the hexagon family keeps its class
     const A = _netAnimNorm(from), B = _netAnimNorm(to), base = A.any ? B : A;
     const lerp = (a, b) => (1 - t) * a + t * b;   // exactly a at t = 0 and exactly b at t = 1
     const axis = (a, b) => {
@@ -454,7 +459,11 @@ function netLerpSpecs(from, to, t) {
 // at EVERY keyframe; otherwise the net is not driven (the author net shows) and the Timeline status says which keyframe lacks one.
 // Reads timeline.currentFrame = {segmentIndex, localT} (written by sketch.js's applyTimelineFrame()), like playbackCrossfadeColors().
 // A snapshot of the AUTHOR net for capture: a clone of the spec, or {regular: true} for a regular net.
-function netSpecSnapshot() { return baseNetTransform ? JSON.parse(JSON.stringify(baseNetTransform)) : { regular: true }; }
+function netSpecSnapshot() {
+    if (!baseNetTransform) return { regular: true };
+    const spec = JSON.parse(JSON.stringify(baseNetTransform));
+    return (_netIsProjective(spec) && typeof currentShape !== 'undefined') ? netProjectiveForShape(spec, currentShape) : spec;   // task 127: the family follows the shape: a spec written before a shape change is captured with the family it is DRAWN with (else a valid pair is refused with "family differs")
+}
 function timelineNetCoupled() {
     const tl = timeline;
     return !!(tl && tl.netStates && tl.keyframeLayerIds.length >= 2 && tl.netStates.length === tl.keyframeLayerIds.length && tl.netStates.every(s => !!s));
@@ -681,7 +690,7 @@ function netTransformExportData(spec, E, Rt, meshes, shape) {   // task 106: sha
 // The inverse of netTransformExportData(): the spec (as baseNetTransform holds it) from an
 // exported meta.netTransform. Only kind/w/alternate/repeat are read - everything else is derived.
 function netTransformFromExport(exported) {
-    if (exported && exported.version === 2) return exported.kind === 'projective' && (exported.family === '□N' || exported.family === '△N') ? Object.assign(netProjectiveSpec(exported.a, exported.b, exported.format, exported.family), exported.interp === true ? { interp: true } : {}) : null;   // task 121; task 124: the triangle family
+    if (exported && exported.version === 2) return exported.kind === 'projective' && (exported.family === '□N' || exported.family === '△N' || exported.family === '*N') ? Object.assign(netProjectiveSpec(exported.a, exported.b, exported.format, exported.family, exported.cls), exported.interp === true ? { interp: true } : {}) : null;   // task 121; task 124: the triangle family
     if (!exported || exported.version !== 1) return null;
     const axis = a => (!a || a.kind === 'uniform') ? { kind: 'uniform', w: 0 } : (a.kind === 'trig' && a.focus) ? { kind: a.kind, w: a.w, focus: a.focus, alternate: !!a.alternate } : { kind: a.kind, w: a.w, alternate: !!a.alternate };
     // repeat: an export from before the closed-net option has neither field and was drawn repeated
@@ -865,20 +874,35 @@ const NETWARP_PROJ_MAX_B = 12;
 const NETWARP_PROJ_EPS = 1e-3;
 function _netIsProjective(spec) { return !!spec && spec.kind === 'projective'; }
 // task 124: the family follows the shape (square □N, triangle △N); the triangle takes a >= 1 and the full format only (its rim lies on triangle edges: the middle axis p = q cuts triangles, Messung 120/3)
-function netProjectiveFamilyFor(shape) { return shape === 'triangle' ? '\u25b3N' : '\u25a1N'; }
+function netProjectiveFamilyFor(shape) { return shape === 'triangle' ? '\u25b3N' : shape === 'hex' ? '*N' : '\u25a1N'; }   // task 127: the hexagon's family is *N (the omission rule: reports/125.md)
 function netProjectiveAMin(family) { return family === '\u25b3N' ? 1 : 2; }
-function netProjectiveSpec(a, b, format, family) { return { kind: 'projective', a, b, format: format === 'half' ? 'half' : 'full', family: family === '\u25b3N' ? '\u25b3N' : '\u25a1N' }; }
+// task 127: `cls` (0, 1, 2) = the omission class of the hexagon family *N: the hexagon centres are the lattice points with i - j = cls (mod 3); 0 = the symmetric derivation (Hinterreiter p. 14), 1 and 2 mirror images; no key for the other families
+function netProjectiveSpec(a, b, format, family, cls) {
+    const fam = family === '\u25b3N' ? '\u25b3N' : family === '*N' ? '*N' : '\u25a1N', out = { kind: 'projective', a, b, format: format === 'half' ? 'half' : 'full', family: fam };
+    if (fam === '*N') out.cls = cls === 1 || cls === 2 ? cls : 0;
+    return out;
+}
 // {valid, reason}: an invalid spec is IGNORED visibly (no warp; the export flags it), never half-applied.
 // The family FOLLOWS THE SHAPE (no user switch): for a square or triangle sheet the shape decides, the spec's own `family` is only what it was written with (a shape change leaves it stale; netProjectiveForShape renames it).
-function netProjectiveForShape(spec, shape) { return (_netIsProjective(spec) && (shape === 'square' || shape === 'triangle') && spec.family !== netProjectiveFamilyFor(shape)) ? Object.assign({}, spec, { family: netProjectiveFamilyFor(shape) }) : spec; }
+function netProjectiveForShape(spec, shape) {
+    if (!_netIsProjective(spec) || (shape !== 'square' && shape !== 'triangle' && shape !== 'hex')) return spec;
+    const fam = netProjectiveFamilyFor(shape);
+    if (spec.family === fam) return spec;
+    const out = Object.assign({}, spec, { family: fam });   // task 127: the hexagon family carries cls (0 when renamed to it), the others none
+    if (fam === '*N') { if (out.cls === undefined) out.cls = 0; } else delete out.cls;
+    return out;
+}
 function netProjectiveEffective(spec, shape) {
     let reason = null;
-    const fam = (shape === 'square' || shape === 'triangle') ? netProjectiveFamilyFor(shape) : (spec && spec.family), tri = fam === '\u25b3N', amin = netProjectiveAMin(fam);
+    const known = shape === 'square' || shape === 'triangle' || shape === 'hex';
+    const fam = known ? netProjectiveFamilyFor(shape) : (spec && spec.family), tri = fam === '\u25b3N', hexa = fam === '*N', amin = netProjectiveAMin(fam);
     if (!_netIsProjective(spec)) reason = 'not a projective net spec';
-    else if (shape !== undefined && shape !== 'square' && shape !== 'triangle') reason = 'the 3C net exists for the square and the triangle only (the hexagon lacks the omission rule)';
-    else if (fam !== '\u25a1N' && fam !== '\u25b3N') reason = 'family must be \u25a1N or \u25b3N';
+    else if (shape !== undefined && !known) reason = 'the 3C net exists for the square, the triangle and the hexagon only';
+    else if (fam !== '\u25a1N' && fam !== '\u25b3N' && fam !== '*N') reason = 'family must be \u25a1N, \u25b3N or *N';
     else if (spec.format !== 'full' && spec.format !== 'half') reason = 'format must be full or half';
     else if (tri && spec.format !== 'full') reason = 'the 3C net on the triangle exists in the full format only (the middle axis cuts triangles)';
+    else if (hexa && spec.format !== 'full') reason = 'the 3C net on the hexagon exists in the full format only for now';   // task 127: the half format is not built (it cuts hexagons along the middle axis; reports/125.md)
+    else if (hexa && spec.cls !== undefined && !(spec.cls === 0 || spec.cls === 1 || spec.cls === 2)) reason = 'the omission class cls must be 0, 1 or 2';
     else if (!Number.isFinite(spec.a) || !Number.isFinite(spec.b)) reason = 'a and b must be numbers';
     else if (spec.interp !== true && (!Number.isInteger(spec.a) || !Number.isInteger(spec.b))) reason = 'a and b must be whole numbers';
     else if (spec.a < amin - 1e-9) reason = tri ? 'a must be at least 1' : 'a must be at least 2 (a = 1 puts the tile at the vanishing line into the picture: not built, see ROADMAP)';
@@ -918,9 +942,18 @@ function _projReg(warp, pt) {
 }
 function _projRegPoint(warp, s, t) { const F = warp.frame; return { x: F.c0.x + s * F.v1.x + t * F.v2.x, y: F.c0.y + s * F.v1.y + t * F.v2.y }; }
 // the edit tile: the tile with the largest area inside the net, ties to the one nearest the middle of the picture
-function _netProjEditTile(a, b, half, tri) {
+function _netProjEditTile(a, b, half, tri, cls) {
     const planes = _projPlanes(a, b, half), nx = Math.ceil(b - 1e-9), ny = half ? Math.ceil(b / 2 - 1e-9) : nx, vm = 2 * a * b / (a + b), mp = half ? 0.75 * vm : vm / 2, mq = half ? 0.25 * vm : vm / 2;
     let best = { i: 0, j: 0, ar: -1, d: Infinity };
+    if (cls !== undefined) {   // task 127: the hexagon: the tile whose CENTRE (i, j) has i - j = cls (mod 3), largest area inside the net, ties to the middle; (i, j) is the centre (lattice coordinates p = s + i, q = t + j of the centroid-anchored frame)
+        const ring = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]], R = Math.ceil(b) + 1;
+        for (let i = -1; i <= R; i++) for (let j = -1; j <= R; j++) {
+            if ((((i - j) % 3) + 3) % 3 !== cls) continue;
+            const ar = _projArea(_projClipPoly(ring.map(([di, dj]) => [i + di, j + dj]), planes)), d = Math.hypot(i - mp, j - mq);
+            if (ar > best.ar + 1e-9 || (Math.abs(ar - best.ar) <= 1e-9 && d < best.d)) best = { i, j, ar, d };
+        }
+        return { i: best.i, j: best.j };
+    }
     for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
         // task 124: on the triangle the edit tile is the UPPER triangle of the mesh (i, j) - the mesh holds the base triangle (1,0), (0,1), (1,1) - so its area and distance are those of that triangle
         const poly = tri ? [[i + 1, j], [i, j + 1], [i + 1, j + 1]] : [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]];
@@ -930,15 +963,15 @@ function _netProjEditTile(a, b, half, tri) {
     return { i: best.i, j: best.j };
 }
 function _netProjectiveWarp(spec, frame) {
-    const tri = spec.family === '\u25b3N';
-    if (!netProjectiveEffective(spec, tri ? 'triangle' : 'square').valid) return null;
+    const tri = spec.family === '\u25b3N', hexa = spec.family === '*N';
+    if (!netProjectiveEffective(spec, hexa ? 'hex' : tri ? 'triangle' : 'square').valid) return null;
     const { c0, v1, v2 } = frame, det = v1.x * v2.y - v2.x * v1.y;
     if (!det) return null;
-    const a = spec.a, b = spec.b, half = spec.format === 'half', ed = _netProjEditTile(a, b, half, tri);
+    const a = spec.a, b = spec.b, half = spec.format === 'half', ed = _netProjEditTile(a, b, half, tri, hexa ? (spec.cls | 0) : undefined);
     const W = typeof canvasW !== 'undefined' ? canvasW : 600, H = typeof canvasH !== 'undefined' ? canvasH : 600;
     const rc0 = { x: c0.x - ed.i * v1.x - ed.j * v2.x, y: c0.y - ed.i * v1.y - ed.j * v2.y }, ry = half ? b / 2 : b;
     const rv1 = { x: b * v1.x, y: b * v1.y }, rv2 = { x: ry * v2.x, y: ry * v2.y };
-    return { projective: { a, b, half, W, H, i0: ed.i, j0: ed.j, nx: Math.ceil(b - 1e-9), ny: half ? Math.ceil(b / 2 - 1e-9) : Math.ceil(b - 1e-9) }, fx: null, fy: null, altX: false, altY: false, repeat: false, domain: 'field', field: { Rt: 1, h: 0 }, domainIgnored: null, frame: { c0, v1, v2, det }, c0: rc0, v1: rv1, v2: rv2, det: rv1.x * rv2.y - rv2.x * rv1.y };
+    return { projective: Object.assign({ a, b, half, W, H, i0: ed.i, j0: ed.j, nx: Math.ceil(b - 1e-9), ny: half ? Math.ceil(b / 2 - 1e-9) : Math.ceil(b - 1e-9) }, hexa ? { hex: true, cls: spec.cls | 0 } : {}), fx: null, fy: null, altX: false, altY: false, repeat: false, domain: 'field', field: { Rt: 1, h: 0 }, domainIgnored: null, frame: { c0, v1, v2, det }, c0: rc0, v1: rv1, v2: rv2, det: rv1.x * rv2.y - rv2.x * rv1.y };
 }
 function _netProjApply(warp, pt) { const r = _projReg(warp, pt); return _projPx(warp.projective, r.p, r.q); }
 function _netProjInvert(warp, pt) { const P = warp.projective, r = _projPQ(P, pt.x, pt.y); return _projRegPoint(warp, r.p - P.i0, r.q - P.j0); }
@@ -950,6 +983,16 @@ function _netProjInside(warp, pt) {
 // a click on the picture -> the edit tile's own coordinates (the node is then drawn as a copy in every tile): like netWarpFieldLocal() of a Field
 function _netProjLocal(warp, pt) {
     const P = warp.projective, r = _projPQ(P, pt.x, pt.y);
+    if (P.hex) {   // task 127: the hexagon whose centre (class cls) is nearest in the lattice metric (60 degrees: d^2 = x^2 + y^2 + x y); the free point is the position inside THAT hexagon, relative to its centre
+        let ci = 0, cj = 0, bd = Infinity;
+        for (let i = Math.floor(r.p) - 2; i <= Math.floor(r.p) + 3; i++) for (let j = Math.floor(r.q) - 2; j <= Math.floor(r.q) + 3; j++) {
+            if ((((i - j) % 3) + 3) % 3 !== P.cls) continue;
+            const x = r.p - i, y = r.q - j, d = x * x + y * y + x * y;
+            if (d < bd) { bd = d; ci = i; cj = j; }
+        }
+        const l = r.p - ci, m = r.q - cj, at = _projRegPoint(warp, l, m), di = ci - P.i0, dj = cj - P.j0;
+        return { x: at.x, y: at.y, tile: { i: (di - dj) / 3, j: (di + 2 * dj) / 3 }, local: { l, m } };   // the tile index in the hexagon lattice (v1 = 2 f1 - f2, v2 = f1 + f2) relative to the edit tile
+    }
     let i = Math.floor(r.p), j = Math.floor(r.q);
     if (i > P.nx - 1) i = P.nx - 1; if (j > P.ny - 1) j = P.ny - 1; if (i < 0) i = 0; if (j < 0) j = 0;
     const l = r.p - i, m = r.q - j, at = _projRegPoint(warp, l, m);
@@ -983,10 +1026,10 @@ function _netProjTileOutside(warp, tileCentroid, flip180) {
 }
 // the net's own lines for the overlay: p = i + k/E and q = j + k/E, cut exactly with the region; macro at k = 0
 function _netProjGridLines(spec, corners, E) {
-    const tri = !!corners && corners.length === 3;   // the sheet decides (a triangle has 3 outer corners), not the spec's family
-    spec = netProjectiveForShape(spec, tri ? 'triangle' : 'square');
+    const tri = !!corners && corners.length === 3, hexa = !!corners && corners.length === 6;   // the sheet decides (a triangle has 3 outer corners, a hexagon 6), not the spec's family
+    spec = netProjectiveForShape(spec, hexa ? 'hex' : tri ? 'triangle' : 'square');
     if (!corners || corners.length < (tri ? 3 : 4) || !(E >= 1)) return [];
-    const warp = tri ? netWarpForBase(spec, 'triangle', corners, undefined, 1)   // task 124: the triangle's frame (c0 = A + B - C, v1 = C - B, v2 = C - A) and its validity are those of netWarpForBase
+    const warp = (tri || hexa) ? netWarpForBase(spec, hexa ? 'hex' : 'triangle', corners, undefined, 1)   // task 124: the triangle's frame (c0 = A + B - C, v1 = C - B, v2 = C - A) and its validity are those of netWarpForBase
         : _netProjectiveWarp(spec, { c0: corners[0], v1: { x: corners[1].x - corners[0].x, y: corners[1].y - corners[0].y }, v2: { x: corners[3].x - corners[0].x, y: corners[3].y - corners[0].y } });
     if (!warp) return [];
     const P = warp.projective, planes = _projPlanes(P.a, P.b, P.half), out = [], hi = P.b;
@@ -996,15 +1039,43 @@ function _netProjGridLines(spec, corners, E) {
         const A = _projPx(P, pa + c[0] * (pb - pa), qa + c[0] * (qb - qa)), B = _projPx(P, pa + c[1] * (pb - pa), qa + c[1] * (qb - qa));
         out.push({ level, axis, x1: A.x, y1: A.y, x2: B.x, y2: B.y });
     };
+    if (P.hex) {   // task 127: the hexagon's net: the macro lines are the edges of the honeycomb (lattice edges whose end points are no hexagon centre), the micro lines the fine triangle lattice
+        for (let i = -2; i <= Math.ceil(P.b) + 1; i++) for (let j = -2; j <= Math.ceil(P.b) + 1; j++) {
+            if ((((i - j) % 3) + 3) % 3 === P.cls) continue;
+            for (const [di, dj, ax] of [[1, 0, 'v'], [0, 1, 'h'], [1, -1, 'd']]) { if ((((i + di - (j + dj)) % 3) + 3) % 3 === P.cls) continue; add(i, j, i + di, j + dj, ax, 'macro'); }
+        }
+        for (let k = 0; k <= Math.ceil(P.b * E - 1e-9); k++) { if (k % E === 0) continue; const u = k / E; add(u, 0, u, hi, 'v', 'micro'); add(0, u, hi, u, 'h', 'micro'); add(u, 0, 0, u, 'd', 'micro'); }
+        return out;
+    }
     for (let k = 0; k <= Math.ceil(P.b * E - 1e-9); k++) { const u = k / E; add(u, 0, u, hi, 'v', k % E === 0 ? 'macro' : 'micro'); add(0, u, hi, u, 'h', k % E === 0 ? 'macro' : 'micro'); if (tri) add(u, 0, 0, u, 'd', k % E === 0 ? 'macro' : 'micro'); }   // the triangle's third family p + q = u is the Baren (a triangle edge)
     return out;
 }
 // The numbers a UI needs (3C-3) and the tests pin: W (meshes) = area of the region, the tile counts, the stretch of the picture meshes (largest / smallest aspect over the meshes with at least a quarter inside, Messung 6), the edit tile.
 function netProjectiveInfo(spec, Wpx, Hpx) {
-    const tri = !!spec && spec.family === '\u25b3N', eff = netProjectiveEffective(spec, tri ? 'triangle' : 'square');
+    const tri = !!spec && spec.family === '\u25b3N', hexa = !!spec && spec.family === '*N', eff = netProjectiveEffective(spec, hexa ? 'hex' : tri ? 'triangle' : 'square');
     if (!eff.valid) return { valid: false, reason: eff.reason };
     const a = spec.a, b = spec.b, half = spec.format === 'half', planes = _projPlanes(a, b, half), nx = Math.ceil(b - 1e-9), ny = half ? Math.ceil(b / 2 - 1e-9) : nx;
     const P = { a, b, half, W: Wpx, H: Hpx }, e = 1e-4;
+    if (hexa) {   // task 127: W = sum of the area shares of the hexagons (6 triangles = 3 meshes each) = (b^2 - a^2) / 6; the stretch (an INTERPRETATION, reports/125.md): the image box of a whole hexagon against 2 : sqrt3, the maximum over the hexagons with at least a quarter of their area inside, and the measure of task 124 on the fine triangles, whichever is larger
+        const cls = spec.cls | 0, ring = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]], R = Math.ceil(b) + 2;
+        let Wh = 0, withAreaH = 0, st = 1, fine = 1;
+        for (let i = -2; i <= R; i++) for (let j = -2; j <= R; j++) {
+            if ((((i - j) % 3) + 3) % 3 !== cls) continue;
+            const poly = ring.map(([di, dj]) => [i + di, j + dj]), ar = _projArea(_projClipPoly(poly, planes));
+            if (ar < 1e-9) continue;
+            Wh += ar / 3; withAreaH++;
+            if (ar < 0.25 * 3 || poly.some(q => q[0] + q[1] < 0.2)) continue;
+            const pts = poly.map(q => _projPx(P, q[0], q[1])), xs = pts.map(q => q.x), ys = pts.map(q => q.y), asp = (Math.max(...xs) - Math.min(...xs)) / (Math.max(...ys) - Math.min(...ys)) / (2 / Math.sqrt(3));
+            st = Math.max(st, asp, 1 / asp);
+        }
+        for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) for (const cell of [[[i + 1, j], [i, j + 1], [i + 1, j + 1]], [[i, j], [i + 1, j], [i, j + 1]]]) {
+            const poly = _projClipPoly(cell, planes); if (_projArea(poly) < 0.125) continue;
+            const cx = poly.reduce((u, q) => u + q[0], 0) / poly.length, cy = poly.reduce((u, q) => u + q[1], 0) / poly.length;
+            const A = _projPx(P, cx - e, cy + e), B = _projPx(P, cx + e, cy - e), C = _projPx(P, cx - e, cy - e), D = _projPx(P, cx + e, cy + e), asp = Math.abs(B.x - A.x) / Math.abs(D.y - C.y) * Math.sqrt(3);
+            fine = Math.max(fine, asp, 1 / asp);
+        }
+        return { valid: true, reason: null, W: Wh, tiles: { x: nx, y: ny }, tilesWithArea: withAreaH, stretch: Math.max(st, fine), stretchHex: st, stretchFine: fine, editTile: _netProjEditTile(a, b, half, false, cls) };
+    }
     let W = 0, withArea = 0, stretch = 1;
     // task 124: on the triangle W counts TRIANGLES (a mesh = 2): W = b^2 - a^2; the picture's regular mesh is the rhombus with the diagonals p + q (1) and p - q (sqrt 3), so the aspect is taken against 1 : sqrt 3
     // (an interpretation of Hinterreiter p. 17, not proved against the figure); a triangle counts for the stretch with at least a quarter of its area inside
@@ -1027,16 +1098,18 @@ function netProjectiveInfo(spec, Wpx, Hpx) {
 }
 function _netProjExportData(spec, shape) {
     spec = netProjectiveForShape(spec, shape);
-    const tri = spec.family === '\u25b3N', eff = netProjectiveEffective(spec, shape), W = typeof canvasW !== 'undefined' ? canvasW : 600, H = typeof canvasH !== 'undefined' ? canvasH : 600;
+    const tri = spec.family === '\u25b3N', hexa = spec.family === '*N', eff = netProjectiveEffective(spec, shape), W = typeof canvasW !== 'undefined' ? canvasW : 600, H = typeof canvasH !== 'undefined' ? canvasH : 600;
     const out = { version: 2, kind: 'projective', interpretation: true, family: spec.family, a: spec.a, b: spec.b, format: spec.format, geometryIsRegular: true, facesOmitted: false, layerFacesOmitted: true, canvas: { w: W, h: H } };
+    if (hexa) out.cls = spec.cls | 0;   // task 127
     if (spec.interp === true) out.interp = true;
     if (!eff.valid) { out.projectiveIgnored = { reason: eff.reason }; return out; }
     const info = netProjectiveInfo(spec, W, H), half = spec.format === 'half', c = H * spec.a / (spec.b - spec.a);
-    out.orientation = tri ? 'the lattice lines p + q = const (triangle edges, the Baren) run horizontally in the picture' : 'diagonal (lattice turned 45 degrees against the frame)';   // task 124: the triangle lattice has no 45 degree turn
+    out.orientation = hexa ? 'the lattice lines p + q = const (edges of the fine triangle lattice, the Baren) run horizontally in the picture' : tri ? 'the lattice lines p + q = const (triangle edges, the Baren) run horizontally in the picture' : 'diagonal (lattice turned 45 degrees against the frame)';   // task 124: the triangle lattice has no 45 degree turn
     out.W = info.W; out.tiles = info.tiles; out.editTile = info.editTile;
     out.homography = { note: 'pixel = (r0 / r2, r1 / r2) with (r0, r1, r2) = rows . (p, q, 1); lattice coordinates (p, q) = (s + i, t + j) of the base frame; region p, q >= 0, a <= p + q <= b' + (half ? ', p >= q' : ''), rows: [half ? [W, -W, 0] : [W, 0, 0], [-c, -c, c * spec.b], [1, 1, 0]] };
+    if (hexa) { out.tileShape = 'hexagon'; out.omission = 'the fine triangle lattice (p, q) loses the lattice points with p - q = cls (mod 3) and their edges: the hexagon centres (Hinterreiter II p. 14: Auslassen von Linien)'; }
     if (tri) out.tileShape = 'triangle';   // task 124: a tile is a triangle (the mesh = two); the square's export is unchanged
-    out.facesMapping = tri ? 'regular base triangle; every triangle tile (upright, or turned by 180 degrees) is the image of the regular triangle under the one homography of lattice coordinates (p, q) = (s + i, t + j): polygon edges stay straight'
+    out.facesMapping = hexa ? 'regular base hexagon; every hexagon tile is the image of the regular hexagon under the one homography of lattice coordinates (p, q) = (s + i, t + j) of the centroid-anchored fine lattice: polygon edges stay straight' : tri ? 'regular base triangle; every triangle tile (upright, or turned by 180 degrees) is the image of the regular triangle under the one homography of lattice coordinates (p, q) = (s + i, t + j): polygon edges stay straight'
         : 'regular central cell; every tile is the image of the regular tile under the one homography of lattice coordinates (p, q) = (s + i, t + j): polygon edges stay straight';
     return out;
 }
@@ -1044,6 +1117,7 @@ function _netProjCompat(from, to) {
     const pf = _netIsProjective(from), pt = _netIsProjective(to);
     if (!(pf && pt)) return { ok: false, reason: 'a 3C net (Möbiusnetz) is turned 45° against the grid and cannot be interpolated with a Regular, Field, Single or Tiled net' };
     if (from.family !== to.family) return { ok: false, reason: `the 3C family differs (${from.family} vs ${to.family})` };   // task 124: first - a square and a triangle net never interpolate, whatever their format
+    if (from.family === '*N' && (from.cls | 0) !== (to.cls | 0)) return { ok: false, reason: `the 3C omission class differs (${from.cls | 0} vs ${to.cls | 0})` };   // task 127: two hexagon nets with other hexagon centres do not interpolate
     if (from.format !== to.format) return { ok: false, reason: `the 3C format differs (${from.format} vs ${to.format})` };
     return { ok: true, reason: null };
 }

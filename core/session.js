@@ -243,8 +243,9 @@ function _vNetSpec(spec, label) {
     if (!_sObj(o)) throw label + ' must be an object';
     if (o.regular === true) return o;
     if (o.kind === 'projective') {   // task 121 (3C-1): the Moebius net; a main validator without this branch throws on it (no x/y axes): a visible rejection, not a wrong picture
-        const tri = o.family === '\u25b3N', amin = tri ? 1 : 2;   // task 124 (3C-2): the triangle family takes a >= 1 (its full-format rule is the core's, below); the square stays a >= 2
-        if (o.family !== '\u25a1N' && !tri) throw label + '.family must be \u25a1N or \u25b3N';
+        const tri = o.family === '\u25b3N', hexa = o.family === '*N', amin = tri ? 1 : 2;   // task 124 (3C-2): the triangle family takes a >= 1 (its full-format rule is the core's, below); the square stays a >= 2; task 127 (3C-4): the hexagon family *N takes a >= 2 and the class cls
+        if (o.family !== '\u25a1N' && !tri && !hexa) throw label + '.family must be \u25a1N, \u25b3N or *N';
+        if (o.cls !== undefined && !(hexa && _sInt(o.cls) && o.cls >= 0 && o.cls <= 2)) throw label + '.cls must be 0, 1 or 2 (hexagon family only)';
         if (!_sNum(o.a) || !_sNum(o.b) || o.a < amin - 1e-9 || !(o.a < o.b) || o.b > 12 + 1e-9) throw label + '.a and .b must be numbers with ' + amin + ' <= a < b <= 12';
         if (o.interp !== undefined && typeof o.interp !== 'boolean') throw label + '.interp must be a boolean';
         if (o.interp !== true && !(_sInt(o.a) && _sInt(o.b))) throw label + '.a and .b must be whole numbers';

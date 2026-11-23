@@ -47,7 +47,7 @@ function suite(i18nSrc, artSrc, coreSrc) {
   for (const sh of ['square', 'triangle', 'hex']) for (let a = 1; a <= 13; a++) for (let b = 1; b <= 14; b++) for (const d of [1, -1]) { for (const r of [model.stepA(a, b, d, sh), model.stepB(a, b, d)]) if (r.reason) reasons.add(r.reason); }   // task 124: the triangle's a >= 1 reason
   for (const sh of ['square', 'triangle', 'hex']) for (const f of ['full', 'half']) { const r = model.formatAvail(sh, f); if (r.reason) reasons.add(r.reason); }   // task 124: the half format on the triangle
   // task 126: every reason the hint of a spec that draws no net can give (every shape, format, a and b the core refuses or accepts)
-  for (const sh of ['square', 'triangle', 'hex', 'circle']) for (const f of ['full', 'half']) for (const fam of ['\u25a1N', '\u25b3N']) for (const a of [0, 1, 2, 3, 12]) for (const b of [1, 2, 3, 4.5, 12, 13]) {
+  for (const sh of ['square', 'triangle', 'hex', 'circle']) for (const f of ['full', 'half']) for (const fam of ['\u25a1N', '\u25b3N', '*N']) for (const a of [0, 1, 2, 3, 12]) for (const b of [1, 2, 3, 4.5, 12, 13]) {
     const h = model.invalidHint({ effective: core.netProjectiveEffective, forShape: core.netProjectiveForShape }, core.netProjectiveSpec(a, b, f, fam), sh);
     if (h) { reasons.add(h.key); reasons.add(h.shortKey); }
   }
@@ -63,7 +63,7 @@ function suite(i18nSrc, artSrc, coreSrc) {
   check('3b. every reason the model returns is a dictionary key (not a text)', [...reasons].every(r => /^net\.[a-z0-9.]+$/i.test(r) && dict[r]), [...reasons].filter(r => !dict[r]).join(' '));
   // 4. the 3C timeline texts
   const S = core.netProjectiveSpec, REG = { regular: true }, FIELD = { x: { kind: 'trig', w: -1 }, y: 'same', domain: 'field' };
-  const pairs = [[S(2, 4, 'full'), REG], [REG, S(2, 4, 'full')], [S(2, 4, 'full'), FIELD], [S(2, 4, 'full'), S(2, 4, 'half')], [S(2, 4, 'full'), Object.assign(S(2, 4, 'full'), { family: '*N' })]];
+  const pairs = [[S(2, 4, 'full'), REG], [REG, S(2, 4, 'full')], [S(2, 4, 'full'), FIELD], [S(2, 4, 'full'), S(2, 4, 'half')], [S(2, 4, 'full'), Object.assign(S(2, 4, 'full'), { family: '*N' })], [S(3, 7, 'full', '*N', 0), S(3, 7, 'full', '*N', 1)]];   // task 127: the last pair = the omission class differs
   const compat = pairs.map(([x, y]) => core.netAnimationCompat(x, y));
   check('4. every reason _netProjCompat gives has a dictionary key', compat.every(c => !c.ok && model.compatKey(c.reason) && dict[model.compatKey(c.reason).key]), compat.map(c => c.reason).filter(r => !model.compatKey(r)).join(' | '));
   const tr = lang => (k, p) => { const e = dict[k]; let s = e ? e[lang] : k; for (const [n, v] of Object.entries(p || {})) s = s.split('{' + n + '}').join(v); return s; };

@@ -185,7 +185,7 @@ function suite(set, opts = {}) {
         const sb = makeSb(SRC, 600, 600, 'triangle'), S = sb.netProjectiveSpec, E = (sp, sh) => sb.netProjectiveEffective(sp, sh);
         check('5b. the triangle takes the FULL format only (half refused with a reason, no warp)', !E(S(3, 6, 'half', TRI), 'triangle').valid && /full format/.test(E(S(3, 6, 'half', TRI), 'triangle').reason) && E(S(3, 6, 'full', TRI), 'triangle').valid);
         check('5c. a >= 1 on the triangle (1,3 and 1,4 valid), a = 0, a >= b, b > 12, non-integers refused; the SQUARE still takes a >= 2 only', E(S(1, 3, 'full', TRI), 'triangle').valid && E(S(1, 4, 'full', TRI), 'triangle').valid && !E(S(0, 3, 'full', TRI), 'triangle').valid && !E(S(3, 3, 'full', TRI), 'triangle').valid && !E(S(2, 13, 'full', TRI), 'triangle').valid && !E(S(1.5, 4, 'full', TRI), 'triangle').valid && !E(S(1, 4, 'full', SQ), 'square').valid && E(S(2, 4, 'full', SQ), 'square').valid);
-        check('5d. the hexagon has no 3C; the triangle and square family follow the shape (a stale family is renamed: a square spec on the triangle sheet gives the triangle net, and vice versa)', !E(S(2, 4, 'full', TRI), 'hex').valid && sb.netWarpForBase(S(2, 4, 'full', TRI), 'hex', sb.outerCorners, 4, 3) === null
+        check('5d. the triangle and square family follow the shape (a stale family is renamed: a square spec on the triangle sheet gives the triangle net, and vice versa; task 127 pin old -> new: the hexagon has its 3C now, it was refused here)', E(S(2, 4, 'full', TRI), 'hex').valid
             && E(S(2, 4, 'full', SQ), 'triangle').valid && E(S(2, 4, 'full', TRI), 'square').valid && !E(S(1, 4, 'full', TRI), 'square').valid);
         const t = makeSb(SRC, 600, 600, 'triangle'), w1 = t.netWarpForBase(S(1, 3, 'full', SQ), 'triangle', t.outerCorners, 4, 3), w2 = t.netWarpForBase(S(1, 3, 'full', TRI), 'triangle', t.outerCorners, 4, 3);
         check('5e. a stale family builds the same warp as the right one (the family follows the shape)', w1 && w2 && JSON.stringify(w1.projective) === JSON.stringify(w2.projective) && w1.projective.i0 === w2.projective.i0);
@@ -262,12 +262,12 @@ base.forEach(r => { checks++; if (!r.ok) failures++; console.log(`${r.ok ? 'PASS
 console.log('== sabotages: each must turn at least one check red ==');
 const SAB = [
     ['S1  the triangle stretch without the sqrt 3 reference', s => { s.netwarp = mut(s.netwarp, '* (tri ? Math.sqrt(3) : 1)', '* 1'); }],
-    ['S2  edit tile = the farthest mesh (not the one nearest the middle)', s => { s.netwarp = mut(s.netwarp, 'd < best.d))', 'd > best.d))'); }],
+    ['S2  edit tile = the farthest mesh (not the one nearest the middle)', s => { s.netwarp = mut(s.netwarp, 'd < best.d)) best = { i, j, ar, d };\n    }\n    return', 'd > best.d)) best = { i, j, ar, d };\n    }\n    return'); }],
     ['S3  the half format allowed on the triangle', s => { s.netwarp = mut(s.netwarp, "else if (tri && spec.format !== 'full') reason =", "else if (false && spec.format !== 'full') reason ="); }],
     ['S4  tile hook never skips', s => { s.netwarp = mut(s.netwarp, 'return vmax <= P.a + _PROJ_TOL', 'return false && vmax <= P.a + _PROJ_TOL'); }],
     ['S5  netAnimationCompat lets square <-> triangle pass', s => { s.netwarp = mut(s.netwarp, 'if (from.family !== to.family) return', 'if (false) return'); }],
     ['S6  export without tileShape', s => { s.netwarp = mut(s.netwarp, "if (tri) out.tileShape = 'triangle';", ''); }],
-    ['S7  session validator without the family check', s => { s.session = mut(s.session, "if (o.family !== '\\u25a1N' && !tri) throw", 'if (false) throw'); }],
+    ['S7  session validator without the family check', s => { s.session = mut(s.session, "if (o.family !== '\\u25a1N' && !tri && !hexa) throw", 'if (false) throw'); }],
     ['S8  a >= 2 on the triangle too', s => { s.netwarp = mut(s.netwarp, "return family === '\\u25b3N' ? 1 : 2;", 'return 2;'); }],
     ['S9  the family does not follow the shape (stale family kept)', s => { s.netwarp = mut(s.netwarp, '        spec = netProjectiveForShape(spec, shape);\n', ''); }],
     ['S10 the projective branch always taken (off path)', s => { s.netwarp = mut(s.netwarp, "if (spec.kind === 'projective') return _netProjectiveWarp(spec, frame);", "if (true) return _netProjectiveWarp(spec, frame);"); }],
