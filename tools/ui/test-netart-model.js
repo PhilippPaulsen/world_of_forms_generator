@@ -72,6 +72,8 @@ function suite(modelSrc) {
   });
   guard('7', () => {
     check('7. the matrix cells are only tooltips data (1.1 for Netzart 1, 2.2 for 3C), the stop texts are "-", "1", "3C"', M.ART.map(a => a.short).join('|') === '—|1|3C' && M.ART[1].matrix === '1.1' && M.ART[2].matrix === '2.2');
+    const tfake = (k, p) => k + JSON.stringify(p);
+    check('7c. measureLine (task 123): the text of the measures for a valid net, null for an invalid one', M.measureLine(core.netProjectiveInfo(core.netProjectiveSpec(3, 7, 'half'), 600, 600), 'de', tfake) === 'net.3c.info{"w":"10","s":"1,6"}' && M.measureLine({ valid: false }, 'de', tfake) === null);
     check('7b. numbers in the language of the UI', M.summary({ valid: true, W: 6.75, stretch: 2.7345 }, 'de').W === '6,75' && M.summary({ valid: true, W: 6, stretch: 2.7345 }, 'de').stretch === '2,7' && M.summary({ valid: true, W: 6.75, stretch: 2.04 }, 'en').stretch === '2');
   });
   return res;

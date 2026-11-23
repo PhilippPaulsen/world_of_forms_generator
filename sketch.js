@@ -716,7 +716,7 @@ function setup() {
                 const faceOk3 = active && (activeLayer === 'base' || layerGridMatchesBase(additionalLayers[activeLayer])), sig3 = `3c|${active}|${faceOk3}`;
                 if (sig3 !== wasActive) {
                     [curveBtn, freeBtn].filter(Boolean).forEach(b => lockBtn(b, active ? 'Off while a net transform is active. Set the net back to Regular (Base sheet, square) to use curves again.' : null));
-                    if (faceBtn) lockBtn(faceBtn, faceOk3 ? null : 'Face fills on a 3C net: the base sheet and layers on the base grid (same shape and size, no offset, no rotation) only');
+                    if (faceBtn) lockBtn(faceBtn, faceOk3 ? null : (window.UI && UI.t ? UI.t('net.3c.lock.face') : 'Face fills on a 3C net: the base sheet and layers on the base grid (same shape and size, no offset, no rotation) only'));   // task 123: in the language of the UI
                     wasActive = sig3;
                 }
                 return;
@@ -1025,12 +1025,12 @@ function setup() {
     // The persistent Timeline-net indicator (#timeline-net-state); cheap, called whenever its input can change
     window.syncTimelineNetUi = () => {
         const sum = timelineNetSummary();
-        const sig = sum ? sum.state + sum.text : '';
+        const sig = sum ? sum.state + sum.text + (window.UI ? UI.lang : '') : '';   // task 123: the language is part of the signature (the 3C texts are translated)
         if (sig === netUiSig) return;
         netUiSig = sig;
         if (netStateEl) {
             netStateEl.elt.hidden = !sum;
-            if (sum) { netStateEl.html(sum.text); netStateEl.elt.dataset.state = sum.state; }
+            if (sum) { netStateEl.html(window.netArt && window.UI && UI.t ? netArt.tlText(sum.text, UI.t) : sum.text); netStateEl.elt.dataset.state = sum.state; }   // task 123: a 3C reason in the language of the UI
         }
     };
     const timelineKeyframeList = select('#timeline-keyframe-list');
@@ -1304,6 +1304,7 @@ function setup() {
     // ONCE per text; any readout call - the readout resuming, or a clear - ends it). The span is written once per call as before.
     let timelineConditionSaid = null;
     function setTimelineStatus(msg, kind) {
+        if (window.netArt && window.UI && UI.t && msg) msg = netArt.tlText(msg, UI.t);   // task 123: the 3C reason of the frame note (written in applyTimelineFrame, a protected function) in the language of the UI
         if (timelineStatusEl) timelineStatusEl.html(msg || '');
         if (kind === 'refusal' && msg) say('timeline-refusal', msg, 'warn');
         else if (kind === 'condition' && msg) { if (msg !== timelineConditionSaid) { timelineConditionSaid = msg; say('timeline-condition', msg, 'warn'); } }
