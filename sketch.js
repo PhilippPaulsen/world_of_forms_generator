@@ -597,7 +597,7 @@ function setup() {
         const domainBtns = selectAll('.net-domain-btn'), fieldBtn = select('#net-field-btn'), fieldHint = select('#net-field-hint'), fieldInfo = select('#net-field-info');
         const showFieldNote = text => { say('net-field', text, 'info'); };
         const is3C = () => !!baseNetTransform && baseNetTransform.kind === 'projective';   // task 122: the Moebius net (core/netwarp.js) is not a Netzart 1 spec: the guards below keep this panel from reading or rewriting it
-        let memo = null;   // task 122: the Netzart 1 panel state while "-" or 3C is chosen (netArtSet)
+        let memo = null, was3C = null;   // task 122: the Netzart 1 panel state while "-" or 3C is chosen (netArtSet)
         const stateDomain = () => baseNetTransform ? (baseNetTransform.domain === 'field' ? 'field' : baseNetTransform.domain === 'tiled' ? 'tiled' : baseNetTransform.domain === 'single' ? 'single' : (baseNetTransform.repeat ? 'tiled' : 'single')) : null;
         const setDomain = d => { ui.domain = d; if (baseNetTransform && !is3C()) { baseNetTransform.domain = d === 'field' ? 'field' : undefined; baseNetTransform.repeat = d === 'tiled'; } };
         // Macro cells (nested net): ui.macro = the chosen macro count, undefined = smooth (macro = E). The state's
@@ -709,7 +709,7 @@ function setup() {
             const groupHide = !((currentShape === 'square' || currentShape === 'triangle' || currentShape === 'hex') && activeLayer === 'base');   // task 088/089: the triangle and the hexagon have the Netz row too (a Field only)   // task 084: a hidden flag or title is written only when its value changes (this runs on every draw)
             if (group.elt.hidden !== groupHide) group.elt.hidden = groupHide;
             const active = netWarpActive(), on3C = is3C();
-            if (group.elt.classList.contains('net-3c-on') !== on3C) group.elt.classList.toggle('net-3c-on', on3C);   // task 122: the Netzart 1 rows are hidden by CSS under 3C
+            if (was3C !== on3C) { was3C = on3C; group.elt.classList.toggle('net-3c-on', on3C); }   // task 122: the group knows 3C (class), written only when it changes
             if (on3C) {   // task 122: the Moebius net: no Field / Macro / Focus notes, faces allowed like on a Field (base sheet and layers on the base grid), curve and free off
                 [fieldHint, fieldInfo, macroRow, macroHint, sizeHint, focusRow, geoRow].forEach(el => { if (!el.elt.hidden) el.elt.hidden = true; });
                 if (curveType.kind !== 'straight') { curveType = { kind: 'straight' }; curveBtn && curveBtn.removeClass('active'); freeBtn && freeBtn.removeClass('active'); updateCurveTypeControls(); }
