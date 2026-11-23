@@ -79,7 +79,7 @@ const SAB = [
   ['S3  the notice state ignores the shape (no new notice after a shape change)', s => { s.art = mut(s.art, "return hint ? hint.id + '|' + shape : '';", "return hint ? hint.id : '';"); }],
   ['S4  Fall 2: no reason for a below the minimum', s => { s.art = mut(s.art, "spec.a < limitsFor(shape).aMin - 1e-9", 'false'); }],
   ['S5  Fall 1: no reason for the half format on the triangle', s => { s.art = mut(s.art, "shape === 'triangle' && spec.format !== 'full'", 'false'); }],
-  ['S6  a short text is missing from the dictionary', s => { s.i18n = mut(s.i18n, "    'net.3c.invalid.short.aMin': { de: 'Am Quadrat ist a mindestens 2.', en: 'On the square a is at least 2.' },\n", ''); }],
+  ['S6  a short text is missing from the dictionary', s => { s.i18n = mut(s.i18n, "    'net.3c.invalid.short.aMin': { de: 'Quadrat, Sechseck: a mindestens 2.', en: 'Square, hexagon: a at least 2.' },\n", ''); }],
   ['S7  a hint for a spec the core accepts', s => { s.art = mut(s.art, 'if (core.effective(sp, shape).valid) return null;', ''); }],
   ['S8  the notice is never cleared', s => { s.net = mut(s.net, "UI.notifyClear('net-3c-invalid')", 'void 0'); }],
   ['S10 the phone button is never shown', s => { s.net = mut(s.net, 'setHidden(reasonBtn, !hint);', 'setHidden(reasonBtn, true);'); }],

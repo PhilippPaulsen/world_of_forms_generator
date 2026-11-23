@@ -19,7 +19,7 @@ function suite(modelSrc) {
   guard('1', () => {
     const e = s => M.entries(s).map(x => x.id + ':' + (x.ok ? 'ok' : 'no')).join(' ');
     check('1. the table: square -, 1, 3C all available', e('square') === 'off:ok n1:ok n3c:ok', e('square'));
-    check('1b. triangle: 3C available (task 124); hexagon: 3C blocked, with a reason key', e('triangle') === 'off:ok n1:ok n3c:ok' && e('hex') === 'off:ok n1:ok n3c:no' && M.entries('hex')[2].reason === 'net.art.reason.n3c.hex', e('triangle') + ' | ' + e('hex'));
+    check('1b. triangle (task 124) and hexagon (task 127; was blocked): 3C available', e('triangle') === 'off:ok n1:ok n3c:ok' && e('hex') === 'off:ok n1:ok n3c:ok' && M.entries('hex')[2].reason === null, e('triangle') + ' | ' + e('hex'));
     check('1c. an unknown shape: nothing but the reason (no throw)', M.entries('circle').every(x => !x.ok && x.reason === 'net.art.reason.shape'));
   });
   guard('2', () => {
@@ -27,7 +27,7 @@ function suite(modelSrc) {
     check('2. steps on the square: - > 1 > 3C, back; the ends say why', s('square', 'off', 1) === '{"to":"n1"}' && s('square', 'n1', 1) === '{"to":"n3c"}' && s('square', 'n3c', -1) === '{"to":"n1"}' && s('square', 'n1', -1) === '{"to":"off"}' && M.step('square', 'off', -1).to === null && M.step('square', 'off', -1).reason === 'net.art.reason.min', s('square', 'off', -1));
     const past = M.step('square', 'n3c', 1);
     check('2b. past 3C: blocked, the reason names the Netzarten that are not built', past.to === null && past.reason === 'net.art.later.n2' && past.later === true);
-    check('2c. triangle: 1 -> 3C is a stop; hexagon: 1 -> 3C is blocked with the 3C reason, not a stop', M.step('triangle', 'n1', 1).to === 'n3c' && M.step('hex', 'n1', 1).to === null && M.step('hex', 'n1', 1).reason === 'net.art.reason.n3c.hex');
+    check('2c. triangle and hexagon (task 127; was blocked): 1 -> 3C is a stop', M.step('triangle', 'n1', 1).to === 'n3c' && M.step('hex', 'n1', 1).to === 'n3c');
     check('2d. the Netzarten that are not built are listed (2, 3A/3B, 4, 5 to 10), none is a stop', M.later().length === 4 && M.later().every(x => x.reason.startsWith('net.art.later.')) && !M.ART.some(a => a.id.startsWith('n2')));
   });
   guard('3', () => {
@@ -62,6 +62,11 @@ function suite(modelSrc) {
     check('5b. the suggestions follow the ACTUAL canvas (1:1 differs from 2:1)', key(a.list) !== key(b.list) && a.list.length > 0 && b.list.length > 0);
     const none = M.suggest(api, 300, 600);
     check('5c. no suggestion at 1:2: an empty list and a least-stretched hint', none.list.length === 0 && none.best && none.best.b <= 9 && none.best.stretch > 2, JSON.stringify(none.best));
+    {   // task 127: the hexagon's suggestions at the five canvas ratios = the table of reports/125.md for cls 0 (3:4 has none for cls 0; 2,7 and 2,8 exist for cls 1 and 2 only) (W 6..10, stretch <= 2, b <= 9, a >= 2, full format only, cls 0)
+      const want = { 0.5: '', 0.75: '', 1: '3,7 3,8', 1.5: '3,7 4,8 5,9', 2: '4,8 5,8 5,9 6,9' };
+      const got = {}; Object.keys(want).forEach(r => { got[r] = M.suggest(api, Math.round(r * 600), 600, 'hex').list.map(c => c.a + ',' + c.b).sort().join(' '); });
+      check('5e. hexagon suggestions at 1:2, 3:4, 1:1, 3:2, 2:1 equal the table of reports/125.md; all full format with a >= 2', Object.keys(want).every(r => got[r] === want[r]) && [0.75, 1, 1.5, 2].every(r => M.suggest(api, Math.round(r * 600), 600, 'hex').list.every(c => c.format === 'full' && c.a >= 2)), JSON.stringify(got));
+    }
     check('5d. every suggestion obeys the limits (b <= 9, W 7..12, stretch <= 2) and at most 8 are given', [M.suggest(api, 600, 600), M.suggest(api, 800, 600), M.suggest(api, 1200, 600)].every(s => s.list.length <= 8 && s.list.every(c => c.b <= 9 && c.W >= 7 && c.W <= 12 && c.stretch <= 2 + 1e-9)));
     // the triangle (task 124): reports/120-messung.md measurement 6 recomputed with the sqrt 3 reference (tools/grid/measure-3c-triangle.js); a >= 1, W 8 to 16, full format only
     const wantT = { 0.5: '', 0.75: '1,3  1,4', 1: '1,3  2,4', 1.5: '2,4  3,5', 2: '2,4  3,5' }, badT = [];
@@ -97,7 +102,8 @@ let failures = 0, checks = 0;
 suite(MODEL).forEach(r => { checks++; if (!r.ok) failures++; console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name}${r.detail !== undefined && r.detail !== '' ? '  [' + r.detail + ']' : ''}`); });
 console.log('== sabotages: each must turn at least one check red ==');
 const SAB = [
-  ['S1  the table blocks 3C on the triangle', s => mut(s, 'triangle: OK, hex:', "triangle: { ok: false, reason: 'net.art.reason.n3c.hex' }, hex:")],
+  ['S1  the table blocks 3C on the hexagon', s => mut(s, 'n3c: { square: OK, triangle: OK, hex: OK }', "n3c: { square: OK, triangle: OK, hex: { ok: false, reason: 'net.art.reason.n3c.hexHalf' } }")],
+  ['S13 the hexagon uses the square\'s W range', s => mut(s, 'wLo: 6, wHi: 10', 'wLo: 7, wHi: 12')],
   ['S5  the suggestions ignore the canvas ratio', s => mut(s, 'api.info(api.spec(a, b, format, lim.family), W, H)', 'api.info(api.spec(a, b, format, lim.family), 600, 600)')],
   ['S10 the triangle uses the square\'s W range', s => mut(s, 'wLo: 8, wHi: 16', 'wLo: 7, wHi: 12')],
   ['S11 the triangle offers the half format', s => mut(s, "formats: ['full'] }", "formats: ['full', 'half'] }")],
