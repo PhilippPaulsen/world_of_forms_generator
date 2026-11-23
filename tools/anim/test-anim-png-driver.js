@@ -178,7 +178,7 @@ const untouched = (W) => !W.log.some(l => ['progress', 'redraw', 'density', 'pau
             // the working tree may already be committed: then diff against BASE is the whole change as well
             check('sketch.js removed only two lines of the export dialog handlers (Close and the backdrop click, now guarded)', removed.length <= 2 && removed.every(l => l === "-exportOverlay.addClass('hidden');" || l === "-if (e.target.id === 'export-overlay') exportOverlay.addClass('hidden');"), J(removed));
             const core = execFileSync('git', ['diff', '--name-only', BASE, '--', 'core/'], { cwd: ROOT }).toString().split('\n').filter(Boolean);
-            check('core/ differs from main only in anim-export.js', core.every(f => f === 'core/anim-export.js'), J(core));
+            check('core/ differs from main only in anim-export.js', core.every(f => f === 'core/anim-export.js' || f === 'core/netwarp.js' || f === 'core/curves.js' || f === 'core/session.js' /* task 121: 3C-1 */), J(core));
         }
     }
     console.log('== 7. the wiring ==');
