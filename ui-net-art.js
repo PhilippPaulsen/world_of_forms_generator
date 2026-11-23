@@ -84,7 +84,26 @@
   // "6", "6.75" or, in German, "6,75": W has at most two decimals, the stretch one
   function num(v, d, lang) { const s = (Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).toString(); return lang === 'de' ? s.replace('.', ',') : s; }
   function summary(info, lang) { return info && info.valid ? { W: num(info.W, 2, lang), stretch: num(info.stretch, 1, lang) } : null; }
-  const api = { ART: ART, SHAPES: SHAPES, AVAIL: AVAIL, LATER: LATER, entries: entries, availability: availability, step: step, later: later, stepA: stepA, stepB: stepB, warnings: warnings, suggest: suggest, defaultFor: defaultFor, summary: summary, num: num, limits: { A_MIN: A_MIN, B_MAX: B_MAX, SUGGEST_B_MAX: SUGGEST_B_MAX, W_LO: W_LO, W_HI: W_HI, STRETCH_MAX: STRETCH_MAX } };
+  // "W 10 . stretch 1.6" for a measured net (info = netProjectiveInfo); t = UI.t. null for an invalid spec.
+  function measureLine(info, lang, t) { const sm = summary(info, lang); return sm ? t('net.3c.info', { w: sm.W, s: sm.stretch }) : null; }
+  // The three reasons core/netwarp.js (_netProjCompat) gives for a 3C net that cannot be interpolated, as dictionary keys (task 123). The English text is the core's; tools/ui/test-netz-i18n-keys.js runs the
+  // core and fails when a text changes or a new one appears.
+  const COMPAT = [
+    [/^a 3C net \(Möbiusnetz\) is turned 45° against the grid and cannot be interpolated with a Regular, Field, Single or Tiled net$/, 'net.3c.compat.kind'],
+    [/^the 3C format differs \((.+) vs (.+)\)$/, 'net.3c.compat.format'],
+    [/^the 3C family differs \((.+) vs (.+)\)$/, 'net.3c.compat.family']
+  ];
+  function compatKey(reason) { for (const [re, key] of COMPAT) { const m = re.exec(String(reason)); if (m) return { key: key, params: { a: m[1], b: m[2] } }; } return null; }
+  // the timeline texts of the CORE (timelineNetSummary().text, the status note of the frame) that carry a 3C reason, in the language of the UI; every other text is returned unchanged
+  function tlText(text, t) {
+    const s = String(text);
+    let m = /^Net NOT animated between keyframes (\d+) and (\d+): (.*)\. The author net is shown there\.$/.exec(s), c;
+    if (m && (c = compatKey(m[3]))) return t('net.3c.tl.incompatible', { a: m[1], b: m[2], reason: t(c.key, c.params) });
+    m = /^(.*?)Net: the net states of keyframes (\d+) and (\d+) cannot be interpolated: (.*) - the author net is shown$/.exec(s);
+    if (m && (c = compatKey(m[4]))) return m[1] + t('net.3c.tl.note', { reason: t(c.key, c.params) });
+    return s;
+  }
+  const api = { measureLine: measureLine, compatKey: compatKey, tlText: tlText, ART: ART, SHAPES: SHAPES, AVAIL: AVAIL, LATER: LATER, entries: entries, availability: availability, step: step, later: later, stepA: stepA, stepB: stepB, warnings: warnings, suggest: suggest, defaultFor: defaultFor, summary: summary, num: num, limits: { A_MIN: A_MIN, B_MAX: B_MAX, SUGGEST_B_MAX: SUGGEST_B_MAX, W_LO: W_LO, W_HI: W_HI, STRETCH_MAX: STRETCH_MAX } };
   root.netArt = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));

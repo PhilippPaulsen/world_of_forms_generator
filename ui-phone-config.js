@@ -86,7 +86,7 @@
     // release() enables it again. `i18n` (optional) is the dictionary key (ui-i18n.js) of the reason: the engine writes the text of the current language, `reason` is the German text it falls back to.
     // The Fokus stepper left #net-focus-row (which keeps the title and the exact field in the Netz sheet); sketch.js shows that row only for Sin and Tan, so for Aus and Geo
     // the stepper is there but disabled and says why, instead of an empty row.
-    follow: { 'net-focus-stepper': { of: 'net-focus-row', mode: 'disable', reason: 'Fokus gilt für Sin und Tan', i18n: 'net.reason.focus' } },
+    follow: { 'net-focus-stepper': { of: 'net-focus-row', mode: 'disable', reason: 'Der Fokus gilt für Netzart 1 mit Sin und Tan.', i18n: 'net.reason.focus' } },
     // names: the accessible names of the two groups the engine makes (the tool row, the sub-tab row): { text (the German text, also the fallback), i18n (the dictionary key) }. Every label of this file
     // (names, subtabs.*.label, sheets.*.label) has an i18n key: validate() requires it, the engine writes the text of the current language (say(key, text)).
     names: { tools: { text: 'Werkzeuge', i18n: 'phone.tools' }, subtabs: { text: 'Unterbereiche', i18n: 'phone.subtabs' } },
