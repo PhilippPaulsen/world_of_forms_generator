@@ -240,7 +240,7 @@ function suite(set, opts = {}) {
         }
         check('6. W = (b^2 - a^2)/2 (half /2) and the tile counts equal Messung 2 and 5', ok, det);
         const sb = makeSb(SRC, 600, 600), bad = [[1, 4, 'full'], [2, 2, 'full'], [3, 2, 'full'], [2.5, 4, 'full'], [2, 13, 'full'], [2, 4, 'x'], [0, 4, 'full']];
-        check('6b. a = 1, a >= b, a non-integer, b > 12, bad format are refused visibly (reason, no warp)', bad.every(([a, b, f]) => { const sp = Object.assign(sb.netProjectiveSpec(a, b, 'full'), { format: f }); const e = sb.netProjectiveEffective(sp, 'square'); return !e.valid && typeof e.reason === 'string' && e.reason.length > 5 && sb.netWarpForBase(sp, 'square', sb.outerCorners, 4, 3) === null; }) && !sb.netProjectiveEffective(sb.netProjectiveSpec(2, 4, 'full'), 'hex').valid && sb.netWarpForBase(sb.netProjectiveSpec(2, 4, 'full'), 'hex', sb.outerCorners, 4, 3) === null);   // task 124 pin: the triangle has its own 3C now (test-netwarp-projective-triangle.js); the hexagon stays refused
+        check('6b. a = 1, a >= b, a non-integer, b > 12, bad format are refused visibly (reason, no warp)', bad.every(([a, b, f]) => { const sp = Object.assign(sb.netProjectiveSpec(a, b, 'full'), { format: f }); const e = sb.netProjectiveEffective(sp, 'square'); return !e.valid && typeof e.reason === 'string' && e.reason.length > 5 && sb.netWarpForBase(sp, 'square', sb.outerCorners, 4, 3) === null; }));   // task 127 pin (old -> new): the hexagon has its own 3C now (test-netwarp-projective-hex.js); it was refused here (task 124: the hexagon stays refused)
         const ex = sb.netTransformExportData(Object.assign(sb.netProjectiveSpec(1, 4, 'full')), 3, 3, undefined, 'square');
         check('6c. an invalid spec exports projectiveIgnored (a = 1: Fig. 148 is a ROADMAP note)', ex.projectiveIgnored && /at least 2/.test(ex.projectiveIgnored.reason), JSON.stringify(ex.projectiveIgnored));
     });
@@ -268,7 +268,7 @@ function suite(set, opts = {}) {
         const sess = new vm.Script(set.session), ctx = vm.createContext({ console }); sess.runInContext(ctx);
         const V = (spec) => { try { vm.runInContext('_vNetSpec(' + JSON.stringify(spec) + ', "t")', ctx); return null; } catch (e) { return String(e); } };
         const good = [A, sb.netProjectiveSpec(2, 4, 'full'), lerp];
-        const badSpecs = [sb.netProjectiveSpec(1, 4, 'full'), sb.netProjectiveSpec(4, 4, 'full'), sb.netProjectiveSpec(5, 4, 'full'), sb.netProjectiveSpec(2, 13, 'full'), Object.assign(sb.netProjectiveSpec(2, 4, 'full'), { format: 'x' }), Object.assign(sb.netProjectiveSpec(2, 4, 'full'), { family: '*N' }), sb.netProjectiveSpec(2.5, 4, 'full'), Object.assign(sb.netProjectiveSpec(2, 4, 'full'), { interp: 'yes' })];
+        const badSpecs = [sb.netProjectiveSpec(1, 4, 'full'), sb.netProjectiveSpec(4, 4, 'full'), sb.netProjectiveSpec(5, 4, 'full'), sb.netProjectiveSpec(2, 13, 'full'), Object.assign(sb.netProjectiveSpec(2, 4, 'full'), { format: 'x' }), Object.assign(sb.netProjectiveSpec(2, 4, 'full'), { family: 'XN' }), sb.netProjectiveSpec(2.5, 4, 'full'), Object.assign(sb.netProjectiveSpec(2, 4, 'full'), { interp: 'yes' })];
         check('8d. the session validator accepts valid 3C specs and refuses a = 1, a >= b, b > 12, format, family, non-integers', good.every(g => V(g) === null) && badSpecs.every(g => V(g) !== null), badSpecs.map(g => V(g) === null ? 'ACCEPTED ' + JSON.stringify(g) : '').join(''));
         check('8e. the legacy specs still validate', V({ x: { kind: 'trig', w: -1 }, y: 'same', domain: 'field' }) === null && V({ regular: true }) === null);
     });
@@ -318,7 +318,7 @@ base.forEach(r => { checks++; if (!r.ok) failures++; console.log(`${r.ok ? 'PASS
 console.log('== sabotages: each must turn at least one check red ==');
 const SAB = [
     ['S1  Y formula with a and b swapped', s => { s.netwarp = mut(s.netwarp, 'P.H * P.a * (P.b - v) / ((P.b - P.a) * v)', 'P.H * P.b * (P.a - v) / ((P.a - P.b) * v) + 0.5 * P.H'); }],
-    ['S2  edit tile fixed at (0, 0)', s => { s.netwarp = mut(s.netwarp, 'return { i: best.i, j: best.j };', 'return { i: 0, j: 0 };'); }],
+    ['S2  edit tile fixed at (0, 0)', s => { s.netwarp = mut(s.netwarp, 'return { i: best.i, j: best.j };\n}', 'return { i: 0, j: 0 };\n}'); }],
     ['S3  sink without the new line (empty cut)', s => { s.curves = mut(s.curves, "        if (split && split.length < 2) return;   // task 121: a segment entirely outside the 3C net's region draws and collects nothing\n", ''); }],
     ['S4  cut only at v >= a, not at v <= b', s => { s.netwarp = mut(s.netwarp, '[-1, -1, b]', '[0, 0, 1]'); }],
     ['S5  netAnimationCompat lets 3C <-> regular pass', s => { s.netwarp = mut(s.netwarp, 'if (!(pf && pt)) return { ok: false', 'if (false) return { ok: false'); }],
