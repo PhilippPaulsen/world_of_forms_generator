@@ -980,7 +980,6 @@ body.dark {
 
 /* task 122 (3C-3): the Netzart stepper (- | 1 | 3C) in front of the kinds, the Netzart 3C controls (a, b, format, W and stretch) in their place, and the Mehr sections. Tokens only: weights 400 / 600, sizes 12 / 16. */
 #net-art-value, #net-a-value, #net-b-value { min-width: 2.5ch; }   /* task 123: the Netzart, a and b steppers are one width (two characters, a and b show 12 at most) */
-#net-art-value { font-weight: var(--weight-strong); }
 .net-3c { display: flex; align-items: center; gap: var(--gap); flex: none; }
 .net-3c[hidden], .net-3c-warn[hidden], .nav-kinds[hidden], .nav-divider[hidden], #nav-netz .stepper[hidden], #nav-netz .nav-cluster[hidden] { display: none; }
 .net-3c-letter { display: inline-block; width: var(--icon); text-align: center; font-size: var(--size-base); font-weight: var(--weight-strong); line-height: 1; }

@@ -55,6 +55,17 @@ function suite(sketchSrc) {
     w.set('off');
     check('1e. "-": no net', S.baseNetTransform === null);
   });
+  guard('1f', () => {
+    // task 124: the family follows the SHAPE (square-N, triangle-N), never a choice of the panel
+    const T = '\u25b3N', Q = '\u25a1N', w = makeWorld(sketchSrc), S = w.sb;
+    S.currentShape = 'triangle'; w.set('3c', { a: 1, b: 3, format: 'full' });
+    check('1f. on the triangle sheet "3C" writes the triangle family (a = 1 kept)', S.baseNetTransform.family === T && S.baseNetTransform.a === 1 && S.baseNetTransform.format === 'full', w.spec());
+    S.currentShape = 'square'; w.set('3c', P3);
+    check('1g. a shape change to the square: the next 3C choice writes the square family', S.baseNetTransform.family === Q, w.spec());
+    // a shape change under an active 3C leaves the stale family; the core reads the shape\'s (the net is the same one) and the panel does not rewrite or drop it
+    S.currentShape = 'triangle'; S.outerCorners = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 50, y: 86 }]; const before = w.spec(); w.sync(); w.sync();
+    check('1h. a shape change under an active 3C: the panel keeps the spec (no still change of a, b, format) and the core builds the triangle net from it', w.spec() === before && S.netWarpForBase(S.baseNetTransform, 'triangle', S.outerCorners, 4, 3) !== null && S.netWarpForBase(S.baseNetTransform, 'triangle', S.outerCorners, 4, 3).projective.a === 2);
+  });
   guard('2', () => {
     const w = makeWorld(sketchSrc), S = w.sb; w.set('n1'); w.set('3c', P3); const before = w.spec();
     w.handlers['.net-kind-btn:sinus'][0]();   // a Netzart 1 control while 3C is chosen (programmatic: the CSS hides it)
@@ -122,6 +133,7 @@ if (!process.env.SKETCH_JS) {
     ['S2  commit() without its 3C guard', s => mut(s, "            if (is3C()) { afterAuthorEdit(); return; }   // task 122: a Netzart 1 control must not replace a 3C spec\n", '')],
     ['S3  setDomain() writes into a 3C spec', s => mut(s, 'if (baseNetTransform && !is3C()) {', 'if (baseNetTransform) {')],
     ['S4  faceOk of the 3C branch false (the 121 gap: faces locked under 3C)', s => mut(s, 'const faceOk3 = active && (activeLayer', 'const faceOk3 = false && active && (activeLayer')],
+    ['S12 netArtSet writes the square family on the triangle', s => mut(s, 'netProjectiveSpec(par.a, par.b, par.format, netProjectiveFamilyFor(currentShape))', 'netProjectiveSpec(par.a, par.b, par.format)')],
     ['S7  adoptNetState() resets the memory under 3C', s => mut(s, "            if (is3C()) { render(); return; }   // task 122: a restored 3C net keeps the Netzart 1 memory of this panel\n", '')],
     ['S8  3C -> 1 loses the law (memory not restored)', s => mut(s, "if (memo) { ui.axes = memo.axes;", "if (false) { ui.axes = memo.axes;")],
     ['S10 the 3C branch of netControlsSync is missing (Field notes and macro under 3C)', s => mut(s, '            if (on3C) {   // task 122:', '            if (false) {   // task 122:')],

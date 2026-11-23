@@ -44,7 +44,8 @@ function suite(i18nSrc, artSrc, coreSrc) {
   const model = art, ents = ['square', 'triangle', 'hex'].flatMap(sh => model.entries(sh)), reasons = new Set();
   ents.forEach(e => e.reason && reasons.add(e.reason));
   for (const sh of ['square', 'triangle', 'hex']) for (const id of ['off', 'n1', 'n3c']) for (const d of [1, -1]) { const r = model.step(sh, id, d); if (r.reason) reasons.add(r.reason); }
-  for (let a = 1; a <= 13; a++) for (let b = 1; b <= 14; b++) for (const d of [1, -1]) { for (const r of [model.stepA(a, b, d), model.stepB(a, b, d)]) if (r.reason) reasons.add(r.reason); }
+  for (const sh of ['square', 'triangle', 'hex']) for (let a = 1; a <= 13; a++) for (let b = 1; b <= 14; b++) for (const d of [1, -1]) { for (const r of [model.stepA(a, b, d, sh), model.stepB(a, b, d)]) if (r.reason) reasons.add(r.reason); }   // task 124: the triangle's a >= 1 reason
+  for (const sh of ['square', 'triangle', 'hex']) for (const f of ['full', 'half']) { const r = model.formatAvail(sh, f); if (r.reason) reasons.add(r.reason); }   // task 124: the half format on the triangle
   model.later().forEach(l => reasons.add(l.reason));
   reasons.forEach(k => keys.set(k, 'model'));
   for (const a of model.ART) { keys.set('net.art.name.' + a.id, 'dynamic'); keys.set('net.art.tip.' + a.id, 'dynamic'); }
