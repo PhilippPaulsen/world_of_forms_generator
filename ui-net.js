@@ -203,7 +203,10 @@
     [aRoot, bRoot, fmtGroup].forEach(function (el) { setHidden(el, !is3); });   // the layout moves them out of the cluster: each one is hidden on its own
     { const dr = $('#net-domain-row'), ar = $('#net-axes-row'); if (dr) setHidden(dr, is3); if (ar) setHidden(ar, is3); }   // the layout moves them out of #net-group: hidden here, not by a class of the group
     let line3 = null;
-    if (is3 && typeof netProjectiveInfo === 'function') {
+    const why3 = is3 && !ents[artIndex('n3c')].ok ? tt(ents[artIndex('n3c')].reason) : null;   // a 3C spec on a shape that has no 3C (the core draws no net): a, b and the format stay, locked, and the line says why
+    [aRoot, bRoot].forEach(function (el) { UI.setDisabled(el, why3 || all || null); });
+    if (why3) { setText(infoEl, why3 + ' \u26a0'); infoEl.classList.add('warn'); if (infoEl.title !== why3) infoEl.title = why3; line3 = why3; }
+    else if (is3 && typeof netProjectiveInfo === 'function') {
       const info = netProjectiveInfo(cur, canvasW, canvasH), sm = netArt.summary(info, langNow()), wn = netArt.warnings(info);
       const a = Math.round(cur.a), b = Math.round(cur.b);
       setText(aDisplay, String(a)); setText(bDisplay, String(b));
@@ -211,7 +214,7 @@
       if (bInput.value !== String(b)) bInput.value = String(b);
       setAria(aDisplay, 'aria-valuenow', String(a)); setAria(bDisplay, 'aria-valuenow', String(b));
       aStepper.refresh(); bStepper.refresh();
-      fmtBtns.forEach(function (bt) { const on = bt.dataset.format === cur.format; bt.classList.toggle('active', on); setAria(bt, 'aria-checked', on ? 'true' : 'false'); UI.setDisabled(bt, all); });
+      fmtBtns.forEach(function (bt) { const on = bt.dataset.format === cur.format; bt.classList.toggle('active', on); setAria(bt, 'aria-checked', on ? 'true' : 'false'); UI.setDisabled(bt, why3 || all); });
       if (sm) {
         line3 = tt('net.3c.info', { w: sm.W, s: sm.stretch });
         const warn = [];
@@ -273,8 +276,9 @@
     setLocked(strengthExact, reasonStrength());
     setLocked(focusExact, reasonFocus());
     // the readout line of the phone layout's Netz sheet: the active domain and the shape size (core/state.js), in the current language
+    if (line3 !== null) { if (readoutEl && readoutEl.textContent !== line3) readoutEl.textContent = line3; return; }   // task 122: under 3C the line is W and the stretch (the last thing sync() does)
     if (readoutEl && window.netReadout) {
-      const d = $('.net-domain-btn.active'), dom = window.netReadout.readoutDomain(d ? d.dataset.domain : 'single', typeof netDomainEffective === 'function' && typeof netSizeFactors === 'function' ? netDomainEffective({ domain: 'field' }, netSizeFactors(), currentShape).ignored === null : undefined), fld = dom === 'field' && typeof gridSizeX === 'function', ms = fld && typeof netWarpBaseNow === 'function' && netWarpBaseNow() ? netWarpBaseNow().meshes : undefined, hexF = !!ms && currentShape === 'hex', text = window.netReadout.readoutText(dom, hexF ? gridSizeX() : ms ? ms.x : fld ? gridSizeX() : shapeSizeFactor, UI.t, hexF ? gridSizeY() : ms ? ms.y : fld ? gridSizeY() : undefined, !!ms, hexF), family = window.netReadout.readoutFamily(currentShape, dom, typeof netWarpActive === 'function' && netWarpActive(), UI.t), line = line3 !== null ? line3 : family ? family + ' \u00b7 ' + text : text;   // task 122: under 3C the line is W and the stretch;   // task 086: a Field reads X and Y; task 088: the triangle's Field reads the meshes it covers, edge cut; task 111: the family name in front (Field and an active net only)
+      const d = $('.net-domain-btn.active'), dom = window.netReadout.readoutDomain(d ? d.dataset.domain : 'single', typeof netDomainEffective === 'function' && typeof netSizeFactors === 'function' ? netDomainEffective({ domain: 'field' }, netSizeFactors(), currentShape).ignored === null : undefined), fld = dom === 'field' && typeof gridSizeX === 'function', ms = fld && typeof netWarpBaseNow === 'function' && netWarpBaseNow() ? netWarpBaseNow().meshes : undefined, hexF = !!ms && currentShape === 'hex', text = window.netReadout.readoutText(dom, hexF ? gridSizeX() : ms ? ms.x : fld ? gridSizeX() : shapeSizeFactor, UI.t, hexF ? gridSizeY() : ms ? ms.y : fld ? gridSizeY() : undefined, !!ms, hexF), family = window.netReadout.readoutFamily(currentShape, dom, typeof netWarpActive === 'function' && netWarpActive(), UI.t), line = family ? family + ' \u00b7 ' + text : text;   // task 086: a Field reads X and Y; task 088: the triangle's Field reads the meshes it covers, edge cut; task 111: the family name in front (Field and an active net only)
       if (readoutEl.textContent !== line) readoutEl.textContent = line;
     }
   }
