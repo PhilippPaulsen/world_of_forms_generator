@@ -260,6 +260,7 @@ function _netFieldAxisInverse(f, sOut, h) {
 // (so the sink stays untouched and the output is byte-identical to a build without this module).
 function makeNetWarp(spec, frame, E, Rt) {
     if (!spec || !frame) return null;
+    if (spec.kind === 'projective') return _netProjectiveWarp(spec, frame);   // task 121 (3C-1): the Moebius net; every other spec has no `kind` and takes the path below unchanged
     const dom = netDomainEffective(spec, Rt, 'square');   // task 106: a warp built here is the square's (netWarpForBase routes the triangle and the hexagon to their own builders)
     const ax = spec.x, ay = spec.y === 'same' ? spec.x : spec.y;
     const isField = dom.domain === 'field';
@@ -337,6 +338,7 @@ function _netHexField(spec, corners, Rt) {
     return { fx, fy, altX: false, altY: false, repeat: false, domain: 'field', field: { Rt: 1, h: 0, Rx: best.Rx, Ry: best.Ry, hx, hy }, meshes: { x: best.Rx, y: best.Ry, facesPiecewise: true }, refineFaces: true, frame: { c0: cen, v1: f1, v2: f2, det }, domainIgnored: null, c0: fc0, v1: fv1, v2: fv2, det: fv1.x * fv2.y - fv2.x * fv1.y };
 }
 function netWarpForBase(spec, shape, corners, nodeCountValue, Rt) {
+    if (spec && spec.kind === 'projective') return shape === 'square' && corners && corners.length >= 4 ? makeNetWarp(spec, { c0: corners[0], v1: { x: corners[1].x - corners[0].x, y: corners[1].y - corners[0].y }, v2: { x: corners[3].x - corners[0].x, y: corners[3].y - corners[0].y } }, -1, Rt) : null;   // task 121: the square only (3C-2: triangle)
     if (spec && shape === 'hex') return _netHexField(spec, corners, Rt);
     if (spec && shape === 'triangle') return _netTriangleField(spec, corners, Rt);
     if (!spec || shape !== 'square' || !corners || corners.length < 4) return null;
@@ -362,12 +364,14 @@ function netWarpTileCoords(warp, pt) {
 // Whether a warp is a CLOSED net (one tile, no repetition) and whether a point lies inside it.
 function netWarpIsClosed(warp) { return !!warp && !warp.repeat; }
 function netWarpInsideNet(warp, pt) {
+    if (warp.projective) return _netProjInside(warp, pt);
     const c = netWarpTileCoords(warp, warp.field ? _netBackShift(warp, pt) : pt);   // pt is an image-space point (a click)
     if (warp.field) { const [hx, hy] = _netFieldH(warp), [ux, uy] = _netFieldHi(warp); return c.s >= -hx && c.s <= ux + 1 && c.t >= -hy && c.t <= uy + 1; } // the whole field
     return c.s >= 0 && c.s <= 1 && c.t >= 0 && c.t <= 1;
 }
 
 function applyNetWarp(warp, pt) {
+    if (warp.projective) return _netProjApply(warp, pt);   // task 121
     const W = _netFrame(warp);
     const dx = pt.x - W.c0.x, dy = pt.y - W.c0.y;
     const s = (dx * W.v2.y - dy * W.v2.x) / W.det;
@@ -401,6 +405,7 @@ function _netAnimNorm(spec) {
 }
 function _netAnimFamily(a) { return (!a || a.kind === 'uniform' || !a.w) ? null : a.kind; }
 function netAnimationCompat(from, to) {
+    if (_netIsProjective(from) || _netIsProjective(to)) return _netProjCompat(from, to);   // task 121
     const A = _netAnimNorm(from), B = _netAnimNorm(to);
     if (!A.any && !B.any && A.dom !== B.dom) return { ok: false, reason: `the domain differs (${A.dom} vs ${B.dom}) - a different geometry cannot be interpolated` };
     const dom = A.any ? B.dom : A.dom;
@@ -419,6 +424,7 @@ function netAnimationCompat(from, to) {
 }
 function netLerpSpecs(from, to, t) {
     if (!netAnimationCompat(from, to).ok) return null;
+    if (_netIsProjective(from)) return { kind: 'projective', a: (1 - t) * from.a + t * to.a, b: (1 - t) * from.b + t * to.b, format: from.format, family: from.family, interp: true };   // task 121: a, b real in between
     const A = _netAnimNorm(from), B = _netAnimNorm(to), base = A.any ? B : A;
     const lerp = (a, b) => (1 - t) * a + t * b;   // exactly a at t = 0 and exactly b at t = 1
     const axis = (a, b) => {
@@ -526,6 +532,7 @@ function netAnimationExportInfo() {
 // touching a boundary is not split. A corner (s and t both integers at one point) yields one point.
 function netWarpSplitSegment(warp, p1, p2) {
     if (!warp || !warp.field) return null;
+    if (warp.projective) return _netProjCut(warp, p1, p2);   // task 121: the exact cut with the net's region ([] = outside), not a tile split
     const a = netWarpTileCoords(warp, p1), b = netWarpTileCoords(warp, p2), [hx, hy] = _netFieldH(warp), ux = warp.field.hix === undefined ? hx : warp.field.hix, uy = warp.field.hiy === undefined ? hy : warp.field.hiy, EPS = 1e-9, ts = [];
     const axis = (u0, u1, law, h, up) => {   // p1, p2 are REGULAR points (no shift): the inner tile boundaries are k = -h + 1 .. up
         if (!law) return;
@@ -581,6 +588,7 @@ function _netWarpAxisInverse(f, alt, sOut) {
     return k + (flip ? 1 - li : li);
 }
 function invertNetWarp(warp, pt) {
+    if (warp.projective) return _netProjInvert(warp, pt);   // task 121
     if (warp.field) pt = _netBackShift(warp, pt);   // task 105: pt is an image-space point; the picture is F(p + T), so T goes first (once, here)
     const W = _netFrame(warp);
     const dx = pt.x - W.c0.x, dy = pt.y - W.c0.y;
@@ -604,6 +612,7 @@ function invertNetWarp(warp, pt) {
 // clicked, or null (not a field, or outside it: nothing to attach to).
 function netWarpFieldLocal(warp, pt) {
     if (!warp || !warp.field || !netWarpInsideNet(warp, pt)) return null;
+    if (warp.projective) return _netProjLocal(warp, pt);   // task 121
     const [hx, hy] = _netFieldH(warp), [ux, uy] = _netFieldHi(warp), W = _netFrame(warp), c = netWarpTileCoords(warp, _netBackShift(warp, pt));   // pt: an image-space click (task 105: minus T)
     const sr = warp.fx ? _netFieldAxisInverse(warp.fx, c.s, hx) : c.s, tr = warp.fy ? _netFieldAxisInverse(warp.fy, c.t, hy) : c.t;
     let i = Math.floor(sr), j = Math.floor(tr);
@@ -620,6 +629,7 @@ function netWarpFieldLocal(warp, pt) {
 // derived values, written so a reader need not know the constants.
 function isFieldOf(spec, Rt, shape) { return netDomainEffective(spec, Rt, shape).domain === 'field'; }
 function netTransformExportData(spec, E, Rt, meshes, shape) {   // task 106: shape = the sheet's shape (core/export.js passes currentShape); without it the conservative rule applies
+    if (spec && spec.kind === 'projective') return _netProjExportData(spec, shape);   // task 121: version 2
     const ax = spec.x, ay = spec.y === 'same' ? spec.x : spec.y;
     const R = isFieldOf(spec, Rt, shape) ? _netRt(Rt) : null;
     const describe = (axis, Rax) => {
@@ -665,6 +675,7 @@ function netTransformExportData(spec, E, Rt, meshes, shape) {   // task 106: sha
 // The inverse of netTransformExportData(): the spec (as baseNetTransform holds it) from an
 // exported meta.netTransform. Only kind/w/alternate/repeat are read - everything else is derived.
 function netTransformFromExport(exported) {
+    if (exported && exported.version === 2) return exported.kind === 'projective' && exported.family === '□N' ? Object.assign(netProjectiveSpec(exported.a, exported.b, exported.format), exported.interp === true ? { interp: true } : {}) : null;   // task 121
     if (!exported || exported.version !== 1) return null;
     const axis = a => (!a || a.kind === 'uniform') ? { kind: 'uniform', w: 0 } : (a.kind === 'trig' && a.focus) ? { kind: a.kind, w: a.w, focus: a.focus, alternate: !!a.alternate } : { kind: a.kind, w: a.w, alternate: !!a.alternate };
     // repeat: an export from before the closed-net option has neither field and was drawn repeated
@@ -709,6 +720,7 @@ function netWarpRefineFaces(result, warp) {
 // piecewise affine; its vertices are the 6 corners, the crossings of its edges with the mesh lines and its centre (the centre of the hexagon is a lattice node), so the bounding box of those mapped points is that of the image.
 // A no-op (false) for every other warp. 1 px margin.
 function netWarpTileOutsideCanvas(warp, tileCentroid, flip180, margin) {
+    if (warp && warp.projective) return _netProjTileOutside(warp, tileCentroid, flip180);   // task 121
     if (!warp || warp.refineFaces !== true || !warp.frame || typeof outerCorners === 'undefined' || typeof toTileLocal !== 'function') return false;
     const F = warp.frame, W = typeof canvasW !== 'undefined' ? canvasW : 600, H = typeof canvasH !== 'undefined' ? canvasH : 600;
     const loc = outerCorners.map(p => toTileLocal(p, tileCentroid, flip180)), pts = loc.slice();
@@ -743,6 +755,7 @@ function netWarpTileOutsideCanvas(warp, tileCentroid, flip180, margin) {
 // Returns [{level: 'macro'|'micro', axis: 'v'|'h', x1, y1, x2, y2}], canvas coordinates. Positions come
 // from the same per-axis function applyNetWarp() uses (so `alternate` parity and repeat are honoured).
 function netGridLines(spec, corners, E, view, opts = {}) {
+    if (spec && spec.kind === 'projective') return _netProjGridLines(spec, corners, E);   // task 121
     if ((!opts.frame && (!corners || corners.length < 4)) || !(E >= 1)) return [];
     let c0, v1, v2;
     if (opts.frame) { c0 = opts.frame.c0; v1 = opts.frame.v1; v2 = opts.frame.v2; }   // task 088: the base mesh of the triangle / hexagon (task 092: read BEFORE corners[3]: a triangle has 3 corners, the old order threw)
@@ -827,4 +840,180 @@ function netGridLines(spec, corners, E, view, opts = {}) {
         out.push({ level: level(idx), axis: 'h', x1: a.x, y1: a.y, x2: b.x, y2: b.y });
     }
     return out;
+}
+
+// ---- Task 121 (3C-1): the projective net (Moebius net, Hinterreiter Netzart 3C), family square-N ----
+// The picture is the image of the square lattice (p, q) under ONE homography H (plan: tasks/121-3c-projektiv.md, tools/grid/measure-3c.js
+// is the prototype). The pattern is built in regular space as ever; with the tile coordinates (s, t) of the base frame {c0, v1, v2} a point has the
+// lattice coordinates (p, q) = (s + i0, t + j0), (i0, j0) = the EDIT TILE (the visible tile that the node dots, the hit test and free endpoints work in; the
+// picture does not depend on it: every tile carries the same pattern). The net is the region p, q >= 0, a <= v <= b with v = p + q (half format: also
+// p >= q); the frame is the canvas (W x H). With v = p + q:
+//   full  X = W p / v        half  X = W (p - q) / v        Y = H a (b - v) / ((b - a) v)        (a at the bottom, b at the top)
+//   inverse: v = a b / (Y/H (b - a) + a), p = X v / W (full) | (v + X v / W) / 2 (half), q = v - p.
+// Straight lines stay straight: a chord between two mapped endpoints IS the image of the segment, so the sink only has to CUT a segment with the net's
+// region (netWarpSplitSegment returns the exact cut, [] = outside; v < a is the vanishing side, nothing is drawn there). Faces are placed per vertex (exact).
+// The marker fields (repeat false, field {Rt: 1, h: 0}, c0/v1/v2 = the lattice rectangle [0,b] x [0,b]) let core/tiling.js and core/faces.js serve it unchanged.
+// a >= 2 is enforced: only a = 1 has a tile that touches the vanishing line (v = 0), where coordinates run to 8e5 px and the canvas loses its antialiasing (measured,
+// tasks/121-3c-projektiv.md section 3); a = 1 = ROADMAP.
+const NETWARP_PROJ_MAX_B = 12;
+const NETWARP_PROJ_EPS = 1e-3;
+function _netIsProjective(spec) { return !!spec && spec.kind === 'projective'; }
+function netProjectiveSpec(a, b, format) { return { kind: 'projective', a, b, format: format === 'half' ? 'half' : 'full', family: '□N' }; }
+// {valid, reason}: an invalid spec is IGNORED visibly (no warp; the export flags it), never half-applied.
+function netProjectiveEffective(spec, shape) {
+    let reason = null;
+    if (!_netIsProjective(spec)) reason = 'not a projective net spec';
+    else if (shape !== undefined && shape !== 'square') reason = 'the 3C net exists for the square only (the triangle follows in 3C-2)';
+    else if (spec.family !== '□N') reason = 'family must be □N';
+    else if (spec.format !== 'full' && spec.format !== 'half') reason = 'format must be full or half';
+    else if (!Number.isFinite(spec.a) || !Number.isFinite(spec.b)) reason = 'a and b must be numbers';
+    else if (spec.interp !== true && (!Number.isInteger(spec.a) || !Number.isInteger(spec.b))) reason = 'a and b must be whole numbers';
+    else if (spec.a < 2 - 1e-9) reason = 'a must be at least 2 (a = 1 puts the tile at the vanishing line into the picture: not built, see ROADMAP)';
+    else if (!(spec.a < spec.b)) reason = 'a must be smaller than b';
+    else if (spec.b > NETWARP_PROJ_MAX_B + 1e-9) reason = `b exceeds ${NETWARP_PROJ_MAX_B}`;
+    return reason ? { valid: false, reason } : { valid: true, reason: null };
+}
+function _projPlanes(a, b, half) { const h = [[1, 0, 0], [0, 1, 0], [1, 1, -a], [-1, -1, b]]; if (half) h.push([1, -1, 0]); return h; }   // keep A p + B q + C >= 0
+function _projClipPoly(poly, planes) {
+    for (const [A, B, C] of planes) {
+        const out = [];
+        for (let i = 0; i < poly.length; i++) {
+            const P = poly[i], Q = poly[(i + 1) % poly.length], dp = A * P[0] + B * P[1] + C, dq = A * Q[0] + B * Q[1] + C;
+            if (dp >= 0) out.push(P);
+            if ((dp >= 0) !== (dq >= 0)) { const t = dp / (dp - dq); out.push([P[0] + t * (Q[0] - P[0]), P[1] + t * (Q[1] - P[1])]); }
+        }
+        poly = out; if (!poly.length) return poly;
+    }
+    return poly;
+}
+function _projArea(poly) { let s = 0; for (let i = 0; i < poly.length; i++) { const P = poly[i], Q = poly[(i + 1) % poly.length]; s += P[0] * Q[1] - Q[0] * P[1]; } return Math.abs(s) / 2; }
+// the pixel of the lattice point (p, q): the one map of the module (v < eps is clamped to eps so every result is finite; only reached by a point off the net)
+function _projPx(P, p, q) {
+    let v = p + q;
+    if (v < NETWARP_PROJ_EPS) { if (v > 0) { const k = NETWARP_PROJ_EPS / v; p *= k; q *= k; } else { p = q = NETWARP_PROJ_EPS / 2; } v = p + q; }
+    return { x: (P.half ? P.W * (p - q) : P.W * p) / v, y: P.H * P.a * (P.b - v) / ((P.b - P.a) * v) };
+}
+// the lattice point (p, q) of the pixel (X, Y)
+function _projPQ(P, X, Y) {
+    const den = Y / P.H * (P.b - P.a) + P.a, v = P.a * P.b / (den > 1e-12 ? den : 1e-12), p = P.half ? (v + X * v / P.W) / 2 : X * v / P.W;
+    return { p, q: v - p, v };
+}
+// the lattice point (p, q) of a REGULAR point, in the edit tile's frame
+function _projReg(warp, pt) {
+    const F = warp.frame, dx = pt.x - F.c0.x, dy = pt.y - F.c0.y, P = warp.projective;
+    return { p: (dx * F.v2.y - dy * F.v2.x) / F.det + P.i0, q: (F.v1.x * dy - F.v1.y * dx) / F.det + P.j0 };
+}
+function _projRegPoint(warp, s, t) { const F = warp.frame; return { x: F.c0.x + s * F.v1.x + t * F.v2.x, y: F.c0.y + s * F.v1.y + t * F.v2.y }; }
+// the edit tile: the tile with the largest area inside the net, ties to the one nearest the middle of the picture
+function _netProjEditTile(a, b, half) {
+    const planes = _projPlanes(a, b, half), nx = Math.ceil(b - 1e-9), ny = half ? Math.ceil(b / 2 - 1e-9) : nx, vm = 2 * a * b / (a + b), mp = half ? 0.75 * vm : vm / 2, mq = half ? 0.25 * vm : vm / 2;
+    let best = { i: 0, j: 0, ar: -1, d: Infinity };
+    for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
+        const ar = _projArea(_projClipPoly([[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]], planes)), d = Math.hypot(i + 0.5 - mp, j + 0.5 - mq);
+        if (ar > best.ar + 1e-9 || (Math.abs(ar - best.ar) <= 1e-9 && d < best.d)) best = { i, j, ar, d };
+    }
+    return { i: best.i, j: best.j };
+}
+function _netProjectiveWarp(spec, frame) {
+    if (!netProjectiveEffective(spec, 'square').valid) return null;
+    const { c0, v1, v2 } = frame, det = v1.x * v2.y - v2.x * v1.y;
+    if (!det) return null;
+    const a = spec.a, b = spec.b, half = spec.format === 'half', ed = _netProjEditTile(a, b, half);
+    const W = typeof canvasW !== 'undefined' ? canvasW : 600, H = typeof canvasH !== 'undefined' ? canvasH : 600;
+    const rc0 = { x: c0.x - ed.i * v1.x - ed.j * v2.x, y: c0.y - ed.i * v1.y - ed.j * v2.y }, ry = half ? b / 2 : b;
+    const rv1 = { x: b * v1.x, y: b * v1.y }, rv2 = { x: ry * v2.x, y: ry * v2.y };
+    return { projective: { a, b, half, W, H, i0: ed.i, j0: ed.j, nx: Math.ceil(b - 1e-9), ny: half ? Math.ceil(b / 2 - 1e-9) : Math.ceil(b - 1e-9) }, fx: null, fy: null, altX: false, altY: false, repeat: false, domain: 'field', field: { Rt: 1, h: 0 }, domainIgnored: null, frame: { c0, v1, v2, det }, c0: rc0, v1: rv1, v2: rv2, det: rv1.x * rv2.y - rv2.x * rv1.y };
+}
+function _netProjApply(warp, pt) { const r = _projReg(warp, pt); return _projPx(warp.projective, r.p, r.q); }
+function _netProjInvert(warp, pt) { const P = warp.projective, r = _projPQ(P, pt.x, pt.y); return _projRegPoint(warp, r.p - P.i0, r.q - P.j0); }
+const _PROJ_TOL = 1e-9;
+function _netProjInside(warp, pt) {
+    const P = warp.projective, r = _projPQ(P, pt.x, pt.y);
+    return r.v >= P.a - _PROJ_TOL && r.v <= P.b + _PROJ_TOL && r.p >= -_PROJ_TOL && r.q >= -_PROJ_TOL && (!P.half || r.p >= r.q - _PROJ_TOL);
+}
+// a click on the picture -> the edit tile's own coordinates (the node is then drawn as a copy in every tile): like netWarpFieldLocal() of a Field
+function _netProjLocal(warp, pt) {
+    const P = warp.projective, r = _projPQ(P, pt.x, pt.y);
+    let i = Math.floor(r.p), j = Math.floor(r.q);
+    if (i > P.nx - 1) i = P.nx - 1; if (j > P.ny - 1) j = P.ny - 1; if (i < 0) i = 0; if (j < 0) j = 0;
+    const l = r.p - i, m = r.q - j, at = _projRegPoint(warp, l, m);
+    return { x: at.x, y: at.y, tile: { i: i - P.i0, j: j - P.j0 }, local: { l, m } };
+}
+// Cyrus-Beck: the part t0..t1 of the lattice segment (pa,qa)-(pb,qb) inside the planes, or null
+function _projCutParams(pa, qa, pb, qb, planes) {
+    let t0 = 0, t1 = 1;
+    for (const [A, B, C] of planes) {
+        let g0 = A * pa + B * qa + C, g1 = A * pb + B * qb + C;
+        if (g0 < 0 && g0 >= -_PROJ_TOL) g0 = 0; if (g1 < 0 && g1 >= -_PROJ_TOL) g1 = 0;   // a segment ON a rim line (float noise) stays
+        if (g0 < 0 && g1 < 0 && g1 < -_PROJ_TOL) return null;
+        if (g0 < 0 || g1 < 0) { const t = g0 / (g0 - g1); if (g0 < 0) { if (t > t0) t0 = t; } else if (t < t1) t1 = t; }
+    }
+    return t0 > t1 - 1e-12 && (t0 > 0 || t1 < 1) ? null : [t0, t1];
+}
+function _netProjCut(warp, p1, p2) {
+    const P = warp.projective, A = _projReg(warp, p1), B = _projReg(warp, p2), c = _projCutParams(A.p, A.q, B.p, B.q, _projPlanes(P.a, P.b, P.half));
+    if (!c) return [];
+    if (c[0] === 0 && c[1] === 1) return [p1, p2];
+    const at = t => ({ x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) });
+    return [c[0] === 0 ? p1 : at(c[0]), c[1] === 1 ? p2 : at(c[1])];
+}
+// a tile entirely outside the net region draws no face fill (the corners give the extremes: v, p and q are linear)
+function _netProjTileOutside(warp, tileCentroid, flip180) {
+    if (typeof outerCorners === 'undefined' || typeof toTileLocal !== 'function') return false;
+    const P = warp.projective;
+    let vmin = Infinity, vmax = -Infinity, pmax = -Infinity, qmax = -Infinity, dmax = -Infinity;
+    for (const c of outerCorners) { const r = _projReg(warp, toTileLocal(c, tileCentroid, flip180)), v = r.p + r.q; if (v < vmin) vmin = v; if (v > vmax) vmax = v; if (r.p > pmax) pmax = r.p; if (r.q > qmax) qmax = r.q; if (r.p - r.q > dmax) dmax = r.p - r.q; }
+    return vmax <= P.a + _PROJ_TOL || vmin >= P.b - _PROJ_TOL || pmax <= _PROJ_TOL || qmax <= _PROJ_TOL || (P.half && dmax <= _PROJ_TOL);
+}
+// the net's own lines for the overlay: p = i + k/E and q = j + k/E, cut exactly with the region; macro at k = 0
+function _netProjGridLines(spec, corners, E) {
+    if (!corners || corners.length < 4 || !(E >= 1)) return [];
+    const warp = _netProjectiveWarp(spec, { c0: corners[0], v1: { x: corners[1].x - corners[0].x, y: corners[1].y - corners[0].y }, v2: { x: corners[3].x - corners[0].x, y: corners[3].y - corners[0].y } });
+    if (!warp) return [];
+    const P = warp.projective, planes = _projPlanes(P.a, P.b, P.half), out = [], hi = P.b;
+    const add = (pa, qa, pb, qb, axis, level) => {
+        const c = _projCutParams(pa, qa, pb, qb, planes);
+        if (!c) return;
+        const A = _projPx(P, pa + c[0] * (pb - pa), qa + c[0] * (qb - qa)), B = _projPx(P, pa + c[1] * (pb - pa), qa + c[1] * (qb - qa));
+        out.push({ level, axis, x1: A.x, y1: A.y, x2: B.x, y2: B.y });
+    };
+    for (let k = 0; k <= Math.ceil(P.b * E - 1e-9); k++) { const u = k / E; add(u, 0, u, hi, 'v', k % E === 0 ? 'macro' : 'micro'); add(0, u, hi, u, 'h', k % E === 0 ? 'macro' : 'micro'); }
+    return out;
+}
+// The numbers a UI needs (3C-3) and the tests pin: W (meshes) = area of the region, the tile counts, the stretch of the picture meshes (largest / smallest aspect over the meshes with at least a quarter inside, Messung 6), the edit tile.
+function netProjectiveInfo(spec, Wpx, Hpx) {
+    const eff = netProjectiveEffective(spec, 'square');
+    if (!eff.valid) return { valid: false, reason: eff.reason };
+    const a = spec.a, b = spec.b, half = spec.format === 'half', planes = _projPlanes(a, b, half), nx = Math.ceil(b - 1e-9), ny = half ? Math.ceil(b / 2 - 1e-9) : nx;
+    const P = { a, b, half, W: Wpx, H: Hpx }, e = 1e-4;
+    let W = 0, withArea = 0, stretch = 1;
+    for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
+        const poly = _projClipPoly([[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]], planes), ar = _projArea(poly);
+        if (ar < 1e-9) continue;
+        W += ar; withArea++;
+        if (ar < 0.25) continue;
+        const cx = poly.reduce((s, q) => s + q[0], 0) / poly.length, cy = poly.reduce((s, q) => s + q[1], 0) / poly.length;
+        const A = _projPx(P, cx - e, cy + e), B = _projPx(P, cx + e, cy - e), C = _projPx(P, cx - e, cy - e), D = _projPx(P, cx + e, cy + e);
+        const asp = Math.abs(B.x - A.x) / Math.abs(D.y - C.y); stretch = Math.max(stretch, asp, 1 / asp);
+    }
+    return { valid: true, reason: null, W, tiles: { x: nx, y: ny }, tilesWithArea: withArea, stretch, editTile: _netProjEditTile(a, b, half) };
+}
+function _netProjExportData(spec, shape) {
+    const eff = netProjectiveEffective(spec, shape), W = typeof canvasW !== 'undefined' ? canvasW : 600, H = typeof canvasH !== 'undefined' ? canvasH : 600;
+    const out = { version: 2, kind: 'projective', interpretation: true, family: spec.family, a: spec.a, b: spec.b, format: spec.format, geometryIsRegular: true, facesOmitted: false, layerFacesOmitted: true, canvas: { w: W, h: H } };
+    if (spec.interp === true) out.interp = true;
+    if (!eff.valid) { out.projectiveIgnored = { reason: eff.reason }; return out; }
+    const info = netProjectiveInfo(spec, W, H), half = spec.format === 'half', c = H * spec.a / (spec.b - spec.a);
+    out.orientation = 'diagonal (lattice turned 45 degrees against the frame)';
+    out.W = info.W; out.tiles = info.tiles; out.editTile = info.editTile;
+    out.homography = { note: 'pixel = (r0 / r2, r1 / r2) with (r0, r1, r2) = rows . (p, q, 1); lattice coordinates (p, q) = (s + i, t + j) of the base frame; region p, q >= 0, a <= p + q <= b' + (half ? ', p >= q' : ''), rows: [half ? [W, -W, 0] : [W, 0, 0], [-c, -c, c * spec.b], [1, 1, 0]] };
+    out.facesMapping = 'regular central cell; every tile is the image of the regular tile under the one homography of lattice coordinates (p, q) = (s + i, t + j): polygon edges stay straight';
+    return out;
+}
+function _netProjCompat(from, to) {
+    const pf = _netIsProjective(from), pt = _netIsProjective(to);
+    if (!(pf && pt)) return { ok: false, reason: 'a 3C net (Möbiusnetz) is turned 45° against the grid and cannot be interpolated with a Regular, Field, Single or Tiled net' };
+    if (from.format !== to.format) return { ok: false, reason: `the 3C format differs (${from.format} vs ${to.format})` };
+    if (from.family !== to.family) return { ok: false, reason: `the 3C family differs (${from.family} vs ${to.family})` };
+    return { ok: true, reason: null };
 }
