@@ -3231,7 +3231,7 @@ function setNetAnimationStatus(text) { if (window.setNetAnimStatusText) window.s
 function captureNetAnimationEnd(which) {
     if (timelineNetCoupled()) { setNetAnimationStatus('The timeline drives the net.'); return false; }
     const a = ensureNetAnimation(), label = which === 'from' ? 'Start' : 'End';
-    const spec = baseNetTransform ? JSON.parse(JSON.stringify(baseNetTransform)) : { regular: true };
+    const spec = netSpecSnapshot();   // task 127: the family follows the shape
     const other = which === 'from' ? a.to : a.from;
     if (other) {
         const c = which === 'from' ? netAnimationCompat(spec, other) : netAnimationCompat(other, spec);

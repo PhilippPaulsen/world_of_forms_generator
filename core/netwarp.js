@@ -454,7 +454,11 @@ function netLerpSpecs(from, to, t) {
 // at EVERY keyframe; otherwise the net is not driven (the author net shows) and the Timeline status says which keyframe lacks one.
 // Reads timeline.currentFrame = {segmentIndex, localT} (written by sketch.js's applyTimelineFrame()), like playbackCrossfadeColors().
 // A snapshot of the AUTHOR net for capture: a clone of the spec, or {regular: true} for a regular net.
-function netSpecSnapshot() { return baseNetTransform ? JSON.parse(JSON.stringify(baseNetTransform)) : { regular: true }; }
+function netSpecSnapshot() {
+    if (!baseNetTransform) return { regular: true };
+    const spec = JSON.parse(JSON.stringify(baseNetTransform));
+    return (_netIsProjective(spec) && typeof currentShape !== 'undefined') ? netProjectiveForShape(spec, currentShape) : spec;   // task 127: the family follows the shape: a spec written before a shape change is captured with the family it is DRAWN with (else a valid pair is refused with "family differs")
+}
 function timelineNetCoupled() {
     const tl = timeline;
     return !!(tl && tl.netStates && tl.keyframeLayerIds.length >= 2 && tl.netStates.length === tl.keyframeLayerIds.length && tl.netStates.every(s => !!s));
