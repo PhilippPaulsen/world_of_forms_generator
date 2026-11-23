@@ -338,7 +338,13 @@ function _netHexField(spec, corners, Rt) {
     return { fx, fy, altX: false, altY: false, repeat: false, domain: 'field', field: { Rt: 1, h: 0, Rx: best.Rx, Ry: best.Ry, hx, hy }, meshes: { x: best.Rx, y: best.Ry, facesPiecewise: true }, refineFaces: true, frame: { c0: cen, v1: f1, v2: f2, det }, domainIgnored: null, c0: fc0, v1: fv1, v2: fv2, det: fv1.x * fv2.y - fv2.x * fv1.y };
 }
 function netWarpForBase(spec, shape, corners, nodeCountValue, Rt) {
-    if (spec && spec.kind === 'projective') return shape === 'square' && corners && corners.length >= 4 ? makeNetWarp(spec, { c0: corners[0], v1: { x: corners[1].x - corners[0].x, y: corners[1].y - corners[0].y }, v2: { x: corners[3].x - corners[0].x, y: corners[3].y - corners[0].y } }, -1, Rt) : null;   // task 121: the square only (3C-2: triangle)
+    if (spec && spec.kind === 'projective') {   // task 121: the square; task 124 (3C-2): the triangle (frame of _netTriangleField); the hexagon has none; a family that does not fit the shape builds nothing
+        if (!netProjectiveEffective(spec, shape).valid) return null;
+        spec = netProjectiveForShape(spec, shape);
+        if (shape === 'square' && corners && corners.length >= 4) return makeNetWarp(spec, { c0: corners[0], v1: { x: corners[1].x - corners[0].x, y: corners[1].y - corners[0].y }, v2: { x: corners[3].x - corners[0].x, y: corners[3].y - corners[0].y } }, -1, Rt);
+        if (shape === 'triangle' && corners && corners.length === 3) { const A = corners[0], B = corners[1], C = corners[2]; return makeNetWarp(spec, { c0: { x: A.x + B.x - C.x, y: A.y + B.y - C.y }, v1: { x: C.x - B.x, y: C.y - B.y }, v2: { x: C.x - A.x, y: C.y - A.y } }, -1, Rt); }
+        return null;
+    }
     if (spec && shape === 'hex') return _netHexField(spec, corners, Rt);
     if (spec && shape === 'triangle') return _netTriangleField(spec, corners, Rt);
     if (!spec || shape !== 'square' || !corners || corners.length < 4) return null;
@@ -675,7 +681,7 @@ function netTransformExportData(spec, E, Rt, meshes, shape) {   // task 106: sha
 // The inverse of netTransformExportData(): the spec (as baseNetTransform holds it) from an
 // exported meta.netTransform. Only kind/w/alternate/repeat are read - everything else is derived.
 function netTransformFromExport(exported) {
-    if (exported && exported.version === 2) return exported.kind === 'projective' && exported.family === '□N' ? Object.assign(netProjectiveSpec(exported.a, exported.b, exported.format), exported.interp === true ? { interp: true } : {}) : null;   // task 121
+    if (exported && exported.version === 2) return exported.kind === 'projective' && (exported.family === '□N' || exported.family === '△N') ? Object.assign(netProjectiveSpec(exported.a, exported.b, exported.format, exported.family), exported.interp === true ? { interp: true } : {}) : null;   // task 121; task 124: the triangle family
     if (!exported || exported.version !== 1) return null;
     const axis = a => (!a || a.kind === 'uniform') ? { kind: 'uniform', w: 0 } : (a.kind === 'trig' && a.focus) ? { kind: a.kind, w: a.w, focus: a.focus, alternate: !!a.alternate } : { kind: a.kind, w: a.w, alternate: !!a.alternate };
     // repeat: an export from before the closed-net option has neither field and was drawn repeated
@@ -858,17 +864,24 @@ function netGridLines(spec, corners, E, view, opts = {}) {
 const NETWARP_PROJ_MAX_B = 12;
 const NETWARP_PROJ_EPS = 1e-3;
 function _netIsProjective(spec) { return !!spec && spec.kind === 'projective'; }
-function netProjectiveSpec(a, b, format) { return { kind: 'projective', a, b, format: format === 'half' ? 'half' : 'full', family: '□N' }; }
+// task 124: the family follows the shape (square □N, triangle △N); the triangle takes a >= 1 and the full format only (its rim lies on triangle edges: the middle axis p = q cuts triangles, Messung 120/3)
+function netProjectiveFamilyFor(shape) { return shape === 'triangle' ? '\u25b3N' : '\u25a1N'; }
+function netProjectiveAMin(family) { return family === '\u25b3N' ? 1 : 2; }
+function netProjectiveSpec(a, b, format, family) { return { kind: 'projective', a, b, format: format === 'half' ? 'half' : 'full', family: family === '\u25b3N' ? '\u25b3N' : '\u25a1N' }; }
 // {valid, reason}: an invalid spec is IGNORED visibly (no warp; the export flags it), never half-applied.
+// The family FOLLOWS THE SHAPE (no user switch): for a square or triangle sheet the shape decides, the spec's own `family` is only what it was written with (a shape change leaves it stale; netProjectiveForShape renames it).
+function netProjectiveForShape(spec, shape) { return (_netIsProjective(spec) && (shape === 'square' || shape === 'triangle') && spec.family !== netProjectiveFamilyFor(shape)) ? Object.assign({}, spec, { family: netProjectiveFamilyFor(shape) }) : spec; }
 function netProjectiveEffective(spec, shape) {
     let reason = null;
+    const fam = (shape === 'square' || shape === 'triangle') ? netProjectiveFamilyFor(shape) : (spec && spec.family), tri = fam === '\u25b3N', amin = netProjectiveAMin(fam);
     if (!_netIsProjective(spec)) reason = 'not a projective net spec';
-    else if (shape !== undefined && shape !== 'square') reason = 'the 3C net exists for the square only (the triangle follows in 3C-2)';
-    else if (spec.family !== '□N') reason = 'family must be □N';
+    else if (shape !== undefined && shape !== 'square' && shape !== 'triangle') reason = 'the 3C net exists for the square and the triangle only (the hexagon lacks the omission rule)';
+    else if (fam !== '\u25a1N' && fam !== '\u25b3N') reason = 'family must be \u25a1N or \u25b3N';
     else if (spec.format !== 'full' && spec.format !== 'half') reason = 'format must be full or half';
+    else if (tri && spec.format !== 'full') reason = 'the 3C net on the triangle exists in the full format only (the middle axis cuts triangles)';
     else if (!Number.isFinite(spec.a) || !Number.isFinite(spec.b)) reason = 'a and b must be numbers';
     else if (spec.interp !== true && (!Number.isInteger(spec.a) || !Number.isInteger(spec.b))) reason = 'a and b must be whole numbers';
-    else if (spec.a < 2 - 1e-9) reason = 'a must be at least 2 (a = 1 puts the tile at the vanishing line into the picture: not built, see ROADMAP)';
+    else if (spec.a < amin - 1e-9) reason = tri ? 'a must be at least 1' : 'a must be at least 2 (a = 1 puts the tile at the vanishing line into the picture: not built, see ROADMAP)';
     else if (!(spec.a < spec.b)) reason = 'a must be smaller than b';
     else if (spec.b > NETWARP_PROJ_MAX_B + 1e-9) reason = `b exceeds ${NETWARP_PROJ_MAX_B}`;
     return reason ? { valid: false, reason } : { valid: true, reason: null };
@@ -905,20 +918,23 @@ function _projReg(warp, pt) {
 }
 function _projRegPoint(warp, s, t) { const F = warp.frame; return { x: F.c0.x + s * F.v1.x + t * F.v2.x, y: F.c0.y + s * F.v1.y + t * F.v2.y }; }
 // the edit tile: the tile with the largest area inside the net, ties to the one nearest the middle of the picture
-function _netProjEditTile(a, b, half) {
+function _netProjEditTile(a, b, half, tri) {
     const planes = _projPlanes(a, b, half), nx = Math.ceil(b - 1e-9), ny = half ? Math.ceil(b / 2 - 1e-9) : nx, vm = 2 * a * b / (a + b), mp = half ? 0.75 * vm : vm / 2, mq = half ? 0.25 * vm : vm / 2;
     let best = { i: 0, j: 0, ar: -1, d: Infinity };
     for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
-        const ar = _projArea(_projClipPoly([[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]], planes)), d = Math.hypot(i + 0.5 - mp, j + 0.5 - mq);
+        // task 124: on the triangle the edit tile is the UPPER triangle of the mesh (i, j) - the mesh holds the base triangle (1,0), (0,1), (1,1) - so its area and distance are those of that triangle
+        const poly = tri ? [[i + 1, j], [i, j + 1], [i + 1, j + 1]] : [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]];
+        const ar = _projArea(_projClipPoly(poly, planes)), d = tri ? Math.hypot(i + 2 / 3 - mp, j + 2 / 3 - mq) : Math.hypot(i + 0.5 - mp, j + 0.5 - mq);
         if (ar > best.ar + 1e-9 || (Math.abs(ar - best.ar) <= 1e-9 && d < best.d)) best = { i, j, ar, d };
     }
     return { i: best.i, j: best.j };
 }
 function _netProjectiveWarp(spec, frame) {
-    if (!netProjectiveEffective(spec, 'square').valid) return null;
+    const tri = spec.family === '\u25b3N';
+    if (!netProjectiveEffective(spec, tri ? 'triangle' : 'square').valid) return null;
     const { c0, v1, v2 } = frame, det = v1.x * v2.y - v2.x * v1.y;
     if (!det) return null;
-    const a = spec.a, b = spec.b, half = spec.format === 'half', ed = _netProjEditTile(a, b, half);
+    const a = spec.a, b = spec.b, half = spec.format === 'half', ed = _netProjEditTile(a, b, half, tri);
     const W = typeof canvasW !== 'undefined' ? canvasW : 600, H = typeof canvasH !== 'undefined' ? canvasH : 600;
     const rc0 = { x: c0.x - ed.i * v1.x - ed.j * v2.x, y: c0.y - ed.i * v1.y - ed.j * v2.y }, ry = half ? b / 2 : b;
     const rv1 = { x: b * v1.x, y: b * v1.y }, rv2 = { x: ry * v2.x, y: ry * v2.y };
@@ -967,8 +983,11 @@ function _netProjTileOutside(warp, tileCentroid, flip180) {
 }
 // the net's own lines for the overlay: p = i + k/E and q = j + k/E, cut exactly with the region; macro at k = 0
 function _netProjGridLines(spec, corners, E) {
-    if (!corners || corners.length < 4 || !(E >= 1)) return [];
-    const warp = _netProjectiveWarp(spec, { c0: corners[0], v1: { x: corners[1].x - corners[0].x, y: corners[1].y - corners[0].y }, v2: { x: corners[3].x - corners[0].x, y: corners[3].y - corners[0].y } });
+    const tri = !!corners && corners.length === 3;   // the sheet decides (a triangle has 3 outer corners), not the spec's family
+    spec = netProjectiveForShape(spec, tri ? 'triangle' : 'square');
+    if (!corners || corners.length < (tri ? 3 : 4) || !(E >= 1)) return [];
+    const warp = tri ? netWarpForBase(spec, 'triangle', corners, undefined, 1)   // task 124: the triangle's frame (c0 = A + B - C, v1 = C - B, v2 = C - A) and its validity are those of netWarpForBase
+        : _netProjectiveWarp(spec, { c0: corners[0], v1: { x: corners[1].x - corners[0].x, y: corners[1].y - corners[0].y }, v2: { x: corners[3].x - corners[0].x, y: corners[3].y - corners[0].y } });
     if (!warp) return [];
     const P = warp.projective, planes = _projPlanes(P.a, P.b, P.half), out = [], hi = P.b;
     const add = (pa, qa, pb, qb, axis, level) => {
@@ -977,29 +996,38 @@ function _netProjGridLines(spec, corners, E) {
         const A = _projPx(P, pa + c[0] * (pb - pa), qa + c[0] * (qb - qa)), B = _projPx(P, pa + c[1] * (pb - pa), qa + c[1] * (qb - qa));
         out.push({ level, axis, x1: A.x, y1: A.y, x2: B.x, y2: B.y });
     };
-    for (let k = 0; k <= Math.ceil(P.b * E - 1e-9); k++) { const u = k / E; add(u, 0, u, hi, 'v', k % E === 0 ? 'macro' : 'micro'); add(0, u, hi, u, 'h', k % E === 0 ? 'macro' : 'micro'); }
+    for (let k = 0; k <= Math.ceil(P.b * E - 1e-9); k++) { const u = k / E; add(u, 0, u, hi, 'v', k % E === 0 ? 'macro' : 'micro'); add(0, u, hi, u, 'h', k % E === 0 ? 'macro' : 'micro'); if (tri) add(u, 0, 0, u, 'd', k % E === 0 ? 'macro' : 'micro'); }   // the triangle's third family p + q = u is the Baren (a triangle edge)
     return out;
 }
 // The numbers a UI needs (3C-3) and the tests pin: W (meshes) = area of the region, the tile counts, the stretch of the picture meshes (largest / smallest aspect over the meshes with at least a quarter inside, Messung 6), the edit tile.
 function netProjectiveInfo(spec, Wpx, Hpx) {
-    const eff = netProjectiveEffective(spec, 'square');
+    const tri = !!spec && spec.family === '\u25b3N', eff = netProjectiveEffective(spec, tri ? 'triangle' : 'square');
     if (!eff.valid) return { valid: false, reason: eff.reason };
     const a = spec.a, b = spec.b, half = spec.format === 'half', planes = _projPlanes(a, b, half), nx = Math.ceil(b - 1e-9), ny = half ? Math.ceil(b / 2 - 1e-9) : nx;
     const P = { a, b, half, W: Wpx, H: Hpx }, e = 1e-4;
     let W = 0, withArea = 0, stretch = 1;
+    // task 124: on the triangle W counts TRIANGLES (a mesh = 2): W = b^2 - a^2; the picture's regular mesh is the rhombus with the diagonals p + q (1) and p - q (sqrt 3), so the aspect is taken against 1 : sqrt 3
+    // (an interpretation of Hinterreiter p. 17, not proved against the figure); a triangle counts for the stretch with at least a quarter of its area inside
+    const cells = [];
     for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
-        const poly = _projClipPoly([[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]], planes), ar = _projArea(poly);
+        if (tri) { cells.push([[i + 1, j], [i, j + 1], [i + 1, j + 1]]); cells.push([[i, j], [i + 1, j], [i, j + 1]]); }
+        else cells.push([[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]]);
+    }
+    const unit = tri ? 0.5 : 1;
+    for (const cell of cells) {
+        const poly = _projClipPoly(cell, planes), ar = _projArea(poly);
         if (ar < 1e-9) continue;
-        W += ar; withArea++;
-        if (ar < 0.25) continue;
+        W += tri ? 2 * ar : ar; withArea++;
+        if (ar < 0.25 * unit) continue;
         const cx = poly.reduce((s, q) => s + q[0], 0) / poly.length, cy = poly.reduce((s, q) => s + q[1], 0) / poly.length;
         const A = _projPx(P, cx - e, cy + e), B = _projPx(P, cx + e, cy - e), C = _projPx(P, cx - e, cy - e), D = _projPx(P, cx + e, cy + e);
-        const asp = Math.abs(B.x - A.x) / Math.abs(D.y - C.y); stretch = Math.max(stretch, asp, 1 / asp);
+        const asp = Math.abs(B.x - A.x) / Math.abs(D.y - C.y) * (tri ? Math.sqrt(3) : 1); stretch = Math.max(stretch, asp, 1 / asp);
     }
-    return { valid: true, reason: null, W, tiles: { x: nx, y: ny }, tilesWithArea: withArea, stretch, editTile: _netProjEditTile(a, b, half) };
+    return { valid: true, reason: null, W, tiles: { x: nx, y: ny }, tilesWithArea: withArea, stretch, editTile: _netProjEditTile(a, b, half, tri) };
 }
 function _netProjExportData(spec, shape) {
-    const eff = netProjectiveEffective(spec, shape), W = typeof canvasW !== 'undefined' ? canvasW : 600, H = typeof canvasH !== 'undefined' ? canvasH : 600;
+    spec = netProjectiveForShape(spec, shape);
+    const tri = spec.family === '\u25b3N', eff = netProjectiveEffective(spec, shape), W = typeof canvasW !== 'undefined' ? canvasW : 600, H = typeof canvasH !== 'undefined' ? canvasH : 600;
     const out = { version: 2, kind: 'projective', interpretation: true, family: spec.family, a: spec.a, b: spec.b, format: spec.format, geometryIsRegular: true, facesOmitted: false, layerFacesOmitted: true, canvas: { w: W, h: H } };
     if (spec.interp === true) out.interp = true;
     if (!eff.valid) { out.projectiveIgnored = { reason: eff.reason }; return out; }
@@ -1007,13 +1035,15 @@ function _netProjExportData(spec, shape) {
     out.orientation = 'diagonal (lattice turned 45 degrees against the frame)';
     out.W = info.W; out.tiles = info.tiles; out.editTile = info.editTile;
     out.homography = { note: 'pixel = (r0 / r2, r1 / r2) with (r0, r1, r2) = rows . (p, q, 1); lattice coordinates (p, q) = (s + i, t + j) of the base frame; region p, q >= 0, a <= p + q <= b' + (half ? ', p >= q' : ''), rows: [half ? [W, -W, 0] : [W, 0, 0], [-c, -c, c * spec.b], [1, 1, 0]] };
-    out.facesMapping = 'regular central cell; every tile is the image of the regular tile under the one homography of lattice coordinates (p, q) = (s + i, t + j): polygon edges stay straight';
+    if (tri) out.tileShape = 'triangle';   // task 124: a tile is a triangle (the mesh = two); the square's export is unchanged
+    out.facesMapping = tri ? 'regular base triangle; every triangle tile (upright, or turned by 180 degrees) is the image of the regular triangle under the one homography of lattice coordinates (p, q) = (s + i, t + j): polygon edges stay straight'
+        : 'regular central cell; every tile is the image of the regular tile under the one homography of lattice coordinates (p, q) = (s + i, t + j): polygon edges stay straight';
     return out;
 }
 function _netProjCompat(from, to) {
     const pf = _netIsProjective(from), pt = _netIsProjective(to);
     if (!(pf && pt)) return { ok: false, reason: 'a 3C net (Möbiusnetz) is turned 45° against the grid and cannot be interpolated with a Regular, Field, Single or Tiled net' };
+    if (from.family !== to.family) return { ok: false, reason: `the 3C family differs (${from.family} vs ${to.family})` };   // task 124: first - a square and a triangle net never interpolate, whatever their format
     if (from.format !== to.format) return { ok: false, reason: `the 3C format differs (${from.format} vs ${to.format})` };
-    if (from.family !== to.family) return { ok: false, reason: `the 3C family differs (${from.family} vs ${to.family})` };
     return { ok: true, reason: null };
 }
