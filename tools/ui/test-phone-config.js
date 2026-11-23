@@ -718,7 +718,7 @@ T('structure', () => {
     const seg = NAMES.map((n, i) => rules(cut(pos[i], i + 1 < pos.length ? pos[i + 1] : -1).replace(/^\s*\/\*[\s\S]*?\*\//, '')));
     const all = rules(block.slice(block.indexOf('*/') + 2));
     check('the seven blocks hold every rule of the phone block exactly once (' + seg.map(x => x.length).join(' + ') + ' = ' + all.length + ')', seg.reduce((n, x) => n + x.length, 0) === all.length && all.length > 100 && seg.every(x => x.length >= 3));
-    check('the blocks hold 39 / 11 / 4 / 9 / 30 / 3 / 28 rules: a dropped or an added rule changes a count (change the numbers with the rule, and say in which block it belongs; fix F2 moved the anchor swatch\'s rule out of OTHER SURFACES: 5 -> 4)', seg.map(x => x.length).join(' / ') === '39 / 11 / 4 / 9 / 30 / 3 / 28', seg.map(x => x.length).join(' / '));
+    check('the blocks hold 39 / 11 / 4 / 9 / 31 / 3 / 28 rules: a dropped or an added rule changes a count (change the numbers with the rule, and say in which block it belongs; fix F2 moved the anchor swatch\'s rule out of OTHER SURFACES: 5 -> 4)', seg.map(x => x.length).join(' / ') === '39 / 11 / 4 / 9 / 31 / 3 / 28', seg.map(x => x.length).join(' / '));
     // no rule twice (the same media chain, selector and body)
     const keys = all.map(r => r.at.join('>') + '|' + r.sel.replace(/\s+/g, ' ') + '|' + r.body.replace(/\s+/g, ' ').trim());
     const dup = keys.filter((k, i) => keys.indexOf(k) !== i);

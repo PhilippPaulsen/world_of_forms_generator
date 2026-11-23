@@ -1580,7 +1580,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   /* the narrowest phones (320px): the two steppers and More must fit the 288px row, so the number field gives up 8px */
   @media (max-width: 339px) {
-    html.ph .ph-slot .stepper > input[type="number"], html.ph .ph-slot #net-art-stepper > .stepper-display, html.ph .ph-slot #net-a-stepper > .stepper-display, html.ph .ph-slot #net-b-stepper > .stepper-display, html.ph .ph-slot #net-strength-stepper > .stepper-display { width: 40px; min-width: 40px; }   /* task 122: the four display steppers of the Netz Art panel give up the same 8px (the Farbe register stepper keeps its width) */
+    html.ph .ph-slot .stepper > input[type="number"] { width: 40px; min-width: 40px; }
   }
 
   /* The page does not scroll: html and body are exactly the viewport (--ph-h is 100svh, or window.innerHeight where svh does not exist) and clip. The leftover containers (the controls container, whose
@@ -1674,6 +1674,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   /* Art: the four kind buttons are 60px wide ("Aus" / "Sin" / "Tan" / "Geo", as in the Netz row); the text buttons of the panel (Both / X / Y, Reverse) are --target high */
   html.ph .ph-slot .net-kind-btn { width: 48px; }   /* task 122: three laws in the panel (Aus is a hidden technical element), 48px so the format buttons fit the Reverse slot */
   html.ph .ph-slot .net-format-btn { width: 48px; padding: 0; }
+  @media (max-width: 339px) {
+    html.ph .ph-slot #net-art-stepper > .stepper-display, html.ph .ph-slot #net-a-stepper > .stepper-display, html.ph .ph-slot #net-b-stepper > .stepper-display, html.ph .ph-slot #net-strength-stepper > .stepper-display { width: 40px; min-width: 40px; }   /* task 122: the four display steppers of the Art panel give up 8px on the narrowest phones (the Farbe register stepper keeps its width) */
+  }
   html.ph .ph-slot .layer-btn { box-sizing: border-box; min-height: var(--target); }
 
   /* Net lines: the text button of the Netz sheet (#more-netz) becomes an icon in the tool row - two wavy lines drawn with a mask, so the button, its text (the accessible name), its title and its active state
