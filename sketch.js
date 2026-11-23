@@ -819,7 +819,7 @@ function setup() {
         // "-" or 3C is chosen (memo / ui) and comes back; a 3C change only writes a spec of core/netwarp.js, never a Netzart 1 one.
         window.netArtSet = function (art, par) {
             if (ui.x.mode !== 'regular' || ui.y.mode !== 'regular') memo = { axes: ui.axes, domain: ui.domain, macro: ui.macro, x: Object.assign({}, ui.x), y: Object.assign({}, ui.y) };
-            if (art === '3c') { baseNetTransform = netProjectiveSpec(par.a, par.b, par.format); afterAuthorEdit(); return; }
+            if (art === '3c') { baseNetTransform = netProjectiveSpec(par.a, par.b, par.format, netProjectiveFamilyFor(currentShape)); afterAuthorEdit(); return; }   // task 124: the family follows the shape (square-N, triangle-N), never a choice
             if (art === 'off') { ui.x = fresh(); ui.y = fresh(); baseNetTransform = null; commit(); return; }
             if (memo) { ui.axes = memo.axes; ui.domain = memo.domain; ui.macro = memo.macro; ui.x = memo.x; ui.y = memo.y; }
             if (ui.x.mode === 'regular' && ui.y.mode === 'regular') { ui.axes = 'both'; ui.x.mode = 'sinus'; ui.y = Object.assign({}, ui.x); applyNetKindChoice('sinus', true); }

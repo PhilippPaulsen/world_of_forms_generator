@@ -155,13 +155,18 @@
   const tt = function (key, params) { return window.UI && UI.t ? UI.t(key, params) : key; };
   const langNow = function () { return (window.UI && UI.lang) || 'de'; };
   const core3c = function () { return { spec: netProjectiveSpec, info: netProjectiveInfo }; };
+  const forShape = function (spec) { return typeof netProjectiveForShape === 'function' ? netProjectiveForShape(spec, currentShape) : spec; };   // task 124: the family follows the shape (a stale one is renamed by the core)
   function artNow() { return !baseNetTransform ? 'off' : baseNetTransform.kind === 'projective' ? 'n3c' : 'n1'; }
   function spec3c() { return artNow() === 'n3c' ? baseNetTransform : null; }
   let last3c = null;   // the last 3C choice (a, b, format): coming back to 3C starts from it
   function artIndex(id) { for (let i = 0; i < netArt.ART.length; i++) if (netArt.ART[i].id === id) return i; return 0; }
   function choose(id) {
     if (typeof window.netArtSet !== 'function') return;
-    if (id === 'n3c') window.netArtSet('3c', last3c || netArt.defaultFor(core3c(), canvasW, canvasH));
+    if (id === 'n3c') {
+      let par = last3c || netArt.defaultFor(core3c(), canvasW, canvasH, currentShape);
+      if (!netArt.formatAvail(currentShape, par.format).ok) par = { a: par.a, b: par.b, format: 'full' };   // task 124: a half-format memory does not start 3C on the triangle
+      window.netArtSet('3c', par);
+    }
     else window.netArtSet(id === 'off' ? 'off' : 'n1');
   }
   function artCompute(dir) {
@@ -171,7 +176,7 @@
   }
   function abCompute(which, dir) {
     const why = reasonAll(), s = spec3c(); if (why) return { to: null, reason: why }; if (!s) return { to: null, reason: tt('net.art.reason.min') };
-    const a = Math.round(s.a), b = Math.round(s.b), r = which === 'a' ? netArt.stepA(a, b, dir) : netArt.stepB(a, b, dir);
+    const a = Math.round(s.a), b = Math.round(s.b), r = which === 'a' ? netArt.stepA(a, b, dir, currentShape) : netArt.stepB(a, b, dir);
     return r.to === null ? { to: null, reason: tt(r.reason) } : { to: r.to };
   }
   const artStepper = UI.stepper(artRoot, { input: artInput, compute: artCompute, noTyping: true, keyEl: artDisplay });
@@ -181,7 +186,7 @@
   function set3c(a, b, format) { if (typeof window.netArtSet === 'function') window.netArtSet('3c', { a: a, b: b, format: format }); }
   aInput.addEventListener('input', function () { const s = spec3c(); if (s) set3c(parseInt(aInput.value, 10), Math.round(s.b), s.format); });
   bInput.addEventListener('input', function () { const s = spec3c(); if (s) set3c(Math.round(s.a), parseInt(bInput.value, 10), s.format); });
-  fmtBtns.forEach(function (b) { b.addEventListener('click', function () { const s = spec3c(); if (!s || UI.isDisabled(b)) return; set3c(Math.round(s.a), Math.round(s.b), b.dataset.format); }); });
+  fmtBtns.forEach(function (b) { b.addEventListener('click', function () { const s = spec3c(); if (!s || UI.isDisabled(b) || !netArt.formatAvail(currentShape, b.dataset.format).ok) return; set3c(Math.round(s.a), Math.round(s.b), b.dataset.format); }); });
   const setAria = function (el, name, v) { if (el.getAttribute(name) !== v) el.setAttribute(name, v); };   // task 084: an attribute is written only when its value changes (sync runs on every redraw)
   const setText = function (el, v) { if (el.textContent !== v) el.textContent = v; };
   const setHidden = function (el, v) { if (el.hidden !== v) el.hidden = v; };
@@ -209,18 +214,20 @@
     const warnShow = function (text) { setHidden(infoEl, !text); if (text) { setAria(infoEl, 'aria-label', text); if (infoEl.title !== text) infoEl.title = text; } };   // task 123: the row carries a small sign only when there is something to warn about
     if (why3) { warnShow(why3); setText(measureEl, why3); setText(noteEl, ''); line3 = '\u26a0 ' + why3; }
     else if (is3 && typeof netProjectiveInfo === 'function') {
-      const info = netProjectiveInfo(cur, canvasW, canvasH), sm = netArt.summary(info, langNow()), wn = netArt.warnings(info);
+      const info = netProjectiveInfo(forShape(cur), canvasW, canvasH), sm = netArt.summary(info, langNow()), wn = netArt.warnings(info, currentShape), lim = netArt.limitsFor(currentShape);
+      const fa = netArt.formatAvail(currentShape, cur.format), fmtWhy = fa.ok ? null : tt(fa.reason);   // task 124: a half-format spec on the triangle (left by a shape change) stays; the core draws no net for it and this says why
       const a = Math.round(cur.a), b = Math.round(cur.b);
       setText(aDisplay, String(a)); setText(bDisplay, String(b));
       if (aInput.value !== String(a)) aInput.value = String(a);
       if (bInput.value !== String(b)) bInput.value = String(b);
       setAria(aDisplay, 'aria-valuenow', String(a)); setAria(bDisplay, 'aria-valuenow', String(b));
       aStepper.refresh(); bStepper.refresh();
-      fmtBtns.forEach(function (bt) { const on = bt.dataset.format === cur.format; bt.classList.toggle('active', on); setAria(bt, 'aria-checked', on ? 'true' : 'false'); UI.setDisabled(bt, why3 || all); });
-      if (sm) {
+      fmtBtns.forEach(function (bt) { const on = bt.dataset.format === cur.format, fb = netArt.formatAvail(currentShape, bt.dataset.format); bt.classList.toggle('active', on); setAria(bt, 'aria-checked', on ? 'true' : 'false'); UI.setDisabled(bt, why3 || all || (fb.ok ? null : tt(fb.reason))); });
+      if (fmtWhy) { warnShow(fmtWhy); setText(measureEl, fmtWhy); setText(noteEl, fmtWhy); line3 = '\u26a0 ' + fmtWhy; }
+      else if (sm) {
         const ml = netArt.measureLine(info, langNow(), tt), warn = [];
         if (wn.stretch) warn.push(tt('net.3c.warn.stretch', { s: sm.stretch }));
-        if (wn.wLow) warn.push(tt('net.3c.warn.wLow', { w: sm.W })); if (wn.wHigh) warn.push(tt('net.3c.warn.wHigh', { w: sm.W }));
+        if (wn.wLow) warn.push(tt('net.3c.warn.wLow', { w: sm.W, lo: lim.wLo, hi: lim.wHi })); if (wn.wHigh) warn.push(tt('net.3c.warn.wHigh', { w: sm.W, lo: lim.wLo, hi: lim.wHi }));
         const w = warn.join(' ');
         warnShow(w); setText(measureEl, ml); setText(noteEl, w);
         line3 = (warn.length ? '\u26a0 ' : '') + ml;
@@ -237,7 +244,7 @@
       netArt.later().forEach(function (l) { add(tt('net.art.list.later', { label: l.label }), tt(l.reason)); });
       if (is3 && typeof netProjectiveInfo === 'function') {
         setText(frameEl, tt('net.3c.frame', { w: canvasW, h: canvasH }));
-        const ck = canvasW + 'x' + canvasH, sg = suggestCache[ck] || (suggestCache = {}, suggestCache[ck] = netArt.suggest(core3c(), canvasW, canvasH));
+        const ck = currentShape + canvasW + 'x' + canvasH, sg = suggestCache[ck] || (suggestCache = {}, suggestCache[ck] = netArt.suggest(core3c(), canvasW, canvasH, currentShape));
         suggestEl.innerHTML = '';
         sg.list.forEach(function (c) {
           const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'layer-btn net-3c-suggest-btn';
