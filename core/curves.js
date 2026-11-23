@@ -476,6 +476,7 @@ function drawCurvedBezier(p1, p2, curveType, id1, id2) {
     let polyline = null;
     if (activeNetWarp) {
         const split = (!curveType || curveType.kind === 'straight') ? netWarpSplitSegment(activeNetWarp, p1, p2) : null;
+        if (split && split.length < 2) return;   // task 121: a segment entirely outside the 3C net's region draws and collects nothing
         if (split) polyline = split.map(q => applyNetWarp(activeNetWarp, q));
         p1 = polyline ? polyline[0] : applyNetWarp(activeNetWarp, p1);
         p2 = polyline ? polyline[polyline.length - 1] : applyNetWarp(activeNetWarp, p2);
