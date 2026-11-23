@@ -141,3 +141,14 @@ if (require.main === module && process.argv[2] !== 'svg') {
     const is = corners.map(k => k[0]), js = corners.map(k => k[1]), ni = Math.ceil(Math.max(...is)) + 3 - (Math.floor(Math.min(...is)) - 3) + 1, nj = Math.ceil(Math.max(...js)) + 3 - (Math.floor(Math.min(...js)) - 3) + 1;
     row([b, `${c} (${o[0]},${o[1]})`, `${ni} x ${nj} = ${ni * nj}`, hexagons('A', c, 3, b, false).length]); }
 }
+
+if (require.main === module && process.argv[2] !== 'svg') {
+  hdr('Messung 5c: groesste gezeichnete Koordinate in px (Ecken der Sechseckkacheln mit Flaeche im Ausschnitt, ganz; Canvas = Rahmen; Grenze 8000 px, Task 121)');
+  tbl(['Canvas B x H (px)', 'a,b mit der groessten Koordinate', 'c', 'groesste |Koordinate| (px)']);
+  const ring = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
+  for (const [Wc, Hc] of [[600, 600], [1800, 600], [600, 1800]]) { let worstV = 0, at = '';
+    for (let b = 3; b <= 12; b++) for (let a = 2; a < b; a++) for (const c of [0, 1, 2]) { const hs = planes(a, b, false);
+      for (let i = -3; i <= b + 3; i++) for (let j = -3; j <= b + 3; j++) { if (!isCentre('A', c, i, j)) continue; const poly = ring.map(([di, dj]) => [i + di, j + dj]); if (area(clipPoly(poly, hs)) < 1e-9) continue;
+        for (const [p, q] of poly) { const v = p + q; if (v <= 0) { worstV = Infinity; at = `${a},${b} c ${c}: Ecke v <= 0`; continue; } const x = Wc * p / v, y = Hc * a * (b - v) / ((b - a) * v), m = Math.max(Math.abs(x), Math.abs(y)); if (m > worstV) { worstV = m; at = `${a},${b}`; } } } }
+    row([`${Wc} x ${Hc}`, at, 'alle', Math.round(worstV)]); }
+}
