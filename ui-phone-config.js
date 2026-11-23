@@ -113,7 +113,9 @@
       spuren: { label: 'Spuren', i18n: 'subtab.spuren', rows: [{ items: [{ id: 'ph-trail-chips', fluid: true }] }, { items: [{ id: 'ph-trail-stepper', fluid: true }] }] },
       // Netz (commit 3). Art: row 1 = the four kinds (Aus, Sin, Tan, Geo: 4 x 60 + 3 gaps = 264), row 2 = the strength stepper, the panel's own More (#more-netz: the domain, Macro, the exact fields, Alternate and the
       // hints stay in it) and Reverse LAST, an icon (sketch.js shows it for Geo only: More keeps its place whether or not Reverse is there; 117 + 8 + 48 + 8 + 48 = 229). Achsen: row 1 = XY / X / Y, row 2 = the Fokus stepper (sketch.js shows its row for Sin and Tan only: disabled with a reason otherwise, see `follow`).
-      art: { label: 'Art', i18n: 'subtab.art', rows: [{ items: [{ id: 'nav-kinds', w: 264 }] }, { items: [{ id: 'net-strength-stepper', w: 117, wMin: 109 }, { id: 'btn-more-netz', w: 48 }, { id: 'net-reverse-btn', w: 48 }] }] },
+      // task 122 (3C-3): row 1 = the Netzart stepper (- | 1 | 3C), the strength (Netzart 1) or a (3C, same slot), the panel's own More; row 2 = the three laws (Sin, Tan, Geo: 3 x 48 + 2 gaps = 160; the Aus button is a hidden technical element now) or b (3C, same slot), then Reverse (Geo only) or the format
+      // (ganz | halb: 2 x 48 + 8 = 104, same slot). 117 + 8 + 117 + 8 + 48 = 298 (109 + 8 + 109 + 8 + 48 = 282 below 340px); 160 + 8 + 104 = 272.
+      art: { label: 'Art', i18n: 'subtab.art', rows: [{ items: [{ id: 'net-art-stepper', w: 117, wMin: 109 }, { id: 'net-strength-stepper', w: 117, wMin: 109, also: ['net-a-stepper'] }, { id: 'btn-more-netz', w: 48 }] }, { items: [{ id: 'nav-kinds', w: 160, also: ['net-b-stepper'] }, { id: 'net-reverse-btn', w: 104, also: ['net-format'] }] }] },
       achsen: { label: 'Achsen', i18n: 'subtab.achsen', rows: [{ items: [{ id: 'net-axes-row', w: 154 }] }, { items: [{ id: 'net-focus-stepper', w: 117, wMin: 109 }] }] }
     },
     // Bottom sheets (1b): a block that stays inline above 768px and in the tabs that are not covered moves into a sheet (UI.overlay) while the layout is on. The sheet FOLLOWS the block's own open state - the

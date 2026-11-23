@@ -148,6 +148,7 @@
   const netArt = window.netArt;
   const artRoot = $('#net-art-stepper'), artInput = $('#net-art-input'), artDisplay = $('#net-art-value');
   const cluster3c = $('#net-3c'), aRoot = $('#net-a-stepper'), aInput = $('#net-a-input'), aDisplay = $('#net-a-value'), bRoot = $('#net-b-stepper'), bInput = $('#net-b-input'), bDisplay = $('#net-b-value');
+  const fmtGroup = $('#net-format');
   const fmtBtns = Array.prototype.slice.call(document.querySelectorAll('.net-format-btn')), infoEl = $('#net-3c-info');
   const more3c = $('#net-3c-more'), frameEl = $('#net-3c-frame'), suggestEl = $('#net-3c-suggest'), noteEl = $('#net-3c-note'), listEl = $('#net-art-list'), strengthSection = $('#net-strength-section');
   const kindsGroup = $('#nav-kinds'), strengthStepperEl = $('#net-strength-stepper'), dividerA = row.querySelector('.nav-divider-a');
@@ -199,6 +200,7 @@
     const is3 = a3 === 'n3c';
     setHidden(kindsGroup, is3); setHidden(strengthStepperEl, is3); if (dividerA) setHidden(dividerA, is3); setHidden(cluster3c, !is3);
     setHidden(more3c, !is3); setHidden(strengthSection, is3);
+    [aRoot, bRoot, fmtGroup].forEach(function (el) { setHidden(el, !is3); });   // the layout moves them out of the cluster: each one is hidden on its own
     { const dr = $('#net-domain-row'), ar = $('#net-axes-row'); if (dr) setHidden(dr, is3); if (ar) setHidden(ar, is3); }   // the layout moves them out of #net-group: hidden here, not by a class of the group
     let line3 = null;
     if (is3 && typeof netProjectiveInfo === 'function') {
