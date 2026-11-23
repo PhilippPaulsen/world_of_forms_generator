@@ -113,7 +113,28 @@
     if (m && (c = compatKey(m[4]))) return m[1] + t('net.3c.tl.note', { reason: t(c.key, c.params) });
     return s;
   }
-  const api = { measureLine: measureLine, compatKey: compatKey, tlText: tlText, ART: ART, SHAPES: SHAPES, AVAIL: AVAIL, LATER: LATER, entries: entries, availability: availability, step: step, later: later, stepA: stepA, stepB: stepB, warnings: warnings, suggest: suggest, defaultFor: defaultFor, summary: summary, num: num, limitsFor: limitsFor, formatAvail: formatAvail, limits: { A_MIN: A_MIN, B_MAX: B_MAX, SUGGEST_B_MAX: SUGGEST_B_MAX, W_LO: W_LO, W_HI: W_HI, STRETCH_MAX: STRETCH_MAX } };
+  // task 126: why a 3C spec draws NO net on the current shape. core = { effective(spec, shape), forShape(spec, shape) } = netProjectiveEffective / netProjectiveForShape of core/netwarp.js (the core decides what is valid, this
+  // only names the reason). null: not a 3C spec, or the core accepts it. Else { id, key, shortKey }: key = the full sentence (notice, tooltip, Mehr > Maße), shortKey = the line that stays visible; both dictionary keys.
+  const HINTS = {
+    triHalf: { key: 'net.3c.invalid.triHalf', shortKey: 'net.3c.invalid.short.triHalf' },
+    aMin: { key: 'net.3c.invalid.aMin', shortKey: 'net.3c.invalid.short.aMin' },
+    aMin1: { key: 'net.art.reason.aMin1', shortKey: 'net.art.reason.aMin1' },
+    hex: { key: 'net.art.reason.n3c.hex', shortKey: 'net.3c.invalid.short.hex' },
+    other: { key: 'net.3c.invalid.other', shortKey: 'net.3c.invalid.other' }
+  };
+  function invalidHint(core, spec, shape) {
+    if (!spec || spec.kind !== 'projective') return null;
+    const sp = core.forShape ? core.forShape(spec, shape) : spec;
+    if (core.effective(sp, shape).valid) return null;
+    let id = 'other';
+    if (shape === 'hex') id = 'hex';
+    else if (shape === 'triangle' && spec.format !== 'full') id = 'triHalf';
+    else if ((shape === 'square' || shape === 'triangle') && Number.isFinite(spec.a) && spec.a < limitsFor(shape).aMin - 1e-9) id = shape === 'square' ? 'aMin' : 'aMin1';
+    return { id: id, key: HINTS[id].key, shortKey: HINTS[id].shortKey };
+  }
+  // "once per condition": the state of the notice is the reason AND the shape (a shape change reports anew; a change of a or b inside the same reason does not)
+  function hintSig(hint, shape) { return hint ? hint.id + '|' + shape : ''; }
+  const api = { measureLine: measureLine, compatKey: compatKey, tlText: tlText, ART: ART, SHAPES: SHAPES, AVAIL: AVAIL, LATER: LATER, entries: entries, availability: availability, step: step, later: later, stepA: stepA, stepB: stepB, warnings: warnings, suggest: suggest, defaultFor: defaultFor, summary: summary, num: num, limitsFor: limitsFor, formatAvail: formatAvail, invalidHint: invalidHint, hintSig: hintSig, HINTS: HINTS, limits: { A_MIN: A_MIN, B_MAX: B_MAX, SUGGEST_B_MAX: SUGGEST_B_MAX, W_LO: W_LO, W_HI: W_HI, STRETCH_MAX: STRETCH_MAX } };
   root.netArt = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
