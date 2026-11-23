@@ -1580,7 +1580,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   /* the narrowest phones (320px): the two steppers and More must fit the 288px row, so the number field gives up 8px */
   @media (max-width: 339px) {
-    html.ph .ph-slot .stepper > input[type="number"], html.ph .ph-slot .stepper > .stepper-display { width: 40px; min-width: 40px; }   /* task 122: the display steppers (Netzart, a, b, strength) give up the same 8px */
+    html.ph .ph-slot .stepper > input[type="number"], html.ph .ph-slot #net-art-stepper > .stepper-display, html.ph .ph-slot #net-a-stepper > .stepper-display, html.ph .ph-slot #net-b-stepper > .stepper-display, html.ph .ph-slot #net-strength-stepper > .stepper-display { width: 40px; min-width: 40px; }   /* task 122: the four display steppers of the Netz Art panel give up the same 8px (the Farbe register stepper keeps its width) */
   }
 
   /* The page does not scroll: html and body are exactly the viewport (--ph-h is 100svh, or window.innerHeight where svh does not exist) and clip. The leftover containers (the controls container, whose
