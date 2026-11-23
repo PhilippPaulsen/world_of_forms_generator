@@ -985,6 +985,9 @@ body.dark {
 .net-3c-letter { display: inline-block; width: var(--icon); text-align: center; font-size: var(--size-base); font-weight: var(--weight-strong); line-height: 1; }
 .net-format-btn { width: var(--target); padding: 0; }   /* task 123: icon-only */
 .net-3c-warn { display: inline-flex; align-items: center; justify-content: center; width: var(--icon); height: var(--target); color: var(--color-text); }   /* task 123: only when there is a warning (hidden otherwise) */
+/* task 126: the reason line next to the sign (only while the 3C spec draws no net on this shape); one line, ellipsis. The phone has no room for it in the 104px panel (decision pending, see tasks/126). */
+.net-3c-reason { flex: 0 1 auto; min-width: 0; max-width: 34ch; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--size-secondary); color: var(--color-text); }
+.net-3c-reason[hidden] { display: none; }
 .net-3c-measure { margin: 0; font-size: var(--size-base); font-variant-numeric: tabular-nums; }
 #net-group.net-3c-on #net-axes-row, #net-group.net-3c-on #net-domain-row { display: none; }
 .net-3c-note { margin: 0; font-size: var(--size-secondary); color: var(--color-secondary); }

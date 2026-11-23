@@ -149,12 +149,13 @@
   const artRoot = $('#net-art-stepper'), artInput = $('#net-art-input'), artDisplay = $('#net-art-value');
   const cluster3c = $('#net-3c'), aRoot = $('#net-a-stepper'), aInput = $('#net-a-input'), aDisplay = $('#net-a-value'), bRoot = $('#net-b-stepper'), bInput = $('#net-b-input'), bDisplay = $('#net-b-value');
   const fmtGroup = $('#net-format');
-  const fmtBtns = Array.prototype.slice.call(document.querySelectorAll('.net-format-btn')), infoEl = $('#net-3c-info');
+  const fmtBtns = Array.prototype.slice.call(document.querySelectorAll('.net-format-btn')), infoEl = $('#net-3c-info'), reasonEl = $('#net-3c-reason');
   const more3c = $('#net-3c-more'), frameEl = $('#net-3c-frame'), suggestEl = $('#net-3c-suggest'), noteEl = $('#net-3c-note'), listEl = $('#net-art-list'), strengthSection = $('#net-strength-section');
   const kindsGroup = $('#nav-kinds'), strengthStepperEl = $('#net-strength-stepper'), dividerA = row.querySelector('.nav-divider-a');
   const tt = function (key, params) { return window.UI && UI.t ? UI.t(key, params) : key; };
   const langNow = function () { return (window.UI && UI.lang) || 'de'; };
   const core3c = function () { return { spec: netProjectiveSpec, info: netProjectiveInfo }; };
+  const forShape0 = function (spec, shape) { return typeof netProjectiveForShape === 'function' ? netProjectiveForShape(spec, shape) : spec; };
   const forShape = function (spec) { return typeof netProjectiveForShape === 'function' ? netProjectiveForShape(spec, currentShape) : spec; };   // task 124: the family follows the shape (a stale one is renamed by the core)
   function artNow() { return !baseNetTransform ? 'off' : baseNetTransform.kind === 'projective' ? 'n3c' : 'n1'; }
   function spec3c() { return artNow() === 'n3c' ? baseNetTransform : null; }
@@ -190,7 +191,7 @@
   const setAria = function (el, name, v) { if (el.getAttribute(name) !== v) el.setAttribute(name, v); };   // task 084: an attribute is written only when its value changes (sync runs on every redraw)
   const setText = function (el, v) { if (el.textContent !== v) el.textContent = v; };
   const setHidden = function (el, v) { if (el.hidden !== v) el.hidden = v; };
-  let moreSig = null, suggestCache = {};
+  let moreSig = null, suggestCache = {}, lastHintSig = null;   // lastHintSig: the state of the notice "no net, and why" (task 126)
   function fmtWord(f) { return tt(f === 'half' ? 'net.3c.format.half' : 'net.3c.format.full'); }
   function syncArt(all) {
     const a3 = artNow(), idx = artIndex(a3), cur = spec3c(), ents = netArt.entries(currentShape);
@@ -212,10 +213,16 @@
     [aRoot, bRoot].forEach(function (el) { UI.setDisabled(el, why3 || all || null); });
     const measureEl = $('#net-3c-measure');
     const warnShow = function (text) { setHidden(infoEl, !text); if (text) { setAria(infoEl, 'aria-label', text); if (infoEl.title !== text) infoEl.title = text; } };   // task 123: the row carries a small sign only when there is something to warn about
-    if (why3) { warnShow(why3); setText(measureEl, why3); setText(noteEl, ''); line3 = '\u26a0 ' + why3; }
+    // task 126: a 3C spec that draws NO net on this shape says why where the person sees it, not in a tooltip only: the short line next to the sign (the phone: the third row of the Art panel), the notice once per state
+    // (shape included: a shape change reports anew), the full sentence in the tooltip and under Mehr > Maße. The stretch and W warnings stay with the sign alone (they are notes, the net is drawn).
+    const hint = is3 && typeof netProjectiveEffective === 'function' ? netArt.invalidHint({ effective: netProjectiveEffective, forShape: forShape0 }, cur, currentShape) : null;
+    const hintFull = hint ? tt(hint.key) : '', hintShort = hint ? tt(hint.shortKey) : '';
+    setText(reasonEl, hintShort); if (reasonEl.title !== hintFull) reasonEl.title = hintFull; setHidden(reasonEl, !hint);
+    const hs = netArt.hintSig(hint, currentShape);
+    if (hs !== lastHintSig) { lastHintSig = hs; if (hint) { if (window.say) window.say('net-3c-invalid', hintFull, 'warn'); } else if (window.UI && UI.notifyClear) UI.notifyClear('net-3c-invalid'); }
+    if (why3) { warnShow(hintFull || why3); setText(measureEl, hintFull || why3); setText(noteEl, ''); line3 = '\u26a0 ' + (hintShort || why3); }
     else if (is3 && typeof netProjectiveInfo === 'function') {
       const info = netProjectiveInfo(forShape(cur), canvasW, canvasH), sm = netArt.summary(info, langNow()), wn = netArt.warnings(info, currentShape), lim = netArt.limitsFor(currentShape);
-      const fa = netArt.formatAvail(currentShape, cur.format), fmtWhy = fa.ok ? null : tt(fa.reason);   // task 124: a half-format spec on the triangle (left by a shape change) stays; the core draws no net for it and this says why
       const a = Math.round(cur.a), b = Math.round(cur.b);
       setText(aDisplay, String(a)); setText(bDisplay, String(b));
       if (aInput.value !== String(a)) aInput.value = String(a);
@@ -223,7 +230,7 @@
       setAria(aDisplay, 'aria-valuenow', String(a)); setAria(bDisplay, 'aria-valuenow', String(b));
       aStepper.refresh(); bStepper.refresh();
       fmtBtns.forEach(function (bt) { const on = bt.dataset.format === cur.format, fb = netArt.formatAvail(currentShape, bt.dataset.format); bt.classList.toggle('active', on); setAria(bt, 'aria-checked', on ? 'true' : 'false'); UI.setDisabled(bt, why3 || all || (fb.ok ? null : tt(fb.reason))); });
-      if (fmtWhy) { warnShow(fmtWhy); setText(measureEl, fmtWhy); setText(noteEl, fmtWhy); line3 = '\u26a0 ' + fmtWhy; }
+      if (hint) { warnShow(hintFull); setText(measureEl, hintFull); setText(noteEl, hintFull); line3 = '\u26a0 ' + hintShort; }   // task 124/126: a spec the core refuses on this shape (half on the triangle, a = 1 on the square) stays; no net is drawn and this says why
       else if (sm) {
         const ml = netArt.measureLine(info, langNow(), tt), warn = [];
         if (wn.stretch) warn.push(tt('net.3c.warn.stretch', { s: sm.stretch }));
@@ -231,9 +238,6 @@
         const w = warn.join(' ');
         warnShow(w); setText(measureEl, ml); setText(noteEl, w);
         line3 = (warn.length ? '\u26a0 ' : '') + ml;
-      } else {   // task 124: a spec the core refuses on this shape (a = 1 left over from a triangle net on the square): no net is drawn, the line says why (a, b stay editable)
-        const why = Math.round(cur.a) < lim.aMin ? tt(lim.aMinReason) : String(info && info.reason || '');
-        warnShow(why); setText(measureEl, why); setText(noteEl, why); line3 = '\u26a0 ' + why;
       }
     } else { warnShow(''); }
     // the Mehr overlay: rewritten only when what it shows changes (sync runs on every redraw)
