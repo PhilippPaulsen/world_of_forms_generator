@@ -988,6 +988,8 @@ body.dark {
 /* task 126: the reason line next to the sign (only while the 3C spec draws no net on this shape); one line, ellipsis. The phone has no room for it in the 104px panel (decision pending, see tasks/126). */
 .net-3c-reason { flex: 0 1 auto; min-width: 0; max-width: 34ch; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--size-secondary); color: var(--color-text); }
 .net-3c-reason[hidden] { display: none; }
+/* task 126 (P7): the phone's stand-in for the line is a 48px sign button in row 2 of the Art panel (rules in the phone block, html.ph #net-3c-reason-btn); never shown above 768px */
+#net-3c-reason-btn { display: none; }
 .net-3c-measure { margin: 0; font-size: var(--size-base); font-variant-numeric: tabular-nums; }
 #net-group.net-3c-on #net-axes-row, #net-group.net-3c-on #net-domain-row { display: none; }
 .net-3c-note { margin: 0; font-size: var(--size-secondary); color: var(--color-secondary); }
@@ -1726,6 +1728,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   /* the readout: ONE line of 20px, muted, 14px; nothing else of the sheet's former explanations is shown. Above 768px the element is not shown at all (the rule is not in the phone block). */
   html.ph #net-readout { display: block; box-sizing: border-box; height: 20px; margin: 0; padding: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; color: var(--color-secondary); }
+  /* task 126 (P7): the sign button of an invalid 3C spec (index.html #net-3c-reason-btn): 48px in row 2 of the Art panel; it takes Reverse's place for that time (Reverse is the one .layer-btn that is a direct child of row 2; it is locked under 3C anyway), so row 2 stays 285px */
+  html.ph #net-3c-reason-btn:not([hidden]) { display: inline-flex; align-items: center; justify-content: center; flex: none; width: var(--target); height: var(--target); box-sizing: border-box; padding: 0; }
+  html.ph .ph-row:has(> #net-3c-reason-btn:not([hidden])) > button.layer-btn { display: none; }
 
   /* ================================================================================================================================================================================
      SURFACE: LAYER SHEET (patterns C0a; the layer sheet in rows, sheets redesign commit 3a; ui-phone.js buildBlocks(), ui-phone-config.js sheets.layer.blocks). The rows themselves are in SHARED.

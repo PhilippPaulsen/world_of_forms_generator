@@ -4,12 +4,13 @@
  *  1. Fall 1 (square 3C half -> triangle) and Fall 2 (triangle 3C a = 1 -> square): the hint exists, its short and its full text are in the dictionary, German and English, not a raw key, not empty.
  *  2. Every spec the core refuses has a hint with texts, every spec it accepts has none (all shapes, formats, families, a, b); a non-3C spec never.
  *  3. The notice state (hintSig): a shape change is a new state, a change of a inside the same reason is not.
+ *  5. The phone (P7): the sign button in row 2 of the Art panel (config, markup, CSS, tap).
  *  4. The code that shows it (source of ui-net.js, index.html, style.css): the short line is TEXT (not a tooltip only), shown while there is a hint, the notice is keyed and cleared, synced on every tick.
- * Sabotages S1 to S9: each must turn at least one check red.
+ * Sabotages S1 to S12: each must turn at least one check red.
  */
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..'), rd = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
-const SRC = { art: rd('ui-net-art.js'), net: rd('ui-net.js'), html: rd('index.html'), css: rd('style.css'), i18n: rd('ui-i18n.js'), core: rd('core/netwarp.js') };
+const SRC = { art: rd('ui-net-art.js'), net: rd('ui-net.js'), html: rd('index.html'), cfg: rd('ui-phone-config.js'), css: rd('style.css'), i18n: rd('ui-i18n.js'), core: rd('core/netwarp.js') };
 const mut = (s, a, b) => { if (!s.includes(a)) throw new Error('sabotage text not found: ' + a.slice(0, 70)); return s.replace(a, b); };
 const SQ = '□N', TRI = '△N';
 const ph = s => (String(s).match(/\{[A-Za-z]+\}/g) || []).sort().join(',');
@@ -59,6 +60,13 @@ function suite(S) {
     check('4f. style.css: the line is one line with an ellipsis and is not hidden by a rule of its own (only [hidden])', /\.net-3c-reason \{[^}]*white-space: nowrap[^}]*text-overflow: ellipsis/.test(css) && !/\.net-3c-reason \{[^}]*display: none/.test(css));
     check('4g. the stretch and W warnings stay with the sign alone (no reason line for them)', !/setText\(reasonEl, (w|warn|ml)\b/.test(net));
   });
+  guard('5', () => {
+    const net = S.net, html = S.html, css = S.css, cfg = S.cfg;
+    check('5. the phone sign button: in index.html (a button, starts hidden, next to the line), shown only with a hint, label and tooltip carry the full sentence', /<button id="net-3c-reason-btn"[^>]*\bhidden\b/.test(html) && /setHidden\(reasonBtn, !hint\)/.test(net) && /setAria\(reasonBtn, 'aria-label', hintFull\)/.test(net) && /reasonBtn\.title = hintFull/.test(net));
+    check('5b. a tap shows the notice again with the full sentence (say on click, only while the button is shown)', /reasonBtn\.addEventListener\('click', function \(\) \{ if \(!reasonBtn\.hidden && window\.say\) window\.say\('net-3c-invalid', reasonBtn\.title, 'warn'\); \}\)/.test(net));
+    check('5c. the phone config places it in row 2 of the Art panel in the slot of Reverse and the format (no third row, the panel stays 104px)', /\{ id: 'net-reverse-btn', w: 104, also: \['net-format', 'net-3c-reason-btn'\] \}/.test(cfg) && /panelH: 104/.test(cfg));
+    check('5d. style.css: never shown above 768px (display none), shown 48px under html.ph only while it is not hidden, and it makes room for itself in row 2 (the one .layer-btn of the row, Reverse, steps aside)', /\n#net-3c-reason-btn \{ display: none; \}/.test(css) && /html\.ph #net-3c-reason-btn:not\(\[hidden\]\) \{[^}]*display: inline-flex[^}]*width: var\(--target\)/.test(css) && /html\.ph \.ph-row:has\(> #net-3c-reason-btn:not\(\[hidden\]\)\) > button\.layer-btn \{ display: none; \}/.test(css));
+  });
   return res;
 }
 
@@ -74,6 +82,9 @@ const SAB = [
   ['S6  a short text is missing from the dictionary', s => { s.i18n = mut(s.i18n, "    'net.3c.invalid.short.aMin': { de: 'Am Quadrat ist a mindestens 2.', en: 'On the square a is at least 2.' },\n", ''); }],
   ['S7  a hint for a spec the core accepts', s => { s.art = mut(s.art, 'if (core.effective(sp, shape).valid) return null;', ''); }],
   ['S8  the notice is never cleared', s => { s.net = mut(s.net, "UI.notifyClear('net-3c-invalid')", 'void 0'); }],
+  ['S10 the phone button is never shown', s => { s.net = mut(s.net, 'setHidden(reasonBtn, !hint);', 'setHidden(reasonBtn, true);'); }],
+  ['S11 a tap does nothing', s => { s.net = mut(s.net, "window.say('net-3c-invalid', reasonBtn.title, 'warn')", 'void 0'); }],
+  ['S12 the phone config has no place for the button', s => { s.cfg = mut(s.cfg, "also: ['net-format', 'net-3c-reason-btn']", "also: ['net-format']"); }],
   ['S9  the state is not re-read on every sync (only the first time)', s => { s.net = mut(s.net, 'if (hs !== lastHintSig)', 'if (lastHintSig === null)'); }]
 ];
 for (const [name, fn] of SAB) {
