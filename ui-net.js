@@ -231,6 +231,9 @@
         const w = warn.join(' ');
         warnShow(w); setText(measureEl, ml); setText(noteEl, w);
         line3 = (warn.length ? '\u26a0 ' : '') + ml;
+      } else {   // task 124: a spec the core refuses on this shape (a = 1 left over from a triangle net on the square): no net is drawn, the line says why (a, b stay editable)
+        const why = Math.round(cur.a) < lim.aMin ? tt(lim.aMinReason) : String(info && info.reason || '');
+        warnShow(why); setText(measureEl, why); setText(noteEl, why); line3 = '\u26a0 ' + why;
       }
     } else { warnShow(''); }
     // the Mehr overlay: rewritten only when what it shows changes (sync runs on every redraw)

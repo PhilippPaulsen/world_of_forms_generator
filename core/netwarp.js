@@ -1032,7 +1032,7 @@ function _netProjExportData(spec, shape) {
     if (spec.interp === true) out.interp = true;
     if (!eff.valid) { out.projectiveIgnored = { reason: eff.reason }; return out; }
     const info = netProjectiveInfo(spec, W, H), half = spec.format === 'half', c = H * spec.a / (spec.b - spec.a);
-    out.orientation = 'diagonal (lattice turned 45 degrees against the frame)';
+    out.orientation = tri ? 'the lattice lines p + q = const (triangle edges, the Baren) run horizontally in the picture' : 'diagonal (lattice turned 45 degrees against the frame)';   // task 124: the triangle lattice has no 45 degree turn
     out.W = info.W; out.tiles = info.tiles; out.editTile = info.editTile;
     out.homography = { note: 'pixel = (r0 / r2, r1 / r2) with (r0, r1, r2) = rows . (p, q, 1); lattice coordinates (p, q) = (s + i, t + j) of the base frame; region p, q >= 0, a <= p + q <= b' + (half ? ', p >= q' : ''), rows: [half ? [W, -W, 0] : [W, 0, 0], [-c, -c, c * spec.b], [1, 1, 0]] };
     if (tri) out.tileShape = 'triangle';   // task 124: a tile is a triangle (the mesh = two); the square's export is unchanged
