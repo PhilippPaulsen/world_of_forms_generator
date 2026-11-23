@@ -55,8 +55,8 @@
   // the phone layout disables the Fokus stepper (aria-disabled on its root, with the reason) while sketch.js hides the Fokus row (Aus, Geo); the exact field says the same and is locked
   // At 768px and up (the Netz surface, patterns C0b-3) nothing disables the stepper - the layout's follow rule is the phone's - but the exact field sits in the overlay's rows whatever sketch.js does with the Fokus row,
   // so the hidden row itself says "does not apply" (Aus, Geo), with the same text the phone layout writes.
-  function reasonFocus() { return reasonAll() || (artNow() !== 'n1' ? T['reason.art.needsN1'] : null) || (UI.isDisabled(focusRoot) ? focusRoot.dataset.reason || '' : null) || (focusRowEl && focusRowEl.hidden ? UI.t('net.reason.focus') : null); }
-  function reasonStrength() { return reasonAll() || (artNow() !== 'n1' ? T['reason.art.needsN1'] : null) || (kind() === 'regular' ? T['reason.net.needsKind'] : null); }   // task 122: the strength is Netzart 1's
+  function reasonFocus() { return reasonAll() || (artNow() !== 'n1' ? tt('net.art.reason.needsN1.focus') : null) || (UI.isDisabled(focusRoot) ? focusRoot.dataset.reason || '' : null) || (focusRowEl && focusRowEl.hidden ? UI.t('net.reason.focus') : null); }
+  function reasonStrength() { return reasonAll() || (artNow() !== 'n1' ? tt('net.art.reason.needsN1.strength') : null) || (kind() === 'regular' ? T['reason.net.needsKind'] : null); }   // task 122: the strength is Netzart 1's
 
   // ---- kinds: a radiogroup whose state sketch.js owns ------------------------------------------------------------
   kindBtns.forEach(function (b) { UI.checkedFromActive(b); });
@@ -201,11 +201,13 @@
     setHidden(kindsGroup, is3); setHidden(strengthStepperEl, is3); if (dividerA) setHidden(dividerA, is3); setHidden(cluster3c, !is3);
     setHidden(more3c, !is3); setHidden(strengthSection, is3);
     [aRoot, bRoot, fmtGroup].forEach(function (el) { setHidden(el, !is3); });   // the layout moves them out of the cluster: each one is hidden on its own
-    { const dr = $('#net-domain-row'), ar = $('#net-axes-row'); if (dr) setHidden(dr, is3); if (ar) setHidden(ar, is3); }   // the layout moves them out of #net-group: hidden here, not by a class of the group
+    { const dr = $('#net-domain-row'); if (dr) setHidden(dr, is3); }   // task 123: the axes row stays (phone: visible and locked with a reason, desktop Mehr: the group class hides it)   // the layout moves them out of #net-group: hidden here, not by a class of the group
     let line3 = null;
     const why3 = is3 && !ents[artIndex('n3c')].ok ? tt(ents[artIndex('n3c')].reason) : null;   // a 3C spec on a shape that has no 3C (the core draws no net): a, b and the format stay, locked, and the line says why
     [aRoot, bRoot].forEach(function (el) { UI.setDisabled(el, why3 || all || null); });
-    if (why3) { setText(infoEl, why3 + ' \u26a0'); infoEl.classList.add('warn'); if (infoEl.title !== why3) infoEl.title = why3; line3 = why3; }
+    const measureEl = $('#net-3c-measure');
+    const warnShow = function (text) { setHidden(infoEl, !text); if (text) { setAria(infoEl, 'aria-label', text); if (infoEl.title !== text) infoEl.title = text; } };   // task 123: the row carries a small sign only when there is something to warn about
+    if (why3) { warnShow(why3); setText(measureEl, why3); setText(noteEl, ''); line3 = '\u26a0 ' + why3; }
     else if (is3 && typeof netProjectiveInfo === 'function') {
       const info = netProjectiveInfo(cur, canvasW, canvasH), sm = netArt.summary(info, langNow()), wn = netArt.warnings(info);
       const a = Math.round(cur.a), b = Math.round(cur.b);
@@ -216,15 +218,14 @@
       aStepper.refresh(); bStepper.refresh();
       fmtBtns.forEach(function (bt) { const on = bt.dataset.format === cur.format; bt.classList.toggle('active', on); setAria(bt, 'aria-checked', on ? 'true' : 'false'); UI.setDisabled(bt, why3 || all); });
       if (sm) {
-        line3 = tt('net.3c.info', { w: sm.W, s: sm.stretch });
-        const warn = [];
+        const ml = netArt.measureLine(info, langNow(), tt), warn = [];
         if (wn.stretch) warn.push(tt('net.3c.warn.stretch', { s: sm.stretch }));
         if (wn.wLow) warn.push(tt('net.3c.warn.wLow', { w: sm.W })); if (wn.wHigh) warn.push(tt('net.3c.warn.wHigh', { w: sm.W }));
-        const shown = line3 + (warn.length ? ' ⚠' : '');
-        setText(infoEl, shown); infoEl.classList.toggle('warn', warn.length > 0); if (infoEl.title !== warn.join(' ')) infoEl.title = warn.join(' ');
-        setText(noteEl, warn.join(' '));
+        const w = warn.join(' ');
+        warnShow(w); setText(measureEl, ml); setText(noteEl, w);
+        line3 = (warn.length ? '\u26a0 ' : '') + ml;
       }
-    }
+    } else { warnShow(''); }
     // the Mehr overlay: rewritten only when what it shows changes (sync runs on every redraw)
     const sig = [a3, currentShape, langNow(), canvasW, canvasH, cur ? cur.a + ',' + cur.b + ',' + cur.format : ''].join('|');
     if (sig !== moreSig) {
@@ -256,8 +257,8 @@
     const all = reasonAll();
     const line3 = syncArt(all);
     kindBtns.forEach(function (b) { UI.setDisabled(b, all || (artNow() === 'off' ? T['reason.art.needsN1'] : null)); });   // task 122: the law applies to Netzart 1; with "-" the group stays visible and says so
-    axesBtns.forEach(function (b) { UI.setDisabled(b, all); });   // hidden with #net-group elsewhere; in the phone layout's panel they stay visible, so they say why
-    UI.setDisabled(reverseBtn, all);
+    axesBtns.forEach(function (b) { UI.setDisabled(b, all || (artNow() === 'n3c' ? tt('net.art.reason.needsN1.axes') : null)); });   // hidden with #net-group elsewhere; in the phone layout's panel they stay visible, so they say why
+    UI.setDisabled(reverseBtn, all || (artNow() === 'n3c' ? tt('net.art.reason.needsN1.reverse') : null));   // task 123: Reverse is a Netzart 1 control: visible (when Netzart 1 was Geo) but locked under 3C
     UI.setDisabled(moreBtn, all);
     if (all && overlay.isOpen) overlay.close(false);
     strengthStepper.refresh();

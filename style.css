@@ -979,13 +979,14 @@ body.dark {
 .overlay #net-focus-row, .overlay #net-macro-row { width: 100%; }
 
 /* task 122 (3C-3): the Netzart stepper (- | 1 | 3C) in front of the kinds, the Netzart 3C controls (a, b, format, W and stretch) in their place, and the Mehr sections. Tokens only: weights 400 / 600, sizes 12 / 16. */
-#net-art-value { min-width: 3ch; font-weight: var(--weight-strong); }
+#net-art-value, #net-a-value, #net-b-value { min-width: 2.5ch; }   /* task 123: the Netzart, a and b steppers are one width (two characters, a and b show 12 at most) */
+#net-art-value { font-weight: var(--weight-strong); }
 .net-3c { display: flex; align-items: center; gap: var(--gap); flex: none; }
-.net-3c[hidden], .nav-kinds[hidden], .nav-divider[hidden], #nav-netz .stepper[hidden], #nav-netz .nav-cluster[hidden] { display: none; }
+.net-3c[hidden], .net-3c-warn[hidden], .nav-kinds[hidden], .nav-divider[hidden], #nav-netz .stepper[hidden], #nav-netz .nav-cluster[hidden] { display: none; }
 .net-3c-letter { display: inline-block; width: var(--icon); text-align: center; font-size: var(--size-base); font-weight: var(--weight-strong); line-height: 1; }
-.net-format-btn { width: calc(var(--target) + 12px); font-size: var(--size-base); font-weight: var(--weight-regular); }
-.net-3c-info { font-size: var(--size-base); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--color-secondary); }
-.net-3c-info.warn { color: var(--color-text); font-weight: var(--weight-strong); }
+.net-format-btn { width: var(--target); padding: 0; }   /* task 123: icon-only */
+.net-3c-warn { display: inline-flex; align-items: center; justify-content: center; width: var(--icon); height: var(--target); color: var(--color-text); }   /* task 123: only when there is a warning (hidden otherwise) */
+.net-3c-measure { margin: 0; font-size: var(--size-base); font-variant-numeric: tabular-nums; }
 #net-group.net-3c-on #net-axes-row, #net-group.net-3c-on #net-domain-row { display: none; }
 .net-3c-note { margin: 0; font-size: var(--size-secondary); color: var(--color-secondary); }
 .net-3c-note:empty { display: none; }

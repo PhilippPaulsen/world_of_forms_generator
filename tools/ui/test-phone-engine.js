@@ -808,7 +808,7 @@ T('netz-apply', () => {
     const sheet = p.doc.getElementById('more-rail');
     check('the rail\'s sheet keeps its first row (Curve ... Neu anfangen) and gets the second: Random, the catalog link, Info, Download, Clear, then the Curve / Free settings groups; More keeps its own name', sheet.children.map(c => c.id || c.className).join() === 'more-row,more-row more-extra,more-settings,more-name' && sheet.children[1].children.map(c => c.id).join() === 'btn-toggle-lines,btn-random,btn-gallery,btn-info,btn-save,btn-clear' && !config.toolRows.netz.sheet.openerLabel);
     // follow (mode 'disable'): the Fokus stepper stays SHOWN and is aria-disabled with the reason while sketch.js hides #net-focus-row (Aus, Geo)
-    const fs = p.doc.getElementById('net-focus-stepper'), REASON = 'Fokus gilt für Sin und Tan';
+    const fs = p.doc.getElementById('net-focus-stepper'), REASON = 'Der Fokus gilt für Netzart 1 mit Sin und Tan.';
     check('the Fokus stepper is shown (not hidden) and disabled with the reason while sketch.js hides #net-focus-row (Aus, Geo): aria-disabled, data-reason and title say it - at apply', fs.hidden === false && fs.getAttribute('aria-disabled') === 'true' && fs.dataset.reason === REASON && fs.getAttribute('title') === REASON, fs.getAttribute('aria-disabled') + ' / ' + fs.dataset.reason);
     p.focusRow.hidden = false; p.win.uiSync();
     check('...and enabled again when sketch.js shows the row (Sin, Tan): on the next UI tick no aria-disabled, no reason, no title left', fs.hidden === false && fs.getAttribute('aria-disabled') === null && fs.dataset.reason === undefined && fs.getAttribute('title') === null);
