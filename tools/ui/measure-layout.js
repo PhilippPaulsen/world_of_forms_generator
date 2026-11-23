@@ -240,9 +240,12 @@
     click(shapes[1]); await sleep(wait);
     if (nav) { nav.show('netz'); await sleep(wait); }
     net.netz_row = await snapQ();
+    // task 122: the Netzart stepper (net-art-stepper) comes first: one step up chooses Netzart 1 (Sinus + the Field default); the law buttons are locked at "-". A tree without it (main before 122) skips this step.
+    const artUp = document.querySelector('#net-art-stepper .stepper-btn[data-dir="1"]');
+    if (artUp) { click(artUp); await sleep(wait); }
     const sinBtn = document.querySelector('#nav-netz .net-kind-btn[data-kind="sinus"]');
     if (sinBtn) { click(sinBtn); await sleep(wait); }
-    const strUp = document.querySelector('#nav-netz .stepper-btn[data-dir="1"]');
+    const strUp = document.querySelector('#net-strength-stepper .stepper-btn[data-dir="1"]') || document.querySelector('#nav-netz .stepper-btn[data-dir="1"]');
     if (strUp) { click(strUp); await sleep(wait); }
     net.square_sin_field = await snapQ();
     const moreNetz = document.querySelector('#btn-more-netz');
