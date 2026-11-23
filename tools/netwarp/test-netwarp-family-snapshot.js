@@ -24,7 +24,7 @@ const c = t.netAnimationCompat(s1, s2);
 ok('stale + fresh triangle pair is interpolable', c.ok === true, JSON.stringify(c));
 ok('a real square net and a triangle net are still refused', load('square', mk(SQ, 2, 4)).netAnimationCompat(mk(SQ, 2, 4), mk(TR, 3, 5)).ok === false);
 const sq = load('square', mk(TR, 2, 4)); ok('stale triangle family on the square becomes the square family', sq.netSpecSnapshot().family === SQ);
-const hx = load('hex', mk(SQ, 2, 4)); ok('hex shape: snapshot unchanged (no hexagon family yet)', hx.netSpecSnapshot().family === SQ);
+const hx = load('hex', mk(SQ, 2, 4)); const hs = hx.netSpecSnapshot(); ok('hex shape: the snapshot carries the hexagon family *N and cls 0 (task 127: the hexagon has its 3C)', hs.family === '*N' && hs.cls === 0, JSON.stringify(hs));
 ok('regular net', load('triangle', null).netSpecSnapshot().regular === true);
 ok('non-3C spec untouched', JSON.stringify(load('triangle', { x: { kind: 'uniform', w: 0 } }).netSpecSnapshot()) === JSON.stringify({ x: { kind: 'uniform', w: 0 } }));
 const src = fs.readFileSync(path.join(ROOT, 'sketch.js'), 'utf8').replace(/\/\/.*$/gm, '');
