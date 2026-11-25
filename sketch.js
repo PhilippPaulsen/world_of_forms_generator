@@ -2310,6 +2310,8 @@ function setup() {
     } else if (!catalogUrlPattern || !applyCatalogPattern(catalogUrlPattern)) {
         addRandomConnection();
     }
+    // task 133: ?mode=simple|advanced wins over the restored session (ui-mode.js)
+    if (window.uiModeApi) window.uiModeApi.applyQuery();
     // Roadmap: renderLayerTabs()/updateOffsetControls()/updateFaceToggleControl()/
     // updateTimelineControls() only ran once, earlier in setup(), BEFORE
     // rebuildGrid() above - a layer created just now by
