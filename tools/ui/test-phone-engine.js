@@ -245,6 +245,24 @@ T('release', () => {
     check('and again a full round trip leaves the tree as it was (no drift: two markers, two rows)', dump(p.doc.documentElement) === before);
 });
 
+console.log('\n== sub-tabs in the simple view (task 133) ==');
+T('subtabs-simple', () => {
+    const p = buildPage(), eng = ph(p); eng.start();
+    const slot = () => p.doc.getElementById('ph-slot'), btnOf = s => p.doc.getElementById('ph-subtab-' + s);
+    check('the advanced sub-tabs (Ebenen, Zeit) carry data-level="advanced", Raster does not (style.css hides them under html[data-mode=simple])', btnOf('ebenen').getAttribute('data-level') === 'advanced' && btnOf('zeit').getAttribute('data-level') === 'advanced' && btnOf('raster').getAttribute('data-level') === null);
+    eng.show('zeit');
+    p.doc.documentElement.setAttribute('data-mode', 'simple'); p.doc.dispatch('modechange', { detail: { mode: 'simple' } });
+    check('switching to simple while Zeit is shown: the default sub-tab (Raster) is shown instead', slot().children.length === 1 && slot().children[0].getAttribute('data-subtab') === 'raster' && btnOf('raster').getAttribute('aria-current') === 'true');
+    p.doc.documentElement.setAttribute('data-tab', 'farbe'); p.doc.dispatch('tabchange', { detail: { tab: 'farbe' } });
+    p.doc.documentElement.setAttribute('data-tab', 'form'); p.doc.dispatch('tabchange', { detail: { tab: 'form' } });
+    check('coming back to Form in the simple view shows Raster (what was remembered was advanced: not offered)', slot().children[0].getAttribute('data-subtab') === 'raster');
+    p.doc.documentElement.setAttribute('data-mode', 'advanced'); p.doc.dispatch('modechange', { detail: { mode: 'advanced' } });
+    eng.show('zeit');
+    check('in the advanced view Zeit can be shown again (nothing is blocked)', slot().children[0].getAttribute('data-subtab') === 'zeit');
+    const cfg = JSON.parse(JSON.stringify(config.subtabs, (k, v) => v));
+    check('the config marks exactly ebenen, zeit and achsen as advanced sub-tabs', Object.keys(cfg).filter(k => cfg[k].level === 'advanced').sort().join() === 'achsen,ebenen,zeit' && Object.keys(cfg).filter(k => cfg[k].level && cfg[k].level !== 'advanced').length === 0);
+});
+
 console.log('\n== sub-tabs ==');
 T('subtabs', () => {
     const p = buildPage(), orig = original(p), eng = ph(p); eng.start();
