@@ -59,7 +59,9 @@ const R = makeReader(DATA);
 
 // ================= 1. the version pin and the data file =================
 console.log('== the pinned p5 version and the frozen list ==');
-const tag = (HTML.match(/<script src="(https:\/\/cdn\.jsdelivr\.net\/npm\/p5@([\d.]+)\/lib\/(p5(?:\.min)?\.js))"><\/script>/) || []);
+// task 129: p5 is served from vendor/ (vendor/p5-X.Y.Z.js, the non-minified build); the CDN form (p5@x.y.z/lib/p5.js) is still accepted. tag[3] is 'p5.js' or 'p5.min.js' like before.
+const tag = (HTML.match(/<script src="((?:vendor\/p5-([\d.]+)\.js|https:\/\/cdn\.jsdelivr\.net\/npm\/p5@([\d.]+)\/lib\/p5(?:\.min)?\.js))(?:\?v=[^"]*)?"><\/script>/) || []);
+if (tag[1]) { tag[2] = tag[2] || tag[3]; tag[3] = /\.min\.js/.test(tag[1]) ? 'p5.min.js' : 'p5.js'; }
 T('version pin', () => {
     check('index.html loads p5 from the CDN with an exact version (p5@x.y.z/lib/p5.js or p5.min.js)', !!tag[1], tag[1] || 'no p5 <script> tag found');
     check('the frozen list is for the version index.html loads: p5@' + tag[2] + ' vs the file\'s ' + DATA.p5Version + (tag[2] === DATA.p5Version ? '' : ' - p5 was swapped without regenerating tools/ui/p5-names-' + DATA.p5Version + '.json: run the snippet in the header of this test on the new build and replace the file'), tag[2] === DATA.p5Version);
@@ -167,7 +169,7 @@ T('top level', () => {
     // the classic scripts of index.html: <script src> without type="module", local files only (the p5 CDN tag and the module entry are skipped)
     const tags = [...HTML.replace(/<!--[\s\S]*?-->/g, '').matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].map(m => ({ attrs: m[1], body: m[2], src: (m[1].match(/\bsrc="([^"]+)"/) || [])[1] || null, type: (m[1].match(/\btype="([^"]+)"/) || [])[1] || 'classic' }));
     const classic = tags.filter(x => x.type === 'classic' && x.src && !/^(https?:)?\/\//.test(x.src)).map(x => x.src.replace(/\?.*$/, ''));
-    const skipped = tags.filter(x => !(x.type === 'classic' && x.src && !/^(https?:)?\/\//.test(x.src))).map(x => x.type !== 'classic' ? x.type + (x.src ? ' ' + x.src.replace(/\?.*$/, '') : '') : (x.src ? 'external ' + x.src.slice(0, 50) : 'inline'));
+    const skipped = tags.filter(x => !(x.type === 'classic' && x.src && !/^(https?:)?\/\//.test(x.src) && !/^vendor\/p5-/.test(x.src))).map(x => x.type !== 'classic' ? x.type + (x.src ? ' ' + x.src.replace(/\?.*$/, '') : '') : (x.src ? 'external ' + x.src.slice(0, 50) : 'inline'));
     const inline = tags.filter(x => x.type === 'classic' && !x.src && x.body.trim()).map((x, i) => ({ name: 'index.html <script> #' + (i + 1), text: x.body }));
     const files = classic.map(f => ({ name: f, text: f === 'sketch.js' ? SKETCH : fs.readFileSync(path.join(ROOT, f), 'utf8') })).concat(inline);
     if (process.env.P5_EXTRA_SCRIPT) files.push({ name: 'EXTRA:' + path.basename(process.env.P5_EXTRA_SCRIPT), text: fs.readFileSync(process.env.P5_EXTRA_SCRIPT, 'utf8') });

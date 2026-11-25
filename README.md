@@ -61,4 +61,23 @@ Inspired by Wilhelm Ostwald's *Die Harmonie der Formen* and *Die Welt der Formen
 
 ## License
 
-This project is licensed under the MIT License.
+MIT, see [`LICENSE`](./LICENSE). The fonts in `assets/fonts/` are excluded (own licence, see `assets/fonts/LICENSE-SuisseIntl.md`); `vendor/p5-1.9.0.js` is LGPL-2.1 (`vendor/VERSIONS.md`).
+
+## Releases and rollback
+
+Changes are listed in [`CHANGELOG.md`](./CHANGELOG.md). A release is a git tag (`vX.Y.Z`); the older merges carry `pre-*` tags. The live site is GitHub Pages from `main`, so a rollback is a commit on `main` that restores a known state; the old state stays in history.
+
+```bash
+# see what a tag contains, without changing anything
+git tag -n1
+git diff --stat <tag> main
+
+# roll back the published files to a tag (new commit, history kept)
+git checkout main
+git revert --no-edit <bad-commit>        # one change, or
+git restore --source=<tag> --staged --worktree -- .   # all files as in <tag>
+git commit -m "Roll back to <tag>"
+git push                                  # publishes (GitHub Pages)
+```
+
+After a rollback bump the shared `?v=` marker in `index.html`, `gallery.html` and `color-harmony/ui/index.html` so browsers do not serve cached files.

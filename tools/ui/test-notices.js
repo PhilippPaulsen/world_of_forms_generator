@@ -275,7 +275,7 @@ console.log('\n== the markup, the CSS and the call sites ==');
 T('source', () => {
     const cont = (HTML.match(/<div id="ui-notices"[^>]*>/) || [''])[0];
     check('index.html: #ui-notices is an always-rendered container: class "notices", role="status", aria-live="polite", NO hidden attribute, empty; the old #ui-toast is gone', /^<div id="ui-notices" class="notices" role="status" aria-live="polite">$/.test(cont) && /<div id="ui-notices"[^>]*><\/div>/.test(HTML) && !/id="ui-toast"/.test(HTML) && !/ui-toast/.test(strip(UI_SRC)));
-    check('index.html: #node-count-note is GONE (the second fixed toast that overlapped the stack): no element, no `limit-note toast` markup; the container is still there, after the body\'s other content and before the scripts', !/id="node-count-note"/.test(HTML) && !/class="[^"]*\btoast\b[^"]*"/.test(HTML) && HTML.indexOf('id="ui-notices"') > 0 && HTML.indexOf('id="ui-notices"') < HTML.indexOf('<script src="https://cdn.jsdelivr.net'));
+    check('index.html: #node-count-note is GONE (the second fixed toast that overlapped the stack): no element, no `limit-note toast` markup; the container is still there, after the body\'s other content and before the scripts', !/id="node-count-note"/.test(HTML) && !/class="[^"]*\btoast\b[^"]*"/.test(HTML) && HTML.indexOf('id="ui-notices"') > 0 && HTML.indexOf('id="ui-notices"') < HTML.indexOf('<script src="vendor/p5-'));
     const css = strip(CSS);
     const rule = sel => { const m = css.match(new RegExp('(?:^|\\})\\s*' + sel.replace(/[.#]/g, '\\$&') + '\\s*\\{([^}]*)\\}')); return m ? m[1] : ''; };
     const nt = rule('.notices'), nn = rule('.notice');

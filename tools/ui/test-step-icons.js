@@ -17,11 +17,11 @@ const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log
 const T = (name, fn) => { try { fn(); } catch (e) { check(name, false, 'threw: ' + String(e && e.stack).slice(0, 300)); } };
 
 // ---- 1. the app's markup and scripts: no left / right pointing triangle in any spelling ----------------------------------------------------------------------------------------------------------
-// The app = every .html / .js / .mjs / .css file outside tools/, docs/, node_modules and .git (the tests, the notes and the data are not what a phone renders). ALLOWED EXCEPTIONS: none for U+25C0 / U+25B6.
+// The app = every .html / .js / .mjs / .css file outside tools/, docs/, vendor/ (third-party code, task 129), node_modules and .git (the tests, the notes and the data are not what a phone renders). ALLOWED EXCEPTIONS: none for U+25C0 / U+25B6.
 // (Allowed and listed: U+25B2 and U+25BC, the two row buttons of the pairing editor in sketch.js; they are not emoji.)
 function walk(dir, out) {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-        if (e.name === 'node_modules' || e.name === '.git' || (dir === ROOT && (e.name === 'tools' || e.name === 'docs'))) continue;
+        if (e.name === 'node_modules' || e.name === '.git' || (dir === ROOT && (e.name === 'tools' || e.name === 'docs' || e.name === 'vendor'))) continue;
         const p = path.join(dir, e.name);
         if (e.isDirectory()) walk(p, out); else if (/\.(html|js|mjs|css)$/.test(e.name)) out.push(p);
     }
