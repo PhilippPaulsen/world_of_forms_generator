@@ -150,6 +150,10 @@ function _lineStyleNormalize(l) {
     const w = l && typeof l.weight === 'number' && isFinite(l.weight) ? Math.min(LW.max, Math.max(LW.min, l.weight)) : LW.def;
     return { visible: !(l && l.visible === false), weight: w };
 }
+// Task 133: the interface mode. Unlike the two blocks above it is ALWAYS written (settings.uiMode); a missing or bad value reads as the legacy mode 'advanced'
+// (nothing hidden), never as an error.
+const SESSION_UI_MODES = Object.freeze(['simple', 'advanced']);
+function _uiModeNormalize(m) { return SESSION_UI_MODES.includes(m) ? m : 'advanced'; }
 function _snapLines(l) {
     const n = _lineStyleNormalize(l);
     return n.visible && n.weight === 2 ? {} : { lineStyle: n };
@@ -192,6 +196,7 @@ function buildSessionSnapshot(s, now) {
             lineColor: s.lineColor, showNodes: !!s.showNodes, showFaces: !!s.showFaces, freeEndpointsEnabled: !!s.freeEndpointsEnabled,
             altNetSeed: s.altNetSeed ? JSON.parse(JSON.stringify(s.altNetSeed)) : null,
             netTransform: s.baseNetTransform ? JSON.parse(JSON.stringify(s.baseNetTransform)) : null,
+            uiMode: _uiModeNormalize(s.uiMode),
         }, _snapMorph(s.spatialMorph), _snapLines(s.lineStyle)),
         base,
         layers,
@@ -412,6 +417,9 @@ function validateSession(input, opts) {
             const m = spatialMorphNormalize(st.spatialMorph);
             if (!spatialMorphEqual(m, undefined)) settings.spatialMorph = m;
         }
+
+        // interface mode (task 133): always written; absent or not one of the two names -> 'advanced' (a snapshot from before the modes)
+        settings.uiMode = _uiModeNormalize(st.uiMode);
 
         // line style (task 024): additive, optional; absent or default -> no key (the restore sets the default), a bad field falls back to its default.
         if (st.lineStyle !== undefined) {

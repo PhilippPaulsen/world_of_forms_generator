@@ -67,16 +67,19 @@ console.log('== 1. the helpers and the state default ==');
 
 // ---- 2. the bytes ----------------------------------------------------------------------------------------------------------------------
 console.log('\n== 2. the snapshot: byte-identical at the defaults, the block only when it differs ==');
+// task 133: settings.uiMode is always written (one extra field, right after netTransform); the byte check strips exactly that field and then holds as before
+const UIM = ',"uiMode":"advanced"';
+const noMode = t => { if (!t.includes(UIM)) throw new Error('uiMode field missing'); return t.replace(UIM, ''); };
 const WANT = { small: 'c3037bd52eaceb60a722382ea9779e5b50ca1cc520606741e4198172d4c20fc1', layered: 'dbe4f2591181e416d6c49c4f072d19c59f2b58d6eb316a6de4ea7c60ef74913a' };   // task 062: re-recorded for schema 2 (grid instead of nodeCount, spec and free endpoints in the fingerprint); before: 1932cccee4c1, 5c494cc13816 (638 characters)
 {
     const w = world('square', 3, 5, 'none'); w.run('connections = [[1, 6], [2, 9]];');
     const ui = uiOf(w, 'none', 6), t0 = text(w, ui);
     check('the live global exists and holds the defaults in a fresh world', same(getMorph(w), DEF));
-    check('a small pattern with the defaults: the snapshot text has the sha256 of the text the code BEFORE stage b wrote (671 characters under schema 2; 638 before task 062)', sha(t0) === WANT.small && t0.length === 671, sha(t0).slice(0, 12));
+    check('a small pattern with the defaults: the snapshot text has the sha256 of the text the code BEFORE stage b wrote (671 characters under schema 2; 638 before task 062)', sha(noMode(t0)) === WANT.small && t0.length === 671 + UIM.length, sha(noMode(t0)).slice(0, 12));
     check('...and contains no spatialMorph key at all', !t0.includes('spatialMorph'));
     const lay = newCtx(); layeredAltNet(lay, {});
     const tl = text(lay, uiOf(lay, 'spiegeling', 6));
-    check('the heaviest layered scenario (alt-net hex, 3 layers + playback + timeline, colours) with the defaults: the same sha256 as before stage b', sha(tl) === WANT.layered && !tl.includes('spatialMorph'), sha(tl).slice(0, 12));
+    check('the heaviest layered scenario (alt-net hex, 3 layers + playback + timeline, colours) with the defaults: the same sha256 as before stage b', sha(noMode(tl)) === WANT.layered && !tl.includes('spatialMorph'), sha(noMode(tl)).slice(0, 12));
     // the same result however the defaults arrive
     const viaUndefined = w.sb.serializeSession(w.sb.buildSessionSnapshot(Object.assign({}, w.sb.collectSessionState(ui), { spatialMorph: undefined }), 1)).text;
     const viaMalformed = w.sb.serializeSession(w.sb.buildSessionSnapshot(Object.assign({}, w.sb.collectSessionState(ui), { spatialMorph: { enabled: 'no', mode: 'spiral', angleDeg: NaN } }), 1)).text;
@@ -84,7 +87,7 @@ const WANT = { small: 'c3037bd52eaceb60a722382ea9779e5b50ca1cc520606741e4198172d
     // differs -> written, at the end of settings
     setMorph(w, { enabled: true, mode: 'radial', angleDeg: -45.5 });
     const s1 = JSON.parse(text(w, ui));
-    check('a morph that differs from the defaults is written as settings.spatialMorph = { enabled, mode, angleDeg } (exactly three fields), after netTransform', same(s1.settings.spatialMorph, { enabled: true, mode: 'radial', angleDeg: -45.5 }) && Object.keys(s1.settings).at(-1) === 'spatialMorph' && Object.keys(s1.settings).at(-2) === 'netTransform');
+    check('a morph that differs from the defaults is written as settings.spatialMorph = { enabled, mode, angleDeg } (exactly three fields), after netTransform', same(s1.settings.spatialMorph, { enabled: true, mode: 'radial', angleDeg: -45.5 }) && Object.keys(s1.settings).at(-1) === 'spatialMorph' && Object.keys(s1.settings).at(-2) === 'uiMode' && Object.keys(s1.settings).at(-3) === 'netTransform');
     check('the schema is 2 and the morph block adds nothing to it (additive field; task 062 raised the schema for the grid, not for the block)', s1.schema === 2 && w.get('SESSION_SCHEMA_VERSION') === 2);
     const without = clone(s1); delete without.settings.spatialMorph;
     check('apart from that one block the text is the same as without the morph', J(without) === J(JSON.parse(t0)));
