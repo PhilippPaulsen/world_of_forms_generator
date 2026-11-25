@@ -101,6 +101,78 @@ console.log('\n== the switch buttons ==');
     check('the markup has the two buttons with data-mode, aria-pressed and the i18n attributes', /id="btn-mode-simple"[^>]*data-mode="simple"[^>]*data-i18n="mode\.simple"/.test(read('index.html')) && /id="btn-mode-advanced"[^>]*data-mode="advanced"[^>]*data-i18n="mode\.advanced"/.test(read('index.html')));
 }
 
+console.log('\n== advancedActive (the dot) ==');
+{
+    const A = page('', 'simple').api.advancedActive;
+    const base = () => ({ additionalLayers: [], timeline: null, shapeSizeFactorX: null, shapeSizeFactorY: null, currentShape: 'hex', symmetryMode: 'rotation_reflection6', curveType: { kind: 'straight' }, freeEndpointsEnabled: false,
+        altNetSeed: null, baseNetTransform: null, baseLastHarmonyType: null, baseDistributionStrategy: null, lineStyle: { visible: true, weight: 2 }, spatialMorph: { enabled: false, mode: 'linear', angleDeg: 0 } });
+    check('the default state (what a new visitor has) is not advanced', A(base()) === false);
+    check('garbage in is false, never a throw', [undefined, null, 5, 'x', [], {}].every(v => A(v) === false));
+    const one = (name, patch, want) => check(`${name}: ${want ? 'advanced' : 'not advanced'}`, A(Object.assign(base(), patch)) === want);
+    one('a layer', { additionalLayers: [{}] }, true);
+    one('a timeline', { timeline: { keyframeLayerIds: [] } }, true);
+    one('size 5 x 5 (the same twice)', { shapeSizeFactorX: 5, shapeSizeFactorY: 5 }, false);
+    one('size 5 x 3', { shapeSizeFactorX: 5, shapeSizeFactorY: 3 }, true);
+    one('the hexagon with the 3-fold (rotation_reflection3)', { symmetryMode: 'rotation_reflection3' }, true);
+    one('the hexagon with rotation3', { symmetryMode: 'rotation3' }, true);
+    one('the triangle with a 3-fold mode (not set under Mehr: the fold choice is the hexagon\'s)', { currentShape: 'triangle', symmetryMode: 'rotation_reflection3' }, false);
+    one('curve', { curveType: { kind: 'curve' } }, true);
+    one('free', { curveType: { kind: 'free' } }, true);
+    one('free endpoints', { freeEndpointsEnabled: true }, true);
+    one('an alternative net seed', { altNetSeed: { seed: 1 } }, true);
+    one('Sin, both axes, single (what the simple view makes)', { baseNetTransform: { x: { kind: 'trig', w: 0.5 }, y: 'same', repeat: false, macro: undefined, domain: undefined } }, false);
+    one('Geo with a focus of 0', { baseNetTransform: { x: { kind: 'geometric', w: 1, focus: 0 }, y: 'same', repeat: false } }, false);
+    one('a net with a focus', { baseNetTransform: { x: { kind: 'trig', w: 0.5, focus: 0.3 }, y: 'same', repeat: false } }, true);
+    one('a net with alternate', { baseNetTransform: { x: { kind: 'geometric', w: 1, alternate: true }, y: 'same' } }, true);
+    one('a net on one axis', { baseNetTransform: { x: { kind: 'trig', w: 0.5 }, y: { kind: 'trig', w: 0.2 } } }, true);
+    one('a tiled net', { baseNetTransform: { x: { kind: 'trig', w: 0.5 }, y: 'same', repeat: true } }, true);
+    one('a field net', { baseNetTransform: { x: { kind: 'trig', w: 0.5 }, y: 'same', repeat: false, domain: 'field' } }, true);
+    one('a macro', { baseNetTransform: { x: { kind: 'trig', w: 0.5 }, y: 'same', macro: 3 } }, true);
+    one('a Moebius net', { baseNetTransform: { kind: 'projective', family: '\u25a1N', a: 2, b: 3, format: 'full' } }, true);
+    one('a regular net spec', { baseNetTransform: { regular: true } }, false);
+    for (const h of ['2', '3', '4']) one('harmony ' + h, { baseLastHarmonyType: h }, false);
+    for (const h of ['B', 'W', 'S', 'V', 'custom']) one('harmony ' + h, { baseLastHarmonyType: h }, true);
+    one('strategy cyclic', { baseDistributionStrategy: 'cyclic' }, false);
+    for (const st of ['area', 'symmetry', 'rings']) one('strategy ' + st, { baseDistributionStrategy: st }, true);
+    one('lines off', { lineStyle: { visible: false, weight: 2 } }, true);
+    one('line weight 3', { lineStyle: { visible: true, weight: 3 } }, true);
+    one('the morph on', { spatialMorph: { enabled: true, mode: 'linear', angleDeg: 0 } }, true);
+    // the dot on the page
+    const mkBtn = () => { const a = { title: 'T' }, cl = new Set(); return { a, cl, classList: { toggle: (c, on) => { on ? cl.add(c) : cl.delete(c); } }, getAttribute: k => a[k], setAttribute: (k, v) => { a[k] = v; } }; };
+    const btn = mkBtn(), attrs = {};
+    const doc = { readyState: 'complete', documentElement: { setAttribute: (k, v) => { attrs[k] = v; } }, dispatchEvent() {}, addEventListener() {}, getElementById: id => id === 'btn-mode-advanced' ? btn : null };
+    const win = { UI: { onSync() {}, lang: 'de', t: k => ({ 'mode.advanced.title': 'Erweiterte Ansicht', 'mode.advancedActive': 'Erweiterte Einstellungen aktiv' })[k] } };
+    const ctx = vm.createContext({ window: win, document: doc, location: { search: '' }, CustomEvent: function (t, o) { this.detail = o.detail; }, URLSearchParams, console });
+    vm.runInContext("let uiMode = 'simple'; let additionalLayers = []; let timeline = null; let curveType = { kind: 'straight' };", ctx);
+    vm.runInContext(read('ui-mode.js'), ctx, { filename: 'ui-mode.js' });
+    win.uiModeApi.syncDot();
+    check('simple, nothing advanced: no dot, the plain title', !btn.cl.has('has-state') && btn.a.title === 'Erweiterte Ansicht');
+    vm.runInContext("additionalLayers = [{}];", ctx); win.uiModeApi.syncDot();
+    check('simple + a layer: the dot, and the sentence in the title', btn.cl.has('has-state') && btn.a.title === 'Erweiterte Ansicht (Erweiterte Einstellungen aktiv)');
+    vm.runInContext("uiMode = 'advanced';", ctx); win.uiModeApi.syncDot();
+    check('advanced mode: no dot even with the layer (nothing is hidden)', !btn.cl.has('has-state') && btn.a.title === 'Erweiterte Ansicht');
+    vm.runInContext("uiMode = 'simple'; additionalLayers = [];", ctx); win.uiModeApi.syncDot();
+    check('back to simple without a layer: the dot is gone again', !btn.cl.has('has-state'));
+}
+
+console.log('\n== the face-fill reasons in the simple view ==');
+{
+    const sk = read('sketch.js');
+    const m = sk.match(/function faceFillsUnavailableReason\(\) \{[\s\S]*?\n\}\n/);
+    check('the function is found in sketch.js', !!m);
+    const run = (mode, nw, curve) => {
+        const ctx = vm.createContext({ netWarpBaseNow: () => nw, curveType: { kind: curve }, activeLayer: 'base', additionalLayers: [], UI: { t: k => 'T:' + k }, console });
+        vm.runInContext(`let uiMode = '${mode}';`, ctx);
+        vm.runInContext(m[0], ctx);
+        return vm.runInContext('faceFillsUnavailableReason()', ctx);
+    };
+    check('simple + a Single net: the Off sentence (dictionary key), no word of "Field" or "Mehr"', run('simple', { field: false }, 'straight') === 'T:reason.fill.netSimple');
+    check('advanced + a Single net: the old sentence, unchanged (it names Field)', /Use Field/.test(run('advanced', { field: false }, 'straight')));
+    check('simple + curve: the advanced-view sentence', run('simple', null, 'curve') === 'T:reason.fill.curveSimple');
+    check('advanced + curve: the old sentence, unchanged (under Mehr)', /under Mehr/.test(run('advanced', null, 'curve')));
+    check('simple, straight lines, no net: no reason', run('simple', null, 'straight') === null);
+}
+
 console.log('\n== wiring ==');
 {
     const html = read('index.html'), sk = read('sketch.js');

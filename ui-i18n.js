@@ -148,6 +148,10 @@
     'mode.advanced': { de: 'Erweitert', en: 'Advanced' },
     'mode.simple.title': { de: 'Einfache Ansicht: wenige Bedienelemente', en: 'Simple view: few controls' },
     'mode.advanced.title': { de: 'Erweiterte Ansicht: alle Bedienelemente', en: 'Advanced view: all controls' },
+    'mode.advancedActive': { de: 'Erweiterte Einstellungen aktiv', en: 'Advanced settings active' },
+    // task 133: the face-fill reasons of the simple view (they name no control that the simple view hides)
+    'reason.fill.netSimple': { de: 'Die Flächenfüllung geht bei einem verformten Netz nicht. Das Netz auf „Aus“ stellen.', en: 'Face fills are not available while a net is on. Set the net to Off.' },
+    'reason.fill.curveSimple': { de: 'Die Flächenfüllung braucht gerade Linien. In der erweiterten Ansicht Kurve und Frei ausschalten.', en: 'Face fills need straight lines. Turn curve and free off in the advanced view.' },
     'timeline.clear': { de: 'Zeitleiste entfernen', en: 'Remove timeline' },
     'timeline.confirm.cancel': { de: 'Abbrechen', en: 'Cancel' },
     'timeline.confirm.remove': { de: 'Entfernen', en: 'Remove' },

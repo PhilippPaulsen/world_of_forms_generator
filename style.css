@@ -565,6 +565,18 @@ body.dark {
   cursor: pointer;
 }
 .mode-switch button[aria-pressed="true"] { font-weight: var(--weight-strong); color: var(--color-text); }
+/* the state dot (ui-mode.js advancedActive): simple view, but a setting is on that it cannot show. The same 6px corner dot as .nav-more.has-state, top right of the text. */
+.mode-switch button { position: relative; }
+.mode-switch button.has-state::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 14px);
+  right: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
 .app-header .mode-switch + .icon-btn { margin-left: 0; }
 /* below 768px the two do not fit next to the tabs and Help (375px: tabs 175 + switch 190 + Help 40 > 343): ONE button, the mode a tap switches TO, in the small text size of the
    phone tool rows' sub-tabs; its title and aria-label name that mode ("Erweiterte Ansicht: alle Bedienelemente"). Same elements, same handler, only the pressed one is not drawn.
