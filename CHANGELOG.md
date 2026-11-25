@@ -10,10 +10,12 @@ versions follow `vMAJOR.MINOR.PATCH`. The detail per task is in `reports/NNN.md`
 - `vendor/VERSIONS.md`: version, source and SHA-256 of the bundled p5.js. (Task 129)
 
 ### Changed
+- Typeface: Suisse Int'l is no longer in the repository (commercial licence, no redistribution in public repos). `style.css` and `color-harmony/ui/tokens.css` declare the faces with URLs under `https://bachmann-paulsen.de/fonts/` (Book, Semibold; Farborgel also Bold and Book Italic), `--font-ui` falls back to `"SuisseIntl Fallback"`, `system-ui`, Helvetica Neue, Arial. Locally and in forks the fallback appears (plus an expected CORS message in the console); on the website Suisse is loaded externally. The six font files were removed from the working tree, `.gitignore` blocks them, `tools/ui/test-no-suisse-fonts.js` guards it. Shared `?v=` marker 20270107font. (Task 130)
 - p5.js 1.9.0 (the same non-minified build as before) is served from `vendor/p5-1.9.0.js`, no longer from jsDelivr. `tools/ui/test-p5-names.js` reads the local tag. (Task 129)
 - Shared `?v=` marker 20270106rela in `index.html`, `gallery.html`, `color-harmony/ui/index.html`. (Task 129)
 
 ### Removed
+- `assets/fonts/SuisseIntl-*.woff2` and `color-harmony/ui/assets/fonts/SuisseIntl-*.woff2` (6 files). The git history still contains them until it is rewritten (separate task). (Task 130)
 - The Google Fonts request for Material Icons and its unused CSS rule (`.icon-btn .material-icons`); the UI icons are inline SVG. No layout change (before/after screenshots in `reports/129-bilder/`). (Task 129)
 
 ## Status as of 2026-11-25 (retrospective, grouped by task; state `39fcaa94`, Task 128)

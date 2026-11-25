@@ -138,23 +138,25 @@ console.log('\n== 4. copied rules ==');
 
 console.log('\n== 5. fonts ==');
 {
-    const faces = rules => rules.filter(r => r.selector === '@font-face').map(r => { const d = declMap(r.decls); const url = (d.get('src') || '').match(/url\(\s*["']?([^"')]+)["']?\s*\)/); return { family: (d.get('font-family') || '').replace(/["']/g, ''), file: url ? path.basename(url[1]) : null, local: /local\(/.test(d.get('src') || ''), weight: d.get('font-weight'), style: d.get('font-style'), d }; });
+    // Task 130: Suisse Int'l is NOT in the repository (licence). Both style sheets declare the faces with absolute URLs on the website's server.
+    const BASE = 'https://bachmann-paulsen.de/fonts/';
+    const faces = rules => rules.filter(r => r.selector === '@font-face').map(r => { const d = declMap(r.decls); const url = (d.get('src') || '').match(/url\(\s*["']?([^"')]+)["']?\s*\)/); return { family: (d.get('font-family') || '').replace(/["']/g, ''), url: url ? url[1] : null, local: /local\(/.test(d.get('src') || ''), weight: d.get('font-weight'), style: d.get('font-style') || 'normal', display: d.get('font-display'), fmt: /format\(\s*["']woff2["']\s*\)/.test(d.get('src') || ''), d }; });
     const G = faces(gen), F = faces(far);
-    check('the family name is the generator\'s: "SuisseIntl" on every Farborgel face (not "Suisse Intl")', F.length >= 4 && F.filter(f => !f.local).every(f => f.family === 'SuisseIntl'), [...new Set(F.map(f => f.family))].join(', '));
-    const sharedBad = [];
-    for (const g of G.filter(x => x.file)) {
-        const f = F.find(x => x.file === g.file && x.weight === g.weight && (x.style || 'normal') === (g.style || 'normal'));
-        if (!f) { sharedBad.push(g.file + ': no matching face'); continue; }
-        const a = crypto.createHash('md5').update(fs.readFileSync(path.join(ROOT, 'assets/fonts', g.file))).digest('hex');
-        const b = crypto.createHash('md5').update(fs.readFileSync(path.join(ROOT, 'color-harmony/ui/assets/fonts', f.file))).digest('hex');
-        if (a !== b) sharedBad.push(g.file + ': font file differs');
-    }
-    check(`the ${G.filter(x => x.file).length} generator faces (Book, Semibold) exist in the copy with the same weight/style and byte-identical font files`, sharedBad.length === 0 && G.filter(x => x.file).length >= 2, sharedBad.join('; '));
-    check('...and the Farborgel\'s extra faces (Bold, Book Italic) are under the same family and their files exist', F.filter(f => f.file && !G.some(g => g.file === f.file)).every(f => f.family === 'SuisseIntl' && fs.existsSync(path.join(ROOT, 'color-harmony/ui/assets/fonts', f.file))) && F.some(f => f.weight === '700') && F.some(f => f.style === 'italic'));
+    const key = f => f.weight + '/' + f.style;
+    check('the family name is "SuisseIntl" on every face with a file, in the generator and in the Farborgel (not "Suisse Intl")', G.filter(f => f.url).length >= 2 && F.filter(f => f.url).length >= 4 && [...G, ...F].filter(f => !f.local).every(f => f.family === 'SuisseIntl'), [...new Set([...G, ...F].map(f => f.family))].join(', '));
+    check('every face with a file points at ' + BASE + 'suisseintl-<cut>.woff2 (lower case, absolute, no local path), with format("woff2") and font-display: swap', [...G, ...F].filter(f => f.url).every(f => /^https:\/\/bachmann-paulsen\.de\/fonts\/suisseintl-[a-z]+\.woff2$/.test(f.url) && f.fmt && f.display === 'swap'), [...G, ...F].filter(f => f.url && !f.url.startsWith(BASE)).map(f => f.url).join(', '));
+    const EXPECT_G = { '400/normal': 'book', '600/normal': 'semibold' };
+    const EXPECT_F = { '400/normal': 'book', '600/normal': 'semibold', '700/normal': 'bold', '400/italic': 'bookit' };
+    const eq = (faceList, exp) => { const got = {}; faceList.filter(f => f.url).forEach(f => { got[key(f)] = f.url.slice(BASE.length + 'suisseintl-'.length, -'.woff2'.length); }); return JSON.stringify(Object.keys(exp).sort().map(k => [k, exp[k]])) === JSON.stringify(Object.keys(got).sort().map(k => [k, got[k]])); };
+    check('the generator declares exactly Book 400, Semibold 600', eq(G, EXPECT_G), G.filter(f => f.url).map(f => key(f) + ' ' + f.url).join('; '));
+    check('the Farborgel declares exactly Book 400, Semibold 600, Bold 700 and Book Italic 400 (the Bold file is uploaded by the owner; see reports/130.md)', eq(F, EXPECT_F), F.filter(f => f.url).map(f => key(f) + ' ' + f.url).join('; '));
+    const sharedBad = G.filter(g => g.url).filter(g => !F.some(f => f.url === g.url && key(f) === key(g)));
+    check('the Farborgel uses the SAME URL as the generator for the shared cuts (Book, Semibold)', sharedBad.length === 0, sharedBad.map(f => f.url).join(', '));
     const gfb = G.find(x => x.local), ffb = F.find(x => x.local);
     check('the metrics fallback face ("SuisseIntl Fallback": Arial, size-adjust and overrides) is identical', !!gfb && !!ffb && gfb.family === ffb.family && sameDecls(gfb.d, ffb.d));
-    for (const f of F.filter(x => x.file)) { /* every declared file must exist, or the swap silently falls back */ }
-    check('every font file tokens.css points at exists', F.filter(f => f.file).every(f => fs.existsSync(path.join(ROOT, 'color-harmony/ui/assets/fonts', f.file))));
+    const stack = '"SuisseIntl", "SuisseIntl Fallback", system-ui, "Helvetica Neue", Arial, sans-serif';
+    check('--font-ui is the same in both and is: ' + stack, genTokens.get('--font-ui') === stack && farTokens.get('--font-ui') === stack);
+    check('no font file is left in assets/fonts or color-harmony/ui/assets/fonts', ['assets/fonts', 'color-harmony/ui/assets/fonts'].every(d => !fs.existsSync(path.join(ROOT, d)) || fs.readdirSync(path.join(ROOT, d)).every(n => !/\.(woff2?|otf|ttf)$/i.test(n))));
 }
 
 console.log('\n== 6. styles.css really uses the tokens ==');

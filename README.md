@@ -59,9 +59,13 @@ Dark mode theming exists in the codebase but is not currently wired into the UI.
 Developed by Philipp Paulsen, IU International University, 2025.
 Inspired by Wilhelm Ostwald's *Die Harmonie der Formen* and *Die Welt der Formen*.
 
+## Typeface
+
+The UI is set in Suisse Int'l (family name `SuisseIntl`), a commercial typeface that is not in this repository. The website loads it from `https://bachmann-paulsen.de/fonts/` (CORS for that domain only). Locally and in forks that request is blocked and the page shows the fallback: `--font-ui` = `"SuisseIntl", "SuisseIntl Fallback" (Arial, metrics-matched), system-ui, "Helvetica Neue", Arial, sans-serif`. The browser console shows an expected CORS message for the font files. Please do not add Suisse font files to a fork; `.gitignore` and `tools/ui/test-no-suisse-fonts.js` guard against it.
+
 ## License
 
-MIT, see [`LICENSE`](./LICENSE). The fonts in `assets/fonts/` are excluded (own licence, see `assets/fonts/LICENSE-SuisseIntl.md`); `vendor/p5-1.9.0.js` is LGPL-2.1 (`vendor/VERSIONS.md`).
+MIT, see [`LICENSE`](./LICENSE). The typeface Suisse Int'l is not part of this repository (own licence, see `assets/fonts/LICENSE-SuisseIntl.md`); `vendor/p5-1.9.0.js` is LGPL-2.1 (`vendor/VERSIONS.md`).
 
 ## Releases and rollback
 
