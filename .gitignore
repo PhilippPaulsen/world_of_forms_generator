@@ -1,1 +1,15 @@
 .DS_Store
+
+# Commercial typeface Suisse Intl: served externally, never commit (licence)
+*[Ss]uisse*.woff
+*[Ss]uisse*.woff2
+*[Ss]uisse*.otf
+*[Ss]uisse*.ttf
+assets/fonts/*.woff
+assets/fonts/*.woff2
+assets/fonts/*.otf
+assets/fonts/*.ttf
+color-harmony/ui/assets/fonts/*.woff
+color-harmony/ui/assets/fonts/*.woff2
+color-harmony/ui/assets/fonts/*.otf
+color-harmony/ui/assets/fonts/*.ttf

@@ -6,12 +6,15 @@
 */
 
 /* --- Typeface: SuisseIntl, weights 400 and 600 only ---------------------
-   Copies of the files in die-welt-der-formen/assets (web use confirmed by
-   the owner). font-display: swap never blocks text; index.html preloads
-   Book. */
+   Suisse Int'l is commercially licensed and NOT part of this repository.
+   The web fonts are served from https://bachmann-paulsen.de/fonts/ (CORS
+   restricted to that site's domain). Locally and in forks the request is
+   blocked and the stack below falls back to "SuisseIntl Fallback" (Arial,
+   scaled to Suisse's metrics) and then the system font. font-display: swap
+   never blocks text; index.html preloads Book. */
 @font-face {
   font-family: "SuisseIntl";
-  src: url("assets/fonts/SuisseIntl-Book.woff2") format("woff2");
+  src: url("https://bachmann-paulsen.de/fonts/suisseintl-book.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -19,7 +22,7 @@
 
 @font-face {
   font-family: "SuisseIntl";
-  src: url("assets/fonts/SuisseIntl-Semibold.woff2") format("woff2");
+  src: url("https://bachmann-paulsen.de/fonts/suisseintl-semibold.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   font-display: swap;
@@ -54,7 +57,7 @@
   --color-hairline: #d9d9d9;
   --color-bg: #ffffff;
 
-  --font-ui: "SuisseIntl", "SuisseIntl Fallback", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-ui: "SuisseIntl", "SuisseIntl Fallback", system-ui, "Helvetica Neue", Arial, sans-serif;
   --weight-regular: 400;
   --weight-strong: 600;
 

@@ -16,13 +16,14 @@
  * page's value is a <span>), and the older --text / dark-mode variables. This page's own aliases for its three
  * type sizes (--text-primary / --text-ui / --text-meta) live in styles.css, mapped onto the tokens below.
  *
- * Fonts: "SuisseIntl" is the generator's family name (this page used to call the same files "Suisse Intl").
- * Book and Semibold are byte-identical to the generator's; Bold and Book Italic are this page's own extras
+ * Fonts: "SuisseIntl" is the generator's family name. The files are NOT in this repository (commercial licence): they are
+ * served from https://bachmann-paulsen.de/fonts/ (CORS for that domain only); locally the stack falls back.
+ * Book and Semibold are the same URLs as the generator's; Bold and Book Italic are this page's own extras
  * (the navigator code, a few headings and source notes use them) and are declared under the same family.
  */
 @font-face {
   font-family: "SuisseIntl";
-  src: url("./assets/fonts/SuisseIntl-Book.woff2") format("woff2");
+  src: url("https://bachmann-paulsen.de/fonts/suisseintl-book.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -30,7 +31,7 @@
 
 @font-face {
   font-family: "SuisseIntl";
-  src: url("./assets/fonts/SuisseIntl-Semibold.woff2") format("woff2");
+  src: url("https://bachmann-paulsen.de/fonts/suisseintl-semibold.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   font-display: swap;
@@ -38,7 +39,7 @@
 
 @font-face {
   font-family: "SuisseIntl";
-  src: url("./assets/fonts/SuisseIntl-Bold.woff2") format("woff2");
+  src: url("https://bachmann-paulsen.de/fonts/suisseintl-bold.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   font-display: swap;
@@ -46,7 +47,7 @@
 
 @font-face {
   font-family: "SuisseIntl";
-  src: url("./assets/fonts/SuisseIntl-BookIt.woff2") format("woff2");
+  src: url("https://bachmann-paulsen.de/fonts/suisseintl-bookit.woff2") format("woff2");
   font-weight: 400;
   font-style: italic;
   font-display: swap;
@@ -68,7 +69,7 @@
   --color-hairline: #d9d9d9;
   --color-bg: #ffffff;
 
-  --font-ui: "SuisseIntl", "SuisseIntl Fallback", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-ui: "SuisseIntl", "SuisseIntl Fallback", system-ui, "Helvetica Neue", Arial, sans-serif;
   --weight-regular: 400;
   --weight-strong: 600;
 

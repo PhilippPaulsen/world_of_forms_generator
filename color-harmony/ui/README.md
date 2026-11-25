@@ -33,7 +33,7 @@ wrapper's exports match it.
 
 ## UI principles
 
-A neutral grid, local Suisse Intl, thin lines and a single principal view. Color
+A neutral grid, Suisse Intl (served externally), thin lines and a single principal view. Color
 is reserved for calibrated display realizations of actual engine fields. View icons follow the generator's existing
 24-unit outlined SVG shape language; no unrelated icon library is loaded.
 Controls are short German words or geometry. Every icon/digit control has a
@@ -105,17 +105,17 @@ symbols are data, not translated prose. Missing translation keys throw explicitl
 
 ## Typography
 
-The supplied local fonts are copied from the Phase-5 worktree into `assets/fonts/`:
+Suisse Int'l is commercially licensed and NOT in this repository. The faces are declared in `tokens.css` with URLs under `https://bachmann-paulsen.de/fonts/` (CORS for that domain only); locally and in forks the fallback stack appears and the console shows an expected CORS message:
 
 | File | CSS weight/style |
 | --- | --- |
-| `SuisseIntl-Book.woff2` | 400 normal |
-| `SuisseIntl-Semibold.woff2` | 600 normal |
-| `SuisseIntl-Bold.woff2` | 700 normal |
-| `SuisseIntl-BookIt.woff2` | 400 italic |
+| `suisseintl-book.woff2` | 400 normal |
+| `suisseintl-semibold.woff2` | 600 normal |
+| `suisseintl-bold.woff2` | 700 normal |
+| `suisseintl-bookit.woff2` | 400 italic |
 
-The actual filenames differ slightly from the suggested names. CSS declares each
-face explicitly and uses `"Suisse Intl", Arial, sans-serif`. `font-synthesis:none`
+CSS declares each
+face explicitly (family `SuisseIntl`, stack `var(--font-ui)`). `font-synthesis:none`
 prevents simulated weight/style; `font-variant-numeric:tabular-nums` applies
 throughout. Bold is limited to the current hue readout. Source notes use italic.
 
@@ -167,7 +167,7 @@ atlas substitution/shared-member workflows. Desktop and mobile maintain visible
 square swatches, focus styling and 44px primary touch controls; compact code arrows use 32×44px mobile targets. Register scrolling stays
 inside its own container. Real-device and screen-reader studies remain follow-up work.
 
-The page remains white with local Suisse Intl, generator-style 1px outlined controls,
+The page remains white with Suisse Intl (served externally), generator-style 1px outlined controls,
 4px control corners, square contiguous atlas cells and three type sizes (22/13/11px).
 The new composition strip uses adjacent square fields, not rounded palette chips.
 
