@@ -543,53 +543,30 @@ body.dark {
   color: var(--color-text);
 }
 
-/* task 133: the interface mode switch, left of Help: two text buttons like the tabs (regular and secondary; the current one Semibold and black), no frame, no fill.
-   It takes the auto margin that Help had, so the pair stays at the right edge. */
-.mode-switch { display: flex; align-items: stretch; align-self: stretch; gap: 12px; margin-left: auto; }
+/* task 133: the interface mode button (a Plus), left of Help, the same size (--target, --ph-header-h on the phone) and glyph weight. Unlike the frameless Help it is a TOGGLE
+   and looks like the other toggles: a frame while the simple view is on, filled (black, white glyph) while the advanced view is on. It takes the auto margin that Help had;
+   Help sits close to it (the header gap is taken back). */
+.app-header .icon-btn.mode-plus { margin-left: auto; border: 1px solid var(--color-text); color: var(--color-text); position: relative; }
+.app-header .icon-btn.mode-plus.active { background: var(--color-text); color: var(--color-bg); }
+.app-header .mode-plus + .icon-btn { margin-left: -12px; }
 @media (min-width: 768px) {
-  .mode-switch { gap: 16px; }
+  .app-header .mode-plus + .icon-btn { margin-left: -24px; }
 }
-.mode-switch button {
-  display: inline-flex;
-  align-items: center;               /* the text is centred in the full-height click area, as in the tabs */
-  margin: 0;
-  padding: 0 4px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  font: inherit;
-  font-size: var(--fs-tab);
-  font-weight: var(--weight-regular);
-  line-height: 1.1;
-  color: var(--color-secondary);
-  cursor: pointer;
-}
-.mode-switch button[aria-pressed="true"] { font-weight: var(--weight-strong); color: var(--color-text); }
-/* the state dot (ui-mode.js advancedActive): simple view, but a setting is on that it cannot show. The same 6px corner dot as .nav-more.has-state, top right of the text. */
-.mode-switch button { position: relative; }
-.mode-switch button.has-state::after {
+/* the state dot (ui-mode.js advancedActive): simple view, but a setting is on that it cannot show. The same 6px corner dot as .nav-more.has-state. */
+.app-header .mode-plus.has-state::after {
   content: "";
   position: absolute;
-  top: calc(50% - 14px);
-  right: -3px;
+  top: 4px;
+  right: 4px;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: currentColor;
 }
-.app-header .mode-switch + .icon-btn { margin-left: 0; }
-/* below 768px the two do not fit next to the tabs and Help (375px: tabs 175 + switch 190 + Help 40 > 343): ONE button, the mode a tap switches TO, in the small text size of the
-   phone tool rows' sub-tabs; its title and aria-label name that mode ("Erweiterte Ansicht: alle Bedienelemente"). Same elements, same handler, only the pressed one is not drawn.
-   Written as "not all and (min-width: 768px)" (the same widths as max-width: 767px) because tools/ui/test-phone-config.js counts the max-width: 767px blocks of the file. */
-@media not all and (min-width: 768px) {
-  .mode-switch button[aria-pressed="true"] { display: none; }
-  .mode-switch button { font-size: 14px; }
-}
-/* below 360px (320: tabs 194 + switch 68 + Help 40 + two gaps of 20 = 342 > 288) the header gap and the switch shrink once more */
+/* below 360px (320: tabs 194 + two 40px buttons + the gap = 282 <= 288) the header gap shrinks, Help touches the Plus */
 @media not all and (min-width: 360px) {
   .app-header { gap: 4px; }
-  .mode-switch button { font-size: 12px; padding: 0 2px; }
-  .app-header .mode-switch + .icon-btn { width: 36px; }
+  .app-header .mode-plus + .icon-btn { margin-left: 4px; }
 }
 
 .app-header .icon-btn {

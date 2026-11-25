@@ -6,9 +6,9 @@
  *   ?mode=simple | advanced                 a valid value wins over the session and over the default (applyQuery(), called by sketch.js after the restore)
  *   order at a page load                    ?mode > the restored session > UI_MODE_NEW_VISITOR (a session without the field restores UI_MODE_LEGACY)
  *
- *   window.uiModeApi = { MODES, get(), set(mode), applyQuery([search]), parseModeParam(search), advancedActive(state), syncDot() }
+ *   window.uiModeApi = { MODES, get(), set(mode), applyQuery([search]), parseModeParam(search), advancedActive(state), syncButton() }
  *   advancedActive(state)  true when a setting is on that the simple view cannot show (layers, timeline, X != Y, 3-fold, curve / free, a net beyond law + strength, Dreieck colours, a
- *                          distribution, a line style, the morph): the Erweitert button gets a dot while the mode is simple. No reset, no switch (task 133, plan 3.4).
+ *                          distribution, a line style, the morph): the Plus button (#btn-mode-plus) gets a dot while the mode is simple. No reset, no switch (task 133, plan 3.4).
  *   'modechange' on document, detail { mode }: fired when the attribute changes (a click, ?mode=, a session restore - sync() runs on every UI.onSync tick).
  *
  * UI only: no generator state except the one global uiMode is read or written here.
@@ -85,48 +85,51 @@
       lineStyle: typeof lineStyle !== 'undefined' ? lineStyle : undefined, spatialMorph: typeof spatialMorph !== 'undefined' ? spatialMorph : undefined
     };
   }
-  var dotKey = null;
-  // the dot: .has-state on the Erweitert button (the same corner dot as .nav-more.has-state, style.css) and the sentence in its title, only while the mode is simple
-  function syncDot() {
+  var buttonKey = null;
+  // the Plus button in the header (index.html #btn-mode-plus): active (filled) = advanced, plain = simple; aria-pressed, title and aria-label say "More controls: off | on" in
+  // the current language. In the simple view, while a setting is on that the view cannot show (advancedActive), it also gets .has-state (the same 6px corner dot as
+  // .nav-more.has-state, style.css) and the sentence in its name. Re-run on every UI tick, on 'modechange' and (the key holds the language) after a language change.
+  function syncButton() {
     if (typeof document.getElementById !== 'function') return false;
-    var b = document.getElementById('btn-mode-advanced');
+    var b = document.getElementById('btn-mode-plus');
     if (!b) return false;
-    var on = get() === 'simple' && advancedActive(liveState());
-    var lang = window.UI && typeof window.UI.lang === 'string' ? window.UI.lang : (window.UI && window.UI.lang && window.UI.lang()) || '';
-    var key = (on ? '1' : '0') + lang;
-    if (key === dotKey) return false;
-    dotKey = key;
-    b.classList.toggle('has-state', on);
+    var on = get() === 'advanced';
+    var dot = !on && advancedActive(liveState());
+    var lang = window.UI && typeof window.UI.lang === 'string' ? window.UI.lang : '';
+    var key = (on ? 'A' : 'S') + (dot ? '1' : '0') + lang;
+    if (key === buttonKey) return false;
+    buttonKey = key;
+    b.classList.toggle('active', on);
+    b.classList.toggle('has-state', dot);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
     var t = window.UI && typeof window.UI.t === 'function' ? window.UI.t : null;
-    var base = t ? t('mode.advanced.title') : b.getAttribute('title') || '';
-    var note = t ? t('mode.advancedActive') : 'Erweiterte Einstellungen aktiv';
-    b.setAttribute('title', on ? base + ' (' + note + ')' : base);
+    var text = t ? t(on ? 'mode.plus.on' : 'mode.plus.off') : (on ? 'Weitere Bedienelemente: an' : 'Weitere Bedienelemente: aus');
+    if (dot) text += ' (' + (t ? t('mode.advancedActive') : 'Erweiterte Einstellungen aktiv') + ')';
+    b.setAttribute('title', text);
+    b.setAttribute('aria-label', text);
     return true;
   }
 
-  // the switch in the header (index.html #mode-switch): aria-pressed follows the mode on every change; a click sets it. Bound at DOMContentLoaded (the markup comes
-  // before the scripts, but the check keeps the file usable on a page without the switch).
-  function bindSwitch() {
+  // a click toggles the mode and the focus stays on the button (a keyboard user keeps their place). Enter and Space are the native button keys. Bound at DOMContentLoaded
+  // (the markup comes before the scripts; the checks keep the file usable on a page without the button).
+  function bindButton() {
     if (typeof document.getElementById !== 'function') return;
-    var root = document.getElementById('mode-switch');
-    if (!root) return;
-    var buttons = Array.prototype.slice.call(root.querySelectorAll('button[data-mode]'));
-    function show() { buttons.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-mode') === get() ? 'true' : 'false'); }); }
-    buttons.forEach(function (b) {
-      b.addEventListener('click', function () { set(b.getAttribute('data-mode')); b.focus(); });
-    });
-    document.addEventListener('modechange', function () { show(); dotKey = null; syncDot(); });
-    show();
+    var b = document.getElementById('btn-mode-plus');
+    if (!b) return;
+    b.addEventListener('click', function () { set(get() === 'advanced' ? 'simple' : 'advanced'); b.focus(); });
+    document.addEventListener('modechange', function () { buttonKey = null; syncButton(); });
+    buttonKey = null;
+    syncButton();
   }
 
-  window.uiModeApi = { MODES: MODES, get: get, set: set, applyQuery: applyQuery, parseModeParam: parseModeParam, advancedActive: advancedActive, syncDot: syncDot };
+  window.uiModeApi = { MODES: MODES, get: get, set: set, applyQuery: applyQuery, parseModeParam: parseModeParam, advancedActive: advancedActive, syncButton: syncButton };
 
   // as early as this script runs: the attribute and the global follow ?mode= (the session restore in setup() may replace the global; applyQuery() then puts the query back)
   var q0 = parseModeParam(location.search);
   if (q0 && typeof uiMode !== 'undefined') uiMode = q0;
   sync();
   if (typeof document.addEventListener === 'function') {
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindSwitch); else bindSwitch();
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindButton); else bindButton();
   }
-  if (window.UI && typeof window.UI.onSync === 'function') window.UI.onSync(function () { var changed = sync(); syncDot(); return changed; });
+  if (window.UI && typeof window.UI.onSync === 'function') window.UI.onSync(function () { var changed = sync(); syncButton(); return changed; });
 })();

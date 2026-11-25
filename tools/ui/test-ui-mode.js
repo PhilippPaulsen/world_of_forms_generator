@@ -81,24 +81,41 @@ console.log('\n== the order ?mode > session > default ==');
     check('the two constants of core/state.js: a new visitor starts simple, a saved session without the field reads advanced (decision F1)', dflt === 'simple' && legacy === 'advanced');
 }
 
-console.log('\n== the switch buttons ==');
-{
-    const mkBtn = m => { const a = { 'data-mode': m, 'aria-pressed': 'x' }, h = {}; return { a, h, focused: 0, getAttribute: k => a[k], setAttribute: (k, v) => { a[k] = v; }, addEventListener: (t, f) => { h[t] = f; }, focus() { this.focused++; } }; };
-    const bS = mkBtn('simple'), bA = mkBtn('advanced'), docL = {};
-    const attrs = {}, events = [];
+console.log('\n== the Plus button ==');
+function plusPage(initial, lang) {
+    const a = { title: 'T', 'aria-label': 'T', 'aria-pressed': 'x' }, cl = new Set(), h = {}, docL = {};
+    const btn = { a, cl, h, focused: 0, classList: { toggle: (c, on) => { on ? cl.add(c) : cl.delete(c); } }, getAttribute: k => a[k], setAttribute: (k, v) => { a[k] = v; }, addEventListener: (t, f) => { h[t] = f; }, focus() { this.focused++; } };
+    const attrs = {};
     const document = { readyState: 'complete', documentElement: { setAttribute: (k, v) => { attrs[k] = v; } },
-        dispatchEvent: e => { events.push(e.detail.mode); (docL.modechange || []).forEach(f => f(e)); }, addEventListener: (t, f) => { (docL[t] = docL[t] || []).push(f); },
-        getElementById: id => id === 'mode-switch' ? { querySelectorAll: () => [bS, bA] } : null };
-    const win = { UI: { onSync: () => {} }, sessionWriter: { markDirty() {} } };
+        dispatchEvent: e => { (docL.modechange || []).forEach(f => f(e)); }, addEventListener: (t, f) => { (docL[t] = docL[t] || []).push(f); },
+        getElementById: id => id === 'btn-mode-plus' ? btn : null };
+    const D = { 'mode.plus.off': { de: 'Weitere Bedienelemente: aus', en: 'More controls: off' }, 'mode.plus.on': { de: 'Weitere Bedienelemente: an', en: 'More controls: on' }, 'mode.advancedActive': { de: 'Erweiterte Einstellungen aktiv', en: 'Advanced settings active' } };
+    const win = { UI: { onSync() {}, lang, t: k => D[k][win.UI.lang] }, sessionWriter: { markDirty() {} } };
     const ctx = vm.createContext({ window: win, document, location: { search: '' }, CustomEvent: function (t, o) { this.detail = o.detail; }, URLSearchParams, console });
-    vm.runInContext("let uiMode = 'simple';", ctx);
+    vm.runInContext(`let uiMode = '${initial}'; let additionalLayers = []; let timeline = null; let curveType = { kind: 'straight' };`, ctx);
     vm.runInContext(read('ui-mode.js'), ctx, { filename: 'ui-mode.js' });
-    check('at load aria-pressed follows the mode (simple pressed, advanced not)', bS.a['aria-pressed'] === 'true' && bA.a['aria-pressed'] === 'false');
-    bA.h.click();
-    check('a click on Erweitert sets the mode, the attribute and aria-pressed, and keeps the focus on the clicked button', vm.runInContext('uiMode', ctx) === 'advanced' && attrs['data-mode'] === 'advanced' && bA.a['aria-pressed'] === 'true' && bS.a['aria-pressed'] === 'false' && bA.focused === 1);
-    vm.runInContext("uiMode = 'simple';", ctx); win.uiModeApi.get(); document.dispatchEvent({ detail: { mode: 'simple' } });
-    check('a modechange from outside (a session restore) updates aria-pressed', bS.a['aria-pressed'] === 'true' && bA.a['aria-pressed'] === 'false');
-    check('the markup has the two buttons with data-mode, aria-pressed and the i18n attributes', /id="btn-mode-simple"[^>]*data-mode="simple"[^>]*data-i18n="mode\.simple"/.test(read('index.html')) && /id="btn-mode-advanced"[^>]*data-mode="advanced"[^>]*data-i18n="mode\.advanced"/.test(read('index.html')));
+    return { btn, attrs, win, ctx, mode: () => vm.runInContext('uiMode', ctx) };
+}
+{
+    const p = plusPage('simple', 'de'), b = p.btn;
+    check('simple: not pressed, not filled, the name says "aus" (title = aria-label)', b.a['aria-pressed'] === 'false' && !b.cl.has('active') && b.a.title === 'Weitere Bedienelemente: aus' && b.a['aria-label'] === b.a.title);
+    b.h.click();
+    check('a click switches to advanced: pressed, filled, "an", the global and the attribute follow, the focus stays on the button', p.mode() === 'advanced' && p.attrs['data-mode'] === 'advanced' && b.a['aria-pressed'] === 'true' && b.cl.has('active') && b.a.title === 'Weitere Bedienelemente: an' && b.focused === 1);
+    b.h.click();
+    check('a second click switches back to simple', p.mode() === 'simple' && b.a['aria-pressed'] === 'false' && !b.cl.has('active') && b.a.title === 'Weitere Bedienelemente: aus' && b.focused === 2);
+    p.win.UI.lang = 'en'; p.win.uiModeApi.syncButton();
+    check('a language change re-sets the name on the next tick: "More controls: off"', b.a.title === 'More controls: off' && b.a['aria-label'] === 'More controls: off');
+    b.h.click();
+    check('...and "More controls: on" in English', b.a.title === 'More controls: on');
+    vm.runInContext("uiMode = 'simple';", p.ctx); p.win.uiModeApi.syncButton();
+    check('a change of the global from outside (a session restore) updates the button on the next tick', b.a['aria-pressed'] === 'false' && !b.cl.has('active'));
+    const p2 = plusPage('advanced', 'de');
+    check('at load in advanced: pressed and filled', p2.btn.a['aria-pressed'] === 'true' && p2.btn.cl.has('active') && p2.btn.a.title === 'Weitere Bedienelemente: an');
+    const html = read('index.html');
+    const tag = (/<button id="btn-mode-plus"[^>]*>/.exec(html) || [''])[0];
+    check('the markup: a button.icon-btn.mode-plus, type=button, aria-pressed, a title and aria-label with the default text, an 18px plus glyph, BEFORE Help in the header', /class="icon-btn mode-plus"/.test(tag) && /type="button"/.test(tag) && /aria-pressed="false"/.test(tag) && /title="Weitere Bedienelemente: aus"/.test(tag) && /aria-label="Weitere Bedienelemente: aus"/.test(tag)
+        && /id="btn-mode-plus"[\s\S]*?M12 5v14M5 12h14[\s\S]*?id="btn-help"/.test(html) && !/btn-mode-simple|btn-mode-advanced|mode-switch/.test(html.replace(/btn-mode-(none|spiegeling|drehling)/g, '')));
+    check('the Help overlay explains the Plus (data-i18n="help.plus")', /<li data-i18n="help\.plus">Plus:/.test(html));
 }
 
 console.log('\n== advancedActive (the dot) ==');
@@ -138,21 +155,14 @@ console.log('\n== advancedActive (the dot) ==');
     one('line weight 3', { lineStyle: { visible: true, weight: 3 } }, true);
     one('the morph on', { spatialMorph: { enabled: true, mode: 'linear', angleDeg: 0 } }, true);
     // the dot on the page
-    const mkBtn = () => { const a = { title: 'T' }, cl = new Set(); return { a, cl, classList: { toggle: (c, on) => { on ? cl.add(c) : cl.delete(c); } }, getAttribute: k => a[k], setAttribute: (k, v) => { a[k] = v; } }; };
-    const btn = mkBtn(), attrs = {};
-    const doc = { readyState: 'complete', documentElement: { setAttribute: (k, v) => { attrs[k] = v; } }, dispatchEvent() {}, addEventListener() {}, getElementById: id => id === 'btn-mode-advanced' ? btn : null };
-    const win = { UI: { onSync() {}, lang: 'de', t: k => ({ 'mode.advanced.title': 'Erweiterte Ansicht', 'mode.advancedActive': 'Erweiterte Einstellungen aktiv' })[k] } };
-    const ctx = vm.createContext({ window: win, document: doc, location: { search: '' }, CustomEvent: function (t, o) { this.detail = o.detail; }, URLSearchParams, console });
-    vm.runInContext("let uiMode = 'simple'; let additionalLayers = []; let timeline = null; let curveType = { kind: 'straight' };", ctx);
-    vm.runInContext(read('ui-mode.js'), ctx, { filename: 'ui-mode.js' });
-    win.uiModeApi.syncDot();
-    check('simple, nothing advanced: no dot, the plain title', !btn.cl.has('has-state') && btn.a.title === 'Erweiterte Ansicht');
-    vm.runInContext("additionalLayers = [{}];", ctx); win.uiModeApi.syncDot();
-    check('simple + a layer: the dot, and the sentence in the title', btn.cl.has('has-state') && btn.a.title === 'Erweiterte Ansicht (Erweiterte Einstellungen aktiv)');
-    vm.runInContext("uiMode = 'advanced';", ctx); win.uiModeApi.syncDot();
-    check('advanced mode: no dot even with the layer (nothing is hidden)', !btn.cl.has('has-state') && btn.a.title === 'Erweiterte Ansicht');
-    vm.runInContext("uiMode = 'simple'; additionalLayers = [];", ctx); win.uiModeApi.syncDot();
-    check('back to simple without a layer: the dot is gone again', !btn.cl.has('has-state'));
+    const q = plusPage('simple', 'de'), qb = q.btn;
+    check('simple, nothing advanced: no dot, the plain name', !qb.cl.has('has-state') && qb.a.title === 'Weitere Bedienelemente: aus');
+    vm.runInContext("additionalLayers = [{}];", q.ctx); q.win.uiModeApi.syncButton();
+    check('simple + a layer: the dot, and the sentence in the title and the aria-label', qb.cl.has('has-state') && qb.a.title === 'Weitere Bedienelemente: aus (Erweiterte Einstellungen aktiv)' && qb.a['aria-label'] === qb.a.title);
+    qb.h.click();
+    check('advanced mode: no dot even with the layer (nothing is hidden), the plain "an"', !qb.cl.has('has-state') && qb.a.title === 'Weitere Bedienelemente: an');
+    qb.h.click(); vm.runInContext("additionalLayers = [];", q.ctx); q.win.uiModeApi.syncButton();
+    check('back to simple without a layer: the dot is gone again', !qb.cl.has('has-state') && qb.a.title === 'Weitere Bedienelemente: aus');
 }
 
 console.log('\n== the face-fill reasons in the simple view ==');
