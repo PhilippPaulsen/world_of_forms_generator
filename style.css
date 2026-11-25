@@ -572,6 +572,16 @@ body.dark {
 }
 .nav-row[hidden] { display: none; }
 
+/* === Interface mode (task 133) ============================================
+   html[data-mode] is written by ui-mode.js (simple | advanced). Under "simple" every element marked data-level="advanced" in index.html is taken out of the
+   layout, the Tab order and the accessibility tree (display: none; hidden by the person's choice, not by a state: the "never hidden" rule of the rework is about
+   state, this is a view setting). Nothing else changes: handlers, state and the drawing are untouched, and "advanced" is the interface exactly as it was before
+   the modes. "advanced-wide" is hidden from 768px up only: the phone layout (below 768px) moves other controls into the same sheet, so its opener stays. */
+html[data-mode="simple"] [data-level="advanced"] { display: none !important; }
+@media (min-width: 768px) {
+  html[data-mode="simple"] [data-level="advanced-wide"] { display: none !important; }
+}
+
 /* === UI rework 4b: Form row ==============================================
    Every control has a fixed slot; nothing appears, disappears or moves when
    the shape, symmetry, net or timeline changes. A control that is not
