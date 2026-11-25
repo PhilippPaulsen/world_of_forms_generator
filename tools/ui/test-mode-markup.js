@@ -12,8 +12,8 @@ let failures = 0, checks = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
 process.on('uncaughtException', e => { console.log('FAIL  the test run itself crashed: ' + (e && e.message)); process.exit(1); });
 
-// ids that carry data-level="advanced" (hidden in simple at every width)
-const ADVANCED = ['btn-size-lock', 'nav-size-y-stepper', 'btn-more-form', 'btn-toggle-lines', 'line-weight-group', 'btn-paste-pattern', 'layer-table', 'layer-strip', 'layer-rail', 'timeline-strip', 'timeline-group', 'morph-group',
+// ids that carry data-level="advanced" (hidden in simple at every width). #timeline-group has none: it is collapsed unless the Mehr of the (advanced) timeline strip is open.
+const ADVANCED = ['btn-size-lock', 'nav-size-y-stepper', 'btn-more-form', 'btn-toggle-lines', 'line-weight-group', 'btn-paste-pattern', 'layer-table', 'layer-strip', 'layer-rail', 'timeline-strip', 'morph-group',
     'btn-open-dreieck', 'farbe-family-triangle', 'farbe-anchor-register-stepper', 'farbe-strategy-group', 'btn-farborgel', 'net-3c', 'btn-more-netz',
     'btn-toggle-curve', 'btn-toggle-free', 'btn-toggle-free-endpoints', 'btn-alternative-net', 'btn-restart', 'export-json', 'export-anim',
     'curve-fold-group', 'curve-strength-group', 'free-roughness-group', 'free-controls-group'];
@@ -55,7 +55,7 @@ check('the shapes (all three), Ordnung, Größe, Drehung, Spiegelung, Kreis 2/3/
     ['nav-shapes', 'nav-node-stepper', 'nav-size-stepper', 'btn-sym-rotation', 'btn-sym-mirror', 'btn-harmony-2', 'btn-harmony-3', 'btn-harmony-4', 'farbe-anchor-hue-stepper', 'net-art-stepper', 'nav-kinds', 'net-strength-stepper'].every(i => SIMPLE.includes(i)));
 check('no ancestor of an ADVANCED element is itself ADVANCED-marked twice over without need (a marked element inside a marked one is redundant)', ADVANCED.every(i => !chain(nodes[i].parent || { }).length));
 const advCount = ADVANCED.length + WIDE.length;
-check(`${advCount} marked elements, ${SIMPLE.length} listed simple ones`, advCount === 31 && SIMPLE.length >= 30);
+check(`${advCount} marked elements, ${SIMPLE.length} listed simple ones`, advCount === 30 && SIMPLE.length >= 30);
 
 console.log('\n== the CSS ==');
 const css = read('style.css').replace(/\/\*[\s\S]*?\*\//g, '');
