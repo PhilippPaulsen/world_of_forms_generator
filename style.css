@@ -543,21 +543,23 @@ body.dark {
   color: var(--color-text);
 }
 
-/* task 133: the interface mode button (a Plus), left of Help, the same size (--target, --ph-header-h on the phone) and glyph weight. Unlike the frameless Help it is a TOGGLE
-   and looks like the other toggles: a frame while the simple view is on, filled (black, white glyph) while the advanced view is on. It takes the auto margin that Help had;
-   Help sits close to it (the header gap is taken back). */
-.app-header .icon-btn.mode-plus { margin-left: auto; border: 1px solid var(--color-text); color: var(--color-text); position: relative; }
-.app-header .icon-btn.mode-plus.active { background: var(--color-text); color: var(--color-bg); }
+/* task 133, task 136: the interface mode button (a Plus) is drawn like Help: the SAME 18px svg, the same ring (circle r=10, stroke 1.75), frameless, the same hit box
+   (--target, --ph-header-h on the phone), so the two look equally big. Simple view: a grey ring with a plus (like Help's grey); advanced view: the ring filled black with
+   the plus cut out in the page colour. Ring and fill have the same outer size in both states. It takes the auto margin that Help had; Help sits close to it. */
+.app-header .icon-btn.mode-plus { margin-left: auto; position: relative; }
+.app-header .icon-btn.mode-plus.active { color: var(--color-text); background: transparent; }   /* not the black box of .icon-btn.active: the ring is what fills */
+.app-header .icon-btn.mode-plus.active circle { fill: currentColor; }
+.app-header .icon-btn.mode-plus.active path { stroke: var(--color-bg); }
 .app-header .mode-plus + .icon-btn { margin-left: -12px; }
 @media (min-width: 768px) {
   .app-header .mode-plus + .icon-btn { margin-left: -24px; }
 }
-/* the state dot (ui-mode.js advancedActive): simple view, but a setting is on that it cannot show. The same 6px corner dot as .nav-more.has-state. */
+/* the state dot (ui-mode.js advancedActive): simple view, but a setting is on that it cannot show. The same 6px corner dot as .nav-more.has-state, at the ring's top right. */
 .app-header .mode-plus.has-state::after {
   content: "";
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 8px;
+  right: 8px;
   width: 6px;
   height: 6px;
   border-radius: 50%;
