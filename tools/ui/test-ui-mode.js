@@ -78,7 +78,7 @@ console.log('\n== the order ?mode > session > default ==');
     check('?mode=simple wins over a restored session that says advanced', p.mode() === 'simple' && p.attrs['data-mode'] === 'simple');
     p = page('?mode=nonsense', dflt); p.setGlobal('simple'); p.api.applyQuery();
     check('an invalid ?mode= does not beat the session', p.mode() === 'simple');
-    check('the two constants of core/state.js are in the two names (the legacy one is advanced)', ['simple', 'advanced'].includes(dflt) && legacy === 'advanced');
+    check('the two constants of core/state.js: a new visitor starts simple, a saved session without the field reads advanced (decision F1)', dflt === 'simple' && legacy === 'advanced');
 }
 
 console.log('\n== the switch buttons ==');

@@ -68,7 +68,7 @@ console.log('== 1. the helpers and the state default ==');
 // ---- 2. the bytes ----------------------------------------------------------------------------------------------------------------------
 console.log('\n== 2. the snapshot: byte-identical at the defaults, the block only when it differs ==');
 // task 133: settings.uiMode is always written (one extra field, right after netTransform); the byte check strips exactly that field and then holds as before
-const UIM = ',"uiMode":"advanced"';
+const UIM = ',"uiMode":"simple"';   // a fresh world holds the default of a new visitor (core/state.js UI_MODE_NEW_VISITOR, simple since task 133 commit 7)
 const noMode = t => { if (!t.includes(UIM)) throw new Error('uiMode field missing'); return t.replace(UIM, ''); };
 const WANT = { small: 'c3037bd52eaceb60a722382ea9779e5b50ca1cc520606741e4198172d4c20fc1', layered: 'dbe4f2591181e416d6c49c4f072d19c59f2b58d6eb316a6de4ea7c60ef74913a' };   // task 062: re-recorded for schema 2 (grid instead of nodeCount, spec and free endpoints in the fingerprint); before: 1932cccee4c1, 5c494cc13816 (638 characters)
 {

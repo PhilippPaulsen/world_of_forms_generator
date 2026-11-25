@@ -61,7 +61,7 @@ let lineStyle = { visible: true, weight: LINE_WEIGHT.def };
 // Session: settings.uiMode, always written (no schema bump; a snapshot without it, or with a bad value, restores 'advanced'). UI_MODE_NEW_VISITOR is the mode
 // of a page load without a saved session and without ?mode= (ui-mode.js); UI_MODE_LEGACY is the mode of a saved session that has no (valid) field.
 const UI_MODES = Object.freeze(['simple', 'advanced']);
-const UI_MODE_NEW_VISITOR = 'advanced';
+const UI_MODE_NEW_VISITOR = 'simple';
 const UI_MODE_LEGACY = 'advanced';
 let uiMode = UI_MODE_NEW_VISITOR;
 let currentShape = 'triangle';

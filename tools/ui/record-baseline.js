@@ -88,7 +88,7 @@ async function recordBaseline(opts) {
     const f = document.createElement('iframe');
     f.style.cssText = 'position:absolute;left:0;top:0;border:0;width:' + width + 'px;height:812px;background:#fff';
     document.body.appendChild(f);
-    f.src = path + 'index.html?v=baseline' + Math.random().toString(36).slice(2) + '#' + tab;
+    f.src = path + 'index.html?v=baseline' + Math.random().toString(36).slice(2) + '&mode=' + (opts.mode || 'advanced') + '#' + tab;   // task 133: the baselines measure the advanced view (every control), whatever the default of a new visitor is
     await new Promise((r) => f.addEventListener('load', r, { once: true }));
     const d = f.contentDocument;
     for (let i = 0; i < 100 && !d.querySelector('#canvas-container canvas'); i++) await sleep(100);
@@ -119,7 +119,7 @@ async function recordPhone(opts) {
       const f = document.createElement('iframe');
       f.style.cssText = 'position:absolute;left:0;top:0;border:0;width:' + width + 'px;height:' + h + 'px;background:#fff';
       document.body.appendChild(f);
-      f.src = path + 'index.html?v=phone' + Math.random().toString(36).slice(2) + '#' + tab;
+      f.src = path + 'index.html?v=phone' + Math.random().toString(36).slice(2) + '&mode=' + (opts.mode || 'advanced') + '#' + tab;   // task 133: see recordBaseline
       await new Promise((r) => f.addEventListener('load', r, { once: true }));
       const d = f.contentDocument;
       for (let i = 0; i < 100 && !(d.querySelector('#canvas-container canvas') && d.documentElement.classList.contains('ph') && d.getElementById('ph-slot')); i++) await sleep(100);
