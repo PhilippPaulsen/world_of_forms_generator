@@ -81,6 +81,26 @@ console.log('\n== the order ?mode > session > default ==');
     check('the two constants of core/state.js are in the two names (the legacy one is advanced)', ['simple', 'advanced'].includes(dflt) && legacy === 'advanced');
 }
 
+console.log('\n== the switch buttons ==');
+{
+    const mkBtn = m => { const a = { 'data-mode': m, 'aria-pressed': 'x' }, h = {}; return { a, h, focused: 0, getAttribute: k => a[k], setAttribute: (k, v) => { a[k] = v; }, addEventListener: (t, f) => { h[t] = f; }, focus() { this.focused++; } }; };
+    const bS = mkBtn('simple'), bA = mkBtn('advanced'), docL = {};
+    const attrs = {}, events = [];
+    const document = { readyState: 'complete', documentElement: { setAttribute: (k, v) => { attrs[k] = v; } },
+        dispatchEvent: e => { events.push(e.detail.mode); (docL.modechange || []).forEach(f => f(e)); }, addEventListener: (t, f) => { (docL[t] = docL[t] || []).push(f); },
+        getElementById: id => id === 'mode-switch' ? { querySelectorAll: () => [bS, bA] } : null };
+    const win = { UI: { onSync: () => {} }, sessionWriter: { markDirty() {} } };
+    const ctx = vm.createContext({ window: win, document, location: { search: '' }, CustomEvent: function (t, o) { this.detail = o.detail; }, URLSearchParams, console });
+    vm.runInContext("let uiMode = 'simple';", ctx);
+    vm.runInContext(read('ui-mode.js'), ctx, { filename: 'ui-mode.js' });
+    check('at load aria-pressed follows the mode (simple pressed, advanced not)', bS.a['aria-pressed'] === 'true' && bA.a['aria-pressed'] === 'false');
+    bA.h.click();
+    check('a click on Erweitert sets the mode, the attribute and aria-pressed, and keeps the focus on the clicked button', vm.runInContext('uiMode', ctx) === 'advanced' && attrs['data-mode'] === 'advanced' && bA.a['aria-pressed'] === 'true' && bS.a['aria-pressed'] === 'false' && bA.focused === 1);
+    vm.runInContext("uiMode = 'simple';", ctx); win.uiModeApi.get(); document.dispatchEvent({ detail: { mode: 'simple' } });
+    check('a modechange from outside (a session restore) updates aria-pressed', bS.a['aria-pressed'] === 'true' && bA.a['aria-pressed'] === 'false');
+    check('the markup has the two buttons with data-mode, aria-pressed and the i18n attributes', /id="btn-mode-simple"[^>]*data-mode="simple"[^>]*data-i18n="mode\.simple"/.test(read('index.html')) && /id="btn-mode-advanced"[^>]*data-mode="advanced"[^>]*data-i18n="mode\.advanced"/.test(read('index.html')));
+}
+
 console.log('\n== wiring ==');
 {
     const html = read('index.html'), sk = read('sketch.js');

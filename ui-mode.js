@@ -43,11 +43,29 @@
     return q;
   }
 
+  // the switch in the header (index.html #mode-switch): aria-pressed follows the mode on every change; a click sets it. Bound at DOMContentLoaded (the markup comes
+  // before the scripts, but the check keeps the file usable on a page without the switch).
+  function bindSwitch() {
+    if (typeof document.getElementById !== 'function') return;
+    var root = document.getElementById('mode-switch');
+    if (!root) return;
+    var buttons = Array.prototype.slice.call(root.querySelectorAll('button[data-mode]'));
+    function show() { buttons.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-mode') === get() ? 'true' : 'false'); }); }
+    buttons.forEach(function (b) {
+      b.addEventListener('click', function () { set(b.getAttribute('data-mode')); b.focus(); });
+    });
+    document.addEventListener('modechange', show);
+    show();
+  }
+
   window.uiModeApi = { MODES: MODES, get: get, set: set, applyQuery: applyQuery, parseModeParam: parseModeParam };
 
   // as early as this script runs: the attribute and the global follow ?mode= (the session restore in setup() may replace the global; applyQuery() then puts the query back)
   var q0 = parseModeParam(location.search);
   if (q0 && typeof uiMode !== 'undefined') uiMode = q0;
   sync();
+  if (typeof document.addEventListener === 'function') {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindSwitch); else bindSwitch();
+  }
   if (window.UI && typeof window.UI.onSync === 'function') window.UI.onSync(sync);
 })();

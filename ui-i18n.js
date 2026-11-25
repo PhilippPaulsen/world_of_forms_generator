@@ -142,6 +142,12 @@
     'tab.form': { de: 'Form', en: 'Shape' },
     'tab.netz': { de: 'Netz', en: 'Net' },
     'tabs.nav': { de: 'Bereiche', en: 'Sections' },
+    // task 133: the interface mode switch in the header
+    'mode.group': { de: 'Ansicht', en: 'View' },
+    'mode.simple': { de: 'Einfach', en: 'Simple' },
+    'mode.advanced': { de: 'Erweitert', en: 'Advanced' },
+    'mode.simple.title': { de: 'Einfache Ansicht: wenige Bedienelemente', en: 'Simple view: few controls' },
+    'mode.advanced.title': { de: 'Erweiterte Ansicht: alle Bedienelemente', en: 'Advanced view: all controls' },
     'timeline.clear': { de: 'Zeitleiste entfernen', en: 'Remove timeline' },
     'timeline.confirm.cancel': { de: 'Abbrechen', en: 'Cancel' },
     'timeline.confirm.remove': { de: 'Entfernen', en: 'Remove' },
