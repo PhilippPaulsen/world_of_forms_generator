@@ -113,8 +113,8 @@ function plusPage(initial, lang) {
     check('at load in advanced: pressed and filled', p2.btn.a['aria-pressed'] === 'true' && p2.btn.cl.has('active') && p2.btn.a.title === 'Weitere Bedienelemente: an');
     const html = read('index.html');
     const tag = (/<button id="btn-mode-plus"[^>]*>/.exec(html) || [''])[0];
-    check('the markup: a button.icon-btn.mode-plus, type=button, aria-pressed, a title and aria-label with the default text, an 18px plus glyph, BEFORE Help in the header', /class="icon-btn mode-plus"/.test(tag) && /type="button"/.test(tag) && /aria-pressed="false"/.test(tag) && /title="Weitere Bedienelemente: aus"/.test(tag) && /aria-label="Weitere Bedienelemente: aus"/.test(tag)
-        && /id="btn-mode-plus"[\s\S]*?M12 5v14M5 12h14[\s\S]*?id="btn-help"/.test(html) && !/btn-mode-simple|btn-mode-advanced|mode-switch/.test(html.replace(/btn-mode-(none|spiegeling|drehling)/g, '')));
+    check('the markup: a button.icon-btn.mode-plus, type=button, aria-pressed, a title and aria-label with the default text, the same 18px ring (circle r=10) with a plus as Help, BEFORE Help in the header', /class="icon-btn mode-plus"/.test(tag) && /type="button"/.test(tag) && /aria-pressed="false"/.test(tag) && /title="Weitere Bedienelemente: aus"/.test(tag) && /aria-label="Weitere Bedienelemente: aus"/.test(tag)
+        && /id="btn-mode-plus"[\s\S]*?<circle cx="12" cy="12" r="10"><\/circle><path d="M12 8v8M8 12h8"[\s\S]*?id="btn-help"/.test(html) && !/btn-mode-simple|btn-mode-advanced|mode-switch/.test(html.replace(/btn-mode-(none|spiegeling|drehling)/g, '')));
     check('the Help overlay explains the Plus (data-i18n="help.plus")', /<li data-i18n="help\.plus">Plus:/.test(html));
 }
 
