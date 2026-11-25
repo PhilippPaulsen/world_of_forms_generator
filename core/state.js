@@ -56,6 +56,14 @@ let showNodes = true;
 // what drawConnectionWithSymmetry() and the morph render always set. Session: settings.lineStyle, written only when it differs from the default.
 const LINE_WEIGHT = Object.freeze({ min: 0.5, max: 8, step: 0.5, def: 2 });
 let lineStyle = { visible: true, weight: LINE_WEIGHT.def };
+// Task 133: the interface mode. 'advanced' = every control (the interface as it was before the modes), 'simple' = the few self-explanatory ones
+// (index.html data-level="advanced" marks the rest, style.css hides them under html[data-mode="simple"]). A VIEW setting: it never changes what is drawn.
+// Session: settings.uiMode, always written (no schema bump; a snapshot without it, or with a bad value, restores 'advanced'). UI_MODE_NEW_VISITOR is the mode
+// of a page load without a saved session and without ?mode= (ui-mode.js); UI_MODE_LEGACY is the mode of a saved session that has no (valid) field.
+const UI_MODES = Object.freeze(['simple', 'advanced']);
+const UI_MODE_NEW_VISITOR = 'simple';
+const UI_MODE_LEGACY = 'advanced';
+let uiMode = UI_MODE_NEW_VISITOR;
 let currentShape = 'triangle';
 let freeEndpointsEnabled = false; // toggled via #btn-toggle-free-endpoints
 

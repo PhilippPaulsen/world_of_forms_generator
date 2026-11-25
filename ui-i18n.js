@@ -142,6 +142,14 @@
     'tab.form': { de: 'Form', en: 'Shape' },
     'tab.netz': { de: 'Netz', en: 'Net' },
     'tabs.nav': { de: 'Bereiche', en: 'Sections' },
+    // task 133: the interface mode button (Plus) in the header: its name says the state; the help line explains it
+    'mode.plus.off': { de: 'Weitere Bedienelemente: aus', en: 'More controls: off' },
+    'mode.plus.on': { de: 'Weitere Bedienelemente: an', en: 'More controls: on' },
+    'help.plus': { de: 'Plus: weitere Bedienelemente ein- und ausblenden.', en: 'Plus: show or hide more controls.' },
+    'mode.advancedActive': { de: 'Erweiterte Einstellungen aktiv', en: 'Advanced settings active' },
+    // task 133: the face-fill reasons of the simple view (they name no control that the simple view hides)
+    'reason.fill.netSimple': { de: 'Die Flächenfüllung geht bei einem verformten Netz nicht. Das Netz auf „Aus“ stellen.', en: 'Face fills are not available while a net is on. Set the net to Off.' },
+    'reason.fill.curveSimple': { de: 'Die Flächenfüllung braucht gerade Linien. In der erweiterten Ansicht Kurve und Frei ausschalten.', en: 'Face fills need straight lines. Turn curve and free off in the advanced view.' },
     'timeline.clear': { de: 'Zeitleiste entfernen', en: 'Remove timeline' },
     'timeline.confirm.cancel': { de: 'Abbrechen', en: 'Cancel' },
     'timeline.confirm.remove': { de: 'Entfernen', en: 'Remove' },

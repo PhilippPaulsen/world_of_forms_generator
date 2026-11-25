@@ -2310,6 +2310,8 @@ function setup() {
     } else if (!catalogUrlPattern || !applyCatalogPattern(catalogUrlPattern)) {
         addRandomConnection();
     }
+    // task 133: ?mode=simple|advanced wins over the restored session (ui-mode.js)
+    if (window.uiModeApi) window.uiModeApi.applyQuery();
     // Roadmap: renderLayerTabs()/updateOffsetControls()/updateFaceToggleControl()/
     // updateTimelineControls() only ran once, earlier in setup(), BEFORE
     // rebuildGrid() above - a layer created just now by
@@ -4485,8 +4487,11 @@ function drawNetLinesOverlay() {
 function faceFillsUnavailableReason() {
     // Faces are exact only on a FIELD warp (affine per tile), and only for the base sheet (offset layers cross tile boundaries)
     const nw = netWarpBaseNow();
+    const simpleView = typeof uiMode !== 'undefined' && uiMode === 'simple';
+    if (nw && !nw.field && simpleView) return (typeof UI !== 'undefined' && UI.t) ? UI.t('reason.fill.netSimple') : 'Face fills are not available while a net is on. Set the net to Off.';
     if (nw && !nw.field) return 'Face fills are off on a Single or Tiled net transform (the warp is not affine inside a tile, so faces would not fit the lines). Use Field (Shape Size 3-9), or set the net to Regular on the Base sheet.';
     if (nw && nw.field && activeLayer !== 'base' && !layerGridMatchesBase(additionalLayers[activeLayer])) return 'Face fills on a Field are drawn for the Base sheet and for layers on the base grid (same shape and size, no offset, no rotation) - this layer is offset, rotated or of another size, so its lines cross tile boundaries.';
+    if (curveType.kind !== 'straight' && simpleView) return (typeof UI !== 'undefined' && UI.t) ? UI.t('reason.fill.curveSimple') : 'Face fills need straight lines. Turn curve and free off in the advanced view.';
     if (curveType.kind !== 'straight') return 'Face fills need straight lines (curve/free mode is on; both are under Mehr).';
     if (activeLayer === 'base') return null;
     const l = additionalLayers[activeLayer];

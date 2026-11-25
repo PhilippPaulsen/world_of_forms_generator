@@ -98,8 +98,8 @@
           { items: [{ id: 'nav-node-stepper', w: 117, wMin: 109 }, { id: 'nav-size-stepper', w: 117, wMin: 109 }, { id: 'btn-more-form', w: 48 }] }
         ]
       },
-      ebenen: { label: 'Ebenen', i18n: 'subtab.ebenen', rows: [{ items: [{ id: 'layer-strip', fluid: true, h: 104 }] }] },
-      zeit: { label: 'Zeit', i18n: 'subtab.zeit', rows: [{ items: [{ id: 'timeline-strip', fluid: true }] }] },
+      ebenen: { level: 'advanced', label: 'Ebenen', i18n: 'subtab.ebenen', rows: [{ items: [{ id: 'layer-strip', fluid: true, h: 104 }] }] },
+      zeit: { level: 'advanced', label: 'Zeit', i18n: 'subtab.zeit', rows: [{ items: [{ id: 'timeline-strip', fluid: true }] }] },
       // Farbe (commit 2). Row 1 of Harmonie: Kreis + Dreieck (the wrapper), a hairline (`sep`: the engine makes it), and the harmony cluster of the active view (the two clusters share one slot: `also`, and both reserve
       // four buttons' width). It is 337px wide: from 340px down the row scrolls sideways (`scroll`), a 4-button cluster and two anchor buttons do not fit 288px with 48px targets. Row 2: the two anchor steppers and the swatch.
       harmonie: {
@@ -116,7 +116,7 @@
       // task 122 (3C-3): row 1 = the Netzart stepper (- | 1 | 3C), the strength (Netzart 1) or a (3C, same slot), the panel's own More; row 2 = the three laws (Sin, Tan, Geo: 3 x 48 + 2 gaps = 160; the Aus button is a hidden technical element now) or b (3C, same slot), then Reverse (Geo only) or the format
       // (ganz | halb: 2 x 48 + 8 = 104, same slot); task 126: under an invalid 3C spec the sign button net-3c-reason-btn shares that slot too (48px, it replaces Reverse for that time). 117 + 8 + 117 + 8 + 48 = 298 (109 + 8 + 109 + 8 + 48 = 282 below 340px); 160 + 8 + 104 = 272.
       art: { label: 'Art', i18n: 'subtab.art', rows: [{ items: [{ id: 'net-art-stepper', w: 117, wMin: 109 }, { id: 'net-strength-stepper', w: 117, wMin: 109, also: ['net-a-stepper'] }, { id: 'btn-more-netz', w: 48 }] }, { items: [{ id: 'nav-kinds', w: 160, also: ['net-b-stepper'] }, { id: 'net-reverse-btn', w: 104, also: ['net-format', 'net-3c-reason-btn'] }] }] },
-      achsen: { label: 'Achsen', i18n: 'subtab.achsen', rows: [{ items: [{ id: 'net-axes-row', w: 154 }] }, { items: [{ id: 'net-focus-stepper', w: 117, wMin: 109 }] }] }
+      achsen: { level: 'advanced', label: 'Achsen', i18n: 'subtab.achsen', rows: [{ items: [{ id: 'net-axes-row', w: 154 }] }, { items: [{ id: 'net-focus-stepper', w: 117, wMin: 109 }] }] }
     },
     // Bottom sheets (1b): a block that stays inline above 768px and in the tabs that are not covered moves into a sheet (UI.overlay) while the layout is on. The sheet FOLLOWS the block's own open state - the
     // "..." button's existing handler flips it, nothing here toggles it - and closing the sheet (Escape, the scrim, a tap outside, a resize) closes that state by clicking the button once more.

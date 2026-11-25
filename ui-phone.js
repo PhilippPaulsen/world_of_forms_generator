@@ -93,6 +93,7 @@
       t.subtabs.forEach(function (sid) {
         const btn = el('button', 'ph-subtab', { type: 'button', id: 'ph-subtab-' + sid, 'aria-controls': 'ph-slot' });
         btn.textContent = say(config.subtabs[sid].i18n, config.subtabs[sid].label);
+        if (config.subtabs[sid].level) btn.setAttribute('data-level', config.subtabs[sid].level);   // task 133: style.css hides it in the simple view
         btn.addEventListener('click', function () { show(sid); });
         b.subtabs.appendChild(btn);
         b.buttons[sid] = btn;
@@ -475,7 +476,7 @@
         layoutSwitched();
         html.style.setProperty('--panel-h', t.panelH + 'px');
         setInnerHeight();
-        show(remembered[tab] || t.defaultSubtab);
+        show(subtabFor(remembered[tab] || t.defaultSubtab, t));
         syncSheets();
         syncFollows();
         syncRows();
@@ -580,11 +581,14 @@
     // nav.js writes html[data-tab] in every show(), the first one on DOMContentLoaded; uiNav.current() already says 'form' before that (its default), which may not be the tab the URL asks for
     function currentTab() { return html.getAttribute('data-tab') || null; }
     function sync(tab) { return apply(tab || currentTab()); }
+    // task 133: a sub-tab marked level 'advanced' has no button in the simple view (style.css), so it must not be the one shown: back to the tab's default
+    function subtabFor(sid, t) { return html.getAttribute('data-mode') === 'simple' && config.subtabs[sid] && config.subtabs[sid].level === 'advanced' ? t.defaultSubtab : sid; }
 
     function start() {
       if (started) return;
       started = true;
       doc.addEventListener('tabchange', function (e) { sync(e && e.detail && e.detail.tab); });
+      doc.addEventListener('modechange', function () { if (built && applied) show(subtabFor(remembered[applied] || config.tabs[applied].defaultSubtab, config.tabs[applied])); });
       const onMq = function () { sync(); };
       if (mq.addEventListener) mq.addEventListener('change', onMq); else if (mq.addListener) mq.addListener(onMq);
       if (win.addEventListener) { win.addEventListener('resize', onMq); win.addEventListener('orientationchange', onMq); }

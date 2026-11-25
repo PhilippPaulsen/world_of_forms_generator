@@ -6,6 +6,7 @@ versions follow `vMAJOR.MINOR.PATCH`. The detail per task is in `reports/NNN.md`
 ## [Unreleased]
 
 ### Added
+- Interface mode "Einfach / Erweitert" (Simple / Advanced): a switch in the header, `?mode=simple|advanced`, saved in the session (`settings.uiMode`, no schema bump). New visitors start Simple; saved sessions without the field read Advanced. Controls are only hidden, never removed; a dot on "Erweitert" says when a setting is on that the simple view hides. (Task 133)
 - `LICENSE` (MIT, 2025-2026, Philipp Paulsen) with the exceptions for `assets/fonts/` (SuisseIntl, proprietary webfont licence) and `vendor/p5-1.9.0.js` (LGPL-2.1). A placeholder `assets/fonts/LICENSE-SuisseIntl.md` awaits the licence proof. (Task 129)
 - `vendor/VERSIONS.md`: version, source and SHA-256 of the bundled p5.js. (Task 129)
 

@@ -8,7 +8,7 @@
   <!-- Typeface, tokens, body font stack and .control-group live in
        style.css (UI rework Phase 0); do not redeclare them below. -->
   <link rel="preload" href="https://bachmann-paulsen.de/fonts/suisseintl-book.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20270107font">
+  <link rel="stylesheet" href="style.css?v=20270108modek">
   <!-- Cache-busting for the ES-module graph behind core/farborgel-selection.mjs (below). The <script src> tags in
        this file carry ?v= by hand-bump (CLAUDE.md), but a module's own `import ... from './x.mjs'` cannot: this
        import map is the one place that gives every module in that graph the same ?v= as everything else (bump it
@@ -19,11 +19,11 @@
   <script type="importmap">
     {
     "imports": {
-      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20270107font",
-      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20270107font",
-      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20270107font",
-      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20270107font",
-      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20270107font"
+      "./color-harmony/ui/composition.mjs": "./color-harmony/ui/composition.mjs?v=20270108modek",
+      "./color-harmony/ui/HarmonySelection.mjs": "./color-harmony/ui/HarmonySelection.mjs?v=20270108modek",
+      "./color-harmony/ui/DisplayCalibration.mjs": "./color-harmony/ui/DisplayCalibration.mjs?v=20270108modek",
+      "./color-harmony/ui/FullColorCalibration.mjs": "./color-harmony/ui/FullColorCalibration.mjs?v=20270108modek",
+      "./core/farborgel-engine.mjs": "./core/farborgel-engine.mjs?v=20270108modek"
     }
     }
   </script>
@@ -449,6 +449,10 @@
       <a id="tab-farbe" href="#farbe" aria-controls="nav-farbe" data-i18n="tab.farbe">Farbe</a>
       <a id="tab-netz" href="#netz" aria-controls="nav-netz" data-i18n="tab.netz">Netz</a>
     </nav>
+    <!-- task 133: the interface mode button (ui-mode.js): a Plus, plain = simple view, filled = advanced view (all controls). Title, aria-label and aria-pressed are set by ui-mode.js (state and language). Left of Help, which stays the last item. -->
+    <button id="btn-mode-plus" class="icon-btn mode-plus" type="button" aria-pressed="false" title="Weitere Bedienelemente: aus" aria-label="Weitere Bedienelemente: aus">
+      <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+    </button>
     <button id="btn-help" class="icon-btn" type="button" title="Hilfe" aria-label="Hilfe" data-i18n="help">
       <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="12" cy="12" r="10"></circle>
@@ -506,11 +510,11 @@
       </div>
       <!-- Task 080: the aspect-ratio lock and the HEIGHT stepper (X = the width stepper above). Locked (the default, aria-pressed="true") keeps X = Y; unlocked frees Y (1..9, at most 1:3 against X). Phone: ui-form.js
            moves both into #more-form (#ov-size). The state is UI only and is not saved. -->
-      <button id="btn-size-lock" class="icon-btn" type="button" aria-pressed="true" title="Seitenverhältnis koppeln (Quadrat)" aria-label="Seitenverhältnis koppeln (Quadrat)" data-i18n="size.lock">
+      <button id="btn-size-lock" class="icon-btn" type="button" aria-pressed="true" title="Seitenverhältnis koppeln (Quadrat)" aria-label="Seitenverhältnis koppeln (Quadrat)" data-i18n="size.lock" data-level="advanced">
         <svg class="ico ico-closed" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9"/><path d="M8 11 V8 A4 4 0 0 1 16 8 V11"/></svg>
         <svg class="ico ico-open" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9"/><path d="M8 11 V8 A4 4 0 0 1 15.5 6.5"/></svg>
       </button>
-      <div id="nav-size-y-stepper" class="stepper" role="group" aria-label="Größe Höhe (1 bis 9)" data-i18n="size.y.input" aria-disabled="true">
+      <div id="nav-size-y-stepper" class="stepper" role="group" aria-label="Größe Höhe (1 bis 9)" data-i18n="size.y.input" aria-disabled="true" data-level="advanced">
         <svg class="ico stepper-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 V20 M8 8 L12 4 L16 8 M8 16 L12 20 L16 16"/></svg>
         <input type="number" id="shape-size-y-input" min="1" max="9" value="5" inputmode="none" aria-label="Größe Höhe (1 bis 9)" data-i18n="size.y.input">
         <div class="stepper-chevrons">
@@ -527,7 +531,7 @@
           <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 V21" stroke-dasharray="2 3"/><path d="M9 7 L3.5 12 L9 17 Z"/><path d="M15 7 L20.5 12 L15 17 Z"/></svg>
         </button>
       </div>
-      <button id="btn-more-form" class="icon-btn nav-more" type="button" title="Mehr" aria-label="Mehr" aria-controls="more-form" data-i18n="more">
+      <button id="btn-more-form" class="icon-btn nav-more" type="button" title="Mehr" aria-label="Mehr" aria-controls="more-form" data-i18n="more" data-level="advanced">
         <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></g></svg>
       </button>
       <span class="nav-break" aria-hidden="true"></span>
@@ -561,7 +565,7 @@
         <button id="btn-open-kreis" class="icon-btn active" type="button" aria-haspopup="dialog" aria-controls="overlay-kreis" title="Kreis: Gegenfarben, Dreier, Vierer (erneut tippen: Farbton wählen)" aria-label="Kreis: Gegenfarben, Dreier, Vierer (erneut tippen: Farbton wählen)" data-i18n-label="index.kreis-gegenfarben-dreier-vie">
           <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9" /></svg>
         </button>
-        <button id="btn-open-dreieck" class="icon-btn" type="button" aria-haspopup="dialog" aria-controls="overlay-dreieck" title="Dreieck: Schwarz, Weiß, Schatten, Wert (erneut tippen: Register wählen)" aria-label="Dreieck: Schwarz, Weiß, Schatten, Wert (erneut tippen: Register wählen)" data-i18n-label="index.dreieck-schwarz-weiss-schatt">
+        <button id="btn-open-dreieck" class="icon-btn" type="button" aria-haspopup="dialog" aria-controls="overlay-dreieck" title="Dreieck: Schwarz, Weiß, Schatten, Wert (erneut tippen: Register wählen)" aria-label="Dreieck: Schwarz, Weiß, Schatten, Wert (erneut tippen: Register wählen)" data-i18n-label="index.dreieck-schwarz-weiss-schatt" data-level="advanced">
           <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 4 L20 20 L4 20 Z" /></svg>
         </button>
       </div>
@@ -571,7 +575,7 @@
         <button id="btn-harmony-3" class="icon-btn" type="button" title="Dreier (3 Farben)" aria-label="Dreier (3 Farben)" data-i18n-label="index.dreier-3-farben">3</button>
         <button id="btn-harmony-4" class="icon-btn" type="button" title="Vierer (4 Farben)" aria-label="Vierer (4 Farben)" data-i18n-label="index.vierer-4-farben">4</button>
       </div>
-      <div class="nav-cluster nav-harmony-family" id="farbe-family-triangle" role="group" aria-label="Dreieck-Harmonien: Reihen" hidden data-i18n-label="index.dreieck-harmonien-reihen">
+      <div class="nav-cluster nav-harmony-family" id="farbe-family-triangle" role="group" aria-label="Dreieck-Harmonien: Reihen" hidden data-i18n-label="index.dreieck-harmonien-reihen" data-level="advanced">
         <button id="btn-harmony-b" class="icon-btn" type="button" title="Schwarz (Schwarzgleiche)" aria-label="Schwarz (Schwarzgleiche)" data-i18n-label="index.schwarz-schwarzgleiche">B</button>
         <button id="btn-harmony-w" class="icon-btn" type="button" title="Weiß (Weißgleiche)" aria-label="Weiß (Weißgleiche)" data-i18n-label="index.weiss-weissgleiche">W</button>
         <button id="btn-harmony-s" class="icon-btn" type="button" title="Schatten (Schattenreihe)" aria-label="Schatten (Schattenreihe)" data-i18n-label="index.schatten-schattenreihe">S</button>
@@ -586,7 +590,7 @@
           <button class="stepper-btn" type="button" data-dir="-1" title="Farbton zurück" aria-label="Farbton zurück" data-i18n-label="index.farbton-zurueck"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9 L12 15 L18 9" /></svg></button>
         </div>
       </div>
-      <div class="stepper" id="farbe-anchor-register-stepper" role="group" aria-label="Anker Register" data-i18n-label="index.anker-register">
+      <div class="stepper" id="farbe-anchor-register-stepper" role="group" aria-label="Anker Register" data-i18n-label="index.anker-register" data-level="advanced">
         <svg class="ico stepper-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" /></svg>
         <span id="farbe-anchor-register-display" class="stepper-display" role="spinbutton" tabindex="0" aria-label="Anker Register" aria-valuemin="0" aria-valuemax="27" data-i18n-label="index.anker-register">ca</span>
         <input type="range" id="farbe-anchor-register-input" min="0" max="27" step="1" value="0" hidden tabindex="-1" aria-hidden="true">
@@ -644,7 +648,7 @@
           <button class="stepper-btn" type="button" data-dir="-1" title="Stärke weniger" aria-label="Stärke weniger" data-i18n="net.strength.less"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9 L12 15 L18 9"/></svg></button>
         </div>
       </div>
-<div id="net-3c" class="nav-cluster net-3c" hidden>
+<div id="net-3c" class="nav-cluster net-3c" hidden data-level="advanced">
         <!-- task 122: Netzart 3C (Moebius net): a and b (whole numbers, a >= 2, a < b <= 12), the format, W and the stretch at the ACTUAL canvas. Shown instead of Sin / Tan / Geo and the strength. -->
         <div id="net-a-stepper" class="stepper" role="group" aria-label="a: Maschen am unteren Rand" data-i18n="net.3c.a.group">
         <span class="stepper-icon net-3c-letter" aria-hidden="true">a</span>
@@ -673,7 +677,7 @@
         <span id="net-3c-reason" class="net-3c-reason" aria-live="polite" hidden></span><!-- task 126: the short reason while the 3C spec draws no net on this shape (sign + this line); the full sentence is its title and the notice -->
         <button id="net-3c-reason-btn" class="icon-btn net-3c-reason-btn" type="button" aria-label="Kein Netz: Grund anzeigen" hidden><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 L21 19 H3 Z"/><path d="M12 10 V14"/><path d="M12 16.5 V17"/></svg></button><!-- task 126: the phone shows the sign as a 48px button in row 2 of the Art panel (a tap shows the notice again); never shown above 768px -->
       </div>
-      <button id="btn-more-netz" class="icon-btn nav-more" type="button" title="Mehr" aria-label="Mehr" aria-controls="more-netz" data-i18n="more">
+      <button id="btn-more-netz" class="icon-btn nav-more" type="button" title="Mehr" aria-label="Mehr" aria-controls="more-netz" data-i18n="more" data-level="advanced">
         <svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></g></svg>
       </button>
       <span class="nav-break" aria-hidden="true"></span>
@@ -695,12 +699,12 @@
       <!-- The timeline strip (layer-table commit 6): Play, the scrub bar (one decorative diamond mark per keyframe), the ONE Include net switch and "Mehr" (which shows #timeline-group below:
            the keyframe list with its "Net" and remove buttons, the net status, the line pairing editor, the status line, and "Zeitleiste entfernen"). Built by ui-timeline.js; a flex item of the phone's
            wrapping row (order: the canvas, this strip, the layer strip, the tool rail's rows) and, from 768px, the second grid row under the canvas (style.css). -->
-      <div id="timeline-strip" class="timeline-strip" role="group" aria-label="Zeitleiste" data-i18n="timeline.strip"></div>
+      <div id="timeline-strip" class="timeline-strip" role="group" aria-label="Zeitleiste" data-i18n="timeline.strip" data-level="advanced"></div>
       <!-- The layer strip (layer-table commit 4): the phone view of the same layer model (the table and the rail are the others, below) - two rows under the canvas, shown below 768px only
            (style.css): row 1 = the Base chip, the layer chips (they scroll sideways) and "+", row 2 = the eye, "..." and the remove x of the ACTIVE sheet (disabled with a reason on the
            Base). Built by ui-layers.js on the same tick as the table and the rail. It sits directly after the canvas and before the tool rail's rows (the next commit puts the timeline
            strip between the canvas and this one), so the DOM order, and with it the tab order, is the visual order. display: none at 768px and up, where it takes no grid cell. -->
-      <div id="layer-strip" class="layer-strip" role="group" aria-label="Ebenen" data-i18n="layers.strip"></div>
+      <div id="layer-strip" class="layer-strip" role="group" aria-label="Ebenen" data-i18n="layers.strip" data-level="advanced"></div>
       <div class="rail-left">
       <div class="rail-top">
         <div id="rail-group-a" class="rail-group">
@@ -731,7 +735,7 @@
                 <circle cx="18" cy="15" r="2.2" />
               </svg>
             </button>
-            <button id="btn-toggle-lines" class="icon-btn active" type="button" title="Linien: an/aus, Linienstärke" aria-label="Linien: an/aus, Linienstärke" aria-pressed="true" aria-expanded="false" aria-controls="line-weight-group" data-i18n="lines.button">
+            <button id="btn-toggle-lines" class="icon-btn active" type="button" title="Linien: an/aus, Linienstärke" aria-label="Linien: an/aus, Linienstärke" aria-pressed="true" aria-expanded="false" aria-controls="line-weight-group" data-i18n="lines.button" data-level="advanced">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <path d="M4 18 L12 6 L20 16" />
               </svg>
@@ -743,7 +747,7 @@
             </button>
           </div>
           <div id="rail-group-more" class="rail-group">
-            <button id="btn-more-rail" class="icon-btn nav-more" type="button" title="Mehr: Kurve, Frei, Freie Endpunkte, Alternatives Netz" aria-label="Mehr: Kurve, Frei, Freie Endpunkte, Alternatives Netz" aria-controls="more-rail" data-i18n="more.rail.button">
+            <button id="btn-more-rail" class="icon-btn nav-more" type="button" title="Mehr: Kurve, Frei, Freie Endpunkte, Alternatives Netz" aria-label="Mehr: Kurve, Frei, Freie Endpunkte, Alternatives Netz" aria-controls="more-rail" data-i18n="more.rail.button" data-level="advanced-wide">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
             </button>
           </div>
@@ -754,10 +758,10 @@
           <a id="btn-gallery" class="icon-btn" href="gallery.html" target="_blank" rel="noopener" title="Formorgel (öffnet in neuem Tab)" aria-label="Formorgel (öffnet in neuem Tab)" data-i18n="rail.formorgel">
             <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="3" y="3" width="8" height="8" rx="1.5" /><rect x="13" y="3" width="8" height="8" rx="1.5" /><rect x="3" y="13" width="8" height="8" rx="1.5" /><rect x="13" y="13" width="8" height="8" rx="1.5" /></svg>
           </a>
-          <a id="btn-farborgel" class="icon-btn rail-farbe-only" href="color-harmony/ui/index.html" target="_blank" rel="noopener" title="Farborgel (öffnet in neuem Tab)" aria-label="Farborgel (öffnet in neuem Tab)" data-i18n="rail.farborgel">
+          <a id="btn-farborgel" class="icon-btn rail-farbe-only" href="color-harmony/ui/index.html" target="_blank" rel="noopener" title="Farborgel (öffnet in neuem Tab)" aria-label="Farborgel (öffnet in neuem Tab)" data-i18n="rail.farborgel" data-level="advanced">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9" /><g fill="currentColor" stroke="none"><circle cx="12" cy="3" r="2.6" /><circle cx="19.8" cy="16.5" r="2.6" /><circle cx="4.2" cy="16.5" r="2.6" /></g></svg>
           </a>
-          <button id="btn-paste-pattern" class="icon-btn rail-form-only" type="button" title="Paste Pattern (a pattern copied from the catalog, as a new layer)" aria-label="Paste Pattern (a pattern copied from the catalog, as a new layer)" data-i18n="rail.paste">
+          <button id="btn-paste-pattern" class="icon-btn rail-form-only" type="button" title="Paste Pattern (a pattern copied from the catalog, as a new layer)" aria-label="Paste Pattern (a pattern copied from the catalog, as a new layer)" data-i18n="rail.paste" data-level="advanced">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
               <rect x="8" y="2" width="8" height="4" rx="1" />
@@ -787,7 +791,7 @@
         </div>
         <!-- Farbe-only (hidden elsewhere via .rail-farbe-only, style.css; nav.js sets html[data-tab]): the four distribution strategies (core/farborgel-bridge.js's
              DISTRIBUTION_STRATEGIES, an icon radiogroup, one is always current, persisted per sheet by distributionStrategyFor() - ui-farbe.js) and Reset Color, each its own group. -->
-          <div id="farbe-strategy-group" class="rail-group rail-farbe-only" role="radiogroup" aria-label="Verteilungsstrategie" data-i18n="farbe.strategy.group">
+          <div id="farbe-strategy-group" class="rail-group rail-farbe-only" role="radiogroup" aria-label="Verteilungsstrategie" data-i18n="farbe.strategy.group" data-level="advanced">
             <button id="btn-strategy-cyclic" class="icon-btn" type="button" role="radio" aria-checked="false" data-strategy="cyclic" title="Verteilung: Zyklisch (Farben der Reihe nach)" aria-label="Verteilung: Zyklisch (Farben der Reihe nach)" data-i18n-label="index.verteilung-zyklisch-farben-d">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9" /><path d="M20 4v5h-5" /></svg>
             </button>
@@ -827,11 +831,11 @@
       <!-- The layer table (layer-table commit 1): the Base and one row per layer (a number chip, the eye, the remove x), "+" and "...", and a fixed name line. A pure view of
            additionalLayers / activeLayer / timeline, built by ui-layers.js on every UI.onSync tick; hidden (display: none) except where it fits - a fine pointer >= 936px, a coarse
            pointer >= 1032px (style.css), where it replaces the layer rail. Absolutely positioned at the right gutter, so the canvas stays centred. -->
-      <div id="layer-table" class="layer-table" role="group" aria-label="Ebenen" data-i18n="layers.table"></div>
+      <div id="layer-table" class="layer-table" role="group" aria-label="Ebenen" data-i18n="layers.table" data-level="advanced"></div>
       <!-- The layer rail (layer-table commit 2): the narrow view of the same model, a single column at the right gutter for 768px up to the table's threshold (style.css): the chips and "+",
            a hairline, then the eye, "..." and the remove x of the ACTIVE sheet (disabled with a reason on the Base). No name line: the black chip shows the active sheet; the names are
            every button's aria-label and title. Built by ui-layers.js on the same tick as the table; style.css shows ONE of the two (display: none on the other, so never both in the tab order). -->
-      <div id="layer-rail" class="layer-rail" role="group" aria-label="Ebenen" data-i18n="layers.rail"></div>
+      <div id="layer-rail" class="layer-rail" role="group" aria-label="Ebenen" data-i18n="layers.rail" data-level="advanced"></div>
   </div>
 
   <div class="main-container">
@@ -959,21 +963,21 @@
            pre-1.4-A default, kept as this control's own starting value)
            gives only ~7% - a shallow single bulge at fold=1, which is
            exactly the gap this control closes. -->
-      <div class="control-group" id="curve-fold-group" hidden>
+      <div class="control-group" id="curve-fold-group" hidden data-level="advanced">
         <label for="curve-fold-input">Fold</label>
         <div class="icon-row">
           <input type="range" id="curve-fold-input" min="1" max="12" step="1" value="1">
           <span id="curve-fold-value">1</span>
         </div>
       </div>
-      <div class="control-group" id="curve-strength-group" hidden>
+      <div class="control-group" id="curve-strength-group" hidden data-level="advanced">
         <label for="curve-strength-input">Strength</label>
         <div class="icon-row">
           <input type="range" id="curve-strength-input" min="0" max="200" step="1" value="25">
           <span id="curve-strength-value">25</span>
         </div>
       </div>
-      <div class="control-group" id="line-weight-group" hidden>
+      <div class="control-group" id="line-weight-group" hidden data-level="advanced">
         <label for="line-weight-input" data-i18n="lines.weight">Linienstärke</label>
         <div class="icon-row">
           <input type="range" id="line-weight-input" min="0.5" max="8" step="0.5" value="2">
@@ -993,14 +997,14 @@
            min/max/step (already genuinely continuous end-to-end in
            core/curves.js, a pure widget swap) - with a live-value
            readout span, matching the new fold/strength controls above. -->
-      <div class="control-group" id="free-roughness-group" hidden>
+      <div class="control-group" id="free-roughness-group" hidden data-level="advanced">
         <label for="free-roughness-input">Roughness</label>
         <div class="icon-row">
           <input type="range" id="free-roughness-input" min="0" max="5" step="0.25" value="1">
           <span id="free-roughness-value">1</span>
         </div>
       </div>
-      <div class="control-group" id="free-controls-group" hidden>
+      <div class="control-group" id="free-controls-group" hidden data-level="advanced">
         <div class="icon-row">
           <!-- "heimliches Gesetz" ("hidden law") toggle - whether the
                plain theme-line stays visible alongside the free stroke
@@ -1089,7 +1093,7 @@
            spatialMorphStatus() on the UI tick; every control calls window.setSpatialMorph with a partial patch). A surface of its own (config.surfaces.morph, flag sr-morph): a bottom sheet below 768px
            (the engine moves it into ph-sheet-morph), a block under the canvas from 768px (CSS), shown only while it has mo-open. Row 1 = on/off + the three modes, row 2 = the angle (linear only),
            row 3 = the status line. The icons are CSS masks (style.css). -->
-      <div class="control-group" id="morph-group" role="group" aria-label="Morph" data-i18n="morph.group">
+      <div class="control-group" id="morph-group" role="group" aria-label="Morph" data-i18n="morph.group" data-level="advanced">
         <button id="morph-toggle" class="icon-btn morph-toggle" type="button" aria-pressed="false" title="Morph an oder aus" aria-label="Morph an oder aus" data-i18n="morph.toggle"></button>
         <div id="morph-modes" class="morph-modes" role="radiogroup" aria-label="Morph-Art" data-i18n="morph.modes">
           <button id="morph-mode-linear" class="icon-btn morph-mode-btn active" type="button" role="radio" aria-checked="true" data-mode="linear" title="Linear" aria-label="Linear" data-i18n="morph.mode.linear"></button>
@@ -1351,6 +1355,7 @@
         <li>Click nodes to connect them.</li>
         <li>Use the controls to change shape, size and node count.</li>
         <li>Toggle visibility of nodes and curvature.</li>
+        <li data-i18n="help.plus">Plus: weitere Bedienelemente ein- und ausblenden.</li>
       </ul>
       <button id="close-help">Close</button>
     </div>
@@ -1362,11 +1367,11 @@
       <p><strong>Export as…</strong></p>
       <div class="format-options">
         <button id="export-png" class="format-btn" title="Export as PNG">PNG</button>
-        <button id="export-json" class="format-btn" title="Export as JSON">JSON</button>
+        <button id="export-json" class="format-btn" title="Export as JSON" data-level="advanced">JSON</button>
         <button id="export-svg" class="format-btn" title="Export as SVG">SVG</button>
       </div>
       <!-- Task 116: the animation export (PNG sequence as a ZIP): only shown with a timeline of two or more keyframes; sketch.js animExport*() drives it. -->
-      <div id="export-anim" class="export-anim" hidden>
+      <div id="export-anim" class="export-anim" hidden data-level="advanced">
         <p class="export-anim-title" data-i18n="export.anim.title">Animation (Zeitleiste / Raum-Morph)</p>
         <div class="export-anim-row"><span data-i18n="export.anim.format">Format</span></div>
         <div class="format-options">
@@ -1594,7 +1599,7 @@
   <div id="more-rail" class="overlay" role="dialog" aria-label="Mehr" data-i18n="more.rail" hidden>
     <div class="more-row">
       <div class="more-toggles">
-        <button id="btn-toggle-curve" class="icon-btn" title="Toggle Curve" aria-label="Toggle Curve">
+        <button id="btn-toggle-curve" class="icon-btn" title="Toggle Curve" aria-label="Toggle Curve" data-level="advanced">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M4 12c2-4 6-4 8 0s6 4 8 0" />
           </svg>
@@ -1602,12 +1607,12 @@
         <!-- Roadmap 1.5-B: kind:'free' toggle, separate from (not a
              redesign of) the curve toggle - three-way mutually
              exclusive with it and with face-fill (see sketch.js). -->
-        <button id="btn-toggle-free" class="icon-btn" title="Toggle Free Clothing" aria-label="Toggle Free Clothing">
+        <button id="btn-toggle-free" class="icon-btn" title="Toggle Free Clothing" aria-label="Toggle Free Clothing" data-level="advanced">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M2 17c1.5-3 2-5 3.5-3s1 5 3 3-.5-6 2-6 1 6 3 4 0-6 2-4 1 4 3 2" />
           </svg>
         </button>
-        <button id="btn-toggle-free-endpoints" class="icon-btn" title="Toggle Free Endpoints" aria-label="Toggle Free Endpoints">
+        <button id="btn-toggle-free-endpoints" class="icon-btn" title="Toggle Free Endpoints" aria-label="Toggle Free Endpoints" data-level="advanced">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10" />
             <line x1="22" y1="12" x2="18" y2="12" />
@@ -1621,7 +1626,7 @@
              altNetActive/altNetPending state machine. Icon: a dashed
              polygon outline with one solid edge and its two endpoints
              marked, suggesting "click an edge, complete to a shape". -->
-        <button id="btn-alternative-net" class="icon-btn" title="Alternative Net Construction (click two points, then a third to confirm the side)" aria-label="Alternative Net Construction (click two points, then a third to confirm the side)">
+        <button id="btn-alternative-net" class="icon-btn" title="Alternative Net Construction (click two points, then a third to confirm the side)" aria-label="Alternative Net Construction (click two points, then a third to confirm the side)" data-level="advanced">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polygon points="12,3 20,9 17,19 7,19 4,9" stroke-dasharray="3,2" />
             <line x1="7" y1="19" x2="17" y2="19" stroke-width="3" />
@@ -1633,7 +1638,7 @@
       <span class="more-sep" aria-hidden="true"></span>
       <!-- Phase 3 autosave (P2): forget this tab's saved session and start blank - asks first (#restart-overlay, below). Icon only (a file with a plus: a new page); the name is
            the aria-label. Not on the Farbe tab: the whole rail "Mehr" is hidden there (style.css) - switch to Form or Netz. -->
-      <button id="btn-restart" class="icon-btn" type="button" title="Neu anfangen" aria-label="Neu anfangen" data-i18n="restart.open">
+      <button id="btn-restart" class="icon-btn" type="button" title="Neu anfangen" aria-label="Neu anfangen" data-i18n="restart.open" data-level="advanced">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
           <path d="M14 2v6h6" />
@@ -1696,58 +1701,59 @@
        and the reasons of disabled controls, the stepper limits, ... all arrive here; nothing moves the layout. -->
   <div id="ui-notices" class="notices" role="status" aria-live="polite"></div>
 
-  <script src="vendor/p5-1.9.0.js?v=20270107font"></script>
-  <script src="core/forms.js?v=20270107font"></script>
-  <script src="core/state.js?v=20270107font"></script>
-  <script src="core/symmetry.js?v=20270107font"></script>
-  <script src="core/curves.js?v=20270107font"></script>
-  <script src="core/netwarp.js?v=20270107font"></script>
-  <script src="core/tiling.js?v=20270107font"></script>
-  <script src="core/faces.js?v=20270107font"></script>
-  <script src="core/orbits.js?v=20270107font"></script>
-  <script src="core/glossary.js?v=20270107font"></script>
-  <script src="core/color.js?v=20270107font"></script>
-  <script src="core/facecolor.js?v=20270107font"></script>
-  <script src="core/farborgel-bridge.js?v=20270107font"></script>
-  <script src="core/export.js?v=20270107font"></script>
-  <script src="core/anim-export.js?v=20270107font"></script>
-  <script src="core/symmetry-toggles.js?v=20270107font"></script>
-  <script src="core/spatial-morph.js?v=20270107font"></script>
-  <script src="core/spatial-morph-render.js?v=20270107font"></script>
-  <script src="core/session.js?v=20270107font"></script>
-  <script src="core/session-apply.js?v=20270107font"></script>
-  <script src="core/session-store.js?v=20270107font"></script>
-  <script src="core/session-writer.js?v=20270107font"></script>
-  <script src="core/pointer-tap.js?v=20270107font"></script>
-  <script src="core/pick-node.js?v=20270107font"></script>
-  <script src="sketch.js?v=20270107font"></script>
-  <script src="nav.js?v=20270107font"></script>
-  <script src="ui-i18n.js?v=20270107font"></script>
-  <script src="ui.js?v=20270107font"></script>
-  <script src="ui-form.js?v=20270107font"></script>
-  <script src="ui-layer.js?v=20270107font"></script>
-  <script src="ui-timeline.js?v=20270107font"></script>
-  <script src="ui-layers.js?v=20270107font"></script>
-  <script src="ui-morph.js?v=20270107font"></script>
-  <script src="ui-net-readout.js?v=20270107font"></script>
-  <script src="ui-net-art.js?v=20270107font"></script>
-  <script src="ui-net.js?v=20270107font"></script>
-  <script src="ui-farbe.js?v=20270107font"></script>
-  <script src="ui-rail.js?v=20270107font"></script>
-  <script src="ui-lines.js?v=20270107font"></script>
+  <script src="vendor/p5-1.9.0.js?v=20270108modek"></script>
+  <script src="core/forms.js?v=20270108modek"></script>
+  <script src="core/state.js?v=20270108modek"></script>
+  <script src="core/symmetry.js?v=20270108modek"></script>
+  <script src="core/curves.js?v=20270108modek"></script>
+  <script src="core/netwarp.js?v=20270108modek"></script>
+  <script src="core/tiling.js?v=20270108modek"></script>
+  <script src="core/faces.js?v=20270108modek"></script>
+  <script src="core/orbits.js?v=20270108modek"></script>
+  <script src="core/glossary.js?v=20270108modek"></script>
+  <script src="core/color.js?v=20270108modek"></script>
+  <script src="core/facecolor.js?v=20270108modek"></script>
+  <script src="core/farborgel-bridge.js?v=20270108modek"></script>
+  <script src="core/export.js?v=20270108modek"></script>
+  <script src="core/anim-export.js?v=20270108modek"></script>
+  <script src="core/symmetry-toggles.js?v=20270108modek"></script>
+  <script src="core/spatial-morph.js?v=20270108modek"></script>
+  <script src="core/spatial-morph-render.js?v=20270108modek"></script>
+  <script src="core/session.js?v=20270108modek"></script>
+  <script src="core/session-apply.js?v=20270108modek"></script>
+  <script src="core/session-store.js?v=20270108modek"></script>
+  <script src="core/session-writer.js?v=20270108modek"></script>
+  <script src="core/pointer-tap.js?v=20270108modek"></script>
+  <script src="core/pick-node.js?v=20270108modek"></script>
+  <script src="sketch.js?v=20270108modek"></script>
+  <script src="nav.js?v=20270108modek"></script>
+  <script src="ui-i18n.js?v=20270108modek"></script>
+  <script src="ui.js?v=20270108modek"></script>
+  <script src="ui-mode.js?v=20270108modek"></script>
+  <script src="ui-form.js?v=20270108modek"></script>
+  <script src="ui-layer.js?v=20270108modek"></script>
+  <script src="ui-timeline.js?v=20270108modek"></script>
+  <script src="ui-layers.js?v=20270108modek"></script>
+  <script src="ui-morph.js?v=20270108modek"></script>
+  <script src="ui-net-readout.js?v=20270108modek"></script>
+  <script src="ui-net-art.js?v=20270108modek"></script>
+  <script src="ui-net.js?v=20270108modek"></script>
+  <script src="ui-farbe.js?v=20270108modek"></script>
+  <script src="ui-rail.js?v=20270108modek"></script>
+  <script src="ui-lines.js?v=20270108modek"></script>
   <!-- The phone layout (phone layout, commit 1a): the DATA, then the ENGINE. Both load after every ui-*.js (the strips are built, the handlers are bound) and before the window load event, which is when p5 runs setup().
        The engine applies on the first 'tabchange' (nav.js, on DOMContentLoaded) and re-parents existing controls below 768px; see ui-phone.js. -->
   <!-- Commit 2 (the Farbe tab): the chip view of the face trails (the "Spuren" sub-tab). It reads the hidden model #face-colors-list and makes #ph-trail-chips / #ph-trail-stepper in a hidden holder; the engine moves them
        into the panel. It must load after ui-farbe.js (UI.onSync order: the model rows are rebuilt first) and before ui-phone-config.js. -->
-  <script src="ui-phone-chips.js?v=20270107font"></script>
-  <script src="ui-phone-timeline.js?v=20270107font"></script>
-  <script src="ui-phone-pairing.js?v=20270107font"></script>
-  <script src="ui-phone-config.js?v=20270107font"></script>
-  <script src="ui-phone.js?v=20270107font"></script>
+  <script src="ui-phone-chips.js?v=20270108modek"></script>
+  <script src="ui-phone-timeline.js?v=20270108modek"></script>
+  <script src="ui-phone-pairing.js?v=20270108modek"></script>
+  <script src="ui-phone-config.js?v=20270108modek"></script>
+  <script src="ui-phone.js?v=20270108modek"></script>
   <!-- Group D Phase B4: exposes window.farborgelBuildHarmonySelection (core/farborgel-selection.mjs)
        for ui-farbe.js/sketch.js (classic scripts) to call - a module script coexists fine with the
        classic p5-bootstrap scripts above (real-browser verified, no conflicts). -->
-  <script type="module" src="core/farborgel-selection.mjs?v=20270107font"></script>
+  <script type="module" src="core/farborgel-selection.mjs?v=20270108modek"></script>
   <!-- Dark Mode toggle removed from UI - body never gets the .dark class,
        so the app stays permanently in Light Mode (the var(--background)/
        var(--text) defaults in :root). The body.dark CSS variable overrides

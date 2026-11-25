@@ -543,6 +543,32 @@ body.dark {
   color: var(--color-text);
 }
 
+/* task 133: the interface mode button (a Plus), left of Help, the same size (--target, --ph-header-h on the phone) and glyph weight. Unlike the frameless Help it is a TOGGLE
+   and looks like the other toggles: a frame while the simple view is on, filled (black, white glyph) while the advanced view is on. It takes the auto margin that Help had;
+   Help sits close to it (the header gap is taken back). */
+.app-header .icon-btn.mode-plus { margin-left: auto; border: 1px solid var(--color-text); color: var(--color-text); position: relative; }
+.app-header .icon-btn.mode-plus.active { background: var(--color-text); color: var(--color-bg); }
+.app-header .mode-plus + .icon-btn { margin-left: -12px; }
+@media (min-width: 768px) {
+  .app-header .mode-plus + .icon-btn { margin-left: -24px; }
+}
+/* the state dot (ui-mode.js advancedActive): simple view, but a setting is on that it cannot show. The same 6px corner dot as .nav-more.has-state. */
+.app-header .mode-plus.has-state::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+/* below 360px (320: tabs 194 + two 40px buttons + the gap = 282 <= 288) the header gap shrinks, Help touches the Plus */
+@media not all and (min-width: 360px) {
+  .app-header { gap: 4px; }
+  .app-header .mode-plus + .icon-btn { margin-left: 4px; }
+}
+
 .app-header .icon-btn {
   margin-left: auto;
   width: var(--target);
@@ -571,6 +597,16 @@ body.dark {
   .nav-row { padding: 0 24px; }
 }
 .nav-row[hidden] { display: none; }
+
+/* === Interface mode (task 133) ============================================
+   html[data-mode] is written by ui-mode.js (simple | advanced). Under "simple" every element marked data-level="advanced" in index.html is taken out of the
+   layout, the Tab order and the accessibility tree (display: none; hidden by the person's choice, not by a state: the "never hidden" rule of the rework is about
+   state, this is a view setting). Nothing else changes: handlers, state and the drawing are untouched, and "advanced" is the interface exactly as it was before
+   the modes. "advanced-wide" is hidden from 768px up only: the phone layout (below 768px) moves other controls into the same sheet, so its opener stays. */
+html[data-mode="simple"] [data-level="advanced"] { display: none !important; }
+@media (min-width: 768px) {
+  html[data-mode="simple"] [data-level="advanced-wide"] { display: none !important; }
+}
 
 /* === UI rework 4b: Form row ==============================================
    Every control has a fixed slot; nothing appears, disappears or moves when
