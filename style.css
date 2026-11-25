@@ -307,10 +307,6 @@ label { touch-action: manipulation; }
   padding: 0;
 }
 
-.icon-btn .material-icons {
-    font-size: 22px;
-}
-
 .theme-toggle {
     grid-column: 1 / -1; /* Span across all columns */
     display: flex;
