@@ -9,7 +9,7 @@
  *
  * Layout. One key per tab (sessionStorage is per tab): 'wof:session' = JSON envelope { v: 1, href, at, snapshot } where `snapshot` is the
  * text buildSessionSnapshot()/serializeSession() made (a string inside the envelope, so the P0 validator still gets exactly its own text),
- * `href` = origin + path + query WITHOUT the hash, `at` = ms timestamp. A snapshot that was rejected (corrupt, other version, grids do not
+ * `href` = origin + path + query WITHOUT the hash (the comparison also ignores a `lang` parameter, task 138), `at` = ms timestamp. A snapshot that was rejected (corrupt, other version, grids do not
  * match, apply failed) is moved to ONE slot 'wof:session:quarantine' = { v: 1, reason, at, truncated, text }, newest wins. Neither key can
  * be mistaken for the Farborgel mailbox ('wof:farborgel:handoff' / 'wof:farborgel:ack', localStorage, filtered by exact key).
  *
@@ -36,6 +36,15 @@ const _sessionErr = e => (e && (e.name || e.message)) ? String(e.name || e.messa
 // ---- pure helpers --------------------------------------------------------------------------------------------------------
 // origin + path + query, no hash. The reader compares two of these; the hash is dropped on BOTH sides (a #fragment never changes the drawing).
 function _sessionStripHash(href) { const i = href.indexOf('#'); return i < 0 ? href : href.slice(0, i); }
+// task 138: the language is a VIEW setting like the interface mode: ?lang=en and ?lang=de (or none) are the SAME session. A language switch reloads the page with the other
+// ?lang= (the website's menu does that, studio-site/site-nav.js); the snapshot written under the old one must still restore. Every other parameter still counts.
+function _sessionStripLang(href) {
+    const q = href.indexOf('?');
+    if (q < 0) return href;
+    const kept = href.slice(q + 1).split('&').filter(p => p !== '' && !/^lang(=|$)/i.test(p));
+    return href.slice(0, q) + (kept.length ? '?' + kept.join('&') : '');
+}
+function _sessionSameHref(a, b) { return _sessionStripLang(_sessionStripHash(a)) === _sessionStripLang(_sessionStripHash(b)); }
 function sessionCurrentHref(loc) {
     try {
         if (!loc) return null;
@@ -69,7 +78,7 @@ function sessionShouldRestore(o) {
     if (!o.hasSnapshot) return { restore: false, reason: 'no-snapshot' };
     if (o.navType !== 'reload' && o.navType !== 'back_forward' && o.navType !== 'navigate') return { restore: false, reason: 'unknown-nav-type' };
     if (typeof o.snapshotHref !== 'string' || typeof o.currentHref !== 'string') return { restore: false, reason: 'no-href' };
-    if (_sessionStripHash(o.snapshotHref) !== _sessionStripHash(o.currentHref)) return { restore: false, reason: 'different-href' };
+    if (!_sessionSameHref(o.snapshotHref, o.currentHref)) return { restore: false, reason: 'different-href' };
     return { restore: true, reason: o.navType === 'reload' ? 'reload' : o.navType === 'back_forward' ? 'back-forward' : 'same-href' };
 }
 

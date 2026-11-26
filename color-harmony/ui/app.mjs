@@ -16,9 +16,14 @@ import {CalibrationView} from './views/CalibrationView.mjs';
 // P2: the generator's Farbe-tab link opens this page as `?hue=9&reg=pa` (anchor pre-fill); no/unusable parameters
 // = today's default start state. anchorOverridesFromSearch() validates strictly and never throws; the try/catch is
 // belt and braces so that NOTHING in the URL can ever leave the page blank.
+// task 138: `?lang=en` opens the page in English (the generator's Farbe-tab link adds it when the generator is English); no or any other value keeps DEFAULT_LOCALE.
+function withLocale(state) {
+  try {return new URLSearchParams(location.search).get('lang')==='en'?transition(state,{type:'locale',value:'en'}):state;}
+  catch(error) {return state;}
+}
 function initialState() {
-  try {return createState(anchorOverridesFromSearch(location.search));}
-  catch(error) {console.warn('Farborgel: could not apply the URL parameters, opening the default start state -',error.message);return createState();}
+  try {return withLocale(createState(anchorOverridesFromSearch(location.search)));}
+  catch(error) {console.warn('Farborgel: could not apply the URL parameters, opening the default start state -',error.message);return withLocale(createState());}
 }
 let state=initialState(),lastSelection=null;
 // P3 return handoff: opened from a generator tab (`?from=<12 hex>`), "In Muster übernehmen" also sends the SAME version-1

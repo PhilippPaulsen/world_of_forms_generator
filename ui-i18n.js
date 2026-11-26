@@ -145,6 +145,11 @@
     // task 133: the interface mode button (Plus) in the header: its name says the state; the help line explains it
     'mode.plus.off': { de: 'Weitere Bedienelemente: aus', en: 'More controls: off' },
     'mode.plus.on': { de: 'Weitere Bedienelemente: an', en: 'More controls: on' },
+    'help.what': { de: 'Das Studio erzeugt Muster nach Wilhelm Ostwalds Formenlehre: Knoten verbinden, Symmetrie wählen, Farbe und Netz verändern.', en: 'The Studio creates patterns after Wilhelm Ostwald\'s theory of form: connect nodes, choose a symmetry, change colour and net.' },
+    'help.title': { de: 'So geht\'s:', en: 'How to use:' },
+    'help.use1': { de: 'Knoten anklicken, um sie zu verbinden.', en: 'Click nodes to connect them.' },
+    'help.use2': { de: 'Mit den Bedienelementen Form, Größe und Ordnung ändern.', en: 'Use the controls to change shape, size and node count.' },
+    'help.use3': { de: 'Knoten und Krümmung ein- und ausblenden.', en: 'Toggle visibility of nodes and curvature.' },
     'help.plus': { de: 'Plus: weitere Bedienelemente ein- und ausblenden.', en: 'Plus: show or hide more controls.' },
     'mode.advancedActive': { de: 'Erweiterte Einstellungen aktiv', en: 'Advanced settings active' },
     // task 133: the face-fill reasons of the simple view (they name no control that the simple view hides)

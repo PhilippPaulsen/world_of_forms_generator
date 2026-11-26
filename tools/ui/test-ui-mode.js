@@ -90,7 +90,7 @@ function plusPage(initial, lang) {
         dispatchEvent: e => { (docL.modechange || []).forEach(f => f(e)); }, addEventListener: (t, f) => { (docL[t] = docL[t] || []).push(f); },
         getElementById: id => id === 'btn-mode-plus' ? btn : null };
     const D = { 'mode.plus.off': { de: 'Weitere Bedienelemente: aus', en: 'More controls: off' }, 'mode.plus.on': { de: 'Weitere Bedienelemente: an', en: 'More controls: on' }, 'mode.advancedActive': { de: 'Erweiterte Einstellungen aktiv', en: 'Advanced settings active' } };
-    const win = { UI: { onSync() {}, lang, t: k => D[k][win.UI.lang] }, sessionWriter: { markDirty() {} } };
+    const win = { UI: { onSync() {}, lang, t: k => D[k][(win.uiI18n && win.uiI18n.lang) || win.UI.lang] }, sessionWriter: { markDirty() {} } };
     const ctx = vm.createContext({ window: win, document, location: { search: '' }, CustomEvent: function (t, o) { this.detail = o.detail; }, URLSearchParams, console });
     vm.runInContext(`let uiMode = '${initial}'; let additionalLayers = []; let timeline = null; let curveType = { kind: 'straight' };`, ctx);
     vm.runInContext(read('ui-mode.js'), ctx, { filename: 'ui-mode.js' });
@@ -109,6 +109,11 @@ function plusPage(initial, lang) {
     check('...and "More controls: on" in English', b.a.title === 'More controls: on');
     vm.runInContext("uiMode = 'simple';", p.ctx); p.win.uiModeApi.syncButton();
     check('a change of the global from outside (a session restore) updates the button on the next tick', b.a['aria-pressed'] === 'false' && !b.cl.has('active'));
+    // task 138: UI.lang is copied at load; the LIVE language is uiI18n.lang
+    const p3 = plusPage('simple', 'de'); p3.win.uiI18n = { lang: 'en' }; p3.win.uiModeApi.syncButton();
+    check('the name follows uiI18n.lang (live) even while UI.lang is still the value copied at load', p3.btn.a.title === 'More controls: off', p3.btn.a.title);
+    p3.win.uiI18n.lang = 'de'; p3.win.uiModeApi.syncButton();
+    check('...and back to German', p3.btn.a.title === 'Weitere Bedienelemente: aus');
     const p2 = plusPage('advanced', 'de');
     check('at load in advanced: pressed and filled', p2.btn.a['aria-pressed'] === 'true' && p2.btn.cl.has('active') && p2.btn.a.title === 'Weitere Bedienelemente: an');
     const html = read('index.html');
@@ -185,6 +190,12 @@ console.log('\n== the face-fill reasons in the simple view ==');
 
 console.log('\n== wiring ==');
 {
+    const ff = read('ui-farbe.js'), ap = read('color-harmony/ui/app.mjs');
+    check('task 138: the Farbe-tab link to the Farborgel adds &lang=en only while the Studio is English (German adds nothing: the URLs and their tests stay as they were)', /farborgelPageUrl\(anchorFor\(activeLayer\), GENERATOR_TAB_ID\) \+ \(window\.uiI18n && window\.uiI18n\.lang === 'en' \? '&lang=en' : ''\)/.test(ff));
+    check('task 138: the Farborgel page opens in English for ?lang=en and keeps DEFAULT_LOCALE otherwise (it never throws)', /get\('lang'\)==='en'\?transition\(state,\{type:'locale',value:'en'\}\):state/.test(ap) && /withLocale\(createState\(anchorOverridesFromSearch/.test(ap));
+    const dict = require('../../ui-i18n.js').DICT;
+    check('task 138: the five help keys exist in both languages and the markup uses each once', ['help.what', 'help.title', 'help.use1', 'help.use2', 'help.use3', 'help.plus'].every(k => dict[k] && dict[k].de && dict[k].en && (read('index.html').match(new RegExp('data-i18n="' + k.replace('.', '\\.') + '"', 'g')) || []).length === 1));
+
     const html = read('index.html'), sk = read('sketch.js');
     const iUI = html.indexOf('src="ui.js?'), iMode = html.indexOf('src="ui-mode.js?'), iSketch = html.indexOf('src="sketch.js?');
     check('index.html loads ui-mode.js after core/state.js and ui.js (UI.onSync exists)', iMode > iUI && iUI > html.indexOf('src="core/state.js?'));
