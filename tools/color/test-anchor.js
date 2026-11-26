@@ -28,6 +28,7 @@ function makeSandbox() {
     };
     vm.createContext(sb);
     vm.runInContext(SRC, sb);
+    vm.runInContext("uiMode = 'advanced';", sb);   // task 145: the sandbox is the ADVANCED view (the old default anchor, register 0 = \"ca\"); the simple view has its own section below
     return sb;
 }
 
@@ -150,6 +151,26 @@ console.log('\n== 6. register-index stepper arithmetic walks the real 28-entry o
     check('stepping -1 from 0 WRAPS to index 27, "pn" (not -1 or a throw)', step(0, -1) === 27 && order[step(0, -1)] === 'pn');
     check('stepping +1 from 27 (the last) WRAPS to index 0, "ca"', step(27, 1) === 0 && order[step(27, 1)] === 'ca');
     check('stepping +1 from 9 lands on index 10, "ig" -> "la" is index 10 per the real order', order[step(9, 1)] === order[10] && order[10] === 'la');
+}
+
+// ------------------------------------------------------------------------
+console.log('== task 145: the default register of a NEW anchor follows the view ==');
+{
+    const sb = makeSandbox();
+    const order = vm.runInContext('FARBORGEL_REGISTER_ORDER', sb);
+    check('FACE_ANCHOR_SIMPLE_REGISTER indexes "ia" in the real register order', vm.runInContext('FACE_ANCHOR_SIMPLE_REGISTER', sb) === 6 && order[6] === 'ia' && order[0] === 'ca');
+    check('advanced view: a new anchor is {1, 0} ("ca")', same(vm.runInContext('newFaceAnchor()', sb), { hueIndex: 1, registerIndex: 0 }));
+    vm.runInContext("uiMode = 'simple';", sb);
+    check('simple view: a new anchor is {1, 6} ("ia")', same(vm.runInContext('newFaceAnchor()', sb), { hueIndex: 1, registerIndex: 6 }));
+    check('simple view: anchorFor("base") creates "ia" lazily, and keeps it', same(vm.runInContext('baseFaceAnchor = null; anchorFor("base")', sb), { hueIndex: 1, registerIndex: 6 }));
+    vm.runInContext("baseFaceAnchor = { hueIndex: 5, registerIndex: 0 };", sb);
+    check('an EXISTING anchor is never touched by the view (a session with "ca" stays "ca" in the simple view)', same(vm.runInContext('anchorFor("base")', sb), { hueIndex: 5, registerIndex: 0 }));
+    vm.runInContext("baseFaceAnchor = null; uiMode = 'advanced'; anchorFor('base'); uiMode = 'simple';", sb);
+    check('switching the view later does not change an anchor that exists', same(vm.runInContext('baseFaceAnchor', sb), { hueIndex: 1, registerIndex: 0 }));
+    vm.runInContext("rebuildGrid(currentShape);", sb);
+    check('after a grid change (which resets the anchor) the next one is the default of the view it is made in (simple: "ia")', same(vm.runInContext('anchorFor("base")', sb), { hueIndex: 1, registerIndex: 6 }));
+    check('the view is read through typeof (a page or shell without the uiMode global keeps "ca" as it always did)', /registerIndex: \(typeof uiMode !== 'undefined' && uiMode === 'simple'\) \? FACE_ANCHOR_SIMPLE_REGISTER : 0/.test(fs.readFileSync(path.join(ROOT, 'core', 'facecolor.js'), 'utf8')));
+    check('a layer made in the simple view gets "ia" too', (() => { vm.runInContext("uiMode = 'simple'; additionalLayers = [{}];", sb); return same(vm.runInContext('anchorFor(0)', sb), { hueIndex: 1, registerIndex: 6 }); })());
 }
 
 // ------------------------------------------------------------------------

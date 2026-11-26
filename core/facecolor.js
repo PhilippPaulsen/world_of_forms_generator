@@ -976,8 +976,12 @@ function facePaletteFor(sheet) {
 // at the point of consumption - see core/farborgel-bridge.js's _farborgelHueToCoreHue() - never here).
 // registerIndex indexes the real 28-register atlas order per hue (core/farborgel-bridge.js's
 // FARBORGEL_REGISTER_ORDER); null = hue-only (Wert has no register axis, only the 24-hue circle).
+// Task 145: the register of a fresh anchor is 0 ("ca") - and 6 ("ia", core/farborgel-bridge.js FARBORGEL_REGISTER_ORDER[6]) in the SIMPLE view (uiMode, core/state.js), where
+// a person starts without knowing the atlas. An anchor that already exists (a session, the other view) is never touched; only a NEW one (first use, or after a grid change,
+// which resets it) takes the default of the view it is made in. Without the global (the tests, a reduced shell) the default is 0 as it always was.
+const FACE_ANCHOR_SIMPLE_REGISTER = 6;
 function newFaceAnchor() {
-    return { hueIndex: 1, registerIndex: 0 };
+    return { hueIndex: 1, registerIndex: (typeof uiMode !== 'undefined' && uiMode === 'simple') ? FACE_ANCHOR_SIMPLE_REGISTER : 0 };
 }
 
 // Same lazy, per-sheet lifecycle as facePaletteFor() above: independent per layer, reset with the grid

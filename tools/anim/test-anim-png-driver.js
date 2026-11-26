@@ -180,7 +180,7 @@ const untouched = (W) => !W.log.some(l => ['progress', 'redraw', 'density', 'pau
             // the working tree may already be committed: then diff against BASE is the whole change as well
             check('sketch.js removed only two lines of the export dialog handlers (Close and the backdrop click, now guarded)', removed.length <= 8 && removed.every(l => l === "-exportOverlay.addClass('hidden');" || l === "-if (e.target.id === 'export-overlay') exportOverlay.addClass('hidden');" || NET122.includes(l)), J(removed));
             const core = execFileSync('git', ['diff', '--name-only', BASE, '--', 'core/'], { cwd: ROOT }).toString().split('\n').filter(Boolean);
-            check('core/ differs from main only in anim-export.js', core.every(f => f === 'core/anim-export.js' || f === 'core/netwarp.js' || f === 'core/curves.js' || f === 'core/session.js' /* task 121: 3C-1 */ || f === 'core/session-apply.js' || f === 'core/session-store.js' /* task 138: ?lang= */ || f === 'core/export.js' /* task 144: the Download name (exportFileBase, downloadBlob, title) */ || f === 'core/state.js' /* task 133: the session field uiMode (session.js, session-apply.js, state.js) */), J(core));
+            check('core/ differs from main only in anim-export.js', core.every(f => f === 'core/anim-export.js' || f === 'core/netwarp.js' || f === 'core/curves.js' || f === 'core/session.js' /* task 121: 3C-1 */ || f === 'core/session-apply.js' || f === 'core/session-store.js' /* task 138: ?lang= */ || f === 'core/facecolor.js' /* task 145: the default anchor */ || f === 'core/state.js' /* task 133: the session field uiMode (session.js, session-apply.js, state.js) */), J(core));
         }
     }
     console.log('== 7. the wiring ==');
