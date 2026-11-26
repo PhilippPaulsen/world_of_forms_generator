@@ -538,10 +538,16 @@ body.dark {
   color: var(--color-secondary);
   text-decoration: none;
 }
+/* task 148: the current tab is marked by colour only (black against the secondary grey); the weight is the same Book for every tab, like the website's menu (studio-site/menu.css) */
 .app-tabs a[aria-current="page"] {
-  font-weight: var(--weight-strong);
+  font-weight: var(--weight-regular);
   color: var(--color-text);
 }
+
+/* task 148: the header rings (Plus, Help and the website menu that studio-site/site-nav.js adds) draw their stroke as thick as the stem of Suisse Book: measured on the loaded font
+   (canvas, "l" "I" "i" "o" "?" at 200px: 22 to 24px, i.e. 0.11 to 0.12 em), at the 18px of the tab text that is about 2px; the svg is 18px for a 24 unit viewBox, so 2px = 2.67 units
+   (was 1.75 units = 1.3px, thinner than the letters next to it). Only these rings: every other .ico keeps its stroke. */
+.app-header .icon-btn .ico { stroke-width: 2.67; }
 
 /* task 133, task 136: the interface mode button (a Plus) is drawn like Help: the SAME 18px svg, the same ring (circle r=10, stroke 1.75), frameless, the same hit box
    (--target, --ph-header-h on the phone), so the two look equally big. Simple view: a grey ring with a plus (like Help's grey); advanced view: the ring filled black with
