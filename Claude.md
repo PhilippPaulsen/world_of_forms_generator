@@ -8,6 +8,7 @@ engine. This repo is the canonical generator (`sketch.js` UI shell, portable `co
 - `docs/agent-rules.md` - the standing rules (workflow, proof, code traps, reports). Binding.
 - `docs/claude-context.md` - the full project context: key files, phone layout, sheets, patterns block,
   spatial morph, fixes, p5 reader, cache-busting, test history. Read the section you need.
+- `docs/workflow.md` - development, checks, sync into the website, publishing, known debts (read before a merge or a push).
 - `docs/baselines.md` - the history of the layout baselines.
 - `ROADMAP.md` - priorities and status per item (check before starting: much is partly done).
 - `docs/terminology.md` - German/English terms and naming.

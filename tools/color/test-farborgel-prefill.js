@@ -196,7 +196,7 @@ async function main() {
         const app = fs.readFileSync(path.join(ROOT, 'color-harmony/ui/app.mjs'), 'utf8');
         check('app.mjs imports anchorOverridesFromSearch from ./state.mjs', /import\s*\{[^}]*\banchorOverridesFromSearch\b[^}]*\}\s*from\s*'\.\/state\.mjs'/.test(app));
         check('app.mjs builds its initial state through it (createState(anchorOverridesFromSearch(location.search)))', /createState\(\s*anchorOverridesFromSearch\(\s*location\.search\s*\)\s*\)/.test(app));
-        check('...inside a try/catch whose fallback is the plain createState() (belt and braces: never a blank page)', /try\s*\{[^}]*anchorOverridesFromSearch[^}]*\}\s*catch[^{]*\{[^}]*return createState\(\)/.test(app));
+        check('...inside a try/catch whose fallback is the plain createState() (belt and braces: never a blank page)', /try\s*\{[^}]*anchorOverridesFromSearch[^}]*\}\s*catch[^{]*\{[^}]*return (?:withLocale\()?createState\(\)/.test(app));
         check('...and the top-level state is initialised by that function, not by a bare createState()', /let state=initialState\(\)/.test(app) && !/let state=createState\(\)/.test(app));
         const uf = fs.readFileSync(path.join(ROOT, 'ui-farbe.js'), 'utf8');
         const syncBody = (uf.match(/function sync\(\)\s*\{([\s\S]*?)\n  \}\n/) || [])[1] || '';
