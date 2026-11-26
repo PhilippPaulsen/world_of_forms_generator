@@ -32,7 +32,7 @@ for (const m of ['simple', 'advanced']) {
     const w = world('square', 3, 5, 'none'); w.run('connections = [[1, 6], [2, 9]];'); setMode(w, m);
     const ui = uiOf(w, 'none', 6), t = text(w, ui), s = JSON.parse(t);
     const keys = Object.keys(s.settings);
-    check(`mode ${m}: settings.uiMode is written, right after netTransform, the schema is still 2`, s.settings.uiMode === m && keys.at(-1) === 'uiMode' && keys.at(-2) === 'netTransform' && s.schema === 2 && w.get('SESSION_SCHEMA_VERSION') === 2);
+    check(`mode ${m}: settings.uiMode is written, right after netTransform, the schema is still 2`, s.settings.uiMode === m && keys.at(-1) === 'grayTones' && keys.at(-2) === 'uiMode' && keys.at(-3) === 'netTransform' && s.schema === 2 && w.get('SESSION_SCHEMA_VERSION') === 2);
 }
 {
     const w = world('square', 3, 5, 'none'); setMode(w, 'bogus');
