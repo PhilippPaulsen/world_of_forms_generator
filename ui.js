@@ -685,6 +685,44 @@
     return { isOpen: function () { return wasOpen; } };
   }
 
+  // ---- UI.confirm: one confirmation dialog for destructive actions (task 143) ------------------------------------------------------
+  /*
+   * UI.confirm({ title, text, confirm, trigger }) -> Promise<boolean>. The texts are already in the current language (the caller uses UI.t). Uses the static #confirm-overlay
+   * (the look of the other confirmations: .dialog-content, .restart-actions, the red .dialog-danger confirm). Cancel comes FIRST and has the initial focus; Escape, the backdrop and
+   * Cancel resolve false, the confirm button true; the focus goes back to `trigger`. One dialog at a time (a second call while one is open resolves false at once). Without the
+   * markup (a reduced shell) it resolves true: the action is not blocked by a missing dialog.
+   */
+  const confirmEl = document.getElementById('confirm-overlay');
+  let confirmOpen = false;
+  if (confirmEl) {
+    const stub = document.createElement('button');   // UI.dialog wants a trigger; the real one differs per call and gets the focus back in confirmDialog()
+    dialog(confirmEl, stub, document.getElementById('confirm-cancel'));
+  }
+  function confirmDialog(o) {
+    return new Promise(function (resolve) {
+      const cancel = document.getElementById('confirm-cancel'), ok = document.getElementById('confirm-ok');
+      if (!confirmEl || !cancel || !ok) { resolve(true); return; }
+      if (confirmOpen) { resolve(false); return; }
+      confirmOpen = true;
+      document.getElementById('confirm-title').textContent = o.title || '';
+      document.getElementById('confirm-text').textContent = o.text || '';
+      ok.textContent = o.confirm || '';
+      confirmEl.setAttribute('aria-label', o.title || '');
+      function done(value) {
+        confirmEl.classList.add('hidden');
+        cancel.removeEventListener('click', onCancel); ok.removeEventListener('click', onOk); confirmEl.removeEventListener('click', onBackdrop);
+        confirmOpen = false;
+        if (o.trigger && typeof o.trigger.focus === 'function' && o.trigger.offsetParent !== null) o.trigger.focus();
+        resolve(value);
+      }
+      function onCancel() { done(false); }
+      function onOk() { done(true); }
+      function onBackdrop(e) { if (e.target === confirmEl) done(false); }
+      cancel.addEventListener('click', onCancel); ok.addEventListener('click', onOk); confirmEl.addEventListener('click', onBackdrop);
+      confirmEl.classList.remove('hidden');
+    });
+  }
+
   // ---- one sync entry point -------------------------------------------------------
   // sketch.js calls window.uiSync() at the start of every draw() and after symmetry changes; each nav row registers
   // its own state-reading function here with UI.onSync(fn).
@@ -692,7 +730,7 @@
   window.uiSync = function () { for (let i = 0; i < syncFns.length; i++) syncFns[i](); };
   function onSync(fn) { syncFns.push(fn); }
 
-  window.UI = { normalizeNumber: normalizeNumber, onSync: onSync, notify: notify, notifyClear: notifyClear, toast: toast, hideToast: hideToast, setDisabled: setDisabled, name: name, guard: guard, stepper: stepper, pressed: pressed, isDisabled: isDisabled, dialog: dialog, radiogroup: radiogroup, overlay: overlay, checkedFromActive: checkedFromActive, showReason: showReason };
+  window.UI = { confirm: confirmDialog, normalizeNumber: normalizeNumber, onSync: onSync, notify: notify, notifyClear: notifyClear, toast: toast, hideToast: hideToast, setDisabled: setDisabled, name: name, guard: guard, stepper: stepper, pressed: pressed, isDisabled: isDisabled, dialog: dialog, radiogroup: radiogroup, overlay: overlay, checkedFromActive: checkedFromActive, showReason: showReason };
   // the dictionary on UI: UI.t(key, params), UI.lang (the current language: 'de' or 'en'), UI.setLang(l), UI.applyI18n(root); without ui-i18n.js t returns the key
   window.UI.t = I18N ? I18N.t : function (key) { return String(key); };
   window.UI.setLang = I18N ? I18N.setLang : function () { return 'de'; };

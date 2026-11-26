@@ -119,6 +119,31 @@
     });
   }
 
+  // ---- Clear and Reset Color ask first (task 143) -------------------------------------------------------------------------------------------------------------------------
+  // Both throw work away and cannot be undone (Clear empties the line list that Undo walks back through). sketch.js is not touched: the p5 handler of Clear runs on the MOUSEDOWN
+  // (the keyboard bridge of ui.js turns Enter / Space into one), Reset Color's on the CLICK. A capture listener on the document sees the event first; when there is something to lose
+  // it stops it, asks (UI.confirm) and, on "yes", sends the same event again with a one-shot mark so that the ORIGINAL handler (and ui-rail's own sheet logic) runs as before.
+  // Nothing to lose (no line on the active sheet / no colour assignment): no question, the event passes. Reset Color is asked only when the sheet has assignments.
+  const GUARDS = [
+    { id: 'btn-clear', type: 'mousedown', has: function () { return typeof activeConnections === 'function' && activeConnections().length > 0; }, key: 'clear' },
+    { id: 'btn-face-colors-reset', type: 'click', has: function () { const st = typeof faceAssignmentsFor === 'function' ? faceAssignmentsFor(activeLayer) : null; return !!st && st.size > 0; }, key: 'reset' }
+  ];
+  GUARDS.forEach(function (g) {
+    document.addEventListener(g.type, function (e) {
+      const btn = e.target && e.target.closest ? e.target.closest('#' + g.id) : null;
+      if (!btn || btn.__confirmed || e.__confirmedReplay || !g.has()) return;
+      e.stopImmediatePropagation(); e.preventDefault();
+      UI.confirm({ title: UI.t(g.key + '.title'), text: UI.t(g.key + '.text'), confirm: UI.t(g.key + '.confirm'), trigger: btn }).then(function (yes) {
+        if (!yes) return;
+        btn.__confirmed = true;
+        try {
+          if (g.type === 'click') btn.click();
+          else btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window, button: 0 }));
+        } finally { btn.__confirmed = false; }
+      });
+    }, true);
+  });
+
   UI.onSync(function () { syncPressed(); syncDot(); refreshName(); });
   syncPressed(); syncDot(); refreshName();
 })();

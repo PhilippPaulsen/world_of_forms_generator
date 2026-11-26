@@ -69,7 +69,7 @@
     if (netIsAdvanced(s.baseNetTransform)) return true;
     if (s.baseLastHarmonyType !== null && s.baseLastHarmonyType !== undefined && ['2', '3', '4'].indexOf(String(s.baseLastHarmonyType)) < 0) return true;   // Dreieck families, a Farborgel selection
     if (s.baseDistributionStrategy !== null && s.baseDistributionStrategy !== undefined && s.baseDistributionStrategy !== 'cyclic') return true;
-    if (s.lineStyle && (s.lineStyle.visible === false || s.lineStyle.weight !== 2)) return true;
+    if (s.lineStyle && s.lineStyle.weight !== 2) return true;   // the line switch itself is a simple control since task 143; only a changed width is hidden
     if (s.spatialMorph && s.spatialMorph.enabled === true) return true;
     return false;
   }

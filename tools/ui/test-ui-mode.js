@@ -156,7 +156,7 @@ console.log('\n== advancedActive (the dot) ==');
     for (const h of ['B', 'W', 'S', 'V', 'custom']) one('harmony ' + h, { baseLastHarmonyType: h }, true);
     one('strategy cyclic', { baseDistributionStrategy: 'cyclic' }, false);
     for (const st of ['area', 'symmetry', 'rings']) one('strategy ' + st, { baseDistributionStrategy: st }, true);
-    one('lines off', { lineStyle: { visible: false, weight: 2 } }, true);
+    one('lines off (a simple control since task 143)', { lineStyle: { visible: false, weight: 2 } }, false);
     one('line weight 3', { lineStyle: { visible: true, weight: 3 } }, true);
     one('the morph on', { spatialMorph: { enabled: true, mode: 'linear', angleDeg: 0 } }, true);
     // the dot on the page

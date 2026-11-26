@@ -144,14 +144,15 @@ const text = (ctx, ui) => ctx.sb.serializeSession(ctx.sb.buildSessionSnapshot(ct
 }
 
 console.log('\n== 5. the click cycle (DOM stub of ui-lines.js) ==');
-function domStub(sabotageCycle) {
+function domStub(sabotageCycle, mode, withT) {
     const mkEl = () => { const el = { attrs: {}, classes: new Set(), listeners: {}, hidden: true, value: '2', textContent: '2',
         classList: { toggle(c, on) { if (on) el.classes.add(c); else el.classes.delete(c); }, contains: c => el.classes.has(c) },
         setAttribute(k, v) { el.attrs[k] = v; }, getAttribute: k => el.attrs[k], addEventListener(t, f) { el.listeners[t] = f; } }; return el; };
     const els = { 'btn-toggle-lines': mkEl(), 'line-weight-group': mkEl(), 'line-weight-input': mkEl(), 'line-weight-value': mkEl() };
     let redraws = 0, tick = null;
     const ctx = vm.createContext({ document: { getElementById: id => els[id] || null }, LINE_WEIGHT: { min: 0.5, max: 8, step: 0.5, def: 2 }, lineStyle: { visible: true, weight: 2 },
-        redraw: () => { redraws++; }, UI: { onSync: f => { tick = f; } }, Number, isFinite, Math, String });
+        redraw: () => { redraws++; }, UI: withT ? { onSync: f => { tick = f; }, t: k => 'T:' + k } : { onSync: f => { tick = f; } }, Number, isFinite, Math, String });
+    if (mode) vm.runInContext(`var uiMode = '${mode}';`, ctx);
     let src = read('ui-lines.js');
     if (sabotageCycle) src = src.replace("else { open = false; set({ visible: false, weight: lineStyle.weight }); }", "else { open = false; show(); }");
     vm.runInContext(src, ctx, { filename: 'ui-lines.js' });
@@ -172,6 +173,20 @@ function domStub(sabotageCycle) {
     d.ctx.lineStyle = { visible: true, weight: 3 }; d.tick();
     check('a state replaced from outside (a session restore) closes the slider and shows the new weight', d.state().includes('AN/zu') && d.els['line-weight-input'].value === 3);
     check('the open/closed state is not part of lineStyle (nothing to save)', Object.keys(d.ctx.lineStyle).sort().join() === 'visible,weight');
+}
+
+// task 143: in the simple view the button is a plain switch (the slider is not offered) and its name has no width
+{
+    const d = domStub(false, 'simple', true), b = d.els['btn-toggle-lines'];
+    const seq = [d.state()]; d.click(); seq.push(d.state()); d.click(); seq.push(d.state()); d.click(); seq.push(d.state());
+    check('simple view: AN -> click -> AUS -> click -> AN -> click -> AUS, the slider never opens (aria-expanded stays false)',
+        seq.map(x => x.split('/').slice(0, 2).join('/')).join(' | ') === 'AN/zu | AUS/zu | AN/zu | AUS/zu', seq.join(' | '));
+    check('simple view: the name is "lines.toggle" (title and aria-label)', b.attrs.title === 'T:lines.toggle' && b.attrs['aria-label'] === 'T:lines.toggle', b.attrs.title);
+    const e = domStub(false, 'advanced', true);
+    check('advanced view: the name is "lines.button" and the cycle is the old one (the second click opens the slider)', e.els['btn-toggle-lines'].attrs.title === 'T:lines.button' && (e.click(), e.state().includes('AN/offen')));
+    const f = domStub(false, 'advanced', true); f.click();   // slider open
+    vm.runInContext("uiMode = 'simple';", f.ctx); f.tick();
+    check('switching to the simple view closes an open slider and renames the button', f.state().includes('AN/zu') && f.els['btn-toggle-lines'].attrs.title === 'T:lines.toggle');
 }
 
 console.log('\n== 6. markup, i18n, position ==');
