@@ -80,16 +80,18 @@
       compute: function (dir) {
         const lock = moduleWhy(true); // Farborgel still loading and this sheet's harmony needs it: blocked, with the reason (also for the arrow keys)
         if (lock) return { to: null, reason: lock };
-        const cur = parseInt(hueInput.value, 10) || 1;
-        return { to: ((cur - 1 + dir + ANCHOR_HUE_COUNT) % ANCHOR_HUE_COUNT) + 1 }; // a hue RING: always wraps, never blocked
+        const an = anchorFor(activeLayer);
+        const cur = an && an.neutral === true ? 0 : (parseInt(hueInput.value, 10) || 1);   // task 154: 0 is the UI-only position of the neutral "-" between 24 and 1 (never stored as a hue)
+        return { to: (cur + dir + ANCHOR_HUE_COUNT + 1) % (ANCHOR_HUE_COUNT + 1) }; // a RING 1..24 plus "-": always wraps, never blocked
       }
     });
     hueInput.addEventListener('change', function () {
       const a = anchorFor(activeLayer);
       if (!a) return;
       const v = parseInt(hueInput.value, 10);
-      if (!isNaN(v)) a.hueIndex = v;
-      afterAnchorChange();
+      if (isNaN(v)) return;
+      if (v === 0) { enterNeutral(a); return; }   // task 154: the neutral position "-"
+      leaveNeutralTo(a, v);
     });
 
     registerStepperApi = UI.stepper(registerStepperRoot, {
@@ -110,52 +112,6 @@
       if (!isNaN(v)) a.registerIndex = v;
       afterAnchorChange();
     });
-  }
-
-  // ---- gray tones (task 150): the stepper of the default gray fill. The state is the global grayTones (core/state.js: 0 = the legacy ladder of a saved session from before task 149, else 2, 3, 4 or 8); a step
-  // writes it and runs applyGrayDefault() (the explicit reapplication, strategy-aware, like a strategy change), so the sheet is recoloured at once. The value is shown as the number of grays; the legacy
-  // ladder shows the word "alt"/"old" and any step leaves it for 8 (it is not part of the 2-3-4-8 ring). While a harmony colours the sheet the stepper is locked with a reason (the gray default is not in force).
-  const GRAY_TONES = [2, 3, 4, 8];
-  const grayRoot = $('#farbe-gray-stepper'), grayInput = $('#farbe-gray-input'), grayDisplay = $('#farbe-gray-display');
-  let grayStepperApi = null;
-  function grayWhy() {
-    const type = lastHarmonyTypeFor(activeLayer);
-    return (type !== null && type !== undefined) ? tr('farbe.gray.reason', null, 'Eine Harmonie färbt diese Fläche: Graustufen gelten nur für das Standard-Grau.') : null;
-  }
-  if (grayRoot && grayInput && grayDisplay && typeof grayTones !== 'undefined' && typeof UI !== 'undefined' && UI.stepper) {
-    grayStepperApi = UI.stepper(grayRoot, {
-      input: grayInput,
-      noTyping: true,
-      keyEl: grayDisplay,
-      compute: function (dir) {
-        const lock = grayWhy();
-        if (lock) return { to: null, reason: lock };
-        const i = GRAY_TONES.indexOf(grayTones);
-        if (i < 0) return { to: GRAY_TONES.length - 1 };   // the legacy ladder: any step goes to 8
-        return { to: (i + dir + GRAY_TONES.length) % GRAY_TONES.length };   // a ring: 2 3 4 8 2 ...
-      }
-    });
-    grayInput.addEventListener('change', function () {
-      const v = GRAY_TONES[parseInt(grayInput.value, 10)];
-      if (v === undefined || v === grayTones) return;
-      grayTones = v;
-      try { if (window.sessionWriter) window.sessionWriter.markDirty(); } catch (e) { /* the next draw marks it anyway */ }
-      if (grayWhy() === null) applyGrayDefault();
-      sync();
-    });
-  }
-  function syncGray() {
-    if (!grayStepperApi) return;
-    const i = GRAY_TONES.indexOf(grayTones);
-    const text = i >= 0 ? String(grayTones) : tr('farbe.gray.legacy', null, 'alt');
-    if (grayDisplay.textContent !== text) grayDisplay.textContent = text;
-    const now = String(i >= 0 ? grayTones : 0);
-    if (grayDisplay.getAttribute('aria-valuenow') !== now) grayDisplay.setAttribute('aria-valuenow', now);
-    if (grayDisplay.getAttribute('aria-valuetext') !== text) grayDisplay.setAttribute('aria-valuetext', text);
-    const idx = i >= 0 ? i : GRAY_TONES.length - 1;
-    if (parseInt(grayInput.value, 10) !== idx) grayInput.value = String(idx);
-    UI.setDisabled(grayRoot, grayWhy());
-    grayStepperApi.refresh();
   }
 
   // ---- distribution strategy (Phase B-Farbstrategien step 2; moved from a stepper in this row to four icon
@@ -189,7 +145,12 @@
     if (!hueInput || typeof anchorFor !== 'function') return;
     const a = anchorFor(activeLayer);
     if (!a) return; // no active sheet's anchor to show - sync() below's own eligibility check already guards this
-    if (parseInt(hueInput.value, 10) !== a.hueIndex) hueInput.value = String(a.hueIndex);
+    // task 154: the neutral anchor shows "-" in the same number field: an empty value with the placeholder "-" (style.css gives it the colour of a value), so nothing about the box changes
+    const neutral = a.neutral === true, hv = neutral ? '' : String(a.hueIndex);
+    if (hueInput.value !== hv) hueInput.value = hv;
+    if (hueInput.getAttribute('placeholder') !== '\u2014') hueInput.setAttribute('placeholder', '\u2014');
+    const hueName = neutral ? tr('farbe.neutral.swatch', null, 'Unbunt: Weiß, Grau, Schwarz') : tr('index.anker-farbton', null, 'Anker Farbton');
+    if (hueInput.getAttribute('aria-label') !== hueName) { hueInput.setAttribute('aria-label', hueName); hueInput.setAttribute('title', hueName); }
     if (a.registerIndex !== null && parseInt(registerInput.value, 10) !== a.registerIndex) registerInput.value = String(a.registerIndex);
     // Register shows the real atlas code (e.g. "pa"), not the 0-based index - FARBORGEL_REGISTER_ORDER
     // (core/farborgel-bridge.js, built in B2) is the same array the register widgets already index into;
@@ -208,12 +169,17 @@
   // SAME Oklab-mixed, gamut-mapped color applyHarmonyToPattern() now actually paints with (Phase B4
   // follow-up #2), not core/color.js's older resolveColor() - a preview using that system would show a
   // muted color the pattern itself no longer produces once a harmony using this anchor is applied.
+  const NEUTRAL_SWATCH = '#000000';   // task 154: the ONE value of the neutral swatch (the row's and both overlays' previews all go through syncAnchorPreview)
   const anchorPreviewEls = [$('#farbe-anchor-preview'), $('#farbe-anchor-preview-kreis'), $('#farbe-anchor-preview-dreieck')].filter(Boolean);
   function syncAnchorPreview() {
     if (!anchorPreviewEls.length) return;
     const a = anchorFor(activeLayer);
     let bg = 'transparent';
-    if (a && typeof window.farborgelAnchorDisplayColor === 'function') {
+    const neutral = !!(a && a.neutral === true);
+    const swName = neutral ? tr('farbe.neutral.swatch', null, 'Unbunt: Weiß, Grau, Schwarz') : tr('index.anker-vorschau', null, 'Anker-Vorschau');
+    anchorPreviewEls.forEach(function (el) { if (el.getAttribute('aria-label') !== swName) { el.setAttribute('aria-label', swName); el.setAttribute('title', swName); } });
+    if (neutral) bg = NEUTRAL_SWATCH;   // task 154: plain black, no split, no stripes
+    else if (a && typeof window.farborgelAnchorDisplayColor === 'function') {
       try {
         const rgb = window.farborgelAnchorDisplayColor(a);
         bg = 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')';
@@ -298,6 +264,7 @@
     if (type !== null && type !== undefined && HARMONY_FAMILY[type]) viewFamily = HARMONY_FAMILY[type];
   }
   function syncFamily() {
+    if (isNeutral()) viewFamily = 'circle';   // task 154: the neutral state has the three keys of the circle family only (2 3 4 = grays)
     const type = lastHarmonyTypeFor(activeLayer);
     const activeFamily = (type !== null && type !== undefined) ? HARMONY_FAMILY[type] : null;
     Object.keys(familyEls).forEach(function (f) {
@@ -418,6 +385,7 @@
     // direct button/dropdown click and an anchor-triggered reapply (below) are always in exact sync,
     // never two separately-maintained states. Type first, THEN the selection: setLastHarmonyTypeFor()
     // drops the stored selection for every type but 'custom'.
+    neutralMemo = null; { const an = anchorFor(activeLayer); if (an && an.neutral) delete an.neutral; }   // task 154: any harmony applied (key, handoff, dropdown) ends the neutral state and drops the remembered type
     setLastHarmonyTypeFor(activeLayer, type);
     if (type === CUSTOM_HARMONY_TYPE) setLastSelectionFor(activeLayer, JSON.parse(JSON.stringify(selection)));
     renderFaceColorsPanel();
@@ -484,7 +452,36 @@
   // silently dropping the sheet's sticky distributionStrategyFor() preference at the exact moment a
   // person would expect a fresh start to still honor it. Same cross-file convention this file
   // already consumes in the other direction (window.farborgelBuildHarmonySelection).
-  window.applyGrayDefault = applyGrayDefault;
+  // Task 154: Reset Color (sketch.js, untouched) calls window.applyGrayDefault after resetFaceColors(): that also drops the remembered harmony type of the neutral state.
+  window.applyGrayDefault = function () { neutralMemo = null; applyGrayDefault(); };
+  // ---- the neutral state of the hue stepper (task 154) --------------------------------------------------------------------------------------------------------------------------
+  // "-" sits between hue 24 and hue 1 (anchor.neutral, core/facecolor.js; hueIndex stays 1..24). In it the keys 2 3 4 are the number of grays (grayTones, core/state.js; again on the active key = 8), the
+  // sheet is the default gray fill. Entering it from a harmony colours the sheet gray at once and remembers that harmony's type IN MEMORY ONLY (neutralMemo: not in the session, the autosave
+  // or the export); leaving it to a hue applies that type with the new hue, else the gray stays. The memo goes with any harmony applied from outside, Reset Color, a sheet change (sync()), a reload.
+  let neutralMemo = null;
+  function isNeutral() { const an = typeof anchorFor === 'function' ? anchorFor(activeLayer) : null; return !!(an && an.neutral === true); }
+  function enterNeutral(a) {
+    if (a.neutral !== true) {
+      const t = lastHarmonyTypeFor(activeLayer);
+      neutralMemo = REGENERABLE_HARMONY_TYPES.indexOf(t) >= 0 ? { sheet: activeLayer, type: t } : null;
+      a.neutral = true;
+      setLastHarmonyTypeFor(activeLayer, null);
+    }
+    if (grayTones === 0) grayTones = 8;   // the legacy ladder is not operable any more: touching the neutral state moves it to the full row
+    applyGrayDefault();
+    sync();
+  }
+  function leaveNeutralTo(a, hue) {
+    const memo = a.neutral === true && neutralMemo && neutralMemo.sheet === activeLayer ? neutralMemo.type : null;
+    delete a.neutral; a.hueIndex = hue; neutralMemo = null;
+    if (memo) { applyHarmony(memo); sync(); } else afterAnchorChange();
+  }
+  function grayKey(k) {
+    grayTones = grayTones === k ? 8 : k;
+    try { if (window.sessionWriter) window.sessionWriter.markDirty(); } catch (e) { /* the next draw marks it anyway */ }
+    applyGrayDefault();
+    sync();
+  }
 
   // Phase B-Farbstrategien follow-up (per-trail override for Farborgel harmonies): a sibling of
   // core/facecolor.js's assignTrailSlot() for a Farborgel-colored trail, not a reuse of it -
@@ -575,7 +572,7 @@
   Object.keys(harmonyBtns).forEach(function (type) {
     const b = harmonyBtns[type];
     if (!b) return;
-    UI.guard(b, function () { applyHarmony(type); });
+    UI.guard(b, function () { if (isNeutral() && /^[234]$/.test(type)) grayKey(parseInt(type, 10)); else applyHarmony(type); });
     // Group D Phase B4 follow-up: a plain one-shot action button has no built-in "pressed" state (unlike a
     // role="radio" choice) - UI.pressed() keeps aria-pressed in sync with the .active class syncHarmonyActive()
     // below toggles, the same helper .layer-btn's own active-invert buttons would use for a real toggle.
@@ -596,11 +593,19 @@
   // faithful display of it; clears itself automatically via sync() after Reset Color or the old rule system
   // clear lastHarmonyTypeFor() (core/facecolor.js), and is independent per sheet since that state already is.
   function syncHarmonyActive() {
-    const type = lastHarmonyTypeFor(activeLayer);
+    const type = lastHarmonyTypeFor(activeLayer), neutral = isNeutral();
     Object.keys(harmonyBtns).forEach(function (t) {
       const b = harmonyBtns[t];
       if (!b) return;
-      const on = t === type;
+      // task 154: in the neutral state 2 3 4 mean the number of grays (the name changes with them; the dictionary key is swapped, so a language switch keeps it)
+      const asGray = neutral && /^[234]$/.test(t);
+      if ((b.dataset.grayKey === '1') !== asGray) {
+        if (b.dataset.harmonyKey === undefined) b.dataset.harmonyKey = b.getAttribute('data-i18n-label') || '';
+        b.setAttribute('data-i18n-label', asGray ? 'farbe.gray.key' + t : b.dataset.harmonyKey);
+        if (asGray) b.dataset.grayKey = '1'; else delete b.dataset.grayKey;
+        if (window.uiI18n && window.uiI18n.applyI18n) window.uiI18n.applyI18n(b);
+      }
+      const on = neutral ? (asGray && grayTones === parseInt(t, 10)) : t === type;
       if (b.classList.contains('active') !== on) b.classList.toggle('active', on);
     });
   }
@@ -666,7 +671,7 @@
   const farborgelLink = $('#btn-farborgel');
   function syncFarborgelLink() {
     if (!farborgelLink || typeof farborgelPageUrl !== 'function' || typeof anchorFor !== 'function') return;
-    const url = farborgelPageUrl(anchorFor(activeLayer), GENERATOR_TAB_ID) + (window.uiI18n && window.uiI18n.lang === 'en' ? '&lang=en' : '');   // task 138: the Farborgel opens in English when the Studio is
+    const url = farborgelPageUrl(isNeutral() ? null : anchorFor(activeLayer), GENERATOR_TAB_ID) + (window.uiI18n && window.uiI18n.lang === 'en' ? '&lang=en' : '');   // task 138: the Farborgel opens in English when the Studio is
     if (farborgelLink.getAttribute('href') !== url) farborgelLink.setAttribute('href', url);
   }
 
@@ -680,12 +685,14 @@
     followHarmonyFamily();
     syncFamily();
     syncHarmonyActive();
-    syncGray();
     syncStrategy();
     const why = reason();
+    if (neutralMemo && neutralMemo.sheet !== activeLayer) neutralMemo = null;   // task 154: the remembered type is per sheet and does not survive a sheet change
+    const neutral = isNeutral(), neutralWhy = neutral ? tr('farbe.neutral.reason', null, 'Unbunt hat keinen Farbton und kein Register.') : null;
     const loadingAny = why || moduleWhy(false), loadingSheet = why || moduleWhy(true); // see moduleWhy(): the Farborgel module is still loading
-    [kreisTrigger, dreieckTrigger].forEach(function (b) { if (b) UI.setDisabled(b, why); });
-    Object.keys(harmonyBtns).forEach(function (type) { if (harmonyBtns[type]) UI.setDisabled(harmonyBtns[type], loadingAny); });
+    [kreisTrigger, dreieckTrigger].forEach(function (b) { if (b) UI.setDisabled(b, why || neutralWhy); });
+    if (registerStepperRoot) UI.setDisabled(registerStepperRoot, neutralWhy, 'neutral');   // task 154: no register without a hue
+    Object.keys(harmonyBtns).forEach(function (type) { if (harmonyBtns[type]) UI.setDisabled(harmonyBtns[type], neutral && /^[234]$/.test(type) ? null : loadingAny); });
     [hueStepperRoot, registerStepperRoot].forEach(function (root) {
       if (root) root.querySelectorAll('.stepper-btn').forEach(function (b) { UI.setDisabled(b, loadingSheet, 'farbe'); });   // task 092: its own locks only (the stepper refresh in ui.js sets its own)
     });
@@ -699,7 +706,7 @@
     // which is a harmless no-op on an already-empty/default store. Not gated with UI.guard() like the 7
     // harmony buttons above, to avoid a second listener next to sketch.js's real one.
     if (resetBtn) UI.setDisabled(resetBtn, why);
-    if (why) {
+    if (why || neutralWhy) {
       [kreisOverlay, dreieckOverlay].forEach(function (ov) { if (ov && ov.isOpen) ov.close(false); });
     }
 
@@ -707,6 +714,7 @@
     if (fillBtn && fillBtn.classList.contains('needs-attn') !== dotOn) fillBtn.classList.toggle('needs-attn', dotOn);
   }
 
+  document.addEventListener('langchange', function () { if (typeof frameCount !== 'undefined' && frameCount > 0) sync(); });   // task 154: the neutral names follow the language at once
   document.addEventListener('tabchange', sync); // the fill-button dot depends on which tab is current
   // The Farborgel module is ready (core/farborgel-selection.mjs dispatches this once): clear the locks above. Before the first draw there is
   // nothing to clear - that draw's own sync() sees the module - and sync() would run before setup() has built the state, so wait for it.

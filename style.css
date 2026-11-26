@@ -773,6 +773,8 @@ html[data-mode="simple"] [data-level="advanced"] { display: none !important; }
   -moz-appearance: textfield;
   appearance: textfield;
 }
+/* task 154: the neutral "-" of the hue stepper is the placeholder of the (empty, read-only) hue field: the colour and weight of a value */
+#farbe-anchor-hue-input::placeholder { color: inherit; opacity: 1; }
 .stepper input[type="number"]::-webkit-outer-spin-button,
 .stepper input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;

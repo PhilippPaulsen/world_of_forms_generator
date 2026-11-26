@@ -191,7 +191,7 @@ console.log('\n== the face-fill reasons in the simple view ==');
 console.log('\n== wiring ==');
 {
     const ff = read('ui-farbe.js'), ap = read('color-harmony/ui/app.mjs');
-    check('task 138: the Farbe-tab link to the Farborgel adds &lang=en only while the Studio is English (German adds nothing: the URLs and their tests stay as they were)', /farborgelPageUrl\(anchorFor\(activeLayer\), GENERATOR_TAB_ID\) \+ \(window\.uiI18n && window\.uiI18n\.lang === 'en' \? '&lang=en' : ''\)/.test(ff));
+    check('task 138: the Farbe-tab link to the Farborgel adds &lang=en only while the Studio is English (German adds nothing: the URLs and their tests stay as they were)', /farborgelPageUrl\(isNeutral\(\) \? null : anchorFor\(activeLayer\), GENERATOR_TAB_ID\) \+ \(window\.uiI18n && window\.uiI18n\.lang === 'en' \? '&lang=en' : ''\)/.test(ff));
     check('task 138: the Farborgel page opens in English for ?lang=en and keeps DEFAULT_LOCALE otherwise (it never throws)', /get\('lang'\)==='en'\?transition\(state,\{type:'locale',value:'en'\}\):state/.test(ap) && /withLocale\(createState\(anchorOverridesFromSearch/.test(ap));
     const dict = require('../../ui-i18n.js').DICT;
     check('task 138: the five help keys exist in both languages and the markup uses each once', ['help.what', 'help.title', 'help.use1', 'help.use2', 'help.use3', 'help.plus'].every(k => dict[k] && dict[k].de && dict[k].en && (read('index.html').match(new RegExp('data-i18n="' + k.replace('.', '\\.') + '"', 'g')) || []).length === 1));
