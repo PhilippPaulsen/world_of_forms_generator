@@ -278,13 +278,18 @@ function cachedTrailsFor(facesResult, group, gridNodes, connSet) {
 // Cheap on the overwhelming majority of calls (unassignedTrails() early-out, O(trails) - no store
 // write, no resolveColor) - the real cost (N setFaceAssignment()/resolveColor() calls) is paid
 // only the first time a gap is found, not per redraw; see the performance verification step.
+// task 149: the ONE place the number of grays (core/state.js `grayTones`: 0 = legacy ladder, 2, 3, 4, 8) joins a rule's idx: only for max-contrast-gray, as the hidden `tones` axis.
+function _grayRuleIdx(ruleId, idx) {
+    if (ruleId !== 'max-contrast-gray') return idx;
+    return [idx && idx.length ? idx[0] : 0, typeof grayTones === 'number' ? grayTones : 0];
+}
 // The trivial, locally-constructed HarmonySelection-shaped object applyHarmonyToPattern() needs
 // for a max-contrast-gray fill of `n` trails - factored out so ensureDefaultGrayFill() below and
 // ui-farbe.js's own strategy-aware reapplication (afterAnchorChange()'s gray-default branch, Phase
 // B-Farbstrategien follow-up) build it identically, from the one real registered rule
 // (core/color.js), never a second, duplicated formula.
 function buildMaxContrastGraySelection(n) {
-    const colors = generateHarmonyPalette('max-contrast-gray', [0], n);
+    const colors = generateHarmonyPalette('max-contrast-gray', _grayRuleIdx('max-contrast-gray', [0]), n);
     return { members: colors.map(c => ({ analyticalCoordinate: { hueIndex: null, w: c.w, s: c.s } })) };
 }
 
@@ -313,7 +318,7 @@ function newFacePalette() {
 // slot), or null when no rule is applied or there are no trails.
 function applyPaletteToTrails(store, trails, palette) {
     if (!palette || !palette.ruleId || trails.length === 0) return null;
-    const colors = generateHarmonyPalette(palette.ruleId, palette.idx, trails.length);
+    const colors = generateHarmonyPalette(palette.ruleId, _grayRuleIdx(palette.ruleId, palette.idx), trails.length);
     palette.slots = trails.length; // the length of the series now in force (frozen until the next full application)
     const slotOf = new Map();
     trails.forEach((t, i) => {
@@ -353,7 +358,7 @@ function assignTrailSlot(store, palette, key, slot, fallbackSlots) {
     if (!palette || !palette.ruleId) throw new Error('assignTrailSlot: no rule is applied');
     const slots = palette.slots || fallbackSlots;
     if (!Number.isInteger(slot) || slot < 0 || slot >= slots) throw new Error(`assignTrailSlot: slot ${slot} outside the series (0..${slots - 1})`);
-    const series = generateHarmonyPalette(palette.ruleId, palette.idx, slots);
+    const series = generateHarmonyPalette(palette.ruleId, _grayRuleIdx(palette.ruleId, palette.idx), slots);
     const c = _writeSlot(store, palette, key, slot, slots, series);
     palette.overrides.set(key, slot);
     return c;
@@ -371,7 +376,7 @@ function spreadPaletteToUnassigned(store, trails, palette, fallbackSlots) {
     const todo = unassignedTrails(store, trails);
     if (!todo.length) return 0;
     const slots = palette.slots || fallbackSlots || trails.length;
-    const series = generateHarmonyPalette(palette.ruleId, palette.idx, slots);
+    const series = generateHarmonyPalette(palette.ruleId, _grayRuleIdx(palette.ruleId, palette.idx), slots);
     const usage = new Array(slots).fill(0);
     trails.forEach(t => {
         const a = store.get(t.key);

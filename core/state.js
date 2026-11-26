@@ -68,6 +68,11 @@ let uiMode = UI_MODE_NEW_VISITOR;
 // exportFileStem(): cleaned for the file system, '' = the old names world_of_forms.*) and goes into the export JSON as `title` (the field `name` stays the grid name).
 // Session: settings.exportName, written only when it is not empty (additive, no schema bump).
 let exportName = '';
+// Task 149: how many grays the DEFAULT gray fill (rule max-contrast-gray) spreads: 2, 3, 4 or 8, the ends being true white (#ffffff) and true black (#000000), the steps between them the
+// Ostwald letters of the reference system. 0 = the legacy ladder a..p (#f2f2f2..#353535), what every saved session from before task 149 has. A page load without a saved session starts at
+// GRAY_TONES_DEFAULT (8). Session: settings.grayTones, always written (core/session.js), absent or bad = 0. Stored fills keep their own w/s; this only decides what a NEW gray fill looks like.
+const GRAY_TONES_DEFAULT = 8;
+let grayTones = GRAY_TONES_DEFAULT;
 let currentShape = 'triangle';
 let freeEndpointsEnabled = false; // toggled via #btn-toggle-free-endpoints
 

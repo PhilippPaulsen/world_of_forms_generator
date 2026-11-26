@@ -357,10 +357,21 @@ function generateHarmonyPalette(ruleId, idx, slots, system = OSTWALD_REFERENCE_S
     if (!rule) throw new Error(`generateHarmonyPalette: unknown rule "${ruleId}"`);
     if (!Number.isInteger(slots) || slots < 1) throw new Error('generateHarmonyPalette: slots must be a positive integer');
     const params = harmonyRuleParams(rule, system);
-    if (!Array.isArray(idx) || idx.length !== params.length) {
+    // task 149: a rule may declare `extraAxes` (hidden axes after the stepper axes); a caller may give them or leave them out (the axis' default then applies)
+    const extras = rule.extraAxes || [];
+    if (extras.length && Array.isArray(idx) && idx.length > params.length) {
+        if (idx.length > params.length + extras.length) throw new Error(`generateHarmonyPalette("${ruleId}"): idx has more entries than the rule has axes`);
+        const rest = idx.slice(params.length);
+        rest.forEach((k, i) => { if (!extras[i].values.includes(k)) throw new Error(`generateHarmonyPalette("${ruleId}"): idx extra axis ${extras[i].id} must be one of ${extras[i].values.join(',')}, got ${k}`); });
+        idx = idx.slice(0, params.length).concat(rest, extras.slice(rest.length).map(x => x.default));
+    } else if (Array.isArray(idx) && idx.length === params.length) {
+        idx = idx.concat(extras.map(x => x.default));
+    }
+    const stepIdx = Array.isArray(idx) ? idx.slice(0, params.length) : idx;
+    if (!Array.isArray(stepIdx) || stepIdx.length !== params.length) {
         throw new Error(`generateHarmonyPalette("${ruleId}"): idx needs ${params.length} entries (one per param axis)`);
     }
-    idx.forEach((k, i) => {
+    stepIdx.forEach((k, i) => {
         if (!Number.isInteger(k) || k < 0 || k >= params[i].count) {
             throw new Error(`generateHarmonyPalette("${ruleId}"): idx[${i}] (${params[i].id}) must be an integer in 0..${params[i].count - 1}, got ${k}`);
         }
@@ -511,18 +522,36 @@ function _maxContrastGrayIndices(n, letterCount) {
     if (n <= letterCount) return spread;
     return Array.from({ length: n }, (_, k) => spread[k % letterCount]);
 }
+// Task 149: the TONE ladders of the default gray fill. T = 2, 3, 4 or 8 grays; the ladder takes the T letters the legacy spread picks out of a c e g i l n p
+// (_maxContrastGrayIndices(T, 8): 2 = a p, 3 = a i p, 4 = a e l p, 8 = all), but its two ENDS are the true white (w 1, s 0) and the true black (w 0, s 1) - both are valid
+// points of the Ostwald triangle (the gray axis), the steps between them stay the letters of the reference system (c e g i l n are not changed, the reference system is not
+// touched). Returns the white contents light to dark.
+function _grayToneLadder(T, white) {
+    const letters = _maxContrastGrayIndices(T, white.length);
+    return letters.map((li, k) => (k === 0 ? 1 : k === T - 1 ? 0 : white[li]));
+}
+// The EXTRA axis `tones` of max-contrast-gray (a rule's `extraAxes`: values a caller may append to idx AFTER the stepper axes of `params`; harmonyRuleParams() does not list
+// them, so the Face Colors panel of sketch.js keeps its one stepper). 0 = legacy ladder, else 2, 3, 4 or 8. Left out, it is the axis' `default` (generateHarmonyPalette pads).
 registerHarmonyRule({
     id: 'max-contrast-gray',
     label: 'Max-Kontrast-Graustufen',
-    note: 'this app\'s own default for unassigned trails - widest available letter spread for the real trail count, not always all 8',
+    note: 'this app\'s own default for unassigned trails - widest available letter spread for the real trail count, not always all 8; task 149: optional `tones` ladder with true white and black ends',
     params: [{ id: 'direction', label: 'Richtung', i18n: 'rule.axis.direction', count: 2 }],
+    extraAxes: [{ id: 'tones', values: [0, 2, 3, 4, 8], default: 0 }],
     generate(idx, system, slots) {
         const white = system.grayScale.white;
-        const indices = _maxContrastGrayIndices(slots, white.length);
-        const ordered = idx[0] === 1 ? indices.slice().reverse() : indices;
-        return ordered.map(i => {
-            const w = white[i];
-            return { hue: 0, w, s: 1 - w };
-        });
+        const T = idx[1] === undefined ? 0 : idx[1];
+        let ws;
+        if (T === 0) {
+            ws = _maxContrastGrayIndices(slots, white.length).map(i => white[i]);
+        } else {
+            if (![2, 3, 4, 8].includes(T)) throw new Error(`max-contrast-gray: tones must be 0, 2, 3, 4 or 8, got ${T}`);
+            const ladder = _grayToneLadder(T, white);
+            // fewer trails than tones: spread evenly over the ladder (as the legacy rule does over the letters); one trail: the middle tone (white for T = 2); more: cyclic
+            const pos = slots === 1 ? [T === 2 ? 0 : Math.round((T - 1) / 2)] : _maxContrastGrayIndices(slots, T);
+            ws = pos.map(i => ladder[i]);
+        }
+        if (idx[0] === 1) ws = ws.slice().reverse();
+        return ws.map(w => ({ hue: 0, w, s: 1 - w }));
     }
 });

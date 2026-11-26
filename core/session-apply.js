@@ -45,7 +45,7 @@ const SESSION_APPLY_CAPTURED = Object.freeze([
     'nodes', 'centroid', 'outerCorners', 'altNetSeed',
     'connections', 'redoStack', 'baseFaceAssignments', 'baseFacePalette', 'baseFaceAnchor', 'baseLastHarmonyType', 'baseLastSelection', 'baseDistributionStrategy',
     'additionalLayers', 'timeline', 'activeLayer',
-    'baseNetTransform', 'baseNetAnimation', 'faceHover', 'spatialMorph', 'lineStyle', 'uiMode', 'exportName',
+    'baseNetTransform', 'baseNetAnimation', 'faceHover', 'spatialMorph', 'lineStyle', 'uiMode', 'exportName', 'grayTones',
 ]);
 // the `let`s of core/state.js apply deliberately leaves alone (gridRevision: a monotonic counter of base-grid rebuilds - a rollback must never rewind it, or a revision number could name two different grids; faceSelected: the chip view's outline of the selected trail, UI state it re-derives from the restored trails on its next tick; a rollback must not bring back a key of the old pattern)
 const SESSION_APPLY_UNTOUCHED = Object.freeze(['nodeCount', 'svgPathCollector', 'segmentCollector', 'activeNetWarp', 'faceSelected', 'gridRevision']);
@@ -57,7 +57,7 @@ function captureSessionGlobals() {
         nodes, centroid, outerCorners, altNetSeed,
         connections, redoStack, baseFaceAssignments, baseFacePalette, baseFaceAnchor, baseLastHarmonyType, baseLastSelection, baseDistributionStrategy,
         additionalLayers, timeline, activeLayer,
-        baseNetTransform, baseNetAnimation, faceHover, spatialMorph, lineStyle, uiMode, exportName,
+        baseNetTransform, baseNetAnimation, faceHover, spatialMorph, lineStyle, uiMode, exportName, grayTones,
     };
 }
 function _restoreSessionGlobals(c) {
@@ -67,7 +67,7 @@ function _restoreSessionGlobals(c) {
     connections = c.connections; redoStack = c.redoStack; baseFaceAssignments = c.baseFaceAssignments; baseFacePalette = c.baseFacePalette;
     baseFaceAnchor = c.baseFaceAnchor; baseLastHarmonyType = c.baseLastHarmonyType; baseLastSelection = c.baseLastSelection; baseDistributionStrategy = c.baseDistributionStrategy;
     additionalLayers = c.additionalLayers; timeline = c.timeline; activeLayer = c.activeLayer;
-    baseNetTransform = c.baseNetTransform; baseNetAnimation = c.baseNetAnimation; faceHover = c.faceHover; spatialMorph = c.spatialMorph; lineStyle = c.lineStyle; uiMode = c.uiMode; exportName = c.exportName;
+    baseNetTransform = c.baseNetTransform; baseNetAnimation = c.baseNetAnimation; faceHover = c.faceHover; spatialMorph = c.spatialMorph; lineStyle = c.lineStyle; uiMode = c.uiMode; exportName = c.exportName; grayTones = c.grayTones;
     if (typeof canvasSizeSync === 'function') canvasSizeSync();   // task 079: the p5 canvas follows the restored size (a no-op when it did not change)
 }
 
@@ -128,7 +128,7 @@ function collectSessionState(symmetryUi, opts) {
         currentShape, gridSpec, shapeSizeFactor, shapeSizeFactorX, shapeSizeFactorY, canvasW, canvasH, symmetryMode,
         symmetryCategory: symmetryUi && typeof symmetryUi.category === 'function' ? symmetryUi.category() : null,
         symmetryFold: symmetryUi && typeof symmetryUi.fold === 'function' ? symmetryUi.fold() : null,
-        curveType, lineColor, showNodes, showFaces, freeEndpointsEnabled, altNetSeed, baseNetTransform, spatialMorph, lineStyle, uiMode, exportName,
+        curveType, lineColor, showNodes, showFaces, freeEndpointsEnabled, altNetSeed, baseNetTransform, spatialMorph, lineStyle, uiMode, exportName, grayTones,
         connections, redoStack, nodes, baseFaceAssignments, baseFacePalette, baseFaceAnchor, baseLastHarmonyType, baseLastSelection, baseDistributionStrategy,
         additionalLayers: layers, timeline, activeLayer,
     };
@@ -189,6 +189,7 @@ function _buildSessionObjects(snap, plan, step) {
     built.netTransform = st.netTransform ? JSON.parse(JSON.stringify(st.netTransform)) : null;
     // the morph parameters: the saved block, or the DEFAULTS when the snapshot has none (an old snapshot must not keep the morph of the page it is restored into)
     built.exportName = typeof _exportNameNormalize === 'function' ? _exportNameNormalize(st.exportName) : '';
+    built.grayTones = typeof _grayTonesNormalize === 'function' ? _grayTonesNormalize(st.grayTones) : 0;
     built.uiMode = typeof _uiModeNormalize === 'function' ? _uiModeNormalize(st.uiMode) : 'advanced';
     built.lineStyle = typeof _lineStyleNormalize === 'function' ? _lineStyleNormalize(st.lineStyle) : { visible: true, weight: 2 };
     built.spatialMorph = typeof spatialMorphNormalize === 'function' ? spatialMorphNormalize(st.spatialMorph) : { enabled: false, mode: 'linear', angleDeg: 0 };
@@ -244,7 +245,7 @@ function applySessionSnapshot(snapshot, plan, hooks, opts) {
         step('B:layers');
         additionalLayers = built.layers; timeline = built.timeline; activeLayer = snapshot.activeLayer;
         step('B:net');
-        baseNetTransform = built.netTransform; baseNetAnimation = null; faceHover = null; spatialMorph = built.spatialMorph; lineStyle = built.lineStyle; uiMode = built.uiMode; exportName = built.exportName;
+        baseNetTransform = built.netTransform; baseNetAnimation = null; faceHover = null; spatialMorph = built.spatialMorph; lineStyle = built.lineStyle; uiMode = built.uiMode; exportName = built.exportName; grayTones = built.grayTones;
         // the state the hooks are told to show: the globals as they now are, with the snapshot's own (category, fold) - the live
         // symmetryUi still holds the OLD ones until the 'symmetry' hook sets them
         const shown = collectSessionState();

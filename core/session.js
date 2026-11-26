@@ -154,6 +154,10 @@ function _lineStyleNormalize(l) {
 // (nothing hidden), never as an error.
 const SESSION_UI_MODES = Object.freeze(['simple', 'advanced']);
 function _uiModeNormalize(m) { return SESSION_UI_MODES.includes(m) ? m : 'advanced'; }
+// Task 149: the number of grays of the default gray fill (settings.grayTones). ALWAYS written (like uiMode, no schema bump); a missing or bad value reads as 0 = the legacy ladder
+// (a..p, #f2f2f2..#353535), so a snapshot from before task 149 is drawn exactly as before.
+const SESSION_GRAY_TONES = Object.freeze([2, 3, 4, 8]);
+function _grayTonesNormalize(t) { return SESSION_GRAY_TONES.includes(t) ? t : 0; }
 // Task 144: the Download name. Written only when not empty (a snapshot without a name is byte-for-byte the one written before); a bad value reads as no name.
 function _exportNameNormalize(n) { return typeof n === 'string' ? n.normalize('NFC').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) : ''; }
 function _snapExportName(n) { const v = _exportNameNormalize(n); return v ? { exportName: v } : {}; }
@@ -200,6 +204,7 @@ function buildSessionSnapshot(s, now) {
             altNetSeed: s.altNetSeed ? JSON.parse(JSON.stringify(s.altNetSeed)) : null,
             netTransform: s.baseNetTransform ? JSON.parse(JSON.stringify(s.baseNetTransform)) : null,
             uiMode: _uiModeNormalize(s.uiMode),
+            grayTones: _grayTonesNormalize(s.grayTones),
         }, _snapMorph(s.spatialMorph), _snapLines(s.lineStyle), _snapExportName(s.exportName)),
         base,
         layers,
@@ -423,6 +428,9 @@ function validateSession(input, opts) {
 
         // interface mode (task 133): always written; absent or not one of the two names -> 'advanced' (a snapshot from before the modes)
         settings.uiMode = _uiModeNormalize(st.uiMode);
+
+        // gray tones (task 149): always written; absent or bad -> 0 (the legacy ladder)
+        settings.grayTones = _grayTonesNormalize(st.grayTones);
 
         // download name (task 144): additive, optional; empty or bad -> no key
         { const en = _exportNameNormalize(st.exportName); if (en) settings.exportName = en; }
