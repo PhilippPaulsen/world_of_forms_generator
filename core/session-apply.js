@@ -146,7 +146,7 @@ function _sheetColorFields(sheet) {
     const out = {};
     if (sheet.faceAssignments.length) out.faceAssignments = _buildStore(sheet.faceAssignments);
     if (sheet.facePalette) out.facePalette = _buildPalette(sheet.facePalette);
-    if (sheet.faceAnchor) out.faceAnchor = { hueIndex: sheet.faceAnchor.hueIndex, registerIndex: sheet.faceAnchor.registerIndex };
+    if (sheet.faceAnchor) out.faceAnchor = Object.assign({ hueIndex: sheet.faceAnchor.hueIndex, registerIndex: sheet.faceAnchor.registerIndex }, sheet.faceAnchor.neutral === true ? { neutral: true } : {});   // task 153
     if (sheet.lastHarmonyType !== null) out.lastHarmonyType = sheet.lastHarmonyType;
     if (sheet.lastSelection) out.lastSelection = JSON.parse(JSON.stringify(sheet.lastSelection));
     if (sheet.distributionStrategy !== null) out.distributionStrategy = sheet.distributionStrategy;
@@ -158,7 +158,7 @@ function _buildSessionObjects(snap, plan, step) {
     built.base = {
         connections: snap.base.connections.map(c => c.slice()), redoStack: snap.base.redoStack.map(c => c.slice()),
         faceAssignments: _buildStore(snap.base.faceAssignments),
-        facePalette: _buildPalette(snap.base.facePalette), faceAnchor: snap.base.faceAnchor ? { hueIndex: snap.base.faceAnchor.hueIndex, registerIndex: snap.base.faceAnchor.registerIndex } : null,
+        facePalette: _buildPalette(snap.base.facePalette), faceAnchor: snap.base.faceAnchor ? Object.assign({ hueIndex: snap.base.faceAnchor.hueIndex, registerIndex: snap.base.faceAnchor.registerIndex }, snap.base.faceAnchor.neutral === true ? { neutral: true } : {}) : null,   // task 153
         lastHarmonyType: snap.base.lastHarmonyType, lastSelection: snap.base.lastSelection ? JSON.parse(JSON.stringify(snap.base.lastSelection)) : null,
         distributionStrategy: snap.base.distributionStrategy,
         nodes: plan.base.nodes, centroid: plan.base.centroid, outerCorners: plan.base.outerCorners,

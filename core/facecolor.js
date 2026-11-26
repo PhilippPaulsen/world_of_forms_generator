@@ -986,7 +986,7 @@ function facePaletteFor(sheet) {
 // which resets it) takes the default of the view it is made in. Without the global (the tests, a reduced shell) the default is 0 as it always was.
 const FACE_ANCHOR_SIMPLE_REGISTER = 6;
 function newFaceAnchor() {
-    return { hueIndex: 1, registerIndex: (typeof uiMode !== 'undefined' && uiMode === 'simple') ? FACE_ANCHOR_SIMPLE_REGISTER : 0 };
+    return { hueIndex: 1, registerIndex: (typeof uiMode !== 'undefined' && uiMode === 'simple') ? FACE_ANCHOR_SIMPLE_REGISTER : 0, neutral: true };   // task 153: a new anchor starts in the neutral state (the stepper shows "-": white, gray, black); hueIndex stays 1..24
 }
 
 // Same lazy, per-sheet lifecycle as facePaletteFor() above: independent per layer, reset with the grid

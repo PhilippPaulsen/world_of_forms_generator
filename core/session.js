@@ -135,7 +135,7 @@ function _snapSheet(o) {
         nodeCheck: sessionNodeFingerprint(o.nodes, o.gridSpec),
         faceAssignments: _snapStoreEntries(o.faceAssignments),
         facePalette: _snapPalette(o.facePalette),
-        faceAnchor: o.faceAnchor ? { hueIndex: o.faceAnchor.hueIndex, registerIndex: o.faceAnchor.registerIndex } : null,
+        faceAnchor: o.faceAnchor ? Object.assign({ hueIndex: o.faceAnchor.hueIndex, registerIndex: o.faceAnchor.registerIndex }, o.faceAnchor.neutral === true ? { neutral: true } : {}) : null,   // task 153: `neutral` only when true (additive)
         lastHarmonyType: o.lastHarmonyType === undefined ? null : o.lastHarmonyType,
         lastSelection: o.lastSelection ? JSON.parse(JSON.stringify(o.lastSelection)) : null,
         distributionStrategy: o.distributionStrategy === undefined ? null : o.distributionStrategy,
@@ -330,7 +330,7 @@ function _vSheet(o, what) {
     if (o.faceAnchor !== null && o.faceAnchor !== undefined) {
         const a = o.faceAnchor;
         if (!_sObj(a) || !_sInt(a.hueIndex) || a.hueIndex < 1 || a.hueIndex > 24 || !(a.registerIndex === null || (_sInt(a.registerIndex) && a.registerIndex >= 0 && a.registerIndex <= 27))) throw what + '.faceAnchor must be {hueIndex 1-24, registerIndex 0-27 or null}';
-        faceAnchor = { hueIndex: a.hueIndex, registerIndex: a.registerIndex };
+        faceAnchor = Object.assign({ hueIndex: a.hueIndex, registerIndex: a.registerIndex }, a.neutral === true ? { neutral: true } : {});   // task 153: a bad `neutral` reads as absent
     }
     let lastHarmonyType = o.lastHarmonyType === undefined ? null : o.lastHarmonyType;
     if (!(lastHarmonyType === null || SESSION_HARMONY_TYPES.includes(lastHarmonyType))) throw what + '.lastHarmonyType is not a known harmony type';
