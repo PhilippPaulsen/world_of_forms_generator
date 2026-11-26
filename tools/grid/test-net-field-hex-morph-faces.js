@@ -129,8 +129,8 @@ if (on('3')) {
 }
 if (on('4')) {
     let mainFiles = null; const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wof091-'));
-    try { mainFiles = {}; for (const f of ['netwarp', 'spatial-morph-render']) { const p = path.join(dir, f + '.js'); fs.writeFileSync(p, execSync(`git show 66110f0a:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 })); mainFiles[f] = p; } } catch (e) { mainFiles = null; }
-    if (!mainFiles) check('(4) main 66110f0a is not available here: skipped', true);
+    try { mainFiles = {}; for (const f of ['netwarp', 'spatial-morph-render']) { const p = path.join(dir, f + '.js'); fs.writeFileSync(p, execSync(`git show ed0718bf:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 })); mainFiles[f] = p; } } catch (e) { mainFiles = null; }
+    if (!mainFiles) check('(4) main ed0718bf is not available here: skipped', true);
     else {
         const mkMain = (o) => { const keep = process.env.SPATIAL_MORPH_RENDER_JS; process.env.SPATIAL_MORPH_RENDER_JS = mainFiles['spatial-morph-render']; const w = mk(Object.assign({}, o, { files: { 'core/netwarp.js': mainFiles.netwarp } })); if (keep === undefined) delete process.env.SPATIAL_MORPH_RENDER_JS; else process.env.SPATIAL_MORPH_RENDER_JS = keep; return w; };
         const probe = (w) => { w.set('__polys.length = 0; __pairs.length = 0;'); w.set('drawTessellation();'); return J([w.get('__polys'), w.get('__calls ? 0 : 0'), w.get('spatialMorphStatus().code')]); };

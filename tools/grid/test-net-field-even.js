@@ -5,7 +5,7 @@
 //      dots = line ends (0 px, also against the warp core/tiling.js reads), hit test (invert(dot) = node, dot inside), faces allowed, the jump against Aus = e/2 per even axis
 //   2. T exactly once per caller (task 105 step 0): applyNetWarp, invertNetWarp, netWarpInsideNet, netWarpFieldLocal, netWarpSplitSegment, netGridLines
 //   3. Fig. 14 (E = 3 x 4): 4 x 3 and 3 x 4 sinus / tangens: mesh line in the middle of the even axis only
-//   4. byte-equal to main 25016726 (frames, warps, exports, overlays, apply / invert / inside / local / split): odd x odd, an even square WITHOUT a field (no net / Single / Tiled), the triangle and the hexagon with a Field at every size 1..9 (even and odd)
+//   4. byte-equal to main 6ab1569c (frames, warps, exports, overlays, apply / invert / inside / local / split): odd x odd, an even square WITHOUT a field (no net / Single / Tiled), the triangle and the hexagon with a Field at every size 1..9 (even and odd)
 //   5. the floor `netFieldMinTiles`: default 3, nothing but core/netwarp.js reads or writes it, an import (with or without fieldBase / gridShiftPx) cannot change it, the shape rule (even: square only; no or unknown shape = odd only), export fields only for an even axis
 //   6. (kept for numbering) the jump in px
 const fs = require('fs'), path = require('path'), os = require('os'), { execSync, spawnSync } = require('child_process');
@@ -18,7 +18,7 @@ const S = require(path.join(ROOT, 'tools', 'session', 'scenarios.js'));
 const MODE = 'rotation_reflection6';
 const HOOK = 'var canvasSizeSync = function () { width = canvasW; height = canvasH; };';
 const FAST = !!process.env.EVEN_FAST, CHILD = !!process.env.NETWARP_JS;
-const MAIN = '25016726';
+const MAIN = '6ab1569c';
 const FILES = {};
 if (process.env.NETWARP_JS) FILES['core/netwarp.js'] = process.env.NETWARP_JS;
 const world = (shape, files) => { const w = H.makeRenderWorld(shape, 3, 3, MODE, files || FILES); w.set(HOOK); return w; };

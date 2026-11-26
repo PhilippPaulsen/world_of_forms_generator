@@ -1,5 +1,5 @@
 // Task 071b: core/glossary.js is the ONE source of the Hinterreiter terms of the name: the tooltip reads its keys, the info card lists it, the export names the ids.
-//   node tools/grid/test-glossary.js     BASE = the commit before 071b (default 49fd7c87); OLD_TREE = that tree already extracted
+//   node tools/grid/test-glossary.js     BASE = the commit before 071b (default 255bcf35); OLD_TREE = that tree already extracted
 //   1. the old tree: everything but the optional export field "glossary" is equal (measure scripts); the files that may differ are named
 //   2. the glossary: every entry has term and text in de and en; the ids the name uses exist; no text twice; the tooltip owns no text (name.tip.* is gone)
 //   3. the tooltip (real function): "1 Sektor" / "n Sektoren", the explanations of the overline and of aA come from the glossary keys, de/en
@@ -7,7 +7,7 @@
 //   5. the export field "glossary": ids only, only with a v2 name, formatVersion 2, the rest of the export byte-equal; gallery.html loads core/glossary.js
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process'), vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || '49fd7c87';
+const BASE = process.env.BASE || '255bcf35';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');

@@ -4,7 +4,7 @@
 //   2. spatialMorphSeamOpen (the pure function, core/spatial-morph.js) and the render module's use of it: the verdict equals an INDEPENDENT full-frame oracle (tools/morph/seam-data.js frameSeamOpen: the keyframe
 //      drawn alone, its boundary endpoints of inner tiles looked up for a partner of another tile copy), for corpus, hand-built and closed-deformation patterns; the status shape; null when not evaluated; the cache
 //      (a redraw loop and the playback at 60 frames compute it once, changed content / symmetry mode recompute); the check changes no frame; the cost.
-//   3. source pins: sketch.js got the two functions and nothing else that matters here (the eight protected functions are byte-identical to bb03942c, pinned by sha256), no hotkey, no listener.
+//   3. source pins: sketch.js got the two functions and nothing else that matters here (the eight protected functions are byte-identical to 5d248b92, pinned by sha256), no hotkey, no listener.
 //   node tools/morph/test-spatial-morph-write.js
 //   SPATIAL_MORPH_JS / SPATIAL_MORPH_RENDER_JS=/path/to/mutated/file.js node tools/morph/test-spatial-morph-write.js        (sabotage runs; SKETCH_JS the same for sketch.js)
 'use strict';
@@ -204,9 +204,9 @@ T('cost', () => {
 console.log('\n== 3. source pins ==');
 T('pins', () => {
   const PROT = ['applyTimelineFrame', 'applyLayerConnectionsMorphFrame', 'resolveTimelineKeyframeCoords', 'resolveTimelineSegment', 'totalTimelineDurationMs', 'setTimelineProgress', 'toggleTimelinePlayback', 'previewTimelineSegmentMidpoint'];
-  const PINNED = ["f069eecefcff450fa75917d0f7758d2029a441ec7139aa076f3d2441d5d9fd08", "83384dbdb97ce87f1ebb18896b5be3131c280fcfcde35988177bbe1e3e61ca6d", "fc0dcac56033f3dc5bdca2ce0573362658820ec7c36818fc6d301fe086968d6c", "45343680fb52a81a99bdba4ff361e76ed73c26c1b871f45986e8cdb0f702e10e", "97111f21cfcf03331b80e0f4272fd1dc58bd78e6fccc3d819533f01dd4910fe6", "37345290516db9ae0e50df6f3d6f5c19a2b4cdacaf29dfe3017b5c0ba7d315f7", "d310d224e2578d4af6b13c49733885346a01960f27199c9f7d48ea114ab4a34f", "afcb922e154cd8c072dd8c99648956160fd184be845c5f0c45005dd9e6c67714"];   // sha256 of each body at bb03942c
+  const PINNED = ["f069eecefcff450fa75917d0f7758d2029a441ec7139aa076f3d2441d5d9fd08", "83384dbdb97ce87f1ebb18896b5be3131c280fcfcde35988177bbe1e3e61ca6d", "fc0dcac56033f3dc5bdca2ce0573362658820ec7c36818fc6d301fe086968d6c", "45343680fb52a81a99bdba4ff361e76ed73c26c1b871f45986e8cdb0f702e10e", "97111f21cfcf03331b80e0f4272fd1dc58bd78e6fccc3d819533f01dd4910fe6", "37345290516db9ae0e50df6f3d6f5c19a2b4cdacaf29dfe3017b5c0ba7d315f7", "d310d224e2578d4af6b13c49733885346a01960f27199c9f7d48ea114ab4a34f", "afcb922e154cd8c072dd8c99648956160fd184be845c5f0c45005dd9e6c67714"];   // sha256 of each body at 5d248b92
   const got = PROT.map((n) => { const c = cut(n); return c ? sha(c) : null; });
-  check(`the eight protected sketch.js functions are byte-identical to bb03942c (sha256 of each body pinned): ${got.filter((g, i) => g === PINNED[i]).length} of 8`, same(got, PINNED), J(got.map((g, i) => (g === PINNED[i] ? 'ok' : PROT[i]))));
+  check(`the eight protected sketch.js functions are byte-identical to 5d248b92 (sha256 of each body pinned): ${got.filter((g, i) => g === PINNED[i]).length} of 8`, same(got, PINNED), J(got.map((g, i) => (g === PINNED[i] ? 'ok' : PROT[i]))));
   check('the new functions contain no hotkey, no event listener, no storage access and no block comment', ![SRC_SET, SRC_GET].some((t) => /keyPressed|addEventListener|localStorage|sessionStorage|\/\*/.test(t)));
   check('the new functions are top-level declarations followed by their window exports, next to setFaceSelected', SKETCH.indexOf('window.setFaceSelected = setFaceSelected;') < SKETCH.indexOf('function setSpatialMorph(') && SKETCH.indexOf('window.setSpatialMorph = setSpatialMorph;') < SKETCH.indexOf('function updatePatternNameStatus('));
 });

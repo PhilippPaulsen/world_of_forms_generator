@@ -49,7 +49,7 @@ if (require.main === module) {
   }
 }
 if (require.main === module && process.argv[2] === 'time') {
-  const OLDF = path.join(ROOT, 'reports', 'logs', '098-basis-faces.js');   // core/faces.js of main before this task (git show 213f5faf)
+  const OLDF = path.join(ROOT, 'reports', 'logs', '098-basis-faces.js');   // core/faces.js of main before this task (git show 4faaa8d8)
   const buildWith = (file, ci, seed) => { const keep = process.env.FACES_JS; process.env.FACES_JS = file; try { return M.buildAna(A.CONFIGS[ci], seed, 'base'); } finally { if (keep === undefined) delete process.env.FACES_JS; else process.env.FACES_JS = keep; } };
   const NEWF = path.join(ROOT, 'core', 'faces.js'), med = (a) => a.slice().sort((x, y) => x - y)[a.length >> 1];
   // animation: 4 runs with a reordered frame and 4 without, 41 frames each, old and new back to back per frame (ABBA)

@@ -55,7 +55,7 @@ const OPTS = `(function () { const nw = netWarpBaseNow(); if (!nw) return null; 
 {
     // (3) square byte-equal to main, a triangle without a Field: no lines, no error
     let mainSrc = null; const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wof092-'));
-    try { mainSrc = path.join(dir, 'netwarp.js'); fs.writeFileSync(mainSrc, execSync('git show 59710e59:core/netwarp.js', { cwd: ROOT, maxBuffer: 1 << 26 })); } catch (e) { mainSrc = null; }
+    try { mainSrc = path.join(dir, 'netwarp.js'); fs.writeFileSync(mainSrc, execSync('git show 19901c06:core/netwarp.js', { cwd: ROOT, maxBuffer: 1 << 26 })); } catch (e) { mainSrc = null; }
     const bad = {}; let n = 0;
     if (mainSrc) {
         const specs = [fieldSpec(LAWS.sinus), fieldSpec(LAWS.geometric), { x: LAWS.sinus, y: 'same', repeat: false, domain: 'single' }, { x: LAWS.sinus, y: 'same', repeat: true, domain: 'tiled' }, null];

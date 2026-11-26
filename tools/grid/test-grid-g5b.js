@@ -1,5 +1,5 @@
 // G5b (task 061): every layer carries its OWN GridSpec (layer.gridSpec); layer.nodeCount is only its projection (core/forms.js projectLayerGridSpec).
-//   node tools/grid/test-grid-g5b.js     BASE = the commit before 061 (default 0342061c); OLD_TREE = a directory with that tree already extracted (sabotage copies have no .git)
+//   node tools/grid/test-grid-g5b.js     BASE = the commit before 061 (default 5b7dbc0b); OLD_TREE = a directory with that tree already extracted (sabotage copies have no .git)
 //   1. old tree vs working tree, tools/grid/measure-g5b.js: layer geometry, drawn calls, segments, export JSON, alt net, morph frames with layers under a net: equal
 //   2. source scan: exactly ONE write of a member `.nodeCount` (core/forms.js), no nodeCount key in the layer literals (addLayer, addLayerToTimeline, session restore)
 //   3. updateActiveLayerGrid (old and new text, same inputs): same layers, same clamp report; layer.gridSpec and nodeCount agree
@@ -10,7 +10,7 @@
 //   7. corner-field cache signature: same geometry -> same signature and colours, another spec -> another signature
 const fs = require('fs'), path = require('path'), os = require('os'), vm = require('vm'), cp = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || '0342061c';
+const BASE = process.env.BASE || '5b7dbc0b';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');

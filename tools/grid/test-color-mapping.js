@@ -103,7 +103,7 @@ for (const c of B) {
 {
     const cp = require('child_process'), fs = require('fs');
     let oldFn = null;
-    try { oldFn = cp.execFileSync('git', ['show', (process.env.BASE083 || 'e463740e') + ':core/state.js'], { cwd: ROOT, encoding: 'utf8' }).match(/function _mapTrailKeys\([\s\S]*?\n\}\n/)[0].replace('function _mapTrailKeys', 'function _mapTrailKeysOld'); } catch (e) { oldFn = null; }
+    try { oldFn = cp.execFileSync('git', ['show', (process.env.BASE083 || '3bf3c903') + ':core/state.js'], { cwd: ROOT, encoding: 'utf8' }).match(/function _mapTrailKeys\([\s\S]*?\n\}\n/)[0].replace('function _mapTrailKeys', 'function _mapTrailKeysOld'); } catch (e) { oldFn = null; }
     if (!oldFn) console.log('NOTE  the tree before 083 is not available: the face-by-face comparison is skipped');
     else {
         const SIZES = [[3, 3], [5, 5], [7, 7], [3, 5], [5, 3], [5, 7], [8, 7], [9, 3]];

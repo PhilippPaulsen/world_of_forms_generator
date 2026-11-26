@@ -1,5 +1,5 @@
 // Task 070: the lage-2 ceiling comes from the measurement (tools/gitter/measure-lage2-limits.js): triangle 12, square 12, hexagon 9 (it was 5 / 5 / 2, a precaution).
-//   node tools/grid/test-lage2-limits.js     BASE = the commit before 070 (default 0701da35); OLD_TREE = that tree already extracted
+//   node tools/grid/test-lage2-limits.js     BASE = the commit before 070 (default f67b3850); OLD_TREE = that tree already extracted
 //   1. everything inside the old lage-2 limits and all of lage 1 is byte-equal to the old tree; what may differ is named
 //   2. ONE table (LAGE2_MAX), every consumer reads it: validator, stepper max, clamps, setBaseLage / setLayerLage, session validator, the refusal text
 //   3. the new lage-2 grids (triangle / square 6..12, hex 3..9): valid, group closure, line keys and node numbers against the Orakel by coordinates, unique tokens, round trips
@@ -7,7 +7,7 @@
 //   5. session round trip with the highest ordnung per shape (base lage 2 and a lage-2 layer); the validator one above
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || '0701da35';
+const BASE = process.env.BASE || 'f67b3850';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');

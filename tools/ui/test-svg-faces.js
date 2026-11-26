@@ -24,7 +24,7 @@ const { makeRenderWorld } = require('../morph/render-harness.js');
 let failures = 0, checks = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
 process.on('uncaughtException', e => { console.log('FAIL  the test run itself crashed: ' + (e && e.stack)); process.exit(1); });
-const BASE = '1e635820';   // the tree before the task
+const BASE = '024b4ab4';   // the tree before the task
 const oldExport = execSync(`git show ${BASE}:core/export.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString();
 let newExport = fs.readFileSync(path.join(ROOT, 'core/export.js'), 'utf8');
 const mustReplace = (s, a, b) => { if (!s.includes(a)) throw new Error('sabotage anchor missing: ' + a); return s.replace(a, b); };

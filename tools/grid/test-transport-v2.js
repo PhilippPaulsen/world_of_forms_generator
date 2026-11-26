@@ -1,5 +1,5 @@
 // G6b (task 063): export v2 and the pattern transport v2 (URL / paste).
-//   node tools/grid/test-transport-v2.js     BASE = the commit before 063 (default b3dcd67e); OLD_TREE = that tree already extracted (sabotage copies have no .git)
+//   node tools/grid/test-transport-v2.js     BASE = the commit before 063 (default 9f4783bc); OLD_TREE = that tree already extracted (sabotage copies have no .git)
 //   1. SVG: the geometry text equals the old tree for 69 cases (3 shapes x order x 4 symmetry modes x lines/faces, free ends, morph frames); a <title> with the grid name is the ONLY addition,
 //      escaped; no name -> byte-identical
 //   2. export v2: formatVersion 2, meta.grid, nodes with zahl/u/v, lineKeys, name; no nodeCount / orbitIds / patternName / themeLineOrbits anywhere; layers the same contract;
@@ -9,7 +9,7 @@
 //   5. messages de / en; the legacy reader (decision B): old links still load, identical to the old tree; it never writes, never rescues a v2 input; its pin (G7 removes it)
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || 'b3dcd67e';
+const BASE = process.env.BASE || '9f4783bc';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');

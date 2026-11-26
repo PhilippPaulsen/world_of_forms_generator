@@ -226,9 +226,9 @@ const metrics = (w, X, Y, spec) => {
     try {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wof086-'));
         mainFiles = {};
-        for (const f of ['netwarp', 'state', 'export', 'spatial-morph-render']) { const p = path.join(dir, f + '.js'); fs.writeFileSync(p, execSync(`git show 317d0132:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 })); mainFiles['core/' + f + '.js'] = p; }
+        for (const f of ['netwarp', 'state', 'export', 'spatial-morph-render']) { const p = path.join(dir, f + '.js'); fs.writeFileSync(p, execSync(`git show f4fc41ee:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 })); mainFiles['core/' + f + '.js'] = p; }
     } catch (e) { mainFiles = null; }
-    if (!mainFiles) { check('(5) X = Y byte-equal to main: the commit 317d0132 is not available here (a shallow clone): skipped', true); }
+    if (!mainFiles) { check('(5) X = Y byte-equal to main: the commit f4fc41ee is not available here (a shallow clone): skipped', true); }
     else {
         const wn = world('square');
         const envKeep = {}; for (const k of ['STATE_JS', 'EXPORT_JS', 'SPATIAL_MORPH_RENDER_JS']) envKeep[k] = process.env[k];   // main's state.js / export.js / spatial-morph-render.js go in through the env of the fixtures
@@ -249,7 +249,7 @@ const metrics = (w, X, Y, spec) => {
             })()`);
             if (probe(wn) !== probe(wm)) note('differs', [sz, J(spec).slice(0, 60)]);
         }
-        check(`(5) X = Y (sizes 3,5,7,9 x 5 specs = ${n} cases): drawn segments, export, overlay lines, warp, apply / invert / split / local are byte-equal to main (317d0132)`, n === 20 && !bad.first, J(bad));
+        check(`(5) X = Y (sizes 3,5,7,9 x 5 specs = ${n} cases): drawn segments, export, overlay lines, warp, apply / invert / split / local are byte-equal to main (f4fc41ee)`, n === 20 && !bad.first, J(bad));
         // X != Y with a Single: the net is the same on both (only the Field and the readers of shapeSizeFactor differ)
         const bad2 = {}; let m = 0;
         for (const [X, Y] of [[3, 5], [5, 7], [4, 5]]) for (const spec of [SINGLE, { x: { kind: 'trig', w: 0.7 }, y: 'same', repeat: true, domain: 'tiled' }]) {

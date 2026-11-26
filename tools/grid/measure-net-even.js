@@ -1,5 +1,5 @@
 // Task 105 (N2a-1) measurements, not a test:  node tools/grid/measure-net-even.js [outdir]
-//   A. frame time of the Field on ODD sizes, main (bec517fc, merge 105) against the working tree (drawTessellation via the harness, 10 orbit lines, median of 41, interleaved): the change must cost <= +3 %
+//   A. frame time of the Field on ODD sizes, main (c8c51b5a, merge 105) against the working tree (drawTessellation via the harness, 10 orbit lines, median of 41, interleaved): the change must cost <= +3 %
 //   B. the jump of the net picture against Aus at even sizes (px), 3 x 4 / 4 x 3 / 4 x 4 at the default size (600 px short side)
 //   C. pictures (SVG): Fig. 14 sizes (4 columns x 3 rows) sinus and tangens, Aus (plain lines) next to the Field (mesh lines of netGridLines + the drawn frame); outdir/105-*.svg
 const fs = require('fs'), path = require('path'), os = require('os'), { execSync } = require('child_process');
@@ -9,7 +9,7 @@ const J = JSON.stringify, MODE = 'rotation_reflection6', HOOK = 'var canvasSizeS
 const out = process.argv[2] || path.join(os.tmpdir(), 'measure-net-even');
 fs.mkdirSync(out, { recursive: true });
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mne-')), mainFile = path.join(dir, 'netwarp.js');
-fs.writeFileSync(mainFile, execSync('git show bec517fc:core/netwarp.js', { cwd: ROOT, maxBuffer: 1 << 26 }));
+fs.writeFileSync(mainFile, execSync('git show c8c51b5a:core/netwarp.js', { cwd: ROOT, maxBuffer: 1 << 26 }));
 const mk = files => { const w = H.makeRenderWorld('square', 3, 3, MODE, files); w.set(HOOK); return w; };
 const setup = (w, X, Y, spec, conns) => w.set(`currentShape = 'square'; projectGridSpec({ shape: 'square', ordnung: 3, lage: 1 }); shapeSizeFactorX = null; shapeSizeFactorY = null; canvasW = 600; canvasH = 600; width = 600; height = 600;
     setGridSize(${X}, ${Y}); symmetryMode = ${J(MODE)}; connections = ${J(conns || [[1, 6], [2, 5]])}; redoStack = []; baseNetTransform = ${J(spec)}; baseNetAnimation = null; additionalLayers = []; timeline = null; altNetSeed = null; activeLayer = 'base';

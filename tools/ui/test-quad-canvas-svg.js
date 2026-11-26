@@ -17,7 +17,7 @@ const { execSync } = require('child_process');
 const F = require('../session/fixtures.js');
 const ROOT = F.ROOT;
 const SAB = process.env.QUAD_SABOTAGE || '';
-const BASE = '9b398d27';   // the tree before the task
+const BASE = 'b2972d0f';   // the tree before the task
 let failures = 0, checks = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
 process.on('uncaughtException', e => { console.log('FAIL  the test run itself crashed: ' + (e && e.stack)); process.exit(1); });

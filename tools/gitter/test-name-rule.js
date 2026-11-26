@@ -111,7 +111,7 @@ const NMAX = (shape, lage) => shape === 'hex' ? (lage === 2 ? 5 : 6) : 8;
 // (5b) legacy untouched: every function the old orbits.js had is source-identical, and gives the same results
 {
     const cp = require('child_process'), fs = require('fs'), path = require('path'), vm = require('vm');
-    const old = cp.execFileSync('git', ['show', (process.env.BASE || 'dd146481') + ':core/orbits.js'], { cwd: B.ROOT, encoding: 'utf8' });
+    const old = cp.execFileSync('git', ['show', (process.env.BASE || 'c456e613') + ':core/orbits.js'], { cwd: B.ROOT, encoding: 'utf8' });
     const sb = { Math, console, Number, Object, Error, Set, Map, WeakMap, JSON, radians: d => d * Math.PI / 180, cos: Math.cos, sin: Math.sin, sqrt: Math.sqrt, atan2: Math.atan2, PI: Math.PI, dist: (a, b, c, d) => Math.hypot(c - a, d - b) };
     vm.createContext(sb); vm.runInContext(old, sb);
     const names = [...old.matchAll(/^function (\w+)\(/gm)].map(m => m[1]).filter(n => n !== 'computeThemeLineOrbitAssignments' && n !== 'burnsideOrbitCount');   // task 066: removed on purpose (no consumer left: the v1 export was its only one); task 084: burnsideOrbitCount removed (no caller in the app or any test)

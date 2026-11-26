@@ -86,9 +86,9 @@ const fieldSpec = (law) => ({ x: law, y: law.kind === 'trig' ? { kind: 'trig', w
     let mainFiles = null;
     try {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wof088-')); mainFiles = {};
-        for (const f of ['netwarp', 'state', 'export', 'spatial-morph-render']) { const p = path.join(dir, f + '.js'); fs.writeFileSync(p, execSync(`git show 149dad21:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 })); mainFiles['core/' + f + '.js'] = p; }
+        for (const f of ['netwarp', 'state', 'export', 'spatial-morph-render']) { const p = path.join(dir, f + '.js'); fs.writeFileSync(p, execSync(`git show 8c39fe03:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 })); mainFiles['core/' + f + '.js'] = p; }
     } catch (e) { mainFiles = null; }
-    if (!mainFiles) check('(3) main 149dad21 is not available here: skipped', true);
+    if (!mainFiles) check('(3) main 8c39fe03 is not available here: skipped', true);
     else {
         const mk = (shape, main) => {
             if (!main) return world(shape);

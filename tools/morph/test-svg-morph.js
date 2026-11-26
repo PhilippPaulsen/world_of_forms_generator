@@ -28,7 +28,7 @@ const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log
 process.on('uncaughtException', (e) => { console.log('FAIL  the test run itself crashed: ' + (e && e.stack)); process.exit(1); });
 const J = (x) => JSON.stringify(x);
 const { SEAM_MAX } = require('./seam-rule.js');
-const BASE = '8ad40398';   // main before task 036
+const BASE = '21bc5444';   // main before task 036
 
 // ---- file copies (old tree, sabotage) -----------------------------------------------------------------------------------------------------------------------------------------------------------
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'svgmorph-'));

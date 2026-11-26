@@ -12,7 +12,7 @@ const ROOT = path.join(__dirname, '..', '..');
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const J = JSON.stringify, sha = (t) => crypto.createHash('sha256').update(t).digest('hex').slice(0, 16);
-const BASE = '6745c658';
+const BASE = 'f198ab8e';
 const CORE = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'farborgel-bridge', 'glossary'];
 const rd = (f) => fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8');
 const NEW_FC = fs.readFileSync(process.env.FACECOLOR_JS || path.join(ROOT, 'core', 'facecolor.js'), 'utf8');

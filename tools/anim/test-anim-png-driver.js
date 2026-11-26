@@ -15,7 +15,7 @@
  */
 'use strict';
 const fs = require('fs'), os = require('os'), path = require('path'), vm = require('vm'), { execFileSync } = require('child_process');
-const ROOT = path.join(__dirname, '..', '..'), BASE = '94ef6e5b';
+const ROOT = path.join(__dirname, '..', '..'), BASE = '53b07884';
 const SKETCH = fs.readFileSync(process.env.SKETCH_JS || path.join(ROOT, 'sketch.js'), 'utf8');
 let checks = 0, failures = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };

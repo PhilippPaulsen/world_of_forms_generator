@@ -6,7 +6,7 @@
 //   4. Timeline table: hexagon Regular <-> Field ok at even and odd sizes (the guard is the square's only)
 //   5. layers under the hexagon Field stay locked ("Base sheet only", netWarpBlocksFaces(sheet)) at even sizes as at odd ones; the base sheet is not locked
 //   6. faces at even sizes x 4 laws x 2 symmetry configs: the fills in the canvas equal those without the tile skip, cover the canvas (0 px2 gap), the skip does skip, polygons simple; exactness of the refinement (ordnung 2): the image of every regular edge lies on the refined polygon (< 1e-9)
-//   7. byte-equal to main 025ae235: the triangle and the square with a Field at ALL sizes 1..9, the hexagon at odd sizes with a Field and at every size without one
+//   7. byte-equal to main 609f4fb8: the triangle and the square with a Field at ALL sizes 1..9, the hexagon at odd sizes with a Field and at every size without one
 const fs = require('fs'), path = require('path'), os = require('os'), { execSync, spawnSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
 let pass = 0, fail = 0;
@@ -16,7 +16,7 @@ const H = require(path.join(ROOT, 'tools', 'morph', 'render-harness.js'));
 const HOOK = 'var canvasSizeSync = function () { width = canvasW; height = canvasH; };';
 const STUB = 'var __polys = [], __cur = null; push = function () { }; pop = function () { }; noStroke = function () { }; stroke = function () { }; noFill = function () { }; fill = function () { }; strokeWeight = function () { }; CLOSE = "close"; beginShape = function () { __cur = []; }; vertex = function (x, y) { __cur.push([x, y]); }; endShape = function () { __polys.push(__cur); };';
 const FILES = {}; if (process.env.NETWARP_JS) FILES['core/netwarp.js'] = process.env.NETWARP_JS; 
-const CHILD = !!process.env.NETWARP_JS, MAIN = '025ae235';
+const CHILD = !!process.env.NETWARP_JS, MAIN = '609f4fb8';
 const world = (shape, sym, files, ord) => { const w = H.makeRenderWorld(shape, ord || 3, 3, sym || 'none', files === undefined ? FILES : files); w.set(HOOK); w.set(STUB); return w; };
 const setup = (w, shape, X, Y, spec, sym, n, ord, pick) => w.set(`currentShape = ${J(shape)}; projectGridSpec({ shape: ${J(shape)}, ordnung: ${ord || 3}, lage: 1 }); shapeSizeFactorX = null; shapeSizeFactorY = null; canvasW = 600; canvasH = 600; width = 600; height = 600; setGridSize(${X}, ${Y});
     symmetryMode = ${J(sym)}; baseNetTransform = ${J(spec)}; baseNetAnimation = null; additionalLayers = []; timeline = null; altNetSeed = null; activeLayer = 'base'; baseFaceAssignments = new Map(); baseFacePalette = null; showFaces = false; rebuildGrid(currentShape);

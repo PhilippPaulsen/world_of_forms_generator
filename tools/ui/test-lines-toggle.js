@@ -5,7 +5,7 @@
  *   node tools/ui/test-lines-toggle.js
  *   LINES_SABOTAGE=morph|export|weight|cycle node tools/ui/test-lines-toggle.js     (sabotage runs on in-memory copies; the files are never written)
  *
- *  1. Default (on, weight 2): every drawn call (line, bezier, strokeWeight) and the SVG text are byte-identical to the tree before the task (core/curves.js, core/export.js of 85f563da).
+ *  1. Default (on, weight 2): every drawn call (line, bezier, strokeWeight) and the SVG text are byte-identical to the tree before the task (core/curves.js, core/export.js of c269c03b).
  *  2. Off: 0 line() / bezier() calls in the normal frame and in the morph frame (identical and different keyframes); the chord frame (what faces are computed from) is unchanged; the SVG
  *     has no <path> and no line group (nodes and the canvas frame stay).
  *  3. Weight: every line is drawn at the slider's weight (strokeWeight before it), the SVG group carries the same number.
@@ -29,7 +29,7 @@ let failures = 0, checks = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
 process.on('uncaughtException', e => { console.log('FAIL  the test run itself crashed: ' + (e && e.message)); process.exit(1); });
 const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
-const BASE = '6fbf420b';   // the tree before the task
+const BASE = 'df1a41d1';   // the tree before the task
 const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'lines-'));
 const copy = (rel, text) => { const p = path.join(tmp, rel.replace(/\//g, '_')); fs.writeFileSync(p, text); return p; };
 const oldOf = rel => copy('old-' + rel, execSync(`git show ${BASE}:${rel}`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString());
@@ -204,14 +204,15 @@ console.log('\n== 6. markup, i18n, position ==');
     const need = (n) => n * S_.target + (n - 1) * S_.rowGap;
     check(`phone width 390: the rows hold 6 keys (${need(6)}px of ${avail}px); a 7th key makes ${need(7)}px > ${avail}px, so Lines goes to Mehr`, need(6) <= avail && need(7) > avail && ['form', 'netz'].every(t => keys(t) === 6), `${need(6)} / ${need(7)} / ${avail}`);
     check('the rail mirrors aria-pressed for the new toggle (ui-rail.js TOGGLES)', /const TOGGLES = \[[^\]]*'btn-toggle-lines'/.test(read('ui-rail.js')));
-    // task 050 changed sketch.js on purpose (two notes through UI.t, commit 80deee88): sketch.js is pinned against that commit, the other files still against BASE
-    // task 053 re-recorded the golden of curve-fold1-sym on purpose (quad pieces on the canvas, commit fc98e3d9): off-path-golden.json is pinned against that commit
-    // task 127 changed sketch.js on purpose (captureNetAnimationEnd calls netSpecSnapshot): pinned against ce2c2c3c (was e67c37b3, task 124; was 72c19d3c, ad9a41a6, 1b4aabdb, a1a4ca48)
-    // task 116 changed sketch.js on purpose (the PNG-sequence export driver at the end, three lines in the export dialog handlers): pinned against ad9a41a6 (was 2bd470e9)
-    // task 113 changed sketch.js on purpose (faceFillsUnavailableReason: the hexagon-only sentence is gone); before it task 111 changed sketch.js on purpose (the family sentence in #net-field-info); before it task 109 changed sketch.js on purpose (the Field of the hexagon at every size 3..9: net controls, size-change note); before it task 108 (the triangle); task 108 changed sketch.js on purpose (the Field of the triangle at every size 3..9: net controls and the size-change note); before it task 106 (the square, the optimum hint): pinned against the 108 commit (2bd470e9)
-    // task 086 changed sketch.js on purpose (the net's tile counts {x, y}: initNetControls) after task 084 (32a265ae, per-draw writers only on change): sketch.js is pinned against the 086 commit (a2739820)
+    // task 133 changed sketch.js on purpose (applyQuery after the session restore, the simple-view face-fill reasons): sketch.js is pinned against the merge ab22fce9 since task 142 (was c8a68b7e, new hash of the task 127 commit)
+    // task 050 changed sketch.js on purpose (two notes through UI.t, commit aad2d239): sketch.js is pinned against that commit, the other files still against BASE
+    // task 053 re-recorded the golden of curve-fold1-sym on purpose (quad pieces on the canvas, commit 462c0c73): off-path-golden.json is pinned against that commit
+    // task 127 changed sketch.js on purpose (captureNetAnimationEnd calls netSpecSnapshot): pinned against c8a68b7e (was e67f12ee, task 124; was e9640ae5, 4a56f815, be40d8ca, 22f05302)
+    // task 116 changed sketch.js on purpose (the PNG-sequence export driver at the end, three lines in the export dialog handlers): pinned against 4a56f815 (was 7cc9af13)
+    // task 113 changed sketch.js on purpose (faceFillsUnavailableReason: the hexagon-only sentence is gone); before it task 111 changed sketch.js on purpose (the family sentence in #net-field-info); before it task 109 changed sketch.js on purpose (the Field of the hexagon at every size 3..9: net controls, size-change note); before it task 108 (the triangle); task 108 changed sketch.js on purpose (the Field of the triangle at every size 3..9: net controls and the size-change note); before it task 106 (the square, the optimum hint): pinned against the 108 commit (7cc9af13)
+    // task 086 changed sketch.js on purpose (the net's tile counts {x, y}: initNetControls) after task 084 (94dbfb56, per-draw writers only on change): sketch.js is pinned against the 086 commit (105a9bfb)
     // task 031 changes core/facecolor.js on purpose (the playback colours); this check guards what task 024 itself must leave alone, so that file is no longer in the list
-  check('sketch.js is untouched by the task (it is pinned by the morph tests) and gallery.html still loads without core/state.js: the gallery shim defines lineStyle', execSync(`git diff --stat ${BASE} -- core/tiling.js`, { cwd: ROOT }).toString().trim() === '' && execSync('git diff --stat fc98e3d9 -- tools/morph/off-path-golden.json', { cwd: ROOT }).toString().trim() === '' && execSync('git diff --stat ce2c2c3c -- sketch.js', { cwd: ROOT }).toString().trim() === '' && /var lineStyle = \{ visible: true, weight: 2 \}/.test(read('gallery-render.js')));
+  check('sketch.js is untouched by the task (it is pinned by the morph tests) and gallery.html still loads without core/state.js: the gallery shim defines lineStyle', execSync(`git diff --stat ${BASE} -- core/tiling.js`, { cwd: ROOT }).toString().trim() === '' && execSync('git diff --stat 462c0c73 -- tools/morph/off-path-golden.json', { cwd: ROOT }).toString().trim() === '' && execSync('git diff --stat ab22fce9 -- sketch.js', { cwd: ROOT }).toString().trim() === '' && /var lineStyle = \{ visible: true, weight: 2 \}/.test(read('gallery-render.js')));
 }
 
 fs.rmSync(tmp, { recursive: true, force: true });

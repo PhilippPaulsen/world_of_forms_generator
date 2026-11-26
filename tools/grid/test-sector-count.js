@@ -1,6 +1,6 @@
 // Task 072c2: the tooltip of the name says how many sectors a line touches: the RANK of its letter in the series of the shape (triangle a e i n, square a d g k n, hexagon a c e g i l n), not the index in the
 // whole alphabet 'abcdefghiklmn' ("g (7 Sektoren)" in the square was wrong: g is the 3rd letter of the square series).
-//   node tools/grid/test-sector-count.js      SKETCH_JS / ORBITS_JS replace a file by a (sabotaged) copy; on 6f85fd39 the file reads its own tree (RED: the old tooltip)
+//   node tools/grid/test-sector-count.js      SKETCH_JS / ORBITS_JS replace a file by a (sabotaged) copy; on 5a9df6b9 the file reads its own tree (RED: the old tooltip)
 //   1. the table: every letter of every series -> its count (and nothing else is a letter of that shape); never more than the number of letters of the series (4 / 5 / 7)
 //   2. the oracle (tools/gitter/measure-name-rule.js pairOrbits: its n is the number of sectors touched, directly): every orbit of 12 grids -> the core's count equals n
 //   3. the real tooltip text (patternNameTooltip, de and en): the examples of the order (square 52g -> 3, hexagon 12.6c -> 2, triangle 15a -> 1), the full group and "nur Drehung"

@@ -1,5 +1,5 @@
 // Task 068c2: the steppers' value is the ORDNUNG (triangle 1..6, square 1..12, hex 1..7; lage 2: 5/5/2), the legacy count c stays an internal bridge.
-//   node tools/grid/test-ordnung-stepper.js     BASE = the commit before 068c2 (default e47bce44); OLD_TREE = that tree already extracted
+//   node tools/grid/test-ordnung-stepper.js     BASE = the commit before 068c2 (default e58369ae); OLD_TREE = that tree already extracted
 //   1. everything byte-equal to the old tree (measure-g5a/g5b/g6a/g6b, measure-lage2-app)
 //   2. the map old count c -> new ordnung: same spec and same grid for 3 shapes x every old value; c = 1 (legacyC1) shows as ordnung 1 with the same geometry
 //   3. limits and clamps, base input path and layer path (updateActiveLayerGrid({ ordnung })) against the old count path
@@ -7,7 +7,7 @@
 //   5. read-outs (info line, tooltips, input value/max) on fakes; texts de/en; the protected "Knoten" texts stay
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process'), vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || 'e47bce44';
+const BASE = process.env.BASE || 'e58369ae';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');

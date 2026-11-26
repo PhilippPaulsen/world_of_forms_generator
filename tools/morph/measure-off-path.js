@@ -6,7 +6,7 @@
 //                                 await measureOffPath({ perf: 20 })             -> also the median / min / max of 20 redraw() calls per pattern, in ms
 //                                 await measureOffPath({ morph: { enabled: true, mode: 'bilinear', angleDeg: 0 } })    -> the same with the switch ON (needs two keyframes in the pattern)
 //                                 await measureOffPath({ ids: ['corpus-230'] })  -> a subset
-//   3. the golden pixel hashes of the OFF case are in tools/morph/off-path-golden.json (recorded at c432056c); compare with   node -e "..." or by eye; regenerate by running step 2 on the tree you trust.
+//   3. the golden pixel hashes of the OFF case are in tools/morph/off-path-golden.json (recorded at 250c0d79); compare with   node -e "..." or by eye; regenerate by running step 2 on the tree you trust.
 // The hash is FNV-1a over canvas.toDataURL(): stable for the same pixels (the page draws deterministically; the mouse is not over a node).
 async function measureOffPath(o) {
     o = o || {};

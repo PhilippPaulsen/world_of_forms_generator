@@ -1,5 +1,5 @@
 // Task 095: the collinear repair of core/faces.js (switch faceRepairCollinear, default false) and its use in the spatial morph only (core/spatial-morph-render.js spatialMorphRenderTileFaces).
-//   1. synthetic collinear overlap (the cell of the 094 hole, a triangle): the switch ON gives faces that tile the cell exactly; OFF is the old code (result byte-equal to core/faces.js of main 7307ec7e)
+//   1. synthetic collinear overlap (the cell of the 094 hole, a triangle): the switch ON gives faces that tile the cell exactly; OFF is the old code (result byte-equal to core/faces.js of main d693a1d9)
 //   2. switch OFF: the 258-pattern corpus of tools/color/corpus.js gives a byte-equal face result (hash), face count and trail keys as the old file
 //   3. the morph: seed 5015 (triangle, rotation6, t#23): a hole of at most 100 px2 (the old file: more than 50 000), and the switch is back to false after every frame, also after an exception
 //   4. the keyframes' colour fields (computeCellFaces from spatialMorphRenderCornerField) never run with the switch ON and give the same results as the old file; the morph's cell faces run ON
@@ -11,7 +11,7 @@ const fs = require('fs'), path = require('path'), os = require('os'), vm = requi
 const ROOT = path.join(__dirname, '..', '..');
 const A = require('./measure-face-artifacts.js');
 const C = require('../color/corpus.js');
-const BASE = '7307ec7e';
+const BASE = 'd693a1d9';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const J = JSON.stringify, sha = (t) => crypto.createHash('sha256').update(t).digest('hex').slice(0, 16);

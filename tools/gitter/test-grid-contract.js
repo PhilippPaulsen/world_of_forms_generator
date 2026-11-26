@@ -1,6 +1,6 @@
 // G4 (task 059): the grid contract of core/forms.js numberGridNodes()/gridCanonicalPoint() and core/symmetry.js mainGroupSpec() against the Orakel
 // tools/gitter/measure-name-rule.js, matched by COORDINATES (never by ids), and the unchanged lage-1 output of buildGrid().
-//   node tools/gitter/test-grid-contract.js      FORMS_JS / SYMMETRY_JS / ORBITS_JS = mutated copies (sabotage runs); BASE = commit of the old files (default dd146481)
+//   node tools/gitter/test-grid-contract.js      FORMS_JS / SYMMETRY_JS / ORBITS_JS = mutated copies (sabotage runs); BASE = commit of the old files (default c456e613)
 const cp = require('child_process');
 const B = require('./oracle-bridge.js'), O = require('./measure-name-rule.js');
 const core = B.loadCore(), G = core.get, LAT = core.LAT;
@@ -8,7 +8,7 @@ let pass = 0, fail = 0;
 process.on('uncaughtException', e => { console.log('FAIL the test run itself crashed: ' + (e && e.message)); process.exit(1); });
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const J = JSON.stringify, shapes = ['triangle', 'square', 'hex'], VIEW = { sizeFactor: 3, canvasW: 600, canvasH: 600 };
-const BASE = process.env.BASE || 'dd146481';
+const BASE = process.env.BASE || 'c456e613';
 const vm = require('vm');
 const oldForms = cp.execFileSync('git', ['show', BASE + ':core/forms.js'], { cwd: B.ROOT, encoding: 'utf8' });
 const OLD = { Math, console, Number, Object, Error, Set, Map, JSON }; vm.createContext(OLD); vm.runInContext(oldForms, OLD);

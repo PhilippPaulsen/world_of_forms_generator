@@ -13,7 +13,7 @@ const fs = require('fs'), path = require('path'), os = require('os'), vm = requi
 const ROOT = path.join(__dirname, '..', '..');
 const A = require('./measure-face-artifacts.js');
 const C = require('../color/corpus.js');
-const BASE = '4537c655';   // main before this task
+const BASE = '1cc06d30';   // main before this task
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const J = JSON.stringify;

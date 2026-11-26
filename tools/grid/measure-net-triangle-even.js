@@ -1,11 +1,11 @@
-// Task 108: frame time of the triangle Field, main (6857f36c) against the tree: odd sizes (must be within +3 %), and the even sizes next to their odd neighbours (reported).
+// Task 108: frame time of the triangle Field, main (afaed113) against the tree: odd sizes (must be within +3 %), and the even sizes next to their odd neighbours (reported).
 //   node tools/grid/measure-net-triangle-even.js
 const fs = require('fs'), path = require('path'), os = require('os'), { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..'), J = JSON.stringify;
 const H = require(path.join(ROOT, 'tools', 'morph', 'render-harness.js'));
 const MODE = 'rotation_reflection6', HOOK = 'var canvasSizeSync = function () { width = canvasW; height = canvasH; };';
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tri108m-')), mainFile = path.join(dir, 'netwarp.js');
-fs.writeFileSync(mainFile, execSync('git show 6857f36c:core/netwarp.js', { cwd: ROOT, maxBuffer: 1 << 26 }));
+fs.writeFileSync(mainFile, execSync('git show afaed113:core/netwarp.js', { cwd: ROOT, maxBuffer: 1 << 26 }));
 const mk = files => { const w = H.makeRenderWorld('triangle', 3, 3, MODE, files); w.set(HOOK); return w; };
 const W = { main: mk({ 'core/netwarp.js': mainFile }), tree: mk({}) };
 const spec = { x: { kind: 'trig', w: -0.8 }, y: { kind: 'trig', w: 0.56 }, repeat: false, domain: 'field' };

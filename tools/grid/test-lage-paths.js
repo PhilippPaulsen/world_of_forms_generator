@@ -1,5 +1,5 @@
 // Task 068b: base and layers keep their lage through every change; setBaseLage / setLayerLage; the timeline refuses a lage mix; the DOM follows; the name signature.
-//   node tools/grid/test-lage-paths.js     BASE = the commit before 068b (default c6878a14); OLD_TREE = that tree already extracted
+//   node tools/grid/test-lage-paths.js     BASE = the commit before 068b (default 44a390a9); OLD_TREE = that tree already extracted
 //   1. lage 1 equals the old tree (measure-g5a/g5b/g6a/g6b, measure-lage2-app) and the helpers give the old answer for every shape and count
 //   2. switch ON: count input, shape change, size change, addLayer, updateActiveLayerGrid (count / size / shape) keep lage 2, the ordnung is clamped
 //   3. setBaseLage / setLayerLage: lines, redo stack, gridRevision, refusals with a reason
@@ -7,7 +7,7 @@
 //   5. the DOM follows (syncGridControls on fakes), layerHasNonDefaultSettings, patternNameSignature
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process'), vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || 'c6878a14';
+const BASE = process.env.BASE || '44a390a9';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
