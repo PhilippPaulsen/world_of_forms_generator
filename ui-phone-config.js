@@ -67,7 +67,7 @@
         icons: { 'farbe-strategy-group': 4 },
         end: ['btn-more-rail'],
         sheet: { id: 'more-rail', before: 'more-name', opener: 'btn-more-rail', items: ['btn-face-colors-reset', 'btn-toggle-nodes', 'btn-toggle-lines', 'btn-farborgel', 'btn-info', 'btn-save'],
-          settings: ['line-weight-group'],
+          settings: ['line-weight-group', 'farbe-gray-stepper'],
           openerLabel: { text: 'Mehr: Farben zurücksetzen, Knoten, Farborgel, Info, Download', i18n: 'more.farbe.button' } }
       },
       // Netz (commit 3): Undo, Redo | Nodes, Net lines, Fill | More. Net lines is a text button in #more-netz at 768px and up; the phone CSS draws it as an icon in this row. Random, the Formorgel link, Info,

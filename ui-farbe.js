@@ -112,6 +112,52 @@
     });
   }
 
+  // ---- gray tones (task 150): the stepper of the default gray fill. The state is the global grayTones (core/state.js: 0 = the legacy ladder of a saved session from before task 149, else 2, 3, 4 or 8); a step
+  // writes it and runs applyGrayDefault() (the explicit reapplication, strategy-aware, like a strategy change), so the sheet is recoloured at once. The value is shown as the number of grays; the legacy
+  // ladder shows the word "alt"/"old" and any step leaves it for 8 (it is not part of the 2-3-4-8 ring). While a harmony colours the sheet the stepper is locked with a reason (the gray default is not in force).
+  const GRAY_TONES = [2, 3, 4, 8];
+  const grayRoot = $('#farbe-gray-stepper'), grayInput = $('#farbe-gray-input'), grayDisplay = $('#farbe-gray-display');
+  let grayStepperApi = null;
+  function grayWhy() {
+    const type = lastHarmonyTypeFor(activeLayer);
+    return (type !== null && type !== undefined) ? tr('farbe.gray.reason', null, 'Eine Harmonie färbt diese Fläche: Graustufen gelten nur für das Standard-Grau.') : null;
+  }
+  if (grayRoot && grayInput && grayDisplay && typeof grayTones !== 'undefined' && typeof UI !== 'undefined' && UI.stepper) {
+    grayStepperApi = UI.stepper(grayRoot, {
+      input: grayInput,
+      noTyping: true,
+      keyEl: grayDisplay,
+      compute: function (dir) {
+        const lock = grayWhy();
+        if (lock) return { to: null, reason: lock };
+        const i = GRAY_TONES.indexOf(grayTones);
+        if (i < 0) return { to: GRAY_TONES.length - 1 };   // the legacy ladder: any step goes to 8
+        return { to: (i + dir + GRAY_TONES.length) % GRAY_TONES.length };   // a ring: 2 3 4 8 2 ...
+      }
+    });
+    grayInput.addEventListener('change', function () {
+      const v = GRAY_TONES[parseInt(grayInput.value, 10)];
+      if (v === undefined || v === grayTones) return;
+      grayTones = v;
+      try { if (window.sessionWriter) window.sessionWriter.markDirty(); } catch (e) { /* the next draw marks it anyway */ }
+      if (grayWhy() === null) applyGrayDefault();
+      sync();
+    });
+  }
+  function syncGray() {
+    if (!grayStepperApi) return;
+    const i = GRAY_TONES.indexOf(grayTones);
+    const text = i >= 0 ? String(grayTones) : tr('farbe.gray.legacy', null, 'alt');
+    if (grayDisplay.textContent !== text) grayDisplay.textContent = text;
+    const now = String(i >= 0 ? grayTones : 0);
+    if (grayDisplay.getAttribute('aria-valuenow') !== now) grayDisplay.setAttribute('aria-valuenow', now);
+    if (grayDisplay.getAttribute('aria-valuetext') !== text) grayDisplay.setAttribute('aria-valuetext', text);
+    const idx = i >= 0 ? i : GRAY_TONES.length - 1;
+    if (parseInt(grayInput.value, 10) !== idx) grayInput.value = String(idx);
+    UI.setDisabled(grayRoot, grayWhy());
+    grayStepperApi.refresh();
+  }
+
   // ---- distribution strategy (Phase B-Farbstrategien step 2; moved from a stepper in this row to four icon
   // radios in the left rail in the layout round - same state, same persistence): which harmony member each
   // trail gets, cycling core/farborgel-bridge.js's own DISTRIBUTION_STRATEGIES. Persisted per sheet
@@ -634,6 +680,7 @@
     followHarmonyFamily();
     syncFamily();
     syncHarmonyActive();
+    syncGray();
     syncStrategy();
     const why = reason();
     const loadingAny = why || moduleWhy(false), loadingSheet = why || moduleWhy(true); // see moduleWhy(): the Farborgel module is still loading

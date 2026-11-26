@@ -92,6 +92,7 @@ function buildPage(opts) {
             el('div', { id: 'farbe-family-circle', class: 'nav-cluster nav-harmony-family' }, [btn('btn-harmony-2'), btn('btn-harmony-3'), btn('btn-harmony-4')]),
             el('div', { id: 'farbe-family-triangle', class: 'nav-cluster nav-harmony-family' }, ['b', 'w', 's', 'v'].map(k => btn('btn-harmony-' + k))),
             el('span', { class: 'nav-divider nav-divider-b' }),
+            el('div', { id: 'farbe-gray-stepper', class: 'stepper' }, [btn(null, 'stepper-btn'), btn(null, 'stepper-btn')]),
             el('div', { id: 'farbe-anchor-hue-stepper', class: 'stepper' }, [el('input', { id: 'farbe-anchor-hue-input', type: 'number' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')]),
             el('div', { id: 'farbe-anchor-register-stepper', class: 'stepper' }, [el('span', { id: 'farbe-anchor-register-display', class: 'stepper-display' }), btn(null, 'stepper-btn'), btn(null, 'stepper-btn')]),
             el('span', { id: 'farbe-anchor-preview', class: 'fc-swatch' }),
