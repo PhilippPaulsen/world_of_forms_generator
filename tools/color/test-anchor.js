@@ -44,7 +44,7 @@ console.log('== 1. newFaceAnchor() default shape ==');
 {
     const sb = makeSandbox();
     const a = vm.runInContext('newFaceAnchor()', sb);
-    check('default anchor is exactly {hueIndex:1, registerIndex:0}', same(a, { hueIndex: 1, registerIndex: 0 }), JSON.stringify(a));
+    check('default anchor is exactly {hueIndex:1, registerIndex:0}', same(a, { hueIndex: 1, registerIndex: 0, neutral: true }), JSON.stringify(a));
     check('default hueIndex is a valid Farborgel hue (1-24, not core/color.js\'s 0-based convention)', a.hueIndex === 1);
 }
 
@@ -101,7 +101,7 @@ console.log('\n== 4. reset on grid rebuild (the REAL rebuildGrid()/rebuildGridFr
     check('rebuildGrid(): additionalLayers is a fresh empty array (the old layer\'s anchor is discarded with it)', vm.runInContext('additionalLayers.length', sb) === 0);
     const baseAfter = vm.runInContext('anchorFor(\'base\')', sb);
     check('a fresh anchorFor(\'base\') after rebuildGrid() is the default shape again, not the pre-rebuild mutation',
-        same(baseAfter, { hueIndex: 1, registerIndex: 0 }) && baseAfter !== base, JSON.stringify(baseAfter));
+        same(baseAfter, { hueIndex: 1, registerIndex: 0, neutral: true }) && baseAfter !== base, JSON.stringify(baseAfter));
 
     // Same check for the OTHER rebuild entry point (alternative net construction, core/state.js 1.2-C) -
     // both reset call sites were edited together; this proves the second one for real too, not by inspection.
@@ -113,7 +113,7 @@ console.log('\n== 4. reset on grid rebuild (the REAL rebuildGrid()/rebuildGridFr
     check('rebuildGridFromConstruction(): additionalLayers is a fresh empty array too', vm.runInContext('additionalLayers.length', sb) === 0);
     const baseAfter2 = vm.runInContext('anchorFor(\'base\')', sb);
     check('a fresh anchorFor(\'base\') after rebuildGridFromConstruction() is the default shape again',
-        same(baseAfter2, { hueIndex: 1, registerIndex: 0 }), JSON.stringify(baseAfter2));
+        same(baseAfter2, { hueIndex: 1, registerIndex: 0, neutral: true }), JSON.stringify(baseAfter2));
 }
 
 console.log('\n== 5. FARBORGEL_REGISTER_ORDER: independently re-derived, not copy-pasted ==');
@@ -159,18 +159,18 @@ console.log('== task 145: the default register of a NEW anchor follows the view 
     const sb = makeSandbox();
     const order = vm.runInContext('FARBORGEL_REGISTER_ORDER', sb);
     check('FACE_ANCHOR_SIMPLE_REGISTER indexes "ia" in the real register order', vm.runInContext('FACE_ANCHOR_SIMPLE_REGISTER', sb) === 6 && order[6] === 'ia' && order[0] === 'ca');
-    check('advanced view: a new anchor is {1, 0} ("ca")', same(vm.runInContext('newFaceAnchor()', sb), { hueIndex: 1, registerIndex: 0 }));
+    check('advanced view: a new anchor is {1, 0} ("ca")', same(vm.runInContext('newFaceAnchor()', sb), { hueIndex: 1, registerIndex: 0, neutral: true }));
     vm.runInContext("uiMode = 'simple';", sb);
-    check('simple view: a new anchor is {1, 6} ("ia")', same(vm.runInContext('newFaceAnchor()', sb), { hueIndex: 1, registerIndex: 6 }));
-    check('simple view: anchorFor("base") creates "ia" lazily, and keeps it', same(vm.runInContext('baseFaceAnchor = null; anchorFor("base")', sb), { hueIndex: 1, registerIndex: 6 }));
+    check('simple view: a new anchor is {1, 6} ("ia")', same(vm.runInContext('newFaceAnchor()', sb), { hueIndex: 1, registerIndex: 6, neutral: true }));
+    check('simple view: anchorFor("base") creates "ia" lazily, and keeps it', same(vm.runInContext('baseFaceAnchor = null; anchorFor("base")', sb), { hueIndex: 1, registerIndex: 6, neutral: true }));
     vm.runInContext("baseFaceAnchor = { hueIndex: 5, registerIndex: 0 };", sb);
     check('an EXISTING anchor is never touched by the view (a session with "ca" stays "ca" in the simple view)', same(vm.runInContext('anchorFor("base")', sb), { hueIndex: 5, registerIndex: 0 }));
     vm.runInContext("baseFaceAnchor = null; uiMode = 'advanced'; anchorFor('base'); uiMode = 'simple';", sb);
-    check('switching the view later does not change an anchor that exists', same(vm.runInContext('baseFaceAnchor', sb), { hueIndex: 1, registerIndex: 0 }));
+    check('switching the view later does not change an anchor that exists', same(vm.runInContext('baseFaceAnchor', sb), { hueIndex: 1, registerIndex: 0, neutral: true }));
     vm.runInContext("rebuildGrid(currentShape);", sb);
-    check('after a grid change (which resets the anchor) the next one is the default of the view it is made in (simple: "ia")', same(vm.runInContext('anchorFor("base")', sb), { hueIndex: 1, registerIndex: 6 }));
+    check('after a grid change (which resets the anchor) the next one is the default of the view it is made in (simple: "ia")', same(vm.runInContext('anchorFor("base")', sb), { hueIndex: 1, registerIndex: 6, neutral: true }));
     check('the view is read through typeof (a page or shell without the uiMode global keeps "ca" as it always did)', /registerIndex: \(typeof uiMode !== 'undefined' && uiMode === 'simple'\) \? FACE_ANCHOR_SIMPLE_REGISTER : 0/.test(fs.readFileSync(path.join(ROOT, 'core', 'facecolor.js'), 'utf8')));
-    check('a layer made in the simple view gets "ia" too', (() => { vm.runInContext("uiMode = 'simple'; additionalLayers = [{}];", sb); return same(vm.runInContext('anchorFor(0)', sb), { hueIndex: 1, registerIndex: 6 }); })());
+    check('a layer made in the simple view gets "ia" too', (() => { vm.runInContext("uiMode = 'simple'; additionalLayers = [{}];", sb); return same(vm.runInContext('anchorFor(0)', sb), { hueIndex: 1, registerIndex: 6, neutral: true }); })());
 }
 
 // ------------------------------------------------------------------------

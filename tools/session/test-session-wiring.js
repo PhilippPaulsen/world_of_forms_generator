@@ -129,9 +129,9 @@ console.log('\n== 5. Farborgel readiness signal ==');
     check('no polling for the module in sketch.js', !/setInterval|farborgelBuildHarmonySelection[\s\S]{0,200}setTimeout/.test(code(sketch)) && !/waitedMs/.test(sketch));
     check('the colour panel rebuilds when the module arrives (its signature includes the module)', /farborgel: typeof window\.farborgelBuildHarmonySelection === 'function'/.test(sketch));
     check('the lock reads the module state, with the exact regenerable types', /REGENERABLE_HARMONY_TYPES = \['2', '3', '4', 'B', 'W', 'S', 'V'\]/.test(farbeJs) && /typeof window\.farborgelBuildHarmonySelection === 'function'/.test(farbeJs));
-    check('locked: the 7 harmony buttons and the dropdown (any sheet)', /UI\.setDisabled\(harmonyBtns\[type\], loadingAny\)/.test(farbeJs) && /harmonySelect\.disabled = !!loadingAny/.test(farbeJs));
+    check('locked: the 7 harmony buttons and the dropdown (any sheet)', /UI\.setDisabled\(harmonyBtns\[type\], neutral && \/\^\[234\]\$\/\.test\(type\) \? null : loadingAny\)/.test(farbeJs) && /harmonySelect\.disabled = !!loadingAny/.test(farbeJs));
     check('locked on a regenerable sheet: the strategy icons, the anchor steppers (also their compute(), which the arrow keys use) and the anchor points', /UI\.setDisabled\(r, loadingSheet\)/.test(farbeJs) && /UI\.setDisabled\(b, loadingSheet, 'farbe'\)/.test(farbeJs) && count(farbeJs, 'const lock = moduleWhy(true);') === 2 && /UI\.setDisabled\(r, moduleWhy\(true\)\)/.test(farbeJs));
-    check('NOT locked by it: Reset Color and the Kreis/Dreieck triggers', /UI\.setDisabled\(resetBtn, why\)/.test(farbeJs) && /UI\.setDisabled\(b, why\); \}\);\n    Object\.keys\(harmonyBtns\)/.test(farbeJs));
+    check('NOT locked by it: Reset Color and the Kreis/Dreieck triggers', /UI\.setDisabled\(resetBtn, why\)/.test(farbeJs) && /UI\.setDisabled\(b, why \|\| neutralWhy\); \}\);\n(?:.*\n)?    Object\.keys\(harmonyBtns\)/.test(farbeJs));
     check('the reason text exists under its key', /get 'reason\.farborgel\.loading'\(\) \{ return tr\('farbe\.reason\.organLoading', null, 'Farborgel lädt noch\.'\); \}/.test(farbeJs));
 }
 
