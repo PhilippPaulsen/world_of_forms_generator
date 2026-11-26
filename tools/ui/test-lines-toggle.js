@@ -186,6 +186,7 @@ function domStub(sabotageCycle, mode, withT) {
     check('advanced view: the name is "lines.button" and the cycle is the old one (the second click opens the slider)', e.els['btn-toggle-lines'].attrs.title === 'T:lines.button' && (e.click(), e.state().includes('AN/offen')));
     const f = domStub(false, 'advanced', true); f.click();   // slider open
     vm.runInContext("uiMode = 'simple';", f.ctx); f.tick();
+    check('ui-lines.js listens for modechange (a mode switch redraws nothing, so the name and the slider follow at once)', /document\.addEventListener\('modechange', show\)/.test(read('ui-lines.js')));
     check('switching to the simple view closes an open slider and renames the button', f.state().includes('AN/zu') && f.els['btn-toggle-lines'].attrs.title === 'T:lines.toggle');
 }
 

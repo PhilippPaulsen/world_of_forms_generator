@@ -21,10 +21,11 @@
   // the name (title and aria-label) follows the view and the language; written only when it changes (show() runs on every sync)
   function syncName() {
     const l = (typeof window !== 'undefined' && window.uiI18n) ? window.uiI18n.lang : '', key = (simple() ? 's' : 'a') + l;
-    if (key === nameKey || typeof UI === 'undefined' || !UI.t) return;
+    if (typeof UI === 'undefined' || !UI.t) return;
     nameKey = key;
-    const text = UI.t(simple() ? 'lines.toggle' : 'lines.button');
-    btn.setAttribute('title', text); btn.setAttribute('aria-label', text);
+    const text = UI.t(simple() ? 'lines.toggle' : 'lines.button');   // compared with the element itself: ui-i18n.js rewrites the markup name at load for a language other than German
+    if (btn.getAttribute('title') !== text) btn.setAttribute('title', text);
+    if (btn.getAttribute('aria-label') !== text) btn.setAttribute('aria-label', text);
   }
 
   function show() {
@@ -55,5 +56,6 @@
     if (lineStyle !== seen) { seen = lineStyle; open = false; }   // a session restore (or anything else) replaced the state
     show();
   });
+  if (typeof document.addEventListener === 'function') document.addEventListener('modechange', show);   // the view changes the name and closes the slider at once (a mode switch redraws nothing, so no UI tick comes)
   show();
 })();
