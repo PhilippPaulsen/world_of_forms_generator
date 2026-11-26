@@ -8,8 +8,8 @@
 // ----------------- EXPORT ----------------------------------------
 // Task 144: the name of the files of the Download dialog. `exportName` (core/state.js, typed in the dialog, saved in the session) is cleaned here for the file system; empty or
 // nothing usable left = the old stem 'world_of_forms' (so a person who types nothing gets exactly the old file names). Pure, no DOM.
-const EXPORT_DEFAULT_STEM = 'world_of_forms';
-const EXPORT_RESERVED_NAMES = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
+var EXPORT_DEFAULT_STEM = 'world_of_forms';   // var, not const: tests load this file more than once into one context
+var EXPORT_RESERVED_NAMES = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
 function exportFileBase(raw) {
     if (typeof raw !== 'string') return '';
     let t = raw.normalize('NFC').replace(/[\t\n\r\u000b\u000c\u0085\u2028\u2029]/g, ' ').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g, '')   // control and invisible formatting characters
