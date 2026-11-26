@@ -6,8 +6,31 @@
  */
 
 // ----------------- EXPORT ----------------------------------------
+// Task 144: the name of the files of the Download dialog. `exportName` (core/state.js, typed in the dialog, saved in the session) is cleaned here for the file system; empty or
+// nothing usable left = the old stem 'world_of_forms' (so a person who types nothing gets exactly the old file names). Pure, no DOM.
+var EXPORT_DEFAULT_STEM = 'world_of_forms';   // var, not const: tests load this file more than once into one context
+var EXPORT_RESERVED_NAMES = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
+function exportFileBase(raw) {
+    if (typeof raw !== 'string') return '';
+    let t = raw.normalize('NFC').replace(/[\t\n\r\u000b\u000c\u0085\u2028\u2029]/g, ' ').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g, '')   // control and invisible formatting characters
+        .replace(/[\\/:*?"<>|]/g, ' ')                  // path separators and characters that Windows, macOS or Safari refuse or rewrite
+        .replace(/\s+/g, '-')                            // one hyphen for any run of white space
+        .replace(/-{2,}/g, '-').replace(/^[-.\s]+/, '').replace(/[-.\s]+$/, '');
+    t = Array.from(t).slice(0, 60).join('').replace(/[-.\s]+$/, '');   // 60 characters (by code point, never half of a surrogate pair)
+    if (!t) return '';
+    if (EXPORT_RESERVED_NAMES.test(t.split('.')[0])) t = '_' + t;       // CON, PRN, NUL, COM1 ... are not valid file names on Windows, with or without an extension
+    return t;
+}
+function exportFileStem() {
+    const base = typeof exportName === 'string' ? exportFileBase(exportName) : '';
+    return base || EXPORT_DEFAULT_STEM;
+}
+// the default names of the generator ('world_of_forms.json', 'world_of_forms_animation.zip', ...) take the person's stem; any other name is left alone
+function exportFileName(filename) {
+    return typeof filename === 'string' && filename.indexOf(EXPORT_DEFAULT_STEM) === 0 ? exportFileStem() + filename.slice(EXPORT_DEFAULT_STEM.length) : filename;
+}
 function exportPNG() {
-    saveCanvas('world_of_forms', 'png');
+    saveCanvas(exportFileStem(), 'png');
 }
 
 function downloadBlob(content, filename, mimeType) {
@@ -15,7 +38,7 @@ function downloadBlob(content, filename, mimeType) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename;
+    a.download = exportFileName(filename);
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -381,6 +404,8 @@ function buildExportData(crossLayerData) {
     // explicit null.
     // task 063: v2 - the grid name (null for free ends, a reduced mode or no line) instead of patternName / geometry.themeLineOrbits
     data.name = baseKeys.name;
+    // task 144: the name a person typed in the Download dialog (raw, as typed, only while set); `name` above stays the grid name
+    if (typeof exportName === 'string' && exportName.trim()) data.title = exportName.trim().slice(0, 80);
     // task 071b: the ids (no texts) of the glossary terms the name uses (core/glossary.js), only while a v2 name exists; the field is optional and additive (formatVersion stays 2)
     if (baseKeys.name && typeof glossaryIdsForName === 'function') {
         const dn = gridDisplayNameFor(baseSpec, completeConnections, symmetryMode);
