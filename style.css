@@ -1382,6 +1382,10 @@ html[data-tab="farbe"] #btn-gallery { display: none; }
   color: var(--text);
 }
 .dialog-content .restart-actions .dialog-danger { color: var(--danger); border-color: var(--danger); }
+/* task 144: the name field of the Download dialog (ui-export.js): label above, one full-width field, 16px so that iOS does not zoom in */
+.dialog-content .export-name-row { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; }
+.dialog-content .export-name-row label { font-size: var(--size-small, 14px); color: var(--color-secondary); }
+.dialog-content .export-name-row input { box-sizing: border-box; width: 100%; min-height: 44px; padding: 8px 10px; font: inherit; font-size: 16px; color: var(--color-text); background: var(--color-bg); border: 1px solid var(--color-text); border-radius: var(--radius, 4px); }
 @media (hover: hover) {
   .dialog-content .restart-actions button:hover { background: var(--hover-bg); }
 }

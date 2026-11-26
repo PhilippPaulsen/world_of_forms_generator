@@ -434,6 +434,9 @@
     // ---- strings of the scripts of the phone layout that carry a key ----
     'notice.close': { de: 'Hinweis schließen', en: 'Close notice' },
     'more.farbe.button': { de: 'Mehr: Farben zurücksetzen, Knoten, Farborgel, Info, Download', en: 'More: reset colors, nodes, Color Organ, info, download' },
+    // task 144: the name of the files in the Download dialog
+    'export.name.label': { de: 'Name (optional)', en: 'Name (optional)' },
+    'export.name.placeholder': { de: 'world_of_forms', en: 'world_of_forms' },
     'lines.button': { de: 'Linien: an/aus, Linienstärke', en: 'Lines: on/off, line width' },
     'lines.weight': { de: 'Linienstärke', en: 'Line width' },
     'netz.lines.button': { de: 'Netzlinien zeigen', en: 'Show net lines' },

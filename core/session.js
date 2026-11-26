@@ -154,6 +154,9 @@ function _lineStyleNormalize(l) {
 // (nothing hidden), never as an error.
 const SESSION_UI_MODES = Object.freeze(['simple', 'advanced']);
 function _uiModeNormalize(m) { return SESSION_UI_MODES.includes(m) ? m : 'advanced'; }
+// Task 144: the Download name. Written only when not empty (a snapshot without a name is byte-for-byte the one written before); a bad value reads as no name.
+function _exportNameNormalize(n) { return typeof n === 'string' ? n.normalize('NFC').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) : ''; }
+function _snapExportName(n) { const v = _exportNameNormalize(n); return v ? { exportName: v } : {}; }
 function _snapLines(l) {
     const n = _lineStyleNormalize(l);
     return n.visible && n.weight === 2 ? {} : { lineStyle: n };
@@ -197,7 +200,7 @@ function buildSessionSnapshot(s, now) {
             altNetSeed: s.altNetSeed ? JSON.parse(JSON.stringify(s.altNetSeed)) : null,
             netTransform: s.baseNetTransform ? JSON.parse(JSON.stringify(s.baseNetTransform)) : null,
             uiMode: _uiModeNormalize(s.uiMode),
-        }, _snapMorph(s.spatialMorph), _snapLines(s.lineStyle)),
+        }, _snapMorph(s.spatialMorph), _snapLines(s.lineStyle), _snapExportName(s.exportName)),
         base,
         layers,
         activeLayer: s.activeLayer,
@@ -420,6 +423,9 @@ function validateSession(input, opts) {
 
         // interface mode (task 133): always written; absent or not one of the two names -> 'advanced' (a snapshot from before the modes)
         settings.uiMode = _uiModeNormalize(st.uiMode);
+
+        // download name (task 144): additive, optional; empty or bad -> no key
+        { const en = _exportNameNormalize(st.exportName); if (en) settings.exportName = en; }
 
         // line style (task 024): additive, optional; absent or default -> no key (the restore sets the default), a bad field falls back to its default.
         if (st.lineStyle !== undefined) {

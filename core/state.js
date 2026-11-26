@@ -64,6 +64,10 @@ const UI_MODES = Object.freeze(['simple', 'advanced']);
 const UI_MODE_NEW_VISITOR = 'simple';
 const UI_MODE_LEGACY = 'advanced';
 let uiMode = UI_MODE_NEW_VISITOR;
+// Task 144: the name a person gave the pattern in the Download dialog (raw text, at most 80 characters, '' = none). It names the files of the Download dialog (core/export.js
+// exportFileStem(): cleaned for the file system, '' = the old names world_of_forms.*) and goes into the export JSON as `title` (the field `name` stays the grid name).
+// Session: settings.exportName, written only when it is not empty (additive, no schema bump).
+let exportName = '';
 let currentShape = 'triangle';
 let freeEndpointsEnabled = false; // toggled via #btn-toggle-free-endpoints
 
