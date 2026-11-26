@@ -1,5 +1,5 @@
 // G6a (task 062): session schema 2 - settings.grid / sheet.grid {shape, ordnung, lage[, legacyC1]} instead of nodeCount; the fingerprint carries the spec and the free endpoints.
-//   node tools/session/test-session-v2.js     BASE = the commit before 062 (default f76e5d3a); OLD_TREE = that tree already extracted (sabotage copies have no .git)
+//   node tools/session/test-session-v2.js     BASE = the commit before 062 (default 01c28aa8); OLD_TREE = that tree already extracted (sabotage copies have no .git)
 //   1. round trip (base + 4 layers + timeline + members + colours + free endpoints + alt net, and 38 more): the state after restore equals the source AND the old tree's (measure-g6a.js)
 //   2. c = 1 (legacyC1) round trips, as base and as layer, and stays apart from c = 2
 //   3. schema 1 is rejected deterministically ('schema-version'), the notice exists in de and en and the quarantine runs; an invalid import mutates nothing
@@ -8,7 +8,7 @@
 //   6. rollback before every apply step: same objects, gridRevision untouched; no nodeCount key anywhere in a snapshot
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || 'f76e5d3a';
+const BASE = process.env.BASE || '01c28aa8';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');

@@ -4,7 +4,7 @@
 //   2. Aus <-> Field: a regular Field warp moves nothing (0 px) at every size, w = 1e-3 moves < 1 px (no jump of e/2); the export: fieldTiles, fieldMeshes, NO fieldBase, NO gridShiftPx
 //   3. the Timeline table (netAnimationCompat): triangle and hexagon at even and odd sizes Regular <-> Field ok, Field <-> Field ok, Field <-> Tiled refused (domain); the square at an even size still refuses Regular <-> Field
 //   4. netDomainEffective: triangle 3..9 any parity, 1, 2 and 10 refused; hexagon even refused; the square as in 106; no or an unknown shape = odd only
-//   5. byte-equal to main 6857f36c: triangle ODD sizes with a Field (frames, warps, exports, overlays, apply / invert / inside / local / split), the hexagon at ALL sizes 1..9 with a Field (even too), the square at all sizes 1..9 with a Field, the triangle without a Field (none / Single / Tiled) at every size
+//   5. byte-equal to main afaed113: triangle ODD sizes with a Field (frames, warps, exports, overlays, apply / invert / inside / local / split), the hexagon at ALL sizes 1..9 with a Field (even too), the square at all sizes 1..9 with a Field, the triangle without a Field (none / Single / Tiled) at every size
 const fs = require('fs'), path = require('path'), os = require('os'), { execSync, spawnSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
 let pass = 0, fail = 0;
@@ -12,7 +12,7 @@ const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL',
 const J = JSON.stringify;
 const H = require(path.join(ROOT, 'tools', 'morph', 'render-harness.js'));
 const MODE = 'rotation_reflection6', HOOK = 'var canvasSizeSync = function () { width = canvasW; height = canvasH; };';
-const CHILD = !!process.env.NETWARP_JS, MAIN = '6857f36c';
+const CHILD = !!process.env.NETWARP_JS, MAIN = 'afaed113';
 const FILES = {}; if (process.env.NETWARP_JS) FILES['core/netwarp.js'] = process.env.NETWARP_JS;
 const world = (shape, files) => { const w = H.makeRenderWorld(shape, 3, 3, MODE, files || FILES); w.set(HOOK); return w; };
 const setup = (w, shape, X, Y, spec, conns) => w.set(`currentShape = ${J(shape)}; projectGridSpec(${J({ shape, ordnung: 3, lage: 1 })}); shapeSizeFactorX = null; shapeSizeFactorY = null; canvasW = 600; canvasH = 600; width = 600; height = 600;

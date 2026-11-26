@@ -5,7 +5,7 @@
 //   2. the hook is ONE added line: the rest of core/tiling.js is byte-identical to the tree before stage c (sha256), it is the first statement of drawTessellation() and typeof-guarded (the gallery
 //      loads tiling.js without state.js and without this file); the eight functions the two protected netwarp tests cut out of sketch.js are untouched and name no morph global; no hotkey, no event handler;
 //   3. SWITCH OFF: the default is off, the status says 'off', and 30 patterns (12 corpus, 6 with layers, 6 with a timeline paused and at progress values, 3 with a net warp, 3 with curves) draw exactly what
-//      the tree before the hook drew (a hash of every line() / bezier() call, OFF_GOLDEN, taken from core/tiling.js of commit c432056c);
+//      the tree before the hook drew (a hash of every line() / bezier() call, OFF_GOLDEN, taken from core/tiling.js of commit 250c0d79);
 //   4. SWITCH ON: identical keyframes give the normal frame, call for call (3 shapes x symmetry families x 3 modes x 2 / 3 / 4 keyframes, curves and free lines too); with different keyframes the tiles at
 //      the extremes of the span draw exactly the keyframe's own pattern; the seams of the REAL drawn segments stay closed (max drift reported);
 //   5. the status codes of every pre-condition failure (the normal frame is drawn, nothing throws, nothing is logged), the net, the timeline, the faces, the SVG export, the JSON export;
@@ -37,12 +37,12 @@ const J = (x) => JSON.stringify(x);
 const same = (a, b) => J(a) === J(b);
 const hashOf = (x) => sha(J(x)).slice(0, 16);
 
-// ---- the tree before stage c (commit c432056c): pins ------------------------------------------------------------------------------------------------------------------------------------------
+// ---- the tree before stage c (commit 250c0d79): pins ------------------------------------------------------------------------------------------------------------------------------------------
 const PIN = {
   tilingBefore: 'b33c97b80a8c89f5a1d1a6b0712be3715de419de16afc77b3da57988a1614446',
   protectedBodies: 'be4bb9036e806619d0897acdf086777423845a31e0b07a35e1bfc220ce5d6c8e',
 };
-// the segment-call hash of every one of the 30 OFF patterns, from core/tiling.js of c432056c (node tools/morph/off-path-tool.js --hashes with TILING_JS = `git show c432056c:core/tiling.js`)
+// the segment-call hash of every one of the 30 OFF patterns, from core/tiling.js of 250c0d79 (node tools/morph/off-path-tool.js --hashes with TILING_JS = `git show 250c0d79:core/tiling.js`)
 const OFF_GOLDEN = {
   'corpus-0': 'e343be8f86931b24', 'corpus-10': '9b147512407b68bd', 'corpus-38': 'aad3411535e0abfe', 'corpus-63': '5714242a4189e783', 'corpus-89': '6e36170e63ad9b79', 'corpus-119': 'e88892575374fe58', 'corpus-144': 'b21a7aee8f618373', 'corpus-172': '7eb2f8f4bc01565b', 'corpus-201': '40ca93a30130d4ca',
   'corpus-230': '266f25836f2f5479', 'corpus-5': '6d6b4adf1e1e0dc7', 'corpus-100': 'a76a14d0c915db5d', 'layers-offset': '21bdd633105ff203', 'layers-rotated': 'e9453a0a7402586f', 'layers-scaled': '91ecb6192a18de3b', 'layers-hex-on-square': '2d948bddee3a3eb4', 'layers-two': 'd8b3c32db0ae4b68',
@@ -107,7 +107,7 @@ T('pins', () => {
   const hookLines = lines.filter((l) => l.includes('spatialMorph'));
   check('core/tiling.js names the morph in exactly ONE line: the guarded call', hookLines.length === 1 && hookLines[0].startsWith(HOOK), hookLines.length + ' lines');
   const rest = lines.filter((l) => !l.includes('spatialMorph')).join('\n');
-  check('...and without that line the file is byte-for-byte core/tiling.js of c432056c (sha256)', sha(rest) === PIN.tilingBefore, sha(rest).slice(0, 12));
+  check('...and without that line the file is byte-for-byte core/tiling.js of 250c0d79 (sha256)', sha(rest) === PIN.tilingBefore, sha(rest).slice(0, 12));
   const m = /function drawTessellation\(\) \{\n([^\n]*)\n/.exec(TILING_SRC);
   check('the guarded call is the FIRST statement of drawTessellation() and returns when the morph was drawn', !!m && m[1].startsWith(HOOK));
   // the gallery: tiling.js alone, no state.js, no render file: the line must not throw and must not return
@@ -120,7 +120,7 @@ T('pins', () => {
   const grab = (name) => { const mm = SKETCH_SRC.match(new RegExp(`function ${name}\\([\\s\\S]*?\\n\\}\\n`)); if (!mm) throw new Error('cannot extract ' + name); return mm[0]; };
   const NAMES = ['applyTimelineFrame', 'applyLayerConnectionsMorphFrame', 'resolveTimelineKeyframeCoords', 'resolveTimelineSegment', 'totalTimelineDurationMs', 'setTimelineProgress', 'toggleTimelinePlayback', 'previewTimelineSegmentMidpoint'];
   const bodies = NAMES.map(grab).join('\n');
-  check('the eight functions the protected netwarp tests cut out of sketch.js are byte-identical to c432056c (sha256) and name no morph global', sha(bodies) === PIN.protectedBodies && !/spatialMorph/.test(bodies), sha(bodies).slice(0, 12));
+  check('the eight functions the protected netwarp tests cut out of sketch.js are byte-identical to 250c0d79 (sha256) and name no morph global', sha(bodies) === PIN.protectedBodies && !/spatialMorph/.test(bodies), sha(bodies).slice(0, 12));
   // stage e1 added the write / read access (setSpatialMorph, getSpatialMorph and their window exports) to sketch.js as ONE block; everything else in it still does not mention the morph
   const E1_BLOCK = /\/\/ The spatial morph's write and read access[\s\S]*?window\.getSpatialMorph = getSpatialMorph;\n/;
   // d3 K3 (task 018) added ONE block of pure list helpers that call the pairing score / filter of core/spatial-morph.js; the render hook is still not in sketch.js
@@ -161,7 +161,7 @@ T('off', () => {
   check(`${n} patterns (12 corpus, 6 with layers, 6 with a timeline, 3 with a net warp, 3 with curves) draw exactly what the tree before the hook drew: the hash of every line() / bezier() call equals OFF_GOLDEN (${equal}/${n}, ${seen.size} distinct)`, equal === n && n === 30 && seen.size === 30, worst.slice(0, 4).join(','));
   check('OFF_GOLDEN covers every pattern of the spec file and nothing else', same(Object.keys(OFF_GOLDEN).sort(), SPECS.map((s) => s.id).sort()) && SPECS.length === 30);
   const PX = JSON.parse(read('tools/morph/off-path-golden.json')).pixelHashes;
-  check('the browser pixel golden (tools/morph/off-path-golden.json, recorded at c432056c) lists the same 30 patterns, each with a hash', same(Object.keys(PX).sort(), SPECS.map((s) => s.id).sort()) && Object.values(PX).every((v) => /^[0-9a-f]{1,8}:\d+$/.test(v)));
+  check('the browser pixel golden (tools/morph/off-path-golden.json, recorded at 250c0d79) lists the same 30 patterns, each with a hash', same(Object.keys(PX).sort(), SPECS.map((s) => s.id).sort()) && Object.values(PX).every((v) => /^[0-9a-f]{1,8}:\d+$/.test(v)));
   // the render file absent (a page that does not load it): the same frames
   const s = SPECS.find((x) => x.id === 'layers-two');
   const w = makeRenderWorld(s.shape, s.order, s.size, s.mode);

@@ -21,7 +21,7 @@ const os = require('os');
 const { execSync } = require('child_process');
 const { build, PAIRS } = require('./measure-color-jumps.js');
 // the reference = core/spatial-morph-render.js of main BEFORE task 038 (git show), so a defect of the file under test cannot hide in both worlds; a sabotage copy (SPATIAL_MORPH_RENDER_JS) is only the world under test
-const BASE = '13d141f1';
+const BASE = 'a2a209e1';
 const BASE_FILE = path.join(os.tmpdir(), `spatial-morph-render-${BASE}-${process.pid}.js`);
 // task 095: the reference render file gets the same switch lines as the file under test (spatialMorphRenderTileFaces switches the collinear repair of core/faces.js on), otherwise the reference would draw the old, holed faces and the two worlds could not be equal
 const REF_TXT = execSync(`git show ${BASE}:core/spatial-morph-render.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString()

@@ -105,7 +105,7 @@ check('(5) a layer built through addLayer-style state path takes the same short 
 
 // (5) task 081: the frame cuts the pattern only at whole or half cells, in both directions; the long side is at most 1800 px; nothing changed for the classes that were already right
 {
-    const old81 = cp.execFileSync('git', ['show', (process.env.BASE81 || '18fef84f') + ':core/forms.js'], { cwd: ROOT, encoding: 'utf8' });
+    const old81 = cp.execFileSync('git', ['show', (process.env.BASE81 || '3ac36a9e') + ':core/forms.js'], { cwd: ROOT, encoding: 'utf8' });
     const O81 = mk(old81);
     const near = (v) => Math.abs(v - Math.round(v)) < 1e-9;
     let nCut = 0, badCut = 0, maxLong = 0, badUnchanged = 0, nUnchanged = 0, changed = [];

@@ -1,12 +1,12 @@
 // G5a (task 060): gridSpec is the ONE writable truth of the base grid; nodeCount is only its projection; every E comes from getGridDivisions.
-//   node tools/grid/test-grid-g5a.js     BASE = the commit before 060 (default 88a73ecb). Sabotage runs work on a COPY of the repo tree (this file runs from its own ../..).
+//   node tools/grid/test-grid-g5a.js     BASE = the commit before 060 (default 73cb4929). Sabotage runs work on a COPY of the repo tree (this file runs from its own ../..).
 //   1/2. old tree (git archive BASE) and working tree run tools/grid/measure-g5a.js: grids, drawn calls, segments, export JSON, net lines, net warp, 135 morph frames: equal
 //   3.   source scan: exactly ONE write of nodeCount (core/state.js projectGridSpec) in core/, sketch.js, ui*.js, gallery*.js
 //   4.   getGridDivisions(fromLegacy(shape, c)) equals the old E = c - 1 for every shape and c = 1..7 (square lage 2: E = ordnung); netWarpForBase keeps its signature and c = 1 means no warp
 //   5.   session round trip and rollback: gridSpec/nodeCount agree, gridRevision is neither rewound nor touched by apply
 const fs = require('fs'), path = require('path'), os = require('os'), vm = require('vm'), cp = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || '88a73ecb';
+const BASE = process.env.BASE || '73cb4929';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');

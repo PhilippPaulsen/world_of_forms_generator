@@ -1,5 +1,5 @@
 // Task 075 (size steps 2 and 3): a size change of the base carries the layers, the timeline, the alt net and the face colours along; it asks first only when colour groups would be lost.
-//   node tools/grid/test-resize-layers.js     BASE = the commit before 075 (default 1e110c99); OLD_TREE = that tree already extracted; NO_OLD=1 skips (1)
+//   node tools/grid/test-resize-layers.js     BASE = the commit before 075 (default 6330c3c4); OLD_TREE = that tree already extracted; NO_OLD=1 skips (1)
 //   1. nothing without a size change moves: measure scripts byte-equal to the old tree, protected files and the eight protected functions unchanged
 //   2. layers: 3 shapes x ordnung 1..4 x lage 1/2 x 72 size pairs, a layer of the same shape and one of another shape: size L * new / old (exact fraction), geometry = the scaled old one (0 px) = the layer
 //      rebuilt at the new base, offset * old / new, rotation, connections, gridSpec, free point; the drawing with offset and rotation = the scaled old drawing (100 %) = a rebuild (hash)
@@ -12,7 +12,7 @@
 //   7. sources
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process'), crypto = require('crypto');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || '1e110c99';
+const BASE = process.env.BASE || '6330c3c4';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');

@@ -21,7 +21,7 @@ const path = require('path');
 const vm = require('vm');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = '11768afa';   // main at the start of task 121 (the validator and the drawing of main)
+const BASE = 'e0063493';   // main at the start of task 121 (the validator and the drawing of main)
 const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'export', 'farborgel-bridge'];
 const readNew = f => fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8');
 const readOld = f => execSync(`git show ${BASE}:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString();

@@ -26,12 +26,12 @@
  *
  * Saving. A result is big (60 to 120 KB per width): `postTo` (optional) is a URL that gets the JSON by POST (a tiny local server in the scratchpad did that for the cleanup baseline).
  *
- * The files. baseline-phase1.json is the ORIGINAL phase-1 baseline (commit 7ae041c0, before any rework, Form tab only, the old toolbar); it stays as it is, as the "before" of the whole UI
+ * The files. baseline-phase1.json is the ORIGINAL phase-1 baseline (commit 69863d60, before any rework, Form tab only, the old toolbar); it stays as it is, as the "before" of the whole UI
  * rework. baseline-rail-3.json is the baseline after rail rearrangement commit 3 (all three tabs, the five-group rail, the Netz row and its overlay, the OLD layer row and timeline controls,
  * `--target` forced). baseline-cleanup-1.json is the control recorded before the cleanup deleted the old layer, timeline and message DOM: the table, the rail, the strip, the timeline strip and
  * the notices are tracked, and `dom_present` lists the old elements that still exist. baseline-cleanup-1b.json is the same control recorded again on the tree after step 3 with the
  * DETERMINISTIC script (every snapshot but `notice` is taken with no notice on screen and #ui-notices is measured in viewport coordinates: two recordings of one tree give 0 differences,
- * whatever the speed or the visibility of the pane). baseline-cleanup-2.json is the state AFTER the cleanup (the tree of eeb1757d: the old layer, timeline and message DOM removed), with
+ * whatever the speed or the visibility of the pane). baseline-cleanup-2.json is the state AFTER the cleanup (the tree of 83aa06c1: the old layer, timeline and message DOM removed), with
  * two extra widths, 936 (fine) and 1032c (real coarse), the thresholds where the layer table shows; its "before" note holds the comparison with 1b (exactly the 20 removed selectors of
  * dom_present, true -> false, and nothing else). The relation: phase1 = before the whole UI rework; rail-3 = before the layer work; cleanup-1 and cleanup-1b = the controls on the old DOM
  * (1 with the first, nondeterministic script, 1b with the deterministic one); cleanup-2 = after the cleanup. LATER RUNS ARE COMPARED WITH baseline-cleanup-2.json.

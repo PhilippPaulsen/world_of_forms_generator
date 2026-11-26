@@ -82,7 +82,7 @@ if (on('2')) {
 // ---- 3 ----
 if (on('3')) {
     let mainFiles = null; const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wof090-'));
-    try { mainFiles = {}; for (const f of ['netwarp', 'state', 'export', 'spatial-morph-render', 'faces']) { const p = path.join(dir, f + '.js'); fs.writeFileSync(p, execSync(`git show a51af63b:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 })); mainFiles['core/' + f + '.js'] = p; } } catch (e) { mainFiles = null; }
+    try { mainFiles = {}; for (const f of ['netwarp', 'state', 'export', 'spatial-morph-render', 'faces']) { const p = path.join(dir, f + '.js'); fs.writeFileSync(p, execSync(`git show c8c36011:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 })); mainFiles['core/' + f + '.js'] = p; } } catch (e) { mainFiles = null; }
     // the same faces.js without the two hooks
     const cur = fs.readFileSync(process.env.FACES_JS || path.join(ROOT, 'core', 'faces.js'), 'utf8').split('\n').filter(l => !/netWarpTileOutsideCanvas\(activeNetWarp/.test(l)).map(l => l.replace("return typeof netWarpRefineFaces === 'function' ? netWarpRefineFaces(result, activeNetWarp) : result;", 'return result;'));
     const nohook = path.join(dir, 'faces-nohook.js'); fs.writeFileSync(nohook, cur.join('\n'));
@@ -125,15 +125,15 @@ if (on('5')) {
     console.log('REPORT frame time with faces (ms, 10 orbits, D6):', J(rep));
     check(`(5) time per frame with faces in the hexagon Field <= 1.5 x Aus with faces (worst of 5/5, 7/5, 9/9: ${worst.toFixed(2)})`, worst <= 1.5);
 }
-// ---- 7. core/faces.js differs from main (a51af63b) by the two documented hooks only ----
+// ---- 7. core/faces.js differs from main (c8c36011) by the two documented hooks only ----
 if (on('7')) {
-    let diff = null; try { diff = execSync('git diff -U0 a51af63b -- core/faces.js', { cwd: ROOT }).toString(); } catch (e) { }
-    if (diff === null) check('(7) git or a51af63b is not available here: skipped', true);
+    let diff = null; try { diff = execSync('git diff -U0 c8c36011 -- core/faces.js', { cwd: ROOT }).toString(); } catch (e) { }
+    if (diff === null) check('(7) git or c8c36011 is not available here: skipped', true);
     else {
         const added = diff.split('\n').filter(l => /^\+[^+]/.test(l)), removed = diff.split('\n').filter(l => /^-[^-]/.test(l));
-        // task 095: since then faces.js also carries the collinear repair behind the switch faceRepairCollinear: 178 ADDED lines (task 103: +41, pin was 137), none removed, against 7307ec7e (pin: was 0 added; before, `added.length === 2`)
-        let d95 = null; try { d95 = execSync('git diff -U0 7307ec7e -- core/faces.js', { cwd: ROOT }).toString().split('\n'); } catch (e) { }
-        check('(7b) core/faces.js against 7307ec7e (task 095): exactly 178 added lines (task 095: 59 + 8 marker lines; task 098: 70; task 103: 41), none removed, the switch defaults to false', d95 === null || (d95.filter(l => /^\+[^+]/.test(l)).length === 178 && d95.filter(l => /^-[^-]/.test(l)).length === 0 && /^\+let faceRepairCollinear = false;$/m.test(d95.join('\n'))));
+        // task 095: since then faces.js also carries the collinear repair behind the switch faceRepairCollinear: 178 ADDED lines (task 103: +41, pin was 137), none removed, against d693a1d9 (pin: was 0 added; before, `added.length === 2`)
+        let d95 = null; try { d95 = execSync('git diff -U0 d693a1d9 -- core/faces.js', { cwd: ROOT }).toString().split('\n'); } catch (e) { }
+        check('(7b) core/faces.js against d693a1d9 (task 095): exactly 178 added lines (task 095: 59 + 8 marker lines; task 098: 70; task 103: 41), none removed, the switch defaults to false', d95 === null || (d95.filter(l => /^\+[^+]/.test(l)).length === 178 && d95.filter(l => /^-[^-]/.test(l)).length === 0 && /^\+let faceRepairCollinear = false;$/m.test(d95.join('\n'))));
         check('(7) core/faces.js: exactly the two hooks plus the 178 lines of tasks 095, 098 and 103 (netWarpRefineFaces at the end of computeCellFaces replaces `return result;`, netWarpTileOutsideCanvas in drawFaceFillsAtTile)',
             added.length === 2 + 178 && removed.length === 1 && /netWarpRefineFaces\(result, activeNetWarp\)/.test(added.join('')) && /netWarpTileOutsideCanvas\(activeNetWarp, tileCentroid, flip180\)/.test(added.join('')) && /^-\s+return result;$/.test(removed[0]), J({ added: added.length, removed: removed }));
     }

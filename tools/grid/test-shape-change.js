@@ -1,6 +1,6 @@
 // Task 068c3a: a shape change keeps the ORDNUNG (clamped to the new shape's maximum in the lage), the lage stays, the notice says what was cleared and the dialog asks first when layers
 // or the timeline would go with it.
-//   node tools/grid/test-shape-change.js     BASE = the commit before 068c3a (default f5ca44fd); OLD_TREE = that tree already extracted
+//   node tools/grid/test-shape-change.js     BASE = the commit before 068c3a (default f9b801e4); OLD_TREE = that tree already extracted
 //   1. no shape change: byte-equal to the old tree (measure-g5a/g5b/g6a/g6b, measure-lage2-app)
 //   2. base: every ordered pair of shapes x ordnung 1..12 x lage 1/2 (switch on): ordnung = min(old, max), lage kept, the grid = a freshly built grid of that shape and ordnung
 //   3. layer: the same through updateActiveLayerGrid({ shape }), with the clamp report; a legacyC1 state drops the marker
@@ -8,7 +8,7 @@
 //   5. texts de/en
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || 'f5ca44fd';
+const BASE = process.env.BASE || 'f9b801e4';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');

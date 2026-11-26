@@ -1,6 +1,6 @@
 // Task 074 (size step 1): a size change of the base keeps the lines and the free endpoints (scaled), the alt net (seed scaled) and the redo stack; layers, timeline and colours are still cleared,
 // asked first and said after. resizeBase() (core/state.js) is the one write.
-//   node tools/grid/test-resize-base.js      BASE = the commit before 074 (default e1a6e7ac); OLD_TREE = that tree already extracted
+//   node tools/grid/test-resize-base.js      BASE = the commit before 074 (default c531739d); OLD_TREE = that tree already extracted
 //   1. nothing without a size change moves: measure scripts byte-equal to the old tree, protected files unchanged
 //   2. old (rebuild with the lines cleared) against new: every shape x ordnung 1..6 x lage 1/2 x 72 size pairs: ids, line pairs, nodes = scaled nodes (0 px), names equal, the drawing = the rebuilt
 //      drawing (hash) and = the scaled old drawing (100 % of the segments inside the canvas)
@@ -14,7 +14,7 @@
 //  10. sources: the handler calls resizeBase and no other write of shapeSizeFactor is left in sketch.js
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process'), crypto = require('crypto');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || 'e1a6e7ac';
+const BASE = process.env.BASE || 'c531739d';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');

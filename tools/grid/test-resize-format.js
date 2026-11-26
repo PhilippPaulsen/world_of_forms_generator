@@ -1,12 +1,12 @@
 // Task 078 (B2): a size or FORMAT change (X, Y) -> (X', Y') of the base carries lines, free points, layers, timeline, alt net and colours along (074/075 at X = Y), the canvas follows W x H.
-//   node tools/grid/test-resize-format.js     STATE_JS / SKETCH_JS / STYLE_CSS / INDEX_HTML = mutated copies (sabotage runs); BASE = the commit before 078 (default 7420aaea); OLD_TREE = that tree already extracted; NO_OLD=1 skips (1)
+//   node tools/grid/test-resize-format.js     STATE_JS / SKETCH_JS / STYLE_CSS / INDEX_HTML = mutated copies (sabotage runs); BASE = the commit before 078 (default 9216b0b0); OLD_TREE = that tree already extracted; NO_OLD=1 skips (1)
 //   1. X = Y: measure scripts byte-equal to the old tree, the eight protected functions and the protected files unchanged
 //   2. 3 shapes x ordnung 1..4 x lage 1/2 x 72 ordered (X,Y) -> (X',Y') pairs (3/3, 3/5, 5/3, 5/7, 7/8, 8/7, 2/6, 1/3, 4/4 ...): grid nodes = the scaled old ones = the rebuilt grid (1e-9 px), ids / lines / redo / free point,
 //      layers L' = L * min' / min exactly, offset * f, rotation, canvas = W' x H', the centre moves C1 -> C2 (measured), dry run = real run and changes nothing, invalid sizes throw first
 //   3. alt net seed; 4. timeline playback t = 0, .5, 1; 5. colours (square face by face, triangle / hexagon counted); 6. the canvas hook, nodeHit on a W x H canvas, the Field net as Single; 7. sources (CSS, HTML, sketch.js)
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || '7420aaea';
+const BASE = process.env.BASE || '9216b0b0';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const read = f => fs.readFileSync(process.env[f.replace(/\W/g, '_').toUpperCase()] || path.join(ROOT, f), 'utf8');

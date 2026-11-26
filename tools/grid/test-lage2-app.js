@@ -1,5 +1,5 @@
 // Task 067: lage 2 in the app behind the internal developer switch (globalThis.__lage2 === true / ?lage2=1; default OFF).
-//   node tools/grid/test-lage2-app.js      BASE = the commit before 067 (default 27d30af4); OLD_TREE = that tree already extracted (sabotage copies have no .git)
+//   node tools/grid/test-lage2-app.js      BASE = the commit before 067 (default 8558e6e0); OLD_TREE = that tree already extracted (sabotage copies have no .git)
 //   1. lage 1 is byte-equal to the old tree: the four tree-agnostic measurements (g5a grids/drawn/export/net/morph frames, g5b layers, g6a session, g6b SVG/name) plus the fingerprints of the lage-1 grids
 //   2. switch OFF (the default): lage 2 is refused everywhere as before (validate, setGrid, projectGridSpec, projectLayerGridSpec, maxOrdnungFor, session validate/plan)
 //   3. switch ON: ceilings 5/5/2 for base and layers, nodes carry u, v, E = ordnung, legacy c = 1 and fromLegacy never give lage 2
@@ -9,7 +9,7 @@
 //   7. every path with a lage-2 grid: draw, faces, colour, net, morph, export JSON/SVG, name v2, catalog transport (locked gates are listed, not changed)
 const fs = require('fs'), path = require('path'), os = require('os'), vm = require('vm'), cp = require('child_process'), crypto = require('crypto');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || '27d30af4';
+const BASE = process.env.BASE || '8558e6e0';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');

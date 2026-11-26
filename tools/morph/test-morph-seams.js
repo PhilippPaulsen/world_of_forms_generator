@@ -3,7 +3,7 @@
 //   2. spatialMorphRenderGrow as a pure function: offset, miter limit, orientation, splitters / degenerate polygons unchanged, input not touched
 //   3. a morph frame: every drawn polygon is its exact face moved outwards by at most offset x miter limit (same count, order, fill, vertex count); no contour (stroke) at all; the p5 style is back, also after an exception
 //   4. translucent fills, unknown formats and splitters are drawn exactly (not grown), opaque neighbours grown
-//   5. nothing in the DATA is grown: the face result is byte-equal before and after the draw, and the SVG export (svgPathCollector set) draws the exact faces: generateSVGString byte-equal to main before this task (d7271e2b)
+//   5. nothing in the DATA is grown: the face result is byte-equal before and after the draw, and the SVG export (svgPathCollector set) draws the exact faces: generateSVGString byte-equal to main before this task (54726863)
 //   6. the STATIC path (drawFaceFillsAtTile, morph off) is unchanged: the whole call log is byte-equal to main before this task
 //   node tools/morph/test-morph-seams.js        sabotage runs: SPATIAL_MORPH_RENDER_JS=/copy.js, FACES_JS=/copy.js (static path)
 'use strict';
@@ -14,7 +14,7 @@ const { seamRule, SEAM_MAX, OFFSET, MITER } = require('./seam-rule.js');
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const J = JSON.stringify, sha = (t) => crypto.createHash('sha256').update(t).digest('hex').slice(0, 16);
-const BASE = 'd7271e2b';
+const BASE = '54726863';
 const OLD_FILE = path.join(os.tmpdir(), `smr096-${process.pid}.js`);
 fs.writeFileSync(OLD_FILE, execSync(`git show ${BASE}:core/spatial-morph-render.js`, { cwd: ROOT, maxBuffer: 1 << 26 }));
 process.on('exit', () => { try { fs.unlinkSync(OLD_FILE); } catch (e) { } });

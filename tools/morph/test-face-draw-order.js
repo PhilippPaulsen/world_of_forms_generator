@@ -17,7 +17,7 @@ const C = require('../color/corpus.js');
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const J = JSON.stringify;
-const BASE = '213f5faf';
+const BASE = '4faaa8d8';
 const CORE = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'farborgel-bridge', 'glossary'];
 const srcWith = (facesText) => CORE.map((f) => f === 'faces' ? facesText : fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8')).join('\n');
 const NEW_TXT = fs.readFileSync(process.env.FACES_JS || path.join(ROOT, 'core', 'faces.js'), 'utf8');

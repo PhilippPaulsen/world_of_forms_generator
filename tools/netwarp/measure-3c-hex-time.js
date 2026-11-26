@@ -3,7 +3,7 @@ const path = require('path');
 const vm = require('vm');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = '228878be';   // main at the start of task 127 (square and triangle 3C exist there: byte-identity of their drawing is pinned)
+const BASE = '796b7a41';   // main at the start of task 127 (square and triangle 3C exist there: byte-identity of their drawing is pinned)
 const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'export', 'farborgel-bridge'];
 const readNew = f => fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8');
 const readOld = f => execSync(`git show ${BASE}:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString();

@@ -1,5 +1,5 @@
 // Task 071c: updatePatternNameStatus / updateGridInfoLine write the DOM only when the shown value CHANGES (the real sketch.js code on a DOM stub with write counters).
-//   node tools/grid/test-name-writes.js      (run from a tree: it reads its own ../../sketch.js; the old tree c634e55d is RED)
+//   node tools/grid/test-name-writes.js      (run from a tree: it reads its own ../../sketch.js; the old tree 81e91c44 is RED)
 // A repeated call with the same input writes 0 times (it replaced the name's content on every draw() before, so the browser restarted the tooltip each time and it never appeared);
 // a change of line, ordnung, lage, shape, symmetry mode or language writes exactly once per changed field; reduced symmetry has no title; the title survives every rebuild.
 const fs = require('fs'), path = require('path');

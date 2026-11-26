@@ -15,7 +15,7 @@
  */
 'use strict';
 const fs = require('fs'), os = require('os'), path = require('path'), vm = require('vm'), zlib = require('zlib'), { execFileSync } = require('child_process');
-const ROOT = path.join(__dirname, '..', '..'), BASE = '45d45557';
+const ROOT = path.join(__dirname, '..', '..'), BASE = '4e182dfb';
 const SKETCH = fs.readFileSync(process.env.SKETCH_JS || path.join(ROOT, 'sketch.js'), 'utf8');
 let checks = 0, failures = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
@@ -160,7 +160,7 @@ const run = (...a) => G.runAnimationExport(...a);
             const old = show('sketch.js'), PROT = ['applyTimelineFrame', 'applyLayerConnectionsMorphFrame', 'resolveTimelineKeyframeCoords', 'resolveTimelineSegment', 'totalTimelineDurationMs', 'setTimelineProgress', 'toggleTimelinePlayback', 'previewTimelineSegmentMidpoint', 'draw'];
             check('the eight protected functions and draw() are byte-equal to main', PROT.every(n => grab(SKETCH, n) === grab(old, n)));
             const core = execFileSync('git', ['diff', '--name-only', BASE, '--', 'core/'], { cwd: ROOT }).toString().split('\n').filter(Boolean);
-            check('core/ differs from main only in anim-export.js; core/export.js is byte-equal', core.every(f => f === 'core/anim-export.js' || f === 'core/netwarp.js' || f === 'core/curves.js' || f === 'core/session.js' /* task 121: 3C-1 */) && !core.includes('core/export.js'), J(core));
+            check('core/ differs from main only in anim-export.js; core/export.js is byte-equal', core.every(f => f === 'core/anim-export.js' || f === 'core/netwarp.js' || f === 'core/curves.js' || f === 'core/session.js' /* task 121: 3C-1 */ || f === 'core/session-apply.js' || f === 'core/state.js' /* task 133: the session field uiMode (session.js, session-apply.js, state.js) */) && !core.includes('core/export.js'), J(core));
             const n = (s, re) => (s.match(re) || []).length;
             check('no block comment was added to sketch.js (the old source-text tests strip comments with a regex): the same count of "/*" and "*/" as main', n(SKETCH, /\/\*/g) === n(old, /\/\*/g) && n(SKETCH, /\*\//g) === n(old, /\*\//g));
             const rest = SKETCH.replace(/\/\/ The spatial morph's write and read access[\s\S]*?window\.getSpatialMorph = getSpatialMorph;\n/, '').replace(/\/\/ d3 \(K3\): "only conclusive pairings"[\s\S]*?\nfunction timelineConclusiveView\([\s\S]*?\n\}\n/, '');

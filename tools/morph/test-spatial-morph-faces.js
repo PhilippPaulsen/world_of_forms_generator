@@ -35,12 +35,12 @@ const PRINT = process.argv.includes('--print-pins');
 // task 090: core/faces.js carries two documented hooks (netWarpRefineFaces, netWarpTileOutsideCanvas); the pin hashes it WITHOUT them (tools/grid/test-net-field-hex-faces.js (7) pins the hooks themselves)
 const stripHooks = (rel, t) => rel === 'core/faces.js' ? t.replace(/^[ \t]*\/\/ task (09[58]|103) \{\n[\s\S]*?^[ \t]*\/\/ task (09[58]|103) \}\n/gm, '').split('\n').filter((l) => !/netWarpTileOutsideCanvas\(activeNetWarp/.test(l)).map((l) => l.replace(/return typeof netWarpRefineFaces === 'function' \? netWarpRefineFaces\(result, activeNetWarp\) : result;.*$/, 'return result;')).join('\n') : t;
 
-// ---- pins: the tree before this stage (3108480a) ----------------------------------------------------------------------------------------------------------------------------------------------
+// ---- pins: the tree before this stage (bae316bd) ----------------------------------------------------------------------------------------------------------------------------------------------
 const PIN_FILES = {
   'core/tiling.js': 'ca6b9c1c77c7d7973f3deb61a1218dff991351e6bed3e5f1ed06c1de5501aa77',
   'core/faces.js': 'aebc7ceab383339f4e589d53c9e8a9679575466f01b7899fa0b4a6404e611235',   // task 095: pin restored; stripHooks also drops the marked 095 blocks (// task 095 { ... // task 095 })
 };
-// the hash of every line() / bezier() call of the morph frame in these scenes, taken from core/spatial-morph-render.js of 3108480a (node ... --print-pins with SPATIAL_MORPH_RENDER_JS = that file)
+// the hash of every line() / bezier() call of the morph frame in these scenes, taken from core/spatial-morph-render.js of bae316bd (node ... --print-pins with SPATIAL_MORPH_RENDER_JS = that file)
 const LINES_BEFORE = { 'field-faces-off': '5d37aa20c703d3d2', 'field-faces-on': '5d37aa20c703d3d2', 'tiled-faces-on': '15fe329eabaada62', 'single-faces-on': '9c6fa7396bb0297c', 'nonet-faces-on': 'f8dc63cc0a2e678f', 'curve-field-faces-on': '4f53cda18c2baa0c' };
 // the hash of the whole call log (lines AND fills) of the NORMAL frame (switch off) with a field net and faces on, same tree
 const OFF_BEFORE = '0df057907c45df12';

@@ -1,5 +1,5 @@
 // Task 069: the lage-1 ceiling of the ordnung is 12 for EVERY shape (it was triangle 6, square 12, hex 7); lage 2 stays 5 / 5 / 2.
-//   node tools/grid/test-ordnung12.js     BASE = the commit before 069 (default eedbd812); OLD_TREE = that tree already extracted
+//   node tools/grid/test-ordnung12.js     BASE = the commit before 069 (default f3e461d3); OLD_TREE = that tree already extracted
 //   1. everything up to the old ceilings is byte-equal to the old tree; the files this task must not touch are unchanged
 //   2. ONE source of the limit (core/forms.js NODE_COUNT_MAX), every consumer reads it: validator, stepper, clamps, session, catalog transport, messages, markup
 //   3. ordnung 7..12 on all three shapes: valid grids (node formulas), group closure, line keys and node numbers against the Orakel (by coordinates), unique names, round trips
@@ -7,7 +7,7 @@
 //   5. session round trip with ordnung 12 (base, layers); the validator; the catalog transport up to 12
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || 'eedbd812';
+const BASE = process.env.BASE || 'f3e461d3';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');

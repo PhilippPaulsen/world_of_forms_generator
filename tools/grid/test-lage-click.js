@@ -1,5 +1,5 @@
 // Task 068c3b: the lage by a second click on the ACTIVE shape button (base and layer), the dot, aria-label / title, the notices, the dialog, the info sentence.
-//   node tools/grid/test-lage-click.js     BASE = the commit before 068c3b (default acaf3bda); OLD_TREE = that tree already extracted
+//   node tools/grid/test-lage-click.js     BASE = the commit before 068c3b (default 087a9d2a); OLD_TREE = that tree already extracted
 //   1. switch off / everything else: byte-equal to the old tree (measure scripts), protected files unchanged, the p5 handler count unchanged
 //   2. base handler (the real text from sketch.js on fakes): lage 1 <-> 2 for the 3 shapes, ordnung kept, lines / redo stack cleared, gridRevision + 1, notices; refusals; the dialog; switch off
 //   3. layer: toggleLayerLage (lage, lines, timeline lock, ceiling, switch off) and the handler branch
@@ -7,7 +7,7 @@
 //   5. the dot's measures against the shape symbols at 36 / 48 px; the info sentence; texts
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process'), vm = require('vm');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || 'acaf3bda';
+const BASE = process.env.BASE || '087a9d2a';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');

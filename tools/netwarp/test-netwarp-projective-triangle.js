@@ -21,7 +21,7 @@ const path = require('path');
 const vm = require('vm');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = '8fac0c91';   // main at the start of task 124 (square 3C exists there: the byte-identity of its drawing and export is pinned)
+const BASE = '3e90521b';   // main at the start of task 124 (square 3C exists there: the byte-identity of its drawing and export is pinned)
 const FILES = ['forms', 'orbits', 'symmetry', 'curves', 'netwarp', 'tiling', 'faces', 'color', 'facecolor', 'export', 'farborgel-bridge'];
 const readNew = f => fs.readFileSync(path.join(ROOT, 'core', f + '.js'), 'utf8');
 const readOld = f => execSync(`git show ${BASE}:core/${f}.js`, { cwd: ROOT, maxBuffer: 1 << 26 }).toString();

@@ -139,8 +139,8 @@ console.log('\n== 4. stateless, wiring, globals ==');
   check('stateless: t = 0..1 and t = 1..0 give exactly the same colours per face and t', ts.every((t) => a[t] === b[t]));
   check('the draw call passes the normalised mode to the colours (task 038: through the frame memo, which hands it on)', /tileMemo\.colors\(tileFaces, cornerFields, wTile, mode\)/.test(RENDER) && /spatialMorphRenderFaceColors\(res, fields, w, mode\)/.test(RENDER));
   const top = (src) => new Set([...src.matchAll(/^(?:function|const|let|var)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]));
-  // the names of the tree before the task (task/033-spatial-vier-ecken)
-  const base = require('child_process').execSync('git show task/033-spatial-vier-ecken:core/spatial-morph-render.js', { cwd: ROOT, maxBuffer: 1 << 26 }).toString();
+  // the names of the tree before the task (task/033-spatial-vier-ecken, tip 2a0ac97a since the history rewrite)
+  const base = require('child_process').execSync('git show 2a0ac97a:core/spatial-morph-render.js', { cwd: ROOT, maxBuffer: 1 << 26 }).toString();
   const added2 = [...top(RENDER)].filter((x) => !top(base).has(x));
   console.log(`  info: new top-level names: ${added2.join(', ')}`);
   check('every new global of core/spatial-morph-render.js has the prefix spatialMorph[A-Z]', added2.length > 0 && added2.every((x) => /^spatialMorph[A-Z]/.test(x)));

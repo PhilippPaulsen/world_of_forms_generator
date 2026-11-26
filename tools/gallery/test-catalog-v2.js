@@ -1,5 +1,5 @@
 // G7a (task 064): the catalog v2 - generator, manifest, codec, Formorgel, backfill.
-//   node tools/gallery/test-catalog-v2.js     BASE = the commit before 064 (default 59338562); sabotage runs work on a COPY of the repo tree (this file runs from its own ../..)
+//   node tools/gallery/test-catalog-v2.js     BASE = the commit before 064 (default 52c78b05); sabotage runs work on a COPY of the repo tree (this file runs from its own ../..)
 //   1. manifest: every path exists, no duplicates (path, or grid + lines), the catalog is exactly the planned scope, the committed files equal a fresh generation byte for byte
 //   2. per shape x ordnung: the preview file = the page's renderer (gallery-render.js on the live core) = what the entry's generator link resolves to; link and paste round trip
 //   3. names: the catalog name of every entry = formatGridName of its source = the export name of the live generator for the same pattern
@@ -7,7 +7,7 @@
 //   5. backfill: the four rows are the key paths of the legacy orbits; the old catalog is gone (task 066)
 const fs = require('fs'), path = require('path'), os = require('os'), vm = require('vm'), cp = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || '59338562';
+const BASE = process.env.BASE || '52c78b05';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');

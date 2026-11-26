@@ -1,9 +1,9 @@
 // G3 (task 058): the pure lage-2 builder (core/forms.js buildGridNodes / projectGridNodes / buildGrid with {beyondCeiling:true}) and
 // core/symmetry.js canonicalGridFrame, measured against the Orakel tools/gitter/measure-name-rule.js (matched by COORDINATES, never by ids).
-//   node tools/grid/test-lage2-builder.js        FORMS_JS / SYMMETRY_JS = mutated copies (sabotage runs); BASE = git commit of the old forms.js (default 4ab7654d)
+//   node tools/grid/test-lage2-builder.js        FORMS_JS / SYMMETRY_JS = mutated copies (sabotage runs); BASE = git commit of the old forms.js (default c33863e7)
 const fs = require('fs'), path = require('path'), vm = require('vm'), cp = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || '4ab7654d';
+const BASE = process.env.BASE || 'c33863e7';
 const rd = (f, env) => fs.readFileSync(env || path.join(ROOT, f), 'utf8');
 const O = require('../gitter/measure-name-rule.js');
 const FORM_COUNTS = eval(fs.readFileSync(path.join(ROOT, 'tools/gitter/measure-name-rule.js'), 'utf8').match(/const FORM_COUNTS = (\[[\s\S]*?\n\]);/)[1]);

@@ -1,9 +1,9 @@
 // G2 (task 057): GridSpec facade over the Lage-1 builders. Compares against the PREVIOUS core/forms.js (git, BASE env, default
-// 159beb7b = main before 057) byte for byte, then checks the adapter, the validator, rebuildGrid() and setGrid().
+// 9274040f = main before 057) byte for byte, then checks the adapter, the validator, rebuildGrid() and setGrid().
 //   node tools/grid/test-gridspec-facade.js     FORMS_JS / STATE_JS = paths of mutated copies (sabotage runs)
 const fs = require('fs'), path = require('path'), vm = require('vm'), cp = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || '159beb7b';
+const BASE = process.env.BASE || '9274040f';
 const newForms = fs.readFileSync(process.env.FORMS_JS || path.join(ROOT, 'core/forms.js'), 'utf8');
 const stateSrc = fs.readFileSync(process.env.STATE_JS || path.join(ROOT, 'core/state.js'), 'utf8');
 const oldForms = cp.execFileSync('git', ['show', BASE + ':core/forms.js'], { cwd: ROOT, encoding: 'utf8' });

@@ -1,5 +1,5 @@
 // Task 071: #pattern-name-status shows the v2 name for main-group patterns (the same name the export carries), with a tooltip; every other case keeps the old name.
-//   node tools/grid/test-name-display.js     BASE = the commit before 071 (default 1b8362e9); OLD_TREE = that tree already extracted
+//   node tools/grid/test-name-display.js     BASE = the commit before 071 (default a0b8024e); OLD_TREE = that tree already extracted
 //   1. nothing but the display changes: measure scripts equal the old tree; core/orbits.js only gained gridCodeFor and gridDisplayNameFor
 //   2. gridDisplayNameFor: every shape, ordnung 1..12 (lage 2 to 12 / 12 / 9): ascii = the export name, display normalises to it, overline and aA exist, round trip through parseGridName
 //   3. the real updatePatternNameStatus on fakes: main group -> v2 + tooltip; reduced symmetry, free endpoint, no line -> the old behaviour and no tooltip
@@ -7,7 +7,7 @@
 //   5. tooltip texts de/en; the time per call
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
-const BASE = process.env.BASE || '1b8362e9';
+const BASE = process.env.BASE || 'a0b8024e';
 let pass = 0, fail = 0;
 const check = (n, ok, d) => { if (ok) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : d); } };
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
