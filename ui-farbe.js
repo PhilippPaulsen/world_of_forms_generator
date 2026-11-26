@@ -620,7 +620,7 @@
   const farborgelLink = $('#btn-farborgel');
   function syncFarborgelLink() {
     if (!farborgelLink || typeof farborgelPageUrl !== 'function' || typeof anchorFor !== 'function') return;
-    const url = farborgelPageUrl(anchorFor(activeLayer), GENERATOR_TAB_ID);
+    const url = farborgelPageUrl(anchorFor(activeLayer), GENERATOR_TAB_ID) + (window.uiI18n && window.uiI18n.lang === 'en' ? '&lang=en' : '');   // task 138: the Farborgel opens in English when the Studio is
     if (farborgelLink.getAttribute('href') !== url) farborgelLink.setAttribute('href', url);
   }
 

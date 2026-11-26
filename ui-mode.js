@@ -95,7 +95,7 @@
     if (!b) return false;
     var on = get() === 'advanced';
     var dot = !on && advancedActive(liveState());
-    var lang = window.UI && typeof window.UI.lang === 'string' ? window.UI.lang : '';
+    var lang = window.uiI18n && typeof window.uiI18n.lang === 'string' ? window.uiI18n.lang : (window.UI && typeof window.UI.lang === 'string' ? window.UI.lang : '');   // task 138: uiI18n.lang is the LIVE value (UI.lang is copied at load)
     var key = (on ? 'A' : 'S') + (dot ? '1' : '0') + lang;
     if (key === buttonKey) return false;
     buttonKey = key;

@@ -390,6 +390,20 @@ console.log('\n== 8. key names ==');
     })());
 }
 
+// ---- task 138: the language is not part of the URL a snapshot is bound to ------------------------------------------------------
+console.log('\n== task 138: ?lang= is ignored by the href comparison ==');
+{
+    const U = 'https://example.org/studio/', ok = (snap, cur, nav) => S.sessionShouldRestore({ navType: nav || 'navigate', hasSnapshot: true, snapshotHref: snap, currentHref: cur, allowed: true }).restore === true;
+    check('?lang=de -> ?lang=en (a language switch, same-URL navigate): restores', ok(U + '?lang=de', U + '?lang=en'));
+    check('no lang -> ?lang=en, and ?lang=en -> no lang: restores both ways', ok(U, U + '?lang=en') && ok(U + '?lang=en', U));
+    check('a reload and a back_forward with another lang: restores', ok(U + '?lang=de', U + '?lang=en', 'reload') && ok(U + '?lang=de', U + '?lang=en', 'back_forward'));
+    check('the hash still does not matter, with or without lang', ok(U + '?lang=de#farbe', U + '?lang=en#netz'));
+    check('every OTHER parameter still counts: ?shape=hex&lang=de vs ?shape=square&lang=de, and ?mode=advanced vs none', !ok(U + '?shape=hex&lang=de', U + '?shape=square&lang=de') && !ok(U + '?mode=advanced', U) && !ok(U + '?lang=de&x=1', U + '?lang=en'));
+    check('a parameter order or position of lang does not matter: ?lang=en&mode=advanced = ?mode=advanced&lang=de', ok(U + '?lang=en&mode=advanced', U + '?mode=advanced&lang=de'));
+    check('a different path with the same lang is still a different page', !ok(U + '?lang=de', 'https://example.org/other/?lang=de'));
+    check('the stored href is untouched (the comparison, not the storage, ignores lang)', S.makeSessionEnvelope('x', U + '?lang=de#a', 1).includes('?lang=de') && !S.makeSessionEnvelope('x', U + '?lang=de#a', 1).includes('#a') || S.makeSessionEnvelope('x', U + '?lang=de', 1).includes('?lang=de'));
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 console.log(failures ? 'FAIL' : 'PASS');
 process.exit(failures ? 1 : 0);
