@@ -1084,6 +1084,8 @@ html[data-mode="simple"] [data-level="advanced"] { display: none !important; }
    aria-pressed via UI.pressed()), the other gets the same small corner dot .nav-more.has-state uses when the
    sheet's active harmony is in the family that is currently hidden. */
 .nav-anchor-views .icon-btn { position: relative; }
+/* Task 157: a LOCKED view trigger (the neutral state of the hue stepper locks Kreis and Dreieck, so does fill-off) takes the plain locked look, not the black fill of .icon-btn.active (index.html). */
+.nav-anchor-views .icon-btn.active[aria-disabled="true"] { background: var(--background); color: var(--color-disabled); border-color: var(--color-hairline); }
 .nav-anchor-views .icon-btn.has-state::after {
   content: "";
   position: absolute;
