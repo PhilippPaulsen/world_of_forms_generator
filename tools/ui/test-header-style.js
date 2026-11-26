@@ -7,7 +7,7 @@ const path = require('path');
 const css = fs.readFileSync(path.join(__dirname, '..', '..', 'style.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 let failures = 0, checks = 0;
 const check = (name, ok, detail) => { checks++; if (!ok) failures++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail !== undefined ? '  [' + detail + ']' : ''}`); };
-const rule = sel => { const m = css.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\{([^}]*)\\}')); return m ? m[1] : null; };
+const rule = sel => { const re = new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\{([^}]*)\\}', 'g'); const all = []; let m; while ((m = re.exec(css))) all.push(m[1]); return all.length ? all.join(' ; ') : null; };   // every rule of that selector, joined
 const tab = rule('.app-tabs a'), cur = rule('.app-tabs a[aria-current="page"]');
 check('every header tab has the Book weight (var(--weight-regular))', /font-weight: var\(--weight-regular\)/.test(tab || ''));
 check('the current tab has the SAME weight and is marked by colour only (black)', /font-weight: var\(--weight-regular\)/.test(cur || '') && /color: var\(--color-text\)/.test(cur || '') && !/weight-strong|underline/.test(cur || ''));
