@@ -434,6 +434,15 @@
     // ---- strings of the scripts of the phone layout that carry a key ----
     'notice.close': { de: 'Hinweis schließen', en: 'Close notice' },
     'more.farbe.button': { de: 'Mehr: Farben zurücksetzen, Knoten, Farborgel, Info, Download', en: 'More: reset colors, nodes, Color Organ, info, download' },
+    'lines.toggle': { de: 'Linien an/aus', en: 'Lines on/off' },
+    // task 143: the confirmation of Clear and Reset Color (UI.confirm)
+    'confirm.cancel': { de: 'Abbrechen', en: 'Cancel' },
+    'clear.title': { de: 'Alle Linien löschen?', en: 'Delete all lines?' },
+    'clear.text': { de: 'Alle Linien dieser Ebene werden gelöscht. Das lässt sich nicht rückgängig machen.', en: 'All lines of this layer will be deleted. This cannot be undone.' },
+    'clear.confirm': { de: 'Löschen', en: 'Delete' },
+    'reset.title': { de: 'Farben zurücksetzen?', en: 'Reset colours?' },
+    'reset.text': { de: 'Alle Farbzuordnungen dieser Ebene werden verworfen. Das lässt sich nicht rückgängig machen.', en: 'All colour assignments of this layer will be discarded. This cannot be undone.' },
+    'reset.confirm': { de: 'Zurücksetzen', en: 'Reset' },
     'lines.button': { de: 'Linien: an/aus, Linienstärke', en: 'Lines: on/off, line width' },
     'lines.weight': { de: 'Linienstärke', en: 'Line width' },
     'netz.lines.button': { de: 'Netzlinien zeigen', en: 'Show net lines' },
