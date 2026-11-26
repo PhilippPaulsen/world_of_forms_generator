@@ -10,6 +10,7 @@ These terms describe structures and operations, independent of any specific patt
 
 | German | English | Notes |
 |---|---|---|
+| Graustufen (Standard-Füllgrau) | grays (default gray fill) | Number of tones 2, 3, 4, 8; true white and true black are the ends (task 149/150) |
 | Knoten | node | |
 | Knotenlinie | node line | |
 | Thema / Themalinie | theme (line) | the seed line a pattern is generated from |
