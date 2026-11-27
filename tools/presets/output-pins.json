@@ -1,0 +1,67 @@
+{
+  "note": "Output pins (task 183): per preset SHA-256 of generateSVGString() and of buildExportData(null) without exportedAt, numbers rounded to 1e-6 (-0 = 0). Computed headless by tools/presets/test-output-pins.js on Node v22.23.2 (darwin), generator 9d5fac69. Other Node versions / platforms are NOT verified (Math.sin/cos/pow may differ in the last bit; the export is rounded for that, the SVG uses toFixed(2)). Re-pin only on a deliberate change of what is drawn: node tools/presets/test-output-pins.js --update, then check the diff.",
+  "measuredOn": "9d5fac69",
+  "node": "v22.23.2",
+  "presets": {
+    "quadrat-linien": {
+      "svg": "52fc26302aa46d6196ea357d3075d2447430ac6b09944d0c3b6ddc3daac69ec3",
+      "export": "1caa08328a4ee7a75c3025f4d67eee9ac91447474344420743c8e7e812224524",
+      "polygons": 0,
+      "paths": 1936
+    },
+    "quadrat-drehung-flaeche": {
+      "svg": "10e73e4382e585869f3d7e35f0470b762b6bb3ff290e1323635feb3f4727c087",
+      "export": "cdcbe2d00c6dabe07b07a1a6e028a893a8d40463414155f5c251b13322da9442",
+      "polygons": 1089,
+      "paths": 968
+    },
+    "quadrat-spiegelung-flaeche": {
+      "svg": "6a5935928e84275a0ad7dfd4e892aaad349900e9c462a65c62aa7efe81bebb39",
+      "export": "74cc8180008aa4ed43057b9f9b48047601a660ccba57bed36cd20b1aeb177d8e",
+      "polygons": 3025,
+      "paths": 1936
+    },
+    "quadrat-drehung-sinus": {
+      "svg": "5d23baeb2fb6347dc9a95604224f5df72871f8d6999d916cf2251ff4f823b0d6",
+      "export": "816a0113a2afdacf3cdf2c3197a2614c8a56db55af865ffe986535763f4a7ec7",
+      "polygons": 81,
+      "paths": 72
+    },
+    "quadrat-spiegelung-sinus": {
+      "svg": "e4b29fe87e45d110faa807163804e65c859e6c47fcae0c5c6632887013f055c4",
+      "export": "eb6683be9d1b1190bfe376bf3e6eaecfd79397ff7b34fd54b7e74381b3ba9fde",
+      "polygons": 225,
+      "paths": 144
+    },
+    "quadrat-drehung-projektiv": {
+      "svg": "904376eae0b335cc9f62b6856e631233936fecaa0f0386704b351c81650e0018",
+      "export": "f587473f607f9434e194260f20d13370a254c5f3e5ace315e82b14a5b452cf9d",
+      "polygons": 126,
+      "paths": 87
+    },
+    "quadrat-spiegelung-projektiv": {
+      "svg": "5fd5f312c0d86ccc6188ee7c4e6297cbf77ea6435df019c505466d8589f644d2",
+      "export": "dfb0336f09ec5dc82454b2e38b7c0e5f0f8308207fd1b4c48b1e105481993057",
+      "polygons": 350,
+      "paths": 174
+    },
+    "quadrat-drehung-linien": {
+      "svg": "bb80580543295bef416a8c54b13a4318c407a61226fc0a7f0c3885d2c25e5022",
+      "export": "edf06d71e08b7079c4c152a386cd4289818cd602036b81a5e0dc86d2e97145e0",
+      "polygons": 0,
+      "paths": 968
+    },
+    "quadrat-drehung-geometrisch": {
+      "svg": "e603c613482ef569328ed3b00eec3ace43eff73345ac74be459228131d37b8ce",
+      "export": "be5d666e6d705ec03e2b4c605c7b47e42d30ef03f440eca3bd70c45c4f737f65",
+      "polygons": 81,
+      "paths": 72
+    },
+    "quadrat-spiegelung-geometrisch": {
+      "svg": "de012a6e13cd1964348e407e1afda88d28ba326dd3ba814143a5f9a08d3383a1",
+      "export": "cf4fae65a34ad531b09fd456c96c5b25ef9bc200eeb6891539a78024ffb4b8a9",
+      "polygons": 225,
+      "paths": 144
+    }
+  }
+}

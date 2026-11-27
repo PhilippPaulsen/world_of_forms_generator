@@ -22,6 +22,8 @@ Stand: 2026-11-26 (Tasks 133 bis 142). Ergänzt `docs/agent-rules.md` (die verbi
 - **Website:** `node tools/test-no-suisse-fonts.cjs`, `node tools/test-start-page.cjs`, `node tools/test-site-nav.cjs`.
 - **Browser** (Chromium-Pane): Konsole leer, SuisseIntl geladen, Breiten 320/360/375/430/768/1280, DE und EN. Safari, iPhone, Firefox und Screenreader **von Hand**.
 
+- **Ausgabe der Presets (Task 183):** Jede Änderung an `core/faces.js`, `core/facecolor.js`, `core/tiling.js` oder `core/forms.js` muss `tools/presets/test-output-pins.js` unverändert grün lassen; `--update` (neu pinnen) nur bei bewusster Darstellungsänderung und nur mit Freigabe im Auftrag.
+
 ## Studio in die Website bringen (Sync)
 1. Generator-Branch lokal nach `main` mergen (`--no-ff`).
 2. Website: Branch `task/NNN-studio-sync`; `tools/sync-studio.sh main --dry-run` **zeigen**, dann ohne `--dry-run`; Commit "studio/ = copy of world_of_forms_generator @ <sha>".
