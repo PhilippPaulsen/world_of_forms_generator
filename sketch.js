@@ -5369,6 +5369,8 @@ function pressAt(x, y, pointerType, hit) {
     }
     if (foundId !== null) {
         const conns = activeConnections();
+        // task 180: a second click on the node that started the line would close it on itself ([a, a], a line of no length): cancel the start instead (it is not drawn, so this is the way back); nothing is added, the redo stack stays
+        if (conns.length && conns[conns.length - 1].length === 1 && conns[conns.length - 1][0] === foundId) { conns.pop(); redraw(); return; }
         if (!conns.length || conns[conns.length - 1].length === 2) conns.push([foundId]);
         else conns[conns.length - 1].push(foundId);
         clearActiveRedoStack(); // Clear redo stack on manual add
