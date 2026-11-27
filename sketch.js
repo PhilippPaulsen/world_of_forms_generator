@@ -2078,7 +2078,8 @@ function setup() {
 
     const pngBtn = select('#export-png');
     pngBtn && pngBtn.mousePressed(() => {
-        exportPNG();
+        markerHidden = true; redraw();   // task 182: the canvas is the image, so the start marker and the hover are blanked for the capture (toBlob snapshots inside saveCanvas)
+        try { exportPNG(); } finally { markerHidden = false; redraw(); }
         exportOverlay && exportOverlay.addClass('hidden');
     });
 
@@ -2450,17 +2451,19 @@ function draw() {
         const dotPos = nd => dotWarp ? applyNetWarp(dotWarp, nd) : nd;
         // Hover (Phase 2, B4c): ONE dot is red - the nearest within HOVER_RADIUS - chosen by the same pickNodeAt over the same drawn positions
         // (drawnHitNodes) that a click uses, so the red dot is the node a click on that spot selects. It used to be every dot within 10 units.
-        const hovered = pickNodeAt(drawnHitNodes(), mouseX, mouseY, HOVER_RADIUS);
+        // task 182: no hover on touch and pen (hoverOn: the last pointer was a mouse), the start node of an open line (selectedId) is red as long as it is the start, none of it in an image export (markerHidden)
+        const hovered = (hoverOn && !markerHidden) ? pickNodeAt(drawnHitNodes(), mouseX, mouseY, HOVER_RADIUS) : null;
         const hoverId = hovered ? hovered.id : null;
+        const selectedId = markerHidden ? null : openStartId(activeConnections());
         nodes.forEach(nd => {
             const p = dotPos(nd);
             if (activeLayer === 'base') {
                 // Default: Schwarz (Grid) / Blau (frei) oder Rot bei Hover
-                fill(nd.id === hoverId ? color(220, 0, 0) : (nd.free ? color(30, 110, 220) : color(0)));
+                fill(nd.id === hoverId || (activeLayer === 'base' && nd.id === selectedId) ? color(220, 0, 0) : (nd.free ? color(30, 110, 220) : color(0)));
             } else {
                 fill(200);
             }
-            ellipse(p.x, p.y, 6, 6);
+            ellipse(p.x, p.y, activeLayer === 'base' && nd.id === selectedId ? 8 : 6, activeLayer === 'base' && nd.id === selectedId ? 8 : 6);
         });
         // The active layer's own persisted nodes. They are STORED canonically (untransformed - orbits, export, morphing and
         // "Align to base" rely on that), but the dot must stand where the layer's central-tile copy is DRAWN: c + offset +
@@ -2470,8 +2473,8 @@ function draw() {
             const dotLayer = additionalLayers[activeLayer];
             dotLayer.nodes.forEach(nd => {
                 const p = dotPos(layerNodeDrawnPosition(dotLayer, nd));
-                fill(nd.id === hoverId ? color(220, 0, 0) : (nd.free ? color(30, 110, 220) : color(0)));
-                ellipse(p.x, p.y, 6, 6);
+                fill(nd.id === hoverId || nd.id === selectedId ? color(220, 0, 0) : (nd.free ? color(30, 110, 220) : color(0)));
+                ellipse(p.x, p.y, nd.id === selectedId ? 8 : 6, nd.id === selectedId ? 8 : 6);
             });
         }
         pop();
@@ -2623,6 +2626,8 @@ function mouseMoved() {
 // explicit setter since `arr = []` can't be expressed through a
 // returned reference.
 function activeConnections() { return activeLayer === 'base' ? connections : additionalLayers[activeLayer].connections; }
+// task 182: the id of the start node of an open line (the last connection of the active sheet holds one id), else null
+function openStartId(conns) { const last = conns[conns.length - 1]; return last && last.length === 1 ? last[0] : null; }
 function activeRedoStack() { return activeLayer === 'base' ? redoStack : additionalLayers[activeLayer].redoStack; }
 function clearActiveConnections() { if (activeLayer === 'base') connections = []; else additionalLayers[activeLayer].connections = []; }
 function clearActiveRedoStack() { if (activeLayer === 'base') redoStack = []; else additionalLayers[activeLayer].redoStack = []; }
@@ -5389,8 +5394,8 @@ function installTapInput() {
     const box = document.getElementById('canvas-container');
     if (!box) return;
     tapDetector = createTapDetector({ now: () => performance.now() });
-    box.addEventListener('pointerdown', e => { tapDetector.down(e); }, true);
-    window.addEventListener('pointermove', e => { tapDetector.move(e); });
+    box.addEventListener('pointerdown', e => { hoverOn = e.pointerType === 'mouse'; tapDetector.down(e); }, true);
+    window.addEventListener('pointermove', e => { hoverOn = e.pointerType === 'mouse'; tapDetector.move(e); });
     window.addEventListener('pointerup', e => { const tap = tapDetector.up(e); if (tap) tapPress(tap); });
     window.addEventListener('pointercancel', e => { tapDetector.cancel(e); });
     window.touchStarted = function () { };   // defined, empty, not returning false
@@ -5444,6 +5449,7 @@ function tapPress(tap) {
 // warp), the same positions the dots and the hover use. The radius: mouse 18 units; touch and pen max(18, 22 css px / scale) - but with free endpoints on, a tap
 // farther than 18 units from every node must still be able to create one, which the 22 px radius would forbid on a grid denser than ~22 px, so then the fine
 // radius 18 decides (nearest within it selects, else a free node).
+let hoverOn = true, markerHidden = false;   // task 182: hoverOn follows the last pointer type (mouse only); markerHidden blanks the start marker and the hover while an image is exported
 const HOVER_RADIUS = 10;   // sketch units: the red hover dot (draw()), unchanged since before B4c
 function drawnHitNodes() {
     const arr = activeNodes(), netWarp = netWarpBaseNow(), hitLayer = activeLayer === 'base' ? null : additionalLayers[activeLayer];
@@ -5700,7 +5706,9 @@ async function animExportStart() {
             E.progressText.textContent = animExportT('progress', { i: p.i, n: p.n }) + (p.ms > 2500 ? ' · ' + animExportT('slow', { s: (p.ms / 1000).toFixed(1) }) : '');
         },
     });
-    const res = await runAnimationExport(env, opts);
+    markerHidden = true;   // task 182: the frames are canvas captures: no start marker, no hover
+    let res;
+    try { res = await runAnimationExport(env, opts); } finally { markerHidden = false; redraw(); }
     U.running = false; U.cancel = false;
     lock(false);
     let key = res.code === 'ok' ? 'done' : (res.code === 'otherClockPlaying' ? 'otherClock' : (res.code === 'tooBig' && svg ? 'tooBigSvg' : res.code));
