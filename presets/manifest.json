@@ -1,0 +1,167 @@
+{
+  "presetManifest": 1,
+  "sessionSchema": 2,
+  "presets": [
+    {
+      "slug": "quadrat-linien",
+      "title": {
+        "de": "Quadrat, Linien",
+        "en": "Square, lines"
+      },
+      "description": {
+        "de": "Zwei Linien im Quadratraster, durch Drehung und Spiegelung zum Muster vervielfacht. Nur Linien.",
+        "en": "Two lines on a square grid, repeated by rotation and reflection into a pattern. Lines only."
+      },
+      "category": "quadrat",
+      "listed": true,
+      "file": "quadrat-linien.session.json",
+      "mode": "simple",
+      "bytes": 1865
+    },
+    {
+      "slug": "quadrat-drehung-flaeche",
+      "title": {
+        "de": "Quadrat, Drehung, Fläche",
+        "en": "Square, rotation, area"
+      },
+      "description": {
+        "de": "Zwei Linien im Quadratraster, durch Drehung vervielfacht. Die entstehenden Flächen sind schwarz und weiß gefüllt.",
+        "en": "Two lines on a square grid, repeated by rotation. The resulting areas are filled black and white."
+      },
+      "category": "quadrat",
+      "listed": true,
+      "file": "quadrat-drehung-flaeche.session.json",
+      "mode": "simple",
+      "bytes": 1375
+    },
+    {
+      "slug": "quadrat-spiegelung-flaeche",
+      "title": {
+        "de": "Quadrat, Spiegelung, Fläche",
+        "en": "Square, reflection, area"
+      },
+      "description": {
+        "de": "Zwei Linien im Quadratraster, durch Drehung und Spiegelung vervielfacht. Die entstehenden Flächen sind schwarz und weiß gefüllt.",
+        "en": "Two lines on a square grid, repeated by rotation and reflection. The resulting areas are filled black and white."
+      },
+      "category": "quadrat",
+      "listed": true,
+      "file": "quadrat-spiegelung-flaeche.session.json",
+      "mode": "simple",
+      "bytes": 1844
+    },
+    {
+      "slug": "quadrat-drehung-sinus",
+      "title": {
+        "de": "Quadrat, Drehung, Sinus",
+        "en": "Square, rotation, sine"
+      },
+      "description": {
+        "de": "Wie \"Quadrat, Drehung, Fläche\", das Raster ist nach einer Sinuskurve verzerrt.",
+        "en": "As \"Square, rotation, area\", with the grid distorted along a sine curve."
+      },
+      "category": "quadrat",
+      "listed": true,
+      "file": "quadrat-drehung-sinus.session.json",
+      "mode": "simple",
+      "bytes": 1442
+    },
+    {
+      "slug": "quadrat-spiegelung-sinus",
+      "title": {
+        "de": "Quadrat, Spiegelung, Sinus",
+        "en": "Square, reflection, sine"
+      },
+      "description": {
+        "de": "Wie \"Quadrat, Spiegelung, Fläche\", das Raster ist nach einer Sinuskurve verzerrt.",
+        "en": "As \"Square, reflection, area\", with the grid distorted along a sine curve."
+      },
+      "category": "quadrat",
+      "listed": true,
+      "file": "quadrat-spiegelung-sinus.session.json",
+      "mode": "simple",
+      "bytes": 1911
+    },
+    {
+      "slug": "quadrat-drehung-projektiv",
+      "title": {
+        "de": "Quadrat, Drehung, projektiv",
+        "en": "Square, rotation, projective"
+      },
+      "description": {
+        "de": "Wie \"Quadrat, Drehung, Fläche\", das Raster ist projektiv verzerrt.",
+        "en": "As \"Square, rotation, area\", with the grid distorted projectively."
+      },
+      "category": "quadrat",
+      "listed": true,
+      "file": "quadrat-drehung-projektiv.session.json",
+      "mode": "simple",
+      "bytes": 1436
+    },
+    {
+      "slug": "quadrat-spiegelung-projektiv",
+      "title": {
+        "de": "Quadrat, Spiegelung, projektiv",
+        "en": "Square, reflection, projective"
+      },
+      "description": {
+        "de": "Wie \"Quadrat, Spiegelung, Fläche\", das Raster ist projektiv verzerrt.",
+        "en": "As \"Square, reflection, area\", with the grid distorted projectively."
+      },
+      "category": "quadrat",
+      "listed": true,
+      "file": "quadrat-spiegelung-projektiv.session.json",
+      "mode": "simple",
+      "bytes": 1905
+    },
+    {
+      "slug": "quadrat-drehung-linien",
+      "title": {
+        "de": "Quadrat, Drehung, Linien",
+        "en": "Square, rotation, lines"
+      },
+      "description": {
+        "de": "Zwei Linien im Quadratraster, durch Drehung zum Muster vervielfacht. Nur Linien.",
+        "en": "Two lines on a square grid, repeated by rotation into a pattern. Lines only."
+      },
+      "category": "quadrat",
+      "listed": false,
+      "file": "quadrat-drehung-linien.session.json",
+      "mode": "simple",
+      "bytes": 1382
+    },
+    {
+      "slug": "quadrat-drehung-geometrisch",
+      "title": {
+        "de": "Quadrat, Drehung, geometrisch",
+        "en": "Square, rotation, geometric"
+      },
+      "description": {
+        "de": "Wie \"Quadrat, Drehung, Fläche\", die Rastergrenzen folgen einer geometrischen Folge.",
+        "en": "As \"Square, rotation, area\", with the grid lines following a geometric progression."
+      },
+      "category": "quadrat",
+      "listed": false,
+      "file": "quadrat-drehung-geometrisch.session.json",
+      "mode": "simple",
+      "bytes": 1463
+    },
+    {
+      "slug": "quadrat-spiegelung-geometrisch",
+      "title": {
+        "de": "Quadrat, Spiegelung, geometrisch",
+        "en": "Square, reflection, geometric"
+      },
+      "description": {
+        "de": "Wie \"Quadrat, Spiegelung, Fläche\", die Rastergrenzen folgen einer geometrischen Folge.",
+        "en": "As \"Square, reflection, area\", with the grid lines following a geometric progression."
+      },
+      "category": "quadrat",
+      "listed": false,
+      "file": "quadrat-spiegelung-geometrisch.session.json",
+      "mode": "simple",
+      "bytes": 1932
+    }
+  ],
+  "redirects": {}
+}

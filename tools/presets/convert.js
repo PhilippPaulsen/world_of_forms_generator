@@ -2,7 +2,7 @@
  * tools/presets/convert.js
  * Task 159 (A2 presets): an EXPORT (formatVersion 2, core/export.js buildExportData) -> a SESSION JSON (core/session.js, schema 2).
  *
- *   node tools/presets/convert.js <export.json> [--grau alt|neu8|abbild] [--out <session.json>]
+ *   node tools/presets/convert.js <export.json> [--grau alt|neu8|abbild] [--faces on|off] [--out <session.json>]
  *
  * Why a tool and not an import in the Studio: the Studio has no import (no new control, no core change). The tool builds the state in a vm
  * with the REAL core (rebuildGrid, setFaceAssignment, buildSessionSnapshot, serializeSession), so the file is written by the core's own writer
@@ -12,6 +12,7 @@
  *   - connections: null edges [a,a] and duplicate pairs are removed (the faces do not change; the cause of null edges is reported, not fixed: reports/161.md);
  *   - face colours: only the entries of the CURRENT trails are kept (an export carries orphans of earlier states);
  *   - net: meta.netTransform (derived, export form) -> the session net spec ({x,y,repeat,domain,macro} | {kind:'projective',...});
+ *   - showFaces: opts.showFaces (default true; false = a lines-only preset; the export does not say, buildExportData writes faces either way);
  *   - mode: settings.uiMode is always written ('simple'), so the old-session rule (no field = advanced) never applies;
  *   - grays (--grau): alt = unchanged (grayTones 0, no anchor); neu8 = recoloured with the 8-tone ladder, cyclic over the trails (the distribution changes);
  *     abbild = rank-preserving map of the old gray values onto tones of the 8-tone ladder (the distribution stays), anchor neutral: true, grayTones 8.
@@ -70,7 +71,7 @@ function convertExport(exp, opts) {
     if (exp.geometry.layers && exp.geometry.layers.length) throw new Error('exports with layers are not converted (a preset is one sheet)');
     const ctx = F.makeContext({ state: true, export: true });
     ctx.run(`currentShape = ${J(m.shapeType)}; projectGridSpec(${J(m.grid)}); shapeSizeFactor = ${m.shapeSizeFactor}; canvasW = 600; canvasH = 600; symmetryMode = ${J(m.symmetryMode)};
-        curveType = ${J(m.curveType)}; showNodes = false; showFaces = true; freeEndpointsEnabled = false; lineColor = ${J(m.lineColor)}; rebuildGrid(currentShape);`);
+        curveType = ${J(m.curveType)}; showNodes = false; showFaces = ${opts.showFaces === false ? 'false' : 'true'}; freeEndpointsEnabled = false; lineColor = ${J(m.lineColor)}; rebuildGrid(currentShape);`);
     const ce = cleanEdges(exp.geometry.edges);
     ctx.run(`connections = ${J(ce.edges)}; redoStack = []; baseNetTransform = ${J(netSpecOf(m.netTransform))}; uiMode = 'simple'; grayTones = ${grau === 'alt' ? 0 : 8};`);
     // the current trails (the symmetry classes of the faces), and the entries of the export that belong to them
@@ -126,10 +127,10 @@ module.exports = { convertExport, exportAfterLoad, netSpecOf, cleanEdges, GRAU_M
 if (require.main === module) {
     const args = process.argv.slice(2);
     const take = f => { const i = args.indexOf(f); if (i < 0) return null; const v = args[i + 1]; args.splice(i, 2); return v; };
-    const grau = take('--grau') || 'abbild', out = take('--out');
+    const grau = take('--grau') || 'abbild', out = take('--out'), faces = take('--faces') !== 'off';
     const file = args[0];
-    if (!file) { console.error('usage: node tools/presets/convert.js <export.json> [--grau alt|neu8|abbild] [--out <session.json>]'); process.exit(2); }
-    const r = convertExport(JSON.parse(fs.readFileSync(file, 'utf8')), { grau });
+    if (!file) { console.error('usage: node tools/presets/convert.js <export.json> [--grau alt|neu8|abbild] [--faces on|off] [--out <session.json>]'); process.exit(2); }
+    const r = convertExport(JSON.parse(fs.readFileSync(file, 'utf8')), { grau, showFaces: faces });
     if (out) fs.writeFileSync(out, r.text);
     console.error(J(r.report));
     if (!out) process.stdout.write(r.text);
