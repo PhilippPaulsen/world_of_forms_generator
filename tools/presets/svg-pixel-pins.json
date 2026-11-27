@@ -1,0 +1,79 @@
+{
+  "source": "Measured in the Browser pane (Chromium, Studio 6dbaaf9d, canvas 1200 x 1200 px, device pixels 2) with tools/presets/render-images.js: the FINAL svg (tools/presets/clip-svg.js of generateSVGString()) drawn at the canvas size against the Studio canvas, pixel for pixel (a pixel counts when any of R, G, B differs). Without a net the difference is one grey step of edge smoothing (max 1 of 255); with a net about 2 % of the pixels differ along the slanted lines (mean about 10, max 102), no moved line and no other area (see _Plaene/S1/vergleich in the plan folder).",
+  "measuredOn": "6dbaaf9d",
+  "canvasPx": 1200,
+  "svgPixelDifference": {
+    "quadrat-linien": {
+      "diffPixels": 600,
+      "maxDelta": 1,
+      "meanDelta": 1,
+      "strong64": 0
+    },
+    "quadrat-spiegelung-flaeche": {
+      "diffPixels": 961,
+      "maxDelta": 1,
+      "meanDelta": 1,
+      "strong64": 0
+    },
+    "quadrat-spiegelung-sinus": {
+      "diffPixels": 29291,
+      "maxDelta": 102,
+      "meanDelta": 9.4,
+      "strong64": 9
+    },
+    "quadrat-spiegelung-projektiv": {
+      "diffPixels": 28784,
+      "maxDelta": 85,
+      "meanDelta": 10.1,
+      "strong64": 150
+    },
+    "quadrat-drehung-flaeche": {
+      "diffPixels": 216,
+      "maxDelta": 1,
+      "meanDelta": 1,
+      "strong64": 0
+    }
+  },
+  "imageSizes": {
+    "quadrat-linien": {
+      "svgFinalBytes": 15641,
+      "pngBytes": 97649
+    },
+    "quadrat-drehung-flaeche": {
+      "svgFinalBytes": 20040,
+      "pngBytes": 25823
+    },
+    "quadrat-spiegelung-flaeche": {
+      "svgFinalBytes": 43732,
+      "pngBytes": 77633
+    },
+    "quadrat-drehung-sinus": {
+      "svgFinalBytes": 10910,
+      "pngBytes": 51940
+    },
+    "quadrat-spiegelung-sinus": {
+      "svgFinalBytes": 26951,
+      "pngBytes": 97172
+    },
+    "quadrat-drehung-projektiv": {
+      "svgFinalBytes": 13927,
+      "pngBytes": 72755
+    },
+    "quadrat-spiegelung-projektiv": {
+      "svgFinalBytes": 33812,
+      "pngBytes": 125122
+    },
+    "quadrat-drehung-linien": {
+      "svgFinalBytes": 7985,
+      "pngBytes": 27525
+    },
+    "quadrat-drehung-geometrisch": {
+      "svgFinalBytes": 10679,
+      "pngBytes": 48784
+    },
+    "quadrat-spiegelung-geometrisch": {
+      "svgFinalBytes": 26384,
+      "pngBytes": 84012
+    }
+  }
+}

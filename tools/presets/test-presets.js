@@ -118,5 +118,20 @@ check('manifest size budget (<= 16 KB)', Buffer.byteLength(manifestText) <= MANI
         check('pixel pins: every slug has integer diffPixels and maxDelta, nothing extra', J(Object.keys(pins.presets).sort()) === J(slugs.slice().sort()) && Object.values(pins.presets).every(v => Number.isInteger(v.diffPixels) && Number.isInteger(v.maxDelta) && v.diffPixels >= 0 && v.maxDelta >= 0));
     }
 }
+// ---- 8 image pins (task 170): the measured size of every preview image and the pixel difference of the five gallery SVGs against the Studio canvas
+{
+    const pinsPath = path.join(__dirname, 'svg-pixel-pins.json');
+    const ok = fs.existsSync(pinsPath);
+    check('svg pins file exists', ok);
+    if (ok) {
+        const pins = JSON.parse(fs.readFileSync(pinsPath, 'utf8'));
+        const gal = man.presets.filter(p => p.gallery).map(p => p.slug).sort();
+        check('svg pins: source note names the method, canvas size and the Studio commit it was measured on', typeof pins.source === 'string' && /render-images\.js/.test(pins.source) && pins.canvasPx === 1200 && /^[0-9a-f]{7,}/.test(pins.measuredOn));
+        check('svg pins: every gallery slug has integer diffPixels / maxDelta, nothing extra', J(Object.keys(pins.svgPixelDifference).sort()) === J(gal) && Object.values(pins.svgPixelDifference).every(v => Number.isInteger(v.diffPixels) && Number.isInteger(v.maxDelta) && v.diffPixels >= 0 && v.maxDelta >= 0));
+        check('svg pins: without a net the difference is one grey step (max 1 of 255, under 0.1 % of the pixels); with a net under 3 % of the pixels and no pixel off by more than 128', Object.entries(pins.svgPixelDifference).every(([slug, v]) => /sinus|projektiv|geometrisch/.test(slug) ? v.diffPixels < 0.03 * 1200 * 1200 && v.maxDelta <= 128 : v.maxDelta <= 1 && v.diffPixels < 0.001 * 1200 * 1200));
+        check('image sizes: every preset has a final svg under 150 KB and a 600 px png under 150 KB (og:image)', J(Object.keys(pins.imageSizes).sort()) === J(slugs.slice().sort()) && Object.values(pins.imageSizes).every(v => v.svgFinalBytes > 0 && v.svgFinalBytes < 150 * 1024 && v.pngBytes > 0 && v.pngBytes < 150 * 1024), Math.max(...Object.values(pins.imageSizes).map(v => v.pngBytes)) + ' B largest png');
+    }
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 process.exit(failures ? 1 : 0);
