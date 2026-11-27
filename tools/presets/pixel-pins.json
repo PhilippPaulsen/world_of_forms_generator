@@ -1,0 +1,47 @@
+{
+  "source": "Measured in the Browser pane (Chromium, 1200 x 1200 px canvas, Einfach, window 1x) with tools/presets/measure-pixels.js; method of task 156 adapted: restored from the preset against restored from the autosave of that restore (a preset is never built by clicks). Task 156 recorded about 20 px, max 3 for the rotation pattern (square, seed 4242, built against loaded, also on main before B5); see reports/160.md.",
+  "measuredOn": "8bb1bbb3",
+  "canvasPx": 1200,
+  "presets": {
+    "quadrat-linien": {
+      "diffPixels": 0,
+      "maxDelta": 0
+    },
+    "quadrat-drehung-flaeche": {
+      "diffPixels": 0,
+      "maxDelta": 0
+    },
+    "quadrat-spiegelung-flaeche": {
+      "diffPixels": 0,
+      "maxDelta": 0
+    },
+    "quadrat-drehung-sinus": {
+      "diffPixels": 0,
+      "maxDelta": 0
+    },
+    "quadrat-spiegelung-sinus": {
+      "diffPixels": 0,
+      "maxDelta": 0
+    },
+    "quadrat-drehung-projektiv": {
+      "diffPixels": 0,
+      "maxDelta": 0
+    },
+    "quadrat-spiegelung-projektiv": {
+      "diffPixels": 0,
+      "maxDelta": 0
+    },
+    "quadrat-drehung-linien": {
+      "diffPixels": 0,
+      "maxDelta": 0
+    },
+    "quadrat-drehung-geometrisch": {
+      "diffPixels": 0,
+      "maxDelta": 0
+    },
+    "quadrat-spiegelung-geometrisch": {
+      "diffPixels": 0,
+      "maxDelta": 0
+    }
+  }
+}
