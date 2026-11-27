@@ -158,7 +158,13 @@ const run = (...a) => G.runAnimationExport(...a);
         if (!git) check('the tree checks (the base commit is not available here: SKIPPED)', true);
         else {
             const old = show('sketch.js'), PROT = ['applyTimelineFrame', 'applyLayerConnectionsMorphFrame', 'resolveTimelineKeyframeCoords', 'resolveTimelineSegment', 'totalTimelineDurationMs', 'setTimelineProgress', 'toggleTimelinePlayback', 'previewTimelineSegmentMidpoint', 'draw'];
-            check('the eight protected functions and draw() are byte-equal to main', PROT.every(n => grab(SKETCH, n) === grab(old, n)));
+            
+            // task 182: draw() is the one protected function the approved change touches (start marker, hover for the mouse only): it must differ from the base ONLY by task-182 lines (every added line names selectedId / hoverOn / markerHidden / task 182; the removed ones are the old hover / dot lines)
+            const dLines = (t) => grab(t, 'draw').split('\n').map(l => l.trim());
+            const d0 = dLines(old), d1 = dLines(SKETCH);
+            const dRemoved = d0.filter(l => !d1.includes(l)), dAdded = d1.filter(l => !d0.includes(l));
+            const drawOk = dAdded.every(l => /selectedId|hoverOn|markerHidden|task 182/.test(l)) && dRemoved.every(l => /^(const hovered = pickNodeAt\(|const hoverId = |fill\(nd\.id === hoverId|ellipse\(p\.x, p\.y, 6, 6\);)/.test(l)) && dRemoved.length <= 6;
+            check('the eight protected functions are byte-equal to main and draw() differs only by task-182 lines', PROT.filter(n => n !== 'draw').every(n => grab(SKETCH, n) === grab(old, n)) && (drawOk || grab(SKETCH, 'draw') === grab(old, 'draw')), J([dRemoved, dAdded]).slice(0, 300));
             const core = execFileSync('git', ['diff', '--name-only', BASE, '--', 'core/'], { cwd: ROOT }).toString().split('\n').filter(Boolean);
             check('core/ differs from main only in anim-export.js; core/export.js is byte-equal', core.every(f => f === 'core/anim-export.js' || f === 'core/netwarp.js' || f === 'core/curves.js' || f === 'core/session.js' /* task 121: 3C-1 */ || f === 'core/session-apply.js' || f === 'core/session-store.js' /* task 138: ?lang= */ || f === 'core/facecolor.js' /* task 145: the default anchor */ || f === 'core/color.js' /* task 149: the gray tones (the rule's tone ladders; with core/facecolor.js, state.js, session.js, session-apply.js) */ || f === 'core/export.js' /* task 144: the Download name (exportFileBase, downloadBlob, title) */ || f === 'core/state.js' /* task 133: the session field uiMode (session.js, session-apply.js, state.js) */) && (!core.includes('core/export.js') || require('../dev/before-task144.js')(fs.readFileSync(path.join(ROOT, 'core/export.js'), 'utf8')) === show('core/export.js')), J(core));   // task 144: export.js is compared without the Download name
             const n = (s, re) => (s.match(re) || []).length;
