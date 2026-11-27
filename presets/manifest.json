@@ -16,7 +16,19 @@
       "listed": true,
       "file": "quadrat-linien.session.json",
       "mode": "simple",
-      "bytes": 1865
+      "bytes": 1865,
+      "gallery": {
+        "order": 1,
+        "image": "quadrat-linien.svg",
+        "caption": {
+          "de": "Zwei Linien, gedreht und gespiegelt.",
+          "en": "Two lines, rotated and reflected."
+        },
+        "alt": {
+          "de": "Schwarze Linien: zwei Linien im Quadratraster, durch Drehung und Spiegelung zu einem Sternmuster vervielfacht.",
+          "en": "Black lines: two lines on a square grid, repeated by rotation and reflection into a star pattern."
+        }
+      }
     },
     {
       "slug": "quadrat-drehung-flaeche",
@@ -32,7 +44,19 @@
       "listed": true,
       "file": "quadrat-drehung-flaeche.session.json",
       "mode": "simple",
-      "bytes": 1375
+      "bytes": 1375,
+      "gallery": {
+        "order": 5,
+        "image": "quadrat-drehung-flaeche.svg",
+        "caption": {
+          "de": "Neu: Nur Drehung, ohne Spiegelung und Verzerrung.",
+          "en": "New: rotation only, no reflection, no distortion."
+        },
+        "alt": {
+          "de": "Schwarz-weiße Flächen, durch Drehung allein erzeugt.",
+          "en": "Black-and-white areas produced by rotation alone."
+        }
+      }
     },
     {
       "slug": "quadrat-spiegelung-flaeche",
@@ -48,7 +72,19 @@
       "listed": true,
       "file": "quadrat-spiegelung-flaeche.session.json",
       "mode": "simple",
-      "bytes": 1844
+      "bytes": 1844,
+      "gallery": {
+        "order": 2,
+        "image": "quadrat-spiegelung-flaeche.svg",
+        "caption": {
+          "de": "Neu: Flächen schwarz und weiß gefüllt.",
+          "en": "New: areas filled black and white."
+        },
+        "alt": {
+          "de": "Dasselbe Muster, die Flächen zwischen den Linien sind schwarz und weiß gefüllt.",
+          "en": "The same pattern, with the areas between the lines filled black and white."
+        }
+      }
     },
     {
       "slug": "quadrat-drehung-sinus",
@@ -80,7 +116,19 @@
       "listed": true,
       "file": "quadrat-spiegelung-sinus.session.json",
       "mode": "simple",
-      "bytes": 1911
+      "bytes": 1911,
+      "gallery": {
+        "order": 3,
+        "image": "quadrat-spiegelung-sinus.svg",
+        "caption": {
+          "de": "Neu: Raster nach einer Sinuskurve verzerrt.",
+          "en": "New: grid distorted along a sine curve."
+        },
+        "alt": {
+          "de": "Schwarz-weißes Muster, das Raster ist wellenförmig nach einer Sinuskurve verzerrt.",
+          "en": "Black-and-white pattern; the grid is distorted in waves along a sine curve."
+        }
+      }
     },
     {
       "slug": "quadrat-drehung-projektiv",
@@ -112,7 +160,19 @@
       "listed": true,
       "file": "quadrat-spiegelung-projektiv.session.json",
       "mode": "simple",
-      "bytes": 1905
+      "bytes": 1905,
+      "gallery": {
+        "order": 4,
+        "image": "quadrat-spiegelung-projektiv.svg",
+        "caption": {
+          "de": "Neu: Raster projektiv statt sinusförmig verzerrt.",
+          "en": "New: grid distorted projectively, not by a sine curve."
+        },
+        "alt": {
+          "de": "Schwarz-weißes Muster, das Raster ist projektiv verzerrt, die Felder laufen perspektivisch zusammen.",
+          "en": "Black-and-white pattern; the grid is distorted projectively, the cells converge in perspective."
+        }
+      }
     },
     {
       "slug": "quadrat-drehung-linien",

@@ -20,7 +20,7 @@ function buildAll(table, readSource) {
         const file = p.slug + '.session.json';
         files[file] = r.text;
         reports[p.slug] = r.report;
-        entries.push({ slug: p.slug, title: p.title, description: p.description, category: p.category, listed: p.listed, file, mode: 'simple', bytes: Buffer.byteLength(r.text, 'utf8') });
+        entries.push(Object.assign({ slug: p.slug, title: p.title, description: p.description, category: p.category, listed: p.listed, file, mode: 'simple', bytes: Buffer.byteLength(r.text, 'utf8') }, p.gallery ? { gallery: p.gallery } : {}));   // task 169: the optional gallery block (start page), additive: no schema bump
     }
     const manifest = { presetManifest: table.presetManifest, sessionSchema: 2, presets: entries, redirects: {} };
     files['manifest.json'] = JSON.stringify(manifest, null, 2) + '\n';

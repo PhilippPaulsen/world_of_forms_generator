@@ -83,6 +83,23 @@ for (const p of man.presets) {
 }
 check('manifest size budget (<= 16 KB)', Buffer.byteLength(manifestText) <= MANIFEST_BUDGET, Buffer.byteLength(manifestText) + ' B');
 
+// ---- 7 gallery block (task 169): the start page's order, captions and alt texts, all from the manifest
+{
+    const gal = man.presets.filter(p => p.gallery).sort((a, b) => a.gallery.order - b.gallery.order);
+    const CAPTION_MAX = 56;   // chars; measured (task 169): with the Studio's face every DE and EN caption of the five is ONE line on desktop (440 px) and at most THREE on the phone (187 px); the longest is 54
+    check('gallery: five exhibits, the listed presets of the first stage', gal.length === 5 && gal.every(p => p.listed === true), gal.map(p => p.slug).join(' '));
+    check('gallery: order is an integer, unique, and runs 1..n without a gap', gal.every((p, i) => Number.isInteger(p.gallery.order) && p.gallery.order === i + 1));
+    check('gallery: the order is "strictly additive" (task S1, variant B): lines, fill, sine net, projective net, rotation last', J(gal.map(p => p.slug)) === J(['quadrat-linien', 'quadrat-spiegelung-flaeche', 'quadrat-spiegelung-sinus', 'quadrat-spiegelung-projektiv', 'quadrat-drehung-flaeche']));
+    check('gallery: caption and alt complete in DE and EN, non-empty, DE differs from EN', gal.every(p => ['caption', 'alt'].every(k => p.gallery[k] && nonEmpty(p.gallery[k].de) && nonEmpty(p.gallery[k].en) && p.gallery[k].de !== p.gallery[k].en)));
+    check(`gallery: a caption is one short line (<= ${CAPTION_MAX} characters, DE and EN) and ends with a full stop`, gal.every(p => ['de', 'en'].every(l => p.gallery.caption[l].length <= CAPTION_MAX && /\.$/.test(p.gallery.caption[l]))), gal.map(p => Math.max(p.gallery.caption.de.length, p.gallery.caption.en.length)).join(' '));
+    check('gallery: a caption is not the preset description (it names what is new against the previous image)', gal.every(p => p.gallery.caption.de !== p.description.de && p.gallery.caption.en !== p.description.en));
+    check('gallery: captions 2 to n start with "Neu:" / "New:", the first does not', gal.every((p, i) => (i === 0) === !(/^Neu: /.test(p.gallery.caption.de) || /^New: /.test(p.gallery.caption.en))) && gal.slice(1).every(p => /^Neu: /.test(p.gallery.caption.de) && /^New: /.test(p.gallery.caption.en)));
+    check('gallery: image is "<slug>.svg", unique', gal.every(p => p.gallery.image === p.slug + '.svg') && new Set(gal.map(p => p.gallery.image)).size === gal.length);
+    check('gallery: alt texts do not start with "Bild" / "Image" and do not repeat the title', gal.every(p => !/^(Bild|Image)\b/i.test(p.gallery.alt.de + ' ' + p.gallery.alt.en) && p.gallery.alt.de !== p.title.de && p.gallery.alt.en !== p.title.en));
+    check('gallery: only the known keys (order, image, caption, alt), no schema bump (presetManifest stays 1)', gal.every(p => J(Object.keys(p.gallery).sort()) === J(['alt', 'caption', 'image', 'order'])) && man.presetManifest === 1);
+    check('gallery: the other presets carry no gallery block', man.presets.filter(p => !p.gallery).length === 5);
+}
+
 // ---- 5 reproducibility
 {
     const b = buildAll(table, readQuelle);
